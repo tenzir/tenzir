@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/numeric/integral.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
@@ -14,6 +15,8 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
@@ -178,8 +181,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
     auto options = arrow::compute::ArraySortOptions::Defaults();
     options.order = descending_ ? arrow::compute::SortOrder::Descending
                                 : arrow::compute::SortOrder::Ascending;
@@ -224,8 +227,8 @@ public:
     return "sort";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     return optimize_result{filter, stable_ ? order : event_order::unordered,
                            copy()};
   }
@@ -309,8 +312,203 @@ public:
   }
 };
 
+// -- TQL2 implementation below ------------------------------------------------
+
+struct sort_expression {
+  ast::expression expr = {};
+  bool reverse = {};
+
+  friend auto inspect(auto& f, sort_expression& x) -> bool {
+    return f.object(x).fields(f.field("expr", x.expr),
+                              f.field("reverse", x.reverse));
+  }
+};
+
+struct sort_key {
+  std::vector<series> chunks = {};
+  bool reverse = {};
+};
+
+struct sort_index {
+  size_t slice = {};
+  int64_t event = {};
+};
+
+class sort_operator2 final : public crtp_operator<sort_operator2> {
+public:
+  sort_operator2() = default;
+
+  explicit sort_operator2(std::vector<sort_expression> sort_exprs)
+    : sort_exprs_{std::move(sort_exprs)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.sort";
+  }
+
+  auto
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
+    auto events = std::vector<table_slice>{};
+    auto indices = std::vector<sort_index>{};
+    auto sort_keys = std::vector<sort_key>{};
+    sort_keys.reserve(sort_exprs_.size());
+    for (const auto& sort_expr : sort_exprs_) {
+      sort_keys.emplace_back().reverse = sort_expr.reverse;
+    }
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      const auto length = detail::narrow<int64_t>(slice.rows());
+      indices.reserve(indices.size() + slice.rows());
+      for (int64_t i = 0; i < length; ++i) {
+        indices.push_back({
+          .slice = events.size(),
+          .event = i,
+        });
+      }
+      for (size_t i = 0; i < sort_exprs_.size(); ++i) {
+        sort_keys[i].chunks.push_back(
+          eval(sort_exprs_[i].expr, slice, ctrl.diagnostics()));
+      }
+      events.push_back(std::move(slice));
+    }
+    if (indices.empty()) {
+      co_return;
+    }
+    // TODO: If all chunks for a sort key evaluate to the same type, then we can
+    // choose a faster path where we do not need to evaluate the sort key's type
+    // for each row individually. That may be significantly faster.
+    std::ranges::sort(indices, [&](const sort_index& lhs,
+                                   const sort_index& rhs) {
+      for (const auto& sort_key : sort_keys) {
+        const auto& lhs_key = sort_key.chunks[lhs.slice];
+        const auto& rhs_key = sort_key.chunks[rhs.slice];
+        const auto lhs_null = lhs_key.array->IsNull(lhs.event);
+        const auto rhs_null = rhs_key.array->IsNull(rhs.event);
+        if (lhs_null and rhs_null) {
+          continue;
+        }
+        if (lhs_null or rhs_null) {
+          // Nulls last, independent of sort order.
+          return rhs_null;
+        }
+        const auto& lhs_value
+          = value_at(lhs_key.type, *lhs_key.array, lhs.event);
+        const auto& rhs_value
+          = value_at(rhs_key.type, *rhs_key.array, rhs.event);
+        // TODO: Implement this directly on data and data_view. That is
+        // non-trivial however.
+        // TODO: This does not do the correct recursive application of the
+        // comparator to nested structural types. It turns out that is a
+        // non-trivial task as well.
+        const auto cmp = detail::overload{
+          [](const concepts::integer auto& l, const concepts::integer auto& r) {
+            return std::cmp_less(l, r);
+          },
+          []<concepts::number L, concepts::number R>(const L& l, const R& r) {
+            if constexpr (std::same_as<L, double>) {
+              if (std::isnan(l)) {
+                return false;
+              }
+            }
+            if constexpr (std::same_as<R, double>) {
+              if (std::isnan(r)) {
+                return true;
+              }
+            }
+            return l < r;
+          },
+          [&](const auto& l, const auto& r) {
+            if constexpr (std::same_as<decltype(l), decltype(r)>) {
+              return l < r;
+            }
+            return lhs_value.index() < rhs_value.index();
+          },
+        };
+        if (caf::visit(cmp, lhs_value, rhs_value)) {
+          return not sort_key.reverse;
+        }
+        if (caf::visit(cmp, rhs_value, lhs_value)) {
+          return sort_key.reverse;
+        }
+      }
+      // If we're here then it's a tie.
+      return false;
+    });
+    // Lastly, assemble the result by fetching the rows in their sorted order.
+    auto batch = std::vector<table_slice>{};
+    for (const auto& index : indices) {
+      if (not batch.empty()
+          and batch.back().schema() != events[index.slice].schema()) {
+        co_yield concatenate(std::exchange(batch, {}));
+      }
+      if (batch.size() >= defaults::import::table_slice_size) {
+        co_yield concatenate(std::exchange(batch, {}));
+      }
+      batch.push_back(
+        subslice(events[index.slice], index.event, index.event + 1));
+    }
+    if (not batch.empty()) {
+      co_yield concatenate(std::exchange(batch, {}));
+    }
+  }
+
+  auto optimize(const expression& filter,
+                event_order order) const -> optimize_result override {
+    // Our upstream can always be unordered. If our downstream did already not
+    // care about ordering, we can skip sorting entirely.
+    return optimize_result{
+      filter,
+      event_order::unordered,
+      order == event_order::unordered ? nullptr : copy(),
+    };
+  }
+
+  friend auto inspect(auto& f, sort_operator2& x) -> bool {
+    return f.apply(x.sort_exprs_);
+  }
+
+private:
+  std::vector<sort_expression> sort_exprs_ = {};
+};
+
+class plugin2 final : public virtual operator_plugin2<sort_operator2> {
+public:
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    TENZIR_UNUSED(ctx);
+    if (inv.args.empty()) {
+      return std::make_unique<sort_operator2>(std::vector<sort_expression>{{
+        .expr = ast::this_{inv.self.get_location()},
+        .reverse = false,
+      }});
+    }
+    auto sort_exprs = std::vector<sort_expression>{};
+    sort_exprs.reserve(inv.args.size());
+    const auto make_sort_key = [&](const auto& arg) {
+      return arg.match(
+        [&](const ast::unary_expr& unary) -> sort_expression {
+          if (unary.op.inner == ast::unary_op::neg) {
+            return {unary.expr, true};
+          }
+          return {unary, false};
+        },
+        [&](const auto& other) -> sort_expression {
+          return {other, false};
+        });
+    };
+    std::ranges::transform(inv.args, std::back_inserter(sort_exprs),
+                           make_sort_key);
+    return std::make_unique<sort_operator2>(std::move(sort_exprs));
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::sort
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::sort::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::sort::plugin2)
