@@ -852,12 +852,12 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto url = located<std::string>{};
+    auto endpoint = located<std::string>{};
     auto parallel = std::optional<located<uint64_t>>{};
     auto tls = std::optional<located<bool>>{};
     auto args = load_tcp_args{};
     auto parser = argument_parser2::operator_("load_tcp");
-    parser.add(url, "<url>");
+    parser.add(endpoint, "<endpoint>");
     parser.add("connect", args.connect);
     parser.add("parallel", parallel);
     parser.add("tls", tls);
@@ -866,15 +866,15 @@ public:
     parser.add(args.pipeline, "{ ... }");
     parser.parse(inv, ctx).ignore();
     auto failed = false;
-    if (url.inner.starts_with("tcp://")) {
-      url.inner = url.inner.substr(6);
-      url.source.begin += 6;
+    if (endpoint.inner.starts_with("tcp://")) {
+      endpoint.inner = endpoint.inner.substr(6);
+      endpoint.source.begin += 6;
     }
-    if (const auto splits = detail::split(url.inner, ":", 1);
+    if (const auto splits = detail::split(endpoint.inner, ":", 1);
         splits.size() != 2) {
-      diagnostic::error("malformed URL")
-        .primary(url.source)
-        .hint("syntax: tcp://<hostname>:<port>")
+      diagnostic::error("malformed endpoint")
+        .primary(endpoint.source)
+        .hint("syntax: [tcp://]<hostname>:<port>")
         .usage(parser.usage())
         .docs(parser.docs())
         .emit(ctx);
@@ -882,7 +882,7 @@ public:
     } else {
       args.endpoint.inner.hostname = std::string{splits[0]};
       args.endpoint.inner.port = std::string{splits[1]};
-      args.endpoint.source = url.source;
+      args.endpoint.source = endpoint.source;
     }
     if (parallel) {
       args.parallel = *parallel;
