@@ -14,6 +14,9 @@ TenzirRegisterPlugin(
   ENTRYPOINT src/plugin.cpp
   SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
+find_package(CURL)
+find_package(ZLIB)
+
 find_package(AWSSDK COMPONENTS sqs REQUIRED CONFIG)
 dependency_summary("AWS SDK" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
 

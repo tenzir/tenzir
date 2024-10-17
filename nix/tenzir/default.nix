@@ -22,6 +22,7 @@
     flatbuffers,
     fluent-bit,
     protobuf,
+    google-cloud-cpp,
     grpc,
     spdlog,
     libyamlcpp,
@@ -60,11 +61,13 @@
         "plugins/amqp"
         "plugins/azure-blob-storage"
         "plugins/gcs"
+        "plugins/google-cloud-pubsub"
         "plugins/fluent-bit"
         "plugins/kafka"
         "plugins/nic"
         "plugins/parquet"
         "plugins/sigma"
+        "plugins/sqs"
         "plugins/velociraptor"
         "plugins/web"
         "plugins/zmq"
@@ -121,6 +124,7 @@
           aws-sdk-cpp-tenzir
           fast_float
           fluent-bit
+          google-cloud-cpp
           grpc
           libpcap
           libunwind

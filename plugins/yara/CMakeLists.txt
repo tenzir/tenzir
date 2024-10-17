@@ -20,3 +20,11 @@ find_package(PkgConfig REQUIRED QUIET)
 pkg_check_modules(yara REQUIRED IMPORTED_TARGET yara)
 dependency_summary("libyara" PkgConfig::yara "Dependencies")
 target_link_libraries(yara PUBLIC PkgConfig::yara)
+
+# libyara.a needs flags indicated by the `.private` pkg-config sections, but
+# those are not exposed as part of the IMPORTED_TARGET.
+if (TENZIR_ENABLE_STATIC_EXECUTABLE)
+  # NOTE: Despite the claims of the docs, `XXX_STATIC_LINK_LIBRARIES`
+  # doesn't exist, so we have to use `yara_STATIC_LIBRARIES`.
+  target_link_libraries(PkgConfig::yara INTERFACE ${yara_STATIC_LIBRARIES})
+endif ()

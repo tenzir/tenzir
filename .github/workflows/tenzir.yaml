@@ -537,6 +537,7 @@ jobs:
     if: ${{ needs.configure.outputs.run-tenzir-nix == 'true' }}
     uses: ./.github/workflows/nix.yaml
     strategy:
+      fail-fast: false
       matrix:
         config: ${{ fromJSON(needs.configure.outputs.nix-matrix) }}
     with:
@@ -834,6 +835,9 @@ jobs:
           - name: Platform
             target: platform
             path: contrib/tenzir-plugins/platform
+          - name: S3
+            target: s3
+            path: plugins/s3
           - name: Sigma
             target: sigma
             path: plugins/sigma
