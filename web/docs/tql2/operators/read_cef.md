@@ -54,7 +54,7 @@ event:
 }
 ```
 
-### `merge=bool (optional)`
+### `merge = bool (optional)`
 
 Merges all incoming events into a single schema\* that converges over time. This
 option is may be faster for reading *highly heterogeneous* data,
@@ -63,7 +63,7 @@ Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.
 
-### `raw=bool (optional)`
+### `raw = bool (optional)`
 
 Use only the raw types that are native to the parsed format. Fields that have a type
 specified in the chosen `schema` will still be parsed according to the schema.
@@ -71,7 +71,7 @@ specified in the chosen `schema` will still be parsed according to the schema.
 In the case of CEF, this means that no parsing of data takes place at all
 and every value remains a string, unless the field is in the `schema`.
 
-### `schema=str (optional)`
+### `schema = str (optional)`
 
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
 parser.
@@ -86,7 +86,7 @@ If the given schema does not exist, this option instead assigns the output schem
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector=str (optional)`
+### `selector = str (optional)`
 
 Designates a field value as [schema](../../data-model/schemas.md) name with an
 optional dot-separated prefix.
@@ -101,7 +101,7 @@ For example, the Suricata EVE JSON format includes a field
 
 The `selector` option is incompatible with the `schema` option.
 
-### `schema_only=bool (optional)`
+### `schema_only = bool (optional)`
 
 When working with an existing schema (obtained via the `schema` or `selector` option), this option will ensure that the output
 schema has *only* the fields from that schema. If the schema name is obtained
@@ -110,7 +110,7 @@ and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten=str (optional)`
+### `unflatten = str (optional)`
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.

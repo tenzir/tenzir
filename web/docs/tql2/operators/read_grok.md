@@ -69,7 +69,7 @@ specified in the chosen `schema` will still be parsed according to the schema.
 Since grok is just textual parsing, this means that no parsing of data takes place at all
 and every value remains a string, unless the field is in the `schema`.
 
-### `schema=str (optional)`
+### `schema = str (optional)`
 
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
 parser.
@@ -84,7 +84,7 @@ If the given schema does not exist, this option instead assigns the output schem
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector=str (optional)`
+### `selector = str (optional)`
 
 Designates a field value as [schema](../../data-model/schemas.md) name with an
 optional dot-separated prefix.
