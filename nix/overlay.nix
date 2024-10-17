@@ -27,6 +27,11 @@ in {
       })
     ];
   });
+  crc32c = overrideAttrsIf (isDarwin && isStatic) prev.crc32c (orig: {
+    env = orig.env // {
+      NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
+    };
+  });
   google-cloud-cpp =
     let
       google-cloud-cpp' = prev.google-cloud-cpp.overrideAttrs (orig: {
