@@ -119,14 +119,20 @@ auto object_generator::data_unparsed(std::string_view s) -> void {
         return;
       }
       if (msb_->settings_.raw) {
-        b.data(s);
+        if (not b.try_data(s)) {
+          b.null();
+        }
       } else {
         auto res = msb_->builder_raw_.parser_(s, nullptr);
         auto& [value, diag] = res;
         if (value) {
-          b.data(std::move(*value));
+          if (not b.try_data(std::move(*value))) {
+            b.null();
+          }
         } else {
-          b.data(s);
+          if (not b.try_data(s)) {
+            b.null();
+          }
         }
       }
     },
@@ -147,14 +153,20 @@ auto object_generator::data_unparsed(std::string s) -> void {
         return;
       }
       if (msb_->settings_.raw) {
-        b.data(s);
+        if (not b.try_data(s)) {
+          b.null();
+        }
       } else {
         auto res = msb_->builder_raw_.parser_(s, nullptr);
         auto& [value, diag] = res;
         if (value) {
-          b.data(std::move(*value));
+          if (not b.try_data(std::move(*value))) {
+            b.null();
+          }
         } else {
-          b.data(s);
+          if (not b.try_data(s)) {
+            b.null();
+          }
         }
       }
     },
@@ -256,14 +268,20 @@ auto list_generator::data_unparsed(std::string_view s) -> void {
         return;
       }
       if (msb_->settings_.raw) {
-        b.data(s);
+        if (not b.try_data(s)) {
+          b.null();
+        }
       } else {
         auto res = msb_->builder_raw_.parser_(s, nullptr);
         auto& [value, diag] = res;
         if (value) {
-          b.data(std::move(*value));
+          if (not b.try_data(std::move(*value))) {
+            b.null();
+          }
         } else {
-          b.data(s);
+          if (not b.try_data(s)) {
+            b.null();
+          }
         }
       }
     },
