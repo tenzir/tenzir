@@ -1,14 +1,16 @@
 ---
 title: Tenzir Node v4.22
 authors: [jachris, raxyte]
-date: 2024-10-17
+date: 2024-10-18
 tags: [release, node]
 comments: true
 ---
 
-The Documentation for the new version of our Tenzir Query Language is finally here!
+[Tenzir Node v4.22][github-release] comes with documentation for the new version
+of the Tenzir Query Language, connectors for Google Cloud Pub/Sub and various
+bug fixes.
 
-<!-- ![Tenzir Node v4.22](tenzir-node-v4.21.excalidraw.svg) -->
+![Tenzir Node v4.22](tenzir-node-v4.22.excalidraw.svg)
 
 [github-release]: https://github.com/tenzir/tenzir/releases/tag/v4.22.0
 
@@ -17,7 +19,9 @@ The Documentation for the new version of our Tenzir Query Language is finally he
 ## TQL2 Documentation
 
 
-## Publish and Subscribe to Google Cloud Pub/Sub
+
+
+## Google Cloud Pub/Sub Integration
 
 The new `google-cloud-pubsub` connector allows you to subscribe to
 Google Cloud Pub/Sub subscriptions and publish to topics.
