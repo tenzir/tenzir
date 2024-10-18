@@ -18,35 +18,24 @@ bug fixes.
 
 ## TQL2 Documentation
 
-The new version of our query language - TQL2 - was first made
-[public back in August of this year](tenzir-platform-is-now-generally-available#tql2).
-You may also have noticed that the Tenzir App has had a toggle to enable TQL2 for
-some time. Since then we have made great progress on improving its feature suite.
+We’re thrilled to share that the new version of our query language, TQL2, first
+unveiled in August, has taken exciting strides forward! If you’ve been using the
+Tenzir Platform, you might have already noticed the toggle to enable TQL2,
+allowing you to explore its potential.
 
-However, for most of that time there was no good way to learn about the new
-language, as it lacked a crucial part: Documentation.
+Today marks a significant milestone as we unveil the initial version of our
+highly anticipated [TQL2 documentation](../overview). This means you can now
+dive deep into learning about TQL2 and unlock its full capabilities!
 
-This changes today, as we are releasing the initial version of our
-[TQL2 documentation](../overview).
-
-As an example here is the
-[page listing all operators currently available in TQL2](../tql2/operators).
-
-Going forward, we are going to flesh out the documentation and fill in the
-missing parts.
-
-<!-- TODO: Do we encourage usage of TQL2 now? -->
-<!-- TODO: Do we say that some new features may not be made for TQL1 any longer? -->
+We’re committed to continuously enhancing the documentation, ensuring you have
+all the resources you need to make the most of TQL2. Stay tuned for more
+updates!
 
 ## Google Cloud Pub/Sub Integration
 
-The new [`google-cloud-pubsub` connector](../next/connectors/google_cloud_pubsub) allows you to subscribe to
-Google Cloud Pub/Sub subscriptions and publish to topics.
-
-:::note Authenticate with the gcloud CLI
-The connector tries to retrieve the appropriate credentials using
-[Google's Application Default Credentials](https://google.aip.dev/auth/4110).
-:::
+The new [`google-cloud-pubsub`
+connector](../next/connectors/google_cloud_pubsub) allows you to subscribe and
+publish to Google Cloud Pub/Sub subscriptions topics.
 
 ```text{0} title="Subscribe to 'my-subscription'"
 load google-cloud-pubsub "amazing-project-123456" "my-subscription"
@@ -60,19 +49,18 @@ load google-cloud-pubsub "amazing-project-123456" "my-subscription"
 | save google-cloud-pubsub "amazing-project-123456" "alerts-topic"
 ```
 
-The connector is also available in TQL2 as [`load_google_cloud_pubsub`](../tql2/operators/load_google_cloud_pubsub) and
-[`save_google_cloud_pubsub`](../tql2/operators/save_google_cloud_pubsub) respectively:
-
-<!-- TODO: Write and link docs for these operators -->
+The connector is also available in TQL2 as
+[`load_google_cloud_pubsub`](../tql2/operators/load_google_cloud_pubsub) and
+[`save_google_cloud_pubsub`](../tql2/operators/save_google_cloud_pubsub):
 
 ```tql title="Using Tenzir to filter and translate events"
-//tql2
-load_google_cloud_pubsub "amazing-project-123456" "my-subscription"
+// tql2
+load_google_cloud_pubsub "amazing-project-123456", "my-subscription"
 read_syslog
 content = content.parse_grok("{%WORD:type} %{IP:source}")
 where content.type == "alert"
 write_json ndjson=true
-save_google_cloud_pubsub "amazing-project-123456" "alerts-topic"
+save_google_cloud_pubsub "amazing-project-123456", "alerts-topic"
 ```
 
 ## Other Changes
@@ -83,9 +71,9 @@ improvements. For a detailed list of changes, be sure to check out the
 
 ## Join Us for Office Hours
 
-Every second Tuesday at 5 PM CET, we hold our office hours on our
-[Discord server][discord]. Whether you have ideas for new packages or want to
-discuss upcoming features—join us for a chat!
+Every second Tuesday at 5 PM CET, we hold our office hours on our [Discord
+server][discord]. Whether you have ideas for new packages or want to discuss
+upcoming features—join us for a chat!
 
 [discord]: /discord
 [changelog]: /changelog#v4220
