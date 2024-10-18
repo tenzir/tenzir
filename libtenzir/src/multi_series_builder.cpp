@@ -31,10 +31,20 @@ void append_name_to_signature(std::string_view x, signature_type& out) {
   auto name_bytes = as_bytes(x);
   out.insert(out.end(), name_bytes.begin(), name_bytes.end());
 }
+/// Utility function used in the merging mode
+auto store_raw_or_null(builder_ref b, diagnostic_handler& dh,
+                       std::string_view v) -> void {
+  if (not b.try_data(v)) {
+    b.null();
+    TENZIR_ASSERT(b.is_protected());
+    diagnostic::warning("failed to parse a value as expected type")
+      .note("value `{}` failed to parse as `{}`", v, b.type().kind())
+      .emit(dh);
+  }
+}
 } // namespace
 
 namespace detail::multi_series_builder {
-
 auto record_generator::exact_field(std::string_view name) -> object_generator {
   if (not msb_) {
     return object_generator{};
@@ -119,20 +129,18 @@ auto object_generator::data_unparsed(std::string_view s) -> void {
         return;
       }
       if (msb_->settings_.raw) {
-        if (not b.try_data(s)) {
-          b.null();
-        }
+        store_raw_or_null(b, msb_->dh_, s);
       } else {
         auto res = msb_->builder_raw_.parser_(s, nullptr);
         auto& [value, diag] = res;
         if (value) {
-          if (not b.try_data(std::move(*value))) {
-            b.null();
+          if (not b.try_data(*value)) {
+            /// corner case handling if the data_builders used parser disagrees
+            /// with the protected builder
+            store_raw_or_null(b, msb_->dh_, s);
           }
         } else {
-          if (not b.try_data(s)) {
-            b.null();
-          }
+          store_raw_or_null(b, msb_->dh_, s);
         }
       }
     },
@@ -153,20 +161,18 @@ auto object_generator::data_unparsed(std::string s) -> void {
         return;
       }
       if (msb_->settings_.raw) {
-        if (not b.try_data(s)) {
-          b.null();
-        }
+        store_raw_or_null(b, msb_->dh_, s);
       } else {
         auto res = msb_->builder_raw_.parser_(s, nullptr);
         auto& [value, diag] = res;
         if (value) {
-          if (not b.try_data(std::move(*value))) {
-            b.null();
+          if (not b.try_data(*value)) {
+            /// corner case handling if the data_builders used parser disagrees
+            /// with the protected builder
+            store_raw_or_null(b, msb_->dh_, s);
           }
         } else {
-          if (not b.try_data(s)) {
-            b.null();
-          }
+          store_raw_or_null(b, msb_->dh_, s);
         }
       }
     },
@@ -268,20 +274,18 @@ auto list_generator::data_unparsed(std::string_view s) -> void {
         return;
       }
       if (msb_->settings_.raw) {
-        if (not b.try_data(s)) {
-          b.null();
-        }
+        store_raw_or_null(b, msb_->dh_, s);
       } else {
         auto res = msb_->builder_raw_.parser_(s, nullptr);
         auto& [value, diag] = res;
         if (value) {
-          if (not b.try_data(std::move(*value))) {
-            b.null();
+          if (not b.try_data(*value)) {
+            /// corner case handling if the data_builders used parser disagrees
+            /// with the protected builder
+            store_raw_or_null(b, msb_->dh_, s);
           }
         } else {
-          if (not b.try_data(s)) {
-            b.null();
-          }
+          store_raw_or_null(b, msb_->dh_, s);
         }
       }
     },
@@ -302,14 +306,18 @@ auto list_generator::data_unparsed(std::string s) -> void {
         return;
       }
       if (msb_->settings_.raw) {
-        b.data(s);
+        store_raw_or_null(b, msb_->dh_, s);
       } else {
         auto res = msb_->builder_raw_.parser_(s, nullptr);
         auto& [value, diag] = res;
         if (value) {
-          b.data(std::move(*value));
+          if (not b.try_data(*value)) {
+            /// corner case handling if the data_builders used parser disagrees
+            /// with the protected builder
+            store_raw_or_null(b, msb_->dh_, s);
+          }
         } else {
-          b.data(s);
+          store_raw_or_null(b, msb_->dh_, s);
         }
       }
     },

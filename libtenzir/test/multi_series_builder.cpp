@@ -115,7 +115,12 @@ auto check_outcome(const std::vector<series>& res,
 
 struct failing_diagnostic_handler : public diagnostic_handler {
   void emit(diagnostic d) override {
-    fmt::print("diagnostic {} : {}", d.severity, d.message);
+    fmt::print("diagnostic {} : {}\n", d.severity, d.message);
+    if (not d.notes.empty()) {
+      for (auto& n : d.notes) {
+        fmt::print("\t{} : {}\n", n.kind, n.message);
+      }
+    }
     CHECK(false);
   }
 };
@@ -262,6 +267,7 @@ TEST(merging records with seed and raw) {
       {"1", double_type{}},
     },
   };
+  collecting_diagnostic_handler cdh;
   multi_series_builder b{
     multi_series_builder::policy_schema{
       .seed_schema = "seed",
@@ -270,7 +276,7 @@ TEST(merging records with seed and raw) {
       .merge = true,
       .raw = true,
     },
-    dh,
+    cdh,
     {seed_schema},
   };
 
@@ -299,6 +305,8 @@ TEST(merging records with seed and raw) {
   }
 
   const auto res = b.finalize();
+  auto diags = std::move(cdh).collect();
+  CHECK_EQUAL(diags.size(), std::size_t{1});
   CHECK_EQUAL(res.size(),
               std::size_t{1}); // merging should produce exactly one series here
 
