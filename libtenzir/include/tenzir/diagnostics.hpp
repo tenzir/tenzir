@@ -131,20 +131,21 @@ struct [[nodiscard]] diagnostic {
   std::vector<diagnostic_note> notes;
 
   template <class... Ts>
-  static auto builder(enum severity s, fmt::format_string<Ts...> str,
-                      Ts&&... xs) -> diagnostic_builder;
+  static auto
+  builder(enum severity s, fmt::format_string<Ts...> str, Ts&&... xs)
+    -> diagnostic_builder;
 
   static auto builder(enum severity s, caf::error err) -> diagnostic_builder;
 
   template <class... Ts>
-  static auto
-  error(fmt::format_string<Ts...> str, Ts&&... xs) -> diagnostic_builder;
+  static auto error(fmt::format_string<Ts...> str, Ts&&... xs)
+    -> diagnostic_builder;
 
   static auto error(caf::error err) -> diagnostic_builder;
 
   template <class... Ts>
-  static auto
-  warning(fmt::format_string<Ts...> str, Ts&&... xs) -> diagnostic_builder;
+  static auto warning(fmt::format_string<Ts...> str, Ts&&... xs)
+    -> diagnostic_builder;
 
   static auto warning(caf::error err) -> diagnostic_builder;
 
@@ -320,8 +321,8 @@ auto diagnostic::builder(enum severity s, fmt::format_string<Ts...> str,
 }
 
 template <class... Ts>
-auto diagnostic::error(fmt::format_string<Ts...> str,
-                       Ts&&... xs) -> diagnostic_builder {
+auto diagnostic::error(fmt::format_string<Ts...> str, Ts&&... xs)
+  -> diagnostic_builder {
   return builder(severity::error, std::move(str), std::forward<Ts>(xs)...);
 }
 
@@ -331,8 +332,8 @@ inline auto diagnostic::error(caf::error err) -> diagnostic_builder {
 }
 
 template <class... Ts>
-auto diagnostic::warning(fmt::format_string<Ts...> str,
-                         Ts&&... xs) -> diagnostic_builder {
+auto diagnostic::warning(fmt::format_string<Ts...> str, Ts&&... xs)
+  -> diagnostic_builder {
   return builder(severity::warning, std::move(str), std::forward<Ts>(xs)...);
 }
 
@@ -480,6 +481,29 @@ public:
 
   auto operator->()
     -> T* requires(not std::same_as<T, void>) { return &**this; }
+
+  [[nodiscard]]
+  operator caf::expected<T>() && {
+    if (is_success()) {
+      if constexpr (not std::same_as<T, void>) {
+        return std::move(*this).unwrap();
+      } else {
+        return {};
+      }
+    }
+    return ec::silent;
+  }
+
+  [[nodiscard]] operator caf::result<T>() && {
+    if (is_success()) {
+      if constexpr (not std::same_as<T, void>) {
+        return std::move(*this).unwrap();
+      } else {
+        return {};
+      }
+    }
+    return ec::silent;
+  }
 
   friend auto inspect(auto& f, failure_or& x) -> bool {
     return f.apply(static_cast<super&>(x));

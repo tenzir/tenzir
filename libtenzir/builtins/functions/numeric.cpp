@@ -137,8 +137,8 @@ public:
     return "tql2.round";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto value = ast::expression{};
     auto spec = std::optional<located<duration>>{};
     TRY(argument_parser2::function("round")
@@ -161,8 +161,8 @@ public:
     return "tql2.sqrt";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(
       argument_parser2::function("sqrt").add(expr, "<number>").parse(inv, ctx));
@@ -230,8 +230,8 @@ public:
     return "tql2.random";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     argument_parser2::function("random").parse(inv, ctx).ignore();
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -262,7 +262,7 @@ public:
     count_ += arg.array->length() - arg.array->null_count();
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     return count_;
   }
 
@@ -349,7 +349,7 @@ public:
     caf::visit(f, arg.type);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     switch (state_) {
       case state::none:
       case state::failed:

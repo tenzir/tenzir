@@ -98,7 +98,7 @@ public:
 
   virtual void update(const table_slice& input, session ctx) = 0;
 
-  virtual auto finish() -> data = 0;
+  virtual auto get() const -> data = 0;
 };
 
 class aggregation_plugin : public virtual function_plugin {

@@ -23,13 +23,13 @@ template <concrete_type Type>
 struct heterogeneous_data_hash {
   using is_transparent = void;
 
-  [[nodiscard]] auto
-  operator()(view<type_to_data_t<Type>> value) const -> size_t {
+  [[nodiscard]] auto operator()(view<type_to_data_t<Type>> value) const
+    -> size_t {
     return hash(value);
   }
 
-  [[nodiscard]] auto
-  operator()(const type_to_data_t<Type>& value) const -> size_t
+  [[nodiscard]] auto operator()(const type_to_data_t<Type>& value) const
+    -> size_t
     requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
   {
     return hash(make_view(value));
@@ -105,7 +105,7 @@ public:
     }
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     return data{uint64_t{distinct_.size()}};
   }
 
