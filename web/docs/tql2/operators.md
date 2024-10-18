@@ -8,7 +8,7 @@ Tenzir comes with a wide range of built-in pipeline operators.
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`set`](./operators/set.md) | Assigns a value of a field, creating it if necessary | `name = "Tenzir"`
+[`set`](./operators/set.md) | Assigns a value to a field, creating it if necessary | `name = "Tenzir"`
 [`select`](./operators/select.md) | Selects some values and discard the rest | `select name, id=metadata.id`
 [`drop`](./operators/drop.md) | Removes fields from the event | `drop name, metadata.id`
 [`enumerate`](./operators/enumerate.md) | Adds a field with the number of the event | `enumerate num`
