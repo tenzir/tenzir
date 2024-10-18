@@ -12,34 +12,26 @@ Writes a byte stream to a file.
 
 ### `path: str`
 
-The file path to write bytes to.
+The file path to write to. If intermediate directories do not exist, they will
+be created. When `~` is the first character, it will be substituted with the
+value of the `$HOME` environment variable.
 
 ### `append = bool (optional)`
 
-If `true`, appends bytes to the file.
-If `false`, overwrites existing file data.
-
-Cannot be specified with `uds=true`.
-
-Defaults to `false`.
+If `true`, appends to the file instead of overwriting it.
 
 ### `real_time = bool (optional)`
 
-If `true`, immediately writes data to the file.
-If `false`, buffers data and flushes when buffer is filled.
-
-Defaults to `false`.
+If `true`, immediately synchronizes the file with every chunk of bytes instead
+of buffering bytes to batch filesystem write operations.
 
 ### `uds = bool (optional)`
 
-Whether to create a UNIX Domain Socket instead of a normal file.
-
-Defaults to `false`.
+If `true`, creates a Unix Domain Socket instead of a normal file. Cannot be
+combined with `append=true`.
 
 ## Examples
 
 ```tql
-subscribe "ocsf-feed"
-// TODO: Filtering 
-save_file "oscf.logs", append=true, real_time=true
+save_file "/tmp/out.txt"
 ```

@@ -21,7 +21,7 @@ The duration to count events in, i.e., how often the sample rate is computed.
 
 The sampling rate for the first window is `1:1`.
 
-Defaults to `30 seconds`.
+Defaults to `30s`.
 
 ### `mode = str (optional)`
 
@@ -56,7 +56,7 @@ than 50 events (`min_events`) are received. Additionally, cap the max sampling
 rate to `1:500`, i.e. 1 sample for every 500 events or more (`max_rate`).
 
 ```tql
-subscribe "log-stream" 
+subscribe "log-stream"
 sample 30s, min_events=50, max_rate=500
 ```
 Sample some `metrics` every hour, limiting the max samples per period to 5000
@@ -64,7 +64,7 @@ samples (`max_samples`) and limiting the overall sample count to 100k samples
 ([`head`](head.md)).
 
 ```tql
-subscribe "metrics" 
+subscribe "metrics"
 sample 1h, max_samples 5k
 head 100k
 ```

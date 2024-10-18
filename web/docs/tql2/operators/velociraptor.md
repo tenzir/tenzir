@@ -65,7 +65,7 @@ Defaults to a randoum UUID.
 
 The ID of the Velociraptor organization.
 
-Defaults to `root`.
+Defaults to `"root"`.
 
 ### `query = str (optional)`
 
@@ -90,7 +90,7 @@ contains the result of the hunt.
 
 Controls how long to wait before releasing a partial result set.
 
-Defaults to `1 second`.
+Defaults to `1s`.
 
 ### `profile = str (optional)`
 

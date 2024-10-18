@@ -50,7 +50,7 @@ Defaults to 1.0.
 ## Examples
 
 Replay the M57 Zeek logs with real-world inter-arrival times from the `ts`
-column. For example, if an event arrives at time *t* and the next event at
+field. For example, if an event arrives at time *t* and the next event at
 time *u*, then the `delay` operator will wait time *u - t* between emitting the
 two events. If *t > u* then the operator immediately emits next event.
 

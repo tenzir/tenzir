@@ -21,21 +21,17 @@ up. To connect pipelines with back pressure, use the [`publish`](publish.md) and
 
 ### `retro = bool (optional)`
 
-XXX: Is this warning still correct?
-:::warning Experimental
-There is a gap for live events that happen while past events are being exported.
-:::
-
-Export persistent events at a Tenzir node. Unless `live` is given, this is
+Export persistent events at a Tenzir node. Unless `live=true` is given, this is
 implied.
 
-Combine `retro` and `live` to export past events and live events afterwards.
+Use `retro=true, live=true` to export past events, and live events afterwards.
 
 ### `internal = bool (optional)`
 
 Export internal events, such as metrics or diagnostics, instead. By default,
 `export` only returns events that were previously imported with `import`. In
-contrast, `export internal=true` exports internal events such as operator metrics.
+contrast, `export internal=true` exports internal events such as operator
+metrics.
 
 ### `parallel = uint (optional)`
 
@@ -53,11 +49,10 @@ export
 write_json
 ```
 
-[Apply a filter](where.md) to all persisted events, then [only expose the first
-ten results](head.md).
+Apply a filter to all persisted events, then only get the first twenty results:
 
 ```tql
-export 
-where src_ip == 1.2.3.4 
-head 10
+export
+where src_ip == 1.2.3.4
+head 20
 ```

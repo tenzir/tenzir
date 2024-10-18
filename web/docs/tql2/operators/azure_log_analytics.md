@@ -19,29 +19,29 @@ The `azure_log_analytics` operator makes it possible to upload events to
 The operator handles access token retrievals by itself and updates that token
 automatically, if needed.
 
-### `tenant_id=str`
+### `tenant_id = str`
 
 The Microsoft Directory (tenant) ID, written as
 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 
-### `client_id=str`
+### `client_id = str`
 
 The Microsoft Application (client) ID, written as
 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 
-### `client_secret=str`
+### `client_secret = str`
 
 The client secret.
 
-### `dce=str`
+### `dce = str`
 
 The data collection endpoint URL.
 
-### `dcr=str`
+### `dcr = str`
 
 The data collection rule ID, written as `dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`.
 
-### `table=str`
+### `table = str`
 
 The table to upload events to.
 
@@ -51,7 +51,7 @@ Upload `custom.mydata` events to a table `Custom-MyData`:
 
 ```tql
 export
-where @name == "custom.mydata"
+where meta.name == "custom.mydata"
 azure_log_analytics tenant_id="00a00a00-0a00-0a00-00aa-000aa0a0a000",
   client_id="000a00a0-0aa0-00a0-0000-00a000a000a0",
   client_secret="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",

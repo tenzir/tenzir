@@ -1,6 +1,6 @@
 # every
 
-Runs a pipeline every time an `interval` elapses.
+Runs a pipeline periodically at a fixed interval.
 
 ```tql
 every interval:duration { … }
@@ -8,27 +8,31 @@ every interval:duration { … }
 
 ## Description
 
-Runs a pipeline every time an `interval` elapses.
-
-### `interval: duration`
-
-The duration to wait between running pipeline.
-
-### `{ … }`
-
-The pipeline to execute.
+The `every` operator repeats running a pipeline indefinitely at a fixed interval. The first run is starts directly when the outer pipeline itself starts. After every interval, the previous run is finished by stopping its input, and a new run is started.
 
 ## Examples
 
-```tql
-every 10 min {
-  context update 
-}
-```
+Produce once event every second and enumerate the result:
 
 ```tql
-every 1h {
-  load_http "url"
+every 1s {
+  from {}
+}
+enumerate
+――――――――――――――――――――――――
+{"#": 0} // immediately
+{"#": 1} // after 1s
+{"#": 2} // after 2s
+{"#": 3} // after 3s
+// … continues like this
+```
+
+Fetch the results from an API every 10 minutes and publish the result:
+
+```tql
+every 10min {
+  load_http "example.org/api/threats"
+  read_json
 }
 publish "threat-feed"
 ```

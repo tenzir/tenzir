@@ -79,10 +79,10 @@ Without an unflatten separator, the data looks like this:
 
 ```json title="Without unflattening"
 {
-  "id.orig_h" : "1.1.1.1",
-  "id.orig_p" : 10,
-  "id.resp_h" : "1.1.1.2",
-  "id.resp_p" : 5
+  "id.orig_h": "1.1.1.1",
+  "id.orig_p": 10,
+  "id.resp_h": "1.1.1.2",
+  "id.resp_p": 5
 }
 ```
 
@@ -90,11 +90,11 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ```json title="With 'unflatten'"
 {
-  "id" : {
-    "orig_h" : "1.1.1.1",
-    "orig_p" : 10,
-    "resp_h" : "1.1.1.2",
-    "resp_p" : 5
+  "id": {
+    "orig_h": "1.1.1.1",
+    "orig_p": 10,
+    "resp_h": "1.1.1.2",
+    "resp_p": 5
   }
 }
 ```

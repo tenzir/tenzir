@@ -104,7 +104,7 @@ match, effectively creating a disjunction of all rules inside the directory.
 How often the `sigma` operator looks at the specified rule or directory of rules
 to update its internal state.
 
-Defaults to `5 seconds`.
+Defaults to `5s`.
 
 ## Examples
 

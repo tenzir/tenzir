@@ -50,8 +50,10 @@ Here's an `eve.log` sample:
 
 Import the log as follows:
 
-```bash
-tenzir --tql2 'read_suricata | import' < eve.log
+```tql
+read_file "eve.log"
+read_suricata
+import
 ```
 
 Instead of writing to a file, Suricata can also log to a UNIX domain socket that
@@ -67,16 +69,9 @@ outputs:
 ```
 
 Suricata creates `eve.sock` upon startup. Thereafter, you can read from the
-socket via netcat:
+socket:
 
-```bash
-nc -vlkU eve.sock | tenzir --tql2 'read_suricata | ...'
-```
-
-Or natively via this Tenzir pipeline:
-
-XXX: Fix this
-
-```
-from file --uds eve.sock read suricata
+```tql
+load_file "eve.sock"
+read_suricata
 ```

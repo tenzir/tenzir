@@ -24,7 +24,7 @@ easily.
 The number of events or bytes that may be kept at most in the buffer.
 
 Note that every operator already buffers up to `254Ki` events before it starts
-applying back pressure. Smaller buffers may pessimize performance.
+applying back pressure. Smaller buffers may decrease performance.
 
 ### `policy = str (optional)`
 
@@ -40,8 +40,8 @@ otherwise. When buffering bytes, this option always defaults to `"block"`.
 
 ## Examples
 
-Buffer up to `10M` events or bytes in a buffer, dropping them if downstream cannot
-keep up.
+Buffer up to 10 million events or bytes in a buffer, dropping them if downstream
+cannot keep up.
 
 ```tql
 buffer 10M, policy="drop"

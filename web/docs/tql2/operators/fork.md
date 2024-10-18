@@ -1,6 +1,6 @@
 # fork
 
-Executes a subpipeline with the same input.
+Executes a subpipeline with a copy of the input.
 
 ```tql
 fork { … }
@@ -8,17 +8,21 @@ fork { … }
 
 ## Description
 
-Executes a subpipeline with the same input.
+The `fork` operator execute a subpipeline with a copy its input, that is:
+whenever an event arrives, it is send both to the given pipeline and forwarded
+at the same time to the next operator.
 
 ### `{ … }`
 
-The pipeline to execute
+The pipeline to execute. Must have a sink.
 
 ## Examples
 
+Publish incoming events while importing them at the same time:
+
 ```tql
-load_tcp "<url>"
-fork { publish "raw-feed" }
-where @name == "ocsf.dhcp_activity"
-// Filter
+fork {
+  publish "imported-events"
+}
+import
 ```

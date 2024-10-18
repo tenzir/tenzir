@@ -32,15 +32,19 @@ Defaults to `1Ki`.
 
 ## Examples
 
-Read a Zeek conn.log, 100 events at a time:
+### Normal Usage
 
-```tql title="Parse logs from a file and serve them"
+Read a Zeek `conn.log` and make it available as `zeek-conn-logs`:
+
+```tql
 load_file "path/to/conn.log"
 read_zeek_tsv
 serve "zeek-conn-logs"'
 ```
 
-```bash title="Fetch max 100 events from the serve endpoint"
+Then fetch the first 100 events from the `/serve` endpoint:
+
+```bash
 curl \
   -X POST \
   -H "Content-Type: application/json" \
@@ -55,7 +59,7 @@ Subsequent results for further events must specify a continuation token. The
 token is included in the response under `next_continuation_token` if there are
 further events to be retrieved from the endpoint.
 
-Wait for an initial event:
+### Wait for First Event
 
 This pipeline will produce 10 events after 3 seconds of doing nothing.
 

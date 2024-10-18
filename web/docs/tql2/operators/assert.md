@@ -1,33 +1,33 @@
 # assert
 
-Asserts that an invariant is held or that a condition is satisfied.
+Drops event and emits a warning if the invariant is violated.
 
 ```tql
-assert invariant:expr
+assert invariant:bool
 ```
 
 ## Description
 
-The `assert` operator _asserts_ that `invariant` is `true` for all evaluations
-of the expression.
-
-Use `assert` to ensure the shape or other features of the data meet your
-assumptions. Tenzir's expression language offers various ways to describe the desired data. In particular,
-expressions work *across schemas* and thus make it easy to concisely articulate constraints.
-
-### `invariant: expr`
-
-The `predicate` is an [expression](../language/expressions.md) that is evaluated and tested for each event.
-The evaluation must result in a boolean value.
-
-If the result is `true`, execution continues as normal.
-If the result is `false`, the operator emits a diagnostic and continues.
+The `assert` operator asserts that `invariant` is `true` for events. In case an
+event does not satisfy the invariant, it is dropped and a warning is emitted.
+The only difference between `assert` and `where` is that latter does not emit
+such a warning.
 
 ## Examples
 
+Make sure that all events satisfy `x > 2`:
 ```tql
-export
-where @name == "ocsf.dhcp_activity"
-assert this.has("src_ip")
-publish "dhcp"
+from [{x: 1}, {x: 2}, {x: 1}]
+assert x > 2
+―――――――――――――――――――――――――――――
+{x: 1}
+// warning: assertion failure
+{x: 1}
+```
+
+Check that the topic only contains OCSF network activity events:
+```tql
+subscribe "network"
+assert meta.name == "ocsf.network_activity"
+// continue processing
 ```

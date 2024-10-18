@@ -30,28 +30,28 @@ continuously running pipelines, use the `blockwise=true` option that considers e
 block as a separate unit. Otherwise the scanner engine would simply accumulate
 blocks but never trigger a scan.
 
-### `rule:list<str>`
+### `rule: list<str>`
 
 The path to the YARA rule(s).
 
 If the path is a directory, the operator attempts to recursively add all
 contained files as YARA rules.
 
-### `blockwise=bool (optional)`
+### `blockwise = bool (optional)`
 
 If to match on every byte chunk instead of triggering a scan when the input exhausted.
 
 This option makes sense for never-ending dataflows where each chunk of bytes
 constitutes a self-contained unit, such as a single file.
 
-### `compiled_rules=bool (optional)`
+### `compiled_rules = bool (optional)`
 
 Whether to interpret the rules as compiled.
 
 When providing this flag, you must exactly provide one rule path as positional
 argument.
 
-### `fast_scan=bool (optional)`
+### `fast_scan = bool (optional)`
 
 Enable fast matching mode.
 
@@ -65,16 +65,16 @@ simple rule scanning service.
 Scan a file with a set of YARA rules:
 
 ```tql
-load_file "evil.exe" mmap=true 
+load_file "evil.exe", mmap=true
 yara "rule.yara"
 ```
 
 :::info Memory Mapping Optimization
 The `mmap` flag is merely an optimization that constructs a single chunk of
-bytes instead of a contiguous stream. Without `mmap=true`, the
-[`file`](TODO) loader generates a stream of byte chunks and
-feeds them incrementally to the `yara` operator. This also works, but
-performance is better due to memory locality when using `mmap`.
+bytes instead of a contiguous stream. Without `mmap=true`,
+[`load_file`](load_file.md) generates a stream of byte chunks and feeds them
+incrementally to the `yara` operator. This also works, but performance is better
+due to memory locality when using `mmap`.
 :::
 
 Let's unpack a concrete example:
@@ -142,13 +142,18 @@ indexed by string identifier to report a list of matches per rule string.
 
 ### Build a YARA scanning service
 
+:::note
+This example will be back soon.
+:::
+
+<!--
 Let's say you want to build a service that scans malware sample that you receive
 over a Kafka topic `malware`.
 
 Launch the processing pipeline as follows:
 
 ```tql
-load kafka --topic malware 
+load kafka --topic malware
 yara --blockwise /path/to/rules
 ```
 
@@ -177,3 +182,4 @@ load file --mmap evil.exe | save kafka --topic malware
 
 This pipeline loads the file `evil.exe` as single blob and sends it to Kafka, at
 topic `malware`.
+-->

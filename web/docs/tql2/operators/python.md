@@ -62,35 +62,35 @@ separate them with a space: `requirements="foo bar"`.
 Insert or modify the field `x` and set it to `"hello, world"`:
 
 ```tql
-python 'self.x = "hello, world"'
+python "self.x = 'hello, world'"
 ```
 
 Clear the contents of `self` to remove the implicit input values from the
 output:
 
 ```tql
-python '
+python "
   self.clear()
   self.x = 23
-'
+"
 ```
 
 Define a new field `x` as the square root of the field `y`, and remove `y` from
 the output:
 
 ```tql
-python '
+python "
   import math
   self.x = math.sqrt(self.y)
   del self.y
-'
+"
 ```
 
 Make use of third party packages:
 
 ```tql
-python '
+python r#"
   import requests
   requests.post("http://imaginary.api/receive", data=self)
-', requirements="requests=^2.30"
+"#, requirements="requests=^2.30"
 ```

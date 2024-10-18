@@ -14,17 +14,18 @@ the child's standard output is forwarded to the output of the operator.
 
 ### `cmd: str`
 
-The command to execute and hook into the pipeline processing.
-
-The command is interpreted by `/bin/sh -c`.
+The command to execute and hook into the pipeline processing. It is interpreted
+by `/bin/sh -c`.
 
 :::tip Lots of escaping?
-Try using raw string literals to simplify: `r#"This is a valid "string" with
-nested quotes(") "#`.
+Try using raw string literals: `r#"echo "i can use quotes""#`.
 :::
 
 ## Examples
 
+Show a live log from the `tenzir-node` service:
+
 ```tql
-shell ""
+shell "journalctl -u tenzir-node -f"
+read_json
 ```

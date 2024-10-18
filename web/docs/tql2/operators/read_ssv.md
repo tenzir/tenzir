@@ -98,10 +98,10 @@ Without an unflatten separator, the data looks like this:
 
 ```json title="Without unflattening"
 {
-  "id.orig_h" : "1.1.1.1",
-  "id.orig_p" : 10,
-  "id.resp_h" : "1.1.1.2",
-  "id.resp_p" : 5
+  "id.orig_h": "1.1.1.1",
+  "id.orig_p": 10,
+  "id.resp_h": "1.1.1.2",
+  "id.resp_p": 5
 }
 ```
 
@@ -109,39 +109,29 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ```json title="With 'unflatten'"
 {
-  "id" : {
-    "orig_h" : "1.1.1.1",
-    "orig_p" : 10,
-    "resp_h" : "1.1.1.2",
-    "resp_p" : 5
+  "id": {
+    "orig_h": "1.1.1.1",
+    "orig_p": 10,
+    "resp_h": "1.1.1.2",
+    "resp_p": 5
   }
 }
 ```
 
 ## Examples
 
-### Load and parse a SSV file:
+### Parse an SSV file
 
-```csv title="input.ssv"
+```txt title="input.ssv"
 message count ip
-text" 42 "1.1.1.1"
-"longer quoted string" 100 "1.1.1.2"
+text 42 "1.1.1.1"
+"longer string" 100 1.1.1.2
 ```
 
-```tql title="Pipeline"
+```tql
 load "input.ssv"
 read_ssv
-```
-
-```json title="Output"
-{
-  "message" : "some text",
-  "count" : 42,
-  "ip" : "1.1.1.1"
-}
-{
-  "message" : "more text",
-  "count" : 100,
-  "ip" : "1.1.1.2"
-}
+―――――――――――――――――――――――――――――――――――――――――――――――――――――
+{ message: "text", count: 42, ip: 1.1.1.1 }
+{ message: "longer string", count: 100, ip: 1.1.1.2 }
 ```

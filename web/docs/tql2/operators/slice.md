@@ -1,6 +1,6 @@
 # slice
 
-Keep a range of events within the interval `[begin, end)` stepping by `stride`.
+Keeps a range of events within the interval `[begin, end)` stepping by `stride`.
 
 ```tql
 slice [begin=int, end=int, stride=int]

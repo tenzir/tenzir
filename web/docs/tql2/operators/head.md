@@ -14,7 +14,7 @@ Forwards the first `n` events and discards the rest.
 
 ### `n: uint (optional)`
 
-An unsigned integer denoting how many events to keep.
+The number of events to keep.
 
 Defaults to `10`.
 

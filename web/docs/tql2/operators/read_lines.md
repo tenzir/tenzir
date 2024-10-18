@@ -19,12 +19,7 @@ The resulting events have a single field called `line`.
 
 ### `skip_empty = bool (optional)`
 
-Affects parsing of empty lines:
-- `true`: Empty lines are parsed and emitted as `{}`, i.e. events with no
-fields. TODO: Probably a bug. Also, this seems swapped.
-- `false`: Empty lines are skipped.
-
-Defaults to `false`.
+Ignores empty lines in the input.
 
 ### `split_at_null = bool (optional)`
 
@@ -35,4 +30,5 @@ Use null byte (`\0`) as the delimiter instead of newline characters.
 ```tql
 load_file "events.log"
 read_lines
+is_error = line.starts_with("error:")
 ```

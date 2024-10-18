@@ -19,18 +19,10 @@ Take care when using this operator with large inputs.
 Reverse a stream of events:
 
 ```tql
-from [ {x: 1}, {x: 2}, {x: 3} ]
+from [{x: 1}, {x: 2}, {x: 3}]
 reverse
-```
-
-```json title="Output"
-{
-  "x": 3
-}
-{
-  "x": 2
-}
-{
-  "x": 1
-}
+―――――――――――――――――――――――――――――
+{x: 3}
+{x: 2}
+{x: 1}
 ```

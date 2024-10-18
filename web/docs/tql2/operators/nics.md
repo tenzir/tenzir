@@ -44,5 +44,5 @@ List all connected network interfaces.
 
 ```tql
 nics
-where status.connected == true
+where status.connected
 ```

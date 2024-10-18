@@ -1,29 +1,30 @@
 # read_xsv
 
-Read XSV (`X`-Separated Values) from a byte stream.
+Read XSV from a byte stream.
 
 ```tql
 read_xsv field_sep:str, list_sep:str, null_value:str,
-          [comments=bool, header=str, auto_expand=bool, schema=str, selector=str,
-          schema_only=bool, raw=bool, unflatten=str]
+        [comments=bool, header=str, auto_expand=bool, schema=str,
+         selector=str, schema_only=bool, raw=bool, unflatten=str]
 ```
 
 ## Description
 
 The `read_xsv` operator transforms a byte stream into a event stream by parsing
-the bytes as [XSV](https://en.wikipedia.org/wiki/Delimiter-separated_values).
+the bytes as [XSV](https://en.wikipedia.org/wiki/Delimiter-separated_values), a
+generalization of CSV with a more flexible separator specification.
 
 ### `field_sep: str`
 
-The `string` separating different fields.
+The string separating different fields.
 
 ### `list_sep: str`
 
-The `string` separating different elements in a list.
+The string separating different elements in a list within a single field.
 
 ### `null_value: str`
 
-The `string` denoting an absent value.
+The string denoting an absent value.
 
 ### `auto_expand = bool (optional)`
 
@@ -32,16 +33,12 @@ values instead of dropping the excess values.
 
 ### `comments = bool (optional)`
 
-Treat lines beginning with "#" as comments.
+Treat lines beginning with `#` as comments.
 
 ### `header = str (optional)`
 
-The `string` to be used as a `header` for the parsed values.
-If unspecified, the first line of the input is used as the header.
-
-### `list_sep = str (optional)`
-
-The `string` separating the elements _inside_ a list.
+The string to be used as the header for the parsed values. If unspecified, the
+first line of the input is used as the header.
 
 ### `raw = bool (optional)`
 
@@ -103,10 +100,10 @@ Without an unflatten separator, the data looks like this:
 
 ```json title="Without unflattening"
 {
-  "id.orig_h" : "1.1.1.1",
-  "id.orig_p" : 10,
-  "id.resp_h" : "1.1.1.2",
-  "id.resp_p" : 5
+  "id.orig_h": "1.1.1.1",
+  "id.orig_p": 10,
+  "id.resp_h": "1.1.1.2",
+  "id.resp_p": 5
 }
 ```
 
@@ -114,44 +111,11 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ```json title="With 'unflatten'"
 {
-  "id" : {
-    "orig_h" : "1.1.1.1",
-    "orig_p" : 10,
-    "resp_h" : "1.1.1.2",
-    "resp_p" : 5
+  "id": {
+    "orig_h": "1.1.1.1",
+    "orig_p": 10,
+    "resp_h": "1.1.1.2",
+    "resp_p": 5
   }
-}
-```
-
-## Examples
-
-### Load and parse a CSV file:
-
-:::tip Use `read_csv` to read CSV files
-Tenzir provides a `read_csv` operator, which already sets the separators.
-CSV is just used as an easy example here.
-:::
-
-```csv title="input.csv"
-message count ip
-some text, 42, "1.1.1.1"
-more text, 100, "1.1.1.2"
-```
-
-```tql title="Pipeline"
-load "input.csv"
-read_xsv "," ";" ""
-```
-
-```json title="Output"
-{
-  "message" : "some text",
-  "count" : 42,
-  "ip" : "1.1.1.1"
-}
-{
-  "message" : "more text",
-  "count" : 100,
-  "ip" : "1.1.1.2"
 }
 ```

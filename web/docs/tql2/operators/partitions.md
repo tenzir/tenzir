@@ -12,8 +12,8 @@ The `partitions` operator shows a summary of candidate partitions at a node.
 
 ### `predicate: expr (optional)`
 
-Show only partitions which would be considered for pipelines of the form
-`export | where <expr>` instead of returning all data.
+Show only partitions which would be considered for pipelines of the form `export
+| where <expr>` instead of returning all data.
 
 ## Schemas
 
@@ -59,11 +59,10 @@ summarize schema,
 sort schema
 ```
 
-Get an upper bound for the number of events that could contain the IP address
-127.0.0.1:
+Get an upper bound for the number of events that have `src_ip` set to 127.0.0.1:
 
 ```tql
-partitions :ip == 127.0.0.1
+partitions src_ip == 127.0.0.1
 summarize candidates=sum(events)
 ```
 

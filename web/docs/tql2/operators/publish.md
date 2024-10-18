@@ -9,8 +9,8 @@ publish [topic:str]
 ## Description
 
 The `publish` operator publishes events at a node in a channel with the
-specified topic. All [`subscribers`](subscribe.md) of the channel operator receive the 
-events immediately.
+specified topic. All [`subscribers`](subscribe.md) of the channel operator
+receive the events immediately.
 
 :::note
 The `publish` operator does not guarantee that events stay in their
@@ -24,7 +24,7 @@ publishes events to a global unnamed feed.
 
 ## Examples
 
-Publish Zeek conn logs under the topic `"zeek-conn"`.
+Publish Zeek connection logs under the topic `"zeek-conn"`.
 
 ```tql
 load_file "conn.log"

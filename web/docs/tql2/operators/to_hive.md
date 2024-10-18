@@ -47,11 +47,12 @@ Partition by a single field into local JSON files:
 ```tql
 from [{a: 0, b: 0}, {a: 0, b: 1}, {a: 1, b: 2}]
 to_hive "/tmp/out/", partition_by=[a], format="json"
+// This pipeline produces two files:
 // -> /tmp/out/a=0/1.json:
-//    {b: 0}
-//    {b: 1}
+//    {"b": 0}
+//    {"b": 1}
 // -> /tmp/out/a=1/2.json:
-//    {b: 2}
+//    {"b": 2}
 ```
 
 Write as Parquet into the Azure Blob Filesystem, partitioned by year, month and

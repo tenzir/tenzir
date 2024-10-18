@@ -121,10 +121,10 @@ Without an unflatten separator, the data looks like this:
 
 ```json title="Without unflattening"
 {
-  "id.orig_h" : "1.1.1.1",
-  "id.orig_p" : 10,
-  "id.resp_h" : "1.1.1.2",
-  "id.resp_p" : 5
+  "id.orig_h": "1.1.1.1",
+  "id.orig_p": 10,
+  "id.resp_h": "1.1.1.2",
+  "id.resp_p": 5
 }
 ```
 
@@ -132,33 +132,27 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ```json title="With 'unflatten'"
 {
-  "id" : {
-    "orig_h" : "1.1.1.1",
-    "orig_p" : 10,
-    "resp_h" : "1.1.1.2",
-    "resp_p" : 5
+  "id": {
+    "orig_h": "1.1.1.1",
+    "orig_p": 10,
+    "resp_h": "1.1.1.2",
+    "resp_p": 5
   }
 }
 ```
 
 ## Examples
 
-### Parse a fictional HTTP request log:
+Parse a fictional HTTP request log:
 
-```txt title="Input"
-55.3.244.1 GET /index.html 15824 0.043
-```
-
-```tql title="Pipeline"
-read_grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"
-```
-
-```json title="Output"
+```tql
+// Input: 55.3.244.1 GET /index.html 15824 0.043
+read_grok "%{IP:client} %{WORD} %{URIPATHPARAM:req} %{NUMBER:bytes} %{NUMBER:dur}"
+――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
 {
-  "client": "55.3.244.1",
-  "method": "GET",
-  "request": "/index.html",
-  "bytes": 15824,
-  "duration": 0.043
+  client: 55.3.244.1,
+  req: "/index.html",
+  bytes: 15824,
+  dur: 0.043
 }
 ```

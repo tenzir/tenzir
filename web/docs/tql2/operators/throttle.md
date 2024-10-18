@@ -13,19 +13,18 @@ bandwidth.
 
 ### `bandwidth: uint`
 
-An unsigned integer giving the maximum bandwidth that is enforced for
-this pipeline, in bytes per the specified interval.
+The maximum bandwidth that is enforced for this pipeline, in bytes per the
+specified interval.
 
 ### `within = duration (optional)`
 
-The duration in which to measure the maximum bandwidth.
+The duration over which to measure the maximum bandwidth.
 
-Defaults to `1 second`.
+Defaults to `1s`.
 
 ## Examples
 
-Read a TCP stream and print the data to stdout at a rate of 1 character per
-second:
+Read a TCP stream at a rate of 1 character per second:
 
 ```tql
 load_tcp "tcp://0.0.0.0:4000"
@@ -42,4 +41,3 @@ decompress "zstd"
 read_zeek_tsv
 import
 ```
-XXX: decompress

@@ -13,14 +13,15 @@ node.
 
 ### `live = bool (optional)`
 
-Work on all diagnostic events as they are generated in real-time instead of on
-diagnostic events persisted at a Tenzir node.
+If `true`, emits diagnostic events as they are generated in real-time. Unless
+`retro=true` is also given, this makes it so that previous diagnostics events
+are not returned.
 
 ### `retro = bool (optional)`
 
-Work on persisted diagnostic events (first), even when `live=true` is given.
-
-See [`export` operator](export.md#retro) for more details.
+Return diagnostic events that were generated in the past. Unless `live=true` is
+given, this is the default. If both are set to `true`, all previous events are
+returned before beginning with the live events.
 
 ## Schemas
 
@@ -62,12 +63,12 @@ View all diagnostics generated in the past five minutes.
 
 ```tql
 diagnostics
-where timestamp > now() - 5m
+where timestamp > now() - 5min
 ```
 
-Only show diagnostics that contain the `error` severity.
+Get a live feed of error diagnostics as they are emitted.
 
 ```tql
-diagnostics
+diagnostics live=true
 where severity == "error"
 ```

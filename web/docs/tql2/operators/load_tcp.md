@@ -8,14 +8,14 @@ load_tcp endpoint:str, [connect=bool, parallel=uint, tls=bool, certfile=str, key
 
 ## Description
 
-Loads the contents of the `endpoint` as a byte stream and evaluates a pipeline
-for each TCP connection, if given.
+Reads bytes from the given endpoint via TCP or TLS.
 
 ### `endpoint: str`
 
 The endpoint at which the server will listen. If `connect=true`, this is instead
 the remote endpoint to connect to. Must be of the form
-`[tcp://]<hostname>:<port>`.
+`[tcp://]<hostname>:<port>`. Use the hostname `0.0.0.0` o accept connections on
+all interfaces.
 
 ### `connect = bool (optional)`
 
@@ -61,7 +61,9 @@ load_tcp "example.org:8090", connect=true
 read_json
 ```
 
-Wait for connections on localhost with TLS enabled, parsing incoming JSON streams according to the schema `"my_schema"`, forwarding no more than 20 events per individual connection:
+Wait for connections on localhost with TLS enabled, parsing incoming JSON
+streams according to the schema `"my_schema"`, forwarding no more than 20 events
+per individual connection:
 
 ```tql
 load_tcp "127.0.0.1:4000", tls=true, certfile="key_and_cert.pem", keyfile="key_and_cert.pem" {
@@ -70,7 +72,8 @@ load_tcp "127.0.0.1:4000", tls=true, certfile="key_and_cert.pem", keyfile="key_a
 }
 ```
 
-The example above can use a self-signed certificate that can be generated like this:
+The example above can use a self-signed certificate that can be generated like
+this:
 
 ```bash
 openssl req -x509 -newkey rsa:2048 -keyout key_and_cert.pem -out key_and_cert.pem -days 365 -nodes

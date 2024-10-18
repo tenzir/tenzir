@@ -21,19 +21,13 @@ Defaults to the current working directory.
 
 Recursively list files in subdirectories.
 
-Defaults to `false`.
-
 ### `follow_symlinks = bool (optional)`
 
 Follow directory symlinks.
 
-Defaults to `false`.
-
 ### `skip_permission_denied = bool (optional)`
 
 Skip directories that would otherwise result in permission denied errors.
-
-Defaults to `false`.
 
 ## Schemas
 

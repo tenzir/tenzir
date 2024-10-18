@@ -27,9 +27,7 @@ subscribes to the global unnamed feed.
 ## Examples
 
 Subscribe to the events under the topic `zeek-conn` and filter events
-([`where`](where.md)):
 
 ```tql
 subscribe "zeek-conn"
-where ts > now() - 1 week
 ```

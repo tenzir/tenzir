@@ -8,28 +8,44 @@ select (field|assignment)...
 
 ## Description
 
-The operator keeps only the provided fields from the input and drops the
-rest.
+This operator keeps only the provided fields and drops the rest.
 
 ### `field`
 
-The field to keep.
+The field to keep. If it does not exist, it's given the value `null` and a
+warning is emitted.
 
 ### `assignment`
 
-An `assignment` syntactically has the form `y=x`, where the result of the
-expression `x` is bound to `y`.
+An assignment of the form `<field>=<expr>`.
 
 ## Examples
 
+Keep `a` and introduce `y` with the value of `b`:
 ```tql
-from { foo: "FOO", bar: 32, qux: 1ms, drops: 1000 }
-select foo, bar=42, baz=qux
+from {a: 1, b: 2, c: 3}
+select a, y=b
+―――――――――――――――――――――――
+{a: 1, y: 2}
 ```
-```json title="Output"
+
+A more complex example with expressions and selection through records:
+```tql
+from {
+  name: "foo",
+  pos: {
+    x: 1,
+    y: 2,
+  },
+  state: "active",
+}
+select id=name.to_upper(), pos.x, added=true
+――――――――――――――――――――――――――――――――――――――――――――
 {
-  "foo": "FOO",
-  "bar": 42,
-  "baz": "1.0ms"
+  id: "FOO",
+  pos: {
+    x: 1,
+  },
+  added: true,
 }
 ```

@@ -12,16 +12,19 @@ Transforms the input event stream to JSON byte stream.
 
 ### `ndjson = bool (optional)`
 
-Whether to write Newline-Delimited JSON.
+Whether to write newline-delimited JSON output (NDJSON/JSONL).
 
 ### `color = bool (optional)`
 
+Colorize the output.
+
 ## Examples
 
-Convert a YAML stream into JSON and write it to stdout.
+Convert a YAML stream into a JSON file:
 
 ```tql
-export
+load_file "input.yaml"
 read_yaml
 write_json
+save_file "output.json"
 ```

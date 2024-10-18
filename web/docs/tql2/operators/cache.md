@@ -1,10 +1,10 @@
 # cache
 
-:::warning Expert Operator
-We designed the `cache` operator for under-the-hood use of the Tenzir Platform
-on [app.tenzir.com](https://app.tenzir.com). We generally recommend not using
-the operator by yourself, but rather relying on the Tenzir Platform to
-automatically manage caches for you.
+:::warning
+Expert Operator We designed the `cache` operator for under-the-hood
+use of the Tenzir Platform on [app.tenzir.com](https://app.tenzir.com). We
+generally recommend not using the operator by yourself, but rather relying on
+the Tenzir Platform to automatically manage caches for you.
 :::
 
 An in-memory cache shared between pipelines.
@@ -31,8 +31,8 @@ An arbitrary string that uniquely identifies the cache.
 Configures whether the operator is used a source, a sink, or a transformation.
 The following modes are available currently:
 
-- `"read"`: The operators acts as a source reading from a cache that is requires to
-  already exist.
+- `"read"`: The operators acts as a source reading from a cache that is requires
+  to already exist.
 - `"write"`: The operator acts as a sink writing into a cache that must not
   already exist.
 - `"readwrite"`: The operator acts as a transformation passing through events,
@@ -73,8 +73,8 @@ cache "some-unique-identifier"
 ```
 
 Get some high-level statistics about the query, calculating the cache again only
-if it does not exist anymore, deleting the cache if it's unused for more than a
-minute.
+if it does not exist anymore and deleting the cache if it's unused for more than
+a minute.
 
 ```tql
 export

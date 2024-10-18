@@ -14,9 +14,9 @@ Forwards the last `n` events and discards the rest.
 
 ### `n: uint (optional)`
 
-An unsigned integer denoting how many events to keep.
+The number of events to keep.
 
-Defaults to 10.
+Defaults to `10`.
 
 ## Examples
 
@@ -30,6 +30,6 @@ tail
 Get the last five results:
 
 ```tql
-export 
+export
 tail 5
 ```

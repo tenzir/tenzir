@@ -22,7 +22,6 @@ The TQL1 pipeline to evaluate.
 ## Examples
 
 ```tql
-export
-summarize ts, count(.)
+summarize ts, count()
 legacy "chart area"
 ```

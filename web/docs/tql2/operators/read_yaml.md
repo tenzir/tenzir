@@ -1,6 +1,6 @@
 # read_yaml
 
-Parses an incoming [YAML](https://en.wikipedia.org/wiki/YAML) stream into events.
+Parses an incoming YAML stream into events.
 
 ```tql
 read_yaml [merge=bool, raw=bool, schema=str, selector=str, schema_only=bool, unflatten=str]
@@ -79,10 +79,10 @@ Without an unflatten separator, the data looks like this:
 
 ```json title="Without unflattening"
 {
-  "id.orig_h" : "1.1.1.1",
-  "id.orig_p" : 10,
-  "id.resp_h" : "1.1.1.2",
-  "id.resp_p" : 5
+  "id.orig_h": "1.1.1.1",
+  "id.orig_p": 10,
+  "id.resp_h": "1.1.1.2",
+  "id.resp_p": 5
 }
 ```
 
@@ -90,18 +90,18 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ```json title="With 'unflatten'"
 {
-  "id" : {
-    "orig_h" : "1.1.1.1",
-    "orig_p" : 10,
-    "resp_h" : "1.1.1.2",
-    "resp_p" : 5
+  "id": {
+    "orig_h": "1.1.1.1",
+    "orig_p": 10,
+    "resp_h": "1.1.1.2",
+    "resp_p": 5
   }
 }
 ```
 
 ## Examples
 
-### Read a yaml file
+### Parse a YAML file
 
 ```yaml title="input.yaml"
 ---
@@ -116,20 +116,18 @@ dependencies:
 ...
 ```
 
-```tql title="Pipeline"
+```tql
 load_file "input.yaml"
 read_yaml
-```
-
-```json title="Output"
+――――――――――――――――――――――
 {
-  "name": "yaml",
-  "version": "bundled",
-  "kind": "builtin",
-  "types": [
+  name: "yaml",
+  version: "bundled",
+  kind: "builtin",
+  types: [
     "parser",
     "printer"
   ],
-  "dependencies": []
+  dependencies: []
 }
 ```

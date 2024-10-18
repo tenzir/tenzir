@@ -94,10 +94,10 @@ Without an unflatten separator, the data looks like this:
 
 ```json title="Without unflattening"
 {
-  "id.orig_h" : "1.1.1.1",
-  "id.orig_p" : 10,
-  "id.resp_h" : "1.1.1.2",
-  "id.resp_p" : 5
+  "id.orig_h": "1.1.1.1",
+  "id.orig_p": 10,
+  "id.resp_h": "1.1.1.2",
+  "id.resp_p": 5
 }
 ```
 
@@ -105,11 +105,11 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ```json title="With 'unflatten'"
 {
-  "id" : {
-    "orig_h" : "1.1.1.1",
-    "orig_p" : 10,
-    "resp_h" : "1.1.1.2",
-    "resp_p" : 5
+  "id": {
+    "orig_h": "1.1.1.1",
+    "orig_p": 10,
+    "resp_h": "1.1.1.2",
+    "resp_p": 5
   }
 }
 ```
@@ -117,19 +117,19 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 ## Examples
 
 
-### Read in a JSON file
+### Read a JSON file
 
 ```json title="input.json"
 {
-  "product" : "Tenzir",
-  "version.major" : 4,
-  "version.minor" : 22
+  "product": "Tenzir",
+  "version.major": 4,
+  "version.minor": 22
 }
 {
-  "product" : "Tenzir",
-  "version.major" : 4,
-  "version.minor" : 21,
-  "version.dirty" : true
+  "product": "Tenzir",
+  "version.major": 4,
+  "version.minor": 21,
+  "version.dirty": true
 }
 ```
 
@@ -156,7 +156,7 @@ read_json unflatten="."
 }
 ```
 
-### Read in a JSON array
+### Read a JSON array
 
 [JA4+](https://ja4db.com/) provides fingerprints via a REST API, which returns a single JSON array.
 

@@ -8,10 +8,10 @@ Tenzir comes with a wide range of built-in pipeline operators.
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`set`](./operators/set.md) | Assign a value of a field, creating it if necessary | `name = "Tenzir"`
-[`select`](./operators/select.md) | Select some values and discard the rest | `select name, id=metadata.id`
-[`drop`](./operators/drop.md) | Remove fields from the event | `drop name, metadata.id`
-[`enumerate`](./operators/enumerate.md) | Add a field with the number of the event | `enumerate num`
+[`set`](./operators/set.md) | Assigns a value of a field, creating it if necessary | `name = "Tenzir"`
+[`select`](./operators/select.md) | Selects some values and discard the rest | `select name, id=metadata.id`
+[`drop`](./operators/drop.md) | Removes fields from the event | `drop name, metadata.id`
+[`enumerate`](./operators/enumerate.md) | Adds a field with the number of the event | `enumerate num`
 
 <!--
 TODO: Do we want to document set, and if so, how?
@@ -23,12 +23,12 @@ TODO: Do we want to document set, and if so, how?
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`where`](./operators/where.md) | Keep only events matching a predicate | `where name.starts_with("John")`
+[`where`](./operators/where.md) | Keeps only events matching a predicate | `where name.starts_with("John")`
 [`assert`](./operators/assert.md) | Same as `where`, but warns if predicate is `false` | `assert name.starts_with("John")`
-[`taste`](./operators/taste.md) | Keep only N events of each type | `taste 1`
-[`head`](./operators/head.md) | Keep only the first N events | `head 20`
-[`tail`](./operators/tail.md) | Keep only the last N events | `tail 20`
-[`slice`](./operators/slice.md) | Keep a range of events with an optional stride | `slice begin=10, end=30`
+[`taste`](./operators/taste.md) | Keeps only N events of each type | `taste 1`
+[`head`](./operators/head.md) | Keeps only the first N events | `head 20`
+[`tail`](./operators/tail.md) | Keeps only the last N events | `tail 20`
+[`slice`](./operators/slice.md) | Keeps a range of events with an optional stride | `slice begin=10, end=30`
 
 <!--
 [`deduplicate`]() | … | `…`
@@ -38,9 +38,9 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`summarize`](./operators/summarize.md) | Aggregate events with implicit grouping | `summarize name, sum(transaction)`
-[`sort`](./operators/sort.md) | Sort the events by one or more expressions | `sort name, -abs(transaction)`
-[`reverse`](./operators/reverse.md) | Reverse the event order | `reverse`
+[`summarize`](./operators/summarize.md) | Aggregates events with implicit grouping | `summarize name, sum(transaction)`
+[`sort`](./operators/sort.md) | Sorts the events by one or more expressions | `sort name, -abs(transaction)`
+[`reverse`](./operators/reverse.md) | Reverses the event order | `reverse`
 
 <!--
 [`top`](./operators/top.md) | … | `…`
@@ -51,9 +51,9 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`every`](./operators/every.md) | Restart a pipeline periodically | `every 10s { summarize sum(transaction) }`
-[`fork`](./operators/fork.md) | Forward a copy of the events to another pipeline | `fork { to "copy.json" }`
-[`if`](language/statements.md#if) | Split the flow based on a predicate | `if transaction > 0 { … } else { … }`
+[`every`](./operators/every.md) | Restarts a pipeline periodically | `every 10s { summarize sum(transaction) }`
+[`fork`](./operators/fork.md) | Forwards a copy of the events to another pipeline | `fork { to "copy.json" }`
+[`if`](language/statements.md#if) | Splits the flow based on a predicate | `if transaction > 0 { … } else { … }`
 
 <!--
 [`group`]() | Starts a new pipeline for each group | `group path { to $path }`
@@ -65,17 +65,17 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`diagnostics`](./operators/diagnostics.md) | Retrieve diagnostic events of managed pipelines | `diagnostics`
-[`export`](./operators/export.md) | Retrieve events from the node | `export`
-[`load`](./operators/load.md) | Load bytes according to a URL | `load "https://example.org/api/list"`
-[`load_file`](./operators/load_file.md) | Load bytes from a file | `load_file "/tmp/data.json"`
-[`load_http`](./operators/load_http.md) | Receive bytes from a HTTP request | `load_http "example.org", params={n: 5}`
-[`load_tcp`](./operators/load_tcp.md) | Load bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
+[`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
+[`export`](./operators/export.md) | Retrieves events from the node | `export`
+[`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
+[`load_http`](./operators/load_http.md) | Receives bytes from a HTTP request | `load_http "example.org", params={n: 5}`
+[`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
 [`velociraptor`](./operators/velociraptor.md) | Returns results from a Velociraptor server | `velociraptor subscribe="Windows"`
-[`metrics`](./operators/metrics.md) | Retrieve metrics events from a Tenzir node | `metrics "cpu"`
-[`subscribe`](./operators/subscribe.md) | Subscribe to events of a certain topic | `subscribe "topic"`
+[`metrics`](./operators/metrics.md) | Retrieves metrics events from a Tenzir node | `metrics "cpu"`
+[`subscribe`](./operators/subscribe.md) | Subscribes to events of a certain topic | `subscribe "topic"`
 
 <!--
+[`load`](./operators/load.md) | Load bytes according to a URL | `load "https://example.org/api/list"`
 [`from`](./operators/from.md) | | `from "/tmp/data.json"`
 -->
 
@@ -83,16 +83,18 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`azure_log_analytics`](./operators/azure_log_analytics.md) | Send events to Azure Log Analytics | `azure_log_analytics tenant_id=…`
-[`discard`](./operators/discard.md) | Discard incoming bytes or events | `discard`
-[`save_file`](./operators/save_file.md) | Save incoming bytes into a file | `save_file "/tmp/out.json"`
-[`save_http`](./operators/save_http.md) | Send incoming bytes over a HTTP connection | `save_http "example.org/api"`
-[`save`](./operators/save.md) | Save incoming bytes according to a URL | `save "https://example.org/api"`
+[`azure_log_analytics`](./operators/azure_log_analytics.md) | Sends events to Azure Log Analytics | `azure_log_analytics tenant_id=…`
+[`discard`](./operators/discard.md) | Discards incoming bytes or events | `discard`
+[`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`
+[`save_http`](./operators/save_http.md) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
 [`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
-[`import`](./operators/import.md) | Store events at the node | `import`
-[`publish`](./operators/publish.md) | Publish events to a certain topic | `publish "topic"`
+[`import`](./operators/import.md) | Stores events at the node | `import`
+[`publish`](./operators/publish.md) | Publishes events to a certain topic | `publish "topic"`
 
+<!---
+[`save`](./operators/save.md) | Save incoming bytes according to a URL | `save "https://example.org/api"`
+-->
 
 ## Parsing
 
@@ -107,7 +109,7 @@ Operator | Description | Example
 [`read_kv`](./operators/read_kv.md) | Parses key-value pairs | `read_kv r"(\s+)[A-Z_]+:", r":\s*"`
 [`read_leef`](./operators/read_leef.md) | Parses the Log Event Extended Format | `read_leef`
 [`read_lines`](./operators/read_lines.md) | Parses each line into a separate event | `read_lines`
-[`read_ndjson`](./operators/read_ndjson.md) | Parses newline delimited JSON | `read_ndjson`
+[`read_ndjson`](./operators/read_ndjson.md) | Parses newline-delimited JSON | `read_ndjson`
 [`read_ssv`](./operators/read_ssv.md) | Parses space-separated values | `read_ssv header="name count"`
 [`read_suricata`](./operators/read_suricata.md) | Parses Suricata's Eve format | `read_suricata`
 [`read_syslog`](./operators/read_syslog.md) | Parses syslog | `read_syslog`
@@ -155,11 +157,11 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`api`](./operators/api.md) | Use Tenzir's REST API from a pipeline | `api "/pipeline/list"`
-[`batch`](./operators/batch.md) | Control the batch size of events | `batch timeout=1s`
-[`buffer`](./operators/buffer.md) | Add additional buffering to handle spikes | `buffer 10M, policy="drop"`
-[`measure`](./operators/measure.md) | Return events describing the incoming batches | `measure`
-[`throttle`](./operators/throttle.md) | Limit the amount of data flowing through | `throttle 100M, within=1min`
+[`api`](./operators/api.md) | Calls Tenzir's REST API from a pipeline | `api "/pipeline/list"`
+[`batch`](./operators/batch.md) | Controls the batch size of events | `batch timeout=1s`
+[`buffer`](./operators/buffer.md) | Adds additional buffering to handle spikes | `buffer 10M, policy="drop"`
+[`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
+[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
 [`cache`](./operators/cache.md) | In-memory cache shared between pipelines | `cache "w01wyhTZm3", ttl=10min`
 [`legacy`](./operators/legacy.md) | Provides a compatibility fallback to TQL1 pipelines | `legacy "chart area"`
 
@@ -167,22 +169,22 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`config`](./operators/config.md) | Node's configuration | `config`
-[`fields`](./operators/fields.md) | List all fields stored at the node | `fields`
-[`openapi`](./operators/openapi.md) | Node's OpenAPI specification | `openapi`
-[`partitions`](./operators/partitions.md) | Retrieve metadata about events stored at the node | `partitions src_ip == 1.2.3.4`
-[`plugins`](./operators/plugins.md) | List available plugins | `plugins`
-[`schemas`](./operators/schemas.md) | List schemas for events stored at the node | `schemas`
-[`version`](./operators/version.md) | Version Info | `version`
+[`config`](./operators/config.md) | Returns the node's configuration | `config`
+[`fields`](./operators/fields.md) | Lists all fields stored at the node | `fields`
+[`openapi`](./operators/openapi.md) | Returns the OpenAPI specification | `openapi`
+[`partitions`](./operators/partitions.md) | Retrieves metadata about events stored at the node | `partitions src_ip == 1.2.3.4`
+[`plugins`](./operators/plugins.md) | Lists available plugins | `plugins`
+[`schemas`](./operators/schemas.md) | Lists schemas for events stored at the node | `schemas`
+[`version`](./operators/version.md) | Shows the current version | `version`
 
 ## Host Inspection
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`files`](./operators/files.md) | List files in a directory | `files "/var/log/" recurse=true`
-[`nics`](./operators/nics.md) | List available network interfaces | `nics`
-[`processes`](./operators/processes.md) | List running processes | `processes`
-[`sockets`](./operators/sockets.md) | List open sockets | `sockets`
+[`files`](./operators/files.md) | Lists files in a directory | `files "/var/log/" recurse=true`
+[`nics`](./operators/nics.md) | Lists available network interfaces | `nics`
+[`processes`](./operators/processes.md) | Lists running processes | `processes`
+[`sockets`](./operators/sockets.md) | Lists open sockets | `sockets`
 
 ## Uncategorized
 
@@ -193,8 +195,8 @@ Operator | Description | Example
 [`delay`](./operators/delay.md) | Delays events relative to a start time | `delay ts, speed=2.5`
 [`pass`](./operators/pass.md) | Does nothing with the input | `pass`
 [`repeat`](./operators/repeat.md) | Repeats the input after it has finished | `repeat 100`
-[`sigma`](./operators/sigma.md) | Match incoming events against Sigma rules | `sigma "/tmp/rules/"`
+[`sigma`](./operators/sigma.md) | Matches incoming events against Sigma rules | `sigma "/tmp/rules/"`
 [`timeshift`](./operators/timeshift.md) | Adjusts timestamps relative to a given start time | `timeshift ts, start=2020-01-01`
-[`yara`](./operators/yara.md) | Match the incoming byte stream against YARA rules | `yara "/path/to/rules", blockwise=true`
-[`python`](./operators/python.md) | Execute a Python snippet for each event | `python "self.x = self.y"`
-[`shell`](./operators/shell.md) | Run a shell command within the pipeline | <code>shell "./process.sh \| tee copy.txt"</code>
+[`yara`](./operators/yara.md) | Matches the incoming byte stream against YARA rules | `yara "/path/to/rules", blockwise=true`
+[`python`](./operators/python.md) | Executes a Python snippet for each event | `python "self.x = self.y"`
+[`shell`](./operators/shell.md) | Runs a shell command within the pipeline | <code>shell "./process.sh \| tee copy.txt"</code>

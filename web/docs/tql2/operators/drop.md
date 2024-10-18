@@ -6,35 +6,28 @@ Removes fields from the event.
 drop field...
 ```
 
-### Description
+## Description
 
-Removes the given fields from the events.
-
-### `field`
-
-Field to be discarded from the event. Issues a warning if the field is not
+Removes the given fields from the events. Issues a warning if a field is not
 present.
 
-### Examples
+## Examples
 
 ```tql
 from {
-  name: "John",
-  role: "Admin",
+  src: 192.168.0.4,
+  dst: 192.168.0.31,
+  role: "admin",
   info: {
     id: "cR32kdMD9",
-    rank: 8411,
+    msg: 8411,
   },
 }
-drop name, info.id
-write_json
-```
-
-```json title="Output"
+drop role, info.id
+――――――――――――――――――――
 {
-  "role": "Admin",
-  "info": {
-    "rank": 8411
-  }
+  src: 192.168.0.4,
+  dst: 192.168.0.31,
+  info: {msg: 8411},
 }
 ```

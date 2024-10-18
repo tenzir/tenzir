@@ -9,7 +9,7 @@ metrics [name:str, live=bool, retro=bool]
 ## Description
 
 The `metrics` operator retrieves metrics events from a Tenzir node. Metrics
-events are collected every second. 
+events are collected every second.
 
 ### `name: str (optional)`
 
@@ -24,7 +24,6 @@ metrics events persisted at a Tenzir node.
 ### `retro = bool (optional)`
 
 Work on persisted diagnostic events (first), even when `live` is given.
-(See [`export` operator](export.md#retro) for more details)
 
 ## Schemas
 
@@ -45,7 +44,7 @@ Contains information about all accessed API endpoints, emitted once per second.
 | `params`        | `record`   | The API endpoints parameters passed inused.            |
 
 The schema of the record `params` depends on the API endpoint used. Refer to the
-[API documentation](/api) to see the available parameters per endpoint. 
+[API documentation](/api) to see the available parameters per endpoint.
 
 ### `tenzir.metrics.buffer`
 
@@ -375,7 +374,7 @@ excluding pipelines run in the Explorer:
 ```tql
 metrics "operator"
 where timestamp > now() - 1 week
-where hidden == false and source == true
+where source and not hidden
 summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
 ```
 

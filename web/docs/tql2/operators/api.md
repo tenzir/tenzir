@@ -13,8 +13,7 @@ web server, making all APIs accessible from within pipelines.
 
 ### `endpoint: str`
 
-The endpoint to request, e.g., `/pipeline/list` to list all pipelines created
-through the `/pipeline/create` endpoint.
+The endpoint to request, e.g., `/pipeline/list` to list all managed pipelines.
 
 Tenzir's [REST API specification](/api) lists all available endpoints.
 

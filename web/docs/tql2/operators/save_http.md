@@ -1,6 +1,6 @@
 # save_http
 
-Writes a bytes stream to a HTTP URL.
+Sends a byte stream via HTTP.
 
 ```tql
 save_http url:str, [method=str, params=record, headers=record]
@@ -8,13 +8,18 @@ save_http url:str, [method=str, params=record, headers=record]
 
 ## Description
 
+The `save_http` operator performs a HTTP request with the request body being the
+bytes provided by the previous operator.
+
 ### `url: str`
 
-The `url` to write bytes to.
+The URL to write to. The `http://` scheme can be omitted.
 
 ### `method = str (optional)`
 
-The HTTP method to use.
+The HTTP method, such as `POST` or `GET`.
+
+The default is `"POST"`.
 
 ### `params = record (optional)`
 
@@ -26,8 +31,8 @@ The headers for the request.
 
 ## Examples
 
-```tql
-subscribe "active-threats"
-save_http "url", method="PUT", headers = { API_KEY: "000-000-000-000" }
-```
+Send incoming bytes to `example.org/api`:
 
+```tql
+save_http "example.org/api", headers={"X-API-Token": "0000-0000-0000"}
+```

@@ -27,12 +27,3 @@ Defaults to `65536`.
 
 Specifies a maximum latency for events passing through the batch operator. When
 unspecified, an infinite duration is used.
-
-## Examples
-
-Write exactly one NDJSON object at a time to a Kafka topic.
-
-XXX: Fix example
-```
-batch 1 | to kafka -t topic write json -c
-```
