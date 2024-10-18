@@ -53,7 +53,7 @@ will parse as
 {
   "key2": "value, and more"
 }
-  ```
+```
 
 ### `field_split: str (optional)`
 
