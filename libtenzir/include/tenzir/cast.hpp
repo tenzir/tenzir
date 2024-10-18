@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/passthrough.hpp"
@@ -18,9 +19,15 @@
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/type.hpp"
 
+#include <arrow/compute/cast.h>
 #include <caf/expected.hpp>
 
 namespace tenzir {
+
+template <type_or_concrete_type FromType, class ValueType,
+          type_or_concrete_type ToType, class... Args>
+auto cast_value(const FromType& from_type, ValueType&& value,
+                const ToType& to_type, Args&&... args) noexcept;
 
 namespace detail {
 
@@ -366,41 +373,43 @@ struct cast_helper<record_type, record_type> {
     if (from_type == to_type) {
       return from_array;
     }
-    // NOLINTNEXTLINE
-    auto impl = [&](const auto& impl, const record_type& to_type,
-                    std::string_view key_prefix) noexcept
-      -> std::shared_ptr<type_to_arrow_array_t<record_type>> {
-      auto fields = arrow::FieldVector{};
-      auto children = arrow::ArrayVector{};
-      fields.reserve(to_type.num_fields());
-      children.reserve(to_type.num_fields());
-      for (const auto& to_field : to_type.fields()) {
-        const auto key = key_prefix.empty()
-                           ? std::string{to_field.name}
-                           : fmt::format("{}.{}", key_prefix, to_field.name);
-        fields.push_back(to_field.type.to_arrow_field(to_field.name));
-        if (const auto* r = caf::get_if<record_type>(&to_field.type)) {
-          children.push_back(impl(impl, *r, key));
-          continue;
-        }
-        const auto index = from_type.resolve_key(key);
-        if (!index) {
-          // The field does not exist, so we insert a bunch of nulls.
-          children.push_back(
-            arrow::MakeArrayOfNull(to_field.type.to_arrow_type(),
-                                   from_array->length())
-              .ValueOrDie());
-          continue;
-        }
-        // The field exists, so we can insert the casted column.
-        children.push_back(cast_helper<type, type>::cast(
-          from_type.field(*index).type, index->get(*from_array),
-          to_field.type));
+    auto fields = arrow::FieldVector{};
+    fields.reserve(to_type.num_fields());
+    auto children = arrow::ArrayVector{};
+    children.reserve(to_type.num_fields());
+    for (auto&& to_field : to_type.fields()) {
+      auto from_field_array
+        = from_array->GetFieldByName(std::string{to_field.name});
+      fields.push_back(to_field.type.to_arrow_field(to_field.name));
+      if (not from_field_array) {
+        // Using `arrow::MakeArrayOfNull` instead can lead to a segfault when
+        // `ValidateFull()` is called on the struct array afterwards.
+        auto b = to_field.type.make_arrow_builder(arrow::default_memory_pool());
+        check(b->AppendNulls(from_array->length()));
+        children.push_back(finish(*b));
+        continue;
       }
-      return type_to_arrow_array_t<record_type>::Make(children, fields)
-        .ValueOrDie();
-    };
-    return impl(impl, to_type, "");
+      auto from_field_type = std::optional<type>{};
+      for (auto from_field : from_type.fields()) {
+        if (from_field.name == to_field.name) {
+          from_field_type = std::move(from_field.type);
+          break;
+        }
+      }
+      TENZIR_ASSERT(from_field_type);
+      auto visitor = [&]<class FromType, class ToType>(
+                       const FromType& from_type,
+                       const ToType& to_type) -> std::shared_ptr<arrow::Array> {
+        auto cast = std::dynamic_pointer_cast<type_to_arrow_array_t<FromType>>(
+          from_field_array);
+        TENZIR_ASSERT(cast);
+        return cast_helper<FromType, ToType>::cast(from_type, std::move(cast),
+                                                   to_type);
+      };
+      children.push_back(caf::visit(visitor, *from_field_type, to_field.type));
+    }
+    return make_struct_array(from_array->length(), from_array->null_bitmap(),
+                             fields, children);
   }
 
   template <class InputType>
@@ -537,11 +546,17 @@ struct cast_helper<uint64_type, int64_type> {
     return static_cast<int64_t>(value);
   }
 
-  static auto
-  cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
-       const int64_type&) noexcept
+  static auto cast(const uint64_type&,
+                   std::shared_ptr<type_to_arrow_array_t<uint64_type>> array,
+                   const int64_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<int64_type>> {
-    die("unimplemented");
+    // TODO: Improve the behavior for failed casts here.
+    auto opts = arrow::compute::CastOptions{};
+    opts.to_type = arrow::int64();
+    auto result = std::dynamic_pointer_cast<arrow::Int64Array>(
+      check(arrow::compute::Cast(array, opts)).make_array());
+    TENZIR_ASSERT(result);
+    return result;
   }
 };
 
@@ -1079,11 +1094,31 @@ struct cast_helper<string_type, ToType> {
     return from_str(value, to);
   }
 
-  static auto
-  cast(const string_type&, std::shared_ptr<type_to_arrow_array_t<string_type>>,
-       const ToType&) noexcept
+  static auto cast(const string_type&,
+                   std::shared_ptr<type_to_arrow_array_t<string_type>> array,
+                   const ToType& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
-    die("unimplemented");
+    // TODO: Not properly implemented!
+    auto b = to_type.make_arrow_builder(arrow::default_memory_pool());
+    check(b->Reserve(array->length()));
+    if constexpr (detail::is_any_v<ToType, list_type, record_type, map_type>) {
+      check(b->AppendNulls(array->length()));
+    } else {
+      for (auto str : *array) {
+        if (not str) {
+          check(b->AppendNull());
+          continue;
+        }
+        auto result = from_str(*str, to_type);
+        if (not result) {
+          // TODO
+          check(b->AppendNull());
+          continue;
+        }
+        check(append_builder(to_type, *b, *result));
+      }
+    }
+    return finish(*b);
   }
 };
 
@@ -1157,7 +1192,7 @@ auto cast_value(const FromType& from_type, ValueType&& value,
 /// @pre can_cast(from_slice.schema(), to_schema)
 /// @post result.schema() == to_schema
 /// @returns A slice that exactly matches *to_schema*.
-auto cast(table_slice from_slice, const type& to_schema) noexcept
+auto cast(const table_slice& from_slice, const type& to_schema) noexcept
   -> table_slice;
 
 template <concrete_type FromType, concrete_type ToType>

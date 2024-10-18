@@ -16,7 +16,7 @@ DOCUMENT_FIELDS = False
 CLASS_PREFIX = "ocsf."
 OBJECT_PREFIX = "ocsf.object."
 COLUMN_LIMIT = 80
-PROFILES = ALL  # List of strings or ALL.
+PROFILES = []  # List of strings or ALL.
 # =================================================== #
 
 OMIT_MARKER = object()
