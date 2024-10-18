@@ -365,10 +365,6 @@ struct connection_manager_state {
               .note("handle `{}`", connection->socket->native_handle())
               .emit(diagnostics);
           }
-          if (connection.tls_socket) {
-            connection.tls_socket.close();
-          }
-          connection.socket->close();
         } else {
           TENZIR_ASSERT(length > 0);
         }
@@ -398,7 +394,7 @@ struct connection_manager_state {
           TENZIR_ASSERT(connection->chunks.size() <= max_queued_chunks);
           should_read = connection->chunks.size() < max_queued_chunks;
         }
-        if (should_read) {
+        if (not ec and should_read) {
           connection->async_read(self, std::move(diagnostics));
         }
       };
