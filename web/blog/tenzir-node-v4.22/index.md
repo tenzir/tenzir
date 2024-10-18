@@ -18,14 +18,14 @@ bug fixes.
 
 ## TQL2 Documentation
 
-We’re thrilled to share that the new version of our query language, TQL2, first
-unveiled in August, has taken exciting strides forward! If you’ve been using the
-Tenzir Platform, you might have already noticed the toggle to enable TQL2,
+We are thrilled to share that the new version of our query language, TQL2,
+has taken exciting strides forward! If you’ve been using the Tenzir Platform,
+you might have already noticed the toggle to enable TQL2,
 allowing you to explore its potential.
 
 Today marks a significant milestone as we release the initial version of our
-[TQL2 documentation](../tql2/operators). This means you can now dive deep into
-learning about TQL2 and unlock its full capabilities!
+[TQL2 documentation](../next/tql2/operators). You can now dive deep into
+learning TQL2 and unlock its full capabilities!
 
 We’re committed to continuously enhancing the documentation, ensuring you have
 all the resources you need to make the most of TQL2. Stay tuned for more
@@ -50,8 +50,8 @@ load google-cloud-pubsub "amazing-project-123456" "my-subscription"
 ```
 
 The connector is also available in TQL2 as
-[`load_google_cloud_pubsub`](../tql2/operators/load_google_cloud_pubsub) and
-[`save_google_cloud_pubsub`](../tql2/operators/save_google_cloud_pubsub):
+[`load_google_cloud_pubsub`](../next/tql2/operators/load_google_cloud_pubsub) and
+[`save_google_cloud_pubsub`](../next/tql2/operators/save_google_cloud_pubsub):
 
 ```tql title="Using Tenzir to filter and convert events"
 load_google_cloud_pubsub "amazing-project-123456", "my-subscription"

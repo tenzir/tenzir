@@ -17,19 +17,19 @@ The `google_cloud_pubsub` saver publishes bytes to a Google Cloud Pub/Sub topic.
 
 ### `project_id: str`
 
-The project to connect to. Be aware that this is the ID, and not the display name.
+The project to connect to. Note that this is the project_id, not the display name.
 
 ### `topic_id: str`
 
-The topic-id to publish to.
+The topic to publish to.
 
 ## Examples
 
-Publish `suricata.alert` events as JSON the `alerts-topic` in the
+Publish `suricata.alert` events as JSON to `alerts-topic`.
 
 ```tql
 export
-where meta.name = 'suricata.alert'
+where meta.name = "suricata.alert"
 write_json
 save_google_cloud_pubsub "amazing-project-123456", "alerts-topic"
 ```

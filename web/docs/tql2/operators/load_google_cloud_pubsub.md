@@ -3,7 +3,7 @@
 Subscribes to a Google Cloud Pub/Sub subscription and obtains bytes.
 
 ```tql
-load_google_cloud_pubsub project_id:str, subscription_id:str [timeout:duration]
+load_google_cloud_pubsub project_id:str, subscription_id:str, [timeout:duration]
 ```
 
 :::note Authentication
@@ -13,15 +13,15 @@ The connector tries to retrieve the appropriate credentials using Google's
 
 ## Description
 
-The `google_cloud_pubsub` loader acquires raw bytes from a Google Cloud Pub/Sub subscription
+The `google_cloud_pubsub` loader acquires raw bytes from a Google Cloud Pub/Sub subscription.
 
 ### `project_id: str`
 
-The project to connect to. Be aware that this is the ID, and not the display name.
+The project to connect to. Note that this is the project id, not the display name.
 
 ### `subscription_id: str`
 
-The subscription-id to subscribe to.
+The subscription to subscribe to.
 
 ### `timeout = duration (optional)`
 
