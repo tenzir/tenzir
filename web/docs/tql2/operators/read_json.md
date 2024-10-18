@@ -11,7 +11,6 @@ read_json [schema=str, selector=str, schema_only=bool, merge=bool, raw=bool,
            unflatten=str, arrays_of_objects=bool]
 ```
 
-
 ## Description
 
 Parses an incoming JSON byte stream into events.
@@ -115,7 +114,6 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 ```
 
 ## Examples
-
 
 ### Read a JSON file
 

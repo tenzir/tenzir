@@ -7,7 +7,6 @@ read_ndjson [schema=str, selector=str, schema_only=bool,
             merge=bool, raw=bool, unflatten=str]
 ```
 
-
 ## Description
 
 Parses an incoming NDJSON byte stream into events.

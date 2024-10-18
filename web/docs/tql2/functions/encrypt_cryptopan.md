@@ -10,7 +10,7 @@ encrypt_cryptopan(address:ip, [seed=str])
 
 ## Description
 
-Anonymizes IP Addresses using the 
+Anonymizes IP Addresses using the
 [Crypto-PAn](https://en.wikipedia.org/wiki/Crypto-PAn) algorithm.
 
 ### `address: ip`

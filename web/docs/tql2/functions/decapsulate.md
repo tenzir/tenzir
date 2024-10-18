@@ -26,7 +26,6 @@ Special values include `0` (frame does not carry a VLAN ID) and `0xFFF`
 
 ## Examples
 
-
 Decapsulate packets from a PCAP file:
 
 XXX: Fix examples

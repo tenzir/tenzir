@@ -12,9 +12,6 @@
 
 ### Description
 
-
-
-
 ### Examples
 
 ```
