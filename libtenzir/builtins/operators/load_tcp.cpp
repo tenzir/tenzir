@@ -365,6 +365,10 @@ struct connection_manager_state {
               .note("handle `{}`", connection->socket->native_handle())
               .emit(diagnostics);
           }
+          if (connection.tls_socket) {
+            connection.tls_socket.close();
+          }
+          connection.socket->close();
         } else {
           TENZIR_ASSERT(length > 0);
         }
