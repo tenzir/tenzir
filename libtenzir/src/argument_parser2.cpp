@@ -343,7 +343,7 @@ auto argument_parser2::docs() const -> std::string {
   auto category = std::invoke([&] {
     switch (kind_) {
       case kind::op:
-        return "operators";
+        return "tql2/operators";
       case kind::function:
         return "functions";
       case kind::method:
