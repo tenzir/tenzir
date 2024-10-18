@@ -168,7 +168,6 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
     },
     [self](atom::erase,
            const std::filesystem::path& filename) -> caf::result<atom::done> {
-      TENZIR_DEBUG("{} got request to erase {}", *self, filename);
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
       auto err = std::error_code{};

@@ -76,7 +76,7 @@ handle_query(const auto& self, const query_context& query_context) {
         .then(
           [self, issuer = query_context.issuer, query_id = query_context.id,
            rp]() mutable {
-            TENZIR_DEBUG("{} finished working on extract query {}", *self,
+            TENZIR_TRACE("{} finished working on extract query {}", *self,
                          query_id);
             auto it = self->state.running_extractions.find(query_id);
             if (it == self->state.running_extractions.end()) {
@@ -175,7 +175,6 @@ default_passive_store_actor::behavior_type default_passive_store(
   return {
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
-      TENZIR_DEBUG("{} starts working on query {}", *self, query_context.id);
       return handle_query<default_passive_store_actor>(self, query_context);
     },
     [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
@@ -201,7 +200,7 @@ default_passive_store_actor::behavior_type default_passive_store(
     },
     [self](atom::internal, atom::extract,
            const uuid& query_id) -> caf::result<void> {
-      TENZIR_DEBUG("{} continuous working on extract query {}", *self,
+      TENZIR_TRACE("{} continuous working on extract query {}", *self,
                    query_id);
       auto it = self->state.running_extractions.find(query_id);
       if (it == self->state.running_extractions.end())
