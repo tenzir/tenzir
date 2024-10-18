@@ -38,7 +38,7 @@ public:
     // round(x, 1h) -> round to multiples of 1h
     // round(<time>, <duration>)
     // round(x, 1h) -> round so that time is multiples of 1h (for UTC timezone?)
-    return round_with_spec(std::move(value), std::move(spec_.value()), ctx);
+    return round_with_spec(std::move(value), spec_.value(), ctx);
   }
 
 private:
