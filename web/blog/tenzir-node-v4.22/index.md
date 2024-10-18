@@ -37,7 +37,6 @@ Introducing our latest connector: Google Cloud Pub/Sub! The new
 [`google-cloud-pubsub` connector](../next/connectors/google_cloud_pubsub) allows
 users to seamlessly subscribe and publish to Google Cloud Pub/Sub.
 
-
 ```text{0} title="Subscribe to 'my-subscription'"
 load google-cloud-pubsub "amazing-project-123456" "my-subscription"
 | parse syslog
