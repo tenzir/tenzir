@@ -1,9 +1,9 @@
-# save_google_could_pubsub
+# save_google_cloud_pubsub
 
 Publishes to a Google Cloud Pub/Sub topic.
 
 ```tql
-save_google_could_pubsub project_id:str, topic_id:str
+save_google_cloud_pubsub project_id:str, topic_id:str
 ```
 
 :::note Authentication
@@ -31,5 +31,5 @@ Publish `suricata.alert` events as JSON the `alerts-topic` in the
 export
 where meta.name = 'suricata.alert'
 write_json
-save_google_cloud_pubsub "amazing-project-123456" "alerts-topic"
+save_google_cloud_pubsub "amazing-project-123456", "alerts-topic"
 ```

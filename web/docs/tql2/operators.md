@@ -68,7 +68,7 @@ Operator | Description | Example
 [`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
 [`export`](./operators/export.md) | Retrieves events from the node | `export`
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
-[`load_google_could_pubsub`](./operators/load_google_cloud_pubsub.md) | Subscribes to a Google Cloud Pub/Sub subscription | `load_google_cloud_pubsub "amazing-project-123456" "my-subscription"`
+[`load_google…`](./operators/load_google_cloud_pubsub.md) | Listen to a Google Cloud Pub/Sub subscription | `load_google_cloud_pubsub "…", "…"`
 [`load_http`](./operators/load_http.md) | Receives bytes from a HTTP request | `load_http "example.org", params={n: 5}`
 [`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
 [`velociraptor`](./operators/velociraptor.md) | Returns results from a Velociraptor server | `velociraptor subscribe="Windows"`
@@ -87,7 +87,7 @@ Operator | Description | Example
 [`azure_log_analytics`](./operators/azure_log_analytics.md) | Sends events to Azure Log Analytics | `azure_log_analytics tenant_id=…`
 [`discard`](./operators/discard.md) | Discards incoming bytes or events | `discard`
 [`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`
-[`save_google_could_pubsub`](./operators/save_google_cloud_pubsub.md) | Publishes to a Google Cloud Pub/Sub topic | `save_google_cloud_pubsub "amazing-project-123456" "my-topic"`
+[`save_google_cloud…`](./operators/save_google_cloud_pubsub.md) | Publishes to a Google Cloud Pub/Sub topic | `save_google_cloud_pubsub "…", "…"`
 [`save_http`](./operators/save_http.md) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
 [`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
