@@ -745,10 +745,6 @@ index_state::create_active_partition(const type& schema) {
         TENZIR_WARN("{} failed to flush active partition {} ({}) after {} "
                     "timeout: {}",
                     *self, id, schema, data{active_partition_timeout}, err);
-      } else {
-        TENZIR_VERBOSE("{} successfully flushed active partition {} ({}) "
-                       "after {} timeout",
-                       *self, id, schema, data{active_partition_timeout});
       }
     });
     flush_to_disk();
@@ -771,13 +767,13 @@ void index_state::decommission_active_partition(
   // Persist active partition asynchronously.
   const auto part_path = partition_path(id);
   const auto synopsis_path = partition_synopsis_path(id);
-  TENZIR_VERBOSE("{} persists active partition {} to {}", *self, schema,
-                 part_path);
+  TENZIR_DEBUG("{} persists active partition {} to {}", *self, schema,
+               part_path);
   self->request(actor, caf::infinite, atom::persist_v, part_path, synopsis_path)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
-        TENZIR_VERBOSE("{} successfully persisted partition {} {}", *self,
-                       schema, id);
+        TENZIR_DEBUG("{} successfully persisted partition {} {}", *self, schema,
+                     id);
         // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
         // TODO: We should skip this continuation if we're currently shutting
@@ -786,8 +782,8 @@ void index_state::decommission_active_partition(
         self->request(catalog, caf::infinite, atom::merge_v, std::move(apsv))
           .then(
             [=, this](atom::ok) {
-              TENZIR_VERBOSE("{} inserted partition {} {} to the catalog",
-                             *self, schema, id);
+              TENZIR_DEBUG("{} inserted partition {} {} to the catalog", *self,
+                           schema, id);
               for (auto& listener : partition_creation_listeners)
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});

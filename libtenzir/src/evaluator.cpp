@@ -93,7 +93,7 @@ evaluator_state::evaluator_state(
 }
 
 void evaluator_state::handle_result(const offset& position, const ids& result) {
-  TENZIR_DEBUG("{} got {} new hits for predicate at position {}", *self,
+  TENZIR_TRACE("{} got {} new hits for predicate at position {}", *self,
                rank(result), position);
   auto ptr = hits_for(position);
   TENZIR_ASSERT(ptr != nullptr);
@@ -126,7 +126,7 @@ void evaluator_state::handle_no_indexer(const offset& position) {
 
 void evaluator_state::evaluate() {
   auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
-  TENZIR_DEBUG("{} got predicate_hits: {} expr_hits: {}", *self, predicate_hits,
+  TENZIR_TRACE("{} got predicate_hits: {} expr_hits: {}", *self, predicate_hits,
                expr_hits);
   hits |= expr_hits;
 }

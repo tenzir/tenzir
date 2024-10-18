@@ -218,8 +218,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   // vector must be the same as in `combined_schema`. The actual indexers are
   // deserialized and spawned lazily on demand.
   state.indexers.resize(indexes->size());
-  TENZIR_DEBUG("{} found {} indexers for partition {}", state.name,
-               indexes->size(), state.id);
   auto const* type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
     auto const* type_ids_tuple = type_ids->Get(i);
@@ -229,8 +227,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
     if (auto error = fbs::deserialize_bytes(ids_data, ids))
       return error;
   }
-  TENZIR_DEBUG("{} restored {} type-to-ids mapping for partition {}",
-               state.name, state.type_ids_.size(), state.id);
   return caf::none;
 }
 
@@ -416,8 +412,6 @@ partition_actor::behavior_type passive_partition(
         self->state.store = *store;
         self->monitor(self->state.store);
         // Delegate all deferred evaluations now that we have the partition chunk.
-        TENZIR_DEBUG("{} delegates {} deferred evaluations", *self,
-                     self->state.deferred_evaluations.size());
         delegate_deferred_requests(self->state);
       },
       [=](caf::error err) {
@@ -431,9 +425,8 @@ partition_actor::behavior_type passive_partition(
   return {
     [self](atom::query,
            tenzir::query_context query_context) -> caf::result<uint64_t> {
-      TENZIR_DEBUG("{} received query {}", *self, query_context);
+      TENZIR_TRACE("{} received query {}", *self, query_context);
       if (!self->state.partition_chunk) {
-        TENZIR_DEBUG("{} waits for its state", *self);
         return std::get<1>(self->state.deferred_evaluations.emplace_back(
           std::move(query_context), self->make_response_promise<uint64_t>()));
       }
