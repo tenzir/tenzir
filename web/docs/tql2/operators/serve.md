@@ -4,7 +4,7 @@ Make events available under the [`/serve` REST API
 endpoint](/api#/paths/~1serve/post).
 
 ```tql
-serve id:str, [buffer_size=uint]
+serve id:str, [buffer_size=int]
 ```
 
 ## Description
@@ -22,7 +22,7 @@ delivered over the corresponding endpoint.
 An identifier that uniquely identifies the operator. The `serve`
 operator errors when receiving a duplicate serve id.
 
-### `buffer_size = uint (optional)`
+### `buffer_size = int (optional)`
 
 The buffer size specifies the maximum number of events to keep in the `serve`
 operator to make them instantly available in the corresponding endpoint before

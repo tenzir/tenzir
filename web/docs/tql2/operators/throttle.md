@@ -3,7 +3,7 @@
 Limits the bandwidth of a pipeline.
 
 ```tql
-throttle bandwidth:uint, [within=duration]
+throttle bandwidth:int, [within=duration]
 ```
 
 ## Description
@@ -11,7 +11,7 @@ throttle bandwidth:uint, [within=duration]
 The `throttle` operator limits the amount of data flowing through it to a
 bandwidth.
 
-### `bandwidth: uint`
+### `bandwidth: int`
 
 The maximum bandwidth that is enforced for this pipeline, in bytes per the
 specified interval.

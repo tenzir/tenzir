@@ -3,7 +3,7 @@
 An in-memory buffer to improve handling of data spikes in upstream operators.
 
 ```tql
-buffer [capacity:uint, policy=str]
+buffer [capacity:int, policy=str]
 ```
 
 ## Description
@@ -19,7 +19,7 @@ operators to run uninterruptedly even in case the downstream operators of the
 buffer are unable to keep up. This allows pipelines to handle data spikes more
 easily.
 
-### `capacity: uint (optional)`
+### `capacity: int (optional)`
 
 The number of events or bytes that may be kept at most in the buffer.
 

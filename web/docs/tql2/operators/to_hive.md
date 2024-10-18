@@ -3,7 +3,7 @@
 Writes events to a URI using hive partitioning.
 
 ```tql
-to_hive uri:str, partition_by=list<field>, format=str, [timeout=duration, max_size=uint]
+to_hive uri:str, partition_by=list<field>, format=str, [timeout=duration, max_size=int]
 ```
 
 ## Description
@@ -34,7 +34,7 @@ The name of the format that will be used for writing, for example `json` or
 The time after which a new file will be opened for the same partition group.
 Defaults to `5min`.
 
-### `max_size = uint (optional)`
+### `max_size = int (optional)`
 
 The total file size after which a new file will be opened for the same partition
 group. Note that files will typically be slightly larger than this limit,

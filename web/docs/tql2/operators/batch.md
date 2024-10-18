@@ -9,7 +9,7 @@ underlying pipeline execution engine. Use with caution!
 The `batch` operator controls the batch size of events.
 
 ```tql
-batch [limit:uint, timeout=duration]
+batch [limit:int, timeout=duration]
 ```
 
 ## Description
@@ -17,9 +17,9 @@ batch [limit:uint, timeout=duration]
 The `batch` operator takes its input and rewrites it into batches of up to the
 desired size.
 
-### `limit: uint (optional)`
+### `limit: int (optional)`
 
-An unsigned integer denoting how many events to put into one batch at most.
+How many events to put into one batch at most.
 
 Defaults to `65536`.
 

@@ -3,7 +3,7 @@
 Repeats the input a number of times.
 
 ```tql
-repeat [count:uint]
+repeat [count:int]
 ```
 
 ## Description
@@ -16,7 +16,7 @@ working with generated data.
 Take care when using this operator with large inputs.
 :::
 
-### `count: uint (optional)`
+### `count: int (optional)`
 
 The number of times to repeat the input data.
 

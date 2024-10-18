@@ -3,7 +3,7 @@
 Limits the input to `n` events per unique schema.
 
 ```tql
-taste [n:uint]
+taste [n:int]
 ```
 
 ## Description
@@ -14,7 +14,7 @@ The `taste` operator provides an exemplary overview of the "shape" of the data
 described by the pipeline. This helps to understand the diversity of the
 result, especially when interactively exploring data.
 
-### `n: uint (optional)`
+### `n: int (optional)`
 
 The number of events to keep per schema.
 

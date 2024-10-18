@@ -3,7 +3,7 @@
 Submits VQL to a Velociraptor server and returns the response as events.
 
 ```tql
-velociraptor [request_name=str, org_id=str, max_rows=uint,
+velociraptor [request_name=str, org_id=str, max_rows=int,
               subscribe=str, query=str, max_wait=duration, profile=str]
 ```
 
@@ -71,7 +71,7 @@ Defaults to `"root"`.
 
 The [VQL][vql] query string.
 
-### `max_rows = uint (optional)`
+### `max_rows = int (optional)`
 
 The maxium number of rows to return in a the stream gRPC messages returned by
 the server.

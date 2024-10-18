@@ -10,7 +10,7 @@ the Tenzir Platform to automatically manage caches for you.
 An in-memory cache shared between pipelines.
 
 ```tql
-cache id:str, [mode=str, capacity=uint, ttl=duration, max_ttl=duration]
+cache id:str, [mode=str, capacity=int, ttl=duration, max_ttl=duration]
 ```
 
 ## Description
@@ -41,7 +41,7 @@ The following modes are available currently:
 
 Defaults to `"readwrite"`.
 
-### `capacity = uint (optional)`
+### `capacity = int (optional)`
 
 Stores how many events the cache can hold. Caches stop accepting events if the
 capacity is reached and emit a warning.

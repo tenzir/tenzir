@@ -3,7 +3,7 @@
 Loads bytes from a TCP or TLS connection.
 
 ```tql
-load_tcp endpoint:str, [connect=bool, parallel=uint, tls=bool, certfile=str, keyfile=str { … }]
+load_tcp endpoint:str, [connect=bool, parallel=int, tls=bool, certfile=str, keyfile=str { … }]
 ```
 
 ## Description
@@ -21,7 +21,7 @@ all interfaces.
 
 Connect to the endpoint instead of listening at it.
 
-### `parallel = uint (optional)`
+### `parallel = int (optional)`
 
 Maximum number of parallel connections at once.
 

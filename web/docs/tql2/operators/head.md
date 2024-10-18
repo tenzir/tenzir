@@ -3,7 +3,7 @@
 Limits the input to the first `n` events.
 
 ```tql
-head [n:uint]
+head [n:int]
 ```
 
 ## Description
@@ -12,7 +12,7 @@ Forwards the first `n` events and discards the rest.
 
 `head n` is a shorthand notation for [`slice end=n`](slice.md).
 
-### `n: uint (optional)`
+### `n: int (optional)`
 
 The number of events to keep.
 

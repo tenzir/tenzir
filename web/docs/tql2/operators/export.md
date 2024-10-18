@@ -3,7 +3,7 @@
 Retrieves events from a Tenzir node. The dual to [`import`](import.md).
 
 ```tql
-export [live=bool, retro=bool, internal=bool, parallel=uint]
+export [live=bool, retro=bool, internal=bool, parallel=int]
 ```
 
 ## Description
@@ -33,7 +33,7 @@ Export internal events, such as metrics or diagnostics, instead. By default,
 contrast, `export internal=true` exports internal events such as operator
 metrics.
 
-### `parallel = uint (optional)`
+### `parallel = int (optional)`
 
 The parallel level controls how many worker threads the operator uses at most
 for querying historical events.
