@@ -355,20 +355,18 @@ struct connection_manager_state {
                        boost::system::error_code ec, size_t length) mutable {
         connection->reads += 1;
         connection->bytes_read += length;
+        auto stop = false;
         if (ec) {
           // We intentionally pass the empty chunk to the nested pipeline's
           // source to let that shut down cleanly.
           TENZIR_ASSERT(length == 0);
+          stop = true;
           if (ec != boost::asio::error::eof) {
             diagnostic::warning("{}", ec.message())
               .note("failed to read from TCP connection")
               .note("handle `{}`", connection->socket->native_handle())
               .emit(diagnostics);
           }
-          if (connection.tls_socket) {
-            connection.tls_socket.close();
-          }
-          connection.socket->close();
         } else {
           TENZIR_ASSERT(length > 0);
         }
@@ -396,7 +394,7 @@ struct connection_manager_state {
           }
           connection->chunks.push(std::move(chunk));
           TENZIR_ASSERT(connection->chunks.size() <= max_queued_chunks);
-          should_read = connection->chunks.size() < max_queued_chunks;
+          should_read = !stop and connection->chunks.size() < max_queued_chunks;
         }
         if (should_read) {
           connection->async_read(self, std::move(diagnostics));
