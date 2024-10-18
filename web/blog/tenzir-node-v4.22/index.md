@@ -60,8 +60,8 @@ load google-cloud-pubsub "amazing-project-123456" "my-subscription"
 | save google-cloud-pubsub "amazing-project-123456" "alerts-topic"
 ```
 
-The connector is also available in TQL2 `load_google_cloud_pubsub` and
-`save_google_cloud_pubsub` respectively:
+The connector is also available in TQL2 as [`load_google_cloud_pubsub`](../tql2/operators/load_google_cloud_pubsub) and
+[`save_google_cloud_pubsub`](../tql2/operators/save_google_cloud_pubsub) respectively:
 
 <!-- TODO: Write and link docs for these operators -->
 
