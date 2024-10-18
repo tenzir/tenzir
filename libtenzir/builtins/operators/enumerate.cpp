@@ -139,6 +139,7 @@ public:
       for (auto i = int64_t{}; i < detail::narrow<int64_t>(slice.rows()); ++i) {
         check(b->Append(idx++));
       }
+      // TODO: We should insert it at the beginning.
       co_yield assign(selector_, series{int64_type{}, finish(*b)}, slice,
                       ctrl.diagnostics());
     }
