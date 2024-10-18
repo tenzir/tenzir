@@ -9,7 +9,12 @@ top x:field
 ## Description
 
 Shows the most common values for a given field. For each value, a new event
-containing its count will be produced.
+containing its count will be produced. In general, `top x` is equivalent to:
+
+```tql
+summarize x, count=count()
+sort -count
+```
 
 :::note Potentially High Memory Usage
 Take care when using this operator with large inputs.

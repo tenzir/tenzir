@@ -9,7 +9,13 @@ rare x:field
 ## Description
 
 Shows the least common values for a given field. For each unique value, a new
-event containing its count will be produced.
+event containing its count will be produced. In general, `rare x` is equivalent
+to:
+
+```tql
+summarize x, count=count()
+sort count
+```
 
 :::note Potentially High Memory Usage
 Take care when using this operator with large inputs.
