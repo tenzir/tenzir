@@ -41,11 +41,8 @@ Operator | Description | Example
 [`summarize`](./operators/summarize.md) | Aggregates events with implicit grouping | `summarize name, sum(transaction)`
 [`sort`](./operators/sort.md) | Sorts the events by one or more expressions | `sort name, -abs(transaction)`
 [`reverse`](./operators/reverse.md) | Reverses the event order | `reverse`
-
-<!--
-[`top`](./operators/top.md) | … | `…`
-[`rare`](./operators/rare.md) | … | `…`
--->
+[`top`](./operators/top.md) | Shows the most common values | `top user`
+[`rare`](./operators/rare.md) | Shows the least common values | `rare auth.token`
 
 ## Flow Control
 

@@ -21,8 +21,30 @@ The name of the field to find the least common values for.
 
 ## Examples
 
-Find the least common values for field `id.orig_h`.
+Find the least common values for `x`.
+
+```tql
+from [
+  {x: "B"},
+  {x: "A"},
+  {x: "A"},
+  {x: "B"},
+  {x: "A"},
+  {x: "D"},
+  {x: "C"},
+  {x: "C"},
+]
+rare x
+――――――――――――――――――
+{x: "D", count: 1}
+{x: "C", count: 2}
+{x: "B", count: 2}
+{x: "A", count: 3}
+```
+
+Show the five least common values for `id.orig_h`:
 
 ```tql
 rare id.orig_h
+head 5
 ```
