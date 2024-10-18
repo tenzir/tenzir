@@ -680,12 +680,10 @@ void index_state::handle_slice(table_slice x) {
     }
     active_partition = *part;
   } else if (x.rows() > active_partition->second.capacity) {
-    TENZIR_DEBUG("{} exceeds active capacity by {} rows", *self,
-                 x.rows() - active_partition->second.capacity);
-    TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events", *self,
-                   schema,
-                   partition_capacity - active_partition->second.capacity,
-                   partition_capacity);
+    TENZIR_DEBUG("{} flushes active partition {} with {} rows and {}/{} events",
+                 *self, schema, x.rows(),
+                 partition_capacity - active_partition->second.capacity,
+                 partition_capacity);
     decommission_active_partition(schema, {});
     flush_to_disk();
     auto part = create_active_partition(schema);
@@ -734,11 +732,10 @@ index_state::create_active_partition(const type& schema) {
       // If the partition was already rotated then there's nothing to do for us.
       return;
     }
-    TENZIR_VERBOSE("{} flushes active partition {} with {}/{} {} events "
-                   "after {} timeout",
-                   *self, it->second.id,
-                   partition_capacity - it->second.capacity, partition_capacity,
-                   schema, data{active_partition_timeout});
+    TENZIR_DEBUG("{} flushes active partition {} with {}/{} {} events "
+                 "after {} timeout",
+                 *self, it->second.id, partition_capacity - it->second.capacity,
+                 partition_capacity, schema, data{active_partition_timeout});
     decommission_active_partition(schema, [this, schema,
                                            id](const caf::error& err) mutable {
       if (err) {
@@ -767,12 +764,12 @@ void index_state::decommission_active_partition(
   // Persist active partition asynchronously.
   const auto part_path = partition_path(id);
   const auto synopsis_path = partition_synopsis_path(id);
-  TENZIR_DEBUG("{} persists active partition {} to {}", *self, schema,
+  TENZIR_TRACE("{} persists active partition {} to {}", *self, schema,
                part_path);
   self->request(actor, caf::infinite, atom::persist_v, part_path, synopsis_path)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
-        TENZIR_DEBUG("{} successfully persisted partition {} {}", *self, schema,
+        TENZIR_TRACE("{} successfully persisted partition {} {}", *self, schema,
                      id);
         // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
@@ -782,7 +779,7 @@ void index_state::decommission_active_partition(
         self->request(catalog, caf::infinite, atom::merge_v, std::move(apsv))
           .then(
             [=, this](atom::ok) {
-              TENZIR_DEBUG("{} inserted partition {} {} to the catalog", *self,
+              TENZIR_TRACE("{} inserted partition {} {} to the catalog", *self,
                            schema, id);
               for (auto& listener : partition_creation_listeners)
                 self->send(listener, atom::update_v,
@@ -1141,7 +1138,6 @@ index(index_actor::stateful_pointer<index_state> self,
       self->send(importer,
                  detail::generate_actor_metrics(actor_metrics_builder, self));
     });
-  // Clean up unpersisted events every second.
   return {
     [self](atom::done, uuid partition_id) {
       TENZIR_DEBUG("{} queried partition {} successfully", *self, partition_id);

@@ -490,8 +490,8 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
   return {
     [self](atom::proxy, http_request_description& desc,
            std::string& request_id) -> caf::result<rest_response> {
-      TENZIR_VERBOSE("{} proxying request with id {} to {} with {}", *self,
-                     request_id, desc.canonical_path, desc.json_body);
+      TENZIR_DEBUG("{} proxying request with id {} to {} with {}", *self,
+                   request_id, desc.canonical_path, desc.json_body);
       auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
       if (!handler) {
         auto canonical_paths = std::unordered_set<std::string>{};
