@@ -172,10 +172,6 @@ public:
     };
   }
 
-  auto make_query() -> make_query_type override {
-    return {};
-  }
-
   auto reset() -> caf::expected<void> override {
     auto params = bloom_filter_.parameters();
     TENZIR_ASSERT(params.n && params.p);

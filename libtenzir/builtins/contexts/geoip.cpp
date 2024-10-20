@@ -493,10 +493,6 @@ public:
                            "geoip context can not be updated with events");
   }
 
-  auto make_query() -> make_query_type override {
-    return {};
-  }
-
   auto reset() -> caf::expected<void> override {
     return {};
   }
