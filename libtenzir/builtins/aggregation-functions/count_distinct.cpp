@@ -23,13 +23,13 @@ template <concrete_type Type>
 struct heterogeneous_data_hash {
   using is_transparent = void;
 
-  [[nodiscard]] auto
-  operator()(view<type_to_data_t<Type>> value) const -> size_t {
+  [[nodiscard]] auto operator()(view<type_to_data_t<Type>> value) const
+    -> size_t {
     return hash(value);
   }
 
-  [[nodiscard]] auto
-  operator()(const type_to_data_t<Type>& value) const -> size_t
+  [[nodiscard]] auto operator()(const type_to_data_t<Type>& value) const
+    -> size_t
     requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
   {
     return hash(make_view(value));
@@ -100,7 +100,12 @@ public:
     }
     for (auto i = int64_t{}; i < arg.array->length(); ++i) {
       if (arg.array->IsValid(i)) {
-        distinct_.insert(materialize(value_at(arg.type, *arg.array, i)));
+        const auto& view = value_at(arg.type, *arg.array, i);
+        const auto it = distinct_.find(view);
+        if (it != distinct_.end()) {
+          continue;
+        }
+        distinct_.emplace_hint(it, materialize(view));
       }
     }
   }

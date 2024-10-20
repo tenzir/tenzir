@@ -23,8 +23,8 @@ template <concrete_type Type>
 struct heterogeneous_data_hash {
   using is_transparent = void;
 
-  [[nodiscard]] auto
-  operator()(view<type_to_data_t<Type>> value) const -> size_t {
+  [[nodiscard]] auto operator()(view<type_to_data_t<Type>> value) const
+    -> size_t {
     return hash(value);
   }
 
@@ -108,7 +108,12 @@ public:
       if (arg.array->IsNull(i)) {
         continue;
       }
-      distinct_.insert(materialize(value_at(arg.type, *arg.array, i)));
+      const auto& view = value_at(arg.type, *arg.array, i);
+      const auto it = distinct_.find(view);
+      if (it != distinct_.end()) {
+        continue;
+      }
+      distinct_.emplace_hint(it, materialize(view));
     }
   }
 

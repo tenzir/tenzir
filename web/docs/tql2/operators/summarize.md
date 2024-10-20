@@ -57,8 +57,11 @@ differently, take exactly one argument:
   that are not null.
 - `collect`: Creates a list of all grouped values that are not null, preserving
   duplicates.
-- `sample`: Takes the first of all grouped values that is not null.
-- `count`:  When used as `count()`, simply counts the events in the group. When
+- `first`: Takes the first of all grouped values that is not null.
+- `last`: Takes the last of all grouped values that is not null.
+- `top`: Takes the most common of all grouped values that is not null.
+- `rare`: Takes the least common of all grouped values that is not null.
+- `count`: When used as `count()`, simply counts the events in the group. When
   used as `count(x)`, counts all grouped values that are not null.
 - `count_distinct`: Counts all distinct grouped values that are not null.
 
@@ -74,6 +77,7 @@ summarize x=sum(x)
 ```
 
 Group over `y` and compute the sum of `x` for each group:
+
 ```tql
 from [
   {x: 0, y: 0, z: 1},
