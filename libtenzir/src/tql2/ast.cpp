@@ -256,6 +256,12 @@ auto split_legacy_expression(const ast::expression& x)
       return std::pair{trivially_true_expression(), x};
     },
     [&](const auto&) {
+      if (auto field = to_field_extractor(x)) {
+        return std::pair{
+          expression{predicate{*field, relational_operator::equal, data{true}}},
+          ast::expression{ast::constant{true, location::unknown}},
+        };
+      }
       return std::pair{trivially_true_expression(), x};
     });
 }
