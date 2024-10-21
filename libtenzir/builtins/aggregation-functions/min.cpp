@@ -49,7 +49,7 @@ private:
 
 class min_instance final : public aggregation_instance {
 public:
-  using min_t = variant<caf::none_t, int64_t, uint64_t, double, duration>;
+  using min_t = variant<caf::none_t, int64_t, uint64_t, double, duration, time>;
   explicit min_instance(ast::expression expr) : expr_{std::move(expr)} {
   }
 
@@ -101,15 +101,17 @@ public:
           }
         }
       },
-      [&](const arrow::DurationArray& array) {
-        for (auto i = int64_t{}; i < array.length(); ++i) {
-          if (array.IsValid(i)) {
-            const auto val = array.Value(i);
+      [&]<class T>(const T& array)
+        requires concepts::one_of<type_from_arrow_t<T>, duration_type, time_type>
+      {
+        using Ty = type_from_arrow_t<T>;
+        for (const auto& val : values(Ty{}, array)) {
+          if (val) {
             if (not min_) {
-              min_ = duration{val};
+              min_ = val;
             }
-            min_ = min_->match(warn, [&](duration self) -> min_t {
-              return duration{std::min(self.count(), val)};
+            min_ = min_->match(warn, [&](type_to_data_t<Ty> self) -> min_t {
+              return std::min(self, val.value());
             });
             if (std::holds_alternative<caf::none_t>(min_.value())) {
               return;
@@ -118,8 +120,8 @@ public:
         }
       },
       [&](const auto&) {
-        diagnostic::warning("expected types `int`, `uint`, "
-                            "`double` or `duration`, got `{}`",
+        diagnostic::warning("expected types `number`, `time` or `duration`, "
+                            "got `{}`",
                             arg.type.kind())
           .primary(expr_)
           .emit(ctx);
