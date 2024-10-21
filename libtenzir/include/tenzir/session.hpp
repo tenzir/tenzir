@@ -14,33 +14,25 @@ namespace tenzir {
 
 class session_provider {
 public:
-  static auto make(diagnostic_handler& dh) -> session_provider {
-    return session_provider{dh};
-  }
+  static auto make(diagnostic_handler& dh) -> session_provider;
 
-  auto as_session() -> session;
+  auto as_session() & -> session;
+  auto as_session() && -> session = delete;
 
 private:
   friend class session;
 
   class diagnostic_ctx final : public diagnostic_handler {
   public:
-    explicit diagnostic_ctx(diagnostic_handler& dh) : dh_{dh} {
-    }
+    explicit diagnostic_ctx(diagnostic_handler& dh);
 
-    void emit(diagnostic d) override {
-      if (d.severity == severity::error) {
-        failure_ = failure::promise();
-      }
-      dh_.emit(d);
-    }
+    void emit(diagnostic d) override;
 
     std::optional<failure> failure_;
     diagnostic_handler& dh_;
   };
 
-  explicit session_provider(diagnostic_handler& dh) : dh_{dh} {
-  }
+  explicit session_provider(diagnostic_handler& dh);
 
   diagnostic_ctx dh_;
 };
@@ -48,33 +40,20 @@ private:
 /// This is meant to be used as a value type.
 class session {
 public:
-  explicit session(session_provider& provider) : provider_{provider} {
-  }
+  explicit session(session_provider& provider);
 
-  auto get_failure() const -> std::optional<failure> {
-    return provider_.dh_.failure_;
-  }
+  auto get_failure() const -> std::optional<failure>;
 
-  auto has_failure() const -> bool {
-    return get_failure().has_value();
-  }
+  auto has_failure() const -> bool;
 
   auto reg() -> const registry&;
 
-  auto dh() -> diagnostic_handler& {
-    return provider_.dh_;
-  }
+  auto dh() -> diagnostic_handler&;
 
-  operator diagnostic_handler&() {
-    return dh();
-  }
+  explicit(false) operator diagnostic_handler&();
 
 private:
   session_provider& provider_;
 };
-
-inline auto session_provider::as_session() -> session {
-  return session{*this};
-}
 
 } // namespace tenzir
