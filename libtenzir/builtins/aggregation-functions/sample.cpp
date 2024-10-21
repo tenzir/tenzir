@@ -24,7 +24,7 @@ public:
   }
 
 private:
-  [[nodiscard]] type output_type() const override {
+  auto output_type() const -> type override {
     return input_type();
   }
 
@@ -47,64 +47,21 @@ private:
     }
   }
 
-  [[nodiscard]] caf::expected<data> finish() && override {
+  auto finish() && -> caf::expected<data> override {
     return std::move(sample_);
   }
 
   data sample_ = {};
 };
 
-class sample_instance final : public aggregation_instance {
-public:
-  explicit sample_instance(ast::expression expr) : expr_{std::move(expr)} {
-  }
-
-  auto update(const table_slice& input, session ctx) -> void override {
-    if (not caf::holds_alternative<caf::none_t>(sample_)) {
-      return;
-    }
-    auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
-      return;
-    }
-    for (int64_t i = 0; i < arg.array->length(); ++i) {
-      if (arg.array->IsValid(i)) {
-        sample_ = materialize(value_at(arg.type, *arg.array, i));
-        return;
-      }
-    }
-  }
-
-  auto finish() -> data override {
-    return sample_;
-  }
-
-private:
-  ast::expression expr_;
-  data sample_;
-};
-
-class plugin : public virtual aggregation_function_plugin,
-               public virtual aggregation_plugin {
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    return {};
-  }
-
-  [[nodiscard]] std::string name() const override {
+class plugin : public virtual aggregation_function_plugin {
+  auto name() const -> std::string override {
     return "sample";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<aggregation_function>>
-  make_aggregation_function(const type& input_type) const override {
+  auto make_aggregation_function(const type& input_type) const
+    -> caf::expected<std::unique_ptr<aggregation_function>> override {
     return std::make_unique<sample_function>(input_type);
-  }
-
-  auto make_aggregation(invocation inv, session ctx) const
-    -> failure_or<std::unique_ptr<aggregation_instance>> override {
-    auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
-    return std::make_unique<sample_instance>(std::move(expr));
   }
 
   auto aggregation_default() const -> data override {

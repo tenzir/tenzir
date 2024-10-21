@@ -20,9 +20,7 @@ template <basic_type Type>
 class quantile_function final : public aggregation_function {
 public:
   explicit quantile_function(type input_type, double percentile) noexcept
-    : aggregation_function(std::move(input_type)),
-      percentile_{percentile},
-      tdigest_{} {
+    : aggregation_function(std::move(input_type)), percentile_{percentile} {
     // nop
   }
 
