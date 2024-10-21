@@ -17,15 +17,15 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'quickstart',
+      id: 'tutorials/quickstart/README',
     },
     {
       type: 'doc',
-      id: 'map-data-to-ocsf/README',
+      id: 'tutorials/map-data-to-ocsf/README',
     },
     {
       type: 'doc',
-      id: 'write-a-package',
+      id: 'tutorials/write-a-package',
     },
     {
       type: 'html',

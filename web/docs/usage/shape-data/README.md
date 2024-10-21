@@ -13,7 +13,7 @@ visual overview of transformations that you can perform over a data frame:
 We'll walk through examples for each depicted operator, using the
 [M57](../../installation.md) dataset. All examples assume that you have imported
 the M57 sample data into a node, as explained in the
-[quickstart](../../quickstart.md). We therefore start every pipeline with
+[quickstart](../../tutorials/quickstart/README.md). We therefore start every pipeline with
 [`export`](../../operators/export.md).
 
 ## Filter rows with `where`
