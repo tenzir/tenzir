@@ -1,63 +1,66 @@
 # How Does Tenzir Work?
 
-Do you wonder how Tenzir works? What are the moving parts and key abstractions?
-To answer these questions, let's begin with recap'ing central
-[terms](../glossary.md) in the Tenzir ecosystem:
+Tenzir revolves around three primary components:
 
-- **Pipeline**: A sequence of operators to load, parse, transform, and route
-  data.
-- **Node**: A process that manages pipelines.
-- **Platform**: A management layer for a set of nodes.
+- **Pipeline**: A defined sequence of operators responsible for loading,
+  parsing, transforming, and routing data. Pipelines are the core mechanism for
+  data processing.
+- **Node**: A running process that manages and executes pipelines.
+- **Platform**: A higher-level management layer that provides oversight and
+  control over multiple nodes.
 
 ## Standalone and Managed Pipelines
 
-As a user, you would like to run pipelines. That's what brings the value. There
-are two ways to do this:
+Tenzir offers flexibility in running pipelines through two main modes:
 
-1. Run a pipeline standalone on the command line with the `tenzir` binary.
-2. Manage pipelines in a node that you start as Docker container or simply with
-   the `tenzir-node` binary.
+1. **Standalone Execution**: Run directly from the command line using the
+   `tenzir` binary. This mode is ideal for quick, manual data transformations
+   akin to how one would use `jq`, but with broader data handling capabilities.
+2. **Managed Execution via Nodes**: For more sustained or automated data
+   processing, pipelines can be managed within a node. This is either launched
+   as a Docker container or by running the `tenzir-node` binary.
 
 ![Pipelines Two Ways](user-journey-1.svg)
 
-Running a standalone pipeline is useful when you are in front of the terminal
-and want to transform data. Think `jq`, but generalized to arbitrary data and
-input. Managing pipelines in a node is useful for long-running dataflows, but
-it's equally possible to deploy pipelines that finish in a short amount of time.
+The standalone option caters to interactive, ad-hoc tasks, while managed
+pipelines are better suited for continuous or scheduled dataflows. Notably,
+managed pipelines can handle both long-term and short-duration jobs.
 
-## Nodes Connecting to the Platform
+## Connecting Nodes to the Platform
 
-When you deploy a node, it attempts to connect to the platform. This makes it
-easy to use the platform's web interface to test and deploy pipelines. The
-platform is optional, though. You can also use the node's API to manage
-pipelines CRUD-style.
+When deploying a node, it will automatically attempt to connect to the platform,
+providing a seamless way to manage and deploy pipelines through the platform’s
+web interface. However, using the platform is optional—pipelines can still be
+controlled directly via the node’s API in a more hands-on, CRUD-like approach.
 
 ![Nodes and Platform](user-journey-2.svg)
 
-However, the platform provides additional functionality for user and workspace
-management. It is the component where authentication happens and where you bring
-your identity provider (IdP). The platform also stores dashboards, which include
-freely arrangeable cells of charts, also rendered by pipelines.
+The platform, beyond pipeline management, offers user and workspace
+administration, authentication support via external identity providers (IdP),
+and persistent storage for dashboards. These dashboards can be customized with
+charts, which are themselves powered by pipelines.
 
-## Implementing Use Cases with Pipelines
+## Pipeline Use Cases
 
-Whether you use the command line or managed pipelines, the pipelines are your
-working muscles that perform the actual work. There are several [use
-cases](../use-cases.md) where Tenzir shines, ranging from cost optimization to
-building a security data lake.
+Tenzir pipelines are flexible enough to support a wide range of data processing
+tasks, from cost optimization to building sophisticated security data lakes. The
+general structure of many pipelines includes:
 
-Many pipelines follow the same pattern: onboard data in different shapes,
-normalize into a common schema, such as [OCSF](https://github.com/ocsf), enrich
-the events, and finally route them to their destination.
+1. **Data Onboarding**: Accepting input in various formats.
+2. **Data Normalization**: Converting inputs to a consistent schema, such as
+   [OCSF](https://github.com/ocsf).
+3. **Data Enrichment**: Adding extra context or relevant information to events.
+4. **Routing**: Directing enriched data to its intended destination.
 
 ![Pipeline Steps](user-journey-3.svg)
 
-Performing these individual steps is a often a matter of combining multiple
-pipelines to create powerful data fabrics. For example, a frequently scenario
-we encounter is *split-routing*: partitioning a dataflow into a contextualized,
-actionable part sent to the SIEM, and high-volume low-fidelity part stored in
-cheap long-term storage.
+For more advanced needs, pipelines can be combined to form larger, more complex
+data fabrics. A typical example is split-routing: sending contextual, actionable
+data to a SIEM while archiving large volumes of low-fidelity data in a cheaper
+storage solution.
 
 ![Data Pipeline Fabric](user-journey-4.svg)
 
-Now go build your own!
+With these tools at your disposal, Tenzir empowers you to build versatile,
+scalable data pipelines tailored to your specific use cases. Now it's your turn
+to create something powerful!
