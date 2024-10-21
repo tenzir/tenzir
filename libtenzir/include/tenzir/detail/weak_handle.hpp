@@ -31,9 +31,9 @@ template <class Handle>
 struct weak_handle : caf::weak_actor_ptr {
   weak_handle() noexcept = default;
   weak_handle(const weak_handle&) noexcept = default;
-  weak_handle& operator=(const weak_handle&) noexcept = default;
+  auto operator=(const weak_handle&) noexcept -> weak_handle& = default;
   weak_handle(weak_handle&&) noexcept = default;
-  weak_handle& operator=(weak_handle&&) noexcept = default;
+  auto operator=(weak_handle&&) noexcept -> weak_handle& = default;
   ~weak_handle() noexcept = default;
 
   explicit(false) weak_handle(const Handle& handle) noexcept
@@ -41,7 +41,7 @@ struct weak_handle : caf::weak_actor_ptr {
     // nop
   }
 
-  Handle lock() const noexcept {
+  auto lock() const noexcept -> Handle {
     return caf::actor_cast<Handle>(weak_ptr_.lock());
   }
 
