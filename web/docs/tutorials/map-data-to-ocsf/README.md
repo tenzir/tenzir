@@ -713,17 +713,23 @@ read_zeek_tsv
 publish "zeek"
 ```
 
-Then we have one pipeline per Zeek event type `X` and OCSF event class `C`:
+Then we have one pipeline per Zeek event type `X` that publishes to the `ocsf`
+topic:
 
 ```
 subscribe "zeek"
 where @name == "zeek.X"
 // map to OCSF
-publish "ocsf.C"
+publish "ocsf"
 ```
 
 The idea is that all Zeek logs arrive at the topic `zeek`, and all mapping
-pipelines start there by subscribing to the same topic.
+pipelines start there by subscribing to the same topic, but each pipeline
+filters out one event type. Finally, all mapping pipelines publish to the `ocsf`
+topic that represents the combined feed of all OCSF events. Users can then use
+the same filtering pattern as with Zeek to get a subset of the OCSF stream,
+e.g., `subscribe "ocsf" | where @name == "ocsf.authentication"` for all OCSF
+Authentication events.
 
 :::tip Isn't this inefficient?
 You may think that copying the full feed of the `zeek` topic to every mapping
