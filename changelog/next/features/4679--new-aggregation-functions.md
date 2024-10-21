@@ -1,3 +1,3 @@
-We added four new, TQL2-exclusive aggregation functions: `first`, `last`, `top`,
-and `rare`. The function return the first, last, most common, and least common
-non-null value per group, respectively.
+We added three new, TQL2-exclusive aggregation functions: `first`, `last`, and
+`mode`. The functions return the first, last, and most common non-null value per
+group, respectively.

@@ -23,56 +23,14 @@ namespace tenzir::plugins::top_rare {
 
 namespace {
 
-enum class mode { top, rare };
-
-class top_rare_instance final : public aggregation_instance {
-public:
-  explicit top_rare_instance(enum mode mode, ast::expression expr)
-    : mode_{mode}, expr_{std::move(expr)} {
-  }
-
-  auto update(const table_slice& input, session ctx) -> void override {
-    auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
-      return;
-    }
-    for (int64_t i = 0; i < arg.array->length(); ++i) {
-      if (arg.array->IsValid(i)) {
-        const auto& view = value_at(arg.type, *arg.array, i);
-        auto it = counts_.find(view);
-        if (it == counts_.end()) {
-          counts_.emplace_hint(it, materialize(view), 0);
-          continue;
-        }
-        ++it.value();
-        return;
-      }
-    }
-  }
-
-  auto finish() -> data override {
-    const auto comp = [](const auto& lhs, const auto& rhs) {
-      return lhs.second < rhs.second;
-    };
-    const auto it = mode_ == mode::top
-                      ? std::ranges::max_element(counts_, comp)
-                      : std::ranges::min_element(counts_, comp);
-    if (it == counts_.end()) {
-      return {};
-    }
-    return it->first;
-  }
-
-private:
-  const mode mode_ = {};
-  const ast::expression expr_ = {};
-  tsl::robin_map<data, int64_t> counts_ = {};
+enum class mode {
+  top,
+  rare,
 };
 
 template <mode Mode>
 class top_rare_plugin final : public virtual operator_parser_plugin,
-                              public virtual operator_factory_plugin,
-                              public virtual aggregation_plugin {
+                              public virtual operator_factory_plugin {
   auto name() const -> std::string override {
     return Mode == mode::top ? "top" : "rare";
   }
@@ -170,13 +128,6 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
     p->append(std::move(summarized).unwrap());
     p->append(std::move(sorted).unwrap());
     return p;
-  }
-
-  auto make_aggregation(aggregation_plugin::invocation inv, session ctx) const
-    -> failure_or<std::unique_ptr<aggregation_instance>> override {
-    auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
-    return std::make_unique<top_rare_instance>(Mode, std::move(expr));
   }
 
 private:
