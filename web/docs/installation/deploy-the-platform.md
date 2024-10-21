@@ -4,7 +4,7 @@ sidebar_position: 5
 
 # Deploy the platform
 
-The **Tenzir Platform** is the control plane that manage Tenzir Nodes. The
+The **Tenzir Platform** is the control plane that manages Tenzir Nodes. The
 platform also provides a web interface to explore data, create pipelines, and
 build dashboards.
 
@@ -36,7 +36,7 @@ echo YOUR_DOCKER_TOKEN | docker login ghcr.io -u tenzir-distribution --password-
 You need to configure a few external services to run the platform, such as a
 HTTP reverse proxy, an identity provider, and a state database.
 
-Scroll down to the [configuration options](#configuration-section) and populate
+Scroll down to the [configuration options](#configuration-option) and populate
 a `.env` file with your individual settings.
 
 ## Run the Platform
@@ -54,13 +54,14 @@ the `examples` directory:
     └── env.example
 ```
 
-Change into one of these directories and start the platform with
+Change into one of these directories and start the platform in the foreground
+with
 
 ```bash
 docker compose up
 ```
 
-in the foreground, or `docker compose up --detach` to run it in the background.
+or `docker compose up --detach` to run it in the background.
 
 ```text {0} title="❯ docker compose up"
 [+] Running 5/5
