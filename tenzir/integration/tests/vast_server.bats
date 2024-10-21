@@ -1,3 +1,5 @@
+: "${BATS_TEST_TIMEOUT:=60}"
+
 # BATS ports of our old integration test suite.
 
 # This file contains the subset of tests that were using
@@ -74,29 +76,29 @@ teardown() {
       | select /* and a comment there /**/ timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       /**/ /*foo*/"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
       | hash --salt=\"abcdefghij12\" flow_id"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
       | hash --salt=\"abcdefghij12\" flow_id
       | drop flow_id"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
       | hash --salt=\"abcdefghij12\" flow_id
       | drop flow_id
       | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
@@ -104,7 +106,7 @@ teardown() {
       | drop flow_id
       | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
       | rename source_ip=src_ip"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
@@ -260,9 +262,9 @@ teardown() {
   TENZIR_EXAMPLE_YAML="$(dirname "$BATS_TEST_DIRNAME")/../../tenzir.yaml.example"
 
   check tenzir "from file ${TENZIR_EXAMPLE_YAML} read yaml | put plugins=tenzir.plugins, commands=tenzir.start.commands"
-  check tenzir 'show config | drop tenzir.config | drop tenzir.cache-directory | drop tenzir.metrics | drop tenzir.state-directory | write yaml'
+  check tenzir 'config | drop tenzir.config, tenzir.cache-directory, tenzir.metrics, tenzir.state-directory, tenzir.start, tenzir.endpoint | write yaml'
   check tenzir "from file ${INPUTSDIR}/zeek/zeek.json read zeek-json | head 5 | write yaml"
-  check tenzir 'show plugins | where name == "yaml" | repeat 10 | write yaml | read yaml'
+  check tenzir 'plugins | where name == "yaml" | repeat 10 | write yaml | read yaml'
 }
 
 # bats test_tags=pipelines,zeek

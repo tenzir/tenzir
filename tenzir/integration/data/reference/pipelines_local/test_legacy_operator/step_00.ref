@@ -1,0 +1,8 @@
+error: expected additional positional argument `<string>`
+ --> <input>:1:1
+  |
+1 | legacy
+  | ^^^^^^ 
+  |
+  = usage: legacy <string>
+  = docs: https://docs.tenzir.com/tql2/operators/legacy

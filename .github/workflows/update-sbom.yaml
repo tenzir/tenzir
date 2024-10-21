@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Install Nix
-        uses: cachix/install-nix-action@V27
+        uses: cachix/install-nix-action@v30
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Cachix
@@ -29,7 +29,7 @@ jobs:
         run:
           nix run .#generate-sbom
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
           committer: tenzir-bot <engineering@tenzir.com>

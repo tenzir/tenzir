@@ -22,6 +22,7 @@ WORKDIR /tmp/tenzir
 
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 COPY scripts/debian/install-dev-dependencies.sh ./scripts/debian/
+COPY scripts/debian/build-arrow.sh ./scripts/debian/
 RUN ./scripts/debian/install-dev-dependencies.sh && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
     rm /root/fluent-bit_*.deb && \
@@ -110,6 +111,7 @@ COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenz
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
 COPY --from=development /opt/aws-sdk-cpp/lib/ /opt/aws-sdk-cpp/lib/
+COPY --from=dependencies /arrow_*.deb /root/
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 
 RUN apt-get update && \
@@ -143,13 +145,9 @@ RUN apt-get update && \
       python3-venv \
       robin-map-dev \
       wget && \
-    wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-    apt-get -y --no-install-recommends install \
-      ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install libarrow1500=15.0.2-1 libparquet1500=15.0.2-1 && \
+    apt-get -y --no-install-recommends install /root/arrow_*.deb && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
-    rm /root/fluent-bit_*.deb && \
+    rm /root/arrow_*.deb /root/fluent-bit_*.deb && \
     rm -rf /var/lib/apt/lists/* && \
     echo "/opt/aws-sdk-cpp/lib" > /etc/ld.so.conf.d/aws-cpp-sdk.conf && \
     ldconfig
@@ -214,6 +212,16 @@ RUN cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -
       DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --strip --component Runtime && \
       rm -rf build-pipeline-manager
 
+FROM plugins-source AS packages-plugin
+
+# TODO: We can't run the packages integration tests here at the moment, since
+# they require the context and pipeline-manager plugins to be available.
+RUN cmake -S contrib/tenzir-plugins/packages -B build-packages -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-packages --parallel && \
+      DESTDIR=/plugin/packages cmake --install build-packages --strip --component Runtime && \
+      rm -rf build-packages
+
 FROM plugins-source AS platform-plugin
 
 RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
@@ -240,6 +248,7 @@ COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-a
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
+COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
@@ -253,12 +262,7 @@ ENTRYPOINT ["tenzir-node"]
 
 FROM tenzir-node-ce AS tenzir-demo
 
-ENV TENZIR_PIPELINES__M57_SURICATA__NAME='M57 Suricata' \
-    TENZIR_PIPELINES__M57_SURICATA__DEFINITION='from https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst read suricata --no-infer | where #schema != "suricata.stats" | import' \
-    TENZIR_PIPELINES__M57_SURICATA__LABELS='suricata' \
-    TENZIR_PIPELINES__M57_ZEEK__NAME='M57 Zeek' \
-    TENZIR_PIPELINES__M57_ZEEK__DEFINITION='from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv | import' \
-    TENZIR_PIPELINES__M57_ZEEK__LABELS='zeek'
+ENV TENZIR_START__COMMANDS="exec \"from https://raw.githubusercontent.com/tenzir/library/main/demo-node/package.yaml | package add\""
 
 # -- tenzir-node -----------------------------------------------------------------
 

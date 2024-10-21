@@ -29,6 +29,10 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
+  auto operator_index() const noexcept -> uint64_t override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
   auto diagnostics() noexcept -> diagnostic_handler& override {
     struct handler final : public diagnostic_handler {
       handler(local_control_plane& ctrl) : ctrl{ctrl} {
@@ -48,6 +52,10 @@ public:
   }
 
   auto metrics(type) noexcept -> metric_handler override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
+  auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
     TENZIR_UNIMPLEMENTED();
   }
 
@@ -351,6 +359,19 @@ auto operator_base::infer_type_impl(operator_type input) const
 
 auto pipeline::is_closed() const -> bool {
   return !!check_type<void, void>();
+}
+
+auto pipeline::infer_location() const -> std::optional<operator_location> {
+  auto result = operator_location::anywhere;
+  for (auto& op : operators_) {
+    if (result == operator_location::anywhere) {
+      result = op->location();
+    } else if (op->location() != operator_location::anywhere
+               && op->location() != result) {
+      return std::nullopt;
+    }
+  }
+  return result;
 }
 
 auto pipeline::infer_type_impl(operator_type input) const

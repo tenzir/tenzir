@@ -12,12 +12,10 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/aliases.hpp"
-#include "tenzir/data.hpp"
-#include "tenzir/detail/heterogeneous_string_hash.hpp"
+#include "tenzir/detail/flat_map.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/table_slice.hpp"
 
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
@@ -57,35 +55,26 @@ struct importer_state {
 
   void send_report();
 
-  /// @returns various status metrics.
-  [[nodiscard]] caf::typed_response_promise<record>
-  status(status_verbosity v) const;
-
   void on_process(const table_slice& slice);
+
+  /// Process a slice and forward it to the index.
+  void handle_slice(table_slice&& slice);
 
   /// The active id block.
   id_block current;
 
-  /// The continous stage that moves data from all sources to all subscribers.
-  caf::stream_stage_ptr<table_slice,
-                        caf::broadcast_downstream_manager<table_slice>>
-    stage;
-
   /// Pointer to the owning actor.
   importer_actor::pointer self;
 
-  std::string inbound_description = "anonymous";
-
-  std::unordered_map<caf::inbound_path*, std::string> inbound_descriptions;
-
   measurement measurement_ = {};
   stopwatch::time_point last_report = {};
-  detail::heterogeneous_string_hashmap<uint64_t> schema_counters = {};
+  detail::flat_map<type, uint64_t> schema_counters = {};
 
   /// The index actor.
   index_actor index;
 
-  accountant_actor accountant;
+  /// Potentially unpersisted events.
+  std::vector<table_slice> unpersisted_events = {};
 
   /// A list of subscribers for incoming events.
   std::vector<std::pair<receiver_actor<table_slice>, bool /*internal*/>>
@@ -99,11 +88,9 @@ struct importer_state {
 /// @param self The actor handle.
 /// @param dir The directory for persistent state.
 /// @param index A handle to the INDEX.
-/// @param accountant A handle to the ACCOUNTANT.
 /// @param batch_size The initial number of IDs to request when replenishing.
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, index_actor index,
-         accountant_actor accountant);
+         const std::filesystem::path& dir, index_actor index);
 
 } // namespace tenzir

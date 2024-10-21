@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "tenzir/config.hpp" // IWYU pragma: export
-#include "tenzir/tql/fwd.hpp"
+#include "tenzir/config.hpp"  // IWYU pragma: export
+#include "tenzir/tql/fwd.hpp" // IWYU pragma: export
 
 #include <arrow/util/config.h>
 #include <caf/config.hpp>
@@ -104,27 +104,15 @@ struct Offset;
 
 namespace caf {
 
-// TODO CAF 0.19. Check if this already implemented by CAF itself.
-template <class Slot>
-struct inspector_access<inbound_stream_slot<Slot>> {
-  template <class Inspector, class T>
-  static auto apply(Inspector& f, inbound_stream_slot<T>& x) {
-    auto val = x.value();
-    auto result = f.apply(val);
-    if constexpr (Inspector::is_loading)
-      x = inbound_stream_slot<T>{val};
-    return result;
-  }
-};
-
 template <>
 struct inspector_access<std::filesystem::path> {
   template <class Inspector>
-  static auto apply(Inspector& f, std::filesystem::path& x) {
+  static auto apply(Inspector& f, std::filesystem::path& x) -> bool {
     auto str = x.string();
     auto result = f.apply(str);
-    if constexpr (Inspector::is_loading)
+    if constexpr (Inspector::is_loading) {
       x = {str};
+    }
     return result;
   }
 };
@@ -175,7 +163,6 @@ class parser_interface;
 class passive_store;
 class pattern;
 class pipeline;
-class pipeline;
 class plugin_ptr;
 class plugin;
 class port;
@@ -195,7 +182,6 @@ class uuid;
 class value_index;
 class wah_bitmap;
 
-struct accountant_config;
 struct active_partition_state;
 struct attribute;
 struct catalog_lookup_result;
@@ -214,7 +200,6 @@ struct disjunction;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
-struct identifier;
 struct index_state;
 struct invocation;
 struct legacy_address_type;
@@ -242,18 +227,18 @@ struct negation;
 struct node_state;
 struct offset;
 struct operator_metric;
+struct package;
+struct package_pipelines_map;
+struct package_contexts_map;
 struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
 struct passive_partition_state;
-struct performance_report;
-struct performance_sample;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
 struct query_cursor;
 struct query_status;
-struct report;
 struct resource;
 struct rest_endpoint;
 struct rest_response;
@@ -463,19 +448,21 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::disjunction))
   TENZIR_ADD_TYPE_ID((tenzir::ec))
   TENZIR_ADD_TYPE_ID((tenzir::ewah_bitmap))
-  TENZIR_ADD_TYPE_ID((tenzir::operator_metric))
   TENZIR_ADD_TYPE_ID((tenzir::expression))
   TENZIR_ADD_TYPE_ID((tenzir::extract_query_context))
   TENZIR_ADD_TYPE_ID((tenzir::field_extractor))
   TENZIR_ADD_TYPE_ID((tenzir::http_request_description))
   TENZIR_ADD_TYPE_ID((tenzir::invocation))
   TENZIR_ADD_TYPE_ID((tenzir::ip))
+  TENZIR_ADD_TYPE_ID((tenzir::location))
   TENZIR_ADD_TYPE_ID((tenzir::meta_extractor))
   TENZIR_ADD_TYPE_ID((tenzir::module))
   TENZIR_ADD_TYPE_ID((tenzir::negation))
   TENZIR_ADD_TYPE_ID((tenzir::null_bitmap))
   TENZIR_ADD_TYPE_ID((tenzir::operator_box))
+  TENZIR_ADD_TYPE_ID((tenzir::operator_metric))
   TENZIR_ADD_TYPE_ID((tenzir::operator_type))
+  TENZIR_ADD_TYPE_ID((tenzir::package))
   TENZIR_ADD_TYPE_ID((tenzir::partition_info))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_pair))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_ptr))
@@ -490,13 +477,13 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::relational_operator))
   TENZIR_ADD_TYPE_ID((tenzir::rest_endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::rest_response))
+  TENZIR_ADD_TYPE_ID((tenzir::series))
   TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))
   TENZIR_ADD_TYPE_ID((tenzir::taxonomies))
   TENZIR_ADD_TYPE_ID((tenzir::type))
   TENZIR_ADD_TYPE_ID((tenzir::type_extractor))
-  TENZIR_ADD_TYPE_ID((tenzir::series))
   TENZIR_ADD_TYPE_ID((tenzir::uuid))
   TENZIR_ADD_TYPE_ID((tenzir::wah_bitmap))
 
@@ -507,19 +494,17 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   // these kinda things. See tenzir/aliases.hpp for their definitions.
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::data>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<std::string, tenzir::data>))
+  TENZIR_ADD_TYPE_ID(
+    (std::vector<tenzir::detail::stable_map<std::string, tenzir::data>>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<tenzir::data, tenzir::data>))
 
   TENZIR_ADD_TYPE_ID((tenzir::connect_request))
-  TENZIR_ADD_TYPE_ID((tenzir::metrics_metadata))
-  TENZIR_ADD_TYPE_ID((tenzir::performance_report))
   TENZIR_ADD_TYPE_ID((tenzir::query_cursor))
   TENZIR_ADD_TYPE_ID((tenzir::query_status))
-  TENZIR_ADD_TYPE_ID((tenzir::report))
   TENZIR_ADD_TYPE_ID((tenzir::resource))
   TENZIR_ADD_TYPE_ID((tenzir::keep_original_partition))
   TENZIR_ADD_TYPE_ID((tenzir::status_verbosity))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_lookup_result))
-  TENZIR_ADD_TYPE_ID((tenzir::accountant_config))
   TENZIR_ADD_TYPE_ID((tenzir::send_initial_dbstate))
 
   TENZIR_ADD_TYPE_ID((std::pair<std::string, tenzir::data>))
@@ -547,12 +532,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID(
     (std::unordered_map<std::string, std::optional<std::string>>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_synopsis_pair>))
-
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::chunk_ptr>))
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::chunk_ptr>))
-  TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID((caf::outbound_stream_slot<tenzir::table_slice>))
+  TENZIR_ADD_TYPE_ID((std::vector<std::filesystem::path>))
+  TENZIR_ADD_TYPE_ID((std::vector<tenzir::expression>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_types)
 

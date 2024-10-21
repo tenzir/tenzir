@@ -122,8 +122,8 @@ public:
   /// @param global_config The entire Tenzir configuration for potential access
   /// to global options.
   [[nodiscard]] virtual auto
-  initialize(const record& plugin_config, const record& global_config)
-    -> caf::error {
+  initialize(const record& plugin_config,
+             const record& global_config) -> caf::error {
     (void)plugin_config;
     (void)global_config;
     return {};
@@ -145,6 +145,11 @@ public:
 
   /// Components that should be created before the current one so initialization
   /// can succeed.
+  /// Note that the *only* guarantee made is that components are able to
+  /// retrieve actor handles of the wanted components from the registry.
+  /// If actors send requests before returning their behaviors, there is
+  /// no guarantee that these requests will arrive at the destination in
+  /// the correct order.
   /// Defaults to empty list.
   virtual auto wanted_components() const -> std::vector<std::string>;
 
@@ -181,9 +186,8 @@ template <class Base>
 class serialization_plugin : public virtual plugin {
 public:
   /// @pre `x.name() == name()`
-  [[nodiscard]] virtual auto serialize(serializer f, const Base& x) const
-    -> bool
-    = 0;
+  [[nodiscard]] virtual auto
+  serialize(serializer f, const Base& x) const -> bool = 0;
 
   /// @post `!x || x->name() == name()`
   virtual void deserialize(deserializer f, std::unique_ptr<Base>& x) const = 0;
@@ -335,8 +339,7 @@ public:
   virtual auto name() const -> std::string = 0;
 
   virtual auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>>
-    = 0;
+    -> std::optional<generator<chunk_ptr>> = 0;
 
   virtual auto default_parser() const -> std::string {
     return "json";
@@ -350,9 +353,8 @@ public:
 /// @see operator_parser_plugin
 class loader_parser_plugin : public virtual plugin {
 public:
-  virtual auto parse_loader(parser_interface& p) const
-    -> std::unique_ptr<plugin_loader>
-    = 0;
+  virtual auto
+  parse_loader(parser_interface& p) const -> std::unique_ptr<plugin_loader> = 0;
 
   virtual auto supported_uri_schemes() const -> std::vector<std::string>;
 };
@@ -377,8 +379,7 @@ public:
 
   virtual auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>>
-    = 0;
+    -> std::optional<generator<table_slice>> = 0;
 
   /// Apply the parser to an array of strings.
   ///
@@ -386,9 +387,9 @@ public:
   /// for every single string.
   ///
   /// @post `input->length() == result_array->length()`
-  virtual auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                             operator_control_plane& ctrl) const
-    -> std::vector<series>;
+  virtual auto
+  parse_strings(std::shared_ptr<arrow::StringArray> input,
+                operator_control_plane& ctrl) const -> std::vector<series>;
 
   /// Implement ordering optimization for parsers. See
   /// `operator_base::optimize(...)` for details. The default implementation
@@ -402,9 +403,8 @@ public:
 /// @see operator_parser_plugin
 class parser_parser_plugin : public virtual plugin {
 public:
-  virtual auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser>
-    = 0;
+  virtual auto
+  parse_parser(parser_interface& p) const -> std::unique_ptr<plugin_parser> = 0;
 };
 
 using parser_serialization_plugin = serialization_plugin<plugin_parser>;
@@ -458,8 +458,7 @@ public:
   /// should expect a heterogeneous input instead.
   virtual auto
   instantiate(type input_schema, operator_control_plane& ctrl) const
-    -> caf::expected<std::unique_ptr<printer_instance>>
-    = 0;
+    -> caf::expected<std::unique_ptr<printer_instance>> = 0;
 
   /// Returns whether the printer allows for joining output streams into a
   /// single saver.
@@ -473,9 +472,9 @@ public:
 /// @see operator_parser_plugin
 class printer_parser_plugin : public virtual plugin {
 public:
-  virtual auto parse_printer(parser_interface& p) const
-    -> std::unique_ptr<plugin_printer>
-    = 0;
+  virtual auto
+  parse_printer(parser_interface& p) const -> std::unique_ptr<plugin_printer>
+                                              = 0;
 };
 
 using printer_serialization_plugin = serialization_plugin<plugin_printer>;
@@ -503,8 +502,7 @@ public:
 
   virtual auto
   instantiate(operator_control_plane& ctrl, std::optional<printer_info> info)
-    -> caf::expected<std::function<void(chunk_ptr)>>
-    = 0;
+    -> caf::expected<std::function<void(chunk_ptr)>> = 0;
 
   /// Returns true if the saver joins the output from its preceding printer. If
   /// so, `instantiate()` will only be called once.
@@ -522,9 +520,8 @@ public:
 /// @see operator_parser_plugin
 class saver_parser_plugin : public virtual plugin {
 public:
-  virtual auto parse_saver(parser_interface& p) const
-    -> std::unique_ptr<plugin_saver>
-    = 0;
+  virtual auto
+  parse_saver(parser_interface& p) const -> std::unique_ptr<plugin_saver> = 0;
 
   virtual auto supported_uri_schemes() const -> std::vector<std::string>;
 };
@@ -569,29 +566,27 @@ public:
   ///          OpenAPI spec.
   [[nodiscard]] virtual auto
   openapi_endpoints(api_version version = api_version::latest) const -> record
-    = 0;
+                                                                        = 0;
 
   /// OpenAPI description of the schemas used by the plugin endpoints, if any.
   /// @returns A record containing entries for the `schemas` element of an
   ///          OpenAPI spec. The record may be empty if the plugin defines
   ///          no custom schemas.
-  [[nodiscard]] virtual auto
-  openapi_schemas(api_version /*version*/ = api_version::latest) const
-    -> record {
+  [[nodiscard]] virtual auto openapi_schemas(
+    api_version /*version*/ = api_version::latest) const -> record {
     return record{};
   }
 
   /// List of API endpoints provided by this plugin.
-  [[nodiscard]] virtual auto rest_endpoints() const
-    -> const std::vector<rest_endpoint>& = 0;
+  [[nodiscard]] virtual auto
+  rest_endpoints() const -> const std::vector<rest_endpoint>& = 0;
 
   /// Actor that will handle this endpoint.
   //  TODO: This should get some integration with component_plugin so that
   //  the component can be used to answer requests directly.
   [[nodiscard]] virtual auto
-  handler(caf::actor_system& system, node_actor node) const
-    -> rest_handler_actor
-    = 0;
+  handler(caf::actor_system& system,
+          node_actor node) const -> rest_handler_actor = 0;
 };
 
 // -- store plugin ------------------------------------------------------------
@@ -614,27 +609,21 @@ public:
   /// The store builder is required to keep a reference to itself alive
   /// as long as its input stream is live, and persist itself and exit as
   /// soon as the input stream terminates.
-  /// @param accountant The actor handle of the accountant.
   /// @param fs The actor handle of a filesystem.
   /// @param id The partition id for which we want to create a store. Can be
   /// used as a unique key by the implementation.
   /// @returns A handle to the store builder actor to add events to, and a
   /// header that uniquely identifies this store for later use in `make_store`.
   [[nodiscard]] virtual caf::expected<builder_and_header>
-  make_store_builder(accountant_actor accountant, filesystem_actor fs,
-                     const tenzir::uuid& id) const
-    = 0;
+  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const = 0;
 
   /// Create a store actor from the given header. Called when deserializing a
   /// partition that uses this partition as a store backend.
-  /// @param accountant The actor handle the accountant.
   /// @param fs The actor handle of a filesystem.
   /// @param header The store header as found in the partition flatbuffer.
   /// @returns A new store actor.
   [[nodiscard]] virtual caf::expected<store_actor>
-  make_store(accountant_actor accountant, filesystem_actor fs,
-             std::span<const std::byte> header) const
-    = 0;
+  make_store(filesystem_actor fs, std::span<const std::byte> header) const = 0;
 };
 
 /// A base class for plugins that add new store backends.
@@ -651,22 +640,11 @@ public:
 
 private:
   [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder(accountant_actor accountant, filesystem_actor fs,
-                     const tenzir::uuid& id) const final;
+  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const final;
 
   [[nodiscard]] caf::expected<store_actor>
-  make_store(accountant_actor accountant, filesystem_actor fs,
+  make_store(filesystem_actor fs,
              std::span<const std::byte> header) const final;
-};
-
-// -- lookup table plugin -----------
-
-class lookup_table_plugin : public virtual plugin {
-public:
-  virtual auto apply_lookup(std::vector<table_slice> slices,
-                            std::unordered_set<std::string> fields,
-                            record indicators) const -> std::vector<table_slice>
-    = 0;
 };
 
 // -- context plugin -----------------------------------------------------------
@@ -678,7 +656,7 @@ public:
   using make_query_type
     = std::function<auto(parameter_map parameters,
                          const std::vector<std::string>& fields)
-                      ->caf::expected<expression>>;
+                      ->caf::expected<std::vector<expression>>>;
 
   static constexpr auto dump_batch_size_limit = 65536;
 
@@ -709,9 +687,8 @@ public:
   /// @param array The values to look up in the context.
   /// @param replace If true, return the input values for missing fields rather
   /// than nulls.
-  virtual auto apply(series array, bool replace)
-    -> caf::expected<std::vector<series>>
-    = 0;
+  virtual auto
+  apply(series array, bool replace) -> caf::expected<std::vector<series>> = 0;
 
   /// Inspects the context.
   virtual auto show() const -> record = 0;
@@ -720,18 +697,12 @@ public:
   virtual auto dump() -> generator<table_slice> = 0;
 
   /// Updates the context.
-  virtual auto update(table_slice events, parameter_map parameters)
-    -> caf::expected<update_result>
-    = 0;
+  virtual auto
+  update(table_slice events,
+         parameter_map parameters) -> caf::expected<update_result> = 0;
 
   /// Clears the context state, with optional parameters.
   virtual auto reset() -> caf::expected<void> = 0;
-
-  /// Create a snapshot of the initial expression.
-  virtual auto snapshot(parameter_map parameters,
-                        const std::vector<std::string>& fields) const
-    -> caf::expected<expression>
-    = 0;
 
   /// Serializes a context for persistence.
   virtual auto save() const -> caf::expected<save_result> = 0;
@@ -746,9 +717,9 @@ public:
 
   virtual auto version() const -> int = 0;
 
-  virtual auto load(chunk_ptr serialized) const
-    -> caf::expected<std::unique_ptr<context>>
-    = 0;
+  virtual auto
+  load(chunk_ptr serialized) const -> caf::expected<std::unique_ptr<context>>
+                                      = 0;
 };
 
 class context_plugin : public virtual plugin {
@@ -756,13 +727,12 @@ public:
   /// Create a context.
   [[nodiscard]] virtual auto
   make_context(context::parameter_map parameters) const
-    -> caf::expected<std::unique_ptr<context>>
-    = 0;
+    -> caf::expected<std::unique_ptr<context>> = 0;
 
   [[nodiscard]] auto get_latest_loader() const -> const context_loader&;
 
-  [[nodiscard]] auto get_versioned_loader(int version) const
-    -> const context_loader*;
+  [[nodiscard]] auto
+  get_versioned_loader(int version) const -> const context_loader*;
 
   [[nodiscard]] virtual auto context_name() const -> std::string {
     return name();
@@ -792,8 +762,8 @@ public:
   /// Create a metrics collector.
   /// Plugins may return an error if the collector is not supported on the
   /// platform the node is currently running on.
-  [[nodiscard]] virtual auto make_collector() const -> caf::expected<collector>
-    = 0;
+  [[nodiscard]] virtual auto
+  make_collector() const -> caf::expected<collector> = 0;
 
   /// Returns the frequency for collecting the metrics, expressed as the
   /// interval between calls to the collector.
@@ -811,9 +781,8 @@ public:
   virtual auto aspect_name() const -> std::string;
 
   /// Produces the data to show.
-  virtual auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice>
-    = 0;
+  virtual auto
+  show(operator_control_plane& ctrl) const -> generator<table_slice> = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------
@@ -1057,11 +1026,17 @@ extern const char* TENZIR_PLUGIN_VERSION;
       ::tenzir::plugin_ptr::make_builtin(__VA_ARGS__, {})
 #  endif
 
+// NOTE: The decltype expression is necessary for gcc 14 to produce a unique
+// type for the lambda on each invocation. While every lambda is supposed to
+// be a unique type according to the C++ standard, empirically we noticed here
+// that it is not across different translation units. So now we use a lambda
+// for distinguishing instances within the same translation unit and the decltype
+// expression for distinguishing across translation units.
 #  define TENZIR_REGISTER_PLUGIN(...)                                          \
     template <auto>                                                            \
     struct auto_register_plugin;                                               \
     template <>                                                                \
-    struct auto_register_plugin<[] {}> {                                       \
+    struct auto_register_plugin<[](decltype(new __VA_ARGS__)) {}> {            \
       auto_register_plugin() {                                                 \
         static_cast<void>(flag);                                               \
       }                                                                        \
@@ -1110,8 +1085,8 @@ extern const char* TENZIR_PLUGIN_VERSION;
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       return new __VA_ARGS__;                                                  \
     }                                                                          \
-    extern "C" auto tenzir_plugin_destroy(class ::tenzir::plugin* plugin)      \
-      -> void {                                                                \
+    extern "C" auto tenzir_plugin_destroy(                                     \
+      class ::tenzir::plugin* plugin) -> void {                                \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       delete plugin;                                                           \
     }                                                                          \

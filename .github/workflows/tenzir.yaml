@@ -103,14 +103,12 @@ jobs:
           # limit_version. If the version does not exist yet (e.g., because of
           # an intentional break), only check latest. We usually set this to the
           # minimum supported version.
-          limit_version=v4.9.0
+          limit_version=v4.18.0
           if git rev-parse "${limit_version}" --; then
             dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
             dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
-            # We filter out versions older than limit_version, and a set of
-            # releases that are known to be broken, e.g., because their upload
-            # failed in CI.
-            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}' | grep -v 'v4.11.0')
+            # We filter out versions older than limit_version.
+            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}')
             version_matrix="$(printf "$filtered_versions\nlatest\n" | jq -R | jq -sc 'map({version: .})')"
           else
             version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
@@ -222,7 +220,7 @@ jobs:
           run_if_changed python "python/"
           run_if_changed docs "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
-          TENZIR_SOURCES=(cmake/ CMakeLists.txt libtenzir/ libtenzir_test/ schema/ tools/ tenzir/ tenzir.yaml.example version.json)
+          TENZIR_SOURCES=(cmake/ CMakeLists.txt libtenzir/ libtenzir_test/ schema/ scripts/ tenzir/ tenzir.yaml.example version.json)
           run_if_changed tenzir "${TENZIR_SOURCES[@]}"
           run_if_changed_default tenzir-plugins $run_tenzir "plugins/" "contrib/tenzir-plugins/"
           # The tenzir-plugins job downloads the Tenzir artifact from GCS, so we
@@ -256,7 +254,10 @@ jobs:
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             tags=('main' "${{ github.sha }}")
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            major_minor_patch='${{ steps.configure.outputs.release-version }}'
+            major_minor=$(echo $major_minor_patch | sed 's/\(v[0-9]*\.[0-9]*\)\..*/\1/')
+            major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
+            tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
           else
             echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
@@ -374,7 +375,7 @@ jobs:
             [ $pr_number ] # Assert the pr number was non-empty
           fi
       - name: Install Nix
-        uses: cachix/install-nix-action@V27
+        uses: cachix/install-nix-action@v30
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Verify Nix sources are synchronized
@@ -440,7 +441,7 @@ jobs:
           cp -f CHANGELOG.md web/src/pages/changelog.md
       - uses: actions/setup-node@v4
         with:
-          node-version: 16.x
+          node-version: 20.x
           cache-dependency-path: web/yarn.lock
           cache: yarn
       - name: Install dependencies
@@ -536,6 +537,7 @@ jobs:
     if: ${{ needs.configure.outputs.run-tenzir-nix == 'true' }}
     uses: ./.github/workflows/nix.yaml
     strategy:
+      fail-fast: false
       matrix:
         config: ${{ fromJSON(needs.configure.outputs.nix-matrix) }}
     with:
@@ -579,13 +581,9 @@ jobs:
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
             cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
             bundled-plugins:
-              # - Parquet uses illegal instructions on macOS in Arrow version
-              #   14.0.1, so we disable it in the macOS CI. Last checked on
-              #   2023-12-16.
-              # - The http-parser package is disabled on Hoembrew, which means
-              #   we cannot build the web plugin on macOS anymore. Last checked
-              #   on 2024-01-31.
-              - plugins/[^(parquet)(web)]*
+              # macOS runners in GitHub Actions CI are very limited, so we
+              # prefer to have fewer jobs running and build the proprietary
+              # plugins as bundled on macOS.
               - contrib/tenzir-plugins/*
     env:
       BUILD_DIR: build
@@ -665,7 +663,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install Nix
-        uses: cachix/install-nix-action@V27
+        uses: cachix/install-nix-action@v30
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Configure Environment
@@ -749,7 +747,7 @@ jobs:
       - name: Run Integration Tests
         id: integration_tests
         run: |
-          VERBOSE=1 cmake --build "$BUILD_DIR" --target integration -j 1
+          VERBOSE=1 cmake --build "$BUILD_DIR" --target diff-integration -j 1
       - name: Publish Integration Test Report
         uses: mikepenz/action-junit-report@v4
         if: always()
@@ -821,6 +819,13 @@ jobs:
           - name: NIC
             target: nic
             path: plugins/nic
+          # TODO: Enable packages plugin integration tests in CI. The
+          # packages plugin depends on the 'context' and 'pipeline-manager'
+          # plugins, so this requires either merging all three into one single
+          # plugin or bundling the latter two so they're always available.
+          # - name: Packages
+          #   target: packages
+          #   path: contrib/tenzir-plugins/packages
           - name: Parquet
             target: parquet
             path: plugins/parquet
@@ -830,6 +835,9 @@ jobs:
           - name: Platform
             target: platform
             path: contrib/tenzir-plugins/platform
+          - name: S3
+            target: s3
+            path: plugins/s3
           - name: Sigma
             target: sigma
             path: plugins/sigma
@@ -885,7 +893,7 @@ jobs:
           #    -> https://github.com/tailscale/tailscale/issues/11039
           tailscaled-args: --tun=userspace-networking --state=$HOME/tailscaled.state --statedir=$HOME/var/lib/tailscale
       - name: Install Nix
-        uses: cachix/install-nix-action@V27
+        uses: cachix/install-nix-action@v30
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Add GitHub to the SSH known hosts file

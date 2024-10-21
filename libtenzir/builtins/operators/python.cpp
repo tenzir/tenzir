@@ -34,12 +34,11 @@
 #include <boost/asio.hpp>
 #include <boost/interprocess/sync/named_semaphore.hpp>
 #include <boost/process.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/detail/scope_guard.hpp>
+#include <caf/settings.hpp>
 
 #include <filesystem>
-#include <mutex>
-#include <queue>
-#include <thread>
 
 namespace bp = boost::process;
 
@@ -95,7 +94,7 @@ private:
   int64_t pos_ = 0;
 };
 
-auto PYTHON_SCAFFOLD = R"_(
+constexpr auto PYTHON_SCAFFOLD = R"_(
 from tenzir.tools.python_operator_executor import main
 
 main()
@@ -103,10 +102,11 @@ main()
 
 struct config {
   // Implicit arguments passed to every invocation of `pip install`.
-  std::string implicit_requirements = {};
+  std::optional<std::string> implicit_requirements = {};
 
-  // Base path for virtual environments.
-  std::optional<std::string> venv_base_dir = {};
+  // Whether to create a virtualenv environment for the python
+  // operator.
+  bool create_venvs = true;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, config& x) -> bool {
@@ -115,7 +115,7 @@ struct config {
       = f.object(x)
           .pretty_name("tenzir.plugins.python.config")
           .fields(f.field("implicit-requirements", x.implicit_requirements),
-                  f.field("venv-base-dir", x.venv_base_dir));
+                  f.field("create-venvs", x.create_venvs));
     return result;
   }
 };
@@ -150,6 +150,37 @@ public:
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     try {
+      // Compute some config values delayed at runtime, because
+      // `detail::install_datadir` and the venv base dir may be different
+      // between the client and node process.
+      auto implicit_requirements = std::string{};
+      if (config_.implicit_requirements) {
+        implicit_requirements = *config_.implicit_requirements;
+      } else {
+        implicit_requirements = std::string{
+          detail::install_datadir() / "python"
+          / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
+                        version::major, version::minor, version::patch)};
+      }
+      auto venv_base_dir = std::optional<std::filesystem::path>{};
+      if (!config_.create_venvs) {
+        venv_base_dir = std::nullopt;
+      } else if (const auto* cache_dir
+                 = get_if<std::string>(&ctrl.self().home_system().config(),
+                                       "tenzir.cache-directory")) {
+        venv_base_dir = std::filesystem::path{*cache_dir} / "python" / "venvs";
+      } else {
+        venv_base_dir = std::filesystem::temp_directory_path() / "tenzir"
+                        / "python" / "venvs";
+      }
+      // Creating a pipeline through the API waits until a pipeline has started
+      // up succesfully, which requires all individual execution nodes to have
+      // started up immediately. This happens once the operator yielded for the
+      // first time. We yield here immediately as creating the virtual
+      // environment can take a fair amount of time, which empirically led to
+      // 504 errors on app.tenzir.com, especially when viewing the dashboard
+      // when many charts were using the Python operator.
+      co_yield {};
       // Get the code to be executed.
       auto maybe_code = std::visit(
         detail::overload{
@@ -183,122 +214,111 @@ public:
       auto env = bp::environment{boost::this_process::environment()};
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
-      if (config_.venv_base_dir) {
-        auto venv_id
-          = hash(config_.implicit_requirements, requirements_, getuid());
-        auto venv_path = std::filesystem::path{config_.venv_base_dir.value()}
-                         / fmt::format("{:x}", venv_id);
-        auto venv = venv_path.string();
-        env["VIRTUAL_ENV"] = venv;
-        auto ec = std::error_code{};
-        // We want to make sure that the venv is only created once on every
-        // host. For this we use a system wide semaphore that starts with the
-        // count one and gets decremented and then incremented by every peer.
-        // In between these calls the thread is in the critical section and it
-        // can create the venv in case it does not exist yet. Only the first
-        // thread to enter the critical section will create the venv.
-        // ---
-        // Boost sometimes prepends a directory separator depending on which
-        // underlying implementation is used for the semaphore. Thankfully it
-        // is smart enough to check if one is already present. We prevent this
-        // hidden modification by starting the semaphore name with a slash.
-        // This ensures that the truncation logic below is correct.
-        auto sem_name = fmt::format("/tnz-python-{:x}", venv_id);
-        // The semaphore name is restricted to a maximum length of 31 characters
-        // (including the '\0') on macOS. This length has been experimentally
-        // verified. We truncate it to this length unconditionally for
-        // consistency.
-        constexpr auto semaphore_name_max_length = 30u;
-        if (sem_name.size() > semaphore_name_max_length) {
-          sem_name.erase(semaphore_name_max_length);
+      auto maybe_venv = std::optional<std::filesystem::path>{};
+      auto venv_cleanup = [&] {
+        if (config_.create_venvs) {
+          TENZIR_ASSERT(venv_base_dir);
+          auto ec = std::error_code{};
+          std::filesystem::create_directories(*venv_base_dir, ec);
+          auto venv = fmt::format("{}/uvenv-XXXXXX", venv_base_dir->string());
+          if (mkdtemp(venv.data()) == nullptr) {
+            diagnostic::error("{}", detail::describe_errno())
+              .note("failed to create a unique directory for the python "
+                    "virtual environment in {}",
+                    *venv_base_dir)
+              .throw_();
+          }
+          auto venv_path = std::filesystem::path{venv};
+          maybe_venv = venv_path;
+          env["VIRTUAL_ENV"] = venv;
+          env["UV_CACHE_DIR"]
+            = (venv_base_dir->parent_path() / "cache" / "uv").string();
         }
-        // The initial venv creation tends to take a very long time, and often
-        // causes the pipeline creation to take longer then what our FE tolerate
-        // in terms of wait time. As a workaround we yield early, so that the
-        // pipeline appears as created and do the actual venv setup on first
-        // call. At that point the delay is not problematic any more because
-        // `/serve` takes care of it gracefully.
-        co_yield {};
-        auto sem = boost::interprocess::named_semaphore{
-          boost::interprocess::open_or_create, sem_name.c_str(), 1u};
-        const auto wait_ok = sem.timed_wait(std::chrono::system_clock::now()
-                                            + std::chrono::seconds{60});
-        if (not wait_ok) {
-          diagnostic::error("failed to initialize python venv")
-            .note("could not acquire named semaphore '{}' within 60 seconds",
-                  sem_name)
-            .emit(ctrl.diagnostics());
-          boost::interprocess::named_semaphore::remove(sem_name.c_str());
+        return caf::detail::scope_guard([maybe_venv] {
+          if (maybe_venv) {
+            std::error_code ec;
+            auto exists = std::filesystem::exists(*maybe_venv, ec);
+            if (ec) {
+              // ctrl can already be gone, so we can't emit a diagnostic here.
+              TENZIR_WARN("python operator failed to check for venv at {}: {}",
+                          *maybe_venv, ec);
+              return;
+            }
+            if (!exists) {
+              return;
+            }
+            std::filesystem::remove_all(*maybe_venv, ec);
+            if (ec) {
+              // ctrl can already be gone, so we can't emit a diagnostic here.
+              TENZIR_WARN("python operator failed to remove venv at {}: {}",
+                          *maybe_venv, ec);
+            }
+          }
+        });
+      }();
+      if (maybe_venv) {
+#if TENZIR_ENABLE_BUNDLED_UV
+        auto uv_executable = detail::install_libexecdir() / "uv";
+#else
+        auto uv_executable = bp::search_path("uv");
+#endif
+        if (uv_executable.empty()) {
+          diagnostic::error("Failed to find uv").emit(ctrl.diagnostics());
           co_return;
         }
-        auto sem_guard = caf::detail::scope_guard{[&] {
-          sem.post();
-        }};
-        // TODO: Handle broken venvs. Maybe there is a way to check whether the
-        // list of requirements is installed correctly?
-        if (!exists(venv_path, ec)) {
-          // The default size of the pipe buffer is 64k on Linux, we assume
-          // (hope) that this is enough. A possible solution would be to wrap
-          // the invocation in a script that drains the pipe continuously but
-          // only forwards the first n bytes.
-          if (bp::system(python_executable, "-m", "venv", venv,
-                         bp::std_err > std_err,
-                         detail::preserved_fds{{STDERR_FILENO}},
-                         bp::detail::limit_handles_{})
-              != 0) {
-            auto venv_error = drain_pipe(std_err);
-            // We need to delete the potentially broken venv here to make sure
-            // that it doesn't stick around to break later runs of the python
-            // operator.
-            std::filesystem::remove_all(venv, ec);
-            if (ec) {
-              diagnostic::error("failed to create virtualenv: {}", venv_error)
-                .note("failed to delete broken virtualenv: {}", ec.message())
-                .hint("please remove `{}`", venv)
-                .emit(ctrl.diagnostics());
-              co_return;
-            }
-            diagnostic::error("failed to create virtualenv: {}", venv_error)
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-          auto pip_invocation = std::vector<std::string>{
-            venv_path / "bin" / "pip",
-            "install",
-            "--disable-pip-version-check",
-            "-q",
-          };
-          // `split` creates an empty token in case the input was entirely
-          // empty, but we don't want that so we need an extra guard.
-          if (!config_.implicit_requirements.empty()) {
-            auto implicit_requirements_vec
-              = detail::split_escaped(config_.implicit_requirements, " ", "\\");
-            pip_invocation.insert(pip_invocation.end(),
-                                  implicit_requirements_vec.begin(),
-                                  implicit_requirements_vec.end());
-          }
-          if (!requirements_.empty()) {
-            auto requirements_vec = detail::split(requirements_, " ");
-            pip_invocation.insert(pip_invocation.end(),
-                                  requirements_vec.begin(),
-                                  requirements_vec.end());
-          }
-          std_err = bp::ipstream{};
-          TENZIR_VERBOSE("installing python modules with: '{}'",
-                         fmt::join(pip_invocation, "' '"));
-          if (bp::system(pip_invocation, env, bp::std_err > std_err,
-                         detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
-                         bp::detail::limit_handles_{})
-              != 0) {
-            auto pip_error = drain_pipe(std_err);
-            diagnostic::error("{}", pip_error)
-              .note("failed to install pip requirements")
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
+        auto venv_invocation = std::vector<std::string>{
+          uv_executable.string(),
+          "venv",
+          maybe_venv->string(),
+        };
+        TENZIR_VERBOSE("creating a python venv with: '{}'",
+                       fmt::join(venv_invocation, "' '"));
+        if (bp::system(venv_invocation, env, bp::std_err > std_err,
+                       detail::preserved_fds{{STDERR_FILENO}},
+                       bp::detail::limit_handles_{})
+            != 0) {
+          auto venv_error = drain_pipe(std_err);
+          // We need to delete the potentially broken venv here to make sure
+          // that it doesn't stick around to break later runs of the python
+          // operator.
+          diagnostic::error("{}", venv_error)
+            .note("failed to create virtualenv")
+            .throw_();
         }
-        python_executable = venv_path / "bin" / "python3";
-        TENZIR_VERBOSE("python operator utilizes virtual environment {}", venv);
+        auto pip_invocation = std::vector<std::string>{
+          uv_executable.string(),
+          "pip",
+          "install",
+          "-q",
+        };
+        // `split` creates an empty token in case the input was entirely
+        // empty, but we don't want that so we need an extra guard.
+        if (!implicit_requirements.empty()) {
+          auto implicit_requirements_vec
+            = detail::split_escaped(implicit_requirements, " ", "\\");
+          pip_invocation.insert(pip_invocation.end(),
+                                implicit_requirements_vec.begin(),
+                                implicit_requirements_vec.end());
+        }
+        if (!requirements_.empty()) {
+          auto requirements_vec = detail::split(requirements_, " ");
+          pip_invocation.insert(pip_invocation.end(), requirements_vec.begin(),
+                                requirements_vec.end());
+        }
+        std_err = bp::ipstream{};
+        TENZIR_VERBOSE("installing python modules with: '{}'",
+                       fmt::join(pip_invocation, "' '"));
+        if (bp::system(pip_invocation, env, bp::std_err > std_err,
+                       detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
+                       bp::detail::limit_handles_{})
+            != 0) {
+          auto pip_error = drain_pipe(std_err);
+          diagnostic::error("{}", pip_error)
+            .note("failed to install pip requirements")
+            .throw_();
+        }
+        python_executable
+          = std::filesystem::path{*maybe_venv} / "bin" / "python3";
       }
       bp::opstream codepipe; // pipe to transmit the code
       // If we redirect stderr to get error information, we need to switch to a
@@ -306,8 +326,10 @@ public:
       // deadlock when trying to write to stderr. So we use a separate pipe
       // that's only used by the python executor and has well-defined semantics.
       bp::ipstream errpipe;
+      // TODO: Put this into a finalizer so it can be cleaned up correctly in
+      // case of errors or other early returns.
       auto child = bp::child{
-        boost::process::filesystem::path{python_executable},
+        python_executable,
         "-c",
         PYTHON_SCAFFOLD,
         fmt::to_string(codepipe.pipe().native_source()),
@@ -319,6 +341,8 @@ public:
                                codepipe.pipe().native_source(),
                                errpipe.pipe().native_sink()}},
         bp::detail::limit_handles_{}};
+      ::close(codepipe.pipe().native_source());
+      codepipe.pipe().assign_source(-1);
       if (code.empty()) {
         // The current implementation always expects a non-empty input.
         // Otherwise, it blocks forever on a `read` call.
@@ -326,9 +350,24 @@ public:
       } else {
         codepipe << code;
       }
+      codepipe.flush();
+      // We need to close the file descriptor manually because the `close()`
+      // member function of the codepipe doesn't do this.
+      // The destructor of `codepipe` will try to close the file descriptors
+      // unless they are set to -1.
+      ::close(codepipe.pipe().native_sink());
+      codepipe.pipe().assign_sink(-1);
+      // Although we already closed the file descriptors of the codepipe we now
+      // also close the wrapper object to make sure we don't leak any resources.
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
-      co_yield {}; // signal successful startup
+      errpipe.pipe().assign_sink(-1);
+      if (!child.running()) {
+        auto python_error = drain_pipe(errpipe);
+        diagnostic::error("{}", python_error)
+          .note("python process exited with error")
+          .throw_();
+      }
       for (auto&& slice : input) {
         if (!child.running()) {
           auto python_error = drain_pipe(errpipe);
@@ -408,7 +447,6 @@ public:
         co_yield output;
       }
       std_in.close();
-      child.wait();
     } catch (const std::exception& ex) {
       diagnostic::error("{}", ex.what()).emit(ctrl.diagnostics());
     }
@@ -429,11 +467,9 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& /*filter*/, event_order /*order*/) const
+  auto optimize(expression const& /*filter*/, event_order order) const
     -> optimize_result override {
-    // Note: The `unordered` means that we do not necessarily return the first
-    // `limit_` events.
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    return optimize_result::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, python_operator& x) -> bool {
@@ -455,30 +491,18 @@ class plugin final : public virtual operator_plugin<python_operator>,
 public:
   struct config config = {};
 
-  auto initialize(const record& plugin_config, const record& global_config)
-    -> caf::error override {
+  auto initialize(const record& plugin_config,
+                  const record& /*global_config*/) -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
     if (!create_virtualenv) {
       return create_virtualenv.error();
     }
-    if (!(*create_virtualenv)) {
-      config.venv_base_dir = std::nullopt;
-    } else if (const auto* cache_dir = get_if<std::string>(
-                 &global_config, "tenzir.cache-directory")) {
-      config.venv_base_dir
-        = (std::filesystem::path{*cache_dir} / "python" / "venvs").string();
-    } else {
-      config.venv_base_dir = (std::filesystem::temp_directory_path() / "tenzir"
-                              / "python" / "venvs")
-                               .string();
+    config.create_venvs = *create_virtualenv;
+    if (auto const* implicit_requirements
+        = get_if<std::string>(&plugin_config, "implicit-requirements")) {
+      config.implicit_requirements = *implicit_requirements;
     }
-    auto implicit_requirements_default = std::string{
-      detail::install_datadir() / "python"
-      / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
-                    version::major, version::minor, version::patch)};
-    config.implicit_requirements = get_or(
-      plugin_config, "implicit-requirements", implicit_requirements_default);
     return {};
   }
 

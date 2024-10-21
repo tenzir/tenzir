@@ -1,0 +1,6 @@
+error: `max` must be at least 0, but got -100
+ --> <input>:3:32
+  |
+3 |     x = x.replace(":", "", max=-100)
+  |                                ^^^^ 
+  |

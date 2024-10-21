@@ -11,6 +11,7 @@
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/config.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <caf/expected.hpp>
@@ -58,8 +59,9 @@ auto as_amqp_bool(bool x) -> amqp_boolean_t {
 
 /// Interprets a string view as AMQP bytes.
 auto as_amqp_bytes(std::string_view str) -> amqp_bytes_t {
-  if (str.empty())
+  if (str.empty()) {
     return amqp_empty_bytes;
+  }
   // Many RabbitMQ functions take an amqp_bytes_t structure as input.
   // Unfortunately there's not const-preserving equivalent, so we have to bite
   // the const_cast bullet.
@@ -71,8 +73,9 @@ auto as_amqp_bytes(std::string_view str) -> amqp_bytes_t {
 
 /// Interprets a chunk as AMQP bytes.
 auto as_amqp_bytes(chunk_ptr chunk) -> amqp_bytes_t {
-  if (not chunk or chunk->size() == 0)
+  if (not chunk or chunk->size() == 0) {
     return amqp_empty_bytes;
+  }
   // Many RabbitMQ functions take an amqp_bytes_t structure as input.
   // Unfortunately there's not const-preserving equivalent, so we have to bite
   // the const_cast bullet.
@@ -90,11 +93,13 @@ auto as_string_view(amqp_bytes_t bytes) -> std::string_view {
 
 /// Converts a status code into an error.
 auto to_error(int status, std::string_view desc = "") -> caf::error {
-  if (status == AMQP_STATUS_OK)
+  if (status == AMQP_STATUS_OK) {
     return {};
+  }
   const auto* error_string = amqp_error_string2(status);
-  if (desc.empty())
+  if (desc.empty()) {
     return caf::make_error(ec::unspecified, std::string{error_string});
+  }
   return caf::make_error(ec::unspecified,
                          fmt::format("{}: {}", desc, error_string));
 }
@@ -167,33 +172,43 @@ public:
   /// Constructs an AMQP engine from a config record.
   static auto make(record settings) -> caf::expected<amqp_engine> {
     amqp_config config;
-    if (auto* hostname = get_if<std::string>(&settings, "hostname"))
+    if (auto* hostname = get_if<std::string>(&settings, "hostname")) {
       config.hostname = std::move(*hostname);
-    if (auto* port = get_if<uint64_t>(&settings, "port"))
+    }
+    if (auto* port = get_if<uint64_t>(&settings, "port")) {
       config.port = detail::narrow_cast<uint16_t>(*port);
-    if (auto* ssl = get_if<bool>(&settings, "ssl"))
+    }
+    if (auto* ssl = get_if<bool>(&settings, "ssl")) {
       config.ssl = *ssl;
-    if (auto* vhost = get_if<std::string>(&settings, "vhost"))
+    }
+    if (auto* vhost = get_if<std::string>(&settings, "vhost")) {
       config.vhost = std::move(*vhost);
-    if (auto* max_channels = get_if<uint64_t>(&settings, "max_channels"))
+    }
+    if (auto* max_channels = get_if<uint64_t>(&settings, "max_channels")) {
       config.max_channels = detail::narrow_cast<int>(*max_channels);
-    if (auto* frame_size = get_if<uint64_t>(&settings, "frame_size"))
+    }
+    if (auto* frame_size = get_if<uint64_t>(&settings, "frame_size")) {
       config.frame_size = detail::narrow_cast<int>(*frame_size);
-    if (auto* heartbeat = get_if<uint64_t>(&settings, "heartbeat"))
+    }
+    if (auto* heartbeat = get_if<uint64_t>(&settings, "heartbeat")) {
       config.heartbeat = detail::narrow_cast<int>(*heartbeat);
-    if (auto* username = get_if<std::string>(&settings, "username"))
+    }
+    if (auto* username = get_if<std::string>(&settings, "username")) {
       config.username = std::move(*username);
-    if (auto* password = get_if<std::string>(&settings, "password"))
+    }
+    if (auto* password = get_if<std::string>(&settings, "password")) {
       config.password = std::move(*password);
+    }
     if (auto* sasl_method = get_if<std::string>(&settings, "sasl_method")) {
-      if (*sasl_method == "plain")
+      if (*sasl_method == "plain") {
         config.sasl_method = AMQP_SASL_METHOD_PLAIN;
-      else if (*sasl_method == "external")
+      } else if (*sasl_method == "external") {
         config.sasl_method = AMQP_SASL_METHOD_EXTERNAL;
-      else
+      } else {
         return caf::make_error(ec::parse_error,
                                fmt::format("invalid SASL method: {}",
                                            *sasl_method));
+      }
     }
     return amqp_engine{std::move(config)};
   }
@@ -215,24 +230,28 @@ public:
     TENZIR_DEBUG("- password: ***");
     TENZIR_DEBUG("- SASL method: {}", static_cast<int>(config_.sasl_method));
     TENZIR_DEBUG("creating new TCP socket");
-    if (config_.ssl)
+    if (config_.ssl) {
       socket_ = amqp_ssl_socket_new(conn_);
-    else
+    } else {
       socket_ = amqp_tcp_socket_new(conn_);
+    }
     TENZIR_ASSERT(socket_ != nullptr);
   }
 
   ~amqp_engine() {
-    if (not conn_)
+    if (not conn_) {
       return;
+    }
     TENZIR_DEBUG("closing AMQP connection");
     auto reply = amqp_connection_close(conn_, AMQP_REPLY_SUCCESS);
-    if (auto err = to_error(reply))
+    if (auto err = to_error(reply)) {
       TENZIR_DEBUG(err);
+    }
     TENZIR_DEBUG("destroying AMQP connection");
     auto status = amqp_destroy_connection(conn_);
-    if (auto err = to_error(status, "failed to destroy AMQP connection"))
+    if (auto err = to_error(status, "failed to destroy AMQP connection")) {
       TENZIR_WARN(err);
+    }
   }
 
   // Be a move-only handle type.
@@ -252,8 +271,9 @@ public:
 
   /// Connects to the server by opening a socket and logging in.
   auto connect() -> caf::error {
-    if (auto err = open_socket())
+    if (auto err = open_socket()) {
       return err;
+    }
     return login();
   }
 
@@ -279,6 +299,29 @@ public:
     return to_error(status);
   }
 
+  /// Consumes frames from broker, simply for the side effect of processing
+  /// heartbeats implicitly. Required if otherwise no interaction with the
+  /// broker would occur.
+  auto handle_heartbeat(operator_control_plane& ctrl) {
+    amqp_frame_t frame;
+    // We impose no timeout, either there is something to read or not. Never
+    // block!
+    struct timeval tv = {0, 0};
+    int status;
+    if (conn_ == nullptr) {
+      return;
+    }
+    do {
+      status = amqp_simple_wait_frame_noblock(conn_, &frame, &tv);
+      if (AMQP_STATUS_TIMEOUT != status && AMQP_STATUS_OK != status) {
+        diagnostic::warning("unexpected error while processing heartbeats")
+          .note("{}", amqp_error_string2(status))
+          .emit(ctrl.diagnostics());
+        return;
+      }
+    } while (status == AMQP_STATUS_OK);
+  }
+
   /// Starts a consumer by calling the basic.consume method.
   /// @param opts The consuming options.
   auto start_consumer(const consume_options& opts) -> caf::error {
@@ -288,26 +331,29 @@ public:
       conn_, amqp_channel_t{opts.channel}, as_amqp_bytes(opts.queue),
       as_amqp_bool(opts.passive), as_amqp_bool(opts.durable),
       as_amqp_bool(opts.exclusive), as_amqp_bool(opts.auto_delete), arguments);
-    if (declare == nullptr)
+    if (declare == nullptr) {
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to declare queue '{}', "
                                          "passive: {}, durable: {}, exclusive: "
                                          "{}, auto-delete: {}",
                                          opts.queue, opts.passive, opts.durable,
                                          opts.exclusive, opts.auto_delete));
+    }
     TENZIR_DEBUG("got queue '{}' with {} messages and {} consumers",
                  as_string_view(declare->queue), declare->message_count,
                  declare->consumer_count);
-    if (auto err = to_error(amqp_get_rpc_reply(conn_)))
+    if (auto err = to_error(amqp_get_rpc_reply(conn_))) {
       return err;
+    }
     auto declared_queue = std::string{as_string_view(declare->queue)};
     TENZIR_DEBUG("binding queue '{}' to exchange '{}' with routing key '{}'",
                  declared_queue, opts.exchange, opts.routing_key);
     amqp_queue_bind(conn_, amqp_channel_t{opts.channel},
                     as_amqp_bytes(declared_queue), as_amqp_bytes(opts.exchange),
                     as_amqp_bytes(opts.routing_key), arguments);
-    if (auto err = to_error(amqp_get_rpc_reply(conn_)))
+    if (auto err = to_error(amqp_get_rpc_reply(conn_))) {
       return err;
+    }
     TENZIR_DEBUG("setting up consume");
     auto consumer_tag = amqp_empty_bytes;
     amqp_basic_consume(conn_, amqp_channel_t{opts.channel},
@@ -319,9 +365,9 @@ public:
 
   /// Consumes a message.
   /// @returns The message from the server.
-  auto consume(std::optional<std::chrono::microseconds> timeout = {})
-    -> caf::expected<chunk_ptr> {
-    TENZIR_DEBUG("consuming message");
+  auto consume(std::optional<std::chrono::microseconds> timeout
+               = {}) -> caf::expected<chunk_ptr> {
+    TENZIR_TRACE("consuming message");
     auto envelope = amqp_envelope_t{};
     amqp_maybe_release_buffers(conn_);
     timeval us{};
@@ -347,8 +393,9 @@ public:
       return result;
     }
     // A timeout is no error.
-    if (ret.library_error == AMQP_STATUS_TIMEOUT)
+    if (ret.library_error == AMQP_STATUS_TIMEOUT) {
       return chunk_ptr{};
+    }
     // Now we're leaving the happy path.
     TENZIR_DEBUG(
       "reply type is {}, library error {} ({})",
@@ -359,15 +406,16 @@ public:
     if (ret.reply_type == AMQP_RESPONSE_LIBRARY_EXCEPTION) {
       if (ret.library_error != AMQP_STATUS_UNEXPECTED_STATE) {
         // Likely unrecoverable error, let the retry logic handle this
-        return caf::make_error(ec::unspecified,
-                               fmt::format("amqp: {}",
-                               amqp_error_string2(ret.library_error)));
+        return caf::make_error(
+          ec::unspecified,
+          fmt::format("amqp: {}", amqp_error_string2(ret.library_error)));
       }
       TENZIR_DEBUG("waiting for frame");
       auto frame = amqp_frame_t{};
       auto status = amqp_simple_wait_frame(conn_, &frame);
-      if (auto err = to_error(status, "failed to wait for frame"))
+      if (auto err = to_error(status, "failed to wait for frame")) {
         return err;
+      }
       if (frame.frame_type == AMQP_FRAME_METHOD) {
         switch (frame.payload.method.id) {
           default:
@@ -384,8 +432,9 @@ public:
             TENZIR_DEBUG("got mandatory message that couldn't be routed");
             auto message = amqp_message_t{};
             auto ret = amqp_read_message(conn_, frame.channel, &message, 0);
-            if (auto err = to_error(ret))
+            if (auto err = to_error(ret)) {
               return err;
+            }
             auto chunk = move_into_chunk(message.body);
             empty_amqp_pool(&message.pool);
             break;
@@ -427,8 +476,9 @@ private:
                    detail::narrow_cast<int>(config_.max_channels),
                    config_.frame_size, config_.heartbeat, config_.sasl_method,
                    config_.username.c_str(), config_.password.c_str());
-    if (auto err = to_error(reply))
+    if (auto err = to_error(reply)) {
       return err;
+    }
     return {};
   }
 
@@ -584,14 +634,19 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto engine = amqp_engine::make(config_);
-    if (not engine)
-      return engine.error();
-    if (auto err = engine->connect())
+    auto engine = std::shared_ptr<amqp_engine>{};
+    if (auto eng = amqp_engine::make(config_)) {
+      engine = std::make_shared<amqp_engine>(std::move(*eng));
+    } else {
+      return eng.error();
+    }
+    if (auto err = engine->connect()) {
       return err;
+    }
     auto channel = args_.channel ? args_.channel->inner : default_channel;
-    if (auto err = engine->open(channel))
+    if (auto err = engine->open(channel)) {
       return err;
+    }
     auto opts = amqp_engine::publish_options{
       .channel = channel,
       .exchange = args_.exchange ? args_.exchange->inner : default_exchange,
@@ -600,17 +655,32 @@ public:
       .mandatory = args_.mandatory,
       .immediate = args_.immediate,
     };
-    return [&ctrl, engine = std::make_shared<amqp_engine>(std::move(*engine)),
-            opts = std::move(opts)](chunk_ptr chunk) mutable {
-      if (!chunk || chunk->size() == 0)
+    auto heartbeat = try_get<uint64_t>(config_, "heartbeat");
+    if (heartbeat and *heartbeat and **heartbeat > 0) {
+      // If we are requesting heartbeats, we are also responsible to handle the
+      // heartbeats we get. If we have long gaps in interaction with the broker,
+      // we need to proactively check explicitly if there is something for us.
+      // We check 3 times per heartbeat interval, at most once per second.
+      auto interval = std::max(uint64_t{1}, **heartbeat / 3);
+      TENZIR_DEBUG("using heartbeat interval of {} seconds", interval);
+      detail::weak_run_delayed_loop(
+        &ctrl.self(), std::chrono::seconds{interval}, [engine, &ctrl] {
+          TENZIR_TRACE("processing heartbeats");
+          engine->handle_heartbeat(ctrl);
+        });
+    }
+    return [&ctrl, engine, opts = std::move(opts)](chunk_ptr chunk) mutable {
+      if (!chunk || chunk->size() == 0) {
         return;
-      if (auto err = engine->publish(chunk, opts))
+      }
+      if (auto err = engine->publish(chunk, opts)) {
         diagnostic::error("failed to publish {}-byte message", chunk->size())
           .note("channel: {}", opts.channel)
           .note("exchange: {}", opts.exchange)
           .note("routing key: {}", opts.routing_key)
           .hint("{}", err)
           .emit(ctrl.diagnostics());
+      }
       return;
     };
   }
@@ -641,8 +711,8 @@ private:
 class plugin final : public virtual loader_plugin<rabbitmq_loader>,
                      public virtual saver_plugin<rabbitmq_saver> {
 public:
-  auto initialize(const record& config, const record& /* global_config */)
-    -> caf::error override {
+  auto initialize(const record& config,
+                  const record& /* global_config */) -> caf::error override {
     config_ = config;
     return caf::none;
   }
@@ -685,34 +755,37 @@ public:
     parser.parse(p);
     auto config = config_;
     if (args.url) {
-      if (auto cfg = parse_url(args.url->inner))
+      if (auto cfg = parse_url(args.url->inner)) {
         config = std::move(*cfg);
-      else
+      } else {
         diagnostic::error("failed to parse AMQP URL")
           .primary(args.url->source)
           .hint("URL must adhere to the following format")
           .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
           .throw_();
+      }
     }
     if (args.options) {
       std::vector<std::pair<std::string, std::string>> kvps;
-      if (not parsers::kvp_list(args.options->inner, kvps))
+      if (not parsers::kvp_list(args.options->inner, kvps)) {
         diagnostic::error("invalid list of key=value pairs")
           .primary(args.options->source)
           .throw_();
+      }
       // For all string keys, we don't attempt automatic conversion.
       auto strings = std::set<std::string>{"hostname", "vhost", "sasl_method",
                                            "username", "password"};
       for (auto& [key, value] : kvps) {
-        if (strings.contains(key))
+        if (strings.contains(key)) {
           config[key] = std::move(value);
-        else if (auto x = from_yaml(value))
+        } else if (auto x = from_yaml(value)) {
           config[key] = std::move(*x);
-        else
+        } else {
           diagnostic::error("failed to parse value in key-value pair")
             .primary(args.options->source)
             .note("value: {}", value)
             .throw_();
+        }
       }
     }
     return {std::move(args), std::move(config)};
@@ -721,21 +794,28 @@ public:
   auto parse_url(std::string_view str) const -> std::optional<record> {
     auto info = amqp_connection_info{};
     auto copy = std::string{str};
-    if (amqp_parse_url(copy.data(), &info) != AMQP_STATUS_OK)
+    if (amqp_parse_url(copy.data(), &info) != AMQP_STATUS_OK) {
       return std::nullopt;
+    }
     auto result = config_;
-    if (info.host != nullptr)
+    if (info.host != nullptr) {
       result["hostname"] = std::string{info.host};
-    if (info.port != 0)
+    }
+    if (info.port != 0) {
       result["port"] = detail::narrow_cast<uint64_t>(info.port);
-    if (info.ssl != 0)
+    }
+    if (info.ssl != 0) {
       result["ssl"] = true;
-    if (info.vhost != nullptr)
+    }
+    if (info.vhost != nullptr) {
       result["vhost"] = std::string{info.vhost};
-    if (info.user != nullptr)
+    }
+    if (info.user != nullptr) {
       result["username"] = std::string{info.user};
-    if (info.password != nullptr)
+    }
+    if (info.password != nullptr) {
       result["password"] = std::string{info.password};
+    }
     return result;
   }
 

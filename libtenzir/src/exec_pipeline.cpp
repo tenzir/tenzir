@@ -186,8 +186,8 @@ auto add_implicit_source_and_sink(pipeline pipe, exec_config const& config)
 } // namespace
 
 auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
-                   const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void> {
+                   const exec_config& cfg,
+                   caf::actor_system& sys) -> caf::expected<void> {
   auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), cfg);
   if (not implicit_pipe) {
     return std::move(implicit_pipe.error());
@@ -205,6 +205,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   struct handler_state {
     pipeline_executor_actor executor = {};
   };
+  auto dedup = diagnostic_deduplicator{};
   auto handler = self->spawn(
     [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
       self->set_down_handler([&, self](const caf::down_msg& msg) {
@@ -232,7 +233,13 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
           });
       return {
         [&](diagnostic& d) {
-          dh.emit(std::move(d));
+          if (cfg.strict and d.severity >= severity::warning and result) {
+            result = diagnostic::error("encountered warnings in strict mode")
+                       .to_error();
+          }
+          if (dedup.insert(d)) {
+            dh.emit(std::move(d));
+          }
         },
         [&](uint64_t, uint64_t, type&) {
           // Don't register types here.
@@ -275,8 +282,8 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
 }
 
 auto exec_pipeline(std::string content, diagnostic_handler& dh,
-                   const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void> {
+                   const exec_config& cfg,
+                   caf::actor_system& sys) -> caf::expected<void> {
   if (cfg.tql2) {
     auto success = exec2(std::move(content), dh, cfg, sys);
     return success ? ec::no_error : ec::silent;

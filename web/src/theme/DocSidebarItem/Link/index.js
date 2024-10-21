@@ -12,6 +12,45 @@ import TransformationOn from "./TransformationOn.svg";
 import TransformationOff from "./TransformationOff.svg";
 import SinkOn from "./SinkOn.svg";
 import SinkOff from "./SinkOff.svg";
+import Experimental from "./Experimental.svg";
+
+const IconContainer = ({ children, title, marginLeft }) => (
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      height: 20,
+      marginLeft: marginLeft,
+      marginRight: -5,
+    }}
+    title={title}
+  >
+    {children}
+  </div>
+);
+
+const withIconContainer = (Icon, title, marginLeft) => () =>
+  (
+    <IconContainer title={title} marginLeft={marginLeft}>
+      <Icon style={{ height: '100%', width: 'auto' }} />
+    </IconContainer>
+  );
+
+const IconSourceOn = withIconContainer(SourceOn, "Source", 0);
+const IconSourceOff = withIconContainer(SourceOff, "", 0);
+const IconTransformationOn = withIconContainer(TransformationOn, "Transformation", 0);
+const IconTransformationOff = withIconContainer(TransformationOff, "", 0);
+const IconSinkOn = withIconContainer(SinkOn, "Sink", 0);
+const IconSinkOff = withIconContainer(SinkOff, "", 0);
+const IconParserOn = withIconContainer(SourceOn, "Parser", 0);
+const IconParserOff = withIconContainer(SourceOff, "", 0);
+const IconPrinterOn = withIconContainer(SinkOn, "Printer", 0);
+const IconPrinterOff = withIconContainer(SinkOff, "", 0);
+const IconLoaderOn = withIconContainer(SourceOn, "Loader", 0);
+const IconLoaderOff = withIconContainer(SourceOff, "", 0);
+const IconSaverOn = withIconContainer(SinkOn, "Saver", 0);
+const IconSaverOff = withIconContainer(SinkOff, "", 0);
+const IconExperimental = withIconContainer(Experimental, "Experimental", 5);
 
 export default function DocSidebarItemLink({
   item,
@@ -58,6 +97,7 @@ export default function DocSidebarItemLink({
           }}
         >
           {label}
+          {customProps?.experimental && <IconExperimental />}
           <span
             style={{
               flexGrow: 1
@@ -71,31 +111,6 @@ export default function DocSidebarItemLink({
     </li>
   );
 }
-
-const IconContainer = ({ children }) => (
-  <div
-    style={{
-      height: 20,
-      marginRight: -5,
-    }}
-  >
-    {children}
-  </div>
-);
-
-const withIconContainer = (Icon) => () =>
-  (
-    <IconContainer>
-      <Icon style={{ height: '100%', width: 'auto' }} />
-    </IconContainer>
-  );
-
-const IconSourceOn = withIconContainer(SourceOn);
-const IconSourceOff = withIconContainer(SourceOff);
-const IconTransformationOn = withIconContainer(TransformationOn);
-const IconTransformationOff = withIconContainer(TransformationOff);
-const IconSinkOn = withIconContainer(SinkOn);
-const IconSinkOff = withIconContainer(SinkOff);
 
 const SidebarIcons = ({ customProps }) => {
   let content = null;
@@ -111,15 +126,15 @@ const SidebarIcons = ({ customProps }) => {
   } else if (customProps?.connector) {
     content = (
       <>
-        {customProps.connector.loader ? <IconSourceOn /> : <IconSourceOff />}
-        {customProps.connector.saver ? <IconSinkOn /> : <IconSinkOff />}
+        {customProps.connector.loader ? <IconLoaderOn /> : <IconLoaderOff />}
+        {customProps.connector.saver ? <IconSaverOn /> : <IconSaverOff />}
       </>
     );
   } else if (customProps?.format) {
     content = (
       <>
-        {customProps.format.parser ? <IconSourceOn /> : <IconSourceOff />}
-        {customProps.format.printer ? <IconSinkOn /> : <IconSinkOff />}
+        {customProps.format.parser ? <IconParserOn /> : <IconParserOff />}
+        {customProps.format.printer ? <IconPrinterOn /> : <IconPrinterOff />}
       </>
     );
   }

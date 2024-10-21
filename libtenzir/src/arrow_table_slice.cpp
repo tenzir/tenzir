@@ -450,7 +450,7 @@ transform_columns(const table_slice& slice,
   if (slice.rows() == 0) {
     return {};
   }
-  if (caf::get<record_type>(slice.schema()).num_leaves() == 0) {
+  if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
     return slice;
   }
   auto input_batch = to_record_batch(slice);
@@ -609,7 +609,8 @@ auto make_struct_array(int64_t length,
   -> std::shared_ptr<arrow::StructArray> {
   auto field_types = arrow::FieldVector{};
   for (auto [name, array] : detail::zip(field_names, field_arrays)) {
-    field_types.push_back(std::make_shared<arrow::Field>(name, array->type()));
+    field_types.push_back(
+      std::make_shared<arrow::Field>(std::move(name), array->type()));
   }
   return make_struct_array(length, std::move(null_bitmap), field_types,
                            field_arrays);

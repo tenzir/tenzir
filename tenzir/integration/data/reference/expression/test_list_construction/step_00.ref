@@ -1,0 +1,112 @@
+{
+  "x0": [],
+  "x1": [
+    null
+  ],
+  "x2": [
+    null,
+    null
+  ],
+  "x3": [
+    null,
+    42
+  ],
+  "x4": [
+    42,
+    null
+  ],
+  "x5": [
+    {},
+    {}
+  ],
+  "x6": [
+    {
+      "a": 42
+    },
+    {
+      "a": 42
+    }
+  ],
+  "x7": [
+    {
+      "a": 42,
+      "b": null
+    },
+    {
+      "a": null,
+      "b": 42
+    }
+  ],
+  "x8": [
+    {
+      "a": null,
+      "b": null
+    },
+    {
+      "a": 42,
+      "b": 42
+    }
+  ],
+  "x9": [
+    [],
+    []
+  ],
+  "x10": [
+    [],
+    [
+      42
+    ]
+  ],
+  "x11": [
+    [
+      {
+        "x": 42,
+        "y": null
+      }
+    ],
+    [
+      {
+        "x": null,
+        "y": 42
+      }
+    ]
+  ],
+  "x12": [
+    {},
+    null
+  ],
+  "x13": [
+    123,
+    null
+  ],
+  "x14": [
+    [
+      {
+        "x": 123
+      }
+    ],
+    null
+  ]
+}
+warning: type clash in list, using `null` instead
+  --> /dev/stdin:14:13
+   |
+14 |   x12: [{}, []],
+   |             ~~ 
+   |
+   = note: expected `record` but got `list`
+
+warning: type clash in list, using `null` instead
+  --> /dev/stdin:15:14
+   |
+15 |   x13: [123, "abc"],
+   |              ~~~~~ 
+   |
+   = note: expected `int64` but got `string`
+
+warning: type clash in list, using `null` instead
+  --> /dev/stdin:16:21
+   |
+16 |   x14: [[{x: 123}], [{x: "abc"}]],
+   |                     ~~~~~~~~~~~~ 
+   |

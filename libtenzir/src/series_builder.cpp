@@ -9,6 +9,7 @@
 #include "tenzir/series_builder.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/cast.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -90,10 +91,6 @@
 namespace tenzir {
 
 namespace {
-
-void check(const arrow::Status& status) {
-  TENZIR_ASSERT(status.ok(), status.ToString().c_str());
-}
 
 template <class T>
 struct is_atom_type
@@ -337,7 +334,7 @@ public:
     return builder_.list();
   }
 
-  auto total_length() -> int64_t {
+  auto total_length() const -> int64_t {
     auto total = builder_.length();
     for (auto& array : finished_) {
       total += array.length();
@@ -1309,6 +1306,13 @@ series_builder::series_builder(
   }
 }
 
+series_builder::series_builder(const tenzir::type* ty)
+  : impl_{std::make_unique<detail::series_builder_impl>()} {
+  if (ty) {
+    impl_->protect(*ty);
+  }
+}
+
 series_builder::~series_builder() = default;
 
 series_builder::series_builder(series_builder&&) noexcept = default;
@@ -1400,7 +1404,7 @@ auto series_builder::type() -> tenzir::type {
   return impl_->type();
 }
 
-auto series_builder::length() -> int64_t {
+auto series_builder::length() const -> int64_t {
   return impl_->total_length();
 }
 

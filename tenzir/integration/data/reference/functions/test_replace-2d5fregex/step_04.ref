@@ -1,0 +1,6 @@
+error: `max` must be at least 0, but got -1
+ --> <input>:3:50
+  |
+3 |     x = x.replace_regex("[0-9a-f]{2}", "??", max=-1)
+  |                                                  ^^ 
+  |

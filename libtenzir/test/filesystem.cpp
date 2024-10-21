@@ -27,8 +27,7 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
   fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
-    filesystem = self->spawn<caf::detached>(posix_filesystem, directory,
-                                            accountant_actor{});
+    filesystem = self->spawn<caf::detached>(posix_filesystem, directory);
   }
 
   filesystem_actor filesystem;
@@ -104,36 +103,6 @@ TEST(mmap) {
     .receive(
       [&](const chunk_ptr& chk) {
         CHECK_EQUAL(as_bytes(chk), as_bytes(bytes));
-      },
-      [&](const caf::error& err) {
-        FAIL(err);
-      });
-}
-
-TEST(status) {
-  MESSAGE("create file");
-  self
-    ->request(filesystem, caf::infinite, atom::read_v,
-              std::filesystem::path{"not-there"})
-    .receive(
-      [&](const chunk_ptr&) {
-        FAIL("should not receive chunk on failure");
-      },
-      [&](const caf::error& err) {
-        CHECK_EQUAL(err, ec::no_such_file);
-      });
-  self
-    ->request(filesystem, caf::infinite, atom::status_v,
-              status_verbosity::debug, duration{})
-    .receive(
-      [&](record& status) {
-        auto ops = caf::get<record>(status["operations"]);
-        auto checks = caf::get<record>(ops["checks"]);
-        auto failed_checks = caf::get<uint64_t>(checks["failed"]);
-        CHECK_EQUAL(failed_checks, 1u);
-        auto reads = caf::get<record>(ops["reads"]);
-        auto failed_reads = caf::get<uint64_t>(reads["failed"]);
-        CHECK_EQUAL(failed_reads, 0u);
       },
       [&](const caf::error& err) {
         FAIL(err);

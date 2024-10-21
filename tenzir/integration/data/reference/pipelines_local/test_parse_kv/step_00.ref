@@ -1,4 +1,4 @@
-{"line": {"CATEGORY": "Initialization", "HELLO": "World: 123", "ID": "", "XSD-3141-84": "", "FILE": null, "ARGUMENTS": null}}
-{"line": {"CATEGORY": "Access", "HELLO": null, "ID": "XER-8343-12", "XSD-3141-84": null, "FILE": "C:\\foo\\bar.exe", "ARGUMENTS": "[--qux]"}}
+{"line": {"CATEGORY": "Initialization", "HELLO": "World: 123", "ID": "", "XSD-3141-84": ""}}
+{"line": {"CATEGORY": "Access", "ID": "XER-8343-12", "FILE": "C:\\foo\\bar.exe", "ARGUMENTS": "[--qux]"}}
 {"line": {"CATEGORY": 42, "BYE": ""}}
-{"line": {"CATEGORY": null, "BYE": ""}}
+{"line": {"BYE": ""}}

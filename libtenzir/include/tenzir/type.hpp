@@ -89,14 +89,13 @@ concept type_or_concrete_type
 /// A concept that models basic concrete types, i.e., types that do not hold
 /// additional state.
 template <class T>
-concept basic_type = requires {
+concept basic_type =
   // The type must be a concrete type.
-  requires concrete_type<T>;
+  concrete_type<T> &&
   // The type must not hold any state.
-  requires std::is_empty_v<T>;
+  std::is_empty_v<T> &&
   // The type must not define any constructors.
-  requires std::is_trivial_v<T>;
-};
+  std::is_trivial_v<T>;
 
 /// Either `int64_type`, `uint64_type`, or `double_type`.
 template <class T>
@@ -123,6 +122,10 @@ concept complex_type = requires {
   // from to avoid slicing issues.
   requires sizeof(T) == sizeof(stateful_type_base);
 };
+
+template <class T>
+concept extension_type
+  = concrete_type<T> && arrow::is_extension_type<typename T::arrow_type>::value;
 
 // -- type --------------------------------------------------------------------
 
@@ -293,11 +296,9 @@ public:
   [[nodiscard]] data construct() const noexcept;
 
   /// Converts the type into its type definition.
-  /// @param expand Render the definition in its expanded form.
   /// @pre *this
-  [[nodiscard]] auto to_definition(bool expand = false) const noexcept -> data;
-  [[nodiscard]] auto to_definition2(std::optional<std::string> field_name = {},
-                                    offset parent_path = {}) const noexcept
+  [[nodiscard]] auto to_definition(std::optional<std::string> field_name = {},
+                                   offset parent_path = {}) const noexcept
     -> record;
 
   /// Creates a type from an Arrow DataType, Field, or Schema.
@@ -469,6 +470,13 @@ std::strong_ordering operator<=>(const T& lhs, const U& rhs) noexcept {
 /// @relates type
 caf::error
 replace_if_congruent(std::initializer_list<type*> xs, const module& with);
+
+/// Attempts to unify two types.
+///
+/// Every type can be unified with `null_type`. Records can be unified if their
+/// overlapping fields can be unified, and lists can be unified if their value
+/// type can be unified.
+auto unify(const type& a, const type& b) -> std::optional<type>;
 
 // -- null_type ---------------------------------------------------------------
 

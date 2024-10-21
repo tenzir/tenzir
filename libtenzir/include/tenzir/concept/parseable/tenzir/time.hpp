@@ -112,12 +112,32 @@ struct compound_duration_parser
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    auto duration = duration_parser<Rep, Period>{};
-    auto guard = [](attribute dur) { return dur.count() > 0; };
-    auto positive_duration = duration.with(guard);
-    auto add = [&](attribute component) { x += component; };
-    auto p = duration >> ignore(*(positive_duration ->* add));
-    return p(f, l, x);
+    auto negation = (-parsers::ch<'-'>).then([](std::optional<char> x) -> bool {
+      return x.has_value();
+    });
+    auto positive_duration
+      = ignore(&!parsers::ch<'-'>) >> duration_parser<Rep, Period>{};
+    auto compound_duration = negation >> (positive_duration % *parsers::space);
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      return compound_duration(f, l, x);
+    } else {
+      auto result = std::tuple<bool, std::vector<attribute>>{};
+      if (not compound_duration(f, l, result)) {
+        return false;
+      }
+      const auto& [negated, parts] = result;
+      x = attribute::zero();
+      if (negated) {
+        for (auto part : parts) {
+          x -= part;
+        }
+      } else {
+        for (auto part : parts) {
+          x += part;
+        }
+      }
+      return true;
+    }
   }
 };
 
@@ -133,8 +153,12 @@ template <class Rep, class Period>
 auto const stl_duration = compound_duration_parser<Rep, Period>{};
 
 /// A parser for Tenzirs duration type.
-auto const duration
-  = stl_duration<tenzir::duration::rep, tenzir::duration::period>;
+auto const duration = stl_duration<duration::rep, duration::period>;
+
+template <class Rep, class Period>
+auto const simple_stl_duration = duration_parser<Rep, Period>{};
+
+auto const simple_duration = duration_parser<duration::rep, duration::period>{};
 
 } // namespace parsers
 

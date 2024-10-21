@@ -52,6 +52,8 @@ void add_root_opts(command& cmd) {
                                "console");
   cmd.options.add<caf::config_value::list>("?tenzir", "schema-dirs",
                                            module_desc);
+  cmd.options.add<caf::config_value::list>(
+    "?tenzir", "package-dirs", "additional directories containing packages");
   cmd.options.add<std::string>("?tenzir", "state-directory,d",
                                "directory for persistent state");
   cmd.options.add<std::string>("?tenzir", "cache-directory",
@@ -65,8 +67,6 @@ void add_root_opts(command& cmd) {
   cmd.options.add<std::string>("?tenzir", "endpoint,e", "node endpoint");
   cmd.options.add<std::string>("?tenzir", "node-id,i",
                                "the unique ID of this node");
-  cmd.options.add<bool>("?tenzir", "enable-metrics",
-                        "keep track of performance metrics");
   cmd.options.add<caf::config_value::list>("?tenzir", "plugin-dirs",
                                            "additional directories "
                                            "to load plugins from");
@@ -102,6 +102,7 @@ auto make_start_command() {
     "start", "starts a node",
     opts("?tenzir.start")
       .add<bool>("print-endpoint", "print the client endpoint on stdout")
+      .add<std::string>("write-endpoint", "write the client endpoint to a path")
       .add<caf::config_value::list>("commands", "an ordered list of commands "
                                                 "to run inside the node after "
                                                 "starting")

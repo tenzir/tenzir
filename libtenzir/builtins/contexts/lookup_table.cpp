@@ -302,48 +302,6 @@ public:
     return builder.finish();
   }
 
-  auto snapshot(parameter_map, const std::vector<std::string>& fields) const
-    -> caf::expected<expression> override {
-    auto keys = list{};
-    keys.reserve(context_entries.size());
-    const auto now = time::clock::now();
-    auto first_index = std::optional<size_t>{};
-    for (const auto& [k, v] : context_entries) {
-      if (v.is_expired(now)) {
-        continue;
-      }
-      k.populate_snapshot_data(keys);
-      auto current_index = k.original_type_index();
-      if (not first_index) [[unlikely]] {
-        first_index = current_index;
-      } else if (*first_index != current_index) [[unlikely]] {
-        // TODO: With the language revamp, we should get heterogeneous lookups
-        // for free.
-        return caf::make_error(ec::unimplemented,
-                               "lookup-table does not support snapshots for "
-                               "heterogeneous keys");
-      }
-    }
-    for (const auto& [k, v] : subnet_entries.nodes()) {
-      if (v->is_expired(now)) {
-        continue;
-      }
-      keys.emplace_back(k);
-    }
-    auto result = disjunction{};
-    result.reserve(fields.size());
-    for (const auto& field : fields) {
-      auto lhs = to<operand>(field);
-      TENZIR_ASSERT(lhs);
-      result.emplace_back(predicate{
-        *lhs,
-        relational_operator::in,
-        data{keys},
-      });
-    }
-    return result;
-  }
-
   /// Inspects the context.
   auto show() const -> record override {
     // There's no size() function for the PATRICIA trie, so we walk the tree
@@ -381,8 +339,10 @@ public:
       row.field("key", data{key});
       row.field("value", value->raw_data);
       if (entry_builder.length() >= context::dump_batch_size_limit) {
-        co_yield entry_builder.finish_assert_one_slice(
-          fmt::format("tenzir.{}.info", context_type()));
+        for (auto&& slice : entry_builder.finish_as_table_slice(
+               fmt::format("tenzir.{}.info", context_type()))) {
+          co_yield std::move(slice);
+        }
       }
     }
     for (const auto& [key, value] : context_entries) {
@@ -526,11 +486,10 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT(context_it == context_values.end());
-    auto query_f
-      = [key_values_list = std::move(key_values_list)](
-          parameter_map,
-          const std::vector<std::string>& fields) -> caf::expected<expression> {
-      auto result = disjunction{};
+    auto query_f = [key_values_list = std::move(key_values_list)](
+                     parameter_map, const std::vector<std::string>& fields)
+      -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
       result.reserve(fields.size());
       for (const auto& field : fields) {
         auto lhs = to<operand>(field);
@@ -559,23 +518,22 @@ public:
       }
       entry.first.populate_snapshot_data(key_values_list);
     }
-    return
-      [key_values_list = std::move(key_values_list)](
-        parameter_map,
-        const std::vector<std::string>& fields) -> caf::expected<expression> {
-        auto result = disjunction{};
-        result.reserve(fields.size());
-        for (const auto& field : fields) {
-          auto lhs = to<operand>(field);
-          TENZIR_ASSERT(lhs);
-          result.emplace_back(predicate{
-            *lhs,
-            relational_operator::in,
-            data{key_values_list},
-          });
-        }
-        return result;
-      };
+    return [key_values_list = std::move(key_values_list)](
+             parameter_map, const std::vector<std::string>& fields)
+             -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
+      result.reserve(fields.size());
+      for (const auto& field : fields) {
+        auto lhs = to<operand>(field);
+        TENZIR_ASSERT(lhs);
+        result.emplace_back(predicate{
+          *lhs,
+          relational_operator::in,
+          data{key_values_list},
+        });
+      }
+      return result;
+    };
   }
 
   auto reset() -> caf::expected<void> override {

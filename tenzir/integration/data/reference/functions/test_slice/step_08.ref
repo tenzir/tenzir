@@ -1,0 +1,6 @@
+error: `stride` must be greater 0, but got -1
+ --> <input>:5:31
+  |
+5 |     x = x.slice(end=6, stride=-1)
+  |                               ^^ 
+  |

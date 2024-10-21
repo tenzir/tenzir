@@ -9,7 +9,6 @@
 #include "tenzir/partition_transformer.hpp"
 
 #include "tenzir/detail/fanout_counter.hpp"
-#include "tenzir/detail/shutdown_stream_stage.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/partition_synopsis.hpp"
@@ -17,28 +16,12 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/value_index_factory.hpp"
 
-#include <caf/attach_continuous_stream_stage.hpp>
-#include <caf/attach_stream_stage.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <flatbuffers/flatbuffers.h>
 
 namespace tenzir {
 
 namespace {
-
-// A local reimplementation of `caf::broadcast_downstream_manager::push_to()`,
-// because that function was only added late in the 0.17.x cycle and is not
-// available on the Debian 10 packaged version of CAF.
-template <typename T, typename... Ts>
-bool push_to(caf::broadcast_downstream_manager<T>& manager,
-             caf::outbound_stream_slot<T> slot, Ts&&... xs) {
-  auto i = manager.states().find(slot);
-  if (i != manager.states().end()) {
-    i->second.buf.emplace_back(std::forward<Ts>(xs)...);
-    return true;
-  }
-  return false;
-}
 
 void store_or_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
@@ -204,11 +187,7 @@ void partition_transformer_state::update_type_ids_and_indexers(
     auto& typed_indexers = partition_buildup.at(partition_id).indexers;
     auto it = typed_indexers.find(qf);
     if (it == typed_indexers.end()) {
-      const auto skip
-        = should_skip_index_creation(field.type, qf, synopsis_opts.rules);
-      auto idx
-        = skip ? nullptr : factory<value_index>::make(field.type, index_opts);
-      it = typed_indexers.emplace(qf, std::move(idx)).first;
+      it = typed_indexers.emplace(qf, nullptr).first;
     }
     auto& idx = it->second;
     if (idx != nullptr)
@@ -318,9 +297,9 @@ auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   std::string store_id, const index_config& synopsis_opts,
-  const caf::settings& index_opts, accountant_actor accountant,
-  catalog_actor catalog, filesystem_actor fs, pipeline transform,
-  std::string partition_path_template, std::string synopsis_path_template)
+  const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
+  pipeline transform, std::string partition_path_template,
+  std::string synopsis_path_template)
   -> partition_transformer_actor::behavior_type {
   self->state.synopsis_opts = synopsis_opts;
   self->state.partition_path_template = std::move(partition_path_template);
@@ -330,7 +309,6 @@ auto partition_transformer(
   self->state.partition_capacity
     = caf::get_or(index_opts, "cardinality", defaults::max_partition_size);
   self->state.index_opts = index_opts;
-  self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
   self->state.catalog = std::move(catalog);
   self->state.transform = std::move(transform);
@@ -424,20 +402,11 @@ auto partition_transformer(
         store_or_fulfill(self, std::move(stream_data));
         return {};
       }
-      self->state.stage = caf::attach_continuous_stream_stage(
-        self, [](caf::unit_t&) {},
-        [](caf::unit_t&, caf::downstream<tenzir::table_slice>&,
-           tenzir::table_slice) {
-          // We never get input through a source but push directly
-          // to `out` from external code below.
-          /* nop */
-        },
-        [](caf::unit_t&, const caf::error&) { /* nop */ });
       for (auto& [schema, partition_data] : self->state.data) {
         if (partition_data.events == 0)
           continue;
         auto builder_and_header = store_actor_plugin->make_store_builder(
-          self->state.accountant, self->state.fs, partition_data.id);
+          self->state.fs, partition_data.id);
         if (!builder_and_header) {
           self->state.stream_error
             = caf::make_error(ec::invalid_argument,
@@ -446,15 +415,10 @@ auto partition_transformer(
           store_or_fulfill(self, std::move(stream_data));
           return {};
         }
-        self->monitor(builder_and_header->store_builder);
+        partition_data.builder = builder_and_header->store_builder;
+        self->monitor(partition_data.builder);
         ++self->state.stores_launched;
         partition_data.store_header = builder_and_header->header;
-        // Empirically adding the outbound path and pushing data to it
-        // need to be separated by a continuation, although I'm not
-        // completely sure why.
-        self->state.partition_buildup.at(partition_data.id).slot
-          = self->state.stage->add_outbound_path(
-            builder_and_header->store_builder);
       }
       TENZIR_DEBUG("{} received all table slices", *self);
       return self->delegate(static_cast<partition_transformer_actor>(self),
@@ -466,12 +430,11 @@ auto partition_transformer(
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
         auto& buildup = self->state.partition_buildup.at(data.id);
-        auto slot = buildup.slot;
         auto offset = id{0};
         for (auto& slice : buildup.slices) {
           slice.offset(offset);
           offset += slice.rows();
-          push_to(self->state.stage->out(), slot, slice);
+          self->send(data.builder, slice);
           self->state.update_type_ids_and_indexers(data.type_ids, data.id,
                                                    slice);
           mutable_synopsis.add(slice, self->state.partition_capacity,
@@ -494,7 +457,30 @@ auto partition_transformer(
           data.indexer_chunks.emplace_back(qf.name(), chunk);
         }
       }
-      detail::shutdown_stream_stage(self->state.stage);
+      for (auto& [_, partition_data] : self->state.data) {
+        self->request(partition_data.builder, caf::infinite, atom::persist_v)
+          .then(
+            [](resource&) {
+              // This is handled via the down handler.
+              // TODO: The logic needs to be moved here when updating to CAF
+              // 1.0.
+            },
+            [self](caf::error& err) {
+              auto annotated_error = diagnostic::error(err).note("").to_error();
+              std::visit(detail::overload{
+                           [&](partition_transformer_state::path_data& pd) {
+                             pd.promise.deliver(annotated_error);
+                           },
+                           [&](auto&) {
+                             // We should not get here, but let's not abort the
+                             // process if we do.
+                             TENZIR_ERROR("{}", annotated_error);
+                           },
+                         },
+                         self->state.persist);
+              self->quit(annotated_error);
+            });
+      }
       auto stream_data = partition_transformer_state::stream_data{
         .partition_chunks
         = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},

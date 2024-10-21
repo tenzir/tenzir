@@ -4,5 +4,5 @@ error: loader `filee` could not be found
 1 | load filee | read json
   |      ^^^^^ 
   |
-  = hint: must be one of -, file, ftp, ftps, http, https, s3, stdin, tcp, udp
+  = hint: must be one of -, file, ftp, ftps, http, https, stdin, tcp, udp
   = docs: https://docs.tenzir.com/connectors

@@ -16,8 +16,9 @@
 
 namespace tenzir {
 
-auto tokenize(std::string_view content, session ctx)
-  -> failure_or<std::vector<token>> {
+auto tokenize(std::string_view content,
+              session ctx) -> failure_or<std::vector<token>> {
+  TRY(validate_utf8(content, ctx));
   auto tokens = tokenize_permissive(content);
   TRY(verify_tokens(tokens, ctx));
   return tokens;
@@ -28,15 +29,21 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   // TODO: The char-class parsers (such as `parsers::alnum`) can cause undefined
   // behavior. We should fix them or use something different here.
   using namespace parsers;
-  // clang-format off
   auto continue_ident = alnum | '_';
   auto identifier = (alpha | '_') >> *continue_ident;
   auto digit_us = digit | '_';
+  // Note that many parsers here are not strict, but very lenient instead. This
+  // is so that we can tokenize even if the input is malformed, which produces
+  // better error messages.
+  auto ipv4 = +digit >> '.' >> +digit >> +('.' >> +digit);
+  auto ipv6 = *xdigit >> ':' >> *xdigit >> ':' >> *xdigit
+              >> *(('.' >> +digit) | (':' >> *xdigit));
+  auto ip = ipv4 | ipv6;
+  // clang-format off
   auto p
-    = ignore(*xdigit >> ':' >> *xdigit >> ':' >> *xdigit
-             >> *(('.' >> +digit) | (':' >> *xdigit)))
-      ->* [] { return token_kind::ip; }
-    | ignore(+digit >> '.' >> +digit >> +('.' >> +digit))
+    = ignore(ip >> "/" >> *digit)
+      ->* [] { return token_kind::subnet; }
+    | ignore(ip)
       ->* [] { return token_kind::ip; }
     | ignore(+digit >> '-' >> +digit >> '-' >> +digit >> *(alnum | ':' | '+' | '-'))
       ->* [] { return token_kind::datetime; }
@@ -46,6 +53,14 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       ->* [] { return token_kind::string; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')))
       ->* [] { return token_kind::error; } // non-terminated string
+    | ignore("r\"" >> *(any - '"') >> '"')
+      ->* [] { return token_kind::raw_string; }
+    | ignore("r\"" >> *(any - '"'))
+      ->* [] { return token_kind::error; } // non-terminated raw string
+    | ignore("r#\"" >> *(any - "\"#") >> "\"#")
+      ->* [] { return token_kind::raw_string; }
+    | ignore("r#\"" >> *(any - "\"#"))
+      ->* [] { return token_kind::error; } // non-terminated raw string
     | ignore("//" >> *(any - '\n'))
       ->* [] { return token_kind::line_comment; }
     | ignore("/*" >> *(any - "*/") >> "*/")
@@ -68,6 +83,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("/", slash)
     | X("=", equal)
     | X("|", pipe)
+    | X("...", dot_dot_dot)
     | X(".", dot)
     | X("(", lpar)
     | X(")", rpar)
@@ -134,8 +150,8 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   return result;
 }
 
-auto verify_tokens(std::span<const token> tokens, session ctx)
-  -> failure_or<void> {
+auto verify_tokens(std::span<const token> tokens,
+                   session ctx) -> failure_or<void> {
   auto result = failure_or<void>{};
   for (auto& token : tokens) {
     if (token.kind == token_kind::error) {
@@ -166,6 +182,7 @@ auto describe(token_kind k) -> std::string_view {
     X(datetime, "datetime");
     X(delim_comment, "`/*...*/`");
     X(dollar_ident, "dollar identifier");
+    X(dot_dot_dot, "`...`");
     X(dot, "`.`");
     X(else_, "`else`");
     X(equal_equal, "`==`");
@@ -195,6 +212,7 @@ auto describe(token_kind k) -> std::string_view {
     X(or_, "`or`");
     X(pipe, "`|`");
     X(plus, "`+`");
+    X(raw_string, "raw string");
     X(rbrace, "`}`");
     X(rbracket, "`]`");
     X(reserved_keyword, "reserved keyword");
@@ -204,6 +222,7 @@ auto describe(token_kind k) -> std::string_view {
     X(slash, "`/`");
     X(star, "`*`");
     X(string, "string");
+    X(subnet, "subnet");
     X(this_, "`this`");
     X(true_, "`true`");
     X(underscore, "`_`");
@@ -211,6 +230,17 @@ auto describe(token_kind k) -> std::string_view {
   }
 #undef X
   TENZIR_UNREACHABLE();
+}
+
+auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
+  // TODO: Refactor this.
+  arrow::util::InitializeUTF8();
+  if (arrow::util::ValidateUTF8(content)) {
+    return {};
+  }
+  // TODO: Consider reporting offset.
+  diagnostic::error("found invalid UTF8").emit(ctx);
+  return failure::promise();
 }
 
 } // namespace tenzir

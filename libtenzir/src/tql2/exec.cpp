@@ -28,24 +28,6 @@
 namespace tenzir {
 namespace {
 
-/// A diagnostic handler that deduplicate diagnostics.
-class deduplicating_diagnostic_handler final : public diagnostic_handler {
-public:
-  explicit deduplicating_diagnostic_handler(diagnostic_handler& inner)
-    : inner_{inner} {
-  }
-
-  void emit(diagnostic d) override {
-    if (deduplicator_.insert(d)) {
-      inner_.emit(std::move(d));
-    }
-  }
-
-private:
-  diagnostic_deduplicator deduplicator_;
-  diagnostic_handler& inner_;
-};
-
 // TODO: This is a naive implementation and does not do scoping properly.
 class let_resolver : public ast::visitor<let_resolver> {
 public:
@@ -129,11 +111,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
     stmt.match(
       [&](ast::invocation& x) {
         // TODO: Where do we check that this succeeds?
-        auto def = std::get_if<const operator_factory_plugin*>(
-          &ctx.reg().get(x.op.ref));
-        TENZIR_ASSERT(def);
-        TENZIR_ASSERT(*def);
-        auto op = (*def)->make(
+        auto op = ctx.reg().get(x).make(
           operator_factory_plugin::invocation{
             std::move(x.op),
             std::move(x.args),
@@ -206,24 +184,11 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
   return tenzir::pipeline{std::move(ops)};
 }
 
-auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
-  // TODO: Refactor this.
-  arrow::util::InitializeUTF8();
-  if (arrow::util::ValidateUTF8(content)) {
-    return {};
-  }
-  // TODO: Consider reporting offset.
-  diagnostic::error("found invalid UTF8").emit(ctx);
-  return failure::promise();
-}
-
 } // namespace
 
 auto parse_and_compile(std::string_view source, session ctx)
   -> failure_or<pipeline> {
-  TRY(validate_utf8(source, ctx));
-  TRY(auto tokens, tokenize(source, ctx));
-  TRY(auto ast, parse(tokens, source, ctx));
+  TRY(auto ast, parse(source, ctx));
   return compile(std::move(ast), ctx);
 }
 
@@ -250,8 +215,7 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
   TENZIR_UNUSED(sys);
   auto result = std::invoke([&]() -> failure_or<bool> {
-    auto dedup = std::make_unique<deduplicating_diagnostic_handler>(dh);
-    auto provider = session_provider::make(*dedup);
+    auto provider = session_provider::make(dh);
     auto ctx = provider.as_session();
     TRY(validate_utf8(source, ctx));
     auto tokens = tokenize_permissive(source);

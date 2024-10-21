@@ -1,2 +1,6 @@
-error: Empty output not allowed
+error: Traceback (most recent call last):
+    batch_out = execute_user_code(batch_in, compiled_code)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    raise RuntimeError(msg)
+RuntimeError: Empty output not allowed
  = note: python process exited with error

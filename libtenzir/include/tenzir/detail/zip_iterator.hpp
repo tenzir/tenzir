@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include "tenzir/detail/assert.hpp"
+
 #include <cstddef>
 #include <iterator>
 #include <tuple>
@@ -401,6 +403,14 @@ public:
 template <typename... T>
 void swap(const zip_ref<T...>& lhs, const zip_ref<T...>& rhs) {
   lhs.swap_data(rhs);
+}
+
+template <class T, class... Ts>
+auto zip_equal(T& x, Ts&... xs) -> detail::zip<T, Ts...> {
+  auto size = x.size();
+  auto match = ((xs.size() == size) && ...);
+  TENZIR_ASSERT(match);
+  return detail::zip{x, xs...};
 }
 
 } // namespace tenzir::detail

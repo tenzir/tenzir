@@ -131,21 +131,20 @@ struct [[nodiscard]] diagnostic {
   std::vector<diagnostic_note> notes;
 
   template <class... Ts>
-  static auto
-  builder(enum severity s, fmt::format_string<Ts...> str, Ts&&... xs)
-    -> diagnostic_builder;
+  static auto builder(enum severity s, fmt::format_string<Ts...> str,
+                      Ts&&... xs) -> diagnostic_builder;
 
   static auto builder(enum severity s, caf::error err) -> diagnostic_builder;
 
   template <class... Ts>
-  static auto error(fmt::format_string<Ts...> str, Ts&&... xs)
-    -> diagnostic_builder;
+  static auto
+  error(fmt::format_string<Ts...> str, Ts&&... xs) -> diagnostic_builder;
 
   static auto error(caf::error err) -> diagnostic_builder;
 
   template <class... Ts>
-  static auto warning(fmt::format_string<Ts...> str, Ts&&... xs)
-    -> diagnostic_builder;
+  static auto
+  warning(fmt::format_string<Ts...> str, Ts&&... xs) -> diagnostic_builder;
 
   static auto warning(caf::error err) -> diagnostic_builder;
 
@@ -321,8 +320,8 @@ auto diagnostic::builder(enum severity s, fmt::format_string<Ts...> str,
 }
 
 template <class... Ts>
-auto diagnostic::error(fmt::format_string<Ts...> str, Ts&&... xs)
-  -> diagnostic_builder {
+auto diagnostic::error(fmt::format_string<Ts...> str,
+                       Ts&&... xs) -> diagnostic_builder {
   return builder(severity::error, std::move(str), std::forward<Ts>(xs)...);
 }
 
@@ -332,8 +331,8 @@ inline auto diagnostic::error(caf::error err) -> diagnostic_builder {
 }
 
 template <class... Ts>
-auto diagnostic::warning(fmt::format_string<Ts...> str, Ts&&... xs)
-  -> diagnostic_builder {
+auto diagnostic::warning(fmt::format_string<Ts...> str,
+                         Ts&&... xs) -> diagnostic_builder {
   return builder(severity::warning, std::move(str), std::forward<Ts>(xs)...);
 }
 
@@ -362,8 +361,31 @@ public:
     return std::move(result);
   }
 
+  auto empty() const -> bool {
+    return result.empty();
+  }
+
 private:
   std::vector<diagnostic> result;
+};
+
+/// @brief a diagnostic handler that enriches a diagnostic message
+// before emitting it to another handler
+class transforming_diagnostic_handler : public diagnostic_handler {
+public:
+  using transform_function = std::function<diagnostic(diagnostic)>;
+  transforming_diagnostic_handler(diagnostic_handler& dh,
+                                  transform_function transform)
+    : dh_{dh}, transform_{std::move(transform)} {
+  }
+
+  void emit(diagnostic d) override {
+    dh_.emit(transform_(std::move(d)));
+  }
+
+private:
+  diagnostic_handler& dh_;
+  transform_function transform_;
 };
 
 class diagnostic_handler_ref final : public diagnostic_handler {
@@ -399,6 +421,10 @@ public:
     return {};
   }
 
+  friend auto inspect(auto& f, failure& x) -> bool {
+    return f.object(x).fields();
+  }
+
 private:
   failure() = default;
 };
@@ -409,10 +435,13 @@ class [[nodiscard]] failure_or
   : public variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
                    failure> {
 public:
+  using super
+    = variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
+              failure>;
+
   using reference_type = std::add_lvalue_reference_t<T>;
 
-  using variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
-                failure>::variant;
+  using super::super;
 
   void ignore() const {
     // no-op
@@ -451,6 +480,10 @@ public:
 
   auto operator->()
     -> T* requires(not std::same_as<T, void>) { return &**this; }
+
+  friend auto inspect(auto& f, failure_or& x) -> bool {
+    return f.apply(static_cast<super&>(x));
+  }
 };
 
 template <class T>

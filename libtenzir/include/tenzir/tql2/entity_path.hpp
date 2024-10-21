@@ -9,24 +9,38 @@
 #pragma once
 
 #include "tenzir/detail/debug_writer.hpp"
-
-#include <span>
+#include "tenzir/detail/enum.hpp"
 
 namespace tenzir {
+
+TENZIR_ENUM(
+  /// Models the available entity namespaces.
+  entity_ns,
+  /// The operator namespace contains only operators.
+  op,
+  /// The function namespace contains both functions and methods.
+  fn);
 
 class entity_path {
 public:
   entity_path() = default;
 
-  explicit entity_path(std::vector<std::string> path)
-    : segments_{std::move(path)} {
+  explicit entity_path(std::vector<std::string> segments, entity_ns ns)
+    : segments_{std::move(segments)}, ns_{ns} {
+    TENZIR_ASSERT(resolved());
   }
 
   auto resolved() const -> bool {
     return not segments_.empty();
   }
 
+  auto ns() const -> entity_ns {
+    TENZIR_ASSERT(resolved());
+    return ns_;
+  }
+
   auto segments() const -> std::span<const std::string> {
+    TENZIR_ASSERT(resolved());
     return segments_;
   }
 
@@ -35,14 +49,15 @@ public:
       if (not x.resolved()) {
         return dbg->fmt_value("unresolved");
       }
-      return dbg->fmt_value("#{}", fmt::join(x.segments_, "::"));
+      return dbg->fmt_value("{}/{}", fmt::join(x.segments_, "::"), x.ns_);
     }
-    return f.apply(x.segments_);
+    return f.object(x).fields(f.field("path", x.segments_),
+                              f.field("ns", x.ns_));
   }
 
 private:
-  // TODO: Storing resolved entities as strings is quite inefficient.
   std::vector<std::string> segments_;
+  entity_ns ns_{};
 };
 
 } // namespace tenzir

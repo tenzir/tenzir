@@ -71,9 +71,12 @@ auto argument_parser2::parse(const ast::entity& self,
       x);
   };
   auto arg = args.begin();
-  for (auto [idx, positional] : detail::enumerate(positional_)) {
+  auto positional_idx = size_t{0};
+  for (auto it = positional_.begin(); it != positional_.end();
+       ++it, ++positional_idx) {
+    auto& positional = *it;
     if (arg == args.end()) {
-      if (first_optional_ && idx >= *first_optional_) {
+      if (first_optional_ && positional_idx >= *first_optional_) {
         break;
       }
       emit(diagnostic::error("expected additional positional argument `{}`",
@@ -83,12 +86,6 @@ auto argument_parser2::parse(const ast::entity& self,
     }
     auto& expr = *arg;
     if (std::holds_alternative<ast::assignment>(*expr.kind)) {
-      if (first_optional_ && idx >= *first_optional_) {
-        break;
-      }
-      emit(diagnostic::error("expected positional argument `{}` first",
-                             positional.meta)
-             .primary(expr));
       break;
     }
     positional.set.match(
@@ -127,6 +124,14 @@ auto argument_parser2::parse(const ast::entity& self,
       [&](setter<ast::expression>& set) {
         set(expr);
       },
+      [&](setter<ast::simple_selector>& set) {
+        auto sel = ast::simple_selector::try_from(expr);
+        if (not sel) {
+          emit(diagnostic::error("expected a selector").primary(expr));
+          return;
+        }
+        set(std::move(*sel));
+      },
       [&](setter<located<pipeline>>& set) {
         auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
         if (not pipe_expr) {
@@ -144,74 +149,118 @@ auto argument_parser2::parse(const ast::entity& self,
     ++arg;
   }
   for (; arg != args.end(); ++arg) {
-    auto assignment = std::get_if<ast::assignment>(&*arg->kind);
-    if (not assignment) {
-      emit(diagnostic::error("did not expect more positional arguments")
-             .primary(*arg));
-      continue;
-    }
-    auto sel = std::get_if<ast::simple_selector>(&assignment->left);
-    if (not sel || sel->has_this() || sel->path().size() != 1) {
-      emit(diagnostic::error("invalid name").primary(assignment->left));
-      continue;
-    }
-    auto& name = sel->path()[0].name;
-    auto it = std::ranges::find(named_, name, &named::name);
-    if (it == named_.end()) {
-      emit(diagnostic::error("named argument `{}` does not exist", name)
-             .primary(assignment->left));
-      continue;
-    }
-    auto& expr = assignment->right;
-    it->set.match(
-      [&]<data_type T>(setter<located<T>>& set) {
-        auto value = const_eval(expr, ctx);
-        if (not value) {
-          result = value.error();
+    arg->match(
+      [&](ast::assignment assignment) {
+        auto sel = std::get_if<ast::simple_selector>(&assignment.left);
+        if (not sel || sel->has_this() || sel->path().size() != 1) {
+          emit(diagnostic::error("invalid name").primary(assignment.left));
           return;
         }
-        auto cast = caf::get_if<T>(&*value);
-        if constexpr (std::same_as<T, uint64_t>) {
-          if (not cast) {
-            auto other = caf::get_if<int64_t>(&*value);
-            if (other) {
-              if (*other < 0) {
-                emit(diagnostic::error("expected positive integer, got `{}`",
-                                       *other)
-                       .primary(expr));
-                return;
-              }
-              value = static_cast<uint64_t>(*other);
-              cast = caf::get_if<T>(&*value);
+        auto& name = sel->path()[0].name;
+        auto it = std::ranges::find(named_, name, &named::name);
+        if (it == named_.end()) {
+          emit(diagnostic::error("named argument `{}` does not exist", name)
+                 .primary(assignment.left));
+          return;
+        }
+        if (it->found) {
+          emit(diagnostic::error("duplicate named argument `{}`", name)
+                 .primary(*it->found)
+                 .primary(arg->get_location()));
+          return;
+        }
+        it->found = arg->get_location();
+        auto& expr = assignment.right;
+        it->set.match(
+          [&]<data_type T>(setter<located<T>>& set) {
+            auto value = const_eval(expr, ctx);
+            if (not value) {
+              result = value.error();
+              return;
             }
-          }
-        }
-        if (not cast) {
-          // TODO: Attempt conversion.
-          emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
-                                 type_kind::of<data_to_type_t<T>>, kind(*value))
-                 .primary(expr));
-          return;
-        }
-        set(located{std::move(*cast), expr.get_location()});
+            auto cast = caf::get_if<T>(&*value);
+            if constexpr (std::same_as<T, uint64_t>) {
+              if (not cast) {
+                auto other = caf::get_if<int64_t>(&*value);
+                if (other) {
+                  if (*other < 0) {
+                    emit(diagnostic::error(
+                           "expected positive integer, got `{}`", *other)
+                           .primary(expr));
+                    return;
+                  }
+                  value = static_cast<uint64_t>(*other);
+                  cast = caf::get_if<T>(&*value);
+                }
+              }
+            }
+            if (not cast) {
+              // TODO: Attempt conversion.
+              emit(diagnostic::error(
+                     "expected argument of type `{}`, but got `{}`",
+                     type_kind::of<data_to_type_t<T>>, kind(*value))
+                     .primary(expr));
+              return;
+            }
+            set(located{std::move(*cast), expr.get_location()});
+          },
+          [&](setter<ast::expression>& set) {
+            set(expr);
+          },
+          [&](setter<ast::simple_selector>& set) {
+            auto sel = ast::simple_selector::try_from(expr);
+            if (not sel) {
+              emit(diagnostic::error("expected a selector").primary(expr));
+              return;
+            }
+            set(std::move(*sel));
+          },
+          [&](setter<located<pipeline>>& set) {
+            auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
+            if (not pipe_expr) {
+              emit(diagnostic::error("expected a pipeline expression")
+                     .primary(expr));
+              return;
+            }
+            auto pipe = compile(std::move(pipe_expr->inner), ctx);
+            if (pipe.is_error()) {
+              result = pipe.error();
+              return;
+            }
+            set(located{std::move(pipe).unwrap(), expr.get_location()});
+          });
       },
-      [&](setter<ast::expression>& set) {
-        set(expr);
+      [&](ast::pipeline_expr pipe_expr) {
+        if (positional_idx == positional_.size()) {
+          emit(diagnostic::error("did not expect more positional arguments")
+                 .primary(*arg));
+        }
+        positional_[positional_idx].set.match(
+          [&](setter<located<pipeline>>& set) {
+            auto pipe = compile(std::move(pipe_expr.inner), ctx);
+            if (pipe.is_error()) {
+              result = pipe.error();
+              return;
+            }
+            set(located{std::move(pipe).unwrap(), pipe_expr.get_location()});
+          },
+          [&](auto&) {
+            TENZIR_UNREACHABLE();
+          });
+        ++positional_idx;
       },
-      [&](setter<located<pipeline>>& set) {
-        auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
-        if (not pipe_expr) {
-          emit(
-            diagnostic::error("expected a pipeline expression").primary(expr));
-          return;
+      [&](auto&) {
+        if (positional_idx == positional_.size()) {
+          emit(diagnostic::error("unexpected argument").primary(*arg));
         }
-        auto pipe = compile(std::move(pipe_expr->inner), ctx);
-        if (pipe.is_error()) {
-          result = pipe.error();
-          return;
-        }
-        set(located{std::move(pipe).unwrap(), expr.get_location()});
       });
+  }
+  for (const auto& arg : named_) {
+    if (arg.required and not arg.found) {
+      emit(
+        diagnostic::error("required argument `{}` was not provided", arg.name)
+          .primary(self.get_location()));
+    }
   }
   return result;
 }
@@ -245,26 +294,44 @@ auto argument_parser2::usage() const -> std::string {
         usage_cache_ += positional.meta;
       }
     }
-    for (auto& [name, set] : named_) {
-      if (name.starts_with("_")) {
+    const auto append_named_option = [&](const named& opt) {
+      if (opt.name.starts_with("_")) {
         // This denotes an internal/unstable option.
-        continue;
+        return;
       }
       if (std::exchange(has_previous, true)) {
         usage_cache_ += ", ";
       }
-      auto meta = set.match(
+      auto meta = opt.set.match(
         []<data_type T>(const setter<located<T>>&) {
           return fmt::format("<{}>", type_kind::of<data_to_type_t<T>>);
         },
         [](const setter<ast::expression>&) -> std::string {
           return "<expr>";
         },
+        [](const setter<ast::simple_selector>&) -> std::string {
+          return "<selector>";
+        },
         [](const setter<located<pipeline>>&) -> std::string {
           return "{ ... }";
         });
-      usage_cache_ += fmt::format("{}={}", name, meta);
+      auto txt = fmt::format("{}={}", opt.name, meta);
+      usage_cache_ += txt;
+      if (not opt.required) {
+        usage_cache_ += "?";
+      }
+    };
+    for (const auto& opt : named_) {
+      if (opt.required) {
+        append_named_option(opt);
+      }
     }
+    for (const auto& opt : named_) {
+      if (not opt.required) {
+        append_named_option(opt);
+      }
+    }
+
     if (kind_ != kind::op) {
       usage_cache_ += ')';
     }
@@ -276,7 +343,7 @@ auto argument_parser2::docs() const -> std::string {
   auto category = std::invoke([&] {
     switch (kind_) {
       case kind::op:
-        return "operators";
+        return "tql2/operators";
       case kind::function:
         return "functions";
       case kind::method:
@@ -321,6 +388,22 @@ auto argument_parser2::add(std::optional<T>& x, std::string meta)
                                x = std::move(y);
                              }},
                              std::move(meta));
+  }
+  return *this;
+}
+
+template <argument_parser_type T>
+auto argument_parser2::add(std::string name, T& x) -> argument_parser2& {
+  if constexpr (argument_parser_bare_type<T>) {
+    named_.emplace_back(std::move(name), setter<located<T>>{[&x](located<T> y) {
+                          x = std::move(y.inner);
+                        }},
+                        true);
+  } else {
+    named_.emplace_back(std::move(name), setter<T>{[&x](T y) {
+                          x = std::move(y);
+                        }},
+                        true);
   }
   return *this;
 }
@@ -376,6 +459,7 @@ struct instantiate_argument_parser_add {
     static constexpr auto value = std::tuple{
       static_cast<positional<T>>(&argument_parser2::add)...,
       static_cast<positional<std::optional<T>>>(&argument_parser2::add)...,
+      static_cast<named<T>>(&argument_parser2::add)...,
       static_cast<named<std::optional<T>>>(&argument_parser2::add)...,
     };
   };

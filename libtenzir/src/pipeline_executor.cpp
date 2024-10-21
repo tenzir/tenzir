@@ -17,10 +17,6 @@
 #include "tenzir/pipeline.hpp"
 
 #include <caf/actor_system_config.hpp>
-#include <caf/attach_stream_sink.hpp>
-#include <caf/attach_stream_source.hpp>
-#include <caf/attach_stream_stage.hpp>
-#include <caf/downstream.hpp>
 #include <caf/error.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/exit_reason.hpp>
@@ -41,8 +37,13 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
   }
   self->link_to(exec_nodes.back());
   self->set_exit_handler([this](caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received exit from last execution node: {}", *self,
-                 msg.reason);
+    // If we get an exit message, then it's either because the last execution
+    // node died, or because the pipeline manager sent us an exit message. In
+    // either case we just wan to shut down all execution nodes.
+    for (const auto& exec_node : exec_nodes) {
+      TENZIR_ASSERT(exec_node);
+      self->send_exit(exec_node, msg.reason);
+    }
     self->quit(std::move(msg.reason));
   });
   TENZIR_DEBUG("{} successfully spawned {} execution nodes", *self,
@@ -111,13 +112,13 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
                   operator_box{std::move(op)}, input_type, diagnostics, metrics,
                   op_index, is_hidden)
         .then(
-          [=, this](exec_node_actor& exec_node) {
+          [this, description, index](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
             self->monitor(exec_node);
             exec_nodes[index] = std::move(exec_node);
             start_nodes_if_all_spawned();
           },
-          [=, this](const caf::error& err) {
+          [this, description](const caf::error& err) {
             abort_start(diagnostic::error(err)
                           .note("failed to spawn {} remotely", description)
                           .to_error());
@@ -207,18 +208,17 @@ auto pipeline_executor_state::start() -> caf::result<void> {
     for (const auto& op : pipe.operators()) {
       if (op->location() == operator_location::remote) {
         TENZIR_DEBUG("{} connects to node because of remote operators", *self);
-        connect_to_node(self,
-                        [this, pipe = std::move(pipe)](
-                          caf::expected<node_actor> result) mutable {
-                          if (not result) {
-                            abort_start(diagnostic::error(result.error())
-                                          .note("failed to connect to node")
-                                          .to_error());
-                            return;
-                          }
-                          node = *result;
-                          spawn_execution_nodes(std::move(pipe));
-                        });
+        connect_to_node(self, [this, pipe = std::move(pipe)](
+                                caf::expected<node_actor> result) mutable {
+          if (not result) {
+            abort_start(diagnostic::error(result.error())
+                          .note("failed to connect to node")
+                          .to_error());
+            return;
+          }
+          node = *result;
+          spawn_execution_nodes(std::move(pipe));
+        });
         return start_rp;
       }
     }
@@ -232,6 +232,7 @@ auto pipeline_executor_state::pause() -> caf::result<void> {
     return caf::make_error(ec::logic_error,
                            "cannot pause a pipeline before it was started");
   }
+  TENZIR_ASSERT(not exec_nodes.empty());
   auto rp = self->make_response_promise<void>();
   self
     ->fan_out_request<caf::policy::select_all>(exec_nodes, caf::infinite,
@@ -247,6 +248,7 @@ auto pipeline_executor_state::pause() -> caf::result<void> {
 }
 
 auto pipeline_executor_state::resume() -> caf::result<void> {
+  TENZIR_ASSERT(not exec_nodes.empty());
   auto rp = self->make_response_promise<void>();
   self
     ->fan_out_request<caf::policy::select_all>(exec_nodes, caf::infinite,
@@ -277,14 +279,10 @@ auto pipeline_executor(
   self->state.has_terminal = has_terminal;
   self->state.is_hidden = is_hidden;
   self->set_down_handler([self](caf::down_msg& msg) {
-    const auto exec_node
-      = std::find_if(self->state.exec_nodes.begin(),
-                     self->state.exec_nodes.end(), [&](const auto& exec_node) {
-                       return msg.source == exec_node.address();
-                     });
-    if (exec_node != self->state.exec_nodes.end()) {
-      self->state.exec_nodes.erase(exec_node);
-    }
+    const auto exec_node = std::ranges::find(self->state.exec_nodes, msg.source,
+                                             &exec_node_actor::address);
+    TENZIR_ASSERT(exec_node != self->state.exec_nodes.end());
+    self->state.exec_nodes.erase(exec_node);
   });
   return {
     [self](atom::start) -> caf::result<void> {

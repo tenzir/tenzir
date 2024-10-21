@@ -82,8 +82,8 @@ public:
     return op_->internal();
   }
 
-  auto input_independent() const -> bool override {
-    return op_->input_independent();
+  auto idle_after() const -> duration override {
+    return op_->idle_after();
   }
 
   auto infer_type_impl(operator_type input) const

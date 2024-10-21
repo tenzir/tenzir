@@ -227,7 +227,6 @@ public:
         TENZIR_ASSERT(x.is_serialized());
         return true;
       };
-
       return f.object(x)
         .pretty_name("tenzir.table_slice")
         .on_load(callback)
@@ -245,6 +244,8 @@ public:
         .fields(f.field("chunk", chunk), f.field("offset", x.offset_));
     }
   }
+
+  friend auto size(const table_slice& slice) -> uint64_t;
 
   // -- operations -------------------------------------------------------------
 
@@ -342,8 +343,8 @@ auto split(std::vector<table_slice> events, uint64_t partition_point)
 
 /// Selects the rows with indices `[begin, end)`.
 /// @pre `begin <= end && end <= slice.rows()`
-auto subslice(const table_slice& slice, size_t begin, size_t end)
-  -> table_slice;
+auto subslice(const table_slice& slice, size_t begin,
+              size_t end) -> table_slice;
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
@@ -383,24 +384,27 @@ filter(const table_slice& slice, const ids& hints);
 [[nodiscard]] table_slice resolve_enumerations(table_slice slice);
 
 /// Resolve a meta extractor for a given table slice.
-auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
-  -> data;
+auto resolve_meta_extractor(const table_slice& slice,
+                            const meta_extractor& ex) -> data;
 
 /// Resolve an operand into an Array for a given table slice. Note that this
 /// already uses prefix matching instead of suffix matching.
 auto resolve_operand(const table_slice& slice, const operand& op)
   -> std::pair<type, std::shared_ptr<arrow::Array>>;
 
-/// @brief Unflattens the table slice (e.g a "foo.bar" field will be transformed
-/// into a "foo" record field with a "bar" child field).
-/// @param slice Table slice to unflatten.
-/// @param nested_field_separator A string treated as a separator of a nested
-/// fields. E.g with a field "a.b" and a separator ".", the function will create
-/// a record field "a" that contains a field "b".
-/// @return Unflattened table slice which preserves the original slice schema
-/// name.
-auto unflatten(const table_slice& slice,
-               std::string_view nested_field_separator) -> table_slice;
+/// Split field names by a separator by creating nested records.
+///
+/// Example: Splitting `{a.b: 42}` with `.` yields `{a: {b: 42}}`.
+auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice;
+
+auto unflatten(const arrow::ListArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::ListArray>;
+
+auto unflatten(std::shared_ptr<arrow::Array> array,
+               std::string_view sep) -> std::shared_ptr<arrow::Array>;
+
+auto unflatten(const arrow::StructArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::StructArray>;
 
 /// @related flatten
 struct flatten_result {
@@ -408,6 +412,12 @@ struct flatten_result {
   std::vector<std::string> renamed_fields = {};
 };
 
+/// @related flatten
+struct flatten_array_result {
+  type schema;
+  std::shared_ptr<arrow::StructArray> array;
+  std::vector<std::string> renamed_fields;
+};
 /// Flattens a table slice such that it no longer contains nested data
 /// structures by joining nested records over the provided separator and merging
 /// nested lists. Flattening removes all null elements in lists.
@@ -418,8 +428,22 @@ struct flatten_result {
 ///
 /// @param slice The unflattened table slice.
 /// @param separator The separator to join record field names with.
-auto flatten(table_slice slice, std::string_view separator = ".")
-  -> flatten_result;
+auto flatten(table_slice slice, std::string_view separator
+                                = ".") -> flatten_result;
+
+/// Flattens an array recursively such that it no longer contains nested data
+/// structures by joining nested records over the provided separator and merging
+/// nested lists. Flattening removes all null elements in lists.
+///
+/// The operator renames later occurences of conflicting joined field names by
+/// appending `_<idx>` to them, and returns names of the renamed fields
+/// alongside the flattened array.
+///
+/// @param schema Schema of the array to flatten.
+/// @param array Array to flatten recursively.
+/// @param separator The separator to join record field names with.
+auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
+             std::string_view separator) -> flatten_array_result;
 
 } // namespace tenzir
 

@@ -18,21 +18,11 @@
 
 namespace tenzir::concepts {
 
-template <class T, class U>
-concept sameish = std::same_as<std::decay_t<T>, std::decay_t<U>>;
+template <class T, class... Us>
+concept sameish = (std::same_as<std::decay_t<T>, std::decay_t<Us>> or ...);
 
 template <class T>
-concept transparent = requires {
-  typename T::is_transparent;
-};
-
-// Replace this with std::ranges::range concept once all compilers support
-// <ranges> header
-template <class T>
-concept range = requires(T& t) {
-  std::begin(t);
-  std::end(t);
-};
+concept transparent = requires { typename T::is_transparent; };
 
 /// Types that work with std::data and std::size (= containers)
 template <class T>
@@ -72,19 +62,14 @@ concept fixed_byte_sequence = requires(T& x) {
 };
 
 template <class T>
-concept integral = std::is_integral_v<T>;
-
-template <class T>
-concept unsigned_integral = integral<T> && std::is_unsigned_v<T>;
-
-template <class T>
-concept signed_integral = integral<T> && std::is_signed_v<T>;
-
-template <class T>
-concept floating_point = std::is_floating_point_v<T>;
-
-template <class T>
 concept arithmetic = std::is_arithmetic_v<T>;
+
+template <class T>
+concept integer
+  = std::integral<T> and not sameish<T, bool, char, signed char, unsigned char>;
+
+template <class T>
+concept number = integer<T> or std::floating_point<T>;
 
 struct example_inspector {
   static constexpr bool is_loading = true;
@@ -100,18 +85,16 @@ struct example_inspector {
 /// Inspectables
 template <class T>
 concept inspectable = requires(example_inspector& i, T& x) {
-                        { inspect(i, x) } -> std::same_as<bool>;
-                      };
-
-template <class C>
-concept insertable = requires(C& xs, typename C::value_type x) {
-  xs.insert(x);
+  { inspect(i, x) } -> std::same_as<bool>;
 };
 
 template <class C>
-concept appendable = requires(C& xs, typename C::value_type x) {
-  xs.push_back(x);
-};
+concept insertable
+  = requires(C& xs, typename C::value_type x) { xs.insert(x); };
+
+template <class C>
+concept appendable
+  = requires(C& xs, typename C::value_type x) { xs.push_back(x); };
 
 /// A type `T` is a semigroup if an associative binary function from two values
 /// of `T` to another value of `T` exists. We name this function `mappend` in
@@ -132,5 +115,8 @@ concept semigroup = requires(const T& x, const T& y) {
 /// mappend(x, T{}) == mappend(T{}, x) == x
 template <class T>
 concept monoid = semigroup<T> && std::is_default_constructible_v<T>;
+
+template <class T, class... Ts>
+concept one_of = (std::same_as<T, Ts> or ...);
 
 } // namespace tenzir::concepts

@@ -10,6 +10,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -108,6 +109,10 @@ public:
       event_order::ordered,
       std::make_unique<read_operator>(std::move(parser_opt)),
     };
+  }
+
+  auto idle_after() const -> duration override {
+    return defaults::import::batch_timeout;
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {
@@ -301,6 +306,47 @@ public:
   }
 };
 
+class from_events final : public crtp_operator<from_events> {
+public:
+  from_events() = default;
+
+  explicit from_events(std::vector<record> events)
+    : events_{std::move(events)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.from_events";
+  }
+
+  auto operator()() const -> generator<table_slice> {
+    // TODO: We are combining all events into a single schema. Is this what we
+    // want, or do we want a more "precise" output if possible?
+    auto sb = series_builder{};
+    for (auto& event : events_) {
+      sb.data(event);
+    }
+    auto slices = sb.finish_as_table_slice("tenzir.from");
+    for (auto& slice : slices) {
+      co_yield std::move(slice);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, from_events& x) -> bool {
+    return f.apply(x.events_);
+  }
+
+private:
+  std::vector<record> events_;
+};
+
+using from_events_plugin = operator_inspection_plugin<from_events>;
+
 class from_plugin2 final : public virtual operator_factory_plugin {
 public:
   auto name() const -> std::string override {
@@ -323,127 +369,64 @@ public:
     // ```
     auto usage = "from <url/path>, ...<options>";
     auto docs = "https://docs.tenzir.com/operators/from";
+    auto docs = "https://docs.tenzir.com/operators/from";
     if (inv.args.empty()) {
-      diagnostic::error("expected positional argument `<path/url>`")
+      diagnostic::error("expected positional argument `<path/url/events>`")
         .primary(inv.self)
-        .usage(usage)
         .docs(docs)
         .emit(ctx);
       return failure::promise();
     }
-    auto& string_expr = inv.args[0];
-    TRY(auto string_data, const_eval(string_expr, ctx));
-    auto string = caf::get_if<std::string>(&string_data);
-    if (not string) {
-      diagnostic::error("expected string")
-        .primary(string_expr)
-        .usage(usage)
-        .docs(docs)
-        .emit(ctx);
-      return failure::promise();
-    }
-    auto uri = arrow::util::Uri{};
-    auto load = operator_ptr{};
-    auto filename = std::string{};
-    if (uri.Parse(*string).ok()) {
-      auto target = plugins::find<operator_factory_plugin>("tql2.load_file");
-      TENZIR_ASSERT(target);
-      TRY(load, target->make(inv, ctx));
-      // TODO: Does this work everywhere?
-      filename = std::filesystem::path{uri.path()}.filename();
-    } else {
-      // We assume this is a file path instead.
-      auto target = plugins::find<operator_factory_plugin>("tql2.load_file");
-      TENZIR_ASSERT(target);
-      TRY(load, target->make(inv, ctx));
-      filename = std::filesystem::path{*string}.filename();
-    }
-    auto extension = std::filesystem::path{filename}.extension();
-    // TODO: Refactor this.
-    auto extension_to_compression_map
-      = std::array<std::pair<std::string_view, std::string_view>, 8>{{
-        {".br", "brotli"},
-        {".brotli", "brotli"},
-        {".bz2", "bz2"},
-        {".gz", "gzip"},
-        {".gzip", "gzip"},
-        {".lz4", "lz4"},
-        {".zst", "zstd"},
-        {".zstd", "zstd"},
-      }};
-    auto decompress = operator_ptr{};
-    auto compression
-      = std::ranges::find(extension_to_compression_map, extension, [](auto& x) {
-          return x.first;
-        });
-    if (compression != extension_to_compression_map.end()) {
-      auto plugin = plugins::find<operator_factory_plugin>("decompress");
-      TENZIR_ASSERT(plugin);
-      // TODO: This is not optimal.
-      auto decompress_inv = invocation{
-        ast::entity{
-          {ast::identifier{
-            "decompress",
-            inv.self.get_location(),
-          }},
-        },
-        {
-          ast::constant{
-            std::string{compression->second},
-            string_expr.get_location(),
-          },
-        },
-      };
-      TRY(decompress, plugin->make(std::move(decompress_inv), ctx));
-      extension = std::filesystem::path{filename}.stem().extension();
-    }
-    auto read = operator_ptr{};
-    // TODO: We probably do not want this.
-    if (extension.empty()) {
-      diagnostic::error("failed to infer format").primary(string_expr).emit(ctx);
-      return failure::promise();
-    }
-    auto ext_str = std::string{extension};
-    auto ext_name = ext_str.substr(1);
-    auto available = std::vector<std::string>{};
-    auto read_plugin = static_cast<const operator_factory_plugin*>(nullptr);
-    for (auto plugin : plugins::get<operator_factory_plugin>()) {
-      auto exts = plugin->read_extensions();
-      available.insert(available.end(), exts.begin(), exts.end());
-      if (std::ranges::find(exts, ext_name) != exts.end()) {
-        read_plugin = plugin;
-        break;
-      }
-    }
-    std::ranges::sort(available);
-    if (not read_plugin) {
-      diagnostic::error("could not infer reader from extension `{}`", ext_name)
-        .primary(string_expr)
-        .note("must be one of {}",
-              fmt::join(available | std::views::transform([](auto& str) {
-                          return fmt::format("`{}`", str);
-                        }),
-                        ", "))
-        .hint("try `load \"...\" | read_<format>`")
-        .emit(ctx);
-      return failure::promise();
-    }
-    // TODO: Bad.
-    auto read_inv = invocation{
-      ast::entity{{ast::identifier{"TODO", string_expr.get_location()}}},
-      {},
+    auto& expr = inv.args[0];
+    TRY(auto value, const_eval(expr, ctx));
+    auto f = detail::overload{
+      [&](record& event) -> failure_or<operator_ptr> {
+        auto events = std::vector<record>{};
+        events.push_back(std::move(event));
+        return std::make_unique<from_events>(std::move(events));
+      },
+      [&](list& event_list) -> failure_or<operator_ptr> {
+        auto events = std::vector<record>{};
+        for (auto& event : event_list) {
+          auto event_record = caf::get_if<record>(&event);
+          if (not event_record) {
+            diagnostic::error("expected list of records")
+              .primary(expr)
+              .docs(docs)
+              .emit(ctx);
+            return failure::promise();
+          }
+          events.push_back(std::move(*event_record));
+        }
+        return std::make_unique<from_events>(std::move(events));
+      },
+      [&](std::string& path) -> failure_or<operator_ptr> {
+        // TODO: This is just for demo purposes!
+        if (not path.ends_with(".json")) {
+          diagnostic::error("`from` currently requires `.json` files")
+            .primary(expr)
+            .note("this limitation will be lifted very soon")
+            .emit(ctx);
+          return failure::promise();
+        }
+        // TODO: Obviously not great.
+        auto result = pipeline::internal_parse_as_operator(
+          fmt::format("from \"{}\" read json", path));
+        if (not result) {
+          diagnostic::error(result.error()).primary(inv.self).emit(ctx);
+          return failure::promise();
+        }
+        return std::move(*result);
+      },
+      [&](auto&) -> failure_or<operator_ptr> {
+        diagnostic::error("expected string, record or list of records")
+          .primary(inv.args[0])
+          .docs(docs)
+          .emit(ctx);
+        return failure::promise();
+      },
     };
-    TRY(read, read_plugin->make(std::move(read_inv), ctx));
-    auto vec = std::vector<operator_ptr>{};
-    TENZIR_ASSERT(load);
-    vec.push_back(std::move(load));
-    if (decompress) {
-      vec.push_back(std::move(decompress));
-    }
-    TENZIR_ASSERT(read);
-    vec.push_back(std::move(read));
-    TENZIR_WARN("{:#?}", use_default_formatter(vec));
-    return std::make_unique<pipeline>(std::move(vec));
+    return caf::visit(f, value);
   }
 };
 
@@ -559,6 +542,7 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::read_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_events_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin2)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin2)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::save_plugin2)

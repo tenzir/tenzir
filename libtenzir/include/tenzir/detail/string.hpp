@@ -16,7 +16,157 @@
 
 namespace tenzir::detail {
 
-/// Unscapes a string according to an escaper.
+constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
+/// trims leading whitespace of string according to the given whitespace
+/// @param value the string to trim
+/// @param whitespace a string of characters, each of white is considered
+/// whitespace
+/// @returns a string_view without leading whitespace
+inline auto
+trim_front(std::string_view value, const std::string_view whitespace
+                                   = ascii_whitespace) -> std::string_view {
+  if (value.empty()) {
+    return value;
+  }
+  const auto first_character = value.find_first_not_of(whitespace);
+  if (first_character != value.npos) {
+    value.remove_prefix(first_character);
+  }
+  return value;
+}
+
+/// trims trailing whitespace of string according to the given whitespace
+/// @param value the string to trim
+/// @param whitespace a string of characters, each of white is considered
+/// whitespace
+/// @returns a string_view without trailing whitespace
+inline auto
+trim_back(std::string_view value, const std::string_view whitespace
+                                  = ascii_whitespace) -> std::string_view {
+  if (value.empty()) {
+    return value;
+  }
+  const auto last_character = value.find_last_not_of(whitespace);
+  if (last_character != value.npos) {
+    value.remove_suffix(value.size() - last_character - 1);
+  }
+  return value;
+}
+
+/// trims a string according to the given whitespace
+/// @param value the string to trim
+/// @param whitespace a string of characters, each of white is considered
+/// whitespace
+/// @returns a string_view without leading or trailing whitespace
+inline auto
+trim(std::string_view value, const std::string_view whitespace
+                             = ascii_whitespace) -> std::string_view {
+  value = trim_front(value, whitespace);
+  value = trim_back(value, whitespace);
+  return value;
+}
+
+/// @brief Checks whether the index `idx` in `text` is escaped
+inline auto is_escaped(size_t idx, std::string_view text) {
+  if (idx >= text.size()) {
+    return false;
+  }
+  // An odd number of preceding backslashes means it is escaped, for example:
+  // `x\n` => true, `x\\n` => false, `x\\\n` => true, 'x\\\\n' => false.
+  auto backslashes = size_t{0};
+  while (idx > 0 and text[idx - 1] == '\\') {
+    ++backslashes;
+    --idx;
+  }
+  return backslashes % 2 == 1;
+}
+
+/// finds the index of the first occurrence that is not enclosed my matching
+/// quotes quotes that are not closed are not considered quoting anything
+/// @param s the string to search
+/// @param find a list of characters to search for
+/// @param quotes list of characters to consider as "quotes"
+/// @param start index to start the search at
+/// @returns index of the first occurrence of a character from `find` that
+/// is`not enclosed by matching `quotes`; `npos` otherwise
+inline auto
+find_first_of_not_in_quotes(std::string_view s, std::string_view find,
+                            size_t start = 0,
+                            std::string_view quotes = "\"\'") -> size_t {
+  size_t quote_start = s.npos;
+  size_t find_pos = s.npos;
+  const auto is_quote_at = [&](size_t i) {
+    if (quotes.find(s[i]) == quotes.npos) {
+      return false;
+    }
+    return not is_escaped(i, s);
+  };
+
+  for (size_t i = start; i < s.size(); ++i) {
+    if (is_quote_at(i)) {
+      if (quote_start == s.npos) {
+        quote_start = i;
+        continue;
+      } else if (s[quote_start] == s[i]) {
+        quote_start = s.npos;
+        continue;
+      }
+    }
+    if (find.find(s[i]) != s.npos) {
+      if (quote_start == s.npos) {
+        return i;
+      }
+      bool is_enclosed = false;
+      for (size_t j = i + 1; j < s.size(); ++j) {
+        if (is_quote_at(j) and s[j] == s[quote_start]) {
+          is_enclosed = true;
+          break;
+        }
+      }
+      if (not is_enclosed) {
+        return i;
+      }
+    }
+  }
+  return find_pos;
+}
+
+/// finds the index of the first occurrence of a character that is not enclosed
+/// my matching quotes quotes that are not closed are not considered quoting
+/// anything
+/// @param s the string to search
+/// @param find a character to search for
+/// @param start index to start the serach at
+/// @param quotes list of characters to consider as "quotes"
+/// @returns index of the first occurrence of character `find` that is`not
+/// enclosed by matching `quotes`; `npos` otherwise
+inline auto
+find_first_not_in_quotes(std::string_view s, char find, size_t start = 0,
+                         std::string_view quotes = "\"\'") -> size_t {
+  return find_first_of_not_in_quotes(s, std::string_view(&find, 1), start,
+                                     quotes);
+}
+
+/// unquotes a string, IFF its enclosed by matching quotes
+/// @param value the string to unquote
+/// @param quotes a string of characters, each of which is to be considered a
+/// quote
+/// @returns a string_view of without the quotes
+inline auto unquote(std::string_view value, std::string_view quotes
+                                            = "\"\'") -> std::string_view {
+  if (value.size() < 2) {
+    return value;
+  }
+  if (value.front() == value.back()
+      and quotes.find(value.front()) != quotes.npos
+      and not is_escaped(value.size() - 1, value)) {
+    value.remove_prefix(1);
+    value.remove_suffix(1);
+  }
+  return value;
+}
+
+/// Unescapes a string according to an escaper.
 /// @param str The string to escape.
 /// @param escaper The escaper to use.
 /// @returns The escaped version of *str*.
@@ -27,12 +177,13 @@ std::string escape(std::string_view str, Escaper escaper) {
   auto f = str.begin();
   auto l = str.end();
   auto out = std::back_inserter(result);
-  while (f != l)
+  while (f != l) {
     escaper(f, out);
+  }
   return result;
 }
 
-/// Unscapes a string according to an unescaper.
+/// Unescapes a string according to an unescaper.
 /// @param str The string to unescape.
 /// @param unescaper The unescaper to use.
 /// @returns The unescaped version of *str*.
@@ -43,9 +194,11 @@ std::string unescape(std::string_view str, Unescaper unescaper) {
   auto f = str.begin();
   auto l = str.end();
   auto out = std::back_inserter(result);
-  while (f != l)
-    if (!unescaper(f, l, out))
+  while (f != l) {
+    if (!unescaper(f, l, out)) {
       return {};
+    }
+  }
   return result;
 }
 
@@ -145,6 +298,17 @@ replace_all(std::string str, std::string_view search, std::string_view replace);
 /// @returns A vector of substrings.
 std::vector<std::string_view>
 split(std::string_view str, std::string_view sep, size_t max_splits = -1);
+
+/// Splits a character sequence into two substrings.
+/// If `sep` does not occur in `str`, the second substring will be empty.
+/// @param str The string to split.
+/// @param sep The separator where to split.
+/// @pre `!sep.empty()`
+/// @warning The lifetime of the returned substrings are bound to the lifetime
+/// of the string pointed to by `str`.
+/// @returns A pair of substrings.
+std::pair<std::string_view, std::string_view>
+split_once(std::string_view str, std::string_view sep);
 
 /// Splits a character sequence into a vector of substrings, with escaping of
 /// the separator.

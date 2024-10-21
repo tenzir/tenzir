@@ -140,12 +140,6 @@ struct index_counters {
 
 /// The state of the index actor.
 struct index_state {
-  // -- type aliases -----------------------------------------------------------
-
-  using index_stream_stage_ptr = caf::stream_stage_ptr<
-    table_slice, caf::broadcast_downstream_manager<table_slice, tenzir::type,
-                                                   i_partition_selector>>;
-
   // -- constructor ------------------------------------------------------------
 
   explicit index_state(index_actor::pointer self);
@@ -189,13 +183,9 @@ struct index_state {
 
   void flush_to_disk();
 
-  // -- flush handling ---------------------------------------------------------
+  // -- inbound path -----------------------------------------------------------
 
-  /// Adds a new flush listener.
-  void add_flush_listener(flush_listener_actor listener);
-
-  /// Sends a notification to all listeners and clears the listeners list.
-  void notify_flush_listeners();
+  void handle_slice(table_slice slice);
 
   // -- partition handling -----------------------------------------------------
 
@@ -218,6 +208,8 @@ struct index_state {
   void decommission_active_partition(
     const type& schema, std::function<void(const caf::error&)> completion);
 
+  auto flush() -> caf::typed_response_promise<void>;
+
   /// Adds a new partition creation listener.
   void
   add_partition_creation_listener(partition_creation_listener_actor listener);
@@ -230,22 +222,12 @@ struct index_state {
 
   // -- introspection ----------------------------------------------------------
 
-  /// Flushes collected metrics to the accountant.
-  void send_report();
-
-  /// @returns various status metrics.
-  [[nodiscard]] caf::typed_response_promise<record>
-  status(status_verbosity v, duration d) const;
-
   size_t memusage() const;
 
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
   index_actor::pointer self;
-
-  /// The streaming stage.
-  index_stream_stage_ptr stage;
 
   /// One active (read/write) partition per schema.
   std::unordered_map<type, active_partition_info> active_partitions = {};
@@ -306,9 +288,6 @@ struct index_state {
                          query_queue::entry>>
     active_lookups;
 
-  /// Keeps temporary statistics that are flushed with the metrics.
-  index_counters counters = {};
-
   /// The CATALOG actor.
   catalog_actor catalog = {};
 
@@ -321,18 +300,14 @@ struct index_state {
   /// The directory for in-progress partition transforms.
   std::filesystem::path markersdir = {};
 
-  /// Timekeeper for the scheduling algorithm.
-  struct measurement scheduler_measurement = {};
-
-  /// Handle of the accountant.
-  accountant_actor accountant = {};
-
   /// List of actors that wait for the next flush event.
   std::vector<flush_listener_actor> flush_listeners = {};
 
   /// List of actors that want to be notified about new partitions.
   std::vector<partition_creation_listener_actor> partition_creation_listeners
     = {};
+
+  bool shutting_down = false;
 
   /// Plugin responsible for spawning new partition-local stores.
   const tenzir::store_actor_plugin* store_actor_plugin = {};
@@ -360,7 +335,6 @@ struct index_state {
 };
 
 /// Indexes events in horizontal partitions.
-/// @param accountant The accountant actor.
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
 /// @param catalog The catalog actor.
@@ -381,11 +355,11 @@ struct index_state {
 //  TODO: Use a settings struct for the various parameters.
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      accountant_actor accountant, filesystem_actor filesystem,
-      catalog_actor catalog, const std::filesystem::path& dir,
-      std::string store_backend, size_t partition_capacity,
-      duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t max_concurrent_partition_lookups,
+      filesystem_actor filesystem, catalog_actor catalog,
+      const std::filesystem::path& dir, std::string store_backend,
+      size_t partition_capacity, duration active_partition_timeout,
+      size_t max_inmem_partitions, size_t taste_partitions,
+      size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config);
 
 } // namespace tenzir

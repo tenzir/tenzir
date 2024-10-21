@@ -197,10 +197,6 @@ public:
     buf_.insert(buf_.end(), str.begin(), str.end());
   }
 
-  auto out() -> std::back_insert_iterator<std::vector<char>> {
-    return std::back_inserter(buf_);
-  }
-
   /// Writes a custom value based on a format string.
   template <class... Args>
   [[nodiscard]] auto fmt_value(fmt::format_string<Args...> fs, Args&&... args)
@@ -231,6 +227,10 @@ public:
 
 private:
   // -- implementation details -------------------------------------------------
+
+  auto out() -> std::back_insert_iterator<std::vector<char>> {
+    return std::back_inserter(buf_);
+  }
 
   [[nodiscard]] auto fmt_value_impl(fmt::string_view fs, fmt::format_args args)
     -> bool;

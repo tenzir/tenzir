@@ -36,8 +36,10 @@ public:
       return;
     }
     auto& name = x.path[0].name;
+    auto ns = context_ == context_t::op_name ? entity_ns::op : entity_ns::fn;
     // TODO: We pretend here that every name directly maps to its path.
-    auto entity = reg_.try_get(entity_path{{name}});
+    auto path = entity_path{{name}, ns};
+    auto entity = reg_.try_get(path);
     auto expected = std::invoke([&] {
       switch (context_) {
         case context_t::op_name:
@@ -74,8 +76,8 @@ public:
     }
     // TODO: Check if this entity has right type?
     entity->match(
-      [&](const function_plugin* function) {
-        if (dynamic_cast<const method_plugin*>(function)) {
+      [&](std::reference_wrapper<const function_plugin> function) {
+        if (dynamic_cast<const method_plugin*>(&function.get())) {
           if (context_ != context_t::method_name) {
             diagnostic::error("expected {}, got method", expected)
               .primary(x)
@@ -90,9 +92,9 @@ public:
           result_ = failure::promise();
           return;
         }
-        x.ref = entity_path{{name}};
+        x.ref = std::move(path);
       },
-      [&](const operator_factory_plugin*) {
+      [&](std::reference_wrapper<const operator_factory_plugin>) {
         if (context_ != context_t::op_name) {
           diagnostic::error("expected {}, got operator", expected)
             .primary(x)
@@ -100,7 +102,7 @@ public:
           result_ = failure::promise();
           return;
         }
-        x.ref = entity_path{{name}};
+        x.ref = std::move(path);
       });
   }
 
@@ -148,6 +150,12 @@ private:
 auto resolve_entities(ast::pipeline& pipe, session ctx) -> failure_or<void> {
   auto resolver = entity_resolver{ctx};
   resolver.visit(pipe);
+  return resolver.get_failure();
+}
+
+auto resolve_entities(ast::expression& expr, session ctx) -> failure_or<void> {
+  auto resolver = entity_resolver{ctx};
+  resolver.visit(expr);
   return resolver.get_failure();
 }
 

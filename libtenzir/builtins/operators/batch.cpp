@@ -148,7 +148,6 @@ public:
         .primary(timeout->source)
         .throw_();
     }
-
     return std::make_unique<batch_operator>(
       limit ? limit->inner : defaults::import::table_slice_size,
       timeout ? timeout->inner : duration::max(), event_order::ordered);
@@ -156,10 +155,32 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("batch").parse(inv, ctx).ignore();
-    return std::make_unique<batch_operator>(defaults::import::table_slice_size,
-                                            duration::max(),
-                                            event_order::ordered);
+    auto limit = std::optional<located<uint64_t>>{};
+    auto timeout = std::optional<located<duration>>{};
+    argument_parser2::operator_("batch")
+      .add(limit, "<limit>")
+      .add("timeout", timeout)
+      .parse(inv, ctx)
+      .ignore();
+    auto failed = false;
+    if (limit and limit->inner == 0) {
+      diagnostic::error("batch size must not be 0")
+        .primary(limit->source)
+        .emit(ctx);
+      failed = true;
+    }
+    if (timeout and timeout->inner <= duration::zero()) {
+      diagnostic::error("timeout must be a positive duration")
+        .primary(timeout->source)
+        .emit(ctx);
+      failed = true;
+    }
+    if (failed) {
+      return failure::promise();
+    }
+    return std::make_unique<batch_operator>(
+      limit ? limit->inner : defaults::import::table_slice_size,
+      timeout ? timeout->inner : duration::max(), event_order::ordered);
   }
 };
 

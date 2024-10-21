@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/byteswap.hpp"
+#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/hash/legacy_hash.hpp"
@@ -179,6 +180,9 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, ip& x) {
+    if (auto g = as_debug_writer(f)) {
+      return g->fmt_value("{}", x);
+    }
     return f.apply(x.bytes_);
   }
 

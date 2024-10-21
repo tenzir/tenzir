@@ -6,7 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_utils.hpp>
+#include <tenzir/collect.hpp>
 #include <tenzir/detail/enumerate.hpp>
+#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/eval_impl.hpp>
 
 #include <ranges>
@@ -15,19 +18,25 @@ namespace tenzir {
 
 auto evaluator::eval(const ast::record& x) -> series {
   auto fields = detail::stable_map<std::string, series>{};
-  for (auto& item : x.content) {
+  for (auto& item : x.items) {
     item.match(
       [&](const ast::record::field& field) {
         auto val = eval(field.expr);
-        auto [_, inserted] = fields.emplace(field.name.name, std::move(val));
-        if (not inserted) {
-          diagnostic::warning("todo: overwrite existing?")
-            .primary(field.name)
-            .emit(ctx_);
-        }
+        fields[field.name.name] = std::move(val);
       },
-      [](const ast::record::spread&) {
-        TENZIR_TODO();
+      [&](const ast::record::spread& spread) {
+        auto val = eval(spread.expr);
+        auto rec = val.as<record_type>();
+        if (not rec) {
+          diagnostic::warning("expected record, got {}", val.type.kind())
+            .primary(spread.expr)
+            .emit(ctx_);
+          return;
+        }
+        for (auto [i, array] : detail::enumerate(rec->array->fields())) {
+          auto field = rec->type.field(i);
+          fields[field.name] = series{field.type, array};
+        }
       });
   }
   auto field_names = fields | std::views::transform([](auto& x) {
@@ -62,20 +71,21 @@ auto evaluator::eval(const ast::list& x) -> series {
   auto item_ty = type{null_type{}};
   for (auto& item : x.items) {
     auto array = eval(item);
-    // TODO: Rewrite this and handle record extension.
-    if (array.type.kind().is_not<null_type>() && item_ty != array.type) {
-      if (item_ty.kind().is<null_type>()) {
-        item_ty = array.type;
-      } else {
-        diagnostic::warning("type clash in list, using `null` instead")
-          .primary(item)
-          .note("expected `{}` but got `{}`", item_ty.kind(), array.type.kind())
-          .emit(ctx_);
-        arrays.push_back(series::null(null_type{}, length_));
-        continue;
+    auto unified = unify(item_ty, array.type);
+    if (unified) {
+      item_ty = std::move(*unified);
+      arrays.push_back(std::move(array));
+    } else {
+      auto diag
+        = diagnostic::warning("type clash in list, using `null` instead")
+            .primary(item);
+      if (item_ty.kind() != array.type.kind()) {
+        diag = std::move(diag).note("expected `{}` but got `{}`",
+                                    item_ty.kind(), array.type.kind());
       }
+      std::move(diag).emit(ctx_);
+      arrays.push_back(series::null(null_type{}, length_));
     }
-    arrays.push_back(std::move(array));
   }
   // arrays = [<1, 3>, <2, 4>]
   // TODO: Rewrite this, `series_builder` is probably not the right tool.
@@ -92,10 +102,13 @@ auto evaluator::eval(const ast::list& x) -> series {
 
 auto evaluator::eval(const ast::field_access& x) -> series {
   auto l = eval(x.left);
+  if (auto null = l.as<null_type>()) {
+    return std::move(*null);
+  }
   auto rec_ty = caf::get_if<record_type>(&l.type);
   if (not rec_ty) {
     diagnostic::warning("cannot access field of non-record type")
-      .primary(x.dot.combine(x.name))
+      .primary(x.name)
       .secondary(x.left, "type `{}`", l.type.kind())
       .emit(ctx_);
     return null();
@@ -103,6 +116,15 @@ auto evaluator::eval(const ast::field_access& x) -> series {
   auto& s = caf::get<arrow::StructArray>(*l.array);
   for (auto [i, field] : detail::enumerate<int>(rec_ty->fields())) {
     if (field.name == x.name.name) {
+      auto has_null = s.null_count() != 0;
+      if (has_null) {
+        // TODO: It's not 100% obvious that we want to have this warning, but we
+        // went with it for now. Note that this can create cascading warnings.
+        diagnostic::warning("tried to access field of `null`")
+          .primary(x.name)
+          .emit(ctx_);
+        return series{field.type, check(s.GetFlattenedField(i))};
+      }
       return series{field.type, s.field(i)};
     }
   }
@@ -144,6 +166,84 @@ auto evaluator::eval(const ast::root_field& x) -> series {
     .primary(x.ident)
     .emit(ctx_);
   return null();
+}
+
+auto evaluator::eval(const ast::index_expr& x) -> series {
+  if (auto constant = std::get_if<ast::constant>(&*x.index.kind)) {
+    // TODO: Generalize this and simplify.
+    if (auto string = std::get_if<std::string>(&constant->value)) {
+      return eval(ast::field_access{
+        x.expr,
+        x.lbracket,
+        ast::identifier{*string, constant->source},
+      });
+    }
+  }
+  auto value = eval(x.expr);
+  if (auto null = value.as<null_type>()) {
+    return std::move(*null);
+  }
+  auto index = eval(x.index);
+  if (auto null = index.as<null_type>()) {
+    return std::move(*null);
+  }
+  if (auto number = index.as<int64_type>()) {
+    auto list = value.as<list_type>();
+    if (not list) {
+      diagnostic::warning("cannot index into `{}` with `{}`", value.type.kind(),
+                          index.type.kind())
+        .primary(x.index)
+        .emit(ctx_);
+      return null();
+    }
+    auto list_values = list->array->values();
+    auto value_type = list->type.value_type();
+    auto b = value_type.make_arrow_builder(arrow::default_memory_pool());
+    check(b->Reserve(list->length()));
+    auto out_of_bounds = false;
+    auto list_null = false;
+    auto number_null = false;
+    for (auto i = int64_t{0}; i < list->length(); ++i) {
+      if (not list->array->IsValid(i)) {
+        list_null = true;
+        check(b->AppendNull());
+        continue;
+      }
+      if (not number->array->IsValid(i)) {
+        number_null = true;
+        check(b->AppendNull());
+        continue;
+      }
+      auto target = number->array->Value(i);
+      auto length = list->array->value_length(i);
+      if (target < 0) {
+        target = length + target;
+      }
+      if (target < 0 || target >= length) {
+        out_of_bounds = true;
+        check(b->AppendNull());
+        continue;
+      }
+      auto offset = list->array->value_offset(i);
+      auto value_index = offset + target;
+      check(append_array_slice(*b, value_type, *list_values, value_index, 1));
+    }
+    if (out_of_bounds) {
+      diagnostic::warning("list index out of bounds")
+        .primary(x.index)
+        .emit(ctx_);
+    }
+    if (list_null) {
+      diagnostic::warning("cannot index into `null`").primary(x.expr).emit(ctx_);
+    }
+    if (number_null) {
+      diagnostic::warning("cannot use `null` as index")
+        .primary(x.index)
+        .emit(ctx_);
+    }
+    return series{value_type, finish(*b)};
+  }
+  return not_implemented(x);
 }
 
 auto evaluator::eval(const ast::meta& x) -> series {

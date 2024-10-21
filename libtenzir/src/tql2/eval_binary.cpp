@@ -8,11 +8,12 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/checked_math.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
-#include "tenzir/tql2/arrow_utils.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
 
@@ -172,6 +173,113 @@ struct BinOpKernel<ast::binary_op::sub, time_type, duration_type> {
 };
 
 template <>
+struct BinOpKernel<ast::binary_op::add, time_type, duration_type> {
+  using result = time;
+
+  static auto evaluate(time l, duration r)
+    -> std::variant<result, const char*> {
+    return l + r;
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::add, duration_type, time_type> {
+  using result = time;
+
+  static auto evaluate(duration l, time r)
+    -> std::variant<result, const char*> {
+    return l + r;
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::add, duration_type, duration_type> {
+  using result = duration;
+
+  static auto evaluate(duration l, duration r)
+    -> std::variant<result, const char*> {
+    if (auto check = checked_add(l.count(), r.count())) {
+      return duration{check.value()};
+    }
+    return "duration addition overflow";
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::sub, duration_type, duration_type> {
+  using result = duration;
+
+  static auto evaluate(duration l, duration r)
+    -> std::variant<result, const char*> {
+    if (auto check = checked_sub(l.count(), r.count())) {
+      return duration{check.value()};
+    }
+    return "duration subtraction overflow";
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::div, duration_type, duration_type> {
+  using result = double;
+
+  static auto evaluate(duration l, duration r)
+    -> std::variant<result, const char*> {
+    if (r == decltype(r){}) {
+      return "division by zero";
+    }
+    return detail::narrow_cast<result>(l.count())
+           / detail::narrow_cast<result>(r.count());
+  }
+};
+
+template <integral_type N>
+struct BinOpKernel<ast::binary_op::mul, duration_type, N> {
+  using result = duration;
+
+  static auto evaluate(duration l, type_to_data_t<N> r)
+    -> std::variant<result, const char*> {
+    if (auto check = checked_mul(l.count(), r); check.has_value()) {
+      return duration{check.value()};
+    }
+    return "duration multiplication overflow";
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::mul, duration_type, double_type> {
+  using result = duration;
+
+  static auto evaluate(duration l, double r)
+    -> std::variant<result, const char*> {
+    return duration_cast<duration>(l * r);
+  }
+};
+
+template <numeric_type N>
+struct BinOpKernel<ast::binary_op::mul, N, duration_type> {
+  using result = duration;
+
+  static auto evaluate(type_to_data_t<N> l, duration r)
+    -> std::variant<result, const char*> {
+    return BinOpKernel<ast::binary_op::mul, duration_type, N>::evaluate(
+      r, l); // Commutative
+  }
+};
+
+template <numeric_type N>
+struct BinOpKernel<ast::binary_op::div, duration_type, N> {
+  using result = duration;
+
+  static auto evaluate(duration l, type_to_data_t<N> r)
+    -> std::variant<result, const char*> {
+    if (r == decltype(r){}) {
+      return "division by zero";
+    }
+    return std::chrono::duration_cast<duration>(l / r);
+  }
+};
+
+template <>
 struct BinOpKernel<ast::binary_op::sub, time_type, time_type> {
   using result = duration;
 
@@ -239,7 +347,7 @@ template <ast::binary_op Op, concrete_type L, concrete_type R>
 struct EvalBinOp;
 
 // specialization for cases where a kernel is implemented
-template <ast::binary_op Op, concrete_type L, concrete_type R>
+template <ast::binary_op Op, basic_type L, basic_type R>
   requires caf::detail::is_complete<BinOpKernel<Op, L, R>>
 struct EvalBinOp<Op, L, R> {
   static auto eval(const type_to_arrow_array_t<L>& l,
@@ -307,6 +415,25 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
   }
 };
 
+template <>
+struct EvalBinOp<ast::binary_op::in, string_type, string_type> {
+  static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (l.IsNull(i) || r.IsNull(i)) {
+        b.UnsafeAppendNull();
+        continue;
+      }
+      auto lv = l.GetView(i);
+      auto rv = r.GetView(i);
+      check(b.Append(rv.find(lv) != rv.npos));
+    }
+    return finish(b);
+  }
+};
+
 // TODO: We probably don't want this.
 template <ast::binary_op Op>
   requires(Op == ast::binary_op::and_ || Op == ast::binary_op::or_)
@@ -323,9 +450,9 @@ struct EvalBinOp<Op, bool_type, bool_type> {
       auto size = (l.length() + 7) / 8;
       TENZIR_ASSERT(l.values()->size() >= size);
       TENZIR_ASSERT(r.values()->size() >= size);
-      auto l_ptr = l.values()->data();
-      auto r_ptr = r.values()->data();
-      auto o_ptr = buffer->mutable_data();
+      const auto* l_ptr = l.values()->data();
+      const auto* r_ptr = r.values()->data();
+      auto* o_ptr = buffer->mutable_data();
       for (auto i = int64_t{0}; i < size; ++i) {
         if constexpr (is_and) {
           o_ptr[i] = l_ptr[i] & r_ptr[i]; // NOLINT

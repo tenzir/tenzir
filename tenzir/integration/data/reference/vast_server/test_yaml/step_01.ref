@@ -3,8 +3,6 @@ tenzir:
   abort-on-panic: 1
   automatic-rebuild: 0
   bare-mode: true
-  enable-metrics: false
-  endpoint: :0
   exec:
     dump-diagnostics: true
     implicit-events-sink: write json --compact-output | save -
@@ -13,6 +11,4 @@ tenzir:
       disable-timestamp-tags: true
   plugins:
     []
-  start:
-    print-endpoint: true
 ...

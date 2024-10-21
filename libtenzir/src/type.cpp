@@ -8,6 +8,7 @@
 
 #include "tenzir/type.hpp"
 
+#include "tenzir/collect.hpp"
 #include "tenzir/concept/parseable/numeric/integral.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -20,6 +21,7 @@
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/try.hpp"
 
 #include <arrow/array.h>
 #include <arrow/type_traits.h>
@@ -537,7 +539,6 @@ std::optional<type> type::infer(const data& value) noexcept {
         return std::nullopt;
     return first_inferred;
   };
-
   auto f = detail::overload{
     [](caf::none_t) noexcept -> std::optional<type> {
       return type{};
@@ -595,7 +596,7 @@ std::optional<type> type::infer(const data& value) noexcept {
     [](const record& record) noexcept -> std::optional<type> {
       // Record types cannot be inferred from empty records.
       if (record.empty())
-        return std::nullopt;
+        return type{record_type{}};
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(record.size());
       for (const auto& field : record)
@@ -784,8 +785,13 @@ type::operator bool() const noexcept {
 bool operator==(const type& lhs, const type& rhs) noexcept {
   const auto lhs_bytes = as_bytes(lhs);
   const auto rhs_bytes = as_bytes(rhs);
-  return std::equal(lhs_bytes.begin(), lhs_bytes.end(), rhs_bytes.begin(),
-                    rhs_bytes.end());
+  if (lhs_bytes.size() != rhs_bytes.size()) {
+    return false;
+  }
+  if (lhs_bytes.data() == rhs_bytes.data()) {
+    return true;
+  }
+  return std::memcmp(lhs_bytes.data(), rhs_bytes.data(), lhs_bytes.size()) == 0;
 }
 
 std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {
@@ -835,86 +841,8 @@ data type::construct() const noexcept {
   return caf::visit(f, *this);
 }
 
-data type::to_definition(bool expand) const noexcept {
-  // Utility function for adding the attributes to a type definition, if
-  // required.
-  auto attributes_enriched_definition
-    = [&](data type_definition) noexcept -> data {
-    auto attributes_definition = record::vector_type{};
-    for (const auto& [key, value] : attributes(recurse::no)) {
-      if (value.empty())
-        attributes_definition.emplace_back(std::string{key}, caf::none);
-      else
-        attributes_definition.emplace_back(std::string{key},
-                                           std::string{value});
-    }
-    if (!expand && attributes_definition.empty())
-      return type_definition;
-    return record{
-      {"type", std::move(type_definition)},
-      {"attributes", record::make_unsafe(std::move(attributes_definition))},
-    };
-  };
-  // Check if there is an alias, and if there is then visit then one first.
-  for (const auto& alias : aliases()) {
-    auto definition
-      = attributes_enriched_definition(alias.to_definition(expand));
-    const auto name = this->name();
-    if (!expand && name.empty())
-      return definition;
-    return record{
-      {std::string{name}, std::move(definition)},
-    };
-  }
-  // At this point we've gone through all named aliases, but the last innermost
-  // type may still have attributes.
-  TENZIR_ASSERT(name().empty());
-  auto make_type_definition = detail::overload{
-    [](const null_type&) noexcept -> data {
-      return {};
-    },
-    [](const basic_type auto& self) noexcept -> data {
-      return fmt::to_string(self);
-    },
-    [](const enumeration_type& self) noexcept -> data {
-      auto definition = list{};
-      for (const auto& field : self.fields())
-        definition.push_back(std::string{field.name});
-      return record{
-        {"enum", std::move(definition)},
-      };
-    },
-    [&](const list_type& self) noexcept -> data {
-      return record{
-        {"list", self.value_type().to_definition(expand)},
-      };
-    },
-    [&](const map_type& self) noexcept -> data {
-      return record{
-        {"map",
-         record{
-           {"key", self.key_type().to_definition(expand)},
-           {"value", self.value_type().to_definition(expand)},
-         }},
-      };
-    },
-    [&](const record_type& self) noexcept -> data {
-      auto definition = list{};
-      definition.reserve(self.num_fields());
-      for (const auto& [name, type] : self.fields())
-        definition.push_back(
-          record{{std::string{name}, type.to_definition(expand)}});
-      return record{
-        {"record", std::move(definition)},
-      };
-    },
-  };
-  return attributes_enriched_definition(
-    caf::visit(make_type_definition, *this));
-}
-
-auto type::to_definition2(std::optional<std::string> field_name,
-                          offset parent_path) const noexcept -> record {
+auto type::to_definition(std::optional<std::string> field_name,
+                         offset parent_path) const noexcept -> record {
   auto attributes = record{};
   for (const auto& [key, value] : this->attributes()) {
     attributes.emplace(key, value.empty() ? data{} : data{std::string{value}});
@@ -942,7 +870,7 @@ auto type::to_definition2(std::optional<std::string> field_name,
       if (caf::holds_alternative<record_type>(self.value_type())) {
         parent_path.push_back(-1);
       }
-      auto result = self.value_type().to_definition2(
+      auto result = self.value_type().to_definition(
         field_name.value_or(std::string{name()}), parent_path);
       result["kind"]
         = fmt::format("list<{}>", caf::get<std::string>(result["kind"]));
@@ -958,7 +886,7 @@ auto type::to_definition2(std::optional<std::string> field_name,
       for (const auto& field : self.fields()) {
         ++parent_path.back();
         fields.push_back(
-          field.type.to_definition2(std::string{field.name}, parent_path));
+          field.type.to_definition(std::string{field.name}, parent_path));
       }
       auto result = record{};
       result.emplace("name", field_name.value_or(std::string{name()}));
@@ -3617,6 +3545,59 @@ record_type flatten(const record_type& type) noexcept {
       field.type,
     });
   return record_type{fields};
+}
+
+auto unify(const type& a, const type& b) -> std::optional<type> {
+  // TODO: This function does not preserve metadata.
+  // TODO: Do we want to unify number types?
+  auto f = detail::overload{
+    [](const null_type&, const null_type&) -> std::optional<type> {
+      return type{null_type{}};
+    },
+    [](const null_type&, const auto& b) -> std::optional<type> {
+      return type{b};
+    },
+    [](const auto& a, const null_type&) -> std::optional<type> {
+      return type{a};
+    },
+    [](const record_type& a, const record_type& b) -> std::optional<type> {
+      auto fields = collect(a.fields());
+      for (auto [name, b_ty] : b.fields()) {
+        auto it
+          = std::ranges::find(fields, name, &record_type::field_view::name);
+        if (it == fields.end()) {
+          fields.emplace_back(name, b_ty);
+          continue;
+        }
+        auto& a_ty = it->type;
+        TRY(auto ty, unify(a_ty, b_ty));
+        it->type = std::move(ty);
+      }
+      return type{record_type{fields}};
+    },
+    [](const list_type& a, const list_type& b) -> std::optional<type> {
+      TRY(auto ty, unify(a.value_type(), b.value_type()));
+      return type{list_type{ty}};
+    },
+    [](const enumeration_type& a,
+       const enumeration_type& b) -> std::optional<type> {
+      if (a != b) {
+        return std::nullopt;
+      }
+      return type{a};
+    },
+    []<basic_type T>(const T&, const T&) -> std::optional<type> {
+      return type{T{}};
+    },
+    [](const map_type&, const map_type&) -> std::optional<type> {
+      TENZIR_UNREACHABLE();
+    },
+    []<class A, class B>(const A&, const B&) -> std::optional<type> {
+      static_assert(not std::same_as<A, B>);
+      return std::nullopt;
+    },
+  };
+  return caf::visit(f, a, b);
 }
 
 } // namespace tenzir

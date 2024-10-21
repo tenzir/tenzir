@@ -18,20 +18,63 @@ in {
       })
     ];
   });
+  cmakeWithPatch = final.cmake.overrideAttrs (orig: {
+    patches = (orig.patches or []) ++ [
+      (prev.buildPackages.fetchpatch {
+        name = "cmake-fix-findcurl-link-libraries.patch";
+        url = "https://gitlab.kitware.com/cmake/cmake/-/commit/76c2d7781eb37acd6731bcd8ea9a25ad03b01021.patch";
+        hash = "sha256-ZIvRkfmdkhNCf2qu0t6HgMPCindDIbMkMzI2WtI20Ds=";
+      })
+    ];
+  });
+  crc32c = overrideAttrsIf (isDarwin && isStatic) prev.crc32c (orig: {
+    env = orig.env // {
+      NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
+    };
+  });
   google-cloud-cpp =
+    let
+      google-cloud-cpp' = prev.google-cloud-cpp.overrideAttrs (orig: {
+        installCheckPhase = let
+          disabledTests = lib.optionalString stdenv.hostPlatform.isDarwin ''
+            common_internal_async_connection_ready_test
+            bigtable_async_read_stream_test
+            bigtable_metadata_update_policy_test
+            bigtable_bigtable_benchmark_test
+            bigtable_embedded_server_test
+          '';
+        in ''
+          runHook preInstallCheck
+
+          # Disable any integration tests, which need to contact the internet.
+          ctest \
+            --label-exclude integration-test \
+            --exclude-from-file <(echo '${disabledTests}')
+
+          runHook postInstallCheck
+        '';
+
+        meta = orig.meta // {
+          platforms = lib.platforms.linux ++ lib.platforms.darwin;
+        };
+      });
+    in
     if !isStatic
-    then prev.google-cloud-cpp
+    then google-cloud-cpp'
     else
-      prev.google-cloud-cpp.overrideAttrs (orig: {
-        buildInputs = orig.buildInputs ++ [final.gbenchmark];
-        propagatedNativeBuildInputs = (orig.propagatedNativeBuildInputs or []) ++ [prev.buildPackages.pkg-config];
+      google-cloud-cpp'.overrideAttrs (orig: {
+        propagatedNativeBuildInputs = (orig.propagatedNativeBuildInputs or [])
+        ++ [prev.pkgsBuildBuild.pkg-config];
         patches =
           (orig.patches or [])
           ++ [
             ./google-cloud-cpp/0001-Use-pkg-config-to-find-CURL.patch
           ];
+        cmakeFlags = (orig.cmakeFlags or []) ++ [
+          "-DBUILD_TESTING=OFF"
+        ];
       });
-  aws-sdk-cpp-tenzir = overrideAttrsIf isDarwin (final.aws-sdk-cpp.override {
+  aws-sdk-cpp-tenzir = overrideAttrsIf isDarwin (overrideAttrsIf isStatic (final.aws-sdk-cpp.override {
     apis = [
       # arrow-cpp apis; must be kept in sync with nixpkgs.
       "cognito-identity"
@@ -43,12 +86,22 @@ in {
       # Additional apis used by tenzir.
       "sqs"
     ];
-  }) (orig: {
-    doCheck = false;
-    cmakeFlags = orig.cmakeFlags ++ [
-      "-DENABLE_TESTING=OFF"
+  })
+  (orig: {
+    patches = (orig.patches or []) ++ [
+      ./aws-sdk-cpp-findcurl.patch
     ];
-  });
+    cmakeFlags = (orig.cmakeFlags or []) ++ [
+    ];
+  })
+  )
+    (orig: {
+      doCheck = false;
+      cmakeFlags = orig.cmakeFlags ++ [
+        "-DENABLE_TESTING=OFF"
+      ];
+    });
+  azure-sdk-for-cpp = prev.callPackage ./azure-sdk-for-cpp { };
   glog = overrideAttrsIf (isDarwin && isStatic) prev.glog (orig: {
     cmakeFlags = orig.cmakeFlags ++ [
       "-DBUILD_TESTING=OFF"
@@ -57,18 +110,49 @@ in {
   arrow-cpp = let
     arrow-cpp' = prev.arrow-cpp.override {
       aws-sdk-cpp-arrow = final.aws-sdk-cpp-tenzir;
+      enableGcs = true; # Upstream disabled for darwin.
     };
+    arrow-cpp'' = arrow-cpp'.overrideAttrs (orig: {
+      nativeBuildInputs = orig.nativeBuildInputs ++ [
+        prev.pkgsBuildBuild.pkg-config
+      ];
+      buildInputs = orig.buildInputs ++ [
+        final.azure-sdk-for-cpp
+      ];
+      cmakeFlags = orig.cmakeFlags ++ [
+        "-DARROW_AZURE=ON"
+      ];
+      installCheckPhase =
+        let
+          disabledTests = [
+            # flaky
+            "arrow-flight-test"
+            # requires networking
+            "arrow-azurefs-test"
+            "arrow-gcsfs-test"
+            "arrow-flight-integration-test"
+          ];
+        in
+        ''
+          runHook preInstallCheck
+
+          ctest -L unittest --exclude-regex '^(${lib.concatStringsSep "|" disabledTests})$'
+
+          runHook postInstallCheck
+        '';
+    });
   in
     overrideAttrsIf isStatic
     (
       if !isStatic
-      then arrow-cpp'
+      then arrow-cpp''
       else
-        arrow-cpp'.override {
+        arrow-cpp''.override {
           enableShared = false;
           google-cloud-cpp = final.google-cloud-cpp.override {
-            apis = ["storage"];
+            apis = ["pubsub" "storage"];
           };
+          cmake = final.buildPackages.cmakeWithPatch;
         }
     )
     (orig: {
@@ -114,6 +198,8 @@ in {
           ++ [
             ./grpc/drop-broken-cross-check.patch
           ];
+        cmakeFlags = (orig.cmakeFlags or []) ++ [
+        ];
         env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
       });
   http-parser =
@@ -210,7 +296,11 @@ in {
     overrideAttrsIf isStatic fluent-bit'
     (orig: {
       outputs = ["out"];
-      nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")];
+      patches = (orig.patches or []) ++ [
+        ./fluent-bit-devendor.patch
+      ];
+      nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")
+      prev.pkgsBuildBuild.pkg-config];
       # Neither systemd nor postgresql have a working static build.
       propagatedBuildInputs =
         [
@@ -218,6 +308,11 @@ in {
           final.libyaml
         ]
         ++ lib.optionals isLinux [final.musl-fts];
+      buildInputs = (orig.buildInputs or []) ++ [
+        final.c-ares
+        final.nghttp2
+        final.rdkafka
+      ];
       cmakeFlags =
         (orig.cmakeFlags or [])
         ++ [
@@ -235,7 +330,6 @@ in {
       postInstall = let
         archive-blacklist = [
           "libbacktrace.a"
-          "librdkafka.a"
           "libxxhash.a"
         ];
       in ''
@@ -285,6 +379,7 @@ in {
       });
   restinio = final.callPackage ./restinio {};
   pfs = final.callPackage ./pfs {};
+  uv = final.callPackage ./uv-binary {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
   in
@@ -410,6 +505,7 @@ in {
         ps.azure-log-analytics
         ps.compaction
         ps.context
+        ps.packages
         ps.pipeline-manager
         ps.platform
         ps.vast

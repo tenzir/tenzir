@@ -1,0 +1,1 @@
+{"URI": "https://example.com/test.txt?foo=bar", "URIPROTO": "https", "USER": null, "USERNAME": null, "URIHOST": "example.com", "IPORHOST": "example.com", "IP": null, "IPV6": null, "IPV4": null, "HOSTNAME": "example.com", "POSINT": null, "URIPATH": "/test.txt", "URIQUERY": "foo=bar"}

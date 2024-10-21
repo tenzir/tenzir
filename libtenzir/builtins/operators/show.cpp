@@ -98,26 +98,27 @@ public:
     parser.add(aspect, "<aspect>");
     parser.parse(p);
     if (aspect) {
-      // We moved `show version` to `version` when we made the `show` operator
-      // always report a remote location for consistency. This makes it less of
-      // a breaking change.
-      if (aspect->inner == "version") {
-        auto op = pipeline::internal_parse_as_operator("version");
-        if (not op) {
-          diagnostic::error("failed to parse `version` operator: {}",
-                            op.error())
-            .throw_();
+      // We're in the process of removing aspect plugins in favor of operators.
+      // For backwards compatibility, this adds support for `show <aspect>` by
+      // redirecting to the operator.
+      static const auto removed_aspects
+        = std::vector<std::pair<std::string, std::string>>{
+          {"build", "version | set build.features = features | unflatten | "
+                    "yield build | set #schema = \"tenzir.build\""},
+          {"config", "config"},
+          {"dependencies", "version | yield dependencies[] | set #schema = "
+                           "\"tenzir.dependency\""},
+          {"partitions", "partitions"},
+          {"plugins", "plugins"},
+          {"schemas", "schemas"},
+          {"version",
+           "version | drop features, build, dependencies | rename build=tag"},
+          {"fields", "fields"},
+        };
+      for (const auto& [before, after] : removed_aspects) {
+        if (aspect->inner == before) {
+          return check(pipeline::internal_parse_as_operator(after));
         }
-        return std::move(*op);
-      }
-      if (aspect->inner == "partitions") {
-        auto op = pipeline::internal_parse_as_operator("partitions");
-        if (not op) {
-          diagnostic::error("failed to parse `partitions` operator: {}",
-                            op.error())
-            .throw_();
-        }
-        return std::move(*op);
       }
       auto available = std::map<std::string, std::string>{};
       for (const auto& aspect : collect(plugins::get<aspect_plugin>()))

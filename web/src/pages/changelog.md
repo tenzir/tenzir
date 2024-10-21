@@ -1,3 +1,8 @@
+---
+id: changelog
+title: Changelog
+---
+
 # Changelog
 
 This is a stub file. To generate the changelog, build Tenzir and move the

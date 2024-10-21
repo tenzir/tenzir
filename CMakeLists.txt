@@ -835,6 +835,18 @@ option(TENZIR_ENABLE_PYTHON_BINDINGS
        "Build Python bindings (requires poetry)" ON)
 add_feature_info("TENZIR_ENABLE_PYTHON_BINDINGS" TENZIR_ENABLE_PYTHON_BINDINGS
                  "build Python bindings (requires poetry).")
+
+set(TENZIR_ENABLE_BUNDLED_UV_default "ON")
+if (DEFINED ENV{TENZIR_ENABLE_BUNDLED_UV})
+  set(TENZIR_ENABLE_BUNDLED_UV_default $ENV{TENZIR_ENABLE_BUNDLED_UV})
+endif ()
+
+cmake_dependent_option(
+  TENZIR_ENABLE_BUNDLED_UV "Install a statically linked copy of uv" "${TENZIR_ENABLE_BUNDLED_UV_default}"
+  "TENZIR_ENABLE_PYTHON_BINDINGS" OFF)
+add_feature_info("TENZIR_ENABLE_BUNDLED_UV" TENZIR_ENABLE_BUNDLED_UV
+                 "install a statically linked copy of uv.")
+
 if (TENZIR_ENABLE_PYTHON_BINDINGS)
   find_program(POETRY_PATH poetry)
   if (NOT POETRY_PATH)
@@ -882,6 +894,30 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
     DIRECTORY "${TENZIR_PYTHON_BINARY_DIR}"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
     COMPONENT Runtime)
+  if (TENZIR_ENABLE_BUNDLED_UV)
+    set(build_libexecdir "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
+    if (NOT TENZIR_UV_PATH)
+      file(READ "${CMAKE_CURRENT_LIST_DIR}/python/uv-source-info.json" uv_source_info)
+      set(UV_SYSTEM_arm64_Darwin "aarch64-darwin")
+      set(UV_SYSTEM_aarch64_Linux "aarch64-linux")
+      set(UV_SYSTEM_x86_64_Darwin "x86_64-darwin")
+      set(UV_SYSTEM_x86_64_Linux "x86_64-linux")
+      string(JSON uv_source GET "${uv_source_info}" "${UV_SYSTEM_${CMAKE_HOST_SYSTEM_PROCESSOR}_${CMAKE_HOST_SYSTEM_NAME}}")
+      string(JSON uv_url GET "${uv_source}" url)
+      string(JSON uv_sha256 GET "${uv_source}" sha256)
+      get_filename_component(uv_stem "${uv_url}" NAME_WE)
+      file(DOWNLOAD "${uv_url}" "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz" EXPECTED_HASH "SHA256=${uv_sha256}")
+      file(ARCHIVE_EXTRACT INPUT "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz" DESTINATION
+        "${CMAKE_CURRENT_BINARY_DIR}" VERBOSE)
+      set(TENZIR_UV_PATH "${CMAKE_CURRENT_BINARY_DIR}/${uv_stem}/uv")
+    endif ()
+    file(MAKE_DIRECTORY "${build_libexecdir}")
+    file(COPY_FILE "${TENZIR_UV_PATH}" "${build_libexecdir}/uv")
+    install(
+      PROGRAMS "${TENZIR_UV_PATH}"
+      DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
+      COMPONENT Runtime)
+  endif ()
 endif ()
 
 # -- add subdirectories --------------------------------------------------------
@@ -936,17 +972,7 @@ add_feature_info(
   "install tenzir-df-percent.sh with Tenzir.")
 if (TENZIR_ENABLE_TENZIR_DF_PERCENT)
   install(
-    FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/tenzir-df-percent.sh"
-    # These should be inherited from the source but they
-    # get lost in CPack, so we set them explicitly.
-    PERMISSIONS
-      OWNER_READ
-      OWNER_WRITE
-      OWNER_EXECUTE
-      GROUP_READ
-      GROUP_EXECUTE
-      WORLD_READ
-      WORLD_EXECUTE
+    PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/tenzir-df-percent.sh"
     DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
     COMPONENT Runtime)
 endif ()

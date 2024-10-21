@@ -1,0 +1,25 @@
+{
+  "x": "é",
+  "y": "👩‍👩‍👦‍👦",
+  "xa": null,
+  "xb": 2,
+  "xc": 1,
+  "ya": null,
+  "yb": 25,
+  "yc": 7
+}
+warning: expected `list`, got `string`
+ --> /dev/stdin:5:6
+  |
+5 | xa = x.length()
+  |      ~ 
+  |
+  = hint: use `.length_bytes()` or `.length_chars()` instead
+
+warning: expected `list`, got `string`
+ --> /dev/stdin:8:6
+  |
+8 | ya = y.length()
+  |      ~ 
+  |
+  = hint: use `.length_bytes()` or `.length_chars()` instead

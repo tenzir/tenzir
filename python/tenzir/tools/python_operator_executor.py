@@ -1,14 +1,19 @@
 """User code wrapper of the Tenzir python operator."""
 
+import fcntl
+import linecache
 import os
 import sys
+import traceback
 from collections import defaultdict
-from types import ModuleType, CodeType
+from contextlib import suppress
+from types import MethodType, ModuleType, CodeType
 from typing import (
     Any,
     Dict,
     Generator,
     Iterable,
+    Optional,
     SupportsIndex,
     Tuple,
     TypeVar,
@@ -38,6 +43,17 @@ def log(*args):
     z = " ".join(map(str, args))
     y = prefix + " " + z.replace("\n", "\n" + prefix + " ")
     print(y, file=sys.stderr)
+
+
+def add_note(e: Optional[BaseException], msg: str) -> None:
+    if e is None:
+        return
+    if sys.version_info >= (3, 11):
+        e.add_note(msg)
+        return
+    args = e.args
+    arg0 = f"{args[0]}\n{msg}" if args else msg
+    e.args = (arg0,) + args[1:]
 
 
 T = TypeVar("T")
@@ -310,12 +326,18 @@ class ResultsBuffer:
                 field = pa.field(key, type_)
                 array = extension_array(values, type_)
             except Exception as e:
-                raise Exception(f"failed to write modified '{key}': {e}")
+                msg = f"failed to write modified '{key}'"
+                add_note(e, msg)
+                raise
             output_data[key] = (field, array)
 
         # Construct final record batch and revert the flattening.
         fields, arrays = zip(*output_data.values())
         return unflatten_batch(fields, arrays)
+
+
+class WrappedError(Exception):
+    pass
 
 
 def execute_user_code(batch: pa.RecordBatch, compiled_code: CodeType) -> pa.RecordBatch:
@@ -325,11 +347,32 @@ def execute_user_code(batch: pa.RecordBatch, compiled_code: CodeType) -> pa.Reco
         self = buffer.start_row(i)
         env = {"self": self}
         # Run the user-provided code
-        exec(compiled_code, env)
+        try:
+            exec(compiled_code, env)
+        except Exception as e:
+            add_note(e, f"on input event: {self}")
+            raise WrappedError from e
         if len(self) == 0:
-            raise Exception("Empty output not allowed")
+            msg = "Empty output not allowed"
+            raise RuntimeError(msg)
         buffer.finish_row(self)
     return buffer.finish()
+
+
+def write_limited(file, limit: int):
+    def limit_write(self, __s) -> int:
+        nonlocal limit
+        if limit == 0:
+            return 0
+        if len(__s) > limit:
+            __s = __s[:limit]
+            limit = 0
+        else:
+            limit = limit - len(__s)
+        return self.__class__.write(self, __s)
+
+    file.write = MethodType(limit_write, file)
+    return file
 
 
 def main() -> int:
@@ -341,48 +384,59 @@ def main() -> int:
     """
     # The parent uses `codepipe` to transfer the user code to be executed
     # into this program.
-    codepipe = int(sys.argv[1])
-    code = os.read(codepipe, 128 * 1024)
-
+    codepipe = os.fdopen(int(sys.argv[1]), "r")
+    code = codepipe.read()
+    codepipe.close()
+    source_name = "<inline>"
+    lines = code.splitlines(keepends=True)
+    linecache.cache[source_name] = len(code), None, lines, source_name
 
     # When the parent detects an error, it attempts to read the contents
     # of `errpipe` and aborts the pipeline with them as the error.
-    errpipe = int(sys.argv[2])
+    errfd = int(sys.argv[2])
+    errpipe_bufsize = 4096
+    if sys.platform == "linux" and sys.version_info >= (3, 10):
+        errpipe_bufsize = fcntl.fcntl(errfd, fcntl.F_GETPIPE_SZ)
+    if sys.platform == "darwin":
+        errpipe_bufsize = 65536
+    with write_limited(os.fdopen(errfd, "a"), errpipe_bufsize) as errpipe:
 
-    # The parent uses stdin and stdout to transfer the arrow record batches
-    # back and forth.
-    istream = pa.input_stream(sys.stdin.buffer)
-    ostream = pa.output_stream(sys.stdout.buffer)
+        # The parent uses stdin and stdout to transfer the arrow record batches
+        # back and forth.
+        istream = pa.input_stream(sys.stdin.buffer)
+        ostream = pa.output_stream(sys.stdout.buffer)
 
-    try:
-        compiled_code = compile(code, '<string>', 'exec')
-        while True:
-            reader = pa.ipc.RecordBatchStreamReader(istream)
-            batch_in = reader.read_next_batch()
-            # The writer writes an invalid record batch as end-of-stream
-            # marker; we have to read it now to remove it from the pipe
-            # buffer.
-            try:
-                reader.read_next_batch()
-            except StopIteration:
-                pass
-            batch_out = execute_user_code(batch_in, compiled_code)
-            writer = pa.ipc.RecordBatchStreamWriter(ostream, batch_out.schema)
-            writer.write_batch(batch_out)
-            writer.close()
-            sys.stdout.flush()
-    except pa.lib.ArrowInvalid as ae:
-        # The reader throws `ArrowInvalid` when the input is closed
-        # by the parent process.
-        pass
-    except Exception as e:
-        message = str(e).encode("utf-8")
-        # Ensure we will never block while trying to write the error message
-        # by truncating to a size that's smaller than the OS pipe buffer.
-        MAX_MSG_SIZE = 4 * 1024
-        if len(message) > MAX_MSG_SIZE:
-            message = message[:MAX_MSG_SIZE]
-        os.write(errpipe, message)
-        os.close(errpipe)
-        return 1
+        try:
+            compiled_code = compile(code, source_name, "exec")
+        except (SyntaxError, ValueError):
+            traceback.print_exc(limit=0, file=errpipe)
+            return 1
+        try:
+            while True:
+                reader = pa.ipc.RecordBatchStreamReader(istream)
+                batch_in = reader.read_next_batch()
+                # The writer writes an invalid record batch as end-of-stream
+                # marker; we have to read it now to remove it from the pipe
+                # buffer.
+                with suppress(StopIteration):
+                    reader.read_next_batch()
+                batch_out = execute_user_code(batch_in, compiled_code)
+                writer = pa.ipc.RecordBatchStreamWriter(ostream, batch_out.schema)
+                writer.write_batch(batch_out)
+                writer.close()
+                sys.stdout.flush()
+        except pa.lib.ArrowInvalid:
+            # The reader throws `ArrowInvalid` when the input is closed
+            # by the parent process.
+            pass
+        except WrappedError as e:
+            inner = e.__cause__
+            t = inner.__class__ if inner else None
+            tb = inner.__traceback__ if inner else None
+            tb = tb.tb_next if tb else tb
+            traceback.print_exception(t, inner, tb, file=errpipe)
+            return 1
+        except BaseException:
+            traceback.print_exc(file=errpipe)
+            return 1
     return 0

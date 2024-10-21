@@ -28,7 +28,7 @@ struct force_sign;
 
 } // namespace policy
 
-template <concepts::integral T, class Policy = policy::plain, int MinDigits = 0>
+template <std::integral T, class Policy = policy::plain, int MinDigits = 0>
 struct integral_printer : printer_base<integral_printer<T, Policy, MinDigits>> {
   using attribute = T;
 
@@ -43,8 +43,9 @@ struct integral_printer : printer_base<integral_printer<T, Policy, MinDigits>> {
           return std::log10(value);
         }
       }();
-      for (auto i = 1; i < MinDigits - magnitude; ++i)
+      for (auto i = 1; i < MinDigits - magnitude; ++i) {
         *out++ = '0';
+      }
     }
   }
 
@@ -64,7 +65,7 @@ struct integral_printer : printer_base<integral_printer<T, Policy, MinDigits>> {
   }
 };
 
-template <concepts::integral T>
+template <std::integral T>
 struct printer_registry<T> {
   using type = integral_printer<T>;
 };
@@ -77,13 +78,9 @@ namespace printers {
 //     auto const integral = integral_printer<T, Policy>{};
 //
 // but for some reason doesn't care if we "rewrite" it as follows. (#132)
-template <
-  class T,
-  class Policy = policy::plain,
-  int MinDigits = 0
->
-const integral_printer<T, Policy, MinDigits> integral =
-  integral_printer<T, Policy, MinDigits>{};
+template <class T, class Policy = policy::plain, int MinDigits = 0>
+const integral_printer<T, Policy, MinDigits> integral
+  = integral_printer<T, Policy, MinDigits>{};
 
 auto const i8 = integral_printer<int8_t>{};
 auto const i16 = integral_printer<int16_t>{};

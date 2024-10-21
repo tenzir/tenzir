@@ -68,6 +68,10 @@ TEST(positive durations) {
   check_duration("42 hours", 42h);
   check_duration("42hour", 42h);
   check_duration("42h", 42h);
+  MESSAGE("days");
+  check_duration("42 days", days(42));
+  check_duration("42day", days(42));
+  check_duration("42d", days(42));
   MESSAGE("weeks");
   check_duration("1 weeks", 168h);
   check_duration("1week", 168h);
@@ -92,7 +96,7 @@ TEST(compound durations) {
   check_duration("3m42s10ms", 3min + 42s + 10ms);
   check_duration("3s42s10ms", 3s + 42s + 10ms);
   check_duration("42s3m10ms", 3min + 42s + 10ms);
-  check_duration("-10m8ms1ns", -10min + 8ms + 1ns);
+  check_duration("-10m8ms1ns", -(10min + 8ms + 1ns));
   MESSAGE("no intermediate signs");
   auto p = parsers::duration >> parsers::eoi;
   CHECK(!p("-10m-8ms1ns"));

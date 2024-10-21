@@ -46,16 +46,6 @@ struct typed_actor_fwd {
   using unwrap_as_broker = caf::io::typed_broker<Fs...>;
 };
 
-/// The STREAM SINK actor interface.
-/// @tparam Unit The stream unit.
-/// @tparam Args... Additional parameters passed using
-/// `caf::stream_source::add_outbound_path`.
-template <class Unit, class... Args>
-using stream_sink_actor = typename typed_actor_fwd<
-  // Add a new source.
-  auto(caf::stream<Unit>, Args...)
-    ->caf::result<caf::inbound_stream_slot<Unit>>>::unwrap;
-
 /// The FLUSH LISTENER actor interface.
 using flush_listener_actor = typed_actor_fwd<
   // Reacts to the requested flush message.
@@ -110,12 +100,13 @@ using default_passive_store_actor = typed_actor_fwd<
   ::extend_with<store_actor>::unwrap;
 
 /// The STORE BUILDER actor interface.
-using store_builder_actor
-  = typed_actor_fwd<auto(atom::persist)->caf::result<resource>>
+using store_builder_actor = typed_actor_fwd<
+  // Append a slice to the store.
+  auto(table_slice)->caf::result<void>,
+  // Persist the store.
+  auto(atom::persist)->caf::result<resource>>
   // Conform to the protocol of the STORE actor.
   ::extend_with<store_actor>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -151,37 +142,11 @@ using indexer_actor = typed_actor_fwd<
 
 /// The ACTIVE INDEXER actor interface.
 using active_indexer_actor = typed_actor_fwd<
-  // Hooks into the table slice stream.
-  auto(caf::stream<table_slice>)
-    ->caf::result<caf::inbound_stream_slot<table_slice>>,
   // Finalizes the ACTIVE INDEXER into a chunk, which containes an INDEXER.
   auto(atom::snapshot)->caf::result<chunk_ptr>>
   // Conform the the INDEXER ACTOR interface.
   ::extend_with<indexer_actor>
   // Conform to the procol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
-/// The ACCOUNTANT actor interface.
-using accountant_actor = typed_actor_fwd<
-  // Update the configuration of the ACCOUNTANT.
-  auto(atom::config, accountant_config)->caf::result<atom::ok>,
-  // Registers the sender with the ACCOUNTANT.
-  auto(atom::announce, std::string)->caf::result<void>,
-  // Record duration metric.
-  auto(atom::metrics, std::string, duration, metrics_metadata)->caf::result<void>,
-  // Record time metric.
-  auto(atom::metrics, std::string, time, metrics_metadata)->caf::result<void>,
-  // Record integer metric.
-  auto(atom::metrics, std::string, int64_t, metrics_metadata)->caf::result<void>,
-  // Record count metric.
-  auto(atom::metrics, std::string, uint64_t, metrics_metadata)->caf::result<void>,
-  // Record real metric.
-  auto(atom::metrics, std::string, double, metrics_metadata)->caf::result<void>,
-  // Record a metrics report.
-  auto(atom::metrics, report)->caf::result<void>,
-  // Record a performance report.
-  auto(atom::metrics, performance_report)->caf::result<void>>
-  // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
 /// The PARTITION CREATION LISTENER actor interface.
@@ -223,22 +188,14 @@ using catalog_actor = typed_actor_fwd<
 
 /// The interface of an IMPORTER actor.
 using importer_actor = typed_actor_fwd<
-  // Add a new sink.
-  auto(stream_sink_actor<table_slice>)->caf::result<void>,
-  // Register a FLUSH LISTENER actor.
-  auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
-  // Register a subscriber for table slices.
+  // Register a subscriber for table slices, returning the currently unpersisted
+  // events immediately.
   auto(atom::subscribe, receiver_actor<table_slice>, bool internal)
-    ->caf::result<void>,
+    ->caf::result<std::vector<table_slice>>,
   // Push buffered slices downstream to make the data available.
   auto(atom::flush)->caf::result<void>,
   // Import a batch of data.
   auto(table_slice)->caf::result<void>>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the protocol of the STREAM SINK actor for table slices with a
-  // description.
-  ::extend_with<stream_sink_actor<table_slice, std::string>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -246,8 +203,8 @@ using importer_actor = typed_actor_fwd<
 using index_actor = typed_actor_fwd<
   // Triggered when the INDEX finished querying a PARTITION.
   auto(atom::done, uuid)->caf::result<void>,
-  // Subscribes a FLUSH LISTENER to the INDEX.
-  auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
+  // Stores a table slice.
+  auto(table_slice)->caf::result<void>,
   // Subscribes a PARTITION CREATION LISTENER to the INDEX.
   auto(atom::subscribe, atom::create, partition_creation_listener_actor,
        send_initial_dbstate)
@@ -274,8 +231,6 @@ using index_actor = typed_actor_fwd<
     ->caf::result<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -297,6 +252,11 @@ using filesystem_actor = typed_actor_fwd<
   auto(atom::write, std::filesystem::path, chunk_ptr)->caf::result<atom::ok>,
   // Reads a chunk of data from a given path and returns the chunk.
   auto(atom::read, std::filesystem::path)->caf::result<chunk_ptr>,
+  // Reads all files from the given directories and for each directory returns
+  // its structure as a record. Directories are modeled as nested records and
+  // their content as a 'blob'. Nonexisting paths are returned as empty records.
+  auto(atom::read, atom::recursive, std::vector<std::filesystem::path>)
+    ->caf::result<std::vector<record>>,
   // Moves a file on the fielsystem.
   auto(atom::move, std::filesystem::path, std::filesystem::path)
     ->caf::result<atom::done>,
@@ -325,14 +285,11 @@ using partition_transformer_actor = typed_actor_fwd<
 
 /// The interface of an ACTIVE PARTITION actor.
 using active_partition_actor = typed_actor_fwd<
-  auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
+  // Append a slice to the partition.
+  auto(table_slice)->caf::result<void>,
   // Persists the active partition at the specified path.
   auto(atom::persist, std::filesystem::path, std::filesystem::path)
-    ->caf::result<partition_synopsis_ptr>,
-  // INTERNAL: A repeatedly called continuation of the persist request.
-  auto(atom::internal, atom::persist, atom::resume)->caf::result<void>>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
+    ->caf::result<partition_synopsis_ptr>>
   // Conform to the protocol of the PARTITION actor.
   ::extend_with<partition_actor>::unwrap;
 
@@ -343,30 +300,11 @@ using rest_handler_actor = typed_actor_fwd<
     ->caf::result<rest_response>>::unwrap;
 
 /// The interface of a COMPONENT PLUGIN actor.
-using component_plugin_actor = typed_actor_fwd<>
+using component_plugin_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
+  >::extend_with<status_client_actor>::unwrap;
 
-/// The interface of a SOURCE actor.
-using source_actor = typed_actor_fwd<
-  // Retrieve the currently used module of the SOURCE.
-  auto(atom::get, atom::module)->caf::result<module>,
-  // Update the currently used module of the SOURCE.
-  auto(atom::put, module)->caf::result<void>,
-  // Update the expression used for filtering data in the SOURCE.
-  auto(atom::normalize, expression)->caf::result<void>,
-  // Set up a new stream sink for the generated data.
-  auto(stream_sink_actor<table_slice, std::string>)->caf::result<void>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
-/// The interface of a DATAGRAM SOURCE actor.
-using datagram_source_actor = typed_actor_fwd<
-  // Reacts to datagram messages.
-  auto(caf::io::new_datagram_msg)->caf::result<void>>
-  // Conform to the protocol of the SOURCE actor.
-  ::extend_with<source_actor>::unwrap_as_broker;
-
+/// The receiving part of interface of an EXEC NODE actor.
 using exec_node_sink_actor = typed_actor_fwd<
   // Push events.
   auto(atom::push, table_slice events)->caf::result<void>,
@@ -431,6 +369,23 @@ using pipeline_executor_actor = typed_actor_fwd<
   // Resume the pipeline execution. No-op if it was not paused.
   auto(atom::resume)->caf::result<void>>::unwrap;
 
+/// The interface of a PACKAGE LISTENER actor.
+/// Listeners are notified by the package manager in the following order:
+///  1. context_manager component
+///  2. pipeline_manager component
+///  3. other subscribers (tbd)
+using package_listener_actor = typed_actor_fwd<
+  // Add a new package.
+  auto(atom::package, atom::add, package)->caf::result<void>,
+  // Remove all pipelines from a package.
+  auto(atom::package, atom::remove, std::string)->caf::result<void>,
+  // Send the list of packages that were found on disk
+  // during startup. Listeners should use this information
+  // to purge left-over state from packages that were
+  // removed in the meantime.
+  auto(atom::package, atom::start, std::vector<std::string>)
+    ->caf::result<void>>::unwrap;
+
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.
   auto(atom::shutdown, std::vector<caf::actor>)->caf::result<atom::done>>::unwrap;
@@ -452,7 +407,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
     (std::vector<
       std::tuple<tenzir::exec_node_actor, tenzir::operator_type, std::string>>))
 
-  TENZIR_ADD_TYPE_ID((tenzir::accountant_actor))
   TENZIR_ADD_TYPE_ID((tenzir::active_indexer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::active_partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_actor))
@@ -476,9 +430,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::stream_sink_actor<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID(
-    (tenzir::stream_sink_actor<tenzir::table_slice, std::string>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 

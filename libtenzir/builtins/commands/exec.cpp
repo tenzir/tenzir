@@ -82,6 +82,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
                   cfg.implicit_events_source);
   cfg.tql2 = caf::get_or(inv.options, "tenzir.exec.tql2", cfg.tql2);
+  cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
@@ -156,7 +157,9 @@ public:
         .add<std::string>("implicit-events-source",
                           "implicit source for pipelines starting with events "
                           "(default: 'from stdin read json'")
-        .add<bool>("tql2", "use TQL version 2 (experimental)"));
+        .add<bool>("tql2", "use TQL version 2 (experimental)")
+        .add<bool>("strict",
+                   "return a non-zero exit code if any warnings occured"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {

@@ -2,6 +2,8 @@
 # has to setup the virtualenv for the operator.
 : "${BATS_TEST_TIMEOUT:=120}"
 
+# bats file_tags=python_operator
+
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
@@ -32,11 +34,12 @@ END
 
 # bats test_tags=python
 @test "empty output throws" {
-  check ! --with-stderr tenzir -f /dev/stdin <<END
+  run ! tenzir -f /dev/stdin <<END
     version
     | put a.b=1, b=2
     | python 'self.clear()'
 END
+  check grep -v '^\s*File ' <<<"$output"
 }
 
 # bats test_tags=python
@@ -248,7 +251,7 @@ END
 
 # bats test_tags=python
 @test "python operator invalid syntax" {
-  check ! tenzir 'shell "sleep 3; exit 1" | read json | python "x="'
+  check ! tenzir 'shell "sleep 10; exit 1" | read json | python "x="'
   check ! tenzir 'version | put x=42 | python "@@"'
 }
 
@@ -256,7 +259,7 @@ END
 @test "python operator invalid syntax in file" {
   echo "self.original_c = !!" >${BATS_TEST_TMPDIR}/code.py
   check ! tenzir -f /dev/stdin <<END
-  shell "sleep 3; exit 1"
+  shell "sleep 10; exit 1"
     | read json
     | put a.b.c = 2
     | unflatten

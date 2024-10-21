@@ -1,0 +1,7 @@
+{"x": 1, "y": null}
+warning: `year` expected `time`, but got `int64`
+ --> <input>:5:9
+  |
+5 |     y = x.year()
+  |         ~ 
+  |

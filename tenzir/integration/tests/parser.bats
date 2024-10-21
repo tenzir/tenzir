@@ -172,3 +172,13 @@ unmapped = src
 drop src
 EOF
 }
+
+@test "subnets" {
+  check tenzir -f /dev/stdin <<EOF
+from {
+  x: 1.2.3.4/24,
+  z: ::ffff:1.2.3.4/120,
+  y: ::/1,
+}
+EOF
+}

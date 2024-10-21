@@ -12,10 +12,7 @@
 
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
-#include "tenzir/detail/flat_map.hpp"
 
-#include <caf/broadcast_downstream_manager.hpp>
-#include <caf/stream_stage.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <unordered_map>
@@ -65,9 +62,6 @@ struct partition_transformer_state {
   /// Actor handle of the catalog.
   catalog_actor catalog = {};
 
-  /// Actor handle of the accountant.
-  accountant_actor accountant = {};
-
   /// Actor handle of the filesystem actor.
   filesystem_actor fs = {};
 
@@ -76,18 +70,6 @@ struct partition_transformer_state {
 
   /// Collector for the received table slices.
   std::vector<table_slice> input = {};
-
-  using stage_type
-    = caf::stream_stage<table_slice,
-                        caf::broadcast_downstream_manager<table_slice>>;
-  using source_type = typename stage_type::stream_source;
-
-  /// The stream stage to send table slices to the store(s).
-  using partition_transformer_stream_stage_ptr
-    = caf::stream_stage_ptr<table_slice,
-                            caf::broadcast_downstream_manager<table_slice>>;
-
-  partition_transformer_stream_stage_ptr stage = {};
 
   /// Cached stream error, if the stream terminated abnormally.
   caf::error stream_error = {};
@@ -113,10 +95,8 @@ struct partition_transformer_state {
 
   /// Auxiliary data required to create the final partition flatbuffer.
   struct buildup {
-    /// The stream slot of the associated store builder.
-    // Note that we don't need to store the builder
-    // itself, it will shut itself down automatically.
-    caf::outbound_stream_slot<table_slice> slot = {};
+    /// The store builder.
+    store_builder_actor builder = {};
 
     /// Cached table slices in this partition.
     std::vector<table_slice> slices = {};
@@ -170,9 +150,9 @@ struct partition_transformer_state {
 auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
-  const caf::settings& index_opts, accountant_actor accountant,
-  catalog_actor catalog, filesystem_actor fs, pipeline transform,
-  std::string partition_path_template, std::string synopsis_path_template)
+  const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
+  pipeline transform, std::string partition_path_template,
+  std::string synopsis_path_template)
   -> partition_transformer_actor::behavior_type;
 
 } // namespace tenzir

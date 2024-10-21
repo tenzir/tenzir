@@ -11,6 +11,7 @@
 #include "tenzir/concept/printable/core.hpp"
 #include "tenzir/concept/printable/numeric/integral.hpp"
 #include "tenzir/concept/printable/numeric/real.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/time.hpp"
 
 #include <fmt/format.h>
@@ -32,7 +33,8 @@ struct duration_printer : printer_base<duration_printer<Rep, Period, Policy>> {
 
   template <class To, class R, class P>
   static auto is_at_least(std::chrono::duration<R, P> d) {
-    return std::chrono::duration_cast<To>(std::chrono::abs(d)) >= To{1};
+    TENZIR_ASSERT_EXPENSIVE((d >= std::chrono::duration<R, P>::zero()));
+    return std::chrono::duration_cast<To>(d) >= To{1};
   }
 
   template <class To, class R, class P>
@@ -80,7 +82,7 @@ private:
     auto double_str = fmt::format("{:.2f}", duration);
     if (double_str.back() == '0')
       double_str.pop_back();
-    fmt::format_to(out, "{}{}", std::move(double_str), suffix);
+    out = fmt::format_to(out, "{}{}", std::move(double_str), suffix);
     return true;
   }
 
@@ -91,6 +93,13 @@ public:
       auto p = make_printer<Rep>{} << units(d);
       return p(out, d.count());
     } else if constexpr (std::is_same_v<Policy, policy::adaptive>) {
+      if (not(d >= std::chrono::duration<Rep, Period>::zero())) {
+        // The dynamic resolution solution is written only for positive
+        // durations, so to avoid negative durations always being printed with
+        // nanosecond resolution we just take care of it early here.
+        *out++ = '-';
+        d = -d;
+      }
       using namespace std::chrono;
       if (is_at_least<days>(d))
         return print_adaptive(out, count<days>(d), "d");

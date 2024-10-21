@@ -43,9 +43,16 @@ public:
       },
     });
     auto total_events = size_t{0};
+    auto inflight_batches = size_t{0};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
+        continue;
+      }
+      // The current catalog assumes that all events have at least one field.
+      // This check guards against that. We should remove it once we get to
+      // rewriting our catalog.
+      if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
         continue;
       }
       if (not slice.schema().attribute("internal").has_value()) {
@@ -56,24 +63,41 @@ public:
         });
       }
       total_events += slice.rows();
-      // TODO: This temporary solution does not apply back-pressure.
-      ctrl.self().send(importer, std::move(slice));
+      inflight_batches += 1;
+      ctrl.self()
+        .request(importer, caf::infinite, std::move(slice))
+        .then(
+          [&]() {
+            inflight_batches -= 1;
+            ctrl.set_waiting(false);
+          },
+          [&](const caf::error& err) {
+            diagnostic::error(err)
+              .note("failed to import events")
+              .emit(ctrl.diagnostics());
+          });
+      // Limit to at most 20 in-flight batches.
+      if (inflight_batches >= 20) {
+        ctrl.set_waiting(true);
+        co_yield {};
+      }
     }
-    TENZIR_VERBOSE("waiting for completion of import after input stream has "
-                   "ended");
-    // We empirically need this sleep here for the flushing to take any effect
-    // afterwards. I do not fully understand why, but since we're about to
-    // rewrite this operator anyways to create partitions in-band and to
-    // directly send then to the catalog we may as well leave this in here for
-    // now. –- DL, Dec 2023
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    while (inflight_batches > 0) {
+      ctrl.set_waiting(true);
+      co_yield {};
+    }
+    ctrl.set_waiting(true);
     ctrl.self()
       .request(importer, caf::infinite, atom::flush_v)
-      .await([]() {},
-             [&](caf::error& err) {
-               diagnostic::error(add_context(err, "could not flush importer"))
-                 .emit(ctrl.diagnostics());
-             });
+      .then(
+        [&] {
+          ctrl.set_waiting(false);
+        },
+        [&](const caf::error& err) {
+          diagnostic::error(err)
+            .note("failed to flush import")
+            .emit(ctrl.diagnostics());
+        });
     co_yield {};
     const auto elapsed = std::chrono::steady_clock::now() - start_time;
     const auto rate

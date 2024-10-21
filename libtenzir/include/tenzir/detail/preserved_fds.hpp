@@ -8,8 +8,13 @@
 
 #pragma once
 
-#include <boost/process/detail/handler.hpp>
-#include <boost/process/handles.hpp>
+#if __has_include(<boost/process/v1/detail/handler.hpp>)
+#  include <boost/process/v1/detail/handler.hpp>
+#  include <boost/process/v1/handles.hpp>
+#else
+#  include <boost/process/detail/handler.hpp>
+#  include <boost/process/handles.hpp>
+#endif
 
 #include <vector>
 

@@ -128,6 +128,7 @@ setup() {
 
 # bats test_tags=json
 @test "Read JSON with new field in record list" {
+  check tenzir "from file ${INPUTSDIR}/json/record-list-new-field.json read json --merge"
   check tenzir "from file ${INPUTSDIR}/json/record-list-new-field.json"
 }
 
@@ -150,9 +151,9 @@ setup() {
 @test "Schema ID Extractor" {
   check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | put fingerprint = #schema_id | write json'"
 
-  check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | where #schema_id == \"6aeddcaa9adee9b9\" | write json'"
+  check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | where #schema_id == \"59e472ba9bb9e014\" | write json'"
 
-  check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | where #schema_id != \"6aeddcaa9adee9b9\" | write json'"
+  check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | where #schema_id != \"59e472ba9bb9e014\" | write json'"
 }
 
 # bats test_tags=pipelines
@@ -254,6 +255,8 @@ setup() {
   # 3 operators are intentionally chosen to slice in the middle of a batch.
   check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | select extension.dvc | head 8 | extend foo=extension.dvc | write json"
   check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | select extension.dvc | tail 3 | extend foo=extension.dvc | write json"
+  # This tests for a regression where slice 1:-1 crashes for exactly one event.
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 1 | slice 1:-1"
 }
 
 # bats test_tags=pipelines, zeek
@@ -334,6 +337,41 @@ setup() {
   check tenzir "from ${INPUTSDIR}/json/record-in-list2.json read json | unflatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/record-with-multiple-unflattened-values.json read json | unflatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/record-with-multi-nested-field-names.json read json | unflatten | to stdout"
+  check tenzir "unflatten" <<EOF
+{}
+EOF
+  # {x.y: int64, x: {}}
+  check tenzir "read json --merge | unflatten" <<EOF
+{"x.y": 1, "x": {}}
+{"x.y": null, "x": {}}
+{"x.y": 1, "x": null}
+{"x.y": null, "x": null}
+EOF
+  # {x.y: int64, x: {z: int64}}
+  check tenzir "read json --merge | unflatten" <<EOF
+{"x.y": 1, "x": {"z": 2}}
+{"x.y": null, "x": {"z": 2}}
+{"x.y": 1, "x": {"z": null}}
+{"x.y": 1, "x": null}
+{"x.y": null, "x": null}
+EOF
+  # {x.y: {z: int64}, x: {y.z: int64}}
+  check tenzir "read json --merge | unflatten" <<EOF
+{"x.y": {"z": 1}, "x": {"y.z": 2}}
+{"x.y": null, "x": {"y.z": 2}}
+{"x.y": {"z": 1}, "x": null}
+{"x.y": null, "x": null}
+EOF
+  # {x.y: {z: {a.b: int64}}, x: {y.z: {a.c: int64}}}
+  check tenzir "read json --merge | unflatten" <<EOF
+{"x.y": {"z": {"a.b": 1}}, "x": {"y.z": {"a.c": 2}}}
+{"x.y": {"z": null}, "x": {"y.z": {"a.c": 2}}}
+{"x.y": {"z": {"a.b": 1}}, "x": {"y.z": null}}
+{"x.y": {"z": null}, "x": {"y.z": null}}
+{"x.y": {"z": {"a.b": 1}}, "x": null}
+{"x.y": null, "x": {"y.z": {"a.c": 2}}}
+{"x.y": null, "x": null}
+EOF
 }
 
 # bats test_tags=pipelines
@@ -381,6 +419,7 @@ setup() {
   check tenzir "from ${INPUTSDIR}/json/all-types.json read json | write lines"
   check tenzir "from ${INPUTSDIR}/json/all-types.json read json | put e | write lines"
   check tenzir "from ${INPUTSDIR}/json/type-mismatch.json read json | write lines"
+  check tenzir "from ${INPUTSDIR}/json/whitespace.json read json | write lines"
 }
 
 # bats test_#tags=pipelines
@@ -468,6 +507,16 @@ EOF
   check tenzir "from ${INPUTSDIR}/syslog/syslog-rfc3164.log read lines | parse line grok --include-unnamed \"(<%{NONNEGINT:priority}>\s*)?%{SYSLOGTIMESTAMP:timestamp} (%{HOSTNAME:hostname}/%{IPV4:hostip}|%{WORD:host}) %{SYSLOGPROG}:%{GREEDYDATA:message}\""
   check tenzir 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "%{TIMESTAMP_ISO8601}"'
   check tenzir 'show version | put line="55.3.244.1 GET /index.html 15824 0.043" | parse line grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"'
+}
+
+# bates test_tags=pipelines
+@test "Read Grok" {
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "%{GREEDYDATA:version}"'
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak:int}-%{DATA:ref}(-%{DATA:extra})?)?"'
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok --indexed-captures "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak}-%{DATA:ref}(-%{DATA:extra})?)?"'
+  echo "https://example.com/test.txt?foo=bar" | check tenzir 'read grok --include-unnamed "%{URI}"'
+  echo "55.3.244.1 GET /index.html 15824 0.043" | check tenzir 'read grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"'
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "%{TIMESTAMP_ISO8601}"'
 }
 
 # bats test_tags=pipelines
@@ -575,10 +624,6 @@ EOF
   check tenzir "from ${INPUTSDIR}/json/all-types.json read json | set #schema=\"foo\" | write bitz | read bitz | set schema=#schema"
   check tenzir "from ${INPUTSDIR}/json/all-types.json read json | batch 1 | write bitz | read bitz"
   check tenzir "from ${INPUTSDIR}/json/all-types.json read json | head 1 | repeat 100 | batch 100 | write bitz | read bitz"
-}
-
-@test "set operator" {
-  check tenzir 'version | set foo="patch", :uint64=-1, :ip=1.1.1.1, qux=foo, version=123, #schema="foo.bar", schema=#schema, build=null | set schema2=#schema, baz=patch'
 }
 
 # bats test_tags=pipelines, deduplicate
@@ -700,7 +745,7 @@ EOF
 
 }
 
-# bats test_tags=json
+# bats test_tags=json,python_operator
 @test "weird json floats" {
   check tenzir -f /dev/stdin <<EOF
 version |
@@ -771,4 +816,16 @@ EOF
   check tenzir 'read json --ndjson --precise' <<EOF
 {"foo": 42}{"foo": 43}
 EOF
+}
+
+@test "legacy operator" {
+  check ! tenzir --tql2 --dump-pipeline 'legacy'
+  check tenzir --tql2 --dump-pipeline 'legacy ""'
+  check tenzir --tql2 --dump-pipeline 'legacy "from \"example.json.gz\" | write json"'
+  check ! tenzir --tql2 --dump-pipeline 'legacy "this_operator_does_not_exist"'
+}
+
+@test "assert operator" {
+  check tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 0'
+  check ! tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 2'
 }

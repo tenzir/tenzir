@@ -17,6 +17,8 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
 #include <boost/process.hpp>
@@ -215,22 +217,28 @@ public:
     auto chunks_mutex = std::mutex{};
     auto thread = std::thread([&child, &chunks, &chunks_mutex,
                                diagnostics = ctrl.shared_diagnostics()]() {
-      auto buffer = std::vector<char>(block_size);
-      while (true) {
-        auto bytes_read = child->read(as_writeable_bytes(buffer));
-        if (not bytes_read) {
-          diagnostic::error(add_context(bytes_read.error(),
-                                        "failed to read from child process"))
-            .emit(diagnostics);
-          return;
+      try {
+        auto buffer = std::vector<char>(block_size);
+        while (true) {
+          auto bytes_read = child->read(as_writeable_bytes(buffer));
+          if (not bytes_read) {
+            diagnostic::error(bytes_read.error())
+              .note("failed to read from child process")
+              .emit(diagnostics);
+            return;
+          }
+          if (*bytes_read == 0) {
+            // Reading 0 bytes indicates EOF.
+            break;
+          }
+          auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
+          auto lock = std::lock_guard{chunks_mutex};
+          chunks.push(std::move(chk));
         }
-        if (*bytes_read == 0) {
-          // Reading 0 bytes indicates EOF.
-          break;
-        }
-        auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
-        auto lock = std::lock_guard{chunks_mutex};
-        chunks.push(std::move(chk));
+      } catch (const std::exception& err) {
+        diagnostic::error("{}", err.what())
+          .note("encountered exception when reading from child process")
+          .emit(diagnostics);
       }
     });
     {
@@ -306,9 +314,9 @@ public:
     return true;
   }
 
-  auto input_independent() const -> bool override {
+  auto idle_after() const -> duration override {
     // We may produce results without receiving any further input.
-    return true;
+    return duration::max();
   }
 
   auto name() const -> std::string override {
@@ -329,7 +337,8 @@ private:
   std::string command_;
 };
 
-class plugin final : public virtual operator_plugin<shell_operator> {
+class plugin final : public virtual operator_plugin<shell_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {
@@ -345,6 +354,15 @@ public:
     parser.add(command, "<command>");
     parser.parse(p);
     return std::make_unique<shell_operator>(std::move(command));
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto command = located<std::string>{};
+    auto parser
+      = argument_parser2::operator_("shell").add(command, "<command>");
+    TRY(parser.parse(inv, ctx));
+    return std::make_unique<shell_operator>(std::move(command).inner);
   }
 };
 

@@ -18,6 +18,7 @@
 #include <tenzir/pcap.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <pcap/pcap.h>
 
@@ -247,14 +248,17 @@ public:
     for (const auto* ptr = iface.get(); ptr != nullptr; ptr = ptr->next) {
       auto okay = builder.add(std::string_view{ptr->name});
       TENZIR_ASSERT(okay);
-      if (ptr->description)
+      if (ptr->description) {
         okay = builder.add(std::string_view{ptr->description});
-      else
+      } else {
         okay = builder.add(caf::none);
+      }
       auto addrs = list{};
-      for (auto* addr = ptr->addresses; addr != nullptr; addr = addr->next)
-        if (auto x = to<ip>(detail::to_string(addr->addr)))
+      for (auto* addr = ptr->addresses; addr != nullptr; addr = addr->next) {
+        if (auto x = to<ip>(detail::to_string(addr->addr))) {
           addrs.emplace_back(*x);
+        }
+      }
       okay = builder.add(addrs);
       TENZIR_ASSERT(okay);
       auto is_set = [ptr](uint32_t x) {
@@ -304,7 +308,8 @@ public:
 };
 
 class plugin final : public virtual loader_plugin<nic_loader>,
-                     public virtual operator_plugin<nics_operator> {
+                     public virtual operator_plugin<nics_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto initialize(const record& config, const record& /* global_config */)
     -> caf::error override {
@@ -322,6 +327,12 @@ public:
 
   auto signature() const -> operator_signature override {
     return {.source = true};
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("nics").parse(inv, ctx).ignore();
+    return std::make_unique<nics_operator>();
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

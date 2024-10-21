@@ -27,96 +27,14 @@
 namespace tenzir {
 
 namespace {
-
-auto assign(const ast::meta& left, series right, const table_slice& input,
-            diagnostic_handler& diag) -> table_slice {
-  switch (left.kind) {
-    case ast::meta::name: {
-      auto values = dynamic_cast<arrow::StringArray*>(right.array.get());
-      if (not values) {
-        // TODO: Inaccurate location.
-        diagnostic::warning("expected string but got {}", right.type.kind())
-          .primary(left)
-          .emit(diag);
-        return input;
-      }
-      // TODO: We actually have to split the batch sometimes.
-      auto new_name = values->GetView(0);
-      // TODO: Is this correct?
-      auto new_type = type{
-        new_name,
-        input.schema(),
-        collect(input.schema().attributes()),
-      };
-      auto new_batch
-        = to_record_batch(input)->ReplaceSchema(new_type.to_arrow_schema());
-      TENZIR_ASSERT(new_batch.ok());
-      return table_slice{new_batch.MoveValueUnsafe(), new_type};
-    }
-    case ast::meta::import_time: {
-      auto values = dynamic_cast<arrow::TimestampArray*>(right.array.get());
-      if (not values) {
-        // TODO: Inaccurate location.
-        diagnostic::warning("expected time but got {}", right.type.kind())
-          .primary(left)
-          .emit(diag);
-        return input;
-      }
-      // Have to potentially split, again.
-      auto new_time = value_at(time_type{}, *values, 0);
-      // TODO: Copy is unnecessary.
-      auto copy = table_slice{input};
-      copy.import_time(new_time);
-      return copy;
-    }
-    case ast::meta::internal: {
-      auto values = dynamic_cast<arrow::BooleanArray*>(right.array.get());
-      if (not values) {
-        // TODO: Inaccurate location.
-        diagnostic::warning("expected bool but got {}", right.type.kind())
-          .primary(left)
-          .emit(diag);
-        return input;
-      }
-      // TODO: Have to potentially split, again.
-      auto new_value = values->Value(0);
-      auto old_value = input.schema().attribute("internal").has_value();
-      if (new_value == old_value) {
-        return input;
-      }
-      auto new_attributes = std::vector<type::attribute_view>{};
-      for (auto [key, value] : input.schema().attributes()) {
-        if (key == "internal") {
-          continue;
-        }
-        new_attributes.emplace_back(key, value);
-      }
-      if (new_value) {
-        new_attributes.emplace_back("internal", "");
-      }
-      // TODO: Is this correct?
-      auto new_type = type{
-        input.schema().name(),
-        input.schema(),
-        std::move(new_attributes),
-      };
-      auto new_batch
-        = to_record_batch(input)->ReplaceSchema(new_type.to_arrow_schema());
-      TENZIR_ASSERT(new_batch.ok());
-      return table_slice{new_batch.MoveValueUnsafe(), new_type};
-    }
-  }
-  TENZIR_UNREACHABLE();
-}
-
 /// Creates a record that maps `path` to `value`.
 ///
 /// # Examples
 //
 /// ["foo", "bar"] -> {"foo": {"bar": value}}
 /// [] -> value
-auto consume_path(std::span<const ast::identifier> path, series value)
-  -> series {
+auto consume_path(std::span<const ast::identifier> path,
+                  series value) -> series {
   if (path.empty()) {
     return value;
   }
@@ -187,6 +105,87 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
   return series{std::move(new_type), std::move(new_array)};
 }
 
+} // namespace
+
+auto assign(const ast::meta& left, series right, const table_slice& input,
+            diagnostic_handler& diag) -> table_slice {
+  switch (left.kind) {
+    case ast::meta::name: {
+      auto values = dynamic_cast<arrow::StringArray*>(right.array.get());
+      if (not values) {
+        // TODO: Inaccurate location.
+        diagnostic::warning("expected string but got {}", right.type.kind())
+          .primary(left)
+          .emit(diag);
+        return input;
+      }
+      // TODO: We actually have to split the batch sometimes.
+      auto new_name = values->GetView(0);
+      // TODO: Is this correct?
+      auto new_type = type{
+        new_name,
+        input.schema(),
+        collect(input.schema().attributes()),
+      };
+      auto new_batch
+        = to_record_batch(input)->ReplaceSchema(new_type.to_arrow_schema());
+      TENZIR_ASSERT(new_batch.ok());
+      return table_slice{new_batch.MoveValueUnsafe(), new_type};
+    }
+    case ast::meta::import_time: {
+      auto values = dynamic_cast<arrow::TimestampArray*>(right.array.get());
+      if (not values) {
+        // TODO: Inaccurate location.
+        diagnostic::warning("expected time but got {}", right.type.kind())
+          .primary(left)
+          .emit(diag);
+        return input;
+      }
+      // Have to potentially split, again.
+      auto new_time = value_at(time_type{}, *values, 0);
+      auto copy = table_slice{input};
+      copy.import_time(new_time);
+      return copy;
+    }
+    case ast::meta::internal: {
+      auto values = dynamic_cast<arrow::BooleanArray*>(right.array.get());
+      if (not values) {
+        // TODO: Inaccurate location.
+        diagnostic::warning("expected bool but got {}", right.type.kind())
+          .primary(left)
+          .emit(diag);
+        return input;
+      }
+      // TODO: Have to potentially split, again.
+      auto new_value = values->Value(0);
+      auto old_value = input.schema().attribute("internal").has_value();
+      if (new_value == old_value) {
+        return input;
+      }
+      auto new_attributes = std::vector<type::attribute_view>{};
+      for (auto [key, value] : input.schema().attributes()) {
+        if (key == "internal") {
+          continue;
+        }
+        new_attributes.emplace_back(key, value);
+      }
+      if (new_value) {
+        new_attributes.emplace_back("internal", "");
+      }
+      auto new_type = type{
+        input.schema().name(),
+        caf::get<record_type>(input.schema()),
+        std::move(new_attributes),
+      };
+      auto new_batch
+        = to_record_batch(input)->ReplaceSchema(new_type.to_arrow_schema());
+      TENZIR_ASSERT(new_batch.ok());
+      return table_slice{new_batch.MoveValueUnsafe(), new_type};
+    }
+  }
+  TENZIR_UNREACHABLE();
+}
+
 auto assign(const ast::simple_selector& left, series right,
             const table_slice& input, diagnostic_handler& dh) -> table_slice {
   auto array = to_record_batch(input)->ToStructArray().ValueOrDie();
@@ -198,15 +197,17 @@ auto assign(const ast::simple_selector& left, series right,
                         result.type.kind())
       .primary(left)
       .emit(dh);
-    // TODO: Metadata?
     result = {record_type{}, make_struct_array(result.length(), nullptr, {})};
   }
-  // TODO: Metadata?
-  result.type = type{"tenzir.set", result.type};
-  return table_slice{arrow::RecordBatch::Make(
-                       result.type.to_arrow_schema(), result.length(),
-                       caf::get<arrow::StructArray>(*result.array).fields()),
-                     result.type};
+  result.type.assign_metadata(input.schema());
+  auto slice = table_slice{
+    arrow::RecordBatch::Make(
+      result.type.to_arrow_schema(), result.length(),
+      caf::get<arrow::StructArray>(*result.array).fields()),
+    result.type,
+  };
+  slice.import_time(input.import_time());
+  return slice;
 }
 
 auto assign(const ast::selector& left, series right, const table_slice& input,
@@ -219,8 +220,6 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
       return assign(left, std::move(right), input, dh);
     });
 }
-
-} // namespace
 
 auto set_operator::operator()(generator<table_slice> input,
                               operator_control_plane& ctrl) const

@@ -13,10 +13,8 @@
 #include "tenzir/error.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/query_context.hpp"
-#include "tenzir/report.hpp"
 #include "tenzir/table_slice.hpp"
 
-#include <caf/attach_stream_sink.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 namespace tenzir {
@@ -78,7 +76,7 @@ handle_query(const auto& self, const query_context& query_context) {
         .then(
           [self, issuer = query_context.issuer, query_id = query_context.id,
            rp]() mutable {
-            TENZIR_DEBUG("{} finished working on extract query {}", *self,
+            TENZIR_TRACE("{} finished working on extract query {}", *self,
                          query_id);
             auto it = self->state.running_extractions.find(query_id);
             if (it == self->state.running_extractions.end()) {
@@ -87,24 +85,6 @@ handle_query(const auto& self, const query_context& query_context) {
               return;
             }
             rp.deliver(it->second.num_hits);
-            const duration runtime
-              = std::chrono::steady_clock::now() - it->second.start;
-            const auto id_str = fmt::to_string(query_id);
-            self->send(self->state.accountant, atom::metrics_v,
-                       fmt::format("{}.lookup.runtime", self->name()), runtime,
-                       metrics_metadata{
-                         {"query", id_str},
-                         {"issuer", issuer},
-                         {"store-type", self->state.store_type},
-                       });
-            self->send(self->state.accountant, atom::metrics_v,
-                       fmt::format("{}.lookup.hits", self->name()),
-                       it->second.num_hits,
-                       metrics_metadata{
-                         {"query", id_str},
-                         {"issuer", issuer},
-                         {"store-type", self->state.store_type},
-                       });
             self->state.running_extractions.erase(it);
           },
           [self, expr = query_context.expr, query_id = query_context.id,
@@ -168,13 +148,10 @@ default_passive_store_actor::behavior_type default_passive_store(
   default_passive_store_actor::stateful_pointer<default_passive_store_state>
     self,
   std::unique_ptr<passive_store> store, filesystem_actor filesystem,
-  accountant_actor accountant, std::filesystem::path path,
-  std::string store_type) {
-  const auto start = std::chrono::steady_clock::now();
+  std::filesystem::path path, std::string store_type) {
   // Configure our actor state.
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
-  self->state.accountant = std::move(accountant);
   self->state.store = std::move(store);
   self->state.path = std::move(path);
   self->state.store_type = std::move(store_type);
@@ -183,14 +160,8 @@ default_passive_store_actor::behavior_type default_passive_store(
     ->request(self->state.filesystem, caf::infinite, atom::mmap_v,
               self->state.path)
     .await(
-      [self, start](chunk_ptr& chunk) {
+      [self](chunk_ptr& chunk) {
         auto load_error = self->state.store->load(std::move(chunk));
-        duration startup_duration = std::chrono::steady_clock::now() - start;
-        self->send(self->state.accountant, atom::metrics_v,
-                   "passive-store.init.runtime", startup_duration,
-                   metrics_metadata{
-                     {"store-type", self->state.store_type},
-                   });
         if (load_error)
           self->quit(std::move(load_error));
       },
@@ -204,7 +175,6 @@ default_passive_store_actor::behavior_type default_passive_store(
   return {
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
-      TENZIR_DEBUG("{} starts working on query {}", *self, query_context.id);
       return handle_query<default_passive_store_actor>(self, query_context);
     },
     [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
@@ -230,7 +200,7 @@ default_passive_store_actor::behavior_type default_passive_store(
     },
     [self](atom::internal, atom::extract,
            const uuid& query_id) -> caf::result<void> {
-      TENZIR_DEBUG("{} continuous working on extract query {}", *self,
+      TENZIR_TRACE("{} continuous working on extract query {}", *self,
                    query_id);
       auto it = self->state.running_extractions.find(query_id);
       if (it == self->state.running_extractions.end())
@@ -278,12 +248,10 @@ default_passive_store_actor::behavior_type default_passive_store(
 default_active_store_actor::behavior_type default_active_store(
   default_active_store_actor::stateful_pointer<default_active_store_state> self,
   std::unique_ptr<active_store> store, filesystem_actor filesystem,
-  accountant_actor accountant, std::filesystem::path path,
-  std::string store_type) {
+  std::filesystem::path path, std::string store_type) {
   // Configure our actor state.
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
-  self->state.accountant = std::move(accountant);
   self->state.store = std::move(store);
   self->state.path = std::move(path);
   self->state.store_type = std::move(store_type);
@@ -311,88 +279,48 @@ default_active_store_actor::behavior_type default_active_store(
       return num_events;
     },
     [self](atom::persist) -> caf::result<resource> {
-      if (const auto* res = std::get_if<resource>(&self->state.file)) {
-        return *res;
+      if (self->state.erased) {
+        return {};
+      }
+      auto chunk = self->state.store->finish();
+      if (!chunk) {
+        self->quit(diagnostic::error(std::move(chunk.error()))
+                     .note("while persisting store to disk")
+                     .to_error());
+        return {};
       }
       auto rp = self->make_response_promise<resource>();
-      self->state.file = rp;
+      auto res = resource{
+        .url = fmt::format("file://{}", self->state.path),
+        .size = (*chunk)->size(),
+      };
+      self
+        ->request(self->state.filesystem, caf::infinite, atom::write_v,
+                  self->state.path, std::move(*chunk))
+        .then(
+          [self, rp, res](atom::ok) mutable {
+            TENZIR_DEBUG("{} ({}) persisted itself to {}", *self,
+                         self->state.store_type, self->state.path);
+            TENZIR_ASSERT(rp.pending());
+            rp.deliver(res);
+            self->quit();
+          },
+          [self, rp](caf::error& error) mutable {
+            rp.deliver(error);
+            self->quit(diagnostic::error(std::move(error))
+                         .note("while persisting store to disk")
+                         .to_error());
+          });
       return rp;
     },
-    [self](caf::stream<table_slice> stream)
-      -> caf::result<caf::inbound_stream_slot<table_slice>> {
-      struct stream_state {
-        // We intentionally store a strong reference here: The store lifetime
-        // is ref-counted, it should exit after all currently active queries
-        // for this store have finished, its partition has dropped out of the
-        // cache, and it received all data from the incoming stream. This
-        // pointer serves to keep the ref-count alive for the last part, and
-        // is reset after the data has been written to disk.
-        default_active_store_actor strong_self;
-      };
-      auto attach_sink_result = caf::attach_stream_sink(
-        self, stream,
-        [self](stream_state& stream_state) {
-          stream_state.strong_self = self;
-        },
-        [self]([[maybe_unused]] stream_state& stream_state,
-               std::vector<table_slice>& slices) {
-          // If the store is marked for erasure we don't actually need to
-          // add any further slices.
-          if (self->state.erased)
-            return;
-          if (auto error = self->state.store->add(std::move(slices)))
-            self->quit(std::move(error));
-        },
-        [self](stream_state& stream_state, const caf::error& error) {
-          if (ec::end_of_input == error) {
-            TENZIR_WARN("store encountered unexpected end of input before "
-                        "shutdown");
-          } else if (error) {
-            self->quit(error);
-            return;
-          }
-          // If the store is marked for erasure we don't actually need to
-          // persist anything.
-          if (self->state.erased)
-            return;
-          auto chunk = self->state.store->finish();
-          if (!chunk) {
-            self->quit(std::move(chunk.error()));
-            return;
-          }
-          std::visit(detail::overload(
-                       [&](std::monostate) {
-                         self->state.file = resource{
-                           .url = fmt::format("file://{}", self->state.path),
-                           .size = (*chunk)->size(),
-                         };
-                       },
-                       [&](const resource&) {
-                         TENZIR_ASSERT(false);
-                       },
-                       [&](caf::typed_response_promise<resource>& rp) {
-                         TENZIR_ASSERT(rp.pending());
-                         rp.deliver(resource{
-                           .url = fmt::format("file://{}", self->state.path),
-                           .size = (*chunk)->size(),
-                         });
-                       }),
-                     self->state.file);
-          self
-            ->request(self->state.filesystem, caf::infinite, atom::write_v,
-                      self->state.path, std::move(*chunk))
-            .then(
-              [self, stream_state](atom::ok) {
-                static_cast<void>(stream_state);
-                TENZIR_DEBUG("{} ({}) persisted itself to {}", *self,
-                             self->state.store_type, self->state.path);
-              },
-              [self, stream_state](caf::error& error) {
-                static_cast<void>(stream_state);
-                self->quit(std::move(error));
-              });
-        });
-      return attach_sink_result.inbound_slot();
+    [self](table_slice& slice) {
+      if (self->state.erased) {
+        return;
+      }
+      // TODO: Get rid of the vector.
+      if (auto error = self->state.store->add(std::vector{std::move(slice)})) {
+        self->quit(std::move(error));
+      }
     },
     [self](atom::status, status_verbosity, duration) {
       return record{

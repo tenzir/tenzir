@@ -245,34 +245,6 @@ struct formatter<caf::expected<T>> {
   }
 };
 
-template <class T>
-struct formatter<caf::inbound_stream_slot<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto
-  format(const caf::inbound_stream_slot<T>& value, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "in:{}", value.value());
-  }
-};
-
-template <class T>
-struct formatter<caf::outbound_stream_slot<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto
-  format(const caf::outbound_stream_slot<T>& value, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "out:{}", value.value());
-  }
-};
-
 template <>
 struct formatter<caf::error> {
   template <class ParseContext>
@@ -366,7 +338,7 @@ struct formatter<std::error_code> {
   }
 
   template <class FormatContext>
-  constexpr auto format(const std::error_code& value, FormatContext& ctx)
+  constexpr auto format(const std::error_code& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "{}", value.message());
   }

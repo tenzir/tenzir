@@ -72,6 +72,15 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
       .emit(ctrl.diagnostics());
     co_return;
   };
+  auto enable = int{1};
+  if (::setsockopt(*socket.fd, SOL_SOCKET, SO_REUSEADDR, &enable,
+                   sizeof(enable))
+      < 0) {
+    diagnostic::error("could not set socket to SO_REUSEADDR")
+      .note(detail::describe_errno())
+      .emit(ctrl.diagnostics());
+    co_return;
+  }
   if (args.connect) {
     TENZIR_DEBUG("connecting to {}", args.url);
     if (socket.connect(*endpoint) < 0) {
@@ -186,6 +195,14 @@ public:
         .to_error();
     };
     TENZIR_DEBUG("connecting to {}", args_.url);
+    int enable = 1;
+    if (::setsockopt(*socket.fd, SOL_SOCKET, SO_REUSEADDR, &enable,
+                     sizeof(enable))
+        < 0) {
+      return diagnostic::error("could not set socket to SO_REUSEADDR")
+        .note(detail::describe_errno())
+        .to_error();
+    }
     if (socket.connect(*endpoint) < 0) {
       return diagnostic::error("failed to connect to socket")
         .note(detail::describe_errno())

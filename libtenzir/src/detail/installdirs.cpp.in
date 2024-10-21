@@ -10,10 +10,6 @@
 
 namespace tenzir::detail {
 
-std::filesystem::path install_datadir() {
-  return "@CMAKE_INSTALL_FULL_DATADIR@/tenzir";
-}
-
 std::filesystem::path install_configdir() {
   // We are permissive for the config file paths, in case the prefix does not
   // contain the package name.
@@ -23,6 +19,14 @@ std::filesystem::path install_configdir() {
       !std::filesystem::exists(tenzir, err))
     return tenzir;
   return tenzir;
+}
+
+std::filesystem::path install_datadir() {
+  return "@CMAKE_INSTALL_FULL_DATADIR@/tenzir";
+}
+
+std::filesystem::path install_libexecdir() {
+  return "@CMAKE_INSTALL_FULL_LIBEXECDIR@";
 }
 
 std::filesystem::path install_plugindir() {

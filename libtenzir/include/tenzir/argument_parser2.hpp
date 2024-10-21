@@ -26,9 +26,9 @@ using argument_parser_data_types
   = detail::tl_map_t<caf::detail::tl_filter_not_type_t<data::types, pattern>,
                      as_located>;
 
-using argument_parser_full_types
-  = detail::tl_concat_t<argument_parser_data_types,
-                        detail::type_list<located<pipeline>, ast::expression>>;
+using argument_parser_full_types = detail::tl_concat_t<
+  argument_parser_data_types,
+  detail::type_list<located<pipeline>, ast::expression, ast::simple_selector>>;
 
 using argument_parser_bare_types
   = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
@@ -65,28 +65,39 @@ public:
 
   // ------------------------------------------------------------------------
 
+  /// Adds a required positional argument.
   template <argument_parser_type T>
   auto add(T& x, std::string meta) -> argument_parser2&;
 
+  /// Adds an optional positional argument.
   template <argument_parser_type T>
   auto add(std::optional<T>& x, std::string meta) -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
+  /// Adds a required named argument.
+  template <argument_parser_type T>
+  auto add(std::string name, T& x) -> argument_parser2&;
+
+  // ------------------------------------------------------------------------
+
+  /// Adds an optional named argument.
   template <argument_parser_type T>
   auto add(std::string name, std::optional<T>& x) -> argument_parser2&;
 
+  /// Adds an optional named argument.
   auto add(std::string name, std::optional<location>& x) -> argument_parser2&;
 
+  /// Adds an optional named argument.
   auto add(std::string name, bool& x) -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
-  auto parse(const operator_factory_plugin::invocation& inv, session ctx)
-    -> failure_or<void>;
+  auto parse(const operator_factory_plugin::invocation& inv,
+             session ctx) -> failure_or<void>;
   auto parse(const ast::function_call& call, session ctx) -> failure_or<void>;
-  auto parse(const function_plugin::invocation& inv, session ctx)
-    -> failure_or<void>;
+  auto parse(const function_plugin::invocation& inv,
+             session ctx) -> failure_or<void>;
   auto parse(const ast::entity& self, std::span<ast::expression const> args,
              session ctx) -> failure_or<void>;
 
@@ -98,6 +109,10 @@ private:
 
   argument_parser2(kind kind, std::string name)
     : kind_{kind}, name_{std::move(name)} {
+    // TODO: Remove this temporary hack once we removed TQL1 plugins.
+    if (name_.starts_with("tql2.")) {
+      name_.erase(0, 5);
+    }
   }
 
   template <class T>
@@ -106,14 +121,19 @@ private:
   template <class... Ts>
   using setter_variant = variant<setter<Ts>...>;
 
+  using any_setter
+    = caf::detail::tl_apply_t<argument_parser_full_types, setter_variant>;
+
   struct positional {
-    caf::detail::tl_apply_t<argument_parser_full_types, setter_variant> set;
+    any_setter set;
     std::string meta;
   };
 
   struct named {
     std::string name;
-    caf::detail::tl_apply_t<argument_parser_full_types, setter_variant> set;
+    any_setter set;
+    bool required = false;
+    std::optional<location> found = std::nullopt;
   };
 
   mutable std::string usage_cache_;

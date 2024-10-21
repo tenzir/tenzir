@@ -17,10 +17,12 @@
     libpcap,
     arrow-cpp,
     aws-sdk-cpp-tenzir,
+    azure-sdk-for-cpp,
     fast_float,
     flatbuffers,
     fluent-bit,
     protobuf,
+    google-cloud-cpp,
     grpc,
     spdlog,
     libyamlcpp,
@@ -43,6 +45,7 @@
     symlinkJoin,
     extraCmakeFlags ? [],
     python3,
+    uv,
     pkgsBuildHost,
     runCommand,
     makeBinaryWrapper,
@@ -56,12 +59,15 @@
     bundledPlugins =
       [
         "plugins/amqp"
+        "plugins/azure-blob-storage"
         "plugins/gcs"
+        "plugins/google-cloud-pubsub"
         "plugins/fluent-bit"
         "plugins/kafka"
         "plugins/nic"
         "plugins/parquet"
         "plugins/sigma"
+        "plugins/sqs"
         "plugins/velociraptor"
         "plugins/web"
         "plugins/zmq"
@@ -118,6 +124,7 @@
           aws-sdk-cpp-tenzir
           fast_float
           fluent-bit
+          google-cloud-cpp
           grpc
           libpcap
           libunwind
@@ -128,6 +135,8 @@
           cppzmq
           re2
           restinio
+        ] ++ lib.optionals isStatic [
+          azure-sdk-for-cpp
         ] ++ lib.optionals stdenv.isLinux [
           pfs
         ] ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
@@ -162,6 +171,7 @@
             "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
             "-DTENZIR_ENABLE_MANPAGES=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
+            "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
             "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
             "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"
             # Disabled for now, takes long to compile and integration tests give
@@ -169,9 +179,9 @@
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
             "-DTENZIR_ENABLE_BATS_TENZIR_INSTALLATION=OFF"
           ] ++ lib.optionals isStatic [
-            "-DBUILD_SHARED_LIBS:BOOL=OFF"
             #"-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB;RPM"}"
+            "-DTENZIR_UV_PATH:STRING=${lib.getBin uv}/bin/uv"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
             "-DTENZIR_ENABLE_BACKTRACE=${lib.boolToString (!stdenv.isDarwin)}"
@@ -250,7 +260,9 @@
 
         postInstall = ''
           wrapProgram $out/bin/tenzir \
-            --prefix PATH : ${lib.makeBinPath [ py3 ]} \
+            --prefix PATH : ${lib.makeBinPath ([ py3.python ]
+            # The static binary bundles uv.
+             ++ lib.optionals (!isStatic) [ uv ])} \
             --suffix PYTHONPATH : ${py3}/${py3.sitePackages}
         '';
 

@@ -1,4 +1,4 @@
 {"foo": 1, "bar": 2, "baz": 3}
-warning: skips 2 excess values in line
+warning: csv parser skipped excess values in a line
+ = note: line 1: 2 extra values were skipped
  = hint: use `--auto-expand` to add fields for excess values
- = note: from `csv` parser

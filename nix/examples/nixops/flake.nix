@@ -42,17 +42,6 @@
                   disk-budget-high = "100 GiB";
                   disk-budget-low = "95 GiB";
                 };
-
-                # Write metrics to a UDS socket.
-                enable-metrics = true;
-                metrics = {
-                  self-sink.enable = false;
-                  uds-sink = {
-                    enable = false;
-                    path = "/tmp/tenzir-metrics.sock";
-                    type = "datagram";
-                  };
-                };
               };
             };
           };

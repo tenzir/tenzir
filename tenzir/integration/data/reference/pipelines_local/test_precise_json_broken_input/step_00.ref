@@ -1,2 +1,3 @@
-warning: INCOMPLETE_ARRAY_OR_OBJECT: JSON document ended early in the middle of an object or array.
- = note: skips invalid JSON `{"foo": 42,,,`
+warning: json parser: line did not contain a single valid JSON object
+ = note: line 1
+ = note: skipped invalid JSON `{"foo": 42,,,`

@@ -9,29 +9,28 @@
 #include "tenzir/table_slice.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/bitmap_algorithms.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/collect.hpp"
-#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/overload.hpp"
-#include "tenzir/detail/passthrough.hpp"
-#include "tenzir/detail/string.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
-#include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/table_slice.hpp"
-#include "tenzir/fbs/utils.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/value_index.hpp"
 
 #include <arrow/record_batch.h>
 
 #include <cstddef>
+#include <ranges>
 #include <span>
 
 namespace tenzir {
@@ -52,8 +51,9 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     // noexcept-specified. When adding a new encoding, add it here as well.
     std::is_nothrow_invocable<Visitor>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v2&>>) {
-  if (!x)
+  if (!x) {
     return std::invoke(std::forward<Visitor>(visitor));
+  }
   switch (x->table_slice_type()) {
     case fbs::table_slice::TableSlice::NONE:
       return std::invoke(std::forward<Visitor>(visitor));
@@ -74,8 +74,9 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
 /// Get a pointer to the `tenzir.fbs.TableSlice` inside the chunk.
 /// @param chunk The chunk to look at.
 const fbs::TableSlice* as_flatbuffer(const chunk_ptr& chunk) noexcept {
-  if (!chunk)
+  if (!chunk) {
     return nullptr;
+  }
   return fbs::GetTableSlice(chunk->data());
 }
 
@@ -89,8 +90,9 @@ verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
   if (verify == table_slice::verify::yes && chunk) {
     const auto* const data = reinterpret_cast<const uint8_t*>(chunk->data());
     auto verifier = flatbuffers::Verifier{data, chunk->size()};
-    if (!verifier.template VerifyBuffer<fbs::TableSlice>())
+    if (!verifier.template VerifyBuffer<fbs::TableSlice>()) {
       chunk = {};
+    }
   }
   return std::move(chunk);
 }
@@ -102,86 +104,6 @@ template <class Slice, class State>
 constexpr auto&
 state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
   return std::forward<State>(state).arrow_v2;
-}
-
-// A helper struct for unflatten function.
-struct unflatten_field {
-  unflatten_field(std::string_view field_name,
-                  std::shared_ptr<arrow::Array> array = nullptr)
-    : field_name_{field_name}, array_{std::move(array)} {
-  }
-
-  unflatten_field() = default;
-
-  // Add a child nested field with
-  auto add(std::string_view nested_field, std::string_view separator,
-           std::shared_ptr<arrow::Array> array) -> void {
-    auto separator_pos = nested_field.find_first_of(separator);
-    if (separator_pos == std::string::npos) {
-      nested_fields_[nested_field]
-        = unflatten_field{nested_field, std::move(array)};
-      return;
-    }
-    auto new_field_name = nested_field.substr(0, separator_pos);
-    auto& nested = nested_fields_[new_field_name];
-    nested.field_name_ = new_field_name;
-    nested.add(nested_field.substr(separator_pos + 1), separator,
-               std::move(array));
-  }
-
-  auto to_arrow() const -> std::shared_ptr<arrow::Array> {
-    if (array_)
-      return array_;
-    std::vector<std::shared_ptr<arrow::Array>> children;
-    children.reserve(nested_fields_.size());
-    std::vector<std::string> children_field_names;
-    children_field_names.reserve(nested_fields_.size());
-    for (auto& [_, f] : nested_fields_) {
-      children.push_back(f.to_arrow());
-      children_field_names.push_back(std::string{f.field_name_});
-    }
-    return arrow::StructArray::Make(children, children_field_names).ValueOrDie();
-  }
-
-  std::string_view field_name_;
-  detail::stable_map<std::string_view, unflatten_field> nested_fields_;
-  std::shared_ptr<arrow::Array> array_;
-};
-
-auto count_substring_occurrences(std::string_view input,
-                                 std::string_view substring) {
-  auto separator_count = std::size_t{0};
-  for (auto pos = input.find_first_of(substring); pos != std::string_view::npos;
-       pos = input.find_first_of(substring, pos + 1)) {
-    ++separator_count;
-  }
-  return separator_count;
-}
-
-auto make_unflattened_struct_array(
-  const arrow::StructArray& input,
-  const std::unordered_map<std::string_view, unflatten_field*>&
-    original_field_name_to_new_field_map)
-  -> std::shared_ptr<arrow::StructArray> {
-  auto new_fields
-    = std::vector<std::pair<std::string, std::shared_ptr<arrow::Array>>>{};
-  // Fields that were unflattened may have the same parent field. E.g foo.bar
-  // and foo.baz will have the same parent field (foo). foo.bar and foo.baz map
-  // to the same unflatten_field that already handles nested children fields.
-  // This means we can only use to_arrow method only once as it will produce a
-  // foo struct array with bar and baz as children
-  std::unordered_set<unflatten_field*> handled_fields;
-  for (const auto& field : input.type()->fields()) {
-    TENZIR_ASSERT_EXPENSIVE(
-      original_field_name_to_new_field_map.contains(field->name()));
-    auto* f = original_field_name_to_new_field_map.at(field->name());
-    if (not handled_fields.contains(f)) {
-      new_fields.emplace_back(f->field_name_, f->to_arrow());
-      handled_fields.insert(f);
-    }
-  }
-  return make_struct_array(input.length(), input.null_bitmap(),
-                           std::move(new_fields));
 }
 
 } // namespace
@@ -244,8 +166,9 @@ table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch
 table_slice::table_slice(const table_slice& other) noexcept = default;
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
-  if (this == &rhs)
+  if (this == &rhs) {
     return *this;
+  }
   chunk_ = rhs.chunk_;
   offset_ = rhs.offset_;
   state_ = rhs.state_;
@@ -278,8 +201,9 @@ table_slice table_slice::unshare() const noexcept {
 
 // TODO: Dispatch to optimized implementations if the encodings are the same.
 bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
-  if (!lhs.chunk_ && !rhs.chunk_)
+  if (!lhs.chunk_ && !rhs.chunk_) {
     return true;
+  }
   constexpr auto check_metadata = true;
   return to_record_batch(lhs)->Equals(*to_record_batch(rhs), check_metadata);
 }
@@ -348,8 +272,9 @@ time table_slice::import_time() const noexcept {
 }
 
 void table_slice::import_time(time import_time) noexcept {
-  if (import_time == this->import_time())
+  if (import_time == this->import_time()) {
     return;
+  }
   modify_state([&](auto& state) {
     state.import_time(import_time);
   });
@@ -361,8 +286,9 @@ void table_slice::modify_state(F&& f) {
   // creating a new table slice here that points to the same data as the current
   // table slice. This implies that the table slice is no longer in one
   // contiguous buffer.
-  if (chunk_ && !chunk_->unique())
+  if (chunk_ && !chunk_->unique()) {
     *this = table_slice{to_record_batch(*this), schema()};
+  }
   auto g = detail::overload{
     []() noexcept {
       die("cannot assign import time to invalid table slice");
@@ -481,6 +407,10 @@ std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
   return as_bytes(slice.chunk_);
 }
 
+auto size(const table_slice& slice) -> uint64_t {
+  return slice.rows();
+}
+
 // -- operations ---------------------------------------------------------------
 
 table_slice concatenate(std::vector<table_slice> slices) {
@@ -489,10 +419,12 @@ table_slice concatenate(std::vector<table_slice> slices) {
                                 return slice.rows() == 0;
                               }),
                slices.end());
-  if (slices.empty())
+  if (slices.empty()) {
     return {};
-  if (slices.size() == 1)
+  }
+  if (slices.size() == 1) {
     return std::move(slices[0]);
+  }
   auto schema = slices[0].schema();
   TENZIR_ASSERT_EXPENSIVE(std::all_of(slices.begin(), slices.end(),
                                       [&](const auto& slice) {
@@ -513,8 +445,9 @@ table_slice concatenate(std::vector<table_slice> slices) {
     TENZIR_ASSERT(status.ok());
   }
   const auto rows = builder->length();
-  if (rows == 0)
+  if (rows == 0) {
     return {};
+  }
   const auto array = builder->Finish().ValueOrDie();
   auto batch = arrow::RecordBatch::Make(
     std::move(arrow_schema), rows,
@@ -533,23 +466,27 @@ select(const table_slice& slice, expression expr, const ids& hints) {
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   auto slice_ids = make_ids({{offset, offset + slice.rows()}});
   auto selection = slice_ids;
-  if (!hints.empty())
+  if (!hints.empty()) {
     selection &= hints;
+  }
   // Do no rows qualify?
-  if (!any(selection))
+  if (!any(selection)) {
     co_return;
+  }
   // Evaluate the filter expression.
   if (!caf::holds_alternative<caf::none_t>(expr)) {
     // Tailor the expression to the type; this is required for using the
     // evaluate function, which expects field and type extractors to be resolved
     // already.
     auto tailored_expr = tailor(expr, slice.schema());
-    if (!tailored_expr)
+    if (!tailored_expr) {
       co_return;
+    }
     selection = evaluate(*tailored_expr, slice, selection);
     // Do no rows qualify?
-    if (!any(selection))
+    if (!any(selection)) {
       co_return;
+    }
   }
   // Do all rows qualify?
   if (rank(selection) == slice.rows()) {
@@ -584,10 +521,12 @@ split(const table_slice& slice, size_t partition_point) {
   if (slice.rows() == 0) {
     return {{}, {}};
   }
-  if (partition_point == 0)
+  if (partition_point == 0) {
     return {{}, slice};
-  if (partition_point >= slice.rows())
+  }
+  if (partition_point >= slice.rows()) {
     return {slice, {}};
+  }
   return {
     head(slice, partition_point),
     tail(slice, slice.rows() - partition_point),
@@ -629,8 +568,8 @@ auto split(std::vector<table_slice> events, uint64_t partition_point)
   };
 }
 
-auto subslice(const table_slice& slice, size_t begin, size_t end)
-  -> table_slice {
+auto subslice(const table_slice& slice, size_t begin,
+              size_t end) -> table_slice {
   TENZIR_ASSERT(begin <= end);
   TENZIR_ASSERT(end <= slice.rows());
   if (begin == 0 && end == slice.rows()) {
@@ -653,8 +592,9 @@ auto subslice(const table_slice& slice, size_t begin, size_t end)
 
 uint64_t rows(const std::vector<table_slice>& slices) {
   auto result = uint64_t{0};
-  for (const auto& slice : slices)
+  for (const auto& slice : slices) {
     result += slice.rows();
+  }
   return result;
 }
 
@@ -664,8 +604,9 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
     return {};
   }
   auto selected = collect(select(slice, std::move(expr), hints));
-  if (selected.empty())
+  if (selected.empty()) {
     return {};
+  }
   return concatenate(std::move(selected));
 }
 
@@ -687,10 +628,12 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   if (expr == expression{}) {
     auto result = uint64_t{};
     for (auto id : select(hints)) {
-      if (id < offset)
+      if (id < offset) {
         continue;
-      if (id >= offset + slice.rows())
+      }
+      if (id >= offset + slice.rows()) {
         break;
+      }
       ++result;
     }
     return result;
@@ -699,8 +642,9 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   // evaluate function, which expects field and type extractors to be resolved
   // already.
   auto tailored_expr = tailor(expr, slice.schema());
-  if (!tailored_expr)
+  if (!tailored_expr) {
     return 0;
+  }
   return rank(evaluate(expr, slice, hints));
 }
 
@@ -712,8 +656,9 @@ table_slice resolve_enumerations(table_slice slice) {
   // Resolve enumeration types, if there are any.
   auto transformations = std::vector<indexed_transformation>{};
   for (const auto& [field, index] : type.leaves()) {
-    if (!caf::holds_alternative<enumeration_type>(field.type))
+    if (!caf::holds_alternative<enumeration_type>(field.type)) {
       continue;
+    }
     static auto transformation =
       [](struct record_type::field field,
          std::shared_ptr<arrow::Array> array) noexcept
@@ -747,8 +692,8 @@ table_slice resolve_enumerations(table_slice slice) {
   return transform_columns(slice, transformations);
 }
 
-auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
-  -> data {
+auto resolve_meta_extractor(const table_slice& slice,
+                            const meta_extractor& ex) -> data {
   if (slice.rows() == 0) {
     return {};
   }
@@ -867,9 +812,8 @@ namespace {
 /// are replaced with the values of the next list offsets array, repeated until
 /// all list offsets arrays have been combined into one. This allows for
 /// flattening lists in Arrow's data model.
-auto combine_offsets(
-  const std::vector<std::shared_ptr<arrow::Array>>& list_offsets)
-  -> std::shared_ptr<arrow::Array> {
+auto combine_offsets(const std::vector<std::shared_ptr<arrow::Array>>&
+                       list_offsets) -> std::shared_ptr<arrow::Array> {
   TENZIR_ASSERT(not list_offsets.empty());
   auto it = list_offsets.begin();
   auto result = *it++;
@@ -950,6 +894,9 @@ auto flatten_record(
   struct record_type::field field, const std::shared_ptr<arrow::Array>& array)
   -> indexed_transformation::result_type {
   const auto& rt = caf::get<record_type>(field.type);
+  if (rt.num_fields() == 0) {
+    return {};
+  }
   auto struct_array
     = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
   const auto next_name_prefix
@@ -1045,36 +992,34 @@ auto make_rename_transformation(std::string new_name)
 
 } // namespace
 
-auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
-  if (slice.rows() == 0 or slice.columns() == 0) {
-    return {std::move(slice), {}};
-  }
+auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
+             std::string_view separator) -> flatten_array_result {
   // We cannot use arrow::StructArray::Flatten here because that does not
   // work recursively, see apache/arrow#20683. Hence, we roll our own version
   // here.
   auto renamed_fields = std::vector<std::string>{};
   auto transformations = std::vector<indexed_transformation>{};
-  auto num_fields = caf::get<record_type>(slice.schema()).num_fields();
+  auto num_fields = caf::get<record_type>(schema).num_fields();
   transformations.reserve(num_fields);
   for (size_t i = 0; i < num_fields; ++i) {
     transformations.push_back(
       {offset{i}, make_flatten_transformation(separator, "", {})});
   }
-  slice = transform_columns(slice, transformations);
-  // Flattening cannot fail.
-  TENZIR_ASSERT(slice.rows() > 0);
+  const auto& [new_schema, transformed]
+    = transform_columns(schema, array, transformations);
   // The slice may contain duplicate field name here, so we perform an
   // additional transformation to rename them in case we detect any.
   transformations.clear();
-  const auto& layout = caf::get<record_type>(slice.schema());
+  const auto& layout = caf::get<record_type>(new_schema);
   TENZIR_ASSERT_EXPENSIVE(layout.num_fields() == layout.num_leaves());
   for (const auto& leaf : layout.leaves()) {
     size_t num_occurences = 0;
     if (std::any_of(transformations.begin(), transformations.end(),
                     [&](const auto& t) {
                       return t.index == leaf.index;
-                    }))
+                    })) {
       continue;
+    }
     for (const auto& index : layout.resolve_key_suffix(leaf.field.name)) {
       // For historical reasons, resolve_key_suffix also suffix matches for dots
       // within a field name. That's pretty stupid, and it can lead to wrong
@@ -1106,200 +1051,202 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   }
   TENZIR_ASSERT_EXPENSIVE(
     std::is_sorted(transformations.begin(), transformations.end()));
-  slice = transform_columns(slice, transformations);
-  // Renaming cannot fail.
-  TENZIR_ASSERT(slice.rows() > 0);
-  return {
-    std::move(slice),
-    std::move(renamed_fields),
-  };
+  const auto& [sch, arr]
+    = transform_columns(new_schema, transformed, transformations);
+  return {sch, arr, renamed_fields};
 }
 
-auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
-                            std::string_view nested_field_separator)
-  -> std::shared_ptr<arrow::StructArray>;
-
-auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
-  -> void {
-  auto field_array = f.to_arrow();
-  auto field_type = type::from_arrow(*field_array->type());
-  auto arrow_list_type = caf::get<list_type>(field_type);
-  auto list_value_type = arrow_list_type.value_type();
-  auto field_list = std::static_pointer_cast<arrow::ListArray>(field_array);
-  auto builder = std::shared_ptr<arrow::ListBuilder>{};
-  if (caf::holds_alternative<list_type>(list_value_type)) {
-    for (auto i = 0; i < field_list->length(); ++i) {
-      if (field_list->IsValid(i)) {
-        auto new_f = unflatten_field{f.field_name_, field_list->value_slice(i)};
-        unflatten_list(new_f, nested_field_separator);
-        if (not builder) {
-          builder = list_type{type::from_arrow(*new_f.array_->type())}
-                      .make_arrow_builder(arrow::default_memory_pool());
-        }
-        auto status = builder->Append();
-        TENZIR_ASSERT(status.ok());
-        status = append_array(*builder->value_builder(),
-                              type::from_arrow(*new_f.array_->type()),
-                              *new_f.array_);
-        TENZIR_ASSERT(status.ok());
-      }
-    }
-  } else if (caf::holds_alternative<record_type>(list_value_type)) {
-    for (auto i = 0; i < field_list->length(); ++i) {
-      if (field_list->IsValid(i)) {
-        auto struct_array = std::static_pointer_cast<arrow::StructArray>(
-          field_list->value_slice(i));
-        auto unflattened
-          = unflatten_struct_array(struct_array, nested_field_separator);
-        auto unflattened_type = type::from_arrow(*unflattened->type());
-        if (not builder) {
-          builder = list_type{unflattened_type}.make_arrow_builder(
-            arrow::default_memory_pool());
-        }
-        auto status = builder->Append();
-        TENZIR_ASSERT(status.ok());
-        status = append_array(*builder->value_builder(), unflattened_type,
-                              *unflattened);
-        TENZIR_ASSERT(status.ok());
-      }
-    }
+auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
+  if (slice.rows() == 0) {
+    return {std::move(slice), {}};
   }
-  if (builder) {
-    f.array_ = builder->Finish().ValueOrDie();
+  if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+    return {std::move(slice), {}};
+  }
+  const auto& array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+  const auto& [schema, transformed, renamed]
+    = flatten(slice.schema(), array, separator);
+  if (!schema) {
+    return {};
+  }
+  auto batch = arrow::RecordBatch::Make(
+    schema.to_arrow_schema(), transformed->length(), transformed->fields());
+  auto result = table_slice{batch, std::move(schema)};
+  result.offset(slice.offset());
+  result.import_time(slice.import_time());
+  // Flattening cannot fail.
+  TENZIR_ASSERT(result.rows() > 0);
+  return {result, renamed};
+}
+
+namespace {
+
+struct unflatten_entry;
+
+/// Basically a mutable `arrow::StructArray`.
+struct unflatten_record {
+  unflatten_record(int64_t length, std::shared_ptr<arrow::Buffer> null_bitmap);
+
+  int64_t length;
+  std::shared_ptr<arrow::Buffer> null_bitmap;
+  detail::stable_map<std::string_view, unflatten_entry> fields;
+};
+
+struct unflatten_entry
+  : variant<std::shared_ptr<arrow::Array>, unflatten_record> {
+  using variant::variant;
+};
+
+unflatten_record::unflatten_record(int64_t length,
+                                   std::shared_ptr<arrow::Buffer> null_bitmap)
+  : length{length}, null_bitmap{std::move(null_bitmap)} {
+}
+
+auto realize(unflatten_record&& record) -> std::shared_ptr<arrow::StructArray>;
+
+auto realize(unflatten_entry&& entry) -> std::shared_ptr<arrow::Array> {
+  return entry.match<std::shared_ptr<arrow::Array>>(
+    [](std::shared_ptr<arrow::Array>& array) {
+      TENZIR_ASSERT(array);
+      return std::move(array);
+    },
+    [](unflatten_record& record) {
+      return realize(std::move(record));
+    });
+}
+
+auto realize(unflatten_record&& record) -> std::shared_ptr<arrow::StructArray> {
+  auto names = std::vector<std::string>{};
+  auto arrays = std::vector<std::shared_ptr<arrow::Array>>{};
+  for (auto& [name, entry] : record.fields) {
+    names.emplace_back(name);
+    arrays.push_back(realize(std::move(entry)));
+  }
+  return make_struct_array(record.length, record.null_bitmap, std::move(names),
+                           arrays);
+}
+
+auto bitmap_or(const std::shared_ptr<arrow::Buffer>& x,
+               const std::shared_ptr<arrow::Buffer>& y)
+  -> std::shared_ptr<arrow::Buffer> {
+  if (not x || not y) {
+    return nullptr;
+  }
+  auto size = std::min(x->size(), y->size());
+  auto z = check(arrow::AllocateBuffer(size));
+  auto x_ptr = x->data();
+  auto y_ptr = y->data();
+  auto z_ptr = z->mutable_data();
+  for (auto i = int64_t{0}; i < size; ++i) {
+    z_ptr[i] = x_ptr[i] | y_ptr[i]; // NOLINT
+  }
+  return z;
+}
+
+void unflatten_into(unflatten_entry& entry, std::shared_ptr<arrow::Array> array,
+                    std::string_view sep);
+
+void unflatten_into(unflatten_entry& root, const arrow::StructArray& array,
+                    std::string_view sep) {
+  if (not std::holds_alternative<unflatten_record>(root)) {
+    root.emplace<unflatten_record>(array.length(), array.null_bitmap());
+  }
+  auto names = array.struct_type()->fields()
+               | std::views::transform(&arrow::Field::name);
+  // We need to flatten the null bitmap here because it can happen that the
+  // fields are saved to a record that is made non-null by another entry.
+  auto fields = check(array.Flatten());
+  for (auto [name, data] : detail::zip_equal(names, fields)) {
+    auto segments
+      = name | std::views::split(sep)
+        | std::views::transform([](auto subrange) {
+            return std::string_view{subrange.data(), subrange.size()};
+          });
+    auto current = &root;
+    auto handle_segment = [&](std::string_view segment) {
+      auto record = std::get_if<unflatten_record>(current);
+      if (record) {
+        record->null_bitmap
+          = bitmap_or(record->null_bitmap, array.null_bitmap());
+      } else {
+        record = &current->emplace<unflatten_record>(array.length(),
+                                                     array.null_bitmap());
+      }
+      current = &record->fields[segment];
+    };
+    // We have to work around the fact that `std::views::split` does not yield
+    // anything if `name` is empty.
+    if (segments.empty()) {
+      handle_segment("");
+    } else {
+      for (auto segment : segments) {
+        handle_segment(segment);
+      }
+    }
+    unflatten_into(*current, data, sep);
   }
 }
 
-auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
-                            std::string_view nested_field_separator)
-  -> std::shared_ptr<arrow::StructArray> {
-  // Used to map parent fields to its children for unflattening purposes.
-  // Given foo.bar and foo.baz as fields of input slice the algorithm will
-  // first create an instance of unflattened_field for 'foo' key. The created
-  // instance will combine 'bar' and 'baz' fields into a struct array. All the
-  // fields that should be combined under the 'foo' key will use this map to
-  // find the appropriate object which should aggregate it.
-  std::unordered_map<std::string_view, unflatten_field> unflattened_field_map;
-  std::unordered_map<std::string_view, unflatten_field> unflattened_children;
-  std::unordered_map<std::string_view, unflatten_field*>
-    original_field_name_to_new_field_map;
-  // Aggregates all flattened field names under the key that represents the
-  // count of nested_field_separator occurrences. The algorithm starts
-  // iterating over this map so that it can distinguish if a separator
-  // separates nested fields or if it is a part of a field_name. E.g the field
-  // cpu : 5 and cpu.logger : 10 are a valid input. We may also have other
-  // nested fields that are separated by a '.', but these two can't be nested
-  // fields. The algorithm will start with the 'cpu' field and add it to the
-  // unflattened_field_map as it doesn't have any separator in it's field
-  // name. The cpu.logger will be split into 'cpu' and 'logger'. The presence
-  // of 'cpu' in the map indicates that this name is reserved for a field. In
-  // such cases the cpu.logger must itself be a field that cannot be
-  // unflattened.
-  std::map<std::size_t, std::vector<std::string_view>> fields_to_resolve;
-  for (const auto& k : slice_array->struct_type()->fields()) {
-    const auto& field_name = k->name();
-    unflattened_field_map[field_name]
-      = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
-    auto separator_count
-      = count_substring_occurrences(field_name, nested_field_separator);
-    fields_to_resolve[separator_count].push_back(field_name);
+void unflatten_into(unflatten_entry& entry, std::shared_ptr<arrow::Array> array,
+                    std::string_view sep) {
+  if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
+    unflatten_into(entry, *record, sep);
+  } else if (auto list = caf::get_if<arrow::ListArray>(&*array)) {
+    entry = unflatten(*list, sep);
+  } else {
+    entry = std::move(array);
   }
-  for (auto& [field_name, field] : unflattened_field_map) {
-    // Unflatten children recursively.
-    auto field_array = field.to_arrow();
-    auto field_type = type::from_arrow(*field_array->type());
-    if (caf::holds_alternative<record_type>(field_type)) {
-      auto field_struct
-        = std::static_pointer_cast<arrow::StructArray>(field_array);
-      unflattened_children[field_name]
-        = unflatten_field{field_name, unflatten_struct_array(
-                                        field_struct, nested_field_separator)};
-    } else if (caf::holds_alternative<list_type>(field_type)) {
-      unflatten_list(field, nested_field_separator);
-      unflattened_children[field_name] = field;
-    }
-    original_field_name_to_new_field_map[field_name]
-      = std::addressof(unflattened_field_map[field_name]);
-  }
-  for (const auto& [_, fields] : fields_to_resolve) {
-    for (const auto& field : fields) {
-      auto prefix_separator = field.find_last_of(nested_field_separator);
-      if (prefix_separator != std::string::npos) {
-        auto prefix = std::string_view{field.data(), prefix_separator};
-        // Presence of a prefix means that we cannot unflatten the current
-        // field so it is an unflattend field itself.
-        if (original_field_name_to_new_field_map.contains(prefix)) {
-          unflattened_field_map[field] = unflatten_field{
-            field, slice_array->GetFieldByName(std::string{field})};
-          original_field_name_to_new_field_map[field]
-            = std::addressof(unflattened_field_map[field]);
-          TENZIR_DEBUG("retaining original field {} during unflattening: "
-                       "encountered potential value collision with already "
-                       "unflattened field {}",
-                       field, prefix);
-          continue;
-        }
-      }
-      // Try to find the parent field name. E.g with input fields "foo.bar.x",
-      // "foo.bar.z", "foo", "foo.bar.z.b" The fields with least separators are
-      // handled first. The "foo" is unflattened to "foo". The "foo.bar.x" will
-      // be split into "foo.bar" and "x". The "x" is a field name if
-      // unflattening is successful. The loop should start checking at "foo". If
-      // this field is unflattened then it advanced to the next separator
-      // ("foo.bar") The "foo.bar" is not unflattened field so it can be the
-      // parent for "x". The "foo.bar.z" will be added as a child of the
-      // "foo.bar" as the "foo.bar" is not a name of a field after unflattening.
-      // The "foo.bar.z.b" will be left as "foo.bar.z.b" because "foo.bar.z"
-      // already is mapped to a parent.
-      auto current_pos = field.find_first_of(nested_field_separator);
-      for (; current_pos != std::string_view::npos;
-           current_pos
-           = field.find_first_of(nested_field_separator, current_pos + 1)) {
-        auto parent_field_name = std::string_view{field.data(), current_pos};
-        if (not original_field_name_to_new_field_map.contains(
-              parent_field_name)) {
-          auto& struct_field = unflattened_field_map[parent_field_name];
-          struct_field.field_name_ = parent_field_name;
-          auto child_field_array
-            = slice_array->GetFieldByName(std::string{field});
-          if (unflattened_children.contains(field)) {
-            child_field_array = unflattened_children[field].to_arrow();
-          }
-          struct_field.add(field.substr(current_pos + 1),
-                           nested_field_separator, child_field_array);
-          original_field_name_to_new_field_map[field]
-            = std::addressof(unflattened_field_map[parent_field_name]);
-          break;
-        }
-      }
-      // No parent found
-      if (current_pos == std::string_view::npos) {
-        auto& struct_field = unflattened_children.contains(field)
-                               ? unflattened_children[field]
-                               : unflattened_field_map[field];
-        struct_field.field_name_ = field;
-        original_field_name_to_new_field_map[field]
-          = std::addressof(struct_field);
-      }
-    }
-  }
-  return make_unflattened_struct_array(*slice_array,
-                                       original_field_name_to_new_field_map);
 }
 
-auto unflatten(const table_slice& slice,
-               std::string_view nested_field_separator) -> table_slice {
-  if (slice.rows() == 0u)
+} // namespace
+
+auto unflatten(const arrow::StructArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::StructArray> {
+  // We unflatten records by recursively building up an `unflatten_record`,
+  // which is basically a mutable `arrow::StructArray`.
+  auto root = unflatten_entry{unflatten_record{array.length(), nullptr}};
+  unflatten_into(root, array, sep);
+  auto record = std::get_if<unflatten_record>(&root);
+  TENZIR_ASSERT(record);
+  return realize(std::move(*record));
+}
+
+auto unflatten(const arrow::ListArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::ListArray> {
+  // Unflattening a list simply means unflattening its values.
+  auto values = unflatten(array.values(), sep);
+  return check(arrow::ListArray::FromArrays(
+    *array.offsets(), *values, arrow::default_memory_pool(),
+    array.null_bitmap(), array.data()->null_count));
+}
+
+auto unflatten(std::shared_ptr<arrow::Array> array,
+               std::string_view sep) -> std::shared_ptr<arrow::Array> {
+  // We only unflatten records, but records can be contained in lists.
+  if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
+    return unflatten(*record, sep);
+  }
+  if (auto list = caf::get_if<arrow::ListArray>(&*array)) {
+    return unflatten(*list, sep);
+  }
+  return array;
+}
+
+auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice {
+  if (slice.rows() == 0) {
     return slice;
-  auto slice_array = to_record_batch(slice)->ToStructArray().ValueOrDie();
-  auto new_arr = unflatten_struct_array(slice_array, nested_field_separator);
-  auto schema
-    = tenzir::type{slice.schema().name(), type::from_arrow(*new_arr->type())};
-  const auto new_batch = arrow::RecordBatch::Make(
-    schema.to_arrow_schema(), new_arr->length(), new_arr->fields());
-  auto ret = table_slice{new_batch, std::move(schema)};
-  ret.import_time(slice.import_time());
-  ret.offset(slice.offset());
-  return ret;
+  }
+  auto array = check(to_record_batch(slice)->ToStructArray());
+  auto result = unflatten(array, sep);
+  auto cast = std::dynamic_pointer_cast<arrow::StructArray>(std::move(result));
+  TENZIR_ASSERT(cast);
+  auto schema = type{slice.schema().name(), type::from_arrow(*cast->type())};
+  auto batch = arrow::RecordBatch::Make(schema.to_arrow_schema(),
+                                        cast->length(), cast->fields());
+  auto out = table_slice{batch, std::move(schema)};
+  out.import_time(slice.import_time());
+  out.offset(slice.offset());
+  return out;
 }
 
 } // namespace tenzir

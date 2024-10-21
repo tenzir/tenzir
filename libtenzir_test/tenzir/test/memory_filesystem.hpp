@@ -18,7 +18,7 @@
 // An in-memory implementation of the filesystem actor, to rule out
 // test flakiness due to a slow disk and to be able to write to any
 // path without permission issues.
-inline tenzir::filesystem_actor::behavior_type memory_filesystem() {
+inline auto memory_filesystem() -> tenzir::filesystem_actor::behavior_type {
   auto chunks
     = std::make_shared<std::map<std::filesystem::path, tenzir::chunk_ptr>>();
   return {
@@ -35,6 +35,12 @@ inline tenzir::filesystem_actor::behavior_type memory_filesystem() {
         return caf::make_error(tenzir::ec::no_such_file,
                                fmt::format("unknown file {}", path));
       return chunk->second;
+    },
+    [chunks](tenzir::atom::read, tenzir::atom::recursive,
+             const std::vector<std::filesystem::path>&)
+      -> caf::result<std::vector<tenzir::record>> {
+      return caf::make_error(tenzir::ec::unimplemented,
+                             "currently not implemented");
     },
     [chunks](
       tenzir::atom::move, const std::filesystem::path& from,

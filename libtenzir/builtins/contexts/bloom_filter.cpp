@@ -31,7 +31,6 @@
 #include <arrow/type.h>
 #include <caf/error.hpp>
 
-#include <chrono>
 #include <memory>
 #include <string>
 
@@ -69,12 +68,6 @@ public:
     return builder.finish();
   }
 
-  auto snapshot(parameter_map, const std::vector<std::string>&) const
-    -> caf::expected<expression> override {
-    return caf::make_error(ec::unimplemented,
-                           "bloom filter doesn't support snapshots");
-  }
-
   /// Inspects the context.
   auto show() const -> record override {
     return record{
@@ -90,7 +83,8 @@ public:
   }
 
   auto dump() -> generator<table_slice> override {
-    auto ptr = reinterpret_cast<const std::byte*>(bloom_filter_.data().data());
+    const auto* ptr
+      = reinterpret_cast<const std::byte*>(bloom_filter_.data().data());
     auto size = bloom_filter_.data().size();
     auto data = std::basic_string<std::byte>{ptr, size};
     auto entry_builder = series_builder{};
@@ -156,11 +150,10 @@ public:
       bloom_filter_.add(materialized_key);
       key_values_list.emplace_back(std::move(materialized_key));
     }
-    auto query_f
-      = [key_values_list = std::move(key_values_list)](
-          parameter_map,
-          const std::vector<std::string>& fields) -> caf::expected<expression> {
-      auto result = disjunction{};
+    auto query_f = [key_values_list = std::move(key_values_list)](
+                     parameter_map, const std::vector<std::string>& fields)
+      -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
       result.reserve(fields.size());
       for (const auto& field : fields) {
         auto lhs = to<operand>(field);
@@ -173,8 +166,10 @@ public:
       }
       return result;
     };
-    return update_result{.update_info = show(),
-                         .make_query = std::move(query_f)};
+    return update_result{
+      .update_info = show(),
+      .make_query = std::move(query_f),
+    };
   }
 
   auto make_query() -> make_query_type override {

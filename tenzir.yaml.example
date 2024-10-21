@@ -25,25 +25,18 @@ tenzir:
   #   - $PWD/tenzir.db
   #state-directory:
 
-  # The file system path used for persistent state.
-  # Defaults to one of the following paths, selecting the first that is
-  # available:
-  #   - $CACHE_DIRECTORY
-  #   - $XDG_CACHE_HOME/tenzir
-  #   - $HOME/.cache/tenzir (Linux)
-  #   - $HOME/Library/Caches/tenzir (macOS)
-  #cache-directory:
-
-  # The file system path used for persistent state.
-  # Defaults to one of the following paths, selecting the first that is
+  # The file system path used for recoverable state.
+  # In a node process, defaults to the first of the following paths that is
   # available:
   #   - $CACHE_DIRECTORY
   #   - $XDG_CACHE_HOME
   #   - $XDG_HOME_DIR/.cache/tenzir (linux) or $XDG_HOME_DIR/Libraries/caches/tenzir (mac)
   #   - $HOME/.cache/tenzir (linux) or $HOME/Libraries/caches/tenzir (mac)
-  #   - $TEMPORARY_DIRECTORY/tenzir/cache
+  #   - $TEMPORARY_DIRECTORY/tenzir/cache/<uid>
   # To determine $TEMPORARY_DIRECTORY, the values of TMPDIR, TMP, TEMP, TEMPDIR are
   # checked in that order, and as a last resort "/tmp" is used.
+  # In a client process, this setting is ignored and `$TEMPORARY_DIRECTORY/tenzir/client-cache/<uid>`
+  # is used as cache directory.
   #cache-directory:
 
   # The file system path used for log files.
@@ -110,6 +103,10 @@ tenzir:
   # from.
   plugin-dirs: []
 
+  # List of paths that contain statically configured packages.
+  # This setting is ignored unless the package manager plugin is enabled.
+  package-dirs: []
+
   # The plugins to load at startup. For relative paths, Tenzir tries to find
   # the files in the specified `tenzir.plugin-dirs`. The special values
   # 'bundled' and 'all' enable autoloading of bundled and all plugins
@@ -132,7 +129,7 @@ tenzir:
 
   # The size of an index shard, expressed in number of events. This should
   # be a power of 2.
-  max-partition-size: 4194304
+  max-partition-size: 4Mi
 
   # Timeout after which an active partition is forcibly flushed, regardless of
   # its size.
@@ -148,6 +145,26 @@ tenzir:
 
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
+
+  # Control how operator's calculate demand from their upstream operator. Note
+  # that this is an expert feature and should only be changed if you know what
+  # you are doing. All values may either be set to a number, or to a record
+  # containing `bytes` and `events` fields with numbers depending on the
+  # operator's input type.
+  demand:
+    # Issue demand only if room for at least this many elements is available.
+    # Must be greater than zero.
+    min-elements:
+      bytes: 128Ki
+      events: 8Ki
+    # Controls how many elements may be buffered until the operator stops
+    # issuing demand. Must be greater or equal to min-elements.
+    max-elements:
+      bytes: 4Mi
+      events: 254Ki
+    # Controls how many batches of elements may be buffered until the operator
+    # stops issuing demand. Must be greater than zero.
+    max-batches: 20
 
   # Context configured as part of the configuration that are always available.
   contexts:
@@ -191,6 +208,12 @@ tenzir:
     # connections. This comes in handy when letting the OS choose an
     # available random port, i.e., when specifying 0 as port value.
     print-endpoint: false
+
+    # Writes the endpoint for clients when the server is ready to accept
+    # connections to the specified destination. This comes in handy when letting
+    # the OS choose an available random port, i.e., when specifying 0 as port
+    # value, and `print-endpoint` is not sufficient.
+    #write-endpoint: /tmp/tenzir-node-endpoint
 
     # An ordered list of commands to run inside the node after starting.
     # As an example, to configure an auto-starting PCAP source that listens
@@ -269,6 +292,13 @@ tenzir:
       # - Set the option to true to enable with the default delay of 1 minute.
       # - Set the option to a valid duration to enable with a custom delay.
       restart-on-error: 1 minute
+      # Pipelines that are unstoppable will run automatically and indefinitely.
+      # They are not able to pause or stop.
+      # If they do complete, they will end up in a failed state.
+      # If `restart-on-error` is enabled, they will restart after the specified
+      # duration.
+      unstoppable: false
+
 
 # The below settings are internal to CAF, and aren't checked by Tenzir directly.
 # Please be careful when changing these options. Note that some CAF options may

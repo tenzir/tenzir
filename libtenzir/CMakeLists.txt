@@ -88,14 +88,20 @@ string(
   "\n Snappy_LIB"
   "\n ZSTD_LIB)")
 if (BUILD_SHARED_LIBS)
-  set(ARROW_LIBRARY arrow_shared)
+  set(ARROW_LIBRARY Arrow::arrow_shared)
 else ()
-  set(ARROW_LIBRARY arrow_static)
+  set(ARROW_LIBRARY Arrow::arrow_static)
+  # TODO: Missing dependency upstream. Check if still needed when updating
+  # Arrow.
+  target_link_libraries(
+    Arrow::arrow_static
+    INTERFACE Azure::azure-identity Azure::azure-storage-blobs
+              Azure::azure-storage-files-datalake)
 endif ()
 
 # -- boost --------------------------------------------------------------------
 
-find_package(Boost REQUIRED COMPONENTS headers filesystem)
+find_package(Boost REQUIRED COMPONENTS headers filesystem url)
 
 # -- re2 ----------------------------------------------------------------------
 
@@ -261,7 +267,8 @@ target_link_libraries(libtenzir PUBLIC PkgConfig::PC_CURL)
 # The static curl library we use on macOS depends on SystemConfiguration, but
 # that dependency is missing from the pkg-config file, so we insert it here as a
 # work around.
-if (CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND PC_CURL_CFLAGS MATCHES ".*CURL_STATICLIB.*")
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND PC_CURL_CFLAGS MATCHES
+                                            ".*CURL_STATICLIB.*")
   find_library(SystemConfiguration SystemConfiguration REQUIRED)
   mark_as_advanced(SystemConfiguration)
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST
@@ -357,9 +364,9 @@ target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
-target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem)
+target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem Boost::url)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem)")
+       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url)")
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
@@ -373,7 +380,7 @@ add_feature_info(
   "TENZIR_ENABLE_BUNDLED_FASTFLOAT" TENZIR_ENABLE_BUNDLED_FASTFLOAT
   "use the fast_float submodule.")
 if (NOT TENZIR_ENABLE_BUNDLED_FASTFLOAT)
-  find_package(FastFloat 3.4.0 CONFIG)
+  find_package(FastFloat 6.1.4 CONFIG)
 endif ()
 if (NOT FastFloat_FOUND)
   # Use bundled fast_float.
@@ -384,7 +391,7 @@ if (NOT FastFloat_FOUND)
         " initialize the libtenzir/aux/fast_float submodule")
   endif ()
   add_subdirectory(aux/fast_float)
-  add_library(FastFloat::fast_float ALIAS fast_float)
+  TenzirSystemizeTarget(fast_float)
   dependency_summary("fast_float" "${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float"
                      "Dependencies")
 else ()
@@ -475,7 +482,8 @@ endif ()
 
 if (DEFINED TENZIR_VERSION_BUILD_METADATA_BACKUP)
   set(set_tenzir_version_build_metadata
-    "set(TENZIR_VERSION_BUILD_METADATA \"${TENZIR_VERSION_BUILD_METADATA_BACKUP}\")")
+      "set(TENZIR_VERSION_BUILD_METADATA \"${TENZIR_VERSION_BUILD_METADATA_BACKUP}\")"
+  )
 endif ()
 
 file(

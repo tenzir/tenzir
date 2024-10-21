@@ -89,6 +89,7 @@ set(CPACK_RPM_PRE_UNINSTALL_SCRIPT_FILE
   "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/preuninstall")
 set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
   "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/postuninstall")
+set(CPACK_RPM_PACKAGE_REQUIRES_PRE "shadow-utils")
 
 # For the static binary builds it doesn't make much sense to install development
 # utilities, so we never do so.

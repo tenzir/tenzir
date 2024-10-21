@@ -8,6 +8,7 @@
 
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
@@ -43,66 +44,6 @@ namespace tenzir::plugins::summarize {
 
 namespace {
 
-/// Converts a duration into the options required for Arrow Compute's
-/// {Round,Floor,Ceil}Temporal functions.
-/// @param time_resolution The multiple to round to.
-auto make_round_temporal_options(duration time_resolution) noexcept
-  -> arrow::compute::RoundTemporalOptions {
-#define TRY_CAST_EXACTLY(chrono_unit, arrow_unit)                              \
-  do {                                                                         \
-    if (auto cast_resolution = std::chrono::duration_cast<                     \
-          std::chrono::duration<int, std::chrono::chrono_unit::period>>(       \
-          time_resolution);                                                    \
-        time_resolution                                                        \
-        == std::chrono::duration_cast<duration>(cast_resolution)) {            \
-      return arrow::compute::RoundTemporalOptions{                             \
-        cast_resolution.count(),                                               \
-        arrow::compute::CalendarUnit::arrow_unit,                              \
-      };                                                                       \
-    }                                                                          \
-  } while (false)
-  TRY_CAST_EXACTLY(years, YEAR);
-  TRY_CAST_EXACTLY(months, MONTH);
-  TRY_CAST_EXACTLY(weeks, WEEK);
-  TRY_CAST_EXACTLY(days, DAY);
-  TRY_CAST_EXACTLY(hours, HOUR);
-  TRY_CAST_EXACTLY(minutes, MINUTE);
-  TRY_CAST_EXACTLY(seconds, SECOND);
-  TRY_CAST_EXACTLY(milliseconds, MILLISECOND);
-  TRY_CAST_EXACTLY(microseconds, MICROSECOND);
-  TRY_CAST_EXACTLY(nanoseconds, NANOSECOND);
-#undef TRY_CAST_EXACTLY
-  // If neither of these casts are working, then we need nanosecond resolution
-  // but have a value so large that it cannot be represented by a signed 32-bit
-  // integer. In this case we accept the rounding error and take the closest
-  // unit we can without overflow.
-#define TRY_CAST_APPROXIMATELY(chrono_unit, arrow_unit)                        \
-  do {                                                                         \
-    if (auto cast_resolution = std::chrono::duration_cast<                     \
-          std::chrono::duration<uint64_t, std::chrono::chrono_unit::period>>(  \
-          time_resolution);                                                    \
-        cast_resolution.count() <= std::numeric_limits<int>::max()) {          \
-      return arrow::compute::RoundTemporalOptions{                             \
-        static_cast<int>(cast_resolution.count()),                             \
-        arrow::compute::CalendarUnit::arrow_unit,                              \
-      };                                                                       \
-    }                                                                          \
-  } while (false)
-  TRY_CAST_APPROXIMATELY(nanoseconds, NANOSECOND);
-  TRY_CAST_APPROXIMATELY(microseconds, MICROSECOND);
-  TRY_CAST_APPROXIMATELY(milliseconds, MILLISECOND);
-  TRY_CAST_APPROXIMATELY(seconds, SECOND);
-  TRY_CAST_APPROXIMATELY(minutes, MINUTE);
-  TRY_CAST_APPROXIMATELY(hours, HOUR);
-  TRY_CAST_APPROXIMATELY(days, DAY);
-  TRY_CAST_APPROXIMATELY(weeks, WEEK);
-  TRY_CAST_APPROXIMATELY(months, MONTH);
-  TRY_CAST_APPROXIMATELY(years, YEAR);
-#undef TRY_CAST_APPROXIMATELY
-  TENZIR_UNREACHABLE();
-}
-
-/// The configuration of a summarize pipeline operator.
 struct configuration {
   /// The configuration of a single aggregation.
   struct aggregation {
@@ -352,14 +293,6 @@ struct binding {
   };
 };
 
-template <class T, class... Ts>
-auto zip_equal(T& x, Ts&... xs) -> detail::zip<T, Ts...> {
-  auto size = x.size();
-  auto match = ((xs.size() == size) && ...);
-  TENZIR_ASSERT(match);
-  return detail::zip{x, xs...};
-}
-
 /// An instantiation of the inter-schematic aggregation process.
 class implementation {
 public:
@@ -397,7 +330,7 @@ public:
         auto&& bucket = *it->second;
         // Check that the group-by values also have matching types.
         for (auto [existing, other] :
-             zip_equal(bucket.group_by_types, bound.group_by_columns)) {
+             detail::zip_equal(bucket.group_by_types, bound.group_by_columns)) {
           if (!other) {
             // If this group-by column does not exist in the input schema, we
             // already warned and can ignore it.
@@ -442,8 +375,8 @@ public:
         }
         // Check that the aggregation extractors have the same type.
         for (auto&& [aggr, column, cfg] :
-             zip_equal(bucket.aggregations, bound.aggregation_columns,
-                       config.aggregations)) {
+             detail::zip_equal(bucket.aggregations, bound.aggregation_columns,
+                               config.aggregations)) {
           if (aggr.is_dead()) {
             continue;
           }
@@ -522,7 +455,7 @@ public:
     auto update_bucket = [&](bucket& bucket, int64_t offset, int64_t length) {
       bucket.updated_at = std::chrono::steady_clock::now();
       for (auto [aggr, input] :
-           zip_equal(bucket.aggregations, aggregation_arrays)) {
+           detail::zip_equal(bucket.aggregations, aggregation_arrays)) {
         if (!input) {
           // If the input column does not exist, we have nothing to do.
           continue;
@@ -620,13 +553,13 @@ public:
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(config.group_by_extractors.size()
                      + config.aggregations.size());
-      for (auto&& [extractor, group] :
-           zip_equal(config.group_by_extractors, bucket->group_by_types)) {
+      for (auto&& [extractor, group] : detail::zip_equal(
+             config.group_by_extractors, bucket->group_by_types)) {
         fields.emplace_back(extractor, group.is_active() ? group.get_active()
                                                          : type{null_type{}});
       }
       for (auto&& [aggr, cfg] :
-           zip_equal(bucket->aggregations, config.aggregations)) {
+           detail::zip_equal(bucket->aggregations, config.aggregations)) {
         // Same as above.
         fields.emplace_back(cfg.output, aggr.is_active()
                                           ? aggr.get_active()->output_type()
@@ -856,13 +789,13 @@ public:
     return "summarize";
   }
 
-  auto input_independent() const -> bool override {
-    // Returning false here is technically incorrect when using summarize with
+  auto idle_after() const -> duration override {
+    // Returning zero here is technically incorrect when using summarize with
     // timeouts. However, the handling of input-independent non-source operators
     // in the execution nodes is so bad, that we accept a potential delay here
     // over excess CPU usage.
     // TODO: Fix this properly in the execution nodes.
-    return false;
+    return duration::zero();
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -1032,7 +965,7 @@ public:
       }
     };
     auto find_or_create_group = [&](int64_t row) -> bucket2* {
-      for (auto&& [key_value, group] : zip_equal(key, group_values)) {
+      for (auto&& [key_value, group] : detail::zip_equal(key, group_values)) {
         key_value = value_at(group.type, *group.array, row);
       }
       auto it = groups_.find(key);
