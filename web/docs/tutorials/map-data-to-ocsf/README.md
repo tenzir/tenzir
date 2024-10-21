@@ -76,7 +76,7 @@ example of a connection log in TSV format:
 
 We first need to parse the log file into structured form that we can work with
 the individual fields. Thanks to Tenzir's [Zeek
-support](../integrations/zeek.md), we can get quickly turn TSV logs into
+support](../../integrations/zeek.md), we can get quickly turn TSV logs into
 structured data using a single operator:
 
 ```text title="conn-to-ocsf.tql"
@@ -699,8 +699,8 @@ types, and we need to write one mapping pipeline for each. But how do we combine
 the individual pipelines?
 
 Tenzir's answer for this is topic-based publish-subscribe. The
-[`publish`](../operators/publish.md) and
-[`subscribe`](../operators/subscribe.md) operators send events to, and read
+[`publish`](../../operators/publish.md) and
+[`subscribe`](../../operators/subscribe.md) operators send events to, and read
 events from a topic, respectively. Here's an illustration of the conceptual
 approach we are going to use:
 
