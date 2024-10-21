@@ -16,6 +16,7 @@
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
+#include "tenzir/variant_traits.hpp"
 
 // TODO: This file takes very long to compile. Consider splitting it up even more.
 
@@ -567,7 +568,8 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
     = [&]<ast::binary_op Op>(const series& l, const series& r) -> series {
     TENZIR_ASSERT(x.op.inner == Op);
     TENZIR_ASSERT(l.length() == r.length());
-    return caf::visit(
+    return match(
+      std::tie(l.type, r.type),
       [&]<concrete_type L, concrete_type R>(const L&, const R&) -> series {
         if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
           using LA = type_to_arrow_array_t<L>;
@@ -589,8 +591,7 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
             .emit(ctx_);
           return null();
         }
-      },
-      l.type, r.type);
+      });
   };
   using enum ast::binary_op;
   switch (x.op.inner) {

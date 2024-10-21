@@ -21,6 +21,7 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/try.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <arrow/util/utf8.h>
 #include <tsl/robin_set.h>
@@ -46,16 +47,15 @@ public:
       visit(let->expr);
       auto value = const_eval(let->expr, ctx_);
       if (value) {
-        auto f = detail::overload{
+        map_[let->name.name] = tenzir::match(
+          std::move(*value),
           [](auto x) -> ast::constant::kind {
             return x;
           },
-          [](pattern&) -> ast::constant::kind {
+          [](const pattern&) -> ast::constant::kind {
             // TODO
             TENZIR_UNREACHABLE();
-          },
-        };
-        map_[let->name.name] = caf::visit(f, std::move(*value));
+          });
       } else {
         map_[let->name.name] = std::nullopt;
       }
