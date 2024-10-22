@@ -75,11 +75,26 @@ public:
 template <>
 class variant_traits<arrow::Array> {
 public:
-  static constexpr auto count = variant_traits<type>::count;
+  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_array>;
 
-  static auto index(const type& x) -> size_t {
-    // TODO: Is this assumption correct? Probably not!!!
-    return x.type_index();
+  static constexpr auto count = caf::detail::tl_size<types>::value;
+
+  static auto index(const arrow::Array& x) -> size_t {
+    // 1. Check this:
+    (void)x.type_id();
+    arrow::BooleanArray::TypeClass::type_id;
+    // 2. For extension type:
+    auto name
+      = static_cast<const arrow::ExtensionType&>(*x.type()).extension_name();
+    auto other = ip_type::arrow_type::name;
+    if (other == name) {
+      // Ok
+    }
+  }
+
+  template <size_t I>
+  static auto get(const arrow::Array& x) -> decltype(auto) {
+    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
   }
 };
 
@@ -113,6 +128,32 @@ constexpr auto get_impl(V&& v) -> decltype(auto) {
     variant_traits<std::remove_cvref_t<V>>::template get<I>(v));
 }
 
+template <class V, class T>
+constexpr auto type_to_variant_index = std::invoke(
+  []<size_t... Is>(std::index_sequence<Is...>) {
+    auto result = 0;
+    auto found
+      = (std::invoke([&] {
+           if (std::same_as<
+                 std::decay_t<decltype(variant_traits<V>::template get<Is>(
+                   std::declval<V>()))>,
+                 T>) {
+             result = Is;
+             return 1;
+           }
+           return 0;
+         })
+         + ... + 0);
+    if (found == 0) {
+      throw std::runtime_error{"type was not found in variant"};
+    }
+    if (found > 1) {
+      throw std::runtime_error{"type was found multiple times in variant"};
+    }
+    return result;
+  },
+  std::make_index_sequence<variant_traits<V>::count>());
+
 template <class V, class... Fs>
 constexpr auto match_one(V&& v, Fs&&... fs) -> decltype(auto) {
   using Traits = variant_traits<std::remove_cvref_t<V>>;
@@ -123,8 +164,9 @@ constexpr auto match_one(V&& v, Fs&&... fs) -> decltype(auto) {
   static_assert(std::same_as<decltype(index), size_t>);
   using Result = decltype(visitor(get_impl<0>(v)));
   // TODO: static?
+  // TODO: A switch/if-style dispatch is probably more performant.
   constexpr auto table = std::invoke(
-    []<size_t... Is>(std::integer_sequence<size_t, Is...>) {
+    []<size_t... Is>(std::index_sequence<Is...>) {
       return std::array{
         +[](Visitor&& visitor, V&& v) -> Result {
           // TODO: refs?
@@ -143,7 +185,7 @@ constexpr auto match_one(V&& v, Fs&&... fs) -> decltype(auto) {
         }...,
       };
     },
-    std::make_integer_sequence<size_t, Traits::count>());
+    std::make_index_sequence<Traits::count>());
   static_assert(table.size() == Traits::count);
   TENZIR_ASSERT(index < Traits::count);
   return table[index](std::move(visitor), std::forward<V>(v)); // NOLINT
@@ -170,16 +212,43 @@ constexpr auto match_tuple(std::tuple<Xs...> xs, auto&& f) {
   }
 }
 
-template <class T, class... Fs>
-constexpr auto match(T&& x, Fs&&... fs) -> decltype(auto) {
+template <class V, class... Fs>
+constexpr auto match(V&& v, Fs&&... fs) -> decltype(auto) {
   if constexpr (caf::detail::is_specialization<std::tuple,
-                                               std::remove_cvref_t<T>>::value) {
-    return match_tuple(std::forward<T>(x),
+                                               std::remove_cvref_t<V>>::value) {
+    return match_tuple(std::forward<V>(v),
                        detail::overload{std::forward<Fs>(fs)...});
   } else {
-    return match_one(std::forward<T>(x), std::forward<Fs>(fs)...);
+    return match_one(std::forward<V>(v), std::forward<Fs>(fs)...);
   }
 }
+
+// We would need to disable ADL, but then we cannot overload index/type...
+
+// Disable ADL!
+// template <size_t I>
+// constexpr auto get = []<class V>(V&& v) -> decltype(auto) {
+//   TENZIR_ASSERT(variant_traits<V>::index(v) == I);
+//   return get_impl<I>(std::forward<V>(v));
+// };
+template <class T>
+constexpr auto get = []<class V>(V&& v) -> decltype(auto) {
+  constexpr auto index = type_to_variant_index<std::remove_cvref_t<V>, T>;
+  TENZIR_ASSERT(variant_traits<std::remove_cvref_t<V>>::index(v) == index);
+  return get_impl<index>(std::forward<V>(v));
+};
+
+template <class T>
+constexpr auto get_if = []<class V>(V* v) -> T* {
+  constexpr auto index = type_to_variant_index<V, T>;
+  if (not v) {
+    return nullptr;
+  }
+  if (variant_traits<std::remove_const_t<V>>::index(*v) != index) {
+    return nullptr;
+  }
+  return &get_impl<index>(*v);
+};
 
 // template <class T, class... Fs>
 // auto match2(T&& x) {
@@ -227,6 +296,9 @@ void test() {
       });
     return 9.5;
   });
+  auto got = get<double>(std_var);
+  auto ptr = get_if<double>(&std_var);
+
   static_assert(constexpr_test == 9.5);
 
   auto xyz1 = match(
