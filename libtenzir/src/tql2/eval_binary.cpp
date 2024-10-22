@@ -628,6 +628,50 @@ struct EvalBinOp<Op, string_type, string_type> {
   }
 };
 
+template <concrete_type L>
+struct EvalBinOp<ast::binary_op::in, L, list_type> {
+  static auto eval(const type_to_arrow_array_t<L>& l, const arrow::ListArray& r,
+                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    const auto f = [&]<concrete_type R>(const R&) {
+      if constexpr (caf::detail::is_complete<
+                      EvalBinOp<ast::binary_op::eq, L, R>>) {
+        for (auto i = int64_t{}; i < l.length(); ++i) {
+          if (r.IsNull(i)) {
+            b.UnsafeAppendNull();
+            continue;
+          }
+          auto lslice
+            = std::static_pointer_cast<type_to_arrow_array_t<L>>(l.Slice(i, 1));
+          auto rslice = r.value_slice(i);
+          TENZIR_ASSERT(lslice);
+          TENZIR_ASSERT(rslice);
+          auto result = false;
+          for (auto j = int64_t{}; j < rslice->length(); ++j) {
+            auto vals = std::static_pointer_cast<type_to_arrow_array_t<R>>(
+              rslice->Slice(j, 1));
+            TENZIR_ASSERT(vals);
+            auto out = std::static_pointer_cast<arrow::BooleanArray>(
+              EvalBinOp<ast::binary_op::eq, L, R>::eval(*lslice, *vals, warn));
+            TENZIR_ASSERT(out->length() == 1);
+            if (out->IsValid(0) and out->Value(0) == true) {
+              result = true;
+              break;
+            }
+          }
+          check(b.Append(result));
+        }
+      } else {
+        warn("Incompatible types for `in`");
+        check(b.AppendNulls(l.length()));
+      }
+    };
+    caf::visit(f, type::from_arrow(*r.value_type()));
+    return finish(b);
+  }
+};
+
 } // namespace
 
 auto evaluator::eval(const ast::binary_expr& x) -> series {
