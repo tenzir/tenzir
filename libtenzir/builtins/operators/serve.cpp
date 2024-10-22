@@ -483,6 +483,9 @@ struct serve_manager_state {
                     "{} for serve id {}",
                     *self, request.continuation_token, request.serve_id));
     }
+    if (found->done) {
+      return std::make_tuple(std::string{}, std::vector<table_slice>{});
+    }
     auto rp = self->make_response_promise<
       std::tuple<std::string, std::vector<table_slice>>>();
     found->get_rps.push_back(rp);
