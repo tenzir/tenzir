@@ -67,22 +67,22 @@ ARG TENZIR_BUILD_OPTIONS
 FROM development-setup AS development
 
 RUN cmake -B build -G Ninja \
--D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp;/opt/google-cloud-cpp;" \
--D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
--D CMAKE_BUILD_TYPE:STRING="Release" \
--D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
--D TENZIR_ENABLE_AVX2_INSTRUCTIONS:BOOL="OFF" \
--D TENZIR_ENABLE_UNIT_TESTS:BOOL="OFF" \
--D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
--D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
--D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
--D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
--D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
-${TENZIR_BUILD_OPTIONS} && \
-cmake --build build --parallel && \
-cmake --build build --target integration && \
-cmake --install build --strip && \
-rm -rf build
+      -D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp;/opt/google-cloud-cpp;" \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D CMAKE_BUILD_TYPE:STRING="Release" \
+      -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
+      -D TENZIR_ENABLE_AVX2_INSTRUCTIONS:BOOL="OFF" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL="OFF" \
+      -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
+      -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
+      -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
+      -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
+      -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
+      ${TENZIR_BUILD_OPTIONS} && \
+    cmake --build build --parallel && \
+    cmake --build build --target integration && \
+    cmake --install build --strip && \
+    rm -rf build
 
 RUN mkdir -p \
       $PREFIX/etc/tenzir \
@@ -115,7 +115,6 @@ COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenz
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
 COPY --from=development /opt/aws-sdk-cpp/lib/ /opt/aws-sdk-cpp/lib/
-COPY --from=development /opt/google-cloud-cpp/lib/ /opt/google-cloud-cpp/lib/
 COPY --from=dependencies /arrow_*.deb /root/
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 
