@@ -103,7 +103,7 @@ auto main(int argc, char** argv) -> int {
       TENZIR_ERROR("failed to determine location of temporary directory");
       return EXIT_FAILURE;
     }
-    auto path = tmp / "tenzir" / "client-cache" / fmt::format("{:}", getuid());
+    auto path = tmp / fmt::format("tenzir-client-cache-{:}", getuid());
     put(cfg.content, "tenzir.cache-directory", path.string());
     if (previous_value) {
       TENZIR_VERBOSE("using {} as cache directory instead of configured value "
