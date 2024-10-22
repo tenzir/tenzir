@@ -54,7 +54,8 @@ private:
   data sample_ = {};
 };
 
-class plugin : public virtual aggregation_function_plugin {
+class plugin : public virtual aggregation_function_plugin,
+               public virtual aggregation_plugin {
   auto name() const -> std::string override {
     return "sample";
   };
@@ -66,6 +67,13 @@ class plugin : public virtual aggregation_function_plugin {
 
   auto aggregation_default() const -> data override {
     return caf::none;
+  }
+
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    const auto* first = plugins::find<aggregation_plugin>("first");
+    TENZIR_ASSERT(first);
+    return first->make_aggregation(invocation{inv.call}, ctx);
   }
 };
 
