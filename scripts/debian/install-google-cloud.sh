@@ -19,7 +19,7 @@ pushd crc32c
 cmake -B build -S . \
 -G "Unix Makefiles" \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX="&{INSTALL_PREFIX}" \
+  -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
   -DCRC32C_BUILD_TESTS=0 \
   -DCRC32C_BUILD_BENCHMARKS=0 \
   -DCRC32C_BUILD_BENCHMARKS=0 \
@@ -34,7 +34,8 @@ curl -L 'https://github.com/googleapis/google-cloud-cpp/archive/refs/tags/v2.30.
 cmake -B build -S . \
   -G "Unix Makefiles" \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX="&{INSTALL_PREFIX}" \
+  -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+  -DCRC32C_DIR="${INSTALL_PREFIX}" \
   -DBUILD_TESTING=OFF \
   -DGOOGLE_CLOUD_CPP_ENABLE_EXAMPLES=OFF \
   -DGOOGLE_CLOUD_CPP_WITH_MOCKS=OFF \
