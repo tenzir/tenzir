@@ -45,8 +45,8 @@ namespace {
   TENZIR_UNREACHABLE();
 }
 
-[[maybe_unused]] constexpr auto result_if_both_null(ast::binary_op op)
-  -> std::optional<bool> {
+[[maybe_unused]] constexpr auto
+result_if_both_null(ast::binary_op op) -> std::optional<bool> {
   using enum ast::binary_op;
   switch (op) {
     case eq:
@@ -117,8 +117,9 @@ struct BinOpKernel<Op, L, R> {
   using result = decltype(inner(std::declval<type_to_data_t<L>>(),
                                 std::declval<type_to_data_t<R>>()))::value_type;
 
-  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(type_to_data_t<L> l,
+           type_to_data_t<R> r) -> std::variant<result, const char*> {
     auto result = inner(l, r);
     if (not result) {
       return "integer overflow";
@@ -133,8 +134,9 @@ template <ast::binary_op Op, numeric_type L, numeric_type R>
 struct BinOpKernel<Op, L, R> {
   using result = double;
 
-  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(type_to_data_t<L> l,
+           type_to_data_t<R> r) -> std::variant<result, const char*> {
     using enum ast::binary_op;
     if constexpr (Op == add) {
       return static_cast<double>(l) + static_cast<double>(r);
@@ -153,8 +155,9 @@ template <numeric_type L, numeric_type R>
 struct BinOpKernel<ast::binary_op::div, L, R> {
   using result = double;
 
-  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(type_to_data_t<L> l,
+           type_to_data_t<R> r) -> std::variant<result, const char*> {
     if (r == decltype(r){}) {
       return "division by zero";
     }
@@ -166,8 +169,8 @@ template <>
 struct BinOpKernel<ast::binary_op::sub, time_type, duration_type> {
   using result = time;
 
-  static auto evaluate(time l, duration r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(time l, duration r) -> std::variant<result, const char*> {
     return l - r;
   }
 };
@@ -176,8 +179,8 @@ template <>
 struct BinOpKernel<ast::binary_op::add, time_type, duration_type> {
   using result = time;
 
-  static auto evaluate(time l, duration r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(time l, duration r) -> std::variant<result, const char*> {
     return l + r;
   }
 };
@@ -186,8 +189,8 @@ template <>
 struct BinOpKernel<ast::binary_op::add, duration_type, time_type> {
   using result = time;
 
-  static auto evaluate(duration l, time r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(duration l, time r) -> std::variant<result, const char*> {
     return l + r;
   }
 };
@@ -196,8 +199,8 @@ template <>
 struct BinOpKernel<ast::binary_op::add, duration_type, duration_type> {
   using result = duration;
 
-  static auto evaluate(duration l, duration r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(duration l, duration r) -> std::variant<result, const char*> {
     if (auto check = checked_add(l.count(), r.count())) {
       return duration{check.value()};
     }
@@ -209,8 +212,8 @@ template <>
 struct BinOpKernel<ast::binary_op::sub, duration_type, duration_type> {
   using result = duration;
 
-  static auto evaluate(duration l, duration r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(duration l, duration r) -> std::variant<result, const char*> {
     if (auto check = checked_sub(l.count(), r.count())) {
       return duration{check.value()};
     }
@@ -222,8 +225,8 @@ template <>
 struct BinOpKernel<ast::binary_op::div, duration_type, duration_type> {
   using result = double;
 
-  static auto evaluate(duration l, duration r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(duration l, duration r) -> std::variant<result, const char*> {
     if (r == decltype(r){}) {
       return "division by zero";
     }
@@ -236,8 +239,9 @@ template <integral_type N>
 struct BinOpKernel<ast::binary_op::mul, duration_type, N> {
   using result = duration;
 
-  static auto evaluate(duration l, type_to_data_t<N> r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(duration l,
+           type_to_data_t<N> r) -> std::variant<result, const char*> {
     if (auto check = checked_mul(l.count(), r); check.has_value()) {
       return duration{check.value()};
     }
@@ -249,8 +253,8 @@ template <>
 struct BinOpKernel<ast::binary_op::mul, duration_type, double_type> {
   using result = duration;
 
-  static auto evaluate(duration l, double r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(duration l, double r) -> std::variant<result, const char*> {
     return duration_cast<duration>(l * r);
   }
 };
@@ -259,8 +263,8 @@ template <numeric_type N>
 struct BinOpKernel<ast::binary_op::mul, N, duration_type> {
   using result = duration;
 
-  static auto evaluate(type_to_data_t<N> l, duration r)
-    -> std::variant<result, const char*> {
+  static auto evaluate(type_to_data_t<N> l,
+                       duration r) -> std::variant<result, const char*> {
     return BinOpKernel<ast::binary_op::mul, duration_type, N>::evaluate(
       r, l); // Commutative
   }
@@ -270,8 +274,9 @@ template <numeric_type N>
 struct BinOpKernel<ast::binary_op::div, duration_type, N> {
   using result = duration;
 
-  static auto evaluate(duration l, type_to_data_t<N> r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(duration l,
+           type_to_data_t<N> r) -> std::variant<result, const char*> {
     if (r == decltype(r){}) {
       return "division by zero";
     }
@@ -294,8 +299,9 @@ template <ast::binary_op Op, basic_type L, basic_type R>
 struct BinOpKernel<Op, L, R> {
   using result = bool;
 
-  static auto evaluate(view<type_to_data_t<L>> l, view<type_to_data_t<R>> r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(view<type_to_data_t<L>> l,
+           view<type_to_data_t<R>> r) -> std::variant<result, const char*> {
     using enum ast::binary_op;
     if constexpr (Op == eq) {
       return l == r;
@@ -321,8 +327,9 @@ template <ast::binary_op Op, integral_type L, integral_type R>
 struct BinOpKernel<Op, L, R> {
   using result = bool;
 
-  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
-    -> std::variant<result, const char*> {
+  static auto
+  evaluate(type_to_data_t<L> l,
+           type_to_data_t<R> r) -> std::variant<result, const char*> {
     using enum ast::binary_op;
     if constexpr (Op == eq) {
       return std::cmp_equal(l, r);
@@ -350,9 +357,9 @@ struct EvalBinOp;
 template <ast::binary_op Op, basic_type L, basic_type R>
   requires caf::detail::is_complete<BinOpKernel<Op, L, R>>
 struct EvalBinOp<Op, L, R> {
-  static auto eval(const type_to_arrow_array_t<L>& l,
-                   const type_to_arrow_array_t<R>& r, auto&& warn)
-    -> std::shared_ptr<arrow::Array> {
+  static auto
+  eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r,
+       auto&& warn) -> std::shared_ptr<arrow::Array> {
     using kernel = BinOpKernel<Op, L, R>;
     using result = kernel::result;
     using result_type = data_to_type_t<result>;
@@ -556,6 +563,53 @@ struct EvalBinOp<Op, string_type, string_type> {
       }
       b.UnsafeAppend(equal != invert);
     }
+    return finish(b);
+  }
+};
+
+// XXX: Is x in [y,z] <=> x == y or x == z ?
+// TODO: Do we also want x in null and null in x?
+// TODO: Compare numbers across types
+template <concrete_type L>
+struct EvalBinOp<ast::binary_op::in, L, list_type> {
+  static auto eval(const type_to_arrow_array_t<L>& l, const arrow::ListArray& r,
+                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    const auto f = [&]<concrete_type R>(const R&) {
+      if constexpr (caf::detail::is_complete<
+                      EvalBinOp<ast::binary_op::eq, L, R>>) {
+        for (auto i = int64_t{}; i < l.length(); ++i) {
+          if (l.IsNull(i) or r.IsNull(i)) {
+            b.UnsafeAppendNull();
+            continue;
+          }
+          auto lslice
+            = std::static_pointer_cast<type_to_arrow_array_t<L>>(l.Slice(i, 1));
+          auto rslice = r.value_slice(i);
+          TENZIR_ASSERT(lslice);
+          TENZIR_ASSERT(rslice);
+          auto result = false;
+          for (auto j = int64_t{}; j < rslice->length(); ++j) {
+            auto vals = std::static_pointer_cast<type_to_arrow_array_t<R>>(
+              rslice->Slice(j, 1));
+            TENZIR_ASSERT(vals);
+            auto out = std::static_pointer_cast<arrow::BooleanArray>(
+              EvalBinOp<ast::binary_op::eq, L, R>::eval(*lslice, *vals, warn));
+            TENZIR_ASSERT(out->length() == 1);
+            if (out->IsValid(0) and out->Value(0) == true) {
+              result = true;
+              break;
+            }
+          }
+          check(b.Append(result));
+        }
+      } else {
+        warn("Incompatible types for `in`");
+        check(b.AppendNulls(l.length()));
+      }
+    };
+    caf::visit(f, type::from_arrow(*r.value_type()));
     return finish(b);
   }
 };
