@@ -67,7 +67,7 @@ ARG TENZIR_BUILD_OPTIONS
 FROM development-setup AS development
 
 RUN cmake -B build -G Ninja \
--D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp" \
+-D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp;/opt/google-cloud-cpp;" \
 -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
 -D CMAKE_BUILD_TYPE:STRING="Release" \
 -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
