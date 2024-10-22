@@ -381,14 +381,16 @@ struct connection_manager_state {
           if (connection->rp.pending()) {
             caf::anon_send(caf::actor_cast<caf::actor>(self),
                            caf::make_action(
-                             [self, connection, chunk = std::move(chunk),
+                             [self, connection, ec, chunk = std::move(chunk),
                               diagnostics = std::move(diagnostics)]() mutable {
                                auto lock = std::unique_lock{connection->mutex};
                                TENZIR_ASSERT(connection->rp.pending());
                                connection->rp.deliver(std::move(chunk));
-                               TENZIR_WARN("Async read from action");
-                               connection->async_read(self,
-                                                      std::move(diagnostics));
+                               if (not ec) {
+                                 TENZIR_WARN("Async read from action");
+                                 connection->async_read(self,
+                                                        std::move(diagnostics));
+                               }
                              }));
             TENZIR_ASSERT(connection->chunks.empty());
             return;
