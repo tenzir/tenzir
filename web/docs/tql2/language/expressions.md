@@ -65,7 +65,7 @@ whole event, as demonstrated by `this = {a: x, y: b}`.
 ### Metadata
 
 Events carry not only data, but also metadata. To refer to the metadata, use the
-`@` keyword. For example, `@name` carries the name of the event. Currently, the
+`@` prefix. For example, `@name` carries the name of the event. Currently, the
 set of metadata fields is limited to just  `@name`, `@import_time` and
 `@internal`, but will potentially be expanded later to allow arbitrary
 user-defined metadata fields.
