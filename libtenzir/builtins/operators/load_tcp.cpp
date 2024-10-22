@@ -638,8 +638,10 @@ struct connection_manager_state {
   read_from_connection(boost::asio::ip::tcp::socket::native_handle_type handle)
     -> caf::result<chunk_ptr> {
     auto connection = connections.find(handle);
-    TENZIR_ASSERT(connection != connections.end());
     auto chunk = chunk_ptr{};
+    if (connection == connections.end()) {
+      return chunk;
+    }
     auto should_read = false;
     {
       auto lock = std::unique_lock{connection->second->mutex};
