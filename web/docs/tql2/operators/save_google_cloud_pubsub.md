@@ -29,7 +29,7 @@ Publish `suricata.alert` events as JSON to `alerts-topic`.
 
 ```tql
 export
-where meta.name = "suricata.alert"
+where @name = "suricata.alert"
 write_json
 save_google_cloud_pubsub "amazing-project-123456", "alerts-topic"
 ```
