@@ -8,6 +8,17 @@
 
 namespace tenzir {
 
+/// Enables variant methods (like `match`) for a given type.
+///
+/// Implementations need to provide the following `static` members:
+/// - `constexpr size_t count`
+/// - `index(const T&) -> size_t`
+/// - `get<size_t>(const T&) -> const U&`
+///
+/// The `index` function may only return indicies in `[0, count)`. The `get`
+/// function is instantiated for all `[0, count)` and may assume that the given
+/// index is what `index(...)` previously returned. If the original object was
+/// `T&` or `T&&`, the implementation will `const_cast` the result of `get(...)`.
 template <class T>
 class variant_traits;
 
@@ -16,13 +27,12 @@ class variant_traits<std::variant<Ts...>> {
 public:
   static constexpr auto count = sizeof...(Ts);
 
-  constexpr static auto index(const std::variant<Ts...>& x) -> size_t {
+  static constexpr auto index(const std::variant<Ts...>& x) -> size_t {
     return x.index();
   }
 
   template <size_t I>
-  constexpr static auto get(const std::variant<Ts...>& x)
-    -> const std::variant_alternative_t<I, std::variant<Ts...>>& {
+  static constexpr auto get(const std::variant<Ts...>& x) -> decltype(auto) {
     return *std::get_if<I>(&x);
   }
 };
@@ -37,8 +47,7 @@ public:
   }
 
   template <size_t I>
-  static auto get(const caf::variant<Ts...>& x)
-    -> const std::variant_alternative_t<I, std::variant<Ts...>>& {
+  static auto get(const caf::variant<Ts...>& x) -> decltype(auto) {
     using T = std::tuple_element_t<I, std::tuple<Ts...>>;
     return *caf::sum_type_access<caf::variant<Ts...>>::get_if(
       &x, caf::sum_type_token<T, I>{});
@@ -56,14 +65,14 @@ public:
   }
 
   template <size_t I>
-  static auto get(const type& x)
-    -> const caf::detail::tl_at_t<concrete_types, I>& {
+  static auto get(const type& x) -> decltype(auto) {
     using Type = caf::detail::tl_at_t<concrete_types, I>;
     // TODO: This breaks.
     // static_assert(Type::type_index == I);
     if constexpr (basic_type<Type>) {
       static constexpr auto instance = Type{};
-      return instance;
+      // TODO: Why is this necessary?
+      return *&instance;
     } else {
       // TODO: Is this allowed?
       return static_cast<const Type&>(
@@ -71,6 +80,36 @@ public:
     }
   }
 };
+
+/// Requires that the Arrow type has a matching Tenzir type.
+inline auto arrow_type_to_type_index(const arrow::DataType& ty) -> size_t {
+  auto type_id = ty.id();
+  auto result = size_t{};
+  // TODO: Could also use a table here.
+  auto found = std::invoke(
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+      return (
+        std::invoke([&] {
+          using Type = caf::detail::tl_at_t<concrete_types, Is>;
+          // TODO: Extension!
+          if (Type::arrow_type::type_id != type_id) {
+            return false;
+          }
+          if constexpr (extension_type<Type>) {
+            if (static_cast<const arrow::ExtensionType&>(ty).extension_name()
+                != Type::arrow_type::name) {
+              return false;
+            }
+          }
+          result = Is;
+          return true;
+        })
+        || ...);
+    },
+    std::make_index_sequence<caf::detail::tl_size<concrete_types>::value>());
+  TENZIR_ASSERT(found);
+  return result;
+}
 
 template <>
 class variant_traits<arrow::Array> {
@@ -80,21 +119,29 @@ public:
   static constexpr auto count = caf::detail::tl_size<types>::value;
 
   static auto index(const arrow::Array& x) -> size_t {
-    // 1. Check this:
-    (void)x.type_id();
-    arrow::BooleanArray::TypeClass::type_id;
-    // 2. For extension type:
-    auto name
-      = static_cast<const arrow::ExtensionType&>(*x.type()).extension_name();
-    auto other = ip_type::arrow_type::name;
-    if (other == name) {
-      // Ok
-    }
+    return arrow_type_to_type_index(*x.type());
   }
 
   template <size_t I>
   static auto get(const arrow::Array& x) -> decltype(auto) {
     return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+  }
+};
+
+template <>
+class variant_traits<arrow::ArrayBuilder> {
+public:
+  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_builder>;
+
+  static constexpr auto count = caf::detail::tl_size<types>::value;
+
+  static auto index(const arrow::ArrayBuilder& self) -> size_t {
+    return arrow_type_to_type_index(*self.type());
+  }
+
+  template <size_t I>
+  static auto get(const arrow::ArrayBuilder& self) -> decltype(auto) {
+    return static_cast<const caf::detail::tl_at_t<types, I>&>(self);
   }
 };
 
@@ -154,27 +201,25 @@ constexpr auto type_to_variant_index = std::invoke(
   },
   std::make_index_sequence<variant_traits<V>::count>());
 
-template <class V, class... Fs>
-constexpr auto match_one(V&& v, Fs&&... fs) -> decltype(auto) {
+template <class V, class F>
+constexpr auto match_one(V&& v, F&& f) -> decltype(auto) {
   using Traits = variant_traits<std::remove_cvref_t<V>>;
-  // TODO: Could be better by ref?
-  auto visitor = detail::overload{std::forward<Fs>(fs)...};
-  using Visitor = decltype(visitor);
   auto index = Traits::index(std::as_const(v));
   static_assert(std::same_as<decltype(index), size_t>);
-  using Result = decltype(visitor(get_impl<0>(v)));
+  using Result = std::invoke_result_t<F, decltype(get_impl<0>(v))>;
   // TODO: static?
   // TODO: A switch/if-style dispatch is probably more performant.
   constexpr auto table = std::invoke(
     []<size_t... Is>(std::index_sequence<Is...>) {
       return std::array{
-        +[](Visitor&& visitor, V&& v) -> Result {
+        +[](F&& f, V&& v) -> Result {
           // TODO: refs?
           // TODO: void?
-          using Ret = decltype(std::move(visitor)(get_impl<Is>(v)));
+          using Ret
+            = decltype(std::invoke(std::forward<F>(f), get_impl<Is>(v)));
           static_assert(std::same_as<Ret, Result>,
                         "return types must be equal");
-          return std::move(visitor)(get_impl<Is>(v));
+          return std::invoke(std::forward<F>(f), get_impl<Is>(v));
           // if constexpr (std::same_as<Result, void>) {
           // }
           // decltype(auto) result
@@ -188,7 +233,7 @@ constexpr auto match_one(V&& v, Fs&&... fs) -> decltype(auto) {
     std::make_index_sequence<Traits::count>());
   static_assert(table.size() == Traits::count);
   TENZIR_ASSERT(index < Traits::count);
-  return table[index](std::move(visitor), std::forward<V>(v)); // NOLINT
+  return table[index](std::forward<F>(f), std::forward<V>(v)); // NOLINT
 }
 
 template <class... Xs>
@@ -214,12 +259,14 @@ constexpr auto match_tuple(std::tuple<Xs...> xs, auto&& f) {
 
 template <class V, class... Fs>
 constexpr auto match(V&& v, Fs&&... fs) -> decltype(auto) {
+  // TODO: overload could be by ref?
   if constexpr (caf::detail::is_specialization<std::tuple,
                                                std::remove_cvref_t<V>>::value) {
     return match_tuple(std::forward<V>(v),
                        detail::overload{std::forward<Fs>(fs)...});
   } else {
-    return match_one(std::forward<V>(v), std::forward<Fs>(fs)...);
+    return match_one(std::forward<V>(v),
+                     detail::overload{std::forward<Fs>(fs)...});
   }
 }
 
