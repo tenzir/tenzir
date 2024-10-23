@@ -15,6 +15,7 @@
 #include "tenzir/concept/parseable/tenzir/expression.hpp"
 #include "tenzir/concept/parseable/tenzir/pipeline.hpp"
 #include "tenzir/concept/parseable/to.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/tql/basic.hpp"
@@ -169,6 +170,75 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
     });
 }
 
+auto to_duration_comparable(const ast::expression& e) -> std::optional<operand> {
+  if (auto field = to_field_extractor(e)) {
+    return std::move(field).value();
+  }
+  const auto* itime = std::get_if<ast::meta>(e.kind.get());
+  if (itime and itime->kind == ast::meta::import_time) {
+    return meta_extractor{meta_extractor::kind::import_time};
+  }
+  return std::nullopt;
+}
+
+auto fold_now(const ast::expression& l, const ast::binary_op& op,
+              const ast::expression& r) -> std::optional<operand> {
+  // TODO: Evaluate unary_expr to a constant duration
+  const auto constant = std::get_if<ast::constant>(r.kind.get());
+  if (not constant) {
+    return std::nullopt;
+  }
+  const auto y = std::get_if<duration>(&constant->value);
+  if (not y) {
+    return std::nullopt;
+  }
+  const auto call = std::get_if<ast::function_call>(l.kind.get());
+  if (not(call and call->fn.path[0].name == "now")) {
+    return std::nullopt;
+  }
+  if (op == ast::binary_op::add) {
+    return operand{data{time::clock::now() + *y}};
+  }
+  TENZIR_ASSERT(op == ast::binary_op::sub);
+  return operand{data{time::clock::now() - *y}};
+}
+
+// @brief Optimize x > now() +- $y <=> x > $now +- $y and x > now() +- $y
+auto optimize_now(const ast::expression& left, const relational_operator& rop,
+                  const ast::expression& right) -> std::optional<expression> {
+  switch (rop) {
+    using ro = relational_operator;
+    case ro::greater:
+    case ro::greater_equal:
+    case ro::less:
+    case ro::less_equal:
+      break;
+    default:
+      TENZIR_UNREACHABLE();
+  }
+  auto field = to_duration_comparable(left);
+  if (not field) {
+    return std::nullopt;
+  }
+  const auto bexpr = std::get_if<ast::binary_expr>(right.kind.get());
+  if (not bexpr) {
+    return std::nullopt;
+  }
+  const auto op = bexpr->op.inner;
+  if (op != ast::binary_op::add and op != ast::binary_op::sub) {
+    return std::nullopt;
+  }
+  if (auto result = fold_now(bexpr->left, op, bexpr->right)) {
+    return expression{predicate{std::move(*field), rop, std::move(*result)}};
+  }
+  if (op == ast::binary_op::add) {
+    if (auto result = fold_now(bexpr->right, op, bexpr->left)) {
+      return expression{predicate{std::move(*field), rop, std::move(*result)}};
+    }
+  }
+  return std::nullopt;
+}
+
 } // namespace
 
 auto is_true_literal(const ast::expression& y) -> bool {
@@ -209,7 +279,33 @@ auto split_legacy_expression(const ast::expression& x)
         };
         TENZIR_UNREACHABLE();
       });
+      constexpr auto flip_op = [](const relational_operator& op) {
+        switch (op) {
+          case relational_operator::less:
+            return relational_operator::greater;
+          case relational_operator::less_equal:
+            return relational_operator::greater_equal;
+          default:
+            TENZIR_UNREACHABLE();
+        }
+      };
       if (rel_op) {
+        switch (y.op.inner) {
+          case ast::binary_op::gt:
+          case ast::binary_op::geq:
+            if (auto expr = optimize_now(y.left, *rel_op, y.right)) {
+              return std::pair{std::move(expr).value(), x};
+            }
+            break;
+          case ast::binary_op::lt:
+          case ast::binary_op::leq:
+            if (auto expr = optimize_now(y.right, flip_op(*rel_op), y.left)) {
+              return std::pair{std::move(expr).value(), x};
+            }
+            break;
+          default:
+            break;
+        }
         auto left = to_operand(y.left);
         auto right = to_operand(y.right);
         if (not left || not right) {
