@@ -209,6 +209,59 @@ auto split_legacy_expression(const ast::expression& x)
         };
         TENZIR_UNREACHABLE();
       });
+      // x > now() +- $y <=> x > $now +- $y and x > now() +- $y
+      constexpr auto constant_now
+        = [](const ast::expression& left, const relational_operator& rel_op,
+             const ast::expression& right) -> std::optional<expression> {
+        constexpr auto f
+          = [](const ast::expression& l, const ast::binary_op& op,
+               const ast::expression& r) -> std::optional<operand> {
+          if (op != ast::binary_op::add and op != ast::binary_op::sub) {
+            return std::nullopt;
+          }
+          auto call = std::get_if<ast::function_call>(l.kind.get());
+          auto expr = std::get_if<ast::constant>(r.kind.get());
+          if (not(expr and call and call->fn.path[0].name == "now")) {
+            return std::nullopt;
+          }
+          auto dur = std::get_if<duration>(&expr->value);
+          if (not dur) {
+            return std::nullopt;
+          }
+          return operand{data{time::clock::now() + *dur}};
+        };
+        if (auto field = to_field_extractor(left)) {
+          if (auto expr = std::get_if<ast::binary_expr>(right.kind.get())) {
+            if (auto op = f(expr->left, expr->op.inner, expr->right)) {
+              // fmt::println("Op at {}", std::source_location::current());
+              return expression{predicate{std::move(field).value(), rel_op,
+                                          std::move(op).value()}};
+            }
+            if (auto op = f(expr->right, expr->op.inner, expr->left)) {
+              // fmt::println("Op at {}", std::source_location::current());
+              return expression{predicate{std::move(field).value(), rel_op,
+                                          std::move(op).value()}};
+            }
+          }
+        }
+        return std::nullopt;
+      };
+      switch (y.op.inner) {
+        case ast::binary_op::gt:
+        case ast::binary_op::geq:
+          if (auto expr = constant_now(y.left, *rel_op, y.right)) {
+            return std::pair{std::move(expr).value(), std::move(x)};
+          }
+          break;
+        case ast::binary_op::lt:
+        case ast::binary_op::leq:
+          if (auto expr = constant_now(y.right, *rel_op, y.left)) {
+            return std::pair{std::move(expr).value(), std::move(x)};
+          }
+          break;
+        default:
+          break;
+      }
       if (rel_op) {
         auto left = to_operand(y.left);
         auto right = to_operand(y.right);
