@@ -187,6 +187,21 @@ struct expression {
     return f.apply(*detail::make_dependent<Inspector>(x.kind));
   }
 
+  template <class T>
+    requires(caf::detail::tl_contains<expression_kinds,
+                                      std::remove_cvref_t<T>>::value)
+  auto is() const -> bool {
+    constexpr auto visitor = detail::overload{
+      [](const T&) {
+        return true;
+      },
+      [](const auto&) {
+        return false;
+      },
+    };
+    return match(visitor);
+  }
+
   template <class Result = void, class... Fs>
   auto match(Fs&&... fs) & -> decltype(auto);
   template <class Result = void, class... Fs>

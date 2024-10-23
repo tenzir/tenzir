@@ -1144,6 +1144,10 @@ public:
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }
+
+  auto read_extensions() const -> std::vector<std::string> override {
+    return {"json"};
+  }
 };
 
 class read_ndjson_plugin final

@@ -40,6 +40,11 @@ public:
   virtual auto read_extensions() const -> std::vector<std::string> {
     return {};
   }
+  // whether this operator accepts a sub-pipeline. This is used in the tql2
+  // `from` implementation.
+  virtual auto accepts_pipeline() const -> bool {
+    return false;
+  }
 };
 
 template <class Operator>
