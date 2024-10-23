@@ -121,3 +121,10 @@ yc = y.length_chars()
 write_json
 EOF
 }
+
+@test "in list" {
+  check tenzir --tql2 -f /dev/stdin <<EOF
+  from "${INPUTSDIR}/json/lists.json" 
+  exists = x in y
+EOF
+}
