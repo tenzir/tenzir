@@ -7,7 +7,7 @@ comments: true
 ---
 
 [Tenzir Platform v1.2][github-release] brings improvements to diagnostics in the
-Explorer, the ability to download charts, and many stability improvements fixes.
+Explorer, the ability to download charts, and many stability improvements.
 
 ![Tenzir Platform v1.2](tenzir-platform-v1.2.excalidraw.svg)
 
