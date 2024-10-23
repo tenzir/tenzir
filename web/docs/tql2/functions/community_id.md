@@ -1,7 +1,7 @@
 # community_id
 
 Computes the [Community ID](https://github.com/corelight/community-id-spec) for
-a network connection.
+a network connection/flow.
 
 ```tql title="Synopsis"
 community_id(src_ip=ip, dst_ip=ip, proto=str,
@@ -20,7 +20,7 @@ The `src_ip` and `dst_ip` parameters are required. The `proto` string is also re
 
 ## Examples
 
-### Compute a Community ID from the connection 5-tuple
+### Compute a Community ID from a flow 5-tuple
 
 ```tql title="Pipeline"
 from {
