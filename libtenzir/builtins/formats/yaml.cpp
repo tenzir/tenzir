@@ -331,6 +331,10 @@ class read_yaml final
     return std::make_unique<parser_adapter<yaml_parser>>(
       yaml_parser{std::move(opts)});
   }
+
+  auto read_extensions() const -> std::vector<std::string> override {
+    return {"yaml"};
+  }
 };
 
 } // namespace

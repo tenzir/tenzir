@@ -765,6 +765,10 @@ public:
     return std::make_unique<parser_adapter<xsv_parser>>(
       xsv_parser{std::move(opts)});
   }
+
+  auto read_extensions() const -> std::vector<std::string> override {
+    return {std::string{Name}};
+  }
 };
 
 using read_csv = configured_read_xsv_plugin<"csv", ',', ';', "">;

@@ -374,20 +374,16 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     // determine loader based on schema
     {
       if (url->has_scheme()) {
-        for (const auto& p : plugins::get()) {
+        for (const auto& p : plugins::get<operator_factory_plugin>()) {
           const auto name = p->name();
           // TODO: better way to determine tql2 operator?
           if (not(name.starts_with("load_")
                   or name.starts_with("tql2.load_"))) {
             continue;
           }
-          auto* cast = p.as<operator_factory_plugin>();
-          if (not cast) {
-            continue;
-          }
-          for (auto schema : cast->load_schemes()) {
+          for (auto schema : p->load_schemes()) {
             if (schema == url->scheme()) {
-              load_plugin = cast;
+              load_plugin = p;
               break;
             }
           }
@@ -438,41 +434,32 @@ class from_plugin2 final : public virtual operator_factory_plugin {
           }
         }
         if (not compression_name.empty()) {
-          for (const auto& p : plugins::get()) {
+          for (const auto& p : plugins::get<operator_factory_plugin>()) {
             const auto name = p->name();
             // TODO, the decompress operators should ultimately be separate
             // operators
             if (name != "decompress") {
               continue;
             }
-            auto* cast = p.as<operator_factory_plugin>();
-            if (not cast) {
-              continue;
-            }
-            decompress_plugin = cast;
+            decompress_plugin = p;
           }
           TENZIR_ASSERT(decompress_plugin);
         }
       }
       // determine read operator based on file ending
       {
-        for (const auto& p : plugins::get()) {
+        for (const auto& p : plugins::get<operator_factory_plugin>()) {
           const auto name = p->name();
-          // TODO: better way to determine tql2 operator?
           if (not(name.starts_with("read_")
                   or name.starts_with("tql2.read_"))) {
-            continue;
-          }
-          auto* cast = p.as<operator_factory_plugin>();
-          if (not cast) {
             continue;
           }
           // TODO it may be better to use find here to give better error
           // messages if we find it in the middle of the filename
           // this may happen for unknown compressions
-          for (auto extension : cast->read_extensions()) {
+          for (auto extension : p->read_extensions()) {
             if (filename.ends_with(extension)) {
-              read_plugin = cast;
+              read_plugin = p;
               break;
             }
           }
