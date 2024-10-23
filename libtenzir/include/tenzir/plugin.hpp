@@ -706,9 +706,6 @@ public:
 
   /// Serializes a context for persistence.
   virtual auto save() const -> caf::expected<save_result> = 0;
-
-  /// Returns a callback for retroactive lookups.
-  virtual auto make_query() -> make_query_type = 0;
 };
 
 class context_loader {

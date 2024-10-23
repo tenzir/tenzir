@@ -177,17 +177,19 @@ public:
       auto current_value = array->Value(0);
       auto current_begin = int64_t{0};
       // We add an artificial `false` at index `length` to flush.
+      auto results = std::vector<table_slice>{};
       for (auto i = int64_t{1}; i < length + 1; ++i) {
         auto next = i != length && array->Value(i);
         if (current_value == next) {
           continue;
         }
         if (current_value) {
-          co_yield subslice(slice, current_begin, i);
+          results.push_back(subslice(slice, current_begin, i));
         }
         current_value = next;
         current_begin = i;
       }
+      co_yield concatenate(std::move(results));
     }
   }
 

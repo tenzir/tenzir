@@ -15,6 +15,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/resolve.hpp>
 
@@ -22,7 +23,10 @@ namespace tenzir::plugins::top_rare {
 
 namespace {
 
-enum class mode { top, rare };
+enum class mode {
+  top,
+  rare,
+};
 
 template <mode Mode>
 class top_rare_plugin final : public virtual operator_parser_plugin,
@@ -69,7 +73,6 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
         count_field->inner = default_count_field;
       }
     }
-
     // TODO: Replace this textual parsing with a subpipeline to improve
     // diagnostics for this operator.
     auto repr = fmt::format("summarize {0}=count(.) by {1} | sort {0} {2}",
@@ -83,15 +86,16 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
     return std::move(*parsed);
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_plugin::invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto selector = ast::simple_selector{};
     const auto loc = inv.self.get_location();
     TRY(argument_parser2::operator_(name())
           .add(selector, "<field>")
           .parse(inv, ctx));
-    auto summarize = plugins::find<operator_factory_plugin>("tql2.summarize");
-    auto sort = plugins::find<operator_factory_plugin>("tql2.sort");
+    const auto* summarize
+      = plugins::find<operator_factory_plugin>("tql2.summarize");
+    const auto* sort = plugins::find<operator_factory_plugin>("tql2.sort");
     TENZIR_ASSERT(summarize);
     TENZIR_ASSERT(sort);
     auto ident = ast::identifier{"count", loc};

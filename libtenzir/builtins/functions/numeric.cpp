@@ -137,8 +137,8 @@ public:
     return "tql2.round";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto value = ast::expression{};
     auto spec = std::optional<located<duration>>{};
     TRY(argument_parser2::function("round")
@@ -161,8 +161,8 @@ public:
     return "tql2.sqrt";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(
       argument_parser2::function("sqrt").add(expr, "<number>").parse(inv, ctx));
@@ -230,8 +230,8 @@ public:
     return "tql2.random";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     argument_parser2::function("random").parse(inv, ctx).ignore();
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -433,6 +433,55 @@ public:
   }
 };
 
+class median final : public aggregation_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.median";
+  }
+
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    // TODO: Reconsider whether we want a default here. Maybe positional?
+    auto delta_opt = std::optional<located<int64_t>>{};
+    auto buffer_size_opt = std::optional<located<int64_t>>{};
+    TRY(argument_parser2::function("median")
+          .add(expr, "expr")
+          // TODO: This is a test for hidden parameters.
+          .add("_delta", delta_opt)
+          .add("_buffer_size", buffer_size_opt)
+          .parse(inv, ctx));
+    // TODO: This function probably already exists. If not, it should.
+    auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {
+      if (0 <= x && x <= std::numeric_limits<uint32_t>::max()) {
+        return static_cast<uint32_t>(x);
+      }
+      return std::nullopt;
+    };
+    auto delta = uint32_t{100};
+    if (delta_opt) {
+      if (auto narrowed = try_narrow(delta_opt->inner)) {
+        delta = *narrowed;
+      } else {
+        diagnostic::error("expected delta to fit in a uint32")
+          .primary(*delta_opt)
+          .emit(ctx);
+      }
+    }
+    auto buffer_size = uint32_t{500};
+    if (buffer_size_opt) {
+      if (auto narrowed = try_narrow(buffer_size_opt->inner)) {
+        buffer_size = *narrowed;
+      } else {
+        diagnostic::error("expected buffer size to fit in a uint32")
+          .primary(*buffer_size_opt)
+          .emit(ctx);
+      }
+    }
+    return std::make_unique<quantile_instance>(expr, 0.5, delta, buffer_size);
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::numeric
@@ -442,3 +491,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sqrt)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::random)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::count)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::quantile)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::median)

@@ -251,7 +251,7 @@ private:
 ///
 /// Note that this is not an actual `expression`. Instead, expressions can be
 /// converted to `selector` on-demand. Currently, this is limited to meta
-/// selectors (e.g., `meta.tag`) and simple selectors (see `simple_selector`).
+/// selectors (e.g., `@tag`) and simple selectors (see `simple_selector`).
 struct selector : variant<meta, simple_selector> {
   using variant::variant;
 

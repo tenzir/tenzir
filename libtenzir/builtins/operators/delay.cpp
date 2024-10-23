@@ -272,7 +272,7 @@ class plugin2 final : public virtual operator_plugin2<delay_operator2> {
     argument_parser2::operator_("delay")
       .add(expr, "<expr>")
       .add("speed", speed)
-      .add("start", speed)
+      .add("start", start)
       .parse(inv, ctx)
       .ignore();
     if (speed and speed->inner <= 0.0) {

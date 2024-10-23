@@ -28,6 +28,6 @@ assert x > 2
 Check that the topic only contains OCSF network activity events:
 ```tql
 subscribe "network"
-assert meta.name == "ocsf.network_activity"
+assert @name == "ocsf.network_activity"
 // continue processing
 ```
