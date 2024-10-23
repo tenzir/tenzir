@@ -1,4 +1,4 @@
-# How Does Tenzir Work?
+# How Tenzir Works
 
 Tenzir revolves around three primary components:
 

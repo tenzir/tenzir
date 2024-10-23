@@ -165,7 +165,7 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'how-does-tenzir-work/README',
+      id: 'how-tenzir-works/README',
     },
     {
       type: 'doc',
