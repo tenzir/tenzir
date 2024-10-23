@@ -36,7 +36,7 @@ echo YOUR_DOCKER_TOKEN | docker login ghcr.io -u tenzir-distribution --password-
 You need to configure a few external services to run the platform, such as a
 HTTP reverse proxy, an identity provider, and a state database.
 
-Scroll down to the [configuration options](#configuration-option) and populate
+Scroll down to the [configuration options](#configuration-options) and populate
 a `.env` file with your individual settings.
 
 ## Run the Platform
