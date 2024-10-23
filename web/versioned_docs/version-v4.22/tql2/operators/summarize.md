@@ -46,9 +46,12 @@ differently, take exactly one argument:
   values to be booleans.
 - `all`: Computes the conjunction (AND) of all grouped values. Requires the
   values to be booleans.
+- `first`: Takes the first of all grouped values that is not null.
+- `last`: Takes the last of all grouped values that is not null.
 - `mean`: Computes the mean of all grouped values.
 - `median`: Computes the approximate median of all grouped values with a
   t-digest algorithm.
+- `mode`: Takes the most common of all grouped values that is not null.
 - `quantile`: Computes the quantile specified by the named argument `q`, for
   example: `quantile(x, q=0.2)`.
 - `stddev`: Computes the standard deviation of all grouped values.
@@ -57,8 +60,7 @@ differently, take exactly one argument:
   that are not null.
 - `collect`: Creates a list of all grouped values that are not null, preserving
   duplicates.
-- `sample`: Takes the first of all grouped values that is not null.
-- `count`:  When used as `count()`, simply counts the events in the group. When
+- `count`: When used as `count()`, simply counts the events in the group. When
   used as `count(x)`, counts all grouped values that are not null.
 - `count_distinct`: Counts all distinct grouped values that are not null.
 
@@ -74,6 +76,7 @@ summarize x=sum(x)
 ```
 
 Group over `y` and compute the sum of `x` for each group:
+
 ```tql
 from [
   {x: 0, y: 0, z: 1},

@@ -62,13 +62,13 @@ instance, `from {x: 1, y: 2} | z = this` has the output
 `{x: 1, y: 2, z: {x: 1, y: 2}}`. This keyword can also be used to overwrite the
 whole event, as demonstrated by `this = {a: x, y: b}`.
 
-### `meta`
+### Metadata
 
 Events carry not only data, but also metadata. To refer to the metadata, use the
-`meta` keyword. For example, `meta.name` carries the name of the event.
-Currently, the set of metadata fields is limited to just  `meta.name`,
-`meta.import_time` and `meta.internal`, but will potentially be expanded later
-to allow arbitrary user-defined metadata fields.
+`@` prefix. For example, `@name` carries the name of the event. Currently, the
+set of metadata fields is limited to just  `@name`, `@import_time` and
+`@internal`, but will potentially be expanded later to allow arbitrary
+user-defined metadata fields.
 
 ### Unary Expression
 

@@ -284,7 +284,7 @@ package_add "/path/to/package.yaml", inputs={
 
 The package should show up in the list of packages after installation:
 
-```
+```tql
 // tql2
 packages
 where id == "sslbl"
@@ -292,7 +292,7 @@ where id == "sslbl"
 
 The pipelines that came with the package also have its ID prefixed:
 
-```
+```tql
 // tql2
 pipelines
 where id.starts_with("sslbl")
@@ -300,7 +300,7 @@ where id.starts_with("sslbl")
 
 And the context is also there:
 
-```
+```tql
 // tql2
 contexts
 where id.starts_with("sslbl")
