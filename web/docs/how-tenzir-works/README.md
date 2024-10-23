@@ -2,9 +2,9 @@
 
 Tenzir revolves around three primary components:
 
-- **Pipeline**: A defined sequence of operators responsible for loading,
-  parsing, transforming, and routing data. Pipelines are the core mechanism for
-  data processing.
+- **Pipeline**: A sequence of operators responsible for loading, parsing,
+  transforming, and routing data. Pipelines are the core mechanism for data
+  processing.
 - **Node**: A running process that manages and executes pipelines.
 - **Platform**: A higher-level management layer that provides oversight and
   control over multiple nodes.
@@ -17,21 +17,22 @@ Tenzir offers flexibility in running pipelines through two main modes:
    `tenzir` binary. This mode is ideal for quick, manual data transformations
    akin to how one would use `jq`, but with broader data handling capabilities.
 2. **Managed Execution via Nodes**: For more sustained or automated data
-   processing, pipelines can be managed within a node. This is either launched
+   processing, pipelines can be managed within a node that either launched
    as a Docker container or by running the `tenzir-node` binary.
 
 ![Pipelines Two Ways](user-journey-1.svg)
 
 The standalone option caters to interactive, ad-hoc tasks, while managed
-pipelines are better suited for continuous or scheduled dataflows. Notably,
-managed pipelines can handle both long-term and short-duration jobs.
+pipelines are better suited for continuous or scheduled dataflows. Managed
+pipelines have direct access to additional features within the node runtime,
+such as an indexed storage engine and [contexts](../contexts.md).
 
 ## Connecting Nodes to the Platform
 
 When deploying a node, it will automatically attempt to connect to the platform,
 providing a seamless way to manage and deploy pipelines through the platform’s
 web interface. However, using the platform is optional—pipelines can still be
-controlled directly via the node’s API in a more hands-on, CRUD-like approach.
+controlled directly via the node's API in a more hands-on, CRUD-like approach.
 
 ![Nodes and Platform](user-journey-2.svg)
 
@@ -39,6 +40,10 @@ The platform, beyond pipeline management, offers user and workspace
 administration, authentication support via external identity providers (IdP),
 and persistent storage for dashboards. These dashboards can be customized with
 charts, which are themselves powered by pipelines.
+
+We host one instance of the platform at
+[app.tenzir.com](https://app.tenzir.com), but you can also [deploy the platform
+on premises](../installation/deploy-the-platform.md).
 
 ## Pipeline Use Cases
 
