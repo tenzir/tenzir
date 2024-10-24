@@ -2,32 +2,30 @@
 
 Checks whether an IP address has version number 4.
 
-```tql title="Synopsis"
-is_v4(ip) -> str
+```tql
+is_v4(x:ip) -> bool
 ```
 
 ## Description
 
-The `ipv4` function checks whether the version number of an IP address is 4.
+The `ipv4` function checks whether the version number of a given IP address `x`
+is 4.
 
 ## Examples
 
 ### Check if an IP is IPv4
 
-```tql title="Pipeline"
+```tql
 from {
-  x: 1.2.3.4,
-  y: ::1,
+  x: is_v4(1.2.3.4),
+  y: is_v4(::1),
 }
-x_is_v4 = x.is_v4()
-y_is_v4 = y.is_v4()
-drop x, y
 ```
 
-```tql title="Output"
+```tql
 {
-  "x_is_v4": true,
-  "y_is_v4": false
+  x: true,
+  y: false
 }
 ```
 

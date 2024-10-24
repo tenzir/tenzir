@@ -3,7 +3,7 @@
 Computes the [Community ID](https://github.com/corelight/community-id-spec) for
 a network connection/flow.
 
-```tql title="Synopsis"
+```tql
 community_id(src_ip=ip, dst_ip=ip, proto=str,
              [src_port=int, dst_port=int, seed=int]) -> str
 ```
@@ -22,28 +22,15 @@ The `src_ip` and `dst_ip` parameters are required. The `proto` string is also re
 
 ### Compute a Community ID from a flow 5-tuple
 
-```tql title="Pipeline"
+```tql
 from {
-  source_ip: 1.2.3.4,
-  source_port: 4584,
-  destination_ip: 43.3.132.3,
-  destination_port: 3483,
-  protocol: "tcp",
+  x: community_id(src_ip=1.2.3.4, src_port=4584, dst_ip=43.3.132.3,
+                  dst_port=3483, proto="tcp")
 }
-cid = community_id(
-  src_ip=source_ip,
-  src_port=source_port,
-  dst_ip=destination_ip,
-  dst_port=destination_port,
-  proto=protocol,
-)
-select cid
 ```
 
-```tql title="Output"
-{
-  "cid": "1:koNcqhFRD5kb254ZrLsdv630jCM="
-}
+```tql
+{x: "1:koNcqhFRD5kb254ZrLsdv630jCM="}
 ```
 
 ### Compute a Community ID from a host pair
@@ -51,17 +38,10 @@ select cid
 Because source and destination port are optional, it suffices to provide two IP
 addreses to compute a valid Community ID.
 
-```tql title="Pipeline"
-from {
-  src: 1.2.3.4,
-  dst: 43.3.132.3,
-}
-cid = community_id(src_ip=src, dst_ip=dst, proto="udp")
-select cid
+```tql
+from {x: community_id(src_ip=1.2.3.4, dst_ip=43.3.132.3, proto="udp")}
 ```
 
-```tql title="Output"
-{
-  "cid": "1:7TrrMeH98PrUKC0ySu3RNmpUr48="
-}
+```tql
+{x: "1:7TrrMeH98PrUKC0ySu3RNmpUr48="}
 ```
