@@ -190,16 +190,38 @@ struct expression {
   template <class T>
     requires(caf::detail::tl_contains<expression_kinds,
                                       std::remove_cvref_t<T>>::value)
-  auto is() const -> bool {
+  auto as() -> T* {
     constexpr auto visitor = detail::overload{
-      [](const T&) {
-        return true;
+      [](T& t) -> T* {
+        return &t;
       },
-      [](const auto&) {
-        return false;
+      [](const auto&) -> T* {
+        return nullptr;
       },
     };
     return match(visitor);
+  }
+
+  template <class T>
+    requires(caf::detail::tl_contains<expression_kinds,
+                                      std::remove_cvref_t<T>>::value)
+  auto as() const -> const T* {
+    constexpr auto visitor = detail::overload{
+      [](const T& t) -> const T* {
+        return &t;
+      },
+      [](const auto&) -> const T* {
+        return nullptr;
+      },
+    };
+    return match(visitor);
+  }
+
+  template <class T>
+    requires(caf::detail::tl_contains<expression_kinds,
+                                      std::remove_cvref_t<T>>::value)
+  auto is() const -> bool {
+    return as<T>() != nullptr;
   }
 
   template <class Result = void, class... Fs>

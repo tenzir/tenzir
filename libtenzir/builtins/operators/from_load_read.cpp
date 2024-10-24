@@ -14,6 +14,7 @@
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/util/uri.h>
@@ -363,7 +364,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         .emit(ctx);
       return failure::promise();
     }
-    const auto has_pipeline_argument = inv.args.back().is<ast::pipeline_expr>();
+    auto pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
     auto url = boost::urls::parse_uri_reference(path);
     if (not url) {
       diagnostic::error("Invalid URI")
@@ -403,7 +404,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       }
     }
     auto compression_name = std::string_view{};
-    if (not has_pipeline_argument) {
+    if (not pipeline_argument) {
       const auto& file = url->segments().back();
       auto first_dot = file.find('.');
       if (first_dot == file.npos) {
@@ -473,32 +474,55 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         }
       }
     }
-
-    fmt::print("source: {}\n", load_plugin ? load_plugin->name() : "none");
-    fmt::print("decompress: {}\n",
-               decompress_plugin ? decompress_plugin->name() : "none");
-    fmt::print("read: {}\n", read_plugin ? read_plugin->name() : "none");
-
-    if (load_plugin->accepts_pipeline()) {
-      TENZIR_ASSERT(inv.args.back().is<ast::pipeline_expr>());
-      TENZIR_UNIMPLEMENTED();
+    TENZIR_TRACE("`from` operator was given a pipeline : {}",
+                 pipeline_argument != nullptr);
+    TENZIR_TRACE("`from` operator determined source    : {}",
+                 load_plugin ? load_plugin->name() : "none");
+    TENZIR_TRACE("`from` operator determined decompress: {}",
+                 decompress_plugin ? decompress_plugin->name() : "none");
+    TENZIR_TRACE("`from` operator determined read      : {}",
+                 read_plugin ? read_plugin->name() : "none");
+    if (load_plugin->load_accepts_pipeline()) {
+      if (not pipeline_argument) {
+        inv.args.emplace_back(ast::pipeline_expr{});
+        pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+        if (decompress_plugin) {
+          auto decompress_ent = ast::entity{std::vector{
+            ast::identifier{decompress_plugin->name(),
+                            inv.args.front().get_location()},
+          }};
+          pipeline_argument->inner.body.emplace_back(
+            ast::invocation{std::move(decompress_ent), {}});
+        }
+        auto read_ent = ast::entity{std::vector{
+          ast::identifier{read_plugin->name(), inv.args.front().get_location()},
+        }};
+        pipeline_argument->inner.body.emplace_back(
+          ast::invocation{std::move(read_ent), {}});
+      }
+      return load_plugin->make(std::move(inv), std::move(ctx));
     } else {
       auto result = std::vector<operator_ptr>{};
       TRY(auto load_op, load_plugin->make(inv, ctx));
-      inv.args.clear();
-      auto decompress_op = decltype(load_op){};
-      if (decompress_plugin) {
-        inv.args.emplace_back(
-          ast::constant{std::string{compression_name}, location::unknown});
-        TRY(decompress_op, decompress_plugin->make(inv, ctx));
-        inv.args.clear();
-      }
-      TRY(auto read_op, read_plugin->make(inv, ctx));
       result.emplace_back(std::move(load_op));
-      if (decompress_op) {
-        result.emplace_back(std::move(decompress_op));
+      if (pipeline_argument) {
+        TRY(auto parsed_pipeline,
+            compile(std::move(pipeline_argument->inner), ctx));
+        for (auto&& op : std::move(parsed_pipeline).unwrap()) {
+          result.push_back(std::move(op));
+        }
+      } else {
+        if (decompress_plugin) {
+          auto decompress_op = decltype(load_op){};
+          inv.args.emplace_back(
+            ast::constant{std::string{compression_name}, location::unknown});
+          TRY(decompress_op, decompress_plugin->make(inv, ctx));
+          inv.args.clear();
+          result.emplace_back(std::move(decompress_op));
+        }
+        TRY(auto read_op, read_plugin->make(inv, ctx));
+        result.emplace_back(std::move(read_op));
       }
-      result.emplace_back(std::move(read_op));
       return std::make_unique<pipeline>(std::move(result));
     }
 

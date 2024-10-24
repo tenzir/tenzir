@@ -597,6 +597,10 @@ public:
     }
     return std::make_unique<load_file_operator>(std::move(args));
   }
+
+  auto load_schemes() const -> std::vector<std::string> override {
+    return {"file"};
+  }
 };
 
 class save_file_operator final : public crtp_operator<save_file_operator> {

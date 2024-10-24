@@ -967,6 +967,14 @@ public:
           std::move(args));
       });
   }
+
+  auto load_schemes() const -> std::vector<std::string> override {
+    return {"tcp"};
+  }
+
+  auto load_accepts_pipeline() const -> bool override {
+    return true;
+  }
 };
 
 using load_tcp_bytes_plugin
