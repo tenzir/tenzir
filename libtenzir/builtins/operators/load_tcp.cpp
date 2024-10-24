@@ -346,7 +346,6 @@ struct connection_manager_state {
     auto async_read(connection_manager_actor<Elements>::pointer self,
                     shared_diagnostic_handler diagnostics) -> void {
       // NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays)
-      TENZIR_WARN("async_read, {}", this->socket->native_handle());
       auto read_buffer
         = std::make_unique<chunk::value_type[]>(read_buffer_size);
       // NOLINTEND(cppcoreguidelines-avoid-c-arrays)
@@ -356,7 +355,6 @@ struct connection_manager_state {
                       diagnostics = std::move(diagnostics),
                       read_buffer = std::move(read_buffer)](
                        boost::system::error_code ec, size_t length) mutable {
-        TENZIR_WARN("on_read, {}", connection->socket->native_handle());
         connection->reads += 1;
         connection->bytes_read += length;
         if (ec) {
@@ -389,8 +387,7 @@ struct connection_manager_state {
                                TENZIR_ASSERT(connection->rp.pending());
                                connection->rp.deliver(std::move(chunk));
                                if (not ec) {
-                                 TENZIR_WARN("Async read from action");
-                                 connection->async_read(self,
+                                   connection->async_read(self,
                                                         std::move(diagnostics));
                                }
                              }));
@@ -661,7 +658,6 @@ struct connection_manager_state {
       chunk = std::move(connection->second->chunks.front());
       connection->second->chunks.pop();
     }
-    TENZIR_WARN("read_from_connection: should_read={}", should_read);
     if (should_read) {
       connection->second->async_read(self, diagnostics);
     }
