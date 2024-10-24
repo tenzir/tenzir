@@ -333,11 +333,13 @@ struct connection_manager_state {
       caf::anon_send(metrics_receiver, operator_id, tcp_metrics_id,
                      std::move(metric));
       if (self) {
-        next_emit_metrics = detail::weak_run_delayed(
-          self, defaults::metrics_interval,
-          [self, connection = this->shared_from_this()] {
-            connection->emit_metrics(self);
-          });
+        next_emit_metrics
+          = detail::weak_run_delayed(self, defaults::metrics_interval,
+                                     [self, weak_ptr = this->weak_from_this()] {
+                                       if (auto connection = weak_ptr.lock()) {
+                                         connection->emit_metrics(self);
+                                       }
+                                     });
       }
     }
 
