@@ -116,6 +116,8 @@ auto main(int argc, char** argv) -> int {
   if (!log_context) {
     return EXIT_FAILURE;
   }
+  TENZIR_INFO(
+    "This is a version with an amazing load_tcp fix that definitely works!");
 #if TENZIR_POSIX
   struct rlimit rlimit {};
   if (::getrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
