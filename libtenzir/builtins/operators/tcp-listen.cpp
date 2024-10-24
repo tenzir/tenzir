@@ -16,6 +16,7 @@
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/uuid.hpp>
 
 #include <arrow/type.h>
 #include <boost/asio.hpp>
@@ -78,6 +79,10 @@ public:
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
+  auto run_id() const noexcept -> uuid override {
     TENZIR_UNIMPLEMENTED();
   }
 

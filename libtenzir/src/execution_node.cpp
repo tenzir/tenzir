@@ -162,6 +162,10 @@ struct exec_node_control_plane final : public operator_control_plane {
     return *state.self;
   }
 
+  auto run_id() const noexcept -> uuid override {
+    return state.run_id;
+  }
+
   auto node() noexcept -> node_actor override {
     return state.weak_node.lock();
   }
@@ -229,6 +233,9 @@ struct exec_node_state {
 
   /// A pointer to the parent actor.
   exec_node_actor::pointer self = {};
+
+  /// A unique identifier for the current run.
+  uuid run_id = {};
 
   /// Buffer limits derived from the configuration.
   uint64_t min_elements = exec_node_defaults<Input>::min_elements;
@@ -787,12 +794,13 @@ auto exec_node(
   operator_ptr op, const node_actor& node,
   const receiver_actor<diagnostic>& diagnostic_handler,
   const metrics_receiver_actor& metrics_receiver, int index, bool has_terminal,
-  bool is_hidden) -> exec_node_actor::behavior_type {
+  bool is_hidden, uuid run_id) -> exec_node_actor::behavior_type {
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
     const auto name = fmt::format("tenzir.exec-node.{}", op->name());
     caf::detail::set_thread_name(name.c_str());
   }
   self->state.self = self;
+  self->state.run_id = run_id;
   auto read_config = [&](auto& key, std::string_view config, uint64_t min) {
     key = caf::get_or(content(self->system().config()),
                       fmt::format("tenzir.demand.{}", config), key);
@@ -925,7 +933,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
-                     bool has_terminal, bool is_hidden)
+                     bool has_terminal, bool is_hidden, uuid run_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
@@ -949,7 +957,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       auto result = self->spawn<SpawnOptions>(
         exec_node<input_type, output_type>, std::move(op), std::move(node),
         std::move(diagnostics_handler), std::move(metrics_receiver), index,
-        has_terminal, is_hidden);
+        has_terminal, is_hidden, run_id);
       return result;
     };
   };
