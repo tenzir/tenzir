@@ -1,24 +1,56 @@
 # round
 
-...
+Rounds a number or a time/duration with a specified unit.
 
-<pre>
-<span style={{color: "white"}}>
-<span style={{color: "#ffa657"}}>number</span><span style={{color: "#ff7b72"}}>.</span><span style={{color: "#d2a8ff"}}>round</span>()<br/>
-<span style={{color: "#ffa657"}}>time</span><span style={{color: "#ff7b72"}}>.</span><span style={{color: "#d2a8ff"}}>round</span>(unit<span style={{color: "#ff7b72"}}>:</span><span style={{color: "#ffa657"}}>duration</span>)<br/>
-<span style={{color: "#ffa657"}}>duration</span><span style={{color: "#ff7b72"}}>.</span><span style={{color: "#d2a8ff"}}>round</span>(unit<span style={{color: "#ff7b72"}}>:</span><span style={{color: "#ffa657"}}>duration</span>)
-</span>
-</pre>
-
-### Description
-
-### Examples
-
+```tql
+round(x:number)
+round(x:time, unit:duration)
+round(x:duration, unit:duration)
 ```
-3.4.round() == 3
-3.5.round() == 4
--3.4.round() == -3
 
-42min.round(1h) == 1h
-2024-08-23.round(1y) == 2025-01-01
+## Description
+
+The `round` function rounds a number `x` to an integer.
+
+For time and duration values, use the second `unit` argument to define the
+rounding unit.
+
+## Examples
+
+### Round integers
+
+```tql
+from {
+  x: round(3.4),
+  y: round(3.5),
+  z: round(-3.4),
+}
 ```
+
+```tql
+{
+  x: 3,
+  y: 4,
+  z: -3,
+}
+```
+
+### Round time and duration values
+
+```tql
+from {
+  x: round(2024-08-23, 1y)
+  y: round(42m, 1h)
+}
+```
+
+```tql
+{
+  x: 2025-01-01,
+  y: 1h,
+}
+```
+
+## See Also
+
+[`ceil`](ceil.md), [`floor`](floor.md)
