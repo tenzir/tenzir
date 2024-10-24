@@ -63,7 +63,7 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`from`](./operators/from.md) | Loads from a URI | `from "s3://examplebucket/obj.json.gz` <!--at the top because its important-->
+[`from`](./operators/from.md) | Loads from a URI | `from "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
 [`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
 [`export`](./operators/export.md) | Retrieves events from the node | `export`
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`

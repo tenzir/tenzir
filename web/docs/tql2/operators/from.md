@@ -7,7 +7,7 @@ sidebar_class_name: hidden
 Loads from a URI, inferring the source, compression and format.
 
 ```tql
-from uri:str [ loader_args ..., { pipeline } ]
+from uri:str, [loader_args... { … }]
 ```
 
 :::tip Use `from` if you can
@@ -24,32 +24,29 @@ It will try to infer the connector, compression and format based on the given UR
 
 The URI to load from.
 
-### `loader_args ... (optional)`
+### `loader_args... (optional)`
 
 An optional set of arguments passed to the loader.
 This can be used to e.g. pass credentials to a connector:
 
 ```tql
-from "https:://example.org/file.json", header={ "Token" : 0 }
+from "https:://example.org/file.json", header={Token: 0}
 ```
 
-### `{ pipeline } (optional)`
+### `{ … } (optional)`
 
 A pipeline that can be used if inference for the compression or format does not work
 or is not sufficient.
 
-:::tip Only specify `{ pipeline }` if you need to
-The `{ pipeline }` argument exists for data ingestion purposes.
-If you want to perform other operations on the data afterwards, write a regular pipeline
-after this operator.
+:::tip Only specify `{ … }` if you need to
+The `{ … }` argument exists for data ingestion purposes.
+If you want to perform other operations on the data afterwards, continue the
+pipeline after this operator instead of providing a sub-pipeline.
 :::
 
-:::warning Specifying the pipeline disables compression and format inference
-The pipeline argument is where the decompression and parsing happen. If you specify
-it explicitly, this will disable inference.
-
-Read more below.
-:::
+If inference fails, or you want to pass additional arguments to the decompression or the parsing step,
+you can do this in the sub-pipeline. Providing this pipeline, disables the inference for decompression
+and parsing format in order to avoid confusion.
 
 ## Explanation
 
@@ -73,9 +70,8 @@ this uses the [`decompress` operator](decompress.md).
 Supported compressions can be found in the [list of supported codecs](decompress.md#codec-str).
 
 The decompression step is optional and will only happen if a compression could be inferred.
-
 If you know that the source is compressed and the compression cannot be inferred, you can use the
-[`{ pipeline }` argument](#-pipeline--optional) to specify the decompression manually.
+[`{ … }` argument](#---optional) to specify the decompression manually.
 
 ### Reading
 
@@ -83,26 +79,21 @@ The format to read is, just as the compression, inferred from the file-ending.
 Supported file formats are the common file endings for our [`read_*` operators](operators.md#parsing).
 
 If you want to provide additional arguments to the parser, you can use the
-[`{ pipeline }` argument](#-pipeline--optional) to specify the parsing manually.
-
-This can be useful, if you e.g. know that the input is `suricata` or `ndjson` instead of just plain `json`.
-
-### Effects of `{ pipeline }`
-
-
+[`{ … }` argument](#---optional) to specify the parsing manually. This can be useful,
+if you e.g. know that the input is `suricata` or `ndjson` instead of just plain `json`.
 
 ## Examples
 
 ### Load a local file
 
 ```tql
-from "path/to/my/load/file.csv
+from "path/to/my/load/file.csv"
 ```
 
 ### Load a compressed file
 
 ```tql
-from "path/to/my/load/file.json.bt
+from "path/to/my/load/file.json.bt"
 ```
 
 ### Load a file with parser arguments
@@ -110,7 +101,7 @@ from "path/to/my/load/file.json.bt
 Note how the explicit `decompress` step is now necessary:
 
 ```tql
-from "path/to/my/load/file.json.bt {
+from "path/to/my/load/file.json.bt" {
   decompress "brotoli" // this is now necessary due to the pipeline argument
   read_ndjson selector="event_type:suricata"
 }
@@ -119,5 +110,20 @@ from "path/to/my/load/file.json.bt {
 ### Load from HTTP with a header
 
 ```tql
-from "https:://example.org/file.json", header={ "Token" : 0 }
+from "https:://example.org/file.json", header={Token: 0}
+```
+### Create a single event ad-hoc
+
+```tql
+from {Field: "Value", Other_Field: 42 }
+```
+
+### Create multiple events ad-hoc
+
+```tql
+from [
+  {Field: "Value", Other_Field: 0 },
+  {Field: "Value", Other_Field: 1 },
+  {Field: "Value", Other_Field: 2 }
+]
 ```

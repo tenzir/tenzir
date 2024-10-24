@@ -62,6 +62,10 @@ public:
           .parse(inv, ctx));
     return std::make_unique<load_abs_operator>(std::move(uri));
   }
+
+  auto load_schemes() const -> std::vector<std::string> override {
+    return {"abfs", "abfss"};
+  }
 };
 
 } // namespace tenzir::plugins::abs

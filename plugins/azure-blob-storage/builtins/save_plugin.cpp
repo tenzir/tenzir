@@ -64,6 +64,10 @@ public:
           .parse(inv, ctx));
     return std::make_unique<save_abs_operator>(std::move(uri));
   }
+
+  auto save_schemes() const -> std::vector<std::string> override {
+    return {"abfs", "abfss"};
+  }
 };
 
 } // namespace tenzir::plugins::abs
