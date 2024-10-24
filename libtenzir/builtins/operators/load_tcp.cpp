@@ -333,11 +333,13 @@ struct connection_manager_state {
       caf::anon_send(metrics_receiver, operator_id, tcp_metrics_id,
                      std::move(metric));
       if (self) {
-        next_emit_metrics = detail::weak_run_delayed(
-          self, defaults::metrics_interval,
-          [self, connection = this->shared_from_this()] {
-            connection->emit_metrics(self);
-          });
+        next_emit_metrics
+          = detail::weak_run_delayed(self, defaults::metrics_interval,
+                                     [self, weak_ptr = this->weak_from_this()] {
+                                       if (auto connection = weak_ptr.lock()) {
+                                         connection->emit_metrics(self);
+                                       }
+                                     });
       }
     }
 
@@ -379,13 +381,15 @@ struct connection_manager_state {
           if (connection->rp.pending()) {
             caf::anon_send(caf::actor_cast<caf::actor>(self),
                            caf::make_action(
-                             [self, connection, chunk = std::move(chunk),
+                             [self, connection, ec, chunk = std::move(chunk),
                               diagnostics = std::move(diagnostics)]() mutable {
                                auto lock = std::unique_lock{connection->mutex};
                                TENZIR_ASSERT(connection->rp.pending());
                                connection->rp.deliver(std::move(chunk));
-                               connection->async_read(self,
-                                                      std::move(diagnostics));
+                               if (not ec) {
+                                 connection->async_read(self,
+                                                        std::move(diagnostics));
+                               }
                              }));
             TENZIR_ASSERT(connection->chunks.empty());
             return;
@@ -394,7 +398,7 @@ struct connection_manager_state {
           TENZIR_ASSERT(connection->chunks.size() <= max_queued_chunks);
           should_read = connection->chunks.size() < max_queued_chunks;
         }
-        if (should_read) {
+        if (not ec and should_read) {
           connection->async_read(self, std::move(diagnostics));
         }
       };
@@ -636,8 +640,10 @@ struct connection_manager_state {
   read_from_connection(boost::asio::ip::tcp::socket::native_handle_type handle)
     -> caf::result<chunk_ptr> {
     auto connection = connections.find(handle);
-    TENZIR_ASSERT(connection != connections.end());
     auto chunk = chunk_ptr{};
+    if (connection == connections.end()) {
+      return chunk;
+    }
     auto should_read = false;
     {
       auto lock = std::unique_lock{connection->second->mutex};
