@@ -29,6 +29,9 @@ struct operator_control_plane {
   /// Returns the hosting actor.
   virtual auto self() noexcept -> exec_node_actor::base& = 0;
 
+  /// Returns a unique id for the current run.
+  virtual auto run_id() const noexcept -> uuid = 0;
+
   /// Returns the node actor, if the operator location is remote.
   virtual auto node() noexcept -> node_actor = 0;
 

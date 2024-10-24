@@ -172,14 +172,14 @@ public:
 
   template <class Elements>
     requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input,
-                  operator_control_plane& ctrl) const -> generator<Elements> {
+  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
+    -> generator<Elements> {
     // The internal-write-buffer operator is spawned after the
     // internal-read-buffer operator, so we can safely get the buffer actor here
     // after the first yield and then just remove it from the registry again.
     co_yield {};
     auto buffer = ctrl.self().system().registry().get<buffer_actor<Elements>>(
-      fmt::format("tenzir.buffer.{}", id_));
+      fmt::format("tenzir.buffer.{}.{}", id_, ctrl.run_id()));
     TENZIR_ASSERT(buffer);
     ctrl.self().link_to(buffer);
     ctrl.self().system().registry().erase(buffer->id());
@@ -261,7 +261,7 @@ public:
     return buffer_policy::block;
   }
 
-  auto metrics(operator_control_plane& ctrl) const -> metric_handler {
+  static auto metrics(operator_control_plane& ctrl) -> metric_handler {
     return ctrl.metrics(type{
       "tenzir.metrics.buffer",
       record_type{
@@ -274,8 +274,8 @@ public:
 
   template <class Elements>
     requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input,
-                  operator_control_plane& ctrl) const -> generator<Elements> {
+  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
+    -> generator<Elements> {
     // The internal-read-buffer operator is spawned before the
     // internal-write-buffer operator, so we spawn the buffer actor here and
     // move it into the registry before the first yield.
@@ -283,8 +283,8 @@ public:
       = ctrl.self().spawn<caf::linked>(make_buffer<Elements>, capacity_,
                                        policy<Elements>(ctrl), metrics(ctrl),
                                        ctrl.shared_diagnostics());
-    ctrl.self().system().registry().put(fmt::format("tenzir.buffer.{}", id_),
-                                        buffer);
+    ctrl.self().system().registry().put(
+      fmt::format("tenzir.buffer.{}.{}", id_, ctrl.run_id()), buffer);
     co_yield {};
     // Now, we can get batch by batch from the buffer.
     for (auto&& elements : input) {
