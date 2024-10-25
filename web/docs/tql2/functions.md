@@ -69,6 +69,7 @@ Function | Description | Example
 Function | Description | Example
 :--------|:-------------|:-------
 [`community_id`](functions/community_id.md) | Computes a Community ID | `community_id(src_ip=1.2.3.4, dst_ip=4.5.6.7, proto="tcp")`
+[`decapsulate`](functions/decapsulate.md) | Decapsulates PCAP packets | `decapsulate(this)`
 [`is_v4`](functions/is_v4.md) | Checks if an IP is IPv4 | `is_v4(1.2.3.4)`
 [`is_v6`](functions/is_v6.md) | Checks if an IP is IPv6 | `is_v6(::1)`
 
