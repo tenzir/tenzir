@@ -26,6 +26,34 @@ suitable for function chaining, e.g., `x.f().g().h()` reads left-to-right as
 
 Throughout our documentation, we use the free function syntax.
 
+## String
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`capitalize`](functions/capitalize.md) | Capitalizes the first character of a string | `capitalize("hello")`
+[`ends_with`](functions/ends_with.md) | Checks if a string ends with a substring | `ends_with("hello", "lo")`
+[`is_alnum`](functions/is_alnum.md) | Checks if a string is alphanumeric | `is_alnum("hello123")`
+[`is_alpha`](functions/is_alpha.md) | Checks if a string contains only letters | `is_alpha("hello")`
+[`is_lower`](functions/is_lower.md) | Checks if a string is in lowercase | `is_lower("hello")`
+[`is_numeric`](functions/is_numeric.md) | Checks if a string contains only numbers | `is_numeric("1234")`
+[`is_printable`](functions/is_printable.md) | Checks if a string contains only printable characters | `is_printable("hello")`
+[`is_title`](functions/is_title.md) | Checks if a string follows title case | `is_title("Hello World")`
+[`is_upper`](functions/is_upper.md) | Checks if a string is in uppercase | `is_upper("HELLO")`
+[`length_bytes`](functions/length_bytes.md) | Returns the length of a string in bytes | `length_bytes("hello")`
+[`length_chars`](functions/length_chars.md) | Returns the length of a string in characters | `length_chars("hello")`
+[`starts_with`](functions/starts_with.md) | Checks if a string starts with a substring | `starts_with("hello", "he")`
+[`to_lower`](functions/to_lower.md) | Converts a string to lowercase | `to_lower("HELLO")`
+[`to_title`](functions/to_title.md) | Converts a string to title case | `to_title("hello world")`
+[`to_upper`](functions/to_upper.md) | Converts a string to uppercase | `to_upper("hello")`
+[`trim`](functions/trim.md) | Trims whitespace from both ends of a string | `trim(" hello ")`
+[`trim_end`](functions/trim_end.md) | Trims whitespace from the end of a string | `trim_end("hello ")`
+[`trim_start`](functions/trim_start.md) | Trims whitespace from the start of a string | `trim_start(" hello")`
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`file_name`](functions/file_name.md) | Extracts the file name from a file path | `file_name("/path/to/log.json")`
+[`parent_dir`](functions/parent_dir.md) | Extracts the parent directory from a file path | `parent_dir("/path/to/log.json")`
+
 ## Math
 
 Function | Description | Example
@@ -44,6 +72,16 @@ Function | Description | Example
 [`is_v4`](functions/is_v4.md) | Checks if an IP is IPv4 | `is_v4(1.2.3.4)`
 [`is_v6`](functions/is_v6.md) | Checks if an IP is IPv6 | `is_v6(::1)`
 
+<!--
+
+## OCSF
+- `ocsf::category_name`
+- `ocsf::category_uid`
+- `ocsf::class_name`
+- `ocsf::class_uid`
+
+-->
+
 ## Type System
 
 Function | Description | Example
@@ -58,16 +96,6 @@ Function | Description | Example
 
 <!--
 
-## OCSF
-- `ocsf::category_name`
-- `ocsf::category_uid`
-- `ocsf::class_name`
-- `ocsf::class_uid`
-
-## Paths
-- `file_name`
-- `parent_dir`
-
 ## Aggregation (?)
 - `count`
 - `quantile`
@@ -81,26 +109,6 @@ Function | Description | Example
 - `now`
 - `as_secs`
 - `since_epoch`
-
-## Strings
-- `capitalize`
-- `ends_with`
-- `is_alnum`
-- `is_alpha`
-- `is_lower`
-- `is_numeric`
-- `is_printable`
-- `is_title`
-- `is_upper`
-- `length_bytes`
-- `length_chars`
-- `starts_with`
-- `to_lower`
-- `to_title`
-- `to_upper`
-- `trim`
-- `trim_end`
-- `trim_start`
 
 ## Lists
 - `length`
