@@ -318,7 +318,46 @@ class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
   }
 };
 
-class read_yaml final
+class write_yaml final : public crtp_operator<write_yaml> {
+public:
+  write_yaml() = default;
+
+  auto name() const -> std::string override {
+    return "tql2.write_yaml";
+  }
+
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto printer = yaml_printer{}.instantiate(type{}, ctrl);
+    TENZIR_ASSERT(printer);
+    TENZIR_ASSERT(*printer);
+    for (auto&& slice : input) {
+      auto yielded = false;
+      for (auto&& chunk : (*printer)->process(slice)) {
+        co_yield std::move(chunk);
+        yielded = true;
+      }
+      if (not yielded) {
+        co_yield {};
+      }
+    }
+    for (auto&& chunk : (*printer)->finish()) {
+      co_yield std::move(chunk);
+    }
+  }
+
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, write_yaml& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class read_yaml_plugin final
   : public virtual operator_plugin2<parser_adapter<yaml_parser>> {
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
@@ -337,8 +376,23 @@ class read_yaml final
   }
 };
 
+class write_yaml_plugin final : public virtual operator_plugin2<write_yaml> {
+public:
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    // TODO: More options, and consider `null_fields=false` as default.
+    TRY(argument_parser2::operator_("write_yaml").parse(inv, ctx));
+    return std::make_unique<write_yaml>();
+  }
+
+  auto write_extensions() const -> std::vector<std::string> override {
+    return {"yaml"};
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::yaml
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::yaml_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::read_yaml)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::read_yaml_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::write_yaml_plugin)

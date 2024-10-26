@@ -40,6 +40,10 @@ public:
   virtual auto read_extensions() const -> std::vector<std::string> {
     return {};
   }
+  /// Returns the file extensions which the operator can write (e.g. `yaml`).
+  virtual auto write_extensions() const -> std::vector<std::string> {
+    return {};
+  }
   // whether this operator accepts a sub-pipeline. This is used in the tql2
   // `from` implementation.
   virtual auto load_accepts_pipeline() const -> bool {

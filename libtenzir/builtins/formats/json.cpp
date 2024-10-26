@@ -1323,6 +1323,10 @@ public:
           .parse(inv, ctx));
     return std::make_unique<write_json>(args);
   }
+
+  auto write_extensions() const -> std::vector<std::string> override {
+    return {"json"};
+  }
 };
 
 } // namespace
