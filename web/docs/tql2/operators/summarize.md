@@ -63,6 +63,9 @@ differently, take exactly one argument:
 - `count`: When used as `count()`, simply counts the events in the group. When
   used as `count(x)`, counts all grouped values that are not null.
 - `count_distinct`: Counts all distinct grouped values that are not null.
+- `over`: Given `fun(…).over(str)`, computes the aggregation function `fun(…)`
+  per unique non-null value of `str`, returning the record `{str: fun(…), …}`
+  with the values of `str` lifted into field names of the returned record.
 
 ## Examples
 
@@ -128,4 +131,19 @@ pairs:
 ```tql
 ts = round(ts, 1h)
 summarize ts, src_ip, dest_ip, sum(bytes_in), sum(bytes_out)
+```
+
+Count events in each category, creating separate counts depending on the name.
+
+```tql
+from [
+  {category: 1, name: "foo", x: 1},
+  {category: 1, name: "bar", x: 2},
+  {category: 1, name: "bar", x: 3},
+  {category: 2, name: "foo", x: 4},
+]
+summarize category, x=sum(x).over(name)
+―――――――――――――――――――――――――――――――――――――――
+{category: 1, x: {foo: 1, bar: 5}}
+{category: 2, x: {foo: 4, bar: null}}
 ```
