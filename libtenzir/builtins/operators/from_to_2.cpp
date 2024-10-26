@@ -68,8 +68,9 @@ private:
 using from_events_plugin = operator_inspection_plugin<from_events>;
 
 class from_plugin2 final : public virtual operator_factory_plugin {
-  auto create_pipeline_from_uri(std::string_view path, invocation inv,
-                                session ctx) const -> failure_or<operator_ptr> {
+  static auto
+  create_pipeline_from_uri(std::string_view path, invocation inv,
+                           session ctx) -> failure_or<operator_ptr> {
     const operator_factory_plugin* load_plugin = nullptr;
     const operator_factory_plugin* decompress_plugin = nullptr;
     const operator_factory_plugin* read_plugin = nullptr;
@@ -105,7 +106,6 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       if (url->has_scheme()) {
         for (const auto& p : plugins::get<operator_factory_plugin>()) {
           const auto name = p->name();
-          // TODO: better way to determine tql2 operator?
           if (not(name.starts_with("load_")
                   or name.starts_with("tql2.load_"))) {
             continue;
@@ -250,10 +250,12 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       } else {
         if (decompress_plugin) {
           auto decompress_op = operator_ptr{};
-          inv.args.emplace_back(
-            ast::constant{std::string{compression_name}, location::unknown});
           TRY(decompress_op,
-              decompress_plugin->make(invocation{inv.self, {}}, ctx));
+              decompress_plugin->make(
+                invocation{inv.self,
+                           {ast::constant{std::string{compression_name},
+                                          location::unknown}}},
+                ctx));
           inv.args.clear();
           result.emplace_back(std::move(decompress_op));
         }
@@ -275,18 +277,6 @@ public:
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    // TODO: Improve diagnostics and consider refactoring.
-    // TODO: Options are only applied to loader?
-    // ```
-    // from "https://example.org/foo.json", headers={"My-Token": "Foo123"}
-    // ---
-    // load "https://example.org/foo.json", headers={"My-Token": "Foo123"}
-    // read_json schema="test123"
-    // ---
-    // from "https://example.org/foo.json",
-    //   headers={"My-Token": "Foo123"},
-    //   read_args=[schema="test123"]
-    // ```
     auto docs = "https://docs.tenzir.com/tql2/operators/from";
     if (inv.args.empty()) {
       diagnostic::error("expected positional argument `<path/url/events>`")
@@ -323,6 +313,246 @@ public:
       },
       [&](auto&) -> failure_or<operator_ptr> {
         diagnostic::error("expected a URI, record or list of records")
+          .primary(inv.args[0])
+          .docs(docs)
+          .emit(ctx);
+        return failure::promise();
+      },
+    };
+    return caf::visit(f, value);
+  }
+};
+
+class to_plugin2 final : public virtual operator_factory_plugin {
+  static auto
+  create_pipeline_from_uri(std::string_view path, invocation inv,
+                           session ctx) -> failure_or<operator_ptr> {
+    const operator_factory_plugin* save_plugin = nullptr;
+    const operator_factory_plugin* compress_plugin = nullptr;
+    const operator_factory_plugin* write_plugin = nullptr;
+    const auto pipeline_count = std::ranges::count_if(
+      inv.args, &ast::expression::is<ast::pipeline_expr>);
+    if (pipeline_count > 1) {
+      diagnostic::error(
+        "`from` can currently not handle more than one nested pipeline")
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+    if (pipeline_count > 0) {
+      auto it = std::ranges::find_if(inv.args,
+                                     &ast::expression::is<ast::pipeline_expr>);
+      if (it != std::prev(inv.args.end())) {
+        diagnostic::error("parsing pipeline must be the last argument")
+          .primary(it->get_location())
+          .primary(inv.args.back().get_location())
+          .emit(ctx);
+        return failure::promise();
+      }
+    }
+    auto url = boost::urls::parse_uri_reference(path);
+    if (not url) {
+      diagnostic::error("Invalid URI")
+        .primary(inv.args.front().get_location())
+        .emit(ctx);
+      return failure::promise();
+    }
+    // determine loader based on schema
+    {
+      if (url->has_scheme()) {
+        for (const auto& p : plugins::get<operator_factory_plugin>()) {
+          const auto name = p->name();
+          if (not(name.starts_with("save_")
+                  or name.starts_with("tql2.save_"))) {
+            continue;
+          }
+          for (auto schema : p->save_schemes()) {
+            if (schema == url->scheme()) {
+              save_plugin = p;
+              break;
+            }
+          }
+          if (save_plugin) {
+            break;
+          }
+        }
+        if (not save_plugin) {
+          diagnostic::error("Could not determine save operator for scheme `{}`",
+                            url->scheme())
+            .primary(inv.args.front().get_location())
+            .emit(ctx);
+          return failure::promise();
+        }
+      } else {
+        save_plugin = plugins::find<operator_factory_plugin>("tql2.save_file");
+      }
+    }
+    auto compression_name = std::string_view{};
+    if (not pipeline_argument) {
+      const auto& file = url->segments().back();
+      auto first_dot = file.find('.');
+      if (first_dot == file.npos) {
+        diagnostic::error("could not infer file type from URI")
+          .primary(inv.args.front().get_location())
+          .emit(ctx);
+        return failure::promise();
+      }
+      auto filename = std::string_view{file}.substr(first_dot);
+      // determine compression based on ending
+      {
+        constexpr static auto extension_to_compression_map
+          = std::array<std::pair<std::string_view, std::string_view>, 8>{{
+            {".br", "brotli"},
+            {".brotli", "brotli"},
+            {".bz2", "bz2"},
+            {".gz", "gzip"},
+            {".gzip", "gzip"},
+            {".lz4", "lz4"},
+            {".zst", "zstd"},
+            {".zstd", "zstd"},
+          }};
+        for (const auto& [extension, name] : extension_to_compression_map) {
+          if (filename.ends_with(extension)) {
+            filename.remove_suffix(extension.size());
+            compression_name = name;
+            break;
+          }
+        }
+        if (not compression_name.empty()) {
+          for (const auto& p : plugins::get<operator_factory_plugin>()) {
+            const auto name = p->name();
+            // TODO, the decompress operators should ultimately be separate
+            // operators
+            if (name != "compress") {
+              continue;
+            }
+            compress_plugin = p;
+          }
+          TENZIR_ASSERT(compress_plugin);
+        }
+      }
+      // determine read operator based on file ending
+      {
+        for (const auto& p : plugins::get<operator_factory_plugin>()) {
+          const auto name = p->name();
+          if (not(name.starts_with("write_")
+                  or name.starts_with("tql2.write_"))) {
+            continue;
+          }
+          // TODO it may be better to use find here to give better error
+          // messages if we find it in the middle of the filename
+          // this may happen for unknown compressions
+          for (auto extension : p->write_extensions()) {
+            if (filename.ends_with(extension)) {
+              write_plugin = p;
+              break;
+            }
+          }
+          if (write_plugin) {
+            break;
+          }
+        }
+        if (not write_plugin) {
+          diagnostic::error("could not infer format from uri")
+            .primary(inv.args.front().get_location())
+            .hint("You can pass a pipeline to `from`")
+            .emit(ctx);
+          return failure::promise();
+        }
+      }
+    }
+    TENZIR_TRACE("to operator: given pipeline size   : {}",
+                 pipeline_argument
+                   ? static_cast<int>(pipeline_argument->inner.body.size())
+                   : -1);
+    TENZIR_TRACE("to operator: determined loader     : {}",
+                 save_plugin ? save_plugin->name() : "none");
+    TENZIR_TRACE("to operator: loader accepts pipe   : {}",
+                 save_plugin->load_accepts_pipeline());
+    TENZIR_TRACE("to operator: determined decompress : {}",
+                 compress_plugin ? compress_plugin->name() : "none");
+    TENZIR_TRACE("to operator: determined read       : {}",
+                 write_plugin ? write_plugin->name() : "none");
+    if (save_plugin->load_accepts_pipeline()) {
+      if (not pipeline_argument) {
+        inv.args.emplace_back(ast::pipeline_expr{});
+        pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+        auto write_ent = ast::entity{std::vector{
+          ast::identifier{write_plugin->name(),
+                          inv.args.front().get_location()},
+        }};
+        pipeline_argument->inner.body.emplace_back(
+          ast::invocation{std::move(write_ent), {}});
+        if (compress_plugin) {
+          auto compress_ent = ast::entity{std::vector{
+            ast::identifier{compress_plugin->name(),
+                            inv.args.front().get_location()},
+          }};
+          pipeline_argument->inner.body.emplace_back(
+            ast::invocation{std::move(compress_ent), {}});
+        }
+      }
+      return save_plugin->make(std::move(inv), std::move(ctx));
+    } else {
+      auto result = std::vector<operator_ptr>{};
+      if (pipeline_argument) {
+        TRY(auto compiled_pipeline,
+            compile(std::move(pipeline_argument->inner), ctx));
+        TENZIR_TRACE("to operator: compiled pipeline ops : {}",
+                     compiled_pipeline.operators().size());
+        result.reserve(1 + compiled_pipeline.operators().size());
+        for (auto&& op : std::move(compiled_pipeline).unwrap()) {
+          result.push_back(std::move(op));
+        }
+        /// remove the pipeline argument, as we dont want to pass it to the
+        /// loader if it doesnt accept one
+        inv.args.pop_back();
+      } else {
+        TRY(auto write_op, write_plugin->make(invocation{inv.self, {}}, ctx));
+        result.emplace_back(std::move(write_op));
+        if (compress_plugin) {
+          auto compress_op = operator_ptr{};
+          inv.args.emplace_back();
+          TRY(compress_op,
+              compress_plugin->make(
+                invocation{inv.self,
+                           {ast::constant{std::string{compression_name},
+                                          location::unknown}}},
+                ctx));
+          inv.args.clear();
+          result.emplace_back(std::move(compress_op));
+        }
+        TENZIR_TRACE("to operator: generated deduced ops : {}", result.size());
+      }
+      TRY(auto save_op, save_plugin->make(std::move(inv), ctx));
+      result.push_back(std::move(save_op));
+      return std::make_unique<pipeline>(std::move(result));
+    }
+  }
+
+public:
+  auto name() const -> std::string override {
+    return "tql2.to";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto docs = "https://docs.tenzir.com/tql2/operators/from";
+    if (inv.args.empty()) {
+      diagnostic::error("expected positional argument `<path>`")
+        .primary(inv.self)
+        .docs(docs)
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto& expr = inv.args[0];
+    TRY(auto value, const_eval(expr, ctx));
+    auto f = detail::overload{
+      [&](std::string& path) -> failure_or<operator_ptr> {
+        return create_pipeline_from_uri(path, std::move(inv), std::move(ctx));
+      },
+      [&](auto&) -> failure_or<operator_ptr> {
+        diagnostic::error("expected a URI")
           .primary(inv.args[0])
           .docs(docs)
           .emit(ctx);
@@ -444,5 +674,6 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_events_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin2)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::to_plugin2)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin2)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::save_plugin2)
