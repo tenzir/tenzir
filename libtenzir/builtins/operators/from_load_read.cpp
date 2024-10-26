@@ -365,6 +365,17 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       return failure::promise();
     }
     auto pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+    if (pipeline_count > 0) {
+      auto it = std::ranges::find_if(inv.args,
+                                     &ast::expression::is<ast::pipeline_expr>);
+      if (it != std::prev(inv.args.end())) {
+        diagnostic::error("parsing pipeline must be the last argument")
+          .primary(it->get_location())
+          .primary(inv.args.back().get_location())
+          .emit(ctx);
+        return failure::promise();
+      }
+    }
     auto url = boost::urls::parse_uri_reference(path);
     if (not url) {
       diagnostic::error("Invalid URI")
@@ -474,13 +485,17 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         }
       }
     }
-    TENZIR_TRACE("`from` operator was given a pipeline : {}",
-                 pipeline_argument != nullptr);
-    TENZIR_TRACE("`from` operator determined source    : {}",
+    TENZIR_TRACE("from operator: given pipeline size   : {}",
+                 pipeline_argument
+                   ? static_cast<int>(pipeline_argument->inner.body.size())
+                   : -1);
+    TENZIR_TRACE("from operator: determined loader     : {}",
                  load_plugin ? load_plugin->name() : "none");
-    TENZIR_TRACE("`from` operator determined decompress: {}",
+    TENZIR_TRACE("from operator: loader accepts pipe   : {}",
+                 load_plugin->load_accepts_pipeline());
+    TENZIR_TRACE("from operator: determined decompress : {}",
                  decompress_plugin ? decompress_plugin->name() : "none");
-    TENZIR_TRACE("`from` operator determined read      : {}",
+    TENZIR_TRACE("from operator: determined read       : {}",
                  read_plugin ? read_plugin->name() : "none");
     if (load_plugin->load_accepts_pipeline()) {
       if (not pipeline_argument) {
@@ -503,30 +518,37 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       return load_plugin->make(std::move(inv), std::move(ctx));
     } else {
       auto result = std::vector<operator_ptr>{};
-      TRY(auto load_op, load_plugin->make(inv, ctx));
-      result.emplace_back(std::move(load_op));
       if (pipeline_argument) {
-        TRY(auto parsed_pipeline,
+        TRY(auto compiled_pipeline,
             compile(std::move(pipeline_argument->inner), ctx));
-        for (auto&& op : std::move(parsed_pipeline).unwrap()) {
+        TENZIR_TRACE("from operator: compiled pipeline ops : {}",
+                     compiled_pipeline.operators().size());
+        result.reserve(1 + compiled_pipeline.operators().size());
+        for (auto&& op : std::move(compiled_pipeline).unwrap()) {
           result.push_back(std::move(op));
         }
+        /// remove the pipeline argument, as we dont want to pass it to the
+        /// loader if it doesnt accept one
+        inv.args.pop_back();
       } else {
         if (decompress_plugin) {
-          auto decompress_op = decltype(load_op){};
+          auto decompress_op = operator_ptr{};
           inv.args.emplace_back(
             ast::constant{std::string{compression_name}, location::unknown});
-          TRY(decompress_op, decompress_plugin->make(inv, ctx));
+          TRY(decompress_op,
+              decompress_plugin->make(invocation{inv.self, {}}, ctx));
           inv.args.clear();
           result.emplace_back(std::move(decompress_op));
         }
-        TRY(auto read_op, read_plugin->make(inv, ctx));
+        TRY(auto read_op, read_plugin->make(invocation{inv.self, {}}, ctx));
         result.emplace_back(std::move(read_op));
+        TENZIR_TRACE("from operator: generated deduced ops : {}",
+                     result.size());
       }
+      TRY(auto load_op, load_plugin->make(std::move(inv), ctx));
+      result.insert(result.begin(), std::move(load_op));
       return std::make_unique<pipeline>(std::move(result));
     }
-
-    return failure::promise();
   }
 
 public:

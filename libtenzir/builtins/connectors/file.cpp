@@ -589,7 +589,18 @@ public:
           .add("mmap", args.mmap)
           .add("timeout", timeout)
           .parse(inv, ctx));
-    args.path.inner = expand_path(args.path.inner);
+    auto& path = args.path.inner;
+    for (const auto& scheme : load_schemes()) {
+      if (path.size() < scheme.size() + 3) {
+        continue;
+      }
+      if (path.starts_with(scheme)
+          and std::string_view{path}.substr(scheme.size(), 3) == "://") {
+        path.erase(path.begin(), path.begin() + scheme.size() + 3);
+        break;
+      }
+    }
+    path = expand_path(path);
     if (timeout) {
       args.timeout = located{
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout->inner),
