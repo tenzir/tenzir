@@ -32,6 +32,10 @@ inline auto rotate_left(uint32_t x, unsigned n) -> uint32_t {
   return (x << n) | (x >> (32 - n));
 }
 
+inline auto rotate_left(uint64_t x, unsigned n) -> uint64_t {
+  return (x << n) | (x >> (64 - n));
+}
+
 inline auto rotate_right(uint32_t x, unsigned n) -> uint32_t {
   return (x >> n) | (x << (32 - n));
 }

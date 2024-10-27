@@ -19,6 +19,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/hash/hash_append.hpp>
+#include <tenzir/hash/md5.hpp>
 #include <tenzir/hash/sha1.hpp>
 #include <tenzir/hash/sha2.hpp>
 #include <tenzir/hash/xxhash.hpp>
@@ -252,6 +253,7 @@ class fun : public virtual function_plugin {
 } // namespace tenzir::plugins::hash
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::md5, "md5">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha1, "sha1">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha224, "sha224">)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha256, "sha256">)

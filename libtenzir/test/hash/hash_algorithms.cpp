@@ -11,6 +11,7 @@
 #include "tenzir/hash/crc.hpp"
 #include "tenzir/hash/fnv.hpp"
 #include "tenzir/hash/hash.hpp"
+#include "tenzir/hash/md5.hpp"
 #include "tenzir/hash/sha1.hpp"
 #include "tenzir/hash/sha2.hpp"
 #include "tenzir/hash/uhash.hpp"
@@ -109,6 +110,12 @@ TEST(xxh64 zero bytes) {
   xxh64 h;
   // Should not segfault or trigger assertions.
   h.add(bytes);
+}
+
+TEST(md5 validity) {
+  std::array<char, 3> foo = {'f', 'o', 'o'};
+  auto digest = hexify(hash<md5>(foo));
+  CHECK_EQUAL(digest, "acbd18db4cc2f85cedef654fccc4a4d8");
 }
 
 TEST(sha1 validity) {
