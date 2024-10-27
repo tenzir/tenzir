@@ -12,6 +12,7 @@
 #include "tenzir/hash/fnv.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/hash/sha1.hpp"
+#include "tenzir/hash/sha2.hpp"
 #include "tenzir/hash/uhash.hpp"
 #include "tenzir/hash/xxhash.hpp"
 #include "tenzir/test/test.hpp"
@@ -112,9 +113,8 @@ TEST(xxh64 zero bytes) {
 
 TEST(sha1 validity) {
   std::array<char, 2> forty_two = {'4', '2'};
-  auto digest = hash<sha1>(forty_two);
-  auto bytes = as_bytes(digest);
-  CHECK_EQUAL(hexify(bytes), "92cfceb39d57d914ed8b14d0e37643de0797ae56");
+  auto digest = hexify(hash<sha1>(forty_two));
+  CHECK_EQUAL(digest, "92cfceb39d57d914ed8b14d0e37643de0797ae56");
 }
 
 TEST(sha1 incremental) {
@@ -123,7 +123,35 @@ TEST(sha1 incremental) {
   sha.add(chop("bar"));
   sha.add(chop("baz"));
   sha.add(chop("42"));
-  auto digest = sha.finish();
-  auto bytes = as_bytes(digest);
-  CHECK_EQUAL(hexify(bytes), "4cbfb91f23be76f0836c3007c1b3c8d8c2eacdd1");
+  auto digest = hexify(sha.finish());
+  CHECK_EQUAL(digest, "4cbfb91f23be76f0836c3007c1b3c8d8c2eacdd1");
+}
+
+TEST(sha224 validity) {
+  std::array<char, 3> foo = {'f', 'o', 'o'};
+  auto digest = hexify(hash<sha224>(foo));
+  CHECK_EQUAL(digest,
+              "0808f64e60d58979fcb676c96ec938270dea42445aeefcd3a4e6f8db");
+}
+
+TEST(sha256 validity) {
+  std::array<char, 3> foo = {'f', 'o', 'o'};
+  auto digest = hexify(hash<sha256>(foo));
+  CHECK_EQUAL(digest, "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e88"
+                      "6266e7ae");
+}
+
+TEST(sha384 validity) {
+  std::array<char, 3> foo = {'f', 'o', 'o'};
+  auto digest = hexify(hash<sha384>(foo));
+  CHECK_EQUAL(digest, "98c11ffdfdd540676b1a137cb1a22b2a70350c9a44171d6b1180c6be"
+                      "5cbb2ee3f79d532c8a1dd9ef2e8e08e752a3babb");
+}
+
+TEST(sha512 validity) {
+  std::array<char, 3> foo = {'f', 'o', 'o'};
+  auto digest = hexify(hash<sha512>(foo));
+  CHECK_EQUAL(digest, "f7fbba6e0636f890e56fbbf3283e524c6fa3204ae298382d624741d0"
+                      "dc6638326e282c41be5e4254d8820772c5518a2c5a8c0c7f7eda1959"
+                      "4a7eb539453e1ed7");
 }

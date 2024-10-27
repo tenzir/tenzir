@@ -171,13 +171,13 @@ auto compute(uint16_t seed, const Ts&... xs) -> std::string {
   if constexpr (std::is_same_v<Policy, policy::base64>) {
     constexpr auto element_size = sizeof(sha1::result_type::value_type);
     constexpr auto num_bytes = element_size * digest.size();
-    auto ptr = reinterpret_cast<const uint8_t*>(digest.data());
+    const auto* ptr = reinterpret_cast<const uint8_t*>(digest.data());
     result.resize(max_length<Policy>());
     auto offset = version_prefix_length();
     auto n = detail::base64::encode(result.data() + offset, ptr, num_bytes);
     result.resize(offset + n);
   } else if constexpr (std::is_same_v<Policy, policy::ascii>) {
-    detail::hexify<policy::lowercase>(as_bytes(digest), result);
+    detail::hexify<policy::lowercase>(digest, result);
   } else {
     static_assert(detail::always_false_v<Policy>, "unsupported policy");
   }

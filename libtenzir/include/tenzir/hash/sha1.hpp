@@ -20,7 +20,7 @@ namespace tenzir {
 /// This implementation comes from https://github.com/kerukuro/digestpp.
 class sha1 {
 public:
-  using result_type = std::array<uint32_t, 5>;
+  using result_type = std::span<const std::byte, 160 / 8>;
 
   static constexpr std::endian endian = std::endian::native;
 
@@ -28,7 +28,7 @@ public:
 
   void add(std::span<const std::byte> bytes) noexcept;
 
-  result_type finish() noexcept;
+  auto finish() noexcept -> result_type;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, sha1& x) {
