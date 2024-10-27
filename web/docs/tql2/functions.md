@@ -74,6 +74,18 @@ Function | Description | Example
 [`is_v4`](functions/is_v4.md) | Checks if an IP is IPv4 | `is_v4(1.2.3.4)`
 [`is_v6`](functions/is_v6.md) | Checks if an IP is IPv6 | `is_v6(::1)`
 
+## Hashing
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`hash_md5`](functions/hash_md5.md) | Computes a MD5 hash digest | `hash_md5("foo")`
+[`hash_sha1`](functions/hash_sha1.md) | Computes a SHA1 hash digest | `hash_sha1("foo")`
+[`hash_sha224`](functions/hash_sha224.md) | Computes a SHA224 hash digest | `hash_sha224("foo")`
+[`hash_sha256`](functions/hash_sha256.md) | Computes a SHA256 hash digest | `hash_sha256("foo")`
+[`hash_sha384`](functions/hash_sha384.md) | Computes a SHA384 hash digest | `hash_sha384("foo")`
+[`hash_sha512`](functions/hash_sha512.md) | Computes a SHA512 hash digest | `hash_sha512("foo")`
+[`hash_xxh3`](functions/hash_xxh3.md) | Computes a XXH3 hash digest | `hash_xxh3("foo")`
+
 <!--
 
 ## OCSF
@@ -84,17 +96,28 @@ Function | Description | Example
 
 -->
 
-## Type System
+## Type Conversion
 
 Function | Description | Example
 :--------|:-------------|:-------
 [`int`](functions/int.md) | Casts an expression to a signed integer | `int(-4.2)`
 [`uint`](functions/uint.md) | Casts an expression to an unsigned integer | `uint(4.2)`
 [`float`](functions/float.md) | Casts an expression to a float | `float(42)`
+[`time`](functions/time.md) | Casts an expression to a time value | `time("2020-03-15")`
 [`str`](functions/str.md) | Casts an expression to string | `str(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
-[`time`](functions/time.md) | Casts an expression to a time value | `time("2020-03-15")`
+
+## Type Introspection
+
+Function | Description | Example
+:--------|:-------------|:-------
 [`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
+[`has`](functions/has.md) | Checks whether a record has a field | `has("field")`
+
+## Generic
+
+- `length`
+
 
 <!--
 
@@ -112,16 +135,15 @@ Function | Description | Example
 - `as_secs`
 - `since_epoch`
 
-## Lists
-- `length`
-
-## Records
-- `has`
-
 ## List and String ?
 - `reverse`
 
 ## TODO
+- `flatten`
+- `unflatten`
+- `format`
+- `parse_json`
+- `print_json`
 - `grok`
 - `parse_cef`
 - `parse_json`
