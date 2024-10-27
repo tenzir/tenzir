@@ -154,8 +154,8 @@ public:
         }
         const auto* src_ip_ptr = src_ips->array->storage()->GetValue(i);
         const auto* dst_ip_ptr = dst_ips->array->storage()->GetValue(i);
-        auto src_ip = ip::v6(as_bytes<16>(src_ip_ptr));
-        auto dst_ip = ip::v6(as_bytes<16>(dst_ip_ptr));
+        auto src_ip = ip::v6(as_bytes<16>(src_ip_ptr, 16));
+        auto dst_ip = ip::v6(as_bytes<16>(dst_ip_ptr, 16));
         auto proto = protos->array->GetView(i);
         auto proto_type = port_type::unknown;
         if (proto == "tcp") {

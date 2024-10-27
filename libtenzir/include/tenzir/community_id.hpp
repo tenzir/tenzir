@@ -177,8 +177,7 @@ auto compute(uint16_t seed, const Ts&... xs) -> std::string {
     auto n = detail::base64::encode(result.data() + offset, ptr, num_bytes);
     result.resize(offset + n);
   } else if constexpr (std::is_same_v<Policy, policy::ascii>) {
-    auto bytes = as_bytes(std::span{digest.data(), digest.size()});
-    detail::hexify<policy::lowercase>(bytes, result);
+    detail::hexify<policy::lowercase>(as_bytes(digest), result);
   } else {
     static_assert(detail::always_false_v<Policy>, "unsupported policy");
   }
