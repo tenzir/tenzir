@@ -17,6 +17,16 @@
 
 namespace tenzir {
 
+template <size_t Extent>
+constexpr auto as_bytes(std::span<const std::byte, Extent> xs) noexcept {
+  return xs;
+}
+
+template <size_t Extent>
+constexpr auto as_writeable_bytes(std::span<std::byte, Extent> xs) noexcept {
+  return xs;
+}
+
 template <concepts::number Number>
 constexpr auto as_bytes(const Number& x) noexcept
   -> std::span<const std::byte, sizeof(Number)> {
