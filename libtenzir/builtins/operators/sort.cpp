@@ -48,16 +48,26 @@ auto sort_record(const arrow::StructArray& array)
   -> std::shared_ptr<arrow::StructArray> {
   auto fields = array.struct_type()->fields();
   auto arrays = array.fields();
-  std::ranges::sort(arrays, std::less<>{}, [&](const auto& array) {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    return fields[&array - arrays.data()]->name();
-  });
-  std::ranges::sort(fields, std::less<>{}, [](const auto& field) {
-    return field->name();
-  });
+  struct kv_pair {
+    std::shared_ptr<arrow::Field> key;
+    std::shared_ptr<arrow::Array> value;
+
+    auto name() const -> std::string_view {
+      return key->name();
+    }
+  };
+  auto data = std::vector<kv_pair>(fields.size());
+  for (size_t i = 0; i < data.size(); ++i) {
+    data[i] = {std::move(fields[i]), std::move(arrays[i])};
+  }
+  std::ranges::sort(data, std::less<>{}, &kv_pair::name);
+  for (size_t i = 0; i < data.size(); ++i) {
+    fields[i] = std::move(data[i].key);
+    arrays[i] = std::move(data[i].value);
+  }
   return std::make_shared<arrow::StructArray>(
-    arrow::struct_(fields), array.length(), arrays, array.null_bitmap(),
-    array.null_count(), array.offset());
+    arrow::struct_(fields), array.length(), std::move(arrays),
+    array.null_bitmap(), array.null_count(), array.offset());
 }
 
 auto sort_record(const series& input) -> series {
