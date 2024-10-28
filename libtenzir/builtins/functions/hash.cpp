@@ -8,16 +8,21 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/as_bytes.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/tenzir/option_set.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/detail/coding.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/hash/default_hash.hpp>
 #include <tenzir/hash/hash_append.hpp>
+#include <tenzir/hash/md5.hpp>
+#include <tenzir/hash/sha1.hpp>
+#include <tenzir/hash/sha2.hpp>
+#include <tenzir/hash/xxhash.hpp>
 #include <tenzir/optional.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
@@ -108,8 +113,8 @@ public:
     return state_type{{*column_index, std::move(transform_fn)}};
   }
 
-  auto
-  process(table_slice slice, state_type& state) const -> output_type override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     return transform_columns(slice, state);
   };
 
@@ -117,8 +122,8 @@ public:
     return "hash";
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }
@@ -195,16 +200,17 @@ public:
   }
 };
 
-class plugin2 : public virtual function_plugin {
+template <class HashAlgorithm, detail::string_literal Name>
+class fun : public virtual function_plugin {
   auto name() const -> std::string override {
-    return "xxhash3";
+    return fmt::format("hash_{}", Name);
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto seed = std::optional<std::string>{};
-    TRY(argument_parser2::function("xxhash3")
+    TRY(argument_parser2::function(name())
           .add(expr, "<expr>")
           .add("seed", seed)
           .parse(inv, ctx));
@@ -212,11 +218,34 @@ class plugin2 : public virtual function_plugin {
       [expr_ = std::move(expr), seed_ = std::move(seed)](evaluator eval,
                                                          session) -> series {
         const auto& s = eval(expr_);
+        auto hash = [&](const auto& x) {
+          // We only hash the bytes and the length. Users expect that the
+          // resulting digest is the same as in other tools, which hash the
+          // sequence of bytes. This includes hashing the seed.
+          HashAlgorithm hasher{};
+          if (seed_) {
+            hasher.add(as_bytes(*seed_));
+          }
+          auto f = detail::overload{
+            [&](const auto& value) {
+              hash_append(hasher, value);
+            },
+            [&](std::string_view str) {
+              hasher.add(as_bytes(str));
+            },
+          };
+          caf::visit(f, x);
+          return std::move(hasher).finish();
+        };
         auto b = string_type::make_arrow_builder(arrow::default_memory_pool());
         for (const auto& value : values(s.type, *s.array)) {
-          const auto& hash
-            = seed_ ? tenzir::hash(value, seed_.value()) : tenzir::hash(value);
-          check(b->Append(fmt::format("{:x}", hash)));
+          auto digest = hash(value);
+          if constexpr (concepts::integer<typename HashAlgorithm::result_type>
+                        and HashAlgorithm::endian == std::endian::little) {
+            digest = detail::to_network_order(digest);
+          }
+          auto hex = detail::hexify(as_bytes(digest));
+          check(b->Append(hex));
         }
         return {string_type{}, finish(*b)};
       });
@@ -228,4 +257,10 @@ class plugin2 : public virtual function_plugin {
 } // namespace tenzir::plugins::hash
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::plugin2)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::md5, "md5">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha1, "sha1">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha224, "sha224">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha256, "sha256">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha384, "sha384">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::sha512, "sha512">)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::fun<tenzir::xxh3_64, "xxh3">)

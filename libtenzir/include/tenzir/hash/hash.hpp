@@ -37,7 +37,7 @@ struct hash_algorithm_proxy {
     requires(uniquely_hashable<T, HashAlgorithm>)
   static auto sequentialize(const T& x) noexcept {
     if constexpr (uniquely_represented<T>) {
-      auto ptr = reinterpret_cast<const std::byte*>(std::addressof(x));
+      const auto* ptr = reinterpret_cast<const std::byte*>(std::addressof(x));
       return std::span<const std::byte, sizeof(T)>{ptr, sizeof(x)};
     } else if constexpr (concepts::fixed_byte_sequence<T>) {
       return as_bytes(x);
@@ -47,7 +47,8 @@ struct hash_algorithm_proxy {
   }
 
   template <class T>
-  typename HashAlgorithm::result_type operator()(const T& x) const noexcept {
+  auto operator()(const T& x) const noexcept ->
+    typename HashAlgorithm::result_type {
     if constexpr (uniquely_hashable<T, HashAlgorithm>) {
       auto bytes = sequentialize(x);
       if constexpr (oneshot_hash<HashAlgorithm>) {
@@ -59,23 +60,23 @@ struct hash_algorithm_proxy {
       } else {
         auto h = std::make_from_tuple<HashAlgorithm>(seeds);
         h.add(bytes);
-        return h.finish();
+        return std::move(h).finish();
       }
     } else if constexpr (incremental_hash<HashAlgorithm>) {
       auto h = std::make_from_tuple<HashAlgorithm>(seeds);
       hash_append(h, x);
-      return h.finish();
+      return std::move(h).finish();
     } else {
       static_assert(always_false_v<T>, "T is not hashable");
     }
   }
 
   template <class... Ts>
-  typename HashAlgorithm::result_type
-  operator()(const Ts&... xs) const noexcept {
+  auto operator()(const Ts&... xs) const noexcept ->
+    typename HashAlgorithm::result_type {
     auto h = std::make_from_tuple<HashAlgorithm>(seeds);
     hash_append(h, xs...);
-    return h.finish();
+    return std::move(h).finish();
   }
 
   std::tuple<Seeds...> seeds;
