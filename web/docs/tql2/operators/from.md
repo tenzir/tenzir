@@ -38,15 +38,17 @@ from "https:://example.org/file.json", header={Token: 0}
 A pipeline that can be used if inference for the compression or format does not work
 or is not sufficient.
 
-:::tip Only specify `{ … }` if you need to
-The `{ … }` argument exists for data ingestion purposes.
+Providing this pipeline
+disables the inference for the decompression and parsing format in order to avoid
+confusion.
+
+:::tip Only specify `{ … }` if you need it for data ingestion
+The `{ … }` argument exists for data ingestion purposes. In most situations,
+inference should be sufficient and the pipeline should not be required.
+
 If you want to perform other operations on the data afterwards, continue the
 pipeline after this operator instead of providing a sub-pipeline.
 :::
-
-If inference fails, or you want to pass additional arguments to the decompression or the parsing step,
-you can do this in the sub-pipeline. Providing this pipeline, disables the inference for decompression
-and parsing format in order to avoid confusion.
 
 ## Explanation
 
@@ -71,7 +73,7 @@ Supported compressions can be found in the [list of supported codecs](decompress
 
 The decompression step is optional and will only happen if a compression could be inferred.
 If you know that the source is compressed and the compression cannot be inferred, you can use the
-[`{ … }` argument](#---optional) to specify the decompression manually.
+[pipeline argument](#---optional) to specify the decompression manually.
 
 ### Reading
 
@@ -79,8 +81,40 @@ The format to read is, just as the compression, inferred from the file-ending.
 Supported file formats are the common file endings for our [`read_*` operators](operators.md#parsing).
 
 If you want to provide additional arguments to the parser, you can use the
-[`{ … }` argument](#---optional) to specify the parsing manually. This can be useful,
+[pipeline argument](#---optional) to specify the parsing manually. This can be useful,
 if you e.g. know that the input is `suricata` or `ndjson` instead of just plain `json`.
+
+### The pipeline argument & its relation to the loader
+
+Some loaders, such as the [`load_tcp` operator](load_tcp.md) accept a sub-pipeline
+directly. If the selected loader accepts a sub-pipeline, the `from` operator will dispatch
+decompression and parsing into that sub-pipeline. If a an explicit pipeline argument is provided
+it is forwarded as-is. If the loader does not accept a sub-pipeline, the decompression and parsing
+steps are simply performed as part of the regular pipeline.
+
+#### Example transformation:
+
+```tql title="from operator"
+from "myfile.json.gz"
+```
+```tql title="Effective pipeline"
+load_file "myfile.json.gz"
+decompress "gzip"
+read_json
+```
+
+#### Example with pipeline argument:
+
+```tql title="from operator"
+from "tcp://0.0.0.0:12345", parallel=10 {
+  read_gelf
+}
+```
+```tql title="Effective pipeline"
+load_tcp "tcp://0.0.0.0:12345", parallel=10 {
+  read_gelf
+}
+```
 
 ## Examples
 

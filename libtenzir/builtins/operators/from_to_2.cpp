@@ -102,35 +102,33 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       return failure::promise();
     }
     // determine loader based on schema
-    {
-      if (url->has_scheme()) {
-        for (const auto& p : plugins::get<operator_factory_plugin>()) {
-          const auto name = p->name();
-          if (not(name.starts_with("load_")
-                  or name.starts_with("tql2.load_"))) {
-            continue;
-          }
-          for (auto schema : p->load_schemes()) {
-            if (schema == url->scheme()) {
-              load_plugin = p;
-              break;
-            }
-          }
-          if (load_plugin) {
+    if (url->has_scheme()) {
+      for (const auto& p : plugins::get<operator_factory_plugin>()) {
+        const auto name = p->name();
+        if (not(name.starts_with("load_") or name.starts_with("tql2.load_"))) {
+          continue;
+        }
+        for (auto schema : p->load_schemes()) {
+          if (schema == url->scheme()) {
+            load_plugin = p;
             break;
           }
         }
-        if (not load_plugin) {
-          diagnostic::error("Could not determine load operator for scheme `{}`",
-                            url->scheme())
-            .primary(inv.args.front().get_location())
-            .emit(ctx);
-          return failure::promise();
+        if (load_plugin) {
+          break;
         }
-      } else {
-        load_plugin = plugins::find<operator_factory_plugin>("tql2.load_file");
       }
+      if (not load_plugin) {
+        diagnostic::error("Could not determine load operator for scheme `{}`",
+                          url->scheme())
+          .primary(inv.args.front().get_location())
+          .emit(ctx);
+        return failure::promise();
+      }
+    } else {
+      load_plugin = plugins::find<operator_factory_plugin>("tql2.load_file");
     }
+    TENZIR_ASSERT(load_plugin);
     auto compression_name = std::string_view{};
     if (not pipeline_argument) {
       const auto& file = url->segments().back();
@@ -358,35 +356,33 @@ class to_plugin2 final : public virtual operator_factory_plugin {
       return failure::promise();
     }
     // determine loader based on schema
-    {
-      if (url->has_scheme()) {
-        for (const auto& p : plugins::get<operator_factory_plugin>()) {
-          const auto name = p->name();
-          if (not(name.starts_with("save_")
-                  or name.starts_with("tql2.save_"))) {
-            continue;
-          }
-          for (auto schema : p->save_schemes()) {
-            if (schema == url->scheme()) {
-              save_plugin = p;
-              break;
-            }
-          }
-          if (save_plugin) {
+    if (url->has_scheme()) {
+      for (const auto& p : plugins::get<operator_factory_plugin>()) {
+        const auto name = p->name();
+        if (not(name.starts_with("save_") or name.starts_with("tql2.save_"))) {
+          continue;
+        }
+        for (auto schema : p->save_schemes()) {
+          if (schema == url->scheme()) {
+            save_plugin = p;
             break;
           }
         }
-        if (not save_plugin) {
-          diagnostic::error("Could not determine save operator for scheme `{}`",
-                            url->scheme())
-            .primary(inv.args.front().get_location())
-            .emit(ctx);
-          return failure::promise();
+        if (save_plugin) {
+          break;
         }
-      } else {
-        save_plugin = plugins::find<operator_factory_plugin>("tql2.save_file");
       }
+      if (not save_plugin) {
+        diagnostic::error("Could not determine save operator for scheme `{}`",
+                          url->scheme())
+          .primary(inv.args.front().get_location())
+          .emit(ctx);
+        return failure::promise();
+      }
+    } else {
+      save_plugin = plugins::find<operator_factory_plugin>("tql2.save_file");
     }
+    TENZIR_ASSERT(save_plugin);
     auto compression_name = std::string_view{};
     if (not pipeline_argument) {
       const auto& file = url->segments().back();
