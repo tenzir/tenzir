@@ -52,6 +52,8 @@ differently, take exactly one argument:
 - `median`: Computes the approximate median of all grouped values with a
   t-digest algorithm.
 - `mode`: Takes the most common of all grouped values that is not null.
+- `value_counts`: Returns a list of all grouped values alongside their
+  frequency.
 - `quantile`: Computes the quantile specified by the named argument `q`, for
   example: `quantile(x, q=0.2)`.
 - `stddev`: Computes the standard deviation of all grouped values.
