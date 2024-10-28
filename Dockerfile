@@ -183,18 +183,6 @@ RUN apt-get -y --no-install-recommends install \
 
 # -- bundled-plugins -------------------------------------------------------------------
 
-FROM plugins-source AS google-cloud-pubsub-plugin
-
-COPY scripts/debian/install-google-cloud.sh ./scripts/debian/
-RUN ./scripts/debian/install-google-cloud.sh
-RUN cmake -S plugins/google-cloud-pubsub -B build-google-cloud-pubsub -G Ninja \
-        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
-        -D CMAKE_PREFIX_PATH="/opt/google-cloud-cpp;" && \
-      cmake --build build-google-cloud-pubsub --parallel && \
-      cmake --build build-google-cloud-pubsub --target integration && \
-      DESTDIR=/plugin/google-cloud-pubsub cmake --install build-google-cloud-pubsub --strip --component Runtime && \
-      rm -rf build-build-google-cloud-pubsub
-
 FROM plugins-source AS amqp-plugin
 
 RUN cmake -S plugins/amqp -B build-amqp -G Ninja \
@@ -230,6 +218,18 @@ RUN cmake -S plugins/gcs -B build-gcs -G Ninja \
       cmake --build build-gcs --target integration && \
       DESTDIR=/plugin/gcs cmake --install build-gcs --strip --component Runtime && \
       rm -rf build-build-gcs
+
+FROM plugins-source AS google-cloud-pubsub-plugin
+
+COPY scripts/debian/install-google-cloud.sh ./scripts/debian/
+RUN ./scripts/debian/install-google-cloud.sh
+RUN cmake -S plugins/google-cloud-pubsub -B build-google-cloud-pubsub -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+        -D CMAKE_PREFIX_PATH="/opt/google-cloud-cpp;" && \
+      cmake --build build-google-cloud-pubsub --parallel && \
+      cmake --build build-google-cloud-pubsub --target integration && \
+      DESTDIR=/plugin/google-cloud-pubsub cmake --install build-google-cloud-pubsub --strip --component Runtime && \
+      rm -rf build-build-google-cloud-pubsub
 
 FROM plugins-source AS kafka-plugin
 
@@ -383,11 +383,11 @@ RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
 
 FROM tenzir-de AS tenzir-ce
 
-COPY --from=google-cloud-pubsub-plugin --chown=tenzir:tenzir /plugin/google-cloud-pubsub /
 COPY --from=amqp-plugin --chown=tenzir:tenzir /plugin/amqp /
 COPY --from=azure-blob-storage-plugin --chown=tenzir:tenzir /plugin/azure-blob-storage /
 COPY --from=fluent-bit-plugin --chown=tenzir:tenzir /plugin/fluent-bit /
 COPY --from=gcs-plugin --chown=tenzir:tenzir /plugin/gcs /
+COPY --from=google-cloud-pubsub-plugin --chown=tenzir:tenzir /plugin/google-cloud-pubsub /
 COPY --from=kafka-plugin --chown=tenzir:tenzir /plugin/kafka /
 COPY --from=nic-plugin --chown=tenzir:tenzir /plugin/nic /
 COPY --from=s3-plugin --chown=tenzir:tenzir /plugin/s3 /

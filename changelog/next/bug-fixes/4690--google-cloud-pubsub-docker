@@ -1,0 +1,2 @@
+This `google-cloud-pubsub` connector and TQL2 operators `load_google_cloud_pubsub`
+`save_google_cloud_pubsub` operators are now available in the Docker image.
