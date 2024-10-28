@@ -62,8 +62,7 @@ void sha1::add(std::span<const std::byte> bytes) noexcept {
 
 auto sha1::finish() noexcept -> sha1::result_type {
   finalize();
-  const auto* data = reinterpret_cast<const std::byte*>(H_.data());
-  return result_type{data, result_type::extent};
+  return std::bit_cast<result_type>(H_);
 }
 
 void sha1::finalize() {

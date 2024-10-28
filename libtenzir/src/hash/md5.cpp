@@ -89,8 +89,7 @@ void md5::add(std::span<const std::byte> bytes) noexcept {
 
 auto md5::finish() noexcept -> md5::result_type {
   finalize();
-  const auto* data = reinterpret_cast<const std::byte*>(H_.data());
-  return result_type{data, result_type::extent};
+  return std::bit_cast<result_type>(H_);
 }
 
 void md5::finalize() {

@@ -21,7 +21,7 @@ namespace tenzir {
 /// This implementation comes from https://github.com/kerukuro/digestpp.
 class md5 {
 public:
-  using result_type = std::span<const std::byte, 128 / 8>;
+  using result_type = std::array<const std::byte, 128 / 8>;
 
   static constexpr std::endian endian = std::endian::native;
 
@@ -31,9 +31,10 @@ public:
 
   auto finish() noexcept -> result_type;
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, md5& x) {
-    return f(x.H_, x.m_, x.pos_, x.total_);
+  friend auto inspect(auto& f, md5& x) {
+    return f.object(x).fields(f.field("H", x.H_), f.field("m", x.m_),
+                              f.field("os", x.pos_),
+                              f.field("total", x.total_));
   }
 
 private:

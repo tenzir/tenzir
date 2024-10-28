@@ -235,7 +235,7 @@ class fun : public virtual function_plugin {
             },
           };
           caf::visit(f, x);
-          return hasher.finish();
+          return std::move(hasher).finish();
         };
         auto b = string_type::make_arrow_builder(arrow::default_memory_pool());
         for (const auto& value : values(s.type, *s.array)) {

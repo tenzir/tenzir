@@ -40,7 +40,7 @@ class sha2 {
 
 public:
   constexpr static size_t N = sizeof(T) == 8 ? 512 : 256;
-  using result_type = std::span<const std::byte>;
+  using result_type = std::vector<std::byte>;
 
   static constexpr std::endian endian = std::endian::native;
 
@@ -68,12 +68,16 @@ public:
 
   auto finish() noexcept -> result_type {
     finalize();
-    auto data = reinterpret_cast<const std::byte*>(H_.data());
-    return result_type{data, hash_size_ / 8};
+    auto result = result_type{};
+    result.resize(hash_size_ / 8);
+    std::memcpy(result.data(), H_.data(), result.size());
+    return result;
   }
 
   friend auto inspect(auto& f, sha2& x) {
-    return f(x.H_, x.m_, x.pos_, x.total_, x.hash_size_);
+    return f.object(x).fields(f.field("H", x.H_), f.field("m", x.m_),
+                              f.field("pos", x.pos_),
+                              f.field("total", x.total_));
   }
 
 private:
