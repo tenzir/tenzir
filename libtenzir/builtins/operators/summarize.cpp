@@ -110,8 +110,9 @@ struct group_by_key_view : std::vector<data_view> {
   friend group_by_key materialize(const group_by_key_view& views) {
     auto result = group_by_key{};
     result.reserve(views.size());
-    for (const auto& view : views)
+    for (const auto& view : views) {
       result.push_back(materialize(view));
+    }
     return result;
   }
 };
@@ -121,15 +122,17 @@ struct group_by_key_view : std::vector<data_view> {
 struct group_by_key_hash {
   size_t operator()(const group_by_key& x) const noexcept {
     auto hasher = xxh64{};
-    for (const auto& value : x)
+    for (const auto& value : x) {
       hash_append(hasher, make_view(value));
+    }
     return hasher.finish();
   }
 
   size_t operator()(const group_by_key_view& x) const noexcept {
     auto hasher = xxh64{};
-    for (const auto& value : x)
+    for (const auto& value : x) {
       hash_append(hasher, value);
+    }
     return hasher.finish();
   }
 };
@@ -479,8 +482,9 @@ public:
     for (auto row = int64_t{1}; row < detail::narrow<int64_t>(slice.rows());
          ++row) {
       auto* bucket = find_or_create_bucket(row);
-      if (bucket == first_bucket)
+      if (bucket == first_bucket) {
         continue;
+      }
       update_bucket(*first_bucket, first_row, row - first_row);
       first_row = row;
       first_bucket = bucket;
@@ -952,6 +956,20 @@ public:
     : cfg_{cfg}, ctx_{ctx} {
   }
 
+  auto make_bucket() -> std::unique_ptr<bucket2> {
+    auto bucket = std::make_unique<bucket2>();
+    for (const auto& aggr : cfg_.aggregates) {
+      // We already checked the cast and instantiation before.
+      const auto* fn
+        = dynamic_cast<const aggregation_plugin*>(&ctx_.reg().get(aggr.call));
+      TENZIR_ASSERT(fn);
+      bucket->aggregations.push_back(
+        fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx_)
+          .unwrap());
+    }
+    return bucket;
+  }
+
   void add(const table_slice& slice) {
     auto group_values = std::vector<series>{};
     for (auto& group : cfg_.groups) {
@@ -970,18 +988,7 @@ public:
       }
       auto it = groups_.find(key);
       if (it == groups_.end()) {
-        auto bucket = std::make_unique<bucket2>();
-        for (auto& aggr : cfg_.aggregates) {
-          // We already checked the cast and instantiation before.
-          auto fn = dynamic_cast<const aggregation_plugin*>(
-            &ctx_.reg().get(aggr.call));
-          TENZIR_ASSERT(fn);
-          bucket->aggregations.push_back(
-            fn->make_aggregation(aggregation_plugin::invocation{aggr.call},
-                                 ctx_)
-              .unwrap());
-        }
-        it = groups_.emplace_hint(it, materialize(key), std::move(bucket));
+        it = groups_.emplace_hint(it, materialize(key), make_bucket());
       }
       return &*it->second;
     };
@@ -1023,9 +1030,7 @@ public:
             }
           }
         };
-    // TODO: Group by schema again to make this more efficient.
-    auto b = series_builder{};
-    for (auto& [key, group] : groups_) {
+    const auto finish_group = [&](const auto& key, const auto& group) {
       auto result = record{};
       for (auto index : cfg_.indices) {
         if (index >= 0) {
@@ -1071,7 +1076,21 @@ public:
           emplace(result, dest, value);
         }
       }
-      b.data(result);
+      return result;
+    };
+    // Special case: if there are no configured groups, and no groups were
+    // created because we didn't get any input events, then we create a new
+    // bucket and just finish it. That way, `from [] | summarize count()` will
+    // return a single event showing a count of zero.
+    if (cfg_.groups.empty() and groups_.empty()) {
+      auto b = series_builder{};
+      b.data(finish_group(group_by_key{}, make_bucket()));
+      return b.finish_as_table_slice();
+    }
+    // TODO: Group by schema again to make this more efficient.
+    auto b = series_builder{};
+    for (const auto& [key, group] : groups_) {
+      b.data(finish_group(key, group));
     }
     return b.finish_as_table_slice();
   }
