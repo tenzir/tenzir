@@ -64,6 +64,14 @@ public:
                                  chunk->size()})
             .Build();
       auto future = publisher.Publish(std::move(message));
+      constexpr auto timeout = std::chrono::seconds{30};
+      auto res = future.wait_for(timeout);
+      if (res != std::future_status::ready) {
+        diagnostic::error("google cloud publisher reached a {} timeout",
+                          timeout)
+          .emit(ctrl.diagnostics());
+        return;
+      }
       auto id = future.get();
       if (not id) {
         diagnostic::error("google-cloud-publisher: {}", id.status().message())

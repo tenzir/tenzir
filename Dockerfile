@@ -35,7 +35,6 @@ COPY changelog ./changelog
 COPY cmake ./cmake
 COPY libtenzir ./libtenzir
 COPY libtenzir_test ./libtenzir_test
-COPY plugins ./plugins
 COPY python ./python
 COPY schema ./schema
 COPY scripts ./scripts
@@ -174,7 +173,147 @@ ENTRYPOINT ["tenzir-node"]
 FROM development AS plugins-source
 
 WORKDIR /tmp/tenzir
+COPY plugins ./plugins
 COPY contrib/tenzir-plugins ./contrib/tenzir-plugins
+
+RUN apt-get -y --no-install-recommends install \
+      bats \
+      bats-assert \
+      bats-support
+
+# -- bundled-plugins -------------------------------------------------------------------
+
+FROM plugins-source AS amqp-plugin
+
+RUN cmake -S plugins/amqp -B build-amqp -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-amqp --parallel && \
+      cmake --build build-amqp --target integration && \
+      DESTDIR=/plugin/amqp cmake --install build-amqp --strip --component Runtime && \
+      rm -rf build-build-amqp
+
+FROM plugins-source AS azure-blob-storage-plugin
+
+RUN cmake -S plugins/azure-blob-storage -B build-azure-blob-storage -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-azure-blob-storage --parallel && \
+      cmake --build build-azure-blob-storage --target integration && \
+      DESTDIR=/plugin/azure-blob-storage cmake --install build-azure-blob-storage --strip --component Runtime && \
+      rm -rf build-build-azure-blob-storage
+
+FROM plugins-source AS fluent-bit-plugin
+
+RUN cmake -S plugins/fluent-bit -B build-fluent-bit -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-fluent-bit --parallel && \
+      cmake --build build-fluent-bit --target integration && \
+      DESTDIR=/plugin/fluent-bit cmake --install build-fluent-bit --strip --component Runtime && \
+      rm -rf build-build-fluent-bit
+
+FROM plugins-source AS gcs-plugin
+
+RUN cmake -S plugins/gcs -B build-gcs -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-gcs --parallel && \
+      cmake --build build-gcs --target integration && \
+      DESTDIR=/plugin/gcs cmake --install build-gcs --strip --component Runtime && \
+      rm -rf build-build-gcs
+
+FROM plugins-source AS google-cloud-pubsub-plugin
+
+COPY scripts/debian/install-google-cloud.sh ./scripts/debian/
+RUN ./scripts/debian/install-google-cloud.sh
+RUN cmake -S plugins/google-cloud-pubsub -B build-google-cloud-pubsub -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+        -D CMAKE_PREFIX_PATH="/opt/google-cloud-cpp;" && \
+      cmake --build build-google-cloud-pubsub --parallel && \
+      cmake --build build-google-cloud-pubsub --target integration && \
+      DESTDIR=/plugin/google-cloud-pubsub cmake --install build-google-cloud-pubsub --strip --component Runtime && \
+      rm -rf build-build-google-cloud-pubsub
+
+FROM plugins-source AS kafka-plugin
+
+RUN cmake -S plugins/kafka -B build-kafka -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-kafka --parallel && \
+      cmake --build build-kafka --target integration && \
+      DESTDIR=/plugin/kafka cmake --install build-kafka --strip --component Runtime && \
+      rm -rf build-build-kafka
+
+FROM plugins-source AS nic-plugin
+
+RUN cmake -S plugins/nic -B build-nic -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-nic --parallel && \
+      cmake --build build-nic --target integration && \
+      DESTDIR=/plugin/nic cmake --install build-nic --strip --component Runtime && \
+      rm -rf build-build-nic
+
+FROM plugins-source AS s3-plugin
+
+RUN cmake -S plugins/s3 -B build-s3 -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-s3 --parallel && \
+      cmake --build build-s3 --target integration && \
+      DESTDIR=/plugin/s3 cmake --install build-s3 --strip --component Runtime && \
+      rm -rf build-build-s3
+
+FROM plugins-source AS sigma-plugin
+
+RUN cmake -S plugins/sigma -B build-sigma -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-sigma --parallel && \
+      cmake --build build-sigma --target integration && \
+      DESTDIR=/plugin/sigma cmake --install build-sigma --strip --component Runtime && \
+      rm -rf build-build-sigma
+
+FROM plugins-source AS sqs-plugin
+
+RUN cmake -S plugins/sqs -B build-sqs -G Ninja \
+        -D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp" \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-sqs --parallel && \
+      cmake --build build-sqs --target integration && \
+      DESTDIR=/plugin/sqs cmake --install build-sqs --strip --component Runtime && \
+      rm -rf build-build-sqs
+
+FROM plugins-source AS velociraptor-plugin
+
+RUN cmake -S plugins/velociraptor -B build-velociraptor -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-velociraptor --parallel && \
+      cmake --build build-velociraptor --target integration && \
+      DESTDIR=/plugin/velociraptor cmake --install build-velociraptor --strip --component Runtime && \
+      rm -rf build-build-velociraptor
+
+FROM plugins-source AS web-plugin
+
+RUN cmake -S plugins/web -B build-web -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-web --parallel && \
+      cmake --build build-web --target integration && \
+      DESTDIR=/plugin/web cmake --install build-web --strip --component Runtime && \
+      rm -rf build-build-web
+
+FROM plugins-source AS yara-plugin
+
+RUN cmake -S plugins/yara -B build-yara -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-yara --parallel && \
+      cmake --build build-yara --target integration && \
+      DESTDIR=/plugin/yara cmake --install build-yara --strip --component Runtime && \
+      rm -rf build-build-yara
+
+FROM plugins-source AS zmq-plugin
+
+RUN cmake -S plugins/zmq -B build-zmq -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-zmq --parallel && \
+      cmake --build build-zmq --target integration && \
+      DESTDIR=/plugin/zmq cmake --install build-zmq --strip --component Runtime && \
+      rm -rf build-build-zmq
+
+# -- third-party-plugins -------------------------------------------------------------------
 
 FROM plugins-source AS azure-log-analytics-plugin
 
@@ -243,6 +382,21 @@ RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
 # -- tenzir-ce -------------------------------------------------------------------
 
 FROM tenzir-de AS tenzir-ce
+
+COPY --from=amqp-plugin --chown=tenzir:tenzir /plugin/amqp /
+COPY --from=azure-blob-storage-plugin --chown=tenzir:tenzir /plugin/azure-blob-storage /
+COPY --from=fluent-bit-plugin --chown=tenzir:tenzir /plugin/fluent-bit /
+COPY --from=gcs-plugin --chown=tenzir:tenzir /plugin/gcs /
+COPY --from=google-cloud-pubsub-plugin --chown=tenzir:tenzir /plugin/google-cloud-pubsub /
+COPY --from=kafka-plugin --chown=tenzir:tenzir /plugin/kafka /
+COPY --from=nic-plugin --chown=tenzir:tenzir /plugin/nic /
+COPY --from=s3-plugin --chown=tenzir:tenzir /plugin/s3 /
+COPY --from=sigma-plugin --chown=tenzir:tenzir /plugin/sigma /
+COPY --from=sqs-plugin --chown=tenzir:tenzir /plugin/sqs /
+COPY --from=velociraptor-plugin --chown=tenzir:tenzir /plugin/velociraptor /
+COPY --from=web-plugin --chown=tenzir:tenzir /plugin/web /
+COPY --from=yara-plugin --chown=tenzir:tenzir /plugin/yara /
+COPY --from=zmq-plugin --chown=tenzir:tenzir /plugin/zmq /
 
 COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-analytics /
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
