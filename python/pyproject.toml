@@ -24,7 +24,7 @@ repository = "https://github.com/tenzir/tenzir"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-pyarrow = ">=11,<18"
+pyarrow = ">=11,<19"
 dynaconf = "^3.2"
 
 aiohttp = { version = "^3.8", optional = true }
