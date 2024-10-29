@@ -621,6 +621,8 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
                    auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{};
     check(b.Reserve(l.length()));
+    const auto lty = type::from_arrow(*l.type());
+    const auto rty = type::from_arrow(*r.value_type());
     const auto f = [&]<concrete_type R>(const R&) {
       if constexpr (caf::detail::is_complete<
                       EvalBinOp<ast::binary_op::eq, L, R>>) {
@@ -653,11 +655,13 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
           check(b.Append(result));
         }
       } else {
-        warn("Incompatible types for `in`");
+        warn(fmt::format("got incompatible types for `in`: `{} in list<{}>`",
+                         lty.kind(), rty.kind())
+               .c_str());
         check(b.AppendNulls(l.length()));
       }
     };
-    caf::visit(f, type::from_arrow(*r.value_type()));
+    caf::visit(f, rty);
     return finish(b);
   }
 };
