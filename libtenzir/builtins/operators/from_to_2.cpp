@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
@@ -16,6 +15,7 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/resolve.hpp>
 
 #include <arrow/util/uri.h>
 #include <boost/url/parse.hpp>
@@ -96,7 +96,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     }
     auto url = boost::urls::parse_uri_reference(path);
     if (not url) {
-      diagnostic::error("Invalid URI")
+      diagnostic::error("invalid URI")
         .primary(inv.args.front().get_location())
         .emit(ctx);
       return failure::promise();
@@ -118,11 +118,17 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         }
       }
       if (not load_plugin) {
+        std::ranges::sort(known_schemes);
         auto scheme_loc = inv.args.front().get_location();
-        scheme_loc.begin += 1;
-        scheme_loc.end = scheme_loc.begin + url->scheme().size();
-        diagnostic::error("unsupported scheme f`{}`", url->scheme())
+        if (scheme_loc.end - scheme_loc.begin == path.size() + 2) {
+          scheme_loc.begin += 1;
+          scheme_loc.end = scheme_loc.begin + url->scheme().size();
+        }
+        std::ranges::sort(known_schemes);
+        diagnostic::error("unsupported scheme `{}`", url->scheme())
           .primary(scheme_loc)
+          .note("supported schemes for deduction: : `{}`",
+                fmt::join(known_schemes, "`, `"))
           .emit(ctx);
         return failure::promise();
       }
@@ -135,17 +141,18 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       const auto& file = url->segments().back();
       auto first_dot = file.find('.');
       if (first_dot == file.npos) {
-        diagnostic::error("could not find extension in `{}`", file)
+        diagnostic::error("did not find extension in `{}`", file)
           .primary(inv.args.front().get_location())
           .emit(ctx);
         return failure::promise();
       }
-      auto filename = std::string_view{file}.substr(first_dot);
-      // FIXME this doesnt work in general
-      auto file_ending_loc = inv.args.front().get_location();
-      auto file_start = path.find(file);
-      file_ending_loc.begin += file_start + 1;
-      file_ending_loc.end -= 1;
+      auto file_ending = std::string_view{file}.substr(first_dot);
+      auto filename_loc = inv.args.front().get_location();
+      if (filename_loc.end - filename_loc.begin == path.size() + 2) {
+        auto file_start = path.find(file);
+        filename_loc.begin += file_start + 1;
+        filename_loc.end -= 1;
+      }
       // determine compression based on ending
       {
         constexpr static auto extension_to_compression_map
@@ -160,8 +167,8 @@ class from_plugin2 final : public virtual operator_factory_plugin {
             {".zstd", "zstd"},
           }};
         for (const auto& [extension, name] : extension_to_compression_map) {
-          if (filename.ends_with(extension)) {
-            filename.remove_suffix(extension.size());
+          if (file_ending.ends_with(extension)) {
+            file_ending.remove_suffix(extension.size());
             compression_name = name;
             break;
           }
@@ -186,7 +193,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
           const auto name = p->name();
           auto read_properties = p->read_properties();
           for (auto extension : read_properties.extensions) {
-            if (filename.ends_with(extension)) {
+            if (file_ending.ends_with(extension)) {
               read_plugin = p;
               break;
             }
@@ -194,11 +201,15 @@ class from_plugin2 final : public virtual operator_factory_plugin {
           }
         }
         if (not read_plugin) {
-          // TODO list known extensions
-          diagnostic::error("no known format for extension")
-            .primary(file_ending_loc)
-            .note("known extensions: `{}`", fmt::join(known_extensions, "`, `"))
+          std::ranges::sort(known_extensions);
+          diagnostic::error("no known format for extension `{}`", file_ending)
+            .primary(filename_loc)
+            .note("supported extensions for deduction:  `{}`",
+                  fmt::join(known_extensions, "`, `"))
+            .note(
+              "this could also be caused by an unknown compression extension")
             .hint("you can pass a pipeline to `from`")
+            .docs(docs)
             .emit(ctx);
           return failure::promise();
         }
@@ -222,18 +233,18 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
         if (decompress_plugin) {
           auto decompress_ent = ast::entity{std::vector{
-            ast::identifier{"decompress", inv.args.front().get_location()},
+            ast::identifier{decompress_plugin->name(), location::unknown},
           }};
           pipeline_argument->inner.body.emplace_back(ast::invocation{
             std::move(decompress_ent),
             {ast::constant{std::string{compression_name}, location::unknown}}});
         }
         auto read_ent = ast::entity{std::vector{
-          ast::identifier{read_plugin->name(), inv.args.front().get_location()},
+          ast::identifier{read_plugin->name(), location::unknown},
         }};
         pipeline_argument->inner.body.emplace_back(
           ast::invocation{std::move(read_ent), {}});
-        // resolve_entities()
+        TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
       }
       return load_plugin->make(std::move(inv), std::move(ctx));
     } else {
@@ -274,13 +285,13 @@ class from_plugin2 final : public virtual operator_factory_plugin {
   }
 
 public:
+  constexpr static auto docs = "https://docs.tenzir.com/tql2/operators/from";
   auto name() const -> std::string override {
     return "tql2.from";
   }
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    auto docs = "https://docs.tenzir.com/tql2/operators/from";
     if (inv.args.empty()) {
       diagnostic::error("expected positional argument `<path/url/events>`")
         .primary(inv.self)
@@ -378,11 +389,15 @@ class to_plugin2 final : public virtual operator_factory_plugin {
       }
       if (not save_plugin) {
         auto scheme_loc = inv.args.front().get_location();
-        scheme_loc.begin += 1;
-        scheme_loc.end = scheme_loc.begin + url->scheme().size();
+        if (scheme_loc.end - scheme_loc.begin == path.size() + 2) {
+          scheme_loc.begin += 1;
+          scheme_loc.end = scheme_loc.begin + url->scheme().size();
+        }
+        std::ranges::sort(known_schemes);
         diagnostic::error("unsupported scheme `{}`", url->scheme())
           .primary(scheme_loc)
-          .note("Known schemes: `{}`", fmt::join(known_schemes, "`, `"))
+          .note("supported schemes for deduction: : `{}`",
+                fmt::join(known_schemes, "`, `"))
           .emit(ctx);
         return failure::promise();
       }
@@ -394,18 +409,20 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     if (not pipeline_argument) {
       const auto& file = url->segments().back();
       auto first_dot = file.find('.');
+      auto file_ending = std::string_view{file}.substr(first_dot);
+      auto filename_loc = inv.args.front().get_location();
+      if (filename_loc.end - filename_loc.begin == path.size() + 2) {
+        auto file_start = path.find(file);
+        filename_loc.begin += file_start + 1;
+        filename_loc.end -= 1;
+      }
       if (first_dot == file.npos) {
-        /// TODO list formats. "No known format for extension"
-        diagnostic::error("no known format for extension")
-          .primary(inv.args.front().get_location())
+        diagnostic::error("did not find extension in filename `{}`",
+                          file_ending)
+          .primary(filename_loc)
           .emit(ctx);
         return failure::promise();
       }
-      auto filename = std::string_view{file}.substr(first_dot);
-      auto file_ending_loc = inv.args.front().get_location();
-      auto file_start = path.find(file);
-      file_ending_loc.begin += file_start + 1;
-      file_ending_loc.end -= 1;
       // determine compression based on ending
       {
         constexpr static auto extension_to_compression_map
@@ -420,8 +437,8 @@ class to_plugin2 final : public virtual operator_factory_plugin {
             {".zstd", "zstd"},
           }};
         for (const auto& [extension, name] : extension_to_compression_map) {
-          if (filename.ends_with(extension)) {
-            filename.remove_suffix(extension.size());
+          if (file_ending.ends_with(extension)) {
+            file_ending.remove_suffix(extension.size());
             compression_name = name;
             break;
           }
@@ -445,7 +462,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
         for (const auto& p : plugins::get<operator_factory_plugin>()) {
           auto write_properties = p->write_properties();
           for (auto extension : write_properties.extensions) {
-            if (filename.ends_with(extension)) {
+            if (file_ending.ends_with(extension)) {
               write_plugin = p;
               break;
             }
@@ -456,10 +473,15 @@ class to_plugin2 final : public virtual operator_factory_plugin {
           }
         }
         if (not write_plugin) {
-          diagnostic::error("no known format for extension")
-            .primary(file_ending_loc)
-            .note("Known extensions: `{}`", fmt::join(known_extensions, "`, `"))
-            .hint("You can pass a pipeline to `to`")
+          std::ranges::sort(known_extensions);
+          diagnostic::error("no known format for extension `{}`", file_ending)
+            .primary(filename_loc)
+            .note("supported extensions for deduction: `{}`",
+                  fmt::join(known_extensions, "`, `"))
+            .note(
+              "this could also be caused by an unknown compression extension")
+            .hint("you can pass a pipeline to `to`")
+            .docs(docs)
             .emit(ctx);
           return failure::promise();
         }
@@ -482,18 +504,18 @@ class to_plugin2 final : public virtual operator_factory_plugin {
         inv.args.emplace_back(ast::pipeline_expr{});
         pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
         auto write_ent = ast::entity{std::vector{
-          ast::identifier{write_plugin->name(),
-                          inv.args.front().get_location()},
+          ast::identifier{write_plugin->name(), location::unknown},
         }};
         pipeline_argument->inner.body.emplace_back(
           ast::invocation{std::move(write_ent), {}});
         if (compress_plugin) {
           auto compress_ent = ast::entity{std::vector{
-            ast::identifier{compress_plugin->name(),
-                            inv.args.front().get_location()},
+            ast::identifier{compress_plugin->name(), location::unknown},
           }};
-          pipeline_argument->inner.body.emplace_back(
-            ast::invocation{std::move(compress_ent), {}});
+          pipeline_argument->inner.body.emplace_back(ast::invocation{
+            std::move(compress_ent),
+            {ast::constant{std::string{compression_name}, location::unknown}}});
+          TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
         }
       }
       return save_plugin->make(std::move(inv), std::move(ctx));
@@ -535,13 +557,13 @@ class to_plugin2 final : public virtual operator_factory_plugin {
   }
 
 public:
+  constexpr static auto docs = "https://docs.tenzir.com/tql2/operators/tp";
   auto name() const -> std::string override {
     return "tql2.to";
   }
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    auto docs = "https://docs.tenzir.com/tql2/operators/from";
     if (inv.args.empty()) {
       diagnostic::error("expected positional argument `<path>`")
         .primary(inv.self)
