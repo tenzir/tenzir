@@ -28,9 +28,10 @@ Throughout our documentation, we use the free function syntax.
 
 ## String
 
+### Inspection
+
 Function | Description | Example
 :--------|:-------------|:-------
-[`capitalize`](functions/capitalize.md) | Capitalizes the first character of a string | `capitalize("hello")`
 [`ends_with`](functions/ends_with.md) | Checks if a string ends with a substring | `ends_with("hello", "lo")`
 [`is_alnum`](functions/is_alnum.md) | Checks if a string is alphanumeric | `is_alnum("hello123")`
 [`is_alpha`](functions/is_alpha.md) | Checks if a string contains only letters | `is_alpha("hello")`
@@ -42,6 +43,12 @@ Function | Description | Example
 [`length_bytes`](functions/length_bytes.md) | Returns the length of a string in bytes | `length_bytes("hello")`
 [`length_chars`](functions/length_chars.md) | Returns the length of a string in characters | `length_chars("hello")`
 [`starts_with`](functions/starts_with.md) | Checks if a string starts with a substring | `starts_with("hello", "he")`
+
+### Transformation
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`capitalize`](functions/capitalize.md) | Capitalizes the first character of a string | `capitalize("hello")`
 [`to_lower`](functions/to_lower.md) | Converts a string to lowercase | `to_lower("HELLO")`
 [`to_title`](functions/to_title.md) | Converts a string to title case | `to_title("hello world")`
 [`to_upper`](functions/to_upper.md) | Converts a string to uppercase | `to_upper("hello")`
@@ -49,10 +56,21 @@ Function | Description | Example
 [`trim_end`](functions/trim_end.md) | Trims whitespace from the end of a string | `trim_end("hello ")`
 [`trim_start`](functions/trim_start.md) | Trims whitespace from the start of a string | `trim_start(" hello")`
 
+### File Paths
+
 Function | Description | Example
 :--------|:-------------|:-------
 [`file_name`](functions/file_name.md) | Extracts the file name from a file path | `file_name("/path/to/log.json")`
 [`parent_dir`](functions/parent_dir.md) | Extracts the parent directory from a file path | `parent_dir("/path/to/log.json")`
+
+## Time & Date
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`now`](functions/now.md) | Gets the current wallclock time | `now()`
+[`as_secs`](functions/as_secs.md) | Converts a duration into seconds | `as_secs(42ms)`
+[`from_epoch_ms`](functions/from_epoch_ms.md) | Interprets a number as Unix time | `from_epoch_ms(1730234246123.456)`
+[`since_epoch`](functions/since_epoch.md) | Turns a time value into a duration since the Unix epoch | `since_epoch(2021-02-24)`
 
 ## Math
 
@@ -96,7 +114,16 @@ Function | Description | Example
 
 -->
 
-## Type Conversion
+## Type System
+
+### Introspection
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
+[`has`](functions/has.md) | Checks whether a record has a field | `has("field")`
+
+### Conversation
 
 Function | Description | Example
 :--------|:-------------|:-------
@@ -106,18 +133,6 @@ Function | Description | Example
 [`time`](functions/time.md) | Casts an expression to a time value | `time("2020-03-15")`
 [`str`](functions/str.md) | Casts an expression to string | `str(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
-
-## Type Introspection
-
-Function | Description | Example
-:--------|:-------------|:-------
-[`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
-[`has`](functions/has.md) | Checks whether a record has a field | `has("field")`
-
-## Generic
-
-- `length`
-
 
 <!--
 
@@ -129,11 +144,6 @@ Function | Description | Example
 ## ???
 - `env`
 - `secret`
-
-## Time and Duration
-- `now`
-- `as_secs`
-- `since_epoch`
 
 ## List and String ?
 - `reverse`
