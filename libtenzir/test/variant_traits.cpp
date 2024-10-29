@@ -9,31 +9,56 @@
 #include "tenzir/variant_traits.hpp"
 
 #include "tenzir/test/test.hpp"
+#include "tenzir/tql2/ast.hpp"
+#include "tenzir/type.hpp"
 
 namespace tenzir {
 
-TEST(try_cast) {
+TEST(try_as) {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
-  auto ptr = cast_if<std::unique_ptr<int>>(&v);
+  auto ptr = try_as<std::unique_ptr<int>>(&v);
   REQUIRE(ptr);
   REQUIRE(*ptr);
   REQUIRE(**ptr == 42);
 }
 
-TEST(cast) {
+TEST(as) {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
-  auto& ref = cast<std::unique_ptr<int>>(v);
+  auto& ref = as<std::unique_ptr<int>>(v);
   REQUIRE(ref);
   REQUIRE(*ref == 42);
-  REQUIRE(*cast<std::unique_ptr<int>>(v) == 42);
+  REQUIRE(*as<std::unique_ptr<int>>(v) == 42);
 }
 
-TEST(cast move) {
+TEST(as move) {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
-  auto ref = cast<std::unique_ptr<int>>(std::move(v));
+  auto ref = as<std::unique_ptr<int>>(std::move(v));
   REQUIRE(ref);
   REQUIRE(*ref == 42);
-  REQUIRE(not cast<std::unique_ptr<int>>(v));
+  REQUIRE(not as<std::unique_ptr<int>>(v));
+}
+
+TEST(as const ref) {
+  const auto v = std::variant<int>{42};
+  auto& x = as<int>(v);
+  REQUIRE(x == 42);
+  static_assert(std::same_as<decltype(x), const int&>);
+}
+
+TEST(try_as const ref) {
+  const auto v = std::variant<int>{42};
+  auto x = try_as<int>(v);
+  REQUIRE(x);
+  REQUIRE(*x == 42);
+  static_assert(std::same_as<decltype(x), const int*>);
+}
+
+TEST(try_as const ptr) {
+  const auto v = std::variant<int>{42};
+  auto x = try_as<int>(&v);
+  REQUIRE(x);
+  REQUIRE(*x == 42);
+  static_assert(std::same_as<decltype(x), const int*>);
 }
 
 TEST(match) {
@@ -48,7 +73,7 @@ TEST(match) {
     });
   REQUIRE(result);
   REQUIRE(*result == 42);
-  REQUIRE(*cast<std::unique_ptr<int>>(v) == 42);
+  REQUIRE(*as<std::unique_ptr<int>>(v) == 42);
 }
 
 TEST(match const ref) {
@@ -64,7 +89,7 @@ TEST(match const ref) {
     });
   REQUIRE(result);
   REQUIRE(*result == 42);
-  REQUIRE(*cast<std::unique_ptr<int>>(v) == 42);
+  REQUIRE(*as<std::unique_ptr<int>>(v) == 42);
 }
 
 TEST(match move) {
@@ -79,7 +104,7 @@ TEST(match move) {
     });
   REQUIRE(moved);
   REQUIRE(*moved == 42);
-  REQUIRE(not cast<std::unique_ptr<int>>(v));
+  REQUIRE(not as<std::unique_ptr<int>>(v));
 }
 
 TEST(match move closure) {
@@ -157,15 +182,15 @@ TEST(type modification through match) {
       ty = list_type{string_type{}};
     },
     [](auto&) {});
-  REQUIRE(cast<list_type>(ty).value_type().kind().is<string_type>());
+  REQUIRE(as<list_type>(ty).value_type().kind().is<string_type>());
 }
 
 TEST(expression) {
   auto expr = ast::expression{
     ast::root_field{ast::identifier{"test", location::unknown}}};
-  REQUIRE(cast_if<ast::root_field>(&expr));
-  REQUIRE(not cast_if<ast::this_>(&expr));
-  cast<ast::root_field>(expr).ident.name = "okay";
+  REQUIRE(try_as<ast::root_field>(&expr));
+  REQUIRE(not try_as<ast::this_>(&expr));
+  as<ast::root_field>(expr).ident.name = "okay";
   match(
     std::move(expr),
     [](ast::root_field&& x) {
@@ -175,75 +200,5 @@ TEST(expression) {
       FAIL("unreachable");
     });
 }
-
-// void test() {
-//   auto ty = type{};
-//   match(
-//     ty, []<concrete_type T>(T& x) {}, []<basic_type T>(T& x) {});
-
-//   auto std_var = std::variant<int, double>{};
-//   auto caf_var = caf::variant<int, double>{};
-
-//   constexpr auto constexpr_test = std::invoke([] {
-//     auto var = std::variant<int, double>{5.0};
-//     match(
-//       var,
-//       [](int x) {
-
-//       },
-//       [](double x) {
-
-//       });
-//     return 9.5;
-//   });
-//   auto got = get<double>(std_var);
-//   auto ptr = get_if<double>(&std_var);
-
-//   static_assert(constexpr_test == 9.5);
-
-// void foo() {
-//   auto xyz1 = match(
-//     caf_var,
-//     [](int x) {
-//       static_assert(true);
-//       return 42;
-//     },
-//     [](double x) {
-//       static_assert(true);
-//       return 43;
-//     },
-//     [](std::monostate x) {
-//       static_assert(true);
-//       return 44;
-//     });
-//   auto var = std::variant<double>{};
-//   auto xyz2 = match2(var)(
-//     [](int x) {
-//       static_assert(true);
-//     },
-//     [](double x) {},
-//     [](std::monostate x) {
-//       static_assert(true);
-//     });
-
-//   auto xyz3 = match3(
-//     [](int x) {
-//       static_assert(true);
-//     },
-//     [](double x) {},
-//     [](std::monostate x) {
-//       static_assert(true);
-//     })(var);
-
-//   auto xyz = match4{
-//     [](int x) {
-//       static_assert(true);
-//     },
-//     [](double x) {},
-//     [](std::monostate x) {
-//       static_assert(true);
-//     },
-//   }(var);
-// }
 
 } // namespace tenzir

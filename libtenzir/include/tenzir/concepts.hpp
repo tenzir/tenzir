@@ -119,4 +119,7 @@ concept monoid = semigroup<T> && std::is_default_constructible_v<T>;
 template <class T, class... Ts>
 concept one_of = (std::same_as<T, Ts> or ...);
 
+template <class T>
+concept unqualified = std::same_as<T, std::remove_cvref_t<T>>;
+
 } // namespace tenzir::concepts
