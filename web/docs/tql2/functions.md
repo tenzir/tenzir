@@ -72,6 +72,19 @@ Function | Description | Example
 [`from_epoch_ms`](functions/from_epoch_ms.md) | Interprets a number as Unix time | `from_epoch_ms(1730234246123.456)`
 [`since_epoch`](functions/since_epoch.md) | Turns a time value into a duration since the Unix epoch | `since_epoch(2021-02-24)`
 
+<!--
+
+- `year`
+- `month`
+- `week` (?)
+- `day`
+- `hour`
+- `minute`
+- `second`
+- `tz` (?)
+
+-->
+
 ## Math
 
 Function | Description | Example
