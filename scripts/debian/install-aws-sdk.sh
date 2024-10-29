@@ -35,5 +35,3 @@ cmake -B build \
 cmake --build build --parallel
 cmake --install build --strip
 rm -rf "${SOURCE_TREE}"
-echo "/opt/aws-sdk-cpp/lib" > /etc/ld.so.conf.d/aws-cpp-sdk.conf
-ldconfig
