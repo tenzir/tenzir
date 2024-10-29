@@ -146,7 +146,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow1500=15.0.2-1 libparquet1500=15.0.2-1 && \
+    apt-get -y --no-install-recommends install libarrow1800=18.0.0-1 libparquet1800=18.0.0-1 && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
     rm /root/fluent-bit_*.deb && \
     rm -rf /var/lib/apt/lists/* && \
