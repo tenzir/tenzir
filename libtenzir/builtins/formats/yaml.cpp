@@ -371,8 +371,8 @@ class read_yaml_plugin final
       yaml_parser{std::move(opts)});
   }
 
-  auto read_extensions() const -> std::vector<std::string> override {
-    return {"yaml"};
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"yaml"}};
   }
 };
 
@@ -385,8 +385,8 @@ public:
     return std::make_unique<write_yaml>();
   }
 
-  auto write_extensions() const -> std::vector<std::string> override {
-    return {"yaml"};
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {"yaml"}};
   }
 };
 

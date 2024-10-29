@@ -1145,8 +1145,8 @@ public:
       json_parser{std::move(args)});
   }
 
-  auto read_extensions() const -> std::vector<std::string> override {
-    return {"json"};
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"json"}};
   }
 };
 
@@ -1324,8 +1324,8 @@ public:
     return std::make_unique<write_json>(args);
   }
 
-  auto write_extensions() const -> std::vector<std::string> override {
-    return {"json"};
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {"json"}};
   }
 };
 

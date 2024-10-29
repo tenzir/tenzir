@@ -63,8 +63,8 @@ public:
     return std::make_unique<load_abs_operator>(std::move(uri));
   }
 
-  auto load_schemes() const -> std::vector<std::string> override {
-    return {"abfs", "abfss"};
+  auto load_properties() const -> load_properties_t {
+    return {.schemes = {"abfs", "abfss"}};
   }
 };
 

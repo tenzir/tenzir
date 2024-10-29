@@ -65,8 +65,8 @@ public:
     return std::make_unique<save_abs_operator>(std::move(uri));
   }
 
-  auto save_schemes() const -> std::vector<std::string> override {
-    return {"abfs", "abfss"};
+  auto save_properties() const -> save_properties_t override {
+    return {.schemes = {"abfs", "abfss"}};
   }
 };
 

@@ -26,28 +26,29 @@ public:
     -> failure_or<operator_ptr>
     = 0;
 
-  /// Returns the URI schemes from which the operator can load (e.g., `http`).
-  virtual auto load_schemes() const -> std::vector<std::string> {
+  struct connector_properties_t {
+    std::vector<std::string> schemes = {};
+    bool accepts_pipeline = false;
+  };
+  using load_properties_t = connector_properties_t;
+  using save_properties_t = connector_properties_t;
+  virtual auto load_properties() const -> load_properties_t {
+    return {};
+  }
+  virtual auto save_properties() const -> save_properties_t {
     return {};
   }
 
-  /// Returns the URI schemes to which the operator can save (e.g., `s3`).
-  virtual auto save_schemes() const -> std::vector<std::string> {
+  struct format_properties_t {
+    std::vector<std::string> extensions = {};
+  };
+  using read_properties_t = format_properties_t;
+  using write_properties_t = format_properties_t;
+  virtual auto read_properties() const -> read_properties_t {
     return {};
   }
-
-  /// Returns the file extensions which the operator can parse (e.g. `yaml`).
-  virtual auto read_extensions() const -> std::vector<std::string> {
+  virtual auto write_properties() const -> write_properties_t {
     return {};
-  }
-  /// Returns the file extensions which the operator can write (e.g. `yaml`).
-  virtual auto write_extensions() const -> std::vector<std::string> {
-    return {};
-  }
-  // whether this operator accepts a sub-pipeline. This is used in the tql2
-  // `from` implementation.
-  virtual auto load_accepts_pipeline() const -> bool {
-    return false;
   }
 };
 

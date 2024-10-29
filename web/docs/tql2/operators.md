@@ -63,7 +63,7 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`from`](./operators/from.md) | Loads from a URI | `from "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
+[`from`](./operators/from.md) | Loads from an URI | `from "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
 [`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
 [`export`](./operators/export.md) | Retrieves events from the node | `export`
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
@@ -83,6 +83,7 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
+[`to`](./operators/to.md) | Write to an URI | `from "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
 [`azure_log_analytics`](./operators/azure_log_analytics.md) | Sends events to Azure Log Analytics | `azure_log_analytics tenant_id=…`
 [`discard`](./operators/discard.md) | Discards incoming bytes or events | `discard`
 [`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`

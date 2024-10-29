@@ -4,7 +4,7 @@ sidebar_class_name: hidden
 
 # from
 
-Loads from a URI, inferring the source, compression and format.
+Loads from an URI, inferring the source, compression and format.
 
 ```tql
 from uri:str, [loader_args... { … }]

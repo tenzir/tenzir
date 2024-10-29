@@ -968,12 +968,8 @@ public:
       });
   }
 
-  auto load_schemes() const -> std::vector<std::string> override {
-    return {"tcp"};
-  }
-
-  auto load_accepts_pipeline() const -> bool override {
-    return true;
+  auto load_properties() const -> load_properties_t override {
+    return {.schemes = {"tcp"}, .accepts_pipeline = true};
   }
 };
 

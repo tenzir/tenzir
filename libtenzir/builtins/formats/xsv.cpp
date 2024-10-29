@@ -766,8 +766,8 @@ public:
       xsv_parser{std::move(opts)});
   }
 
-  auto read_extensions() const -> std::vector<std::string> override {
-    return {std::string{Name}};
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {std::string{Name}}};
   }
 };
 
