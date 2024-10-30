@@ -100,7 +100,7 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
   auto& [missing, accumulated_hits] = *ptr;
   accumulated_hits |= result;
   if (--missing == 0) {
-    TENZIR_DEBUG("{} collected all results at position {}", *self, position);
+    TENZIR_TRACE("{} collected all results at position {}", *self, position);
     evaluate();
   }
   decrement_pending();
@@ -114,7 +114,7 @@ void evaluator_state::handle_missing_result(
   auto ptr = hits_for(position);
   TENZIR_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
-    TENZIR_DEBUG("{} collected all results at position {}", *self, position);
+    TENZIR_TRACE("{} collected all results at position {}", *self, position);
     evaluate();
   }
   decrement_pending();

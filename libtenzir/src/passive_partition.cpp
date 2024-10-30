@@ -150,7 +150,7 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
     indexer = self->spawn(passive_indexer, id, std::move(value_index));
     return indexer;
   }
-  TENZIR_DEBUG("passive-partition {} has no index or failed to index for field "
+  TENZIR_TRACE("passive-partition {} has no index or failed to index for field "
                "{}",
                id, qualified_index->field_name()->string_view());
   return {};
@@ -323,7 +323,7 @@ partition_actor::behavior_type passive_partition(
   TENZIR_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_down_handler([=](const caf::down_msg& msg) {
     if (msg.source != self->state.store.address()) {
-      TENZIR_DEBUG("{} ignores DOWN from unexpected sender: {}", *self,
+      TENZIR_TRACE("{} ignores DOWN from unexpected sender: {}", *self,
                    msg.reason);
       return;
     }
@@ -332,7 +332,7 @@ partition_actor::behavior_type passive_partition(
     self->quit(msg.reason);
   });
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
+    TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self, msg.source,
                  msg.reason);
     self->demonitor(self->state.store->address());
     // Receiving an EXIT message does not need to coincide with the state
@@ -354,7 +354,7 @@ partition_actor::behavior_type passive_partition(
     terminate<policy::parallel>(self, std::move(indexers))
       .then(
         [=](atom::done) {
-          TENZIR_DEBUG("{} shut down all indexers successfully", *self);
+          TENZIR_TRACE("{} shut down all indexers successfully", *self);
           self->quit();
         },
         [=](const caf::error& err) {
@@ -471,11 +471,11 @@ partition_actor::behavior_type passive_partition(
               // issues downstream because you need to very carefully handle
               // this scenario, which is easy to overlook as a developer. We
               // should fix this issue.
-              TENZIR_DEBUG("{} received evaluator results with wrong length: "
+              TENZIR_TRACE("{} received evaluator results with wrong length: "
                            "expected {}, got {}",
                            *self, self->state.events, hits.size());
             }
-            TENZIR_DEBUG("{} received results from the evaluator", *self);
+            TENZIR_TRACE("{} received results from the evaluator", *self);
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
             query_context.ids = hits;
@@ -490,10 +490,10 @@ partition_actor::behavior_type passive_partition(
     [self](atom::erase) -> caf::result<atom::done> {
       auto rp = self->make_response_promise<atom::done>();
       if (!self->state.partition_chunk) {
-        TENZIR_DEBUG("{} skips an erase request", *self);
+        TENZIR_TRACE("{} skips an erase request", *self);
         return self->state.deferred_erasures.emplace_back(std::move(rp));
       }
-      TENZIR_DEBUG("{} received an erase message and deletes {}", *self,
+      TENZIR_TRACE("{} received an erase message and deletes {}", *self,
                    self->state.path);
       self
         ->request(self->state.filesystem, caf::infinite, atom::erase_v,
