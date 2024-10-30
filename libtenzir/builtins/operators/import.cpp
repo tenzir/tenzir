@@ -32,7 +32,11 @@ public:
     // can offer a better mechanism here.
     auto self = caf::scoped_actor{ctrl.self().system()};
     auto components = get_node_components<importer_actor>(self, ctrl.node());
-    TENZIR_ASSERT(components);
+    if (!components) {
+      diagnostic::error(components.error())
+        .note("failed get a handle to the importer actor")
+        .throw_();
+    }
     auto [importer] = std::move(*components);
     auto metric_handler = ctrl.metrics({
       "tenzir.metrics.import",
