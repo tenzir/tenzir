@@ -13,7 +13,6 @@
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_path.hpp"
-#include "tenzir/variant_traits.hpp"
 
 #include <caf/detail/is_one_of.hpp>
 #include <caf/detail/type_list.hpp>

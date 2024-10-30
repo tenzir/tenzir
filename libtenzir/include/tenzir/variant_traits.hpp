@@ -18,6 +18,7 @@
 
 namespace tenzir {
 
+/// A backport of C++23's `forward_like`.
 template <class T, class U>
 constexpr auto forward_like(U&& x) noexcept -> auto&& {
   constexpr bool is_adding_const = std::is_const_v<std::remove_reference_t<T>>;
@@ -36,6 +37,7 @@ constexpr auto forward_like(U&& x) noexcept -> auto&& {
   }
 }
 
+/// The return type of `std::forward_like<T>(u)`.
 template <class T, class U>
 using forward_like_t = decltype(forward_like<T>(std::declval<U>()));
 
@@ -73,6 +75,10 @@ auto as_mutable(const T&& x) -> T&& {
 /// of `get(...)`.
 template <concepts::unqualified T>
 class variant_traits;
+
+template <class T>
+concept has_variant_traits
+  = caf::detail::is_complete<variant_traits<std::remove_cvref_t<T>>>;
 
 template <class... Ts>
 class variant_traits<std::variant<Ts...>> {
@@ -203,30 +209,29 @@ constexpr auto variant_index = std::invoke(
 
 } // namespace detail
 
-template <class V, class... Fs>
+/// Calls one of the given functions with the current variant inhabitant.
+template <has_variant_traits V, class... Fs>
 constexpr auto match(V&& v, Fs&&... fs) -> decltype(auto) {
-  // We materialize a `detail::overload` below, which means copying and moving
-  // the functions.
-  if constexpr (caf::detail::is_specialization<std::tuple,
-                                               std::remove_cvref_t<V>>::value) {
-    return match_tuple(std::forward<V>(v),
-                       detail::overload{std::forward<Fs>(fs)...});
-  } else {
-    return match_one(std::forward<V>(v),
-                     detail::overload{std::forward<Fs>(fs)...});
-  }
+  return match_one(std::forward<V>(v),
+                   detail::overload{std::forward<Fs>(fs)...});
 }
 
-/// Casts a variant to the given type `T`, asserting success.
-template <concepts::unqualified T, class V>
+/// Calls one of the given functions with the current variant inhabitants.
+template <has_variant_traits... Ts, class... Fs>
+constexpr auto match(std::tuple<Ts...> v, Fs&&... fs) -> decltype(auto) {
+  return match_tuple(std::move(v), detail::overload{std::forward<Fs>(fs)...});
+}
+
+/// Extracts a `T` from the given variant, asserting success.
+template <concepts::unqualified T, has_variant_traits V>
 auto as(V&& v) -> forward_like_t<V, T> {
   constexpr auto index = detail::variant_index<std::remove_cvref_t<V>, T>;
   TENZIR_ASSERT(variant_traits<std::remove_cvref_t<V>>::index(v) == index);
   return detail::variant_get<index>(std::forward<V>(v));
 };
 
-// TODO: Really `V&` and `V*`?
-template <concepts::unqualified T, class V>
+/// Tries to extract a `T` from the variant, returning `nullptr` otherwise.
+template <concepts::unqualified T, has_variant_traits V>
 auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
   constexpr auto index = detail::variant_index<std::remove_const_t<V>, T>;
   if (variant_traits<std::remove_const_t<V>>::index(v) != index) {
@@ -234,7 +239,7 @@ auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
   }
   return &detail::variant_get<index>(v);
 };
-template <class T, class V>
+template <concepts::unqualified T, has_variant_traits V>
 auto try_as(V* v) -> std::remove_reference_t<forward_like_t<V, T>>* {
   if (not v) {
     return nullptr;

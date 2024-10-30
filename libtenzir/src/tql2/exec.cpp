@@ -21,7 +21,6 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/try.hpp"
-#include "tenzir/variant_traits.hpp"
 
 #include <arrow/util/utf8.h>
 #include <tsl/robin_set.h>

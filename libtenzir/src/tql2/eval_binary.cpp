@@ -16,7 +16,6 @@
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
-#include "tenzir/variant_traits.hpp"
 
 // TODO: This file takes very long to compile. Consider splitting it up even more.
 

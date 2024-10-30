@@ -9,7 +9,6 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/variant_traits.hpp"
 
 namespace tenzir {
 

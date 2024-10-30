@@ -11,6 +11,7 @@
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <caf/detail/pretty_type_name.hpp>
 #include <fmt/format.h>
@@ -20,11 +21,6 @@
 namespace tenzir {
 
 namespace detail {
-
-template <class Result, class Function>
-struct conversion_wrapper : Function {
-  using Function::operator();
-};
 
 template <class Result, class F>
 auto make_conversion_wrapper(F f) -> auto {
@@ -181,6 +177,21 @@ public:
   template <class Result = void, class... Fs>
   auto match(Fs&&... fs) const&& -> decltype(auto) {
     return detail::match<Result>(std::move(*this), std::forward<Fs>(fs)...);
+  }
+};
+
+template <class... Ts>
+class variant_traits<variant<Ts...>> {
+public:
+  static constexpr auto count = sizeof...(Ts);
+
+  static constexpr auto index(const std::variant<Ts...>& x) -> size_t {
+    return x.index();
+  }
+
+  template <size_t I>
+  static constexpr auto get(const std::variant<Ts...>& x) -> decltype(auto) {
+    return *std::get_if<I>(&x);
   }
 };
 
