@@ -31,7 +31,7 @@ The headers for the request.
 
 ## Examples
 
-Send incoming bytes to `example.org/api`:
+### Call a webhook with pipeline data
 
 ```tql
 save_http "example.org/api", headers={"X-API-Token": "0000-0000-0000"}

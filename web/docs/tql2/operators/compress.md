@@ -35,7 +35,7 @@ omitted, the default level for the codec is used.
 
 ## Examples
 
-Export all events in a Gzip-compressed NDJSON file:
+### Export all events in a Gzip-compressed NDJSON file
 
 ```tql
 export
@@ -44,7 +44,7 @@ compress "gzip"
 save_file "/tmp/backup.json.gz"
 ```
 
-Recompress a Zstd-compressed file at a higher compression level:
+###  Recompress a Zstd-compressed file at a higher compression level
 
 ```tql
 load_file "in.zst"

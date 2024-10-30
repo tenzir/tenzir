@@ -140,13 +140,10 @@ You will get one `yara.match` per matching rule:
 Each match has a `rule` field describing the rule and a `matches` record
 indexed by string identifier to report a list of matches per rule string.
 
+<!--
+
 ### Build a YARA scanning service
 
-:::note
-This example will be back soon.
-:::
-
-<!--
 Let's say you want to build a service that scans malware sample that you receive
 over a Kafka topic `malware`.
 

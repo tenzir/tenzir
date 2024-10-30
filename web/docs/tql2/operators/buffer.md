@@ -40,8 +40,9 @@ otherwise. When buffering bytes, this option always defaults to `"block"`.
 
 ## Examples
 
-Buffer up to 10 million events or bytes in a buffer, dropping them if downstream
-cannot keep up.
+### Buffer up to 10 million events or bytes
+
+Buffer and drop events if downstream cannot keep up:
 
 ```tql
 buffer 10M, policy="drop"

@@ -20,7 +20,7 @@ Colorize the output.
 
 ## Examples
 
-Convert a YAML stream into a JSON file:
+### Convert a YAML stream into a JSON file
 
 ```tql
 load_file "input.yaml"

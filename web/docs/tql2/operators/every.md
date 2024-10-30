@@ -12,14 +12,16 @@ The `every` operator repeats running a pipeline indefinitely at a fixed interval
 
 ## Examples
 
-Produce once event every second and enumerate the result:
+### Produce one event per second and enumerate the result
 
 ```tql
 every 1s {
   from {}
 }
 enumerate
-――――――――――――――――――――――――
+```
+
+```tql
 {"#": 0} // immediately
 {"#": 1} // after 1s
 {"#": 2} // after 2s
@@ -27,7 +29,7 @@ enumerate
 // … continues like this
 ```
 
-Fetch the results from an API every 10 minutes and publish the result:
+### Fetch the results from an API every 10 minutes
 
 ```tql
 every 10min {

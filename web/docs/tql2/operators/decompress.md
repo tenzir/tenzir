@@ -19,7 +19,8 @@ all options that Apache Arrow supports for streaming decompression.
 
 Besides the supported `brotli`, `bz2`, `gzip`, `lz4`, and `zstd`, Apache Arrow
 also ships with codecs for `lzo`, `lz4_raw`, `lz4_hadoop` and `snappy`, which
-only support oneshot decompression. Support for them is not currently implemented.
+only support oneshot decompression. Support for them is not currently
+implemented.
 :::
 
 [apache-arrow-compression]: https://arrow.apache.org/docs/cpp/api/utilities.html#compression
@@ -31,7 +32,7 @@ An identifier of the codec to use. Currently supported are `brotli`, `bz2`,
 
 ## Examples
 
-Import Suricata events from a Zstd-compressed file:
+### Import Suricata events from a Zstd-compressed file
 
 ```tql
 load_file "eve.json.zst"
@@ -40,7 +41,7 @@ read_suricata
 import
 ```
 
-Convert a Zstd-compressed file into an LZ4-compressed file:
+### Convert a Zstd-compressed file into an LZ4-compressed file
 
 ```tql
 load_file "in.zst"

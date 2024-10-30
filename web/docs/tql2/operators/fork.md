@@ -18,7 +18,7 @@ The pipeline to execute. Must have a sink.
 
 ## Examples
 
-Publish incoming events while importing them at the same time:
+### Publish incoming events while importing them simultaneously
 
 ```tql
 fork {

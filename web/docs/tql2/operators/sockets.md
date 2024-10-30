@@ -31,7 +31,7 @@ Contains detailed information about the socket.
 
 ## Examples
 
-Show process ID, local, and remote IP address of all sockets:
+### Show process ID, local, and remote IP address of all sockets
 
 ```tql
 sockets

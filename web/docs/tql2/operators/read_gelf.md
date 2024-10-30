@@ -101,7 +101,9 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
+### Read a GELF stream from a TCP socket
+
 ```tql
-load_file "events.log"
+load_tcp "0.0.0.0:54321"
 read_gelf
 ```

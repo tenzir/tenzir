@@ -143,12 +143,14 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
-Parse a fictional HTTP request log:
+### Parse a fictional HTTP request log
 
 ```tql
 // Input: 55.3.244.1 GET /index.html 15824 0.043
 read_grok "%{IP:client} %{WORD} %{URIPATHPARAM:req} %{NUMBER:bytes} %{NUMBER:dur}"
-――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
+```
+
+```tql
 {
   client: 55.3.244.1,
   req: "/index.html",

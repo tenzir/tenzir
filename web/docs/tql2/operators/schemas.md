@@ -16,7 +16,7 @@ time.
 
 ## Examples
 
-See all available schema definitions for the schema `suricata.alert`:
+### See all available definitions for a given schema
 
 ```tql
 schemas

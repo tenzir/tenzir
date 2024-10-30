@@ -66,12 +66,14 @@ differently, take exactly one argument:
 
 ## Examples
 
-Compute the sum of `x` over all events:
+### Compute the sum of a field over all events
 
 ```tql
 from [{x: 1}, {x: 2}]
 summarize x=sum(x)
-―――――――――――――――――――――
+```
+
+```tql
 {x: 3}
 ```
 
@@ -84,10 +86,14 @@ from [
   {x: 1, y: 1, z: 3},
 ]
 summarize y, x=sum(x)
-―――――――――――――――――――――
+```
+
+```tql
 {y: 0, x: 0}
 {y: 1, x: 2}
 ```
+
+### Gather unique values in a list
 
 Group the input by `src_ip` and aggregate all unique `dest_port` values into a
 list:
@@ -103,6 +109,8 @@ list:
 summarize src_ip, count_distinct(dest_port)
 ```
 
+### Compute min and max of a group
+
 Compute minimum and maximum of the `timestamp` field per `src_ip` group:
 
 ```tql
@@ -115,12 +123,16 @@ Compute minimum and maximum of the `timestamp` field over all events:
 summarize min(timestamp), max(timestamp)
 ```
 
+### Check if any value of a group is true
+
 Create a boolean flag `originator` that is `true` if any value in the `src_ip`
 group is `true`:
 
 ```tql
 summarize src_ip, originator=any(is_orig)
 ```
+
+### Create 1-hour time buckets
 
 Create 1-hour groups and produce a summary of network traffic between host
 pairs:

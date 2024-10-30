@@ -13,7 +13,7 @@ configuration files, command-line options, and environment variables.
 
 ## Examples
 
-Write the entire configuration file as YAML:
+### Write the entire configuration file as YAML
 
 ```tql
 config

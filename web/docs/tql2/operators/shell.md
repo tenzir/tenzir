@@ -23,7 +23,7 @@ Try using raw string literals: `r#"echo "i can use quotes""#`.
 
 ## Examples
 
-Show a live log from the `tenzir-node` service:
+### Show a live log from the `tenzir-node` service
 
 ```tql
 shell "journalctl -u tenzir-node -f"

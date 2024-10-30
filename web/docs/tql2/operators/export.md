@@ -42,14 +42,14 @@ Defaults to 3.
 
 ## Examples
 
-Expose all persisted events as JSON data.
+### Export all stored events as JSON
 
 ```tql
 export
 write_json
 ```
 
-Apply a filter to all persisted events, then only get the first twenty results:
+### Get a subset of matching events
 
 ```tql
 export

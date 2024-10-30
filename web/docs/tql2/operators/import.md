@@ -12,7 +12,7 @@ The `import` operator persists events in a Tenzir node.
 
 ## Examples
 
-Import Zeek connection logs into a Tenzir node.
+### Import Zeek connection logs in TSV format
 
 ```tql
 load_file "conn.log"

@@ -23,13 +23,13 @@ A single string containing the JSON request body to send with the request.
 
 ## Examples
 
-List all running pipelines:
+### List all running pipelines
 
 ```tql
 api "/pipeline/list"
 ```
 
-Create a new pipeline and start it immediately.
+### Create a new pipeline and start it immediately
 
 ```tql
 api "/pipeline/create", request_body=r#"{"name": "Suricata Import", "definition": "from file /tmp/eve.sock read suricata", "autostart": {"created": true}}"#

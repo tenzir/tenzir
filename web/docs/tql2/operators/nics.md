@@ -40,7 +40,7 @@ The record `status` has the following schema:
 
 ## Examples
 
-List all connected network interfaces.
+### List all connected network interfaces
 
 ```tql
 nics

@@ -15,17 +15,21 @@ such a warning.
 
 ## Examples
 
-Make sure that all events satisfy `x > 2`:
+### Make sure that all events satisfy `x > 2`
+
 ```tql
 from [{x: 1}, {x: 2}, {x: 1}]
 assert x > 2
-―――――――――――――――――――――――――――――
+```
+
+```tql
 {x: 1}
 // warning: assertion failure
 {x: 1}
 ```
 
-Check that the topic only contains OCSF network activity events:
+### Check that a topic only contains certain events
+
 ```tql
 subscribe "network"
 assert @name == "ocsf.network_activity"

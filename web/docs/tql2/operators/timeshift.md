@@ -37,7 +37,7 @@ Defaults to `1.0`.
 
 ## Examples
 
-Set the M57 Zeek logs to begin at Jan 1, 1984:
+### Reset events to begin at Jan 1, 1984
 
 ```tql
 load_http "https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst" 
@@ -45,6 +45,8 @@ decompress "zstd"
 read_zeek_tsv
 timeshift ts, start=1984-01-01
 ```
+
+### Scale inter-arrival times by 100x
 
 As above, but also make the time span of the trace 100 times longer:
 

@@ -32,43 +32,43 @@ to count from the end, effectively reversing the stream.
 
 ## Examples
 
-Get the second 100 events:
+### Get the second 100 events
 
 ```tql
 slice begin=100, end=200
 ```
 
-Get the last five events:
+### Get the last 5 events
 
 ```tql
 slice begin=-5
 ```
 
-Skip the last ten events:
+### Skip the last 10 events
 
 ```tql
 slice end=-10
 ```
 
-Return the last 50 events, except for the last 2:
+### Return the last 50 events, except for the last 2
 
 ```tql
 slice begin=-50, end=-2
 ```
 
-Skip the first and the last event:
+### Skip the first and the last event
 
 ```tql
 slice begin=1, end=-1
 ```
 
-Return every second event starting from the tenth:
+### Return every second event starting from the tenth
 
 ```tql
 slice begin=9, stride=2
 ```
 
-Return all but the last five events in reverse order:
+### Return all but the last five events in reverse order
 
 ```tql
 slice end=-5, stride=-1

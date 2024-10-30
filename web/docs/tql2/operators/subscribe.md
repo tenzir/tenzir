@@ -26,7 +26,7 @@ subscribes to the global unnamed feed.
 
 ## Examples
 
-Subscribe to the events under the topic `zeek-conn` and filter events
+### Subscribe to the events under a topic
 
 ```tql
 subscribe "zeek-conn"

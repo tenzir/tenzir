@@ -47,19 +47,23 @@ pipeline that parses the individual connection streams into events, for instance
 
 ## Examples
 
-Listen on all network interfaces, parsing each individual connection as syslog.
+### Listen for incoming Syslog over TCP
+
+Listen on all network interfaces, parsing each individual connection as syslog:
 
 ```tql
 load_tcp "0.0.0.0:8090" { read_syslog }
 ```
 
-Connect to a remote endpoint and parse the response as JSON:
+### Connect to a remote endpoint and read JSON
 
 ```tql
 // We know that there is only one connection, so we do not specify a pipeline.
 load_tcp "example.org:8090", connect=true
 read_json
 ```
+
+### Listen on localhost with TLS enabled
 
 Wait for connections on localhost with TLS enabled, parsing incoming JSON
 streams according to the schema `"my_schema"`, forwarding no more than 20 events
@@ -72,8 +76,7 @@ load_tcp "127.0.0.1:4000", tls=true, certfile="key_and_cert.pem", keyfile="key_a
 }
 ```
 
-The example above can use a self-signed certificate that can be generated like
-this:
+This example may use a self-signed certificate that can be generated like this:
 
 ```bash
 openssl req -x509 -newkey rsa:2048 -keyout key_and_cert.pem -out key_and_cert.pem -days 365 -nodes

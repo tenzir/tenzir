@@ -41,12 +41,14 @@ per-batch statistics.
 
 ## Examples
 
-Get the number of bytes read incrementally for a file:
+### Get the number of bytes read incrementally for a file
 
 ```tql
 load_file "input.json"
 measure
-―――――――――――――――――――――――――――――――――――――――――――――――――――――
+```
+
+```
 {timestamp: 2023-04-28T10:22:10.192322, bytes: 16384}
 {timestamp: 2023-04-28T10:22:10.223612, bytes: 16384}
 {timestamp: 2023-04-28T10:22:10.297169, bytes: 16384}
@@ -54,13 +56,15 @@ measure
 {timestamp: 2023-04-28T10:22:10.408171, bytes: 8232}
 ```
 
-Get the number of events read incrementally from a file:
+### Get the number of events read incrementally from a file
 
 ```tql
 load_file "eve.json"
 read_suricata
 measure
-――――――――――――――――――――――――――――――――――――――――
+```
+
+```tql
 {
   timestamp: 2023-04-28T10:26:45.159885,
   events: 65536,
@@ -75,13 +79,15 @@ measure
 }
 ```
 
-Get the total number of events in a file, grouped by schema:
+### Get the total number of events in a file, grouped by schema
 
 ```tql
 load_file "eve.json"
 read_suricata
 measure
 summarize schema, events=sum(events)
-―――――――――――――――――――――――――――――――――――――――
+```
+
+```tql
 {schema: "suricata.dns", events: 65948}
 ```

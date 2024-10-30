@@ -54,26 +54,29 @@ The `dependencies` record contains the following fields:
 
 ## Examples
 
-Use `version` to show the current version of a development build:
+### Show the current version
 
-```json
-{
-  "version": "v4.6.3-36-gbd4c8a058b-dirty",
-  "major": 4,
-  "minor": 6,
-  "patch": 3,
-  "tweak": 36
-}
+```tql
+version
+drop dependencies
 ```
 
-Use `version` to show the current version of a release build:
-
-```json
+```tql
 {
-  "version": "v4.7.0",
-  "major": 4,
-  "minor": 7,
-  "patch": 0,
-  "tweak": 0
+  version: "4.22.1+g324214e6de",
+  tag: "g324214e6de",
+  major: 4,
+  minor: 22,
+  patch: 1,
+  features: [],
+  build: {
+    type: "Release",
+    tree_hash: "c4c37acb5f9dc1ce3806f40bbde17a08",
+    assertions: false,
+    sanitizers: {
+      address: false,
+      undefined_behavior: false,
+    },
+  },
 }
 ```

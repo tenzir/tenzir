@@ -308,7 +308,7 @@ TCP connection.
 
 ## Examples
 
-Show the CPU usage over the last hour:
+### Show the CPU usage over the last hour
 
 ```tql
 metrics "cpu"
@@ -316,39 +316,16 @@ where timestamp > now() - 1h
 select timestamp, percent=loadavg_1m
 ```
 
-<details>
-<summary>Output</summary>
-
-```json
-{
-  "timestamp": "2023-12-21T12:00:32.631102",
-  "percent": 0.40478515625
-}
-{
-  "timestamp": "2023-12-21T11:59:32.626043",
-  "percent": 0.357421875
-}
-{
-  "timestamp": "2023-12-21T11:58:32.620327",
-  "percent": 0.42578125
-}
-{
-  "timestamp": "2023-12-21T11:57:32.614810",
-  "percent": 0.50390625
-}
-{
-  "timestamp": "2023-12-21T11:56:32.609896",
-  "percent": 0.32080078125
-}
-{
-  "timestamp": "2023-12-21T11:55:32.605871",
-  "percent": 0.5458984375
-}
+```tql
+{timestamp: 2023-12-21T12:00:32.631102, percent: 0.40478515625}
+{timestamp: 2023-12-21T11:59:32.626043, percent: 0.357421875}
+{timestamp: 2023-12-21T11:58:32.620327, percent: 0.42578125}
+{timestamp: 2023-12-21T11:57:32.614810, percent: 0.50390625}
+{timestamp: 2023-12-21T11:56:32.609896, percent: 0.32080078125}
+{timestamp: 2023-12-21T11:55:32.605871, percent: 0.5458984375}
 ```
 
-</details>
-
-Get the current memory usage:
+### Get the current memory usage
 
 ```tql
 metrics "memory"
@@ -357,19 +334,14 @@ tail 1
 select current_memory_usage
 ```
 
-<details>
-<summary>Output</summary>
-
-```json
-{
-  "current_memory_usage": 1083031552
-}
+```tql
+{current_memory_usage: 1083031552}
 ```
 
-</details>
+### Show the total pipeline ingress in bytes
 
-Show the total pipeline ingress in bytes for every day over the last week,
-excluding pipelines run in the Explorer:
+Show the inggress for every day over the last week, excluding pipelines that run
+in the Explorer:
 
 ```tql
 metrics "operator"
@@ -378,41 +350,17 @@ where source and not hidden
 summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
 ```
 
-<details>
-<summary>Output</summary>
-
-```json
-{
-  "timestamp": "2023-11-08T00:00:00.000000",
-  "bytes": 79927223
-}
-{
-  "timestamp": "2023-11-09T00:00:00.000000",
-  "bytes": 51788928
-}
-{
-  "timestamp": "2023-11-10T00:00:00.000000",
-  "bytes": 80740352
-}
-{
-  "timestamp": "2023-11-11T00:00:00.000000",
-  "bytes": 75497472
-}
-{
-  "timestamp": "2023-11-12T00:00:00.000000",
-  "bytes": 55497472
-}
-{
-  "timestamp": "2023-11-13T00:00:00.000000",
-  "bytes": 76546048
-}
-{
-  "timestamp": "2023-11-14T00:00:00.000000",
-  "bytes": 68643200
-}
+```tql
+{timestamp: 2023-11-08T00:00:00.000000, bytes: 79927223}
+{timestamp: 2023-11-09T00:00:00.000000, bytes: 51788928}
+{timestamp: 2023-11-10T00:00:00.000000, bytes: 80740352}
+{timestamp: 2023-11-11T00:00:00.000000, bytes: 75497472}
+{timestamp: 2023-11-12T00:00:00.000000, bytes: 55497472}
+{timestamp: 2023-11-13T00:00:00.000000, bytes: 76546048}
+{timestamp: 2023-11-14T00:00:00.000000, bytes: 68643200}
 ```
 
-</details>
+### Show the operators that produced the most events
 
 Show the three operator instantiations that produced the most events in total
 and their pipeline IDs:
@@ -425,30 +373,13 @@ sort -events
 head 3
 ```
 
-<details>
-<summary>Output</summary>
-
-```json
-{
-  "pipeline_id": "70a25089-b16c-448d-9492-af5566789b99",
-  "operator_id": 0,
-  "events": 391008694
-}
-{
-  "pipeline_id": "7842733c-06d6-4713-9b80-e20944927207",
-  "operator_id": 0,
-  "events": 246914949
-}
-{
-  "pipeline_id": "6df003be-0841-45ad-8be0-56ff4b7c19ef",
-  "operator_id": 1,
-  "events": 83013294
-}
+```tql
+{pipeline_id: "70a25089-b16c-448d-9492-af5566789b99", operator_id: 0, events: 391008694 }
+{pipeline_id: "7842733c-06d6-4713-9b80-e20944927207", operator_id: 0, events: 246914949 }
+{pipeline_id: "6df003be-0841-45ad-8be0-56ff4b7c19ef", operator_id: 1, events: 83013294 }
 ```
 
-</details>
-
-Get the disk usage over time:
+### Get the disk usage over time
 
 ```tql
 metrics "disk"
@@ -456,31 +387,14 @@ sort timestamp
 select timestamp, used_bytes
 ```
 
-<details>
-<summary>Output</summary>
-
 ```json
-{
-  "timestamp": "2023-12-21T12:52:32.900086",
-  "used_bytes": 461834444800
-}
-{
-  "timestamp": "2023-12-21T12:53:32.905548",
-  "used_bytes": 461834584064
-}
-{
-  "timestamp": "2023-12-21T12:54:32.910918",
-  "used_bytes": 461840302080
-}
-{
-  "timestamp": "2023-12-21T12:55:32.916200",
-  "used_bytes": 461842751488
-}
+{timestamp: 2023-12-21T12:52:32.900086, used_bytes: 461834444800}
+{timestamp: 2023-12-21T12:53:32.905548, used_bytes: 461834584064}
+{timestamp: 2023-12-21T12:54:32.910918, used_bytes: 461840302080}
+{timestamp: 2023-12-21T12:55:32.916200, used_bytes: 461842751488}
 ```
 
-</details>
-
-Get the memory usage over time:
+### Get the memory usage over time
 
 ```tql
 metrics "memory"
@@ -488,35 +402,15 @@ sort timestamp
 select timestamp, used_bytes
 ```
 
-<details>
-<summary>Output</summary>
-
-```json
-{
-  "timestamp": "2023-12-21T13:08:32.982083",
-  "used_bytes": 48572645376
-}
-{
-  "timestamp": "2023-12-21T13:09:32.986962",
-  "used_bytes": 48380682240
-}
-{
-  "timestamp": "2023-12-21T13:10:32.992494",
-  "used_bytes": 48438878208
-}
-{
-  "timestamp": "2023-12-21T13:11:32.997889",
-  "used_bytes": 48491839488
-}
-{
-  "timestamp": "2023-12-21T13:12:33.003323",
-  "used_bytes": 48529952768
-}
+```tql
+{timestamp: 2023-12-21T13:08:32.982083, used_bytes: 48572645376}
+{timestamp: 2023-12-21T13:09:32.986962, used_bytes: 48380682240}
+{timestamp: 2023-12-21T13:10:32.992494, used_bytes: 48438878208}
+{timestamp: 2023-12-21T13:11:32.997889, used_bytes: 48491839488}
+{timestamp: 2023-12-21T13:12:33.003323, used_bytes: 48529952768}
 ```
 
-</details>
-
-Get inbound TCP traffic over time:
+### Get inbound TCP traffic over time
 
 ```tql
 metrics "tcp"
@@ -524,37 +418,32 @@ sort timestamp
 select timestamp, port, handle, reads, bytes
 ```
 
-<details>
-<summary>Output</summary>
-
-```json
+```tql
 {
-  "timestamp": "2024-09-04T15:43:38.011350",
-  "port": 10000,
-  "handle": "12",
-  "reads": 884,
-  "writes": 0,
-  "bytes_read": 10608,
-  "bytes_written": 0
+  timestamp: 2024-09-04T15:43:38.011350,
+  port: 10000,
+  handle: "12",
+  reads: 884,
+  writes: 0,
+  bytes_read: 10608,
+  bytes_written: 0
 }
 {
-  "timestamp": "2024-09-04T15:43:39.013575",
-  "port": 10000,
-  "handle": "12",
-  "reads": 428,
-  "writes": 0,
-  "bytes_read": 5136,
-  "bytes_written": 0
+  timestamp: 2024-09-04T15:43:39.013575,
+  port: 10000,
+  handle: "12",
+  reads: 428,
+  writes: 0,
+  bytes_read: 5136,
+  bytes_written: 0
 }
 {
-  "timestamp": "2024-09-04T15:43:40.015376",
-  "port": 10000,
-  "handle": "12",
-  "reads": 429,
-  "writes": 0,
-  "bytes_read": 5148,
-  "bytes_written": 0
+  timestamp: 2024-09-04T15:43:40.015376,
+  port: 10000,
+  handle: "12",
+  reads: 429,
+  writes: 0,
+  bytes_read: 5148,
+  bytes_written: 0
 }
 ```
-
-</details>

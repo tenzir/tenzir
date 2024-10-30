@@ -15,7 +15,7 @@ This operator is mainly used to test or benchmark pipelines.
 
 ## Examples
 
-Benchmark to see how long it takes to export everything:
+### Benchmark to see how long it takes to export everything
 
 ```tql
 export 

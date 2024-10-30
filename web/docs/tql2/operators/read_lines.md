@@ -27,6 +27,8 @@ Use null byte (`\0`) as the delimiter instead of newline characters.
 
 ## Examples
 
+### Reads lines from a file
+
 ```tql
 load_file "events.log"
 read_lines

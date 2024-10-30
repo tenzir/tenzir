@@ -115,13 +115,13 @@ If profiles are defined, the operator defaults to the first profile.
 
 ## Examples
 
-Show all processes:
+### Show all processes
 
 ```tql
 velociraptor query="select * from pslist()"
 ```
 
-Subscribe to a hunt flow that contains the `Windows` artifact:
+### Subscribe to a hunt flow containing the `Windows` artifact
 
 ```tql
 velociraptor subscribe="Windows"
