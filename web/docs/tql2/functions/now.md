@@ -28,7 +28,7 @@ from { x: $now }
 ```tql
 subscribe "my-topic"
 select ts=now()
----
+```
 
 ```tql
 {ts: 2024-10-30T15:03:04.85298}
