@@ -32,3 +32,7 @@ from {x: int("42")}
 ```tql
 {x: 42}
 ```
+
+## See Also
+
+[uint](uint.md), [float](float.md), [time](time.md), [str](str.md), [ip](ip.md)

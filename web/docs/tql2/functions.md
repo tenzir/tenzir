@@ -67,9 +67,9 @@ Function | Description | Example
 
 Function | Description | Example
 :--------|:-------------|:-------
-[`now`](functions/now.md) | Gets the current wallclock time | `now()`
 [`as_secs`](functions/as_secs.md) | Converts a duration into seconds | `as_secs(42ms)`
 [`from_epoch_ms`](functions/from_epoch_ms.md) | Interprets a number as Unix time | `from_epoch_ms(1730234246123.456)`
+[`now`](functions/now.md) | Gets the current wallclock time | `now()`
 [`since_epoch`](functions/since_epoch.md) | Turns a time value into a duration since the Unix epoch | `since_epoch(2021-02-24)`
 
 <!--
@@ -136,7 +136,7 @@ Function | Description | Example
 [`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
 [`has`](functions/has.md) | Checks whether a record has a field | `has("field")`
 
-### Conversation
+### Conversion
 
 Function | Description | Example
 :--------|:-------------|:-------

@@ -32,4 +32,4 @@ from { x: from_epoch_ms(1730234246123.456) }
 
 ## See Also
 
-[`now`](now.md), [`since_epoch`](since_epoch.md)
+[`as_secs`](as_secs.md), [`now`](now.md), [`since_epoch`](since_epoch.md)

@@ -22,6 +22,18 @@ from { x: now() }
 {x: 2024-10-28T13:27:33.957987}
 ```
 
+### Anchor a computation with the time of now
+
+```tql
+let $now = now()
+from { x: now() }
+```
+
+```tql
+{x: 2024-10-28T13:27:33.957987}
+```
+
 ## See Also
 
-[`from_epoch_ms`](from_epoch_ms.md), [`since_epoch`](since_epoch.md)
+[`as_secs`](as_secs.md), [`from_epoch_ms`](from_epoch_ms.md),
+[`since_epoch`](since_epoch.md)

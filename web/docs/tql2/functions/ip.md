@@ -21,3 +21,7 @@ from {x: ip("1.2.3.4")}
 ```tql
 {x: 1.2.3.4}
 ```
+
+## See Also
+
+[int](int.md), [uint](uint.md), [float](float.md), [time](time.md), [str](str.md)

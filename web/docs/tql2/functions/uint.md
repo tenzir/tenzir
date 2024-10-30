@@ -22,3 +22,7 @@ from {x: uint(4.2)}
 ```tql
 {x: 4}
 ```
+
+## See Also
+
+[int](int.md), [float](float.md), [time](time.md), [str](str.md), [ip](ip.md)
