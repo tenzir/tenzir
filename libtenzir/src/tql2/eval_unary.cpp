@@ -125,7 +125,7 @@ auto evaluator::eval(const ast::unary_expr& x) -> series {
     TENZIR_ASSERT(x.op.inner == Op);
     return match(v.type, [&]<concrete_type T>(const T&) -> series {
       if constexpr (caf::detail::is_complete<EvalUnOp<Op, T>>) {
-        auto& a = caf::get<type_to_arrow_array_t<T>>(*v.array);
+        auto& a = as<type_to_arrow_array_t<T>>(*v.array);
         auto oa = EvalUnOp<Op, T>::eval(a, [&](std::string_view msg) {
           diagnostic::warning("{}", msg).primary(x).emit(ctx_);
         });

@@ -1417,7 +1417,8 @@ void detail::dynamic_builder::protect(const tenzir::type& ty) {
   TENZIR_ASSERT(length() == 0);
   metadata_ = ty;
   protected_ = true;
-  auto f = detail::overload{
+  match(
+    ty,
     [&](const null_type&) {
       // Do nothing, as we already are a null builder.
     },
@@ -1440,9 +1441,7 @@ void detail::dynamic_builder::protect(const tenzir::type& ty) {
     },
     [&](const map_type&) {
       TENZIR_UNREACHABLE();
-    },
-  };
-  caf::visit(f, ty);
+    });
 }
 
 } // namespace tenzir

@@ -573,8 +573,8 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
         if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
           using LA = type_to_arrow_array_t<L>;
           using RA = type_to_arrow_array_t<R>;
-          auto& la = caf::get<LA>(*l.array);
-          auto& ra = caf::get<RA>(*r.array);
+          auto& la = as<LA>(*l.array);
+          auto& ra = as<RA>(*r.array);
           auto oa = EvalBinOp<Op, L, R>::eval(la, ra, [&](const char* w) {
             diagnostic::warning("{}", w).primary(x).emit(ctx_);
           });
