@@ -67,6 +67,98 @@ private:
 
 using from_events_plugin = operator_inspection_plugin<from_events>;
 
+auto find_given(std::string_view what, auto func, auto member,
+                std::vector<std::string>& possibilities)
+  -> const operator_factory_plugin* {
+  for (const auto& p : plugins::get<operator_factory_plugin>()) {
+    auto properties = (p->*func)();
+    for (auto possibility : properties.*member) {
+      if (what.ends_with(possibility)) {
+        return p;
+        break;
+      }
+      possibilities.push_back(std::move(possibility));
+    }
+  }
+  return nullptr;
+}
+
+auto find_connector_given(std::string_view what, auto func, auto member,
+                          std::string_view path, location loc,
+                          session ctx) -> const operator_factory_plugin* {
+  auto possibilities = std::vector<std::string>{};
+  auto plugin = find_given(what, func, member, possibilities);
+  if (plugin) {
+    return plugin;
+  }
+  std::ranges::sort(possibilities);
+  if (loc.end - loc.begin == path.size() + 2) {
+    loc.begin += 1;
+    loc.end = loc.begin + what.size();
+  }
+  diagnostic::error("unsupported scheme `{}`", what)
+    .primary(loc)
+    .note("supported schemes for deduction: : `{}`",
+          fmt::join(possibilities, "`, `"))
+    .emit(ctx);
+  return nullptr;
+}
+
+auto find_formatter_given(std::string_view what, auto func, auto member,
+                          std::string_view path, location loc, const char* docs,
+                          session ctx) -> const operator_factory_plugin* {
+  auto possibilities = std::vector<std::string>{};
+  auto plugin = find_given(what, func, member, possibilities);
+  if (plugin) {
+    return plugin;
+  }
+  std::ranges::sort(possibilities);
+  if (loc.end - loc.begin == path.size() + 2) {
+    auto file_start = path.find(what);
+    loc.begin += file_start + 1;
+    loc.end -= 1; // TODO this may be shorted in case we have already cut out
+                  // the compression
+  }
+  diagnostic::error("no known format for extension `{}`", what)
+    .primary(loc)
+    .note("supported extensions for deduction:  `{}`",
+          fmt::join(possibilities, "`, `"))
+    .note("this could also be caused by an unknown compression extension")
+    .hint("you can pass a pipeline to handle compression and format")
+    .docs(docs)
+    .emit(ctx);
+  return nullptr;
+}
+
+auto determine_compression(std::string_view& file_ending) -> std::string_view {
+  constexpr static auto extension_to_compression_map
+    = std::array<std::pair<std::string_view, std::string_view>, 8>{{
+      {".br", "brotli"},
+      {".brotli", "brotli"},
+      {".bz2", "bz2"},
+      {".gz", "gzip"},
+      {".gzip", "gzip"},
+      {".lz4", "lz4"},
+      {".zst", "zstd"},
+      {".zstd", "zstd"},
+    }};
+  for (const auto& [extension, name] : extension_to_compression_map) {
+    if (file_ending.ends_with(extension)) {
+      file_ending.remove_suffix(extension.size());
+      return name;
+    }
+  }
+  return {};
+}
+
+auto strip_prefix(std::string name) -> std::string {
+  constexpr auto prefix = std::string_view{"tql2."};
+  if (name.starts_with(prefix)) {
+    return std::move(name).substr(prefix.size());
+  }
+  return name;
+}
+
 class from_plugin2 final : public virtual operator_factory_plugin {
   static auto
   create_pipeline_from_uri(std::string_view path, invocation inv,
@@ -103,39 +195,13 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     }
     // determine loader based on schema
     if (url->has_scheme()) {
-      auto known_schemes = std::vector<std::string>{};
-      for (const auto& p : plugins::get<operator_factory_plugin>()) {
-        auto load_properties = p->load_properties();
-        for (auto scheme : load_properties.schemes) {
-          if (scheme == url->scheme()) {
-            load_plugin = p;
-            break;
-          }
-          known_schemes.push_back(std::move(scheme));
-        }
-        if (load_plugin) {
-          break;
-        }
-      }
-      if (not load_plugin) {
-        std::ranges::sort(known_schemes);
-        auto scheme_loc = inv.args.front().get_location();
-        if (scheme_loc.end - scheme_loc.begin == path.size() + 2) {
-          scheme_loc.begin += 1;
-          scheme_loc.end = scheme_loc.begin + url->scheme().size();
-        }
-        std::ranges::sort(known_schemes);
-        diagnostic::error("unsupported scheme `{}`", url->scheme())
-          .primary(scheme_loc)
-          .note("supported schemes for deduction: : `{}`",
-                fmt::join(known_schemes, "`, `"))
-          .emit(ctx);
-        return failure::promise();
-      }
+      load_plugin = find_connector_given(
+        url->scheme(), &operator_factory_plugin::load_properties,
+        &operator_factory_plugin::load_properties_t::schemes, path,
+        inv.args.front().get_location(), ctx);
     } else {
       load_plugin = plugins::find<operator_factory_plugin>("tql2.load_file");
     }
-    TENZIR_ASSERT(load_plugin);
     auto compression_name = std::string_view{};
     if (not pipeline_argument) {
       const auto& file = url->segments().back();
@@ -154,66 +220,22 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         filename_loc.end -= 1;
       }
       // determine compression based on ending
-      {
-        constexpr static auto extension_to_compression_map
-          = std::array<std::pair<std::string_view, std::string_view>, 8>{{
-            {".br", "brotli"},
-            {".brotli", "brotli"},
-            {".bz2", "bz2"},
-            {".gz", "gzip"},
-            {".gzip", "gzip"},
-            {".lz4", "lz4"},
-            {".zst", "zstd"},
-            {".zstd", "zstd"},
-          }};
-        for (const auto& [extension, name] : extension_to_compression_map) {
-          if (file_ending.ends_with(extension)) {
-            file_ending.remove_suffix(extension.size());
-            compression_name = name;
-            break;
-          }
-        }
-        if (not compression_name.empty()) {
-          for (const auto& p : plugins::get<operator_factory_plugin>()) {
-            const auto name = p->name();
-            // TODO, the decompress operators should ultimately be separate
-            // operators
-            if (name != "decompress") {
-              continue;
-            }
-            decompress_plugin = p;
-          }
-          TENZIR_ASSERT(decompress_plugin);
-        }
-      }
-      // determine read operator based on file ending
-      {
-        auto known_extensions = std::vector<std::string>{};
+      compression_name = determine_compression(file_ending);
+      if (not compression_name.empty()) {
         for (const auto& p : plugins::get<operator_factory_plugin>()) {
           const auto name = p->name();
-          auto read_properties = p->read_properties();
-          for (auto extension : read_properties.extensions) {
-            if (file_ending.ends_with(extension)) {
-              read_plugin = p;
-              break;
-            }
-            known_extensions.push_back(std::move(extension));
+          if (name != "decompress") {
+            continue;
           }
+          decompress_plugin = p;
         }
-        if (not read_plugin) {
-          std::ranges::sort(known_extensions);
-          diagnostic::error("no known format for extension `{}`", file_ending)
-            .primary(filename_loc)
-            .note("supported extensions for deduction:  `{}`",
-                  fmt::join(known_extensions, "`, `"))
-            .note(
-              "this could also be caused by an unknown compression extension")
-            .hint("you can pass a pipeline to `from`")
-            .docs(docs)
-            .emit(ctx);
-          return failure::promise();
-        }
+        TENZIR_ASSERT(decompress_plugin);
       }
+      // determine read operator based on file ending
+      read_plugin = find_formatter_given(
+        file_ending, &operator_factory_plugin::read_properties,
+        &operator_factory_plugin::read_properties_t::extensions, path,
+        inv.args.front().get_location(), docs, ctx);
     }
     TENZIR_TRACE("from operator: given pipeline size   : {}",
                  pipeline_argument
@@ -222,65 +244,45 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     TENZIR_TRACE("from operator: determined loader     : {}",
                  load_plugin ? load_plugin->name() : "none");
     TENZIR_TRACE("from operator: loader accepts pipe   : {}",
-                 load_plugin->load_properties().accepts_pipeline);
+                 load_plugin ? load_plugin->load_properties().accepts_pipeline
+                             : false);
     TENZIR_TRACE("from operator: determined decompress : {}",
                  decompress_plugin ? decompress_plugin->name() : "none");
     TENZIR_TRACE("from operator: determined read       : {}",
                  read_plugin ? read_plugin->name() : "none");
-    if (load_plugin->load_properties().accepts_pipeline) {
-      if (not pipeline_argument) {
-        inv.args.emplace_back(ast::pipeline_expr{});
-        pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
-        if (decompress_plugin) {
-          auto decompress_ent = ast::entity{std::vector{
-            ast::identifier{decompress_plugin->name(), location::unknown},
-          }};
-          pipeline_argument->inner.body.emplace_back(ast::invocation{
-            std::move(decompress_ent),
-            {ast::constant{std::string{compression_name}, location::unknown}}});
-        }
-        auto read_ent = ast::entity{std::vector{
-          ast::identifier{read_plugin->name(), location::unknown},
+    if (not load_plugin or not read_plugin) {
+      return failure::promise();
+    }
+    if (not pipeline_argument) {
+      inv.args.emplace_back(ast::pipeline_expr{});
+      pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+      if (decompress_plugin) {
+        auto decompress_ent = ast::entity{std::vector{
+          ast::identifier{strip_prefix(decompress_plugin->name()),
+                          location::unknown},
         }};
-        pipeline_argument->inner.body.emplace_back(
-          ast::invocation{std::move(read_ent), {}});
-        TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
+        pipeline_argument->inner.body.emplace_back(ast::invocation{
+          std::move(decompress_ent),
+          {ast::constant{std::string{compression_name}, location::unknown}}});
       }
+      auto read_ent = ast::entity{std::vector{
+        ast::identifier{strip_prefix(read_plugin->name()), location::unknown},
+      }};
+      pipeline_argument->inner.body.emplace_back(
+        ast::invocation{std::move(read_ent), {}});
+      TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
+    }
+    if (load_plugin->load_properties().accepts_pipeline) {
       return load_plugin->make(std::move(inv), std::move(ctx));
     } else {
-      auto result = std::vector<operator_ptr>{};
-      if (pipeline_argument) {
-        TRY(auto compiled_pipeline,
-            compile(std::move(pipeline_argument->inner), ctx));
-        TENZIR_TRACE("from operator: compiled pipeline ops : {}",
-                     compiled_pipeline.operators().size());
-        result.reserve(1 + compiled_pipeline.operators().size());
-        for (auto&& op : std::move(compiled_pipeline).unwrap()) {
-          result.push_back(std::move(op));
-        }
-        /// remove the pipeline argument, as we dont want to pass it to the
-        /// loader if it doesnt accept one
-        inv.args.pop_back();
-      } else {
-        if (decompress_plugin) {
-          auto decompress_op = operator_ptr{};
-          TRY(decompress_op,
-              decompress_plugin->make(
-                invocation{inv.self,
-                           {ast::constant{std::string{compression_name},
-                                          location::unknown}}},
-                ctx));
-          inv.args.clear();
-          result.emplace_back(std::move(decompress_op));
-        }
-        TRY(auto read_op, read_plugin->make(invocation{inv.self, {}}, ctx));
-        result.emplace_back(std::move(read_op));
-        TENZIR_TRACE("from operator: generated deduced ops : {}",
-                     result.size());
-      }
+      TRY(auto compiled_pipeline,
+          compile(std::move(pipeline_argument->inner), ctx));
+      TENZIR_TRACE("from operator: compiled pipeline ops : {}",
+                   compiled_pipeline.operators().size());
+      inv.args.pop_back();
       TRY(auto load_op, load_plugin->make(std::move(inv), ctx));
-      result.insert(result.begin(), std::move(load_op));
-      return std::make_unique<pipeline>(std::move(result));
+      compiled_pipeline.prepend(std::move(load_op));
+      return std::make_unique<pipeline>(std::move(compiled_pipeline));
     }
   }
 
@@ -373,38 +375,13 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     }
     // determine loader based on schema
     if (url->has_scheme()) {
-      auto known_schemes = std::vector<std::string>{};
-      for (const auto& p : plugins::get<operator_factory_plugin>()) {
-        auto save_properties = p->save_properties();
-        for (auto scheme : save_properties.schemes) {
-          if (scheme == url->scheme()) {
-            save_plugin = p;
-            break;
-          }
-          known_schemes.push_back(std::move(scheme));
-        }
-        if (save_plugin) {
-          break;
-        }
-      }
-      if (not save_plugin) {
-        auto scheme_loc = inv.args.front().get_location();
-        if (scheme_loc.end - scheme_loc.begin == path.size() + 2) {
-          scheme_loc.begin += 1;
-          scheme_loc.end = scheme_loc.begin + url->scheme().size();
-        }
-        std::ranges::sort(known_schemes);
-        diagnostic::error("unsupported scheme `{}`", url->scheme())
-          .primary(scheme_loc)
-          .note("supported schemes for deduction: : `{}`",
-                fmt::join(known_schemes, "`, `"))
-          .emit(ctx);
-        return failure::promise();
-      }
+      save_plugin = find_connector_given(
+        url->scheme(), &operator_factory_plugin::save_properties,
+        &operator_factory_plugin::save_properties_t::schemes, path,
+        inv.args.front().get_location(), ctx);
     } else {
       save_plugin = plugins::find<operator_factory_plugin>("tql2.save_file");
     }
-    TENZIR_ASSERT(save_plugin);
     auto compression_name = std::string_view{};
     if (not pipeline_argument) {
       const auto& file = url->segments().back();
@@ -424,68 +401,24 @@ class to_plugin2 final : public virtual operator_factory_plugin {
         return failure::promise();
       }
       // determine compression based on ending
-      {
-        constexpr static auto extension_to_compression_map
-          = std::array<std::pair<std::string_view, std::string_view>, 8>{{
-            {".br", "brotli"},
-            {".brotli", "brotli"},
-            {".bz2", "bz2"},
-            {".gz", "gzip"},
-            {".gzip", "gzip"},
-            {".lz4", "lz4"},
-            {".zst", "zstd"},
-            {".zstd", "zstd"},
-          }};
-        for (const auto& [extension, name] : extension_to_compression_map) {
-          if (file_ending.ends_with(extension)) {
-            file_ending.remove_suffix(extension.size());
-            compression_name = name;
-            break;
+      compression_name = determine_compression(file_ending);
+      if (not compression_name.empty()) {
+        for (const auto& p : plugins::get<operator_factory_plugin>()) {
+          const auto name = p->name();
+          // TODO, the decompress operators should ultimately be separate
+          // operators
+          if (name != "compress") {
+            continue;
           }
+          compress_plugin = p;
         }
-        if (not compression_name.empty()) {
-          for (const auto& p : plugins::get<operator_factory_plugin>()) {
-            const auto name = p->name();
-            // TODO, the decompress operators should ultimately be separate
-            // operators
-            if (name != "compress") {
-              continue;
-            }
-            compress_plugin = p;
-          }
-          TENZIR_ASSERT(compress_plugin);
-        }
+        TENZIR_ASSERT(compress_plugin);
       }
       // determine write operator based on file ending
-      {
-        auto known_extensions = std::vector<std::string>{};
-        for (const auto& p : plugins::get<operator_factory_plugin>()) {
-          auto write_properties = p->write_properties();
-          for (auto extension : write_properties.extensions) {
-            if (file_ending.ends_with(extension)) {
-              write_plugin = p;
-              break;
-            }
-            known_extensions.push_back(std::move(extension));
-          }
-          if (write_plugin) {
-            break;
-          }
-        }
-        if (not write_plugin) {
-          std::ranges::sort(known_extensions);
-          diagnostic::error("no known format for extension `{}`", file_ending)
-            .primary(filename_loc)
-            .note("supported extensions for deduction: `{}`",
-                  fmt::join(known_extensions, "`, `"))
-            .note(
-              "this could also be caused by an unknown compression extension")
-            .hint("you can pass a pipeline to `to`")
-            .docs(docs)
-            .emit(ctx);
-          return failure::promise();
-        }
-      }
+      write_plugin = find_formatter_given(
+        file_ending, &operator_factory_plugin::write_properties,
+        &operator_factory_plugin::write_properties_t::extensions, path,
+        inv.args.front().get_location(), docs, ctx);
     }
     TENZIR_TRACE("to operator: given pipeline size   : {}",
                  pipeline_argument
@@ -494,65 +427,45 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     TENZIR_TRACE("to operator: determined loader     : {}",
                  save_plugin ? save_plugin->name() : "none");
     TENZIR_TRACE("to operator: loader accepts pipe   : {}",
-                 save_plugin->save_properties().accepts_pipeline);
+                 save_plugin ? save_plugin->save_properties().accepts_pipeline
+                             : false);
     TENZIR_TRACE("to operator: determined decompress : {}",
                  compress_plugin ? compress_plugin->name() : "none");
     TENZIR_TRACE("to operator: determined read       : {}",
                  write_plugin ? write_plugin->name() : "none");
-    if (save_plugin->save_properties().accepts_pipeline) {
-      if (not pipeline_argument) {
-        inv.args.emplace_back(ast::pipeline_expr{});
-        pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
-        auto write_ent = ast::entity{std::vector{
-          ast::identifier{write_plugin->name(), location::unknown},
+    if (not save_plugin or not write_plugin) {
+      return failure::promise();
+    }
+    if (not pipeline_argument) {
+      inv.args.emplace_back(ast::pipeline_expr{});
+      pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+      if (compress_plugin) {
+        auto decompress_ent = ast::entity{std::vector{
+          ast::identifier{strip_prefix(compress_plugin->name()),
+                          location::unknown},
         }};
-        pipeline_argument->inner.body.emplace_back(
-          ast::invocation{std::move(write_ent), {}});
-        if (compress_plugin) {
-          auto compress_ent = ast::entity{std::vector{
-            ast::identifier{compress_plugin->name(), location::unknown},
-          }};
-          pipeline_argument->inner.body.emplace_back(ast::invocation{
-            std::move(compress_ent),
-            {ast::constant{std::string{compression_name}, location::unknown}}});
-          TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
-        }
+        pipeline_argument->inner.body.emplace_back(ast::invocation{
+          std::move(decompress_ent),
+          {ast::constant{std::string{compression_name}, location::unknown}}});
       }
+      auto read_ent = ast::entity{std::vector{
+        ast::identifier{strip_prefix(write_plugin->name()), location::unknown},
+      }};
+      pipeline_argument->inner.body.emplace_back(
+        ast::invocation{std::move(read_ent), {}});
+      TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
+    }
+    if (save_plugin->load_properties().accepts_pipeline) {
       return save_plugin->make(std::move(inv), std::move(ctx));
     } else {
-      auto result = std::vector<operator_ptr>{};
-      if (pipeline_argument) {
-        TRY(auto compiled_pipeline,
-            compile(std::move(pipeline_argument->inner), ctx));
-        TENZIR_TRACE("to operator: compiled pipeline ops : {}",
-                     compiled_pipeline.operators().size());
-        result.reserve(1 + compiled_pipeline.operators().size());
-        for (auto&& op : std::move(compiled_pipeline).unwrap()) {
-          result.push_back(std::move(op));
-        }
-        /// remove the pipeline argument, as we dont want to pass it to the
-        /// loader if it doesnt accept one
-        inv.args.pop_back();
-      } else {
-        TRY(auto write_op, write_plugin->make(invocation{inv.self, {}}, ctx));
-        result.emplace_back(std::move(write_op));
-        if (compress_plugin) {
-          auto compress_op = operator_ptr{};
-          inv.args.emplace_back();
-          TRY(compress_op,
-              compress_plugin->make(
-                invocation{inv.self,
-                           {ast::constant{std::string{compression_name},
-                                          location::unknown}}},
-                ctx));
-          inv.args.clear();
-          result.emplace_back(std::move(compress_op));
-        }
-        TENZIR_TRACE("to operator: generated deduced ops : {}", result.size());
-      }
-      TRY(auto save_op, save_plugin->make(std::move(inv), ctx));
-      result.push_back(std::move(save_op));
-      return std::make_unique<pipeline>(std::move(result));
+      TRY(auto compiled_pipeline,
+          compile(std::move(pipeline_argument->inner), ctx));
+      TENZIR_TRACE("from operator: compiled pipeline ops : {}",
+                   compiled_pipeline.operators().size());
+      inv.args.pop_back();
+      TRY(auto load_op, save_plugin->make(std::move(inv), ctx));
+      compiled_pipeline.append(std::move(load_op));
+      return std::make_unique<pipeline>(std::move(compiled_pipeline));
     }
   }
 
