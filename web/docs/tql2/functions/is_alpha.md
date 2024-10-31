@@ -16,7 +16,7 @@ characters and `false` otherwise.
 ### Check if a string is alphabetic
 
 ```tql
-from {x: is_alpha("hello")}
+from {x: "hello".is_alpha()}
 ```
 
 ```tql

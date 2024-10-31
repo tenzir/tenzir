@@ -15,7 +15,7 @@ The `trim_end` function removes trailing whitespace from `x`.
 ### Trim whitespace from the end
 
 ```tql
-from {x: trim_end("hello ")}
+from {x: "hello ".trim_end()}
 ```
 
 ```tql

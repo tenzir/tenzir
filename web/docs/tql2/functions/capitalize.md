@@ -16,7 +16,7 @@ converted to uppercase and the rest to lowercase.
 ### Capitalize a lowercase string
 
 ```tql
-from {x: capitalize("hello world")}
+from {x: "hello world".capitalize()}
 ```
 
 ```tql

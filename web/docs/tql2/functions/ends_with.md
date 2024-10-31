@@ -16,7 +16,7 @@ otherwise.
 ### Check if a string ends with a substring
 
 ```tql
-from {x: ends_with("hello", "lo")}
+from {x: "hello".ends_with("lo")}
 ```
 
 ```tql

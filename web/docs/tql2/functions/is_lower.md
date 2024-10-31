@@ -16,7 +16,7 @@ The `is_lower` function returns `true` if `x` is entirely in lowercase and
 ### Check if a string is lowercase
 
 ```tql
-from {x: is_lower("hello")}
+from {x: "hello".is_lower()}
 ```
 
 ```tql

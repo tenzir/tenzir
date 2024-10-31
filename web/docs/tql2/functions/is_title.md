@@ -16,7 +16,7 @@ otherwise.
 ### Check if a string is in title case
 
 ```tql
-from {x: is_title("Hello World")}
+from {x: "Hello World".is_title()}
 ```
 
 ```tql

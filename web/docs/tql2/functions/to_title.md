@@ -15,7 +15,7 @@ The `to_title` function converts all words in `x` to title case.
 ### Convert a string to title case
 
 ```tql
-from {x: to_title("hello world")}
+from {x: "hello world".to_title()}
 ```
 
 ```tql

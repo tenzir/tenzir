@@ -17,7 +17,7 @@ The `length_chars` function returns the character length of the `x` string.
 For ASCII strings, the character length is the same as the number of bytes:
 
 ```tql
-from {x: length_chars("hello")}
+from {x: "hello".length_chars()}
 ```
 
 ```tql
@@ -27,7 +27,7 @@ from {x: length_chars("hello")}
 For Unicode, this may not be the case:
 
 ```tql
-from {x: length_chars("👻")}
+from {x: "👻".length_chars()}
 ```
 
 ```tql

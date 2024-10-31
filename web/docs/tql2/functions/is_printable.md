@@ -16,7 +16,7 @@ characters and `false` otherwise.
 ### Check if a string is printable
 
 ```tql
-from {x: is_printable("hello")}
+from {x: "hello".is_printable()}
 ```
 
 ```tql

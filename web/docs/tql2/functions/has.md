@@ -18,16 +18,19 @@ and `false` otherwise.
 ```tql
 from {
   x: "foo",
+  y: null,
 }
 this = {
   has_x: this.has("x"),
   has_y: this.has("y"),
+  has_z: this.has("z"),
 }
 ```
 
 ```tql
 {
   has_x: true,
-  has_y: false,
+  has_y: true,
+  has_z: false,
 }
 ```

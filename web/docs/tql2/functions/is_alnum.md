@@ -16,7 +16,7 @@ characters and `false` otherwise.
 ### Check if a string is alphanumeric
 
 ```tql
-from {x: is_alnum("hello123")}
+from {x: "hello123".is_alnum()}
 ```
 
 ```tql

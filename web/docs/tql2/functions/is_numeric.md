@@ -16,7 +16,7 @@ and `false` otherwise.
 ### Check if a string is numeric
 
 ```tql
-from {x: is_numeric("1234")}
+from {x: "1234".is_numeric()}
 ```
 
 ```tql

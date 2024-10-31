@@ -15,7 +15,7 @@ The `to_upper` function converts all characters in `x` to uppercase.
 ### Convert a string to uppercase
 
 ```tql
-from {x: to_upper("hello")}
+from {x: "hello".to_upper()}
 ```
 
 ```tql

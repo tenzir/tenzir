@@ -17,7 +17,7 @@ The `length_bytes` function returns the byte length of the `x` string.
 For ASCII strings, the byte length is the same as the number of characters:
 
 ```tql
-from {x: length_bytes("hello")}
+from {x: "hello".length_bytes()}
 ```
 
 ```tql
@@ -27,7 +27,7 @@ from {x: length_bytes("hello")}
 For Unicode, this may not be the case:
 
 ```tql
-from {x: length_bytes("👻")}
+from {x: "👻".length_bytes()}
 ```
 
 ```tql

@@ -17,15 +17,15 @@ is 4.
 
 ```tql
 from {
-  x: is_v4(1.2.3.4),
-  y: is_v4(::1),
+  x: 1.2.3.4.is_v4(),
+  y: ::1.is_v4(),
 }
 ```
 
 ```tql
 {
   x: true,
-  y: false
+  y: false,
 }
 ```
 

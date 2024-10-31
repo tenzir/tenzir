@@ -15,7 +15,7 @@ The `to_lower` function converts all characters in `x` to lowercase.
 ### Convert a string to lowercase
 
 ```tql
-from {x: to_lower("HELLO")}
+from {x: "HELLO".to_lower()}
 ```
 
 ```tql

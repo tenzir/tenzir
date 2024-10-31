@@ -15,7 +15,7 @@ The `trim_start` function removes leading whitespace from `x`.
 ### Trim whitespace from the start
 
 ```tql
-from {x: trim_start(" hello")}
+from {x: " hello".trim_start()}
 ```
 
 ```tql

@@ -32,29 +32,29 @@ Throughout our documentation, we use the free function syntax.
 
 Function | Description | Example
 :--------|:-------------|:-------
-[`ends_with`](functions/ends_with.md) | Checks if a string ends with a substring | `ends_with("hello", "lo")`
-[`is_alnum`](functions/is_alnum.md) | Checks if a string is alphanumeric | `is_alnum("hello123")`
-[`is_alpha`](functions/is_alpha.md) | Checks if a string contains only letters | `is_alpha("hello")`
-[`is_lower`](functions/is_lower.md) | Checks if a string is in lowercase | `is_lower("hello")`
-[`is_numeric`](functions/is_numeric.md) | Checks if a string contains only numbers | `is_numeric("1234")`
-[`is_printable`](functions/is_printable.md) | Checks if a string contains only printable characters | `is_printable("hello")`
-[`is_title`](functions/is_title.md) | Checks if a string follows title case | `is_title("Hello World")`
-[`is_upper`](functions/is_upper.md) | Checks if a string is in uppercase | `is_upper("HELLO")`
-[`length_bytes`](functions/length_bytes.md) | Returns the length of a string in bytes | `length_bytes("hello")`
-[`length_chars`](functions/length_chars.md) | Returns the length of a string in characters | `length_chars("hello")`
-[`starts_with`](functions/starts_with.md) | Checks if a string starts with a substring | `starts_with("hello", "he")`
+[`length_bytes`](functions/length_bytes.md) | Returns the length of a string in bytes | `"hello".length_bytes()`
+[`length_chars`](functions/length_chars.md) | Returns the length of a string in characters | `"hello".length_chars()`
+[`starts_with`](functions/starts_with.md) | Checks if a string starts with a substring | `"hello".starts_with("he")`
+[`ends_with`](functions/ends_with.md) | Checks if a string ends with a substring | `"hello".ends_with("lo")`
+[`is_alnum`](functions/is_alnum.md) | Checks if a string is alphanumeric | `"hello123".is_alnum()`
+[`is_alpha`](functions/is_alpha.md) | Checks if a string contains only letters | `"hello".is_alpha()`
+[`is_lower`](functions/is_lower.md) | Checks if a string is in lowercase | `"hello".is_lower()`
+[`is_numeric`](functions/is_numeric.md) | Checks if a string contains only numbers | `"1234".is_numeric()`
+[`is_printable`](functions/is_printable.md) | Checks if a string contains only printable characters | `"hello".is_printable()`
+[`is_title`](functions/is_title.md) | Checks if a string follows title case | `"Hello World".is_title()`
+[`is_upper`](functions/is_upper.md) | Checks if a string is in uppercase | `"HELLO".is_upper()`
 
 ### Transformation
 
 Function | Description | Example
 :--------|:-------------|:-------
-[`capitalize`](functions/capitalize.md) | Capitalizes the first character of a string | `capitalize("hello")`
-[`to_lower`](functions/to_lower.md) | Converts a string to lowercase | `to_lower("HELLO")`
-[`to_title`](functions/to_title.md) | Converts a string to title case | `to_title("hello world")`
-[`to_upper`](functions/to_upper.md) | Converts a string to uppercase | `to_upper("hello")`
-[`trim`](functions/trim.md) | Trims whitespace from both ends of a string | `trim(" hello ")`
-[`trim_end`](functions/trim_end.md) | Trims whitespace from the end of a string | `trim_end("hello ")`
-[`trim_start`](functions/trim_start.md) | Trims whitespace from the start of a string | `trim_start(" hello")`
+[`trim`](functions/trim.md) | Trims whitespace from both ends of a string | `" hello ".trim()`
+[`trim_start`](functions/trim_start.md) | Trims whitespace from the start of a string | `" hello".trim_start()`
+[`trim_end`](functions/trim_end.md) | Trims whitespace from the end of a string | `"hello ".trim_end()`
+[`capitalize`](functions/capitalize.md) | Capitalizes the first character of a string | `"hello".capitalize()`
+[`to_lower`](functions/to_lower.md) | Converts a string to lowercase | `"HELLO".to_lower()`
+[`to_title`](functions/to_title.md) | Converts a string to title case | `"hello world".to_title()`
+[`to_upper`](functions/to_upper.md) | Converts a string to uppercase | `"hello".to_upper()`
 
 ### File Paths
 
@@ -134,7 +134,7 @@ Function | Description | Example
 Function | Description | Example
 :--------|:-------------|:-------
 [`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
-[`has`](functions/has.md) | Checks whether a record has a field | `has("field")`
+[`has`](functions/has.md) | Checks whether a record has a field | `record.has("field")`
 
 ### Conversion
 

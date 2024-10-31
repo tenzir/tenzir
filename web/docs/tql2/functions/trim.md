@@ -15,7 +15,7 @@ The `trim` function removes leading and trailing whitespace from `x`.
 ### Trim whitespace from both ends
 
 ```tql
-from {x: trim(" hello ")}
+from {x: " hello ".trim()}
 ```
 
 ```tql

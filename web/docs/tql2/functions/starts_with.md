@@ -16,7 +16,7 @@ The `starts_with` function returns `true` if `x` starts with `prefix` and
 ### Check if a string starts with a substring
 
 ```tql
-from {x: starts_with("hello", "he")}
+from {x: "hello".starts_with("he")}
 ```
 
 ```tql

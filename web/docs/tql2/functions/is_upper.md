@@ -15,7 +15,7 @@ The `is_upper` function returns `true` if `x` is entirely in uppercase; otherwis
 ### Check if a string is uppercase
 
 ```tql
-from {x: is_upper("HELLO")}
+from {x: "HELLO".is_upper()}
 ```
 
 ```tql
