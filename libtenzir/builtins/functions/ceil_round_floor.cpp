@@ -17,20 +17,22 @@
 #include <arrow/util/tdigest.h>
 
 namespace tenzir::plugins::numeric {
-namespace {
 
-template <bool Ceil>
+TENZIR_ENUM(mode, ceil, floor, round);
+
+namespace {
+template <mode Mode>
 class plugin final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return Ceil ? "ceil" : "floor";
+    return std::string{to_string(Mode)};
   }
 
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto spec = std::optional<located<duration>>{};
-    TRY(argument_parser2::function(name())
+    TRY(argument_parser2::function(function_name())
           .add(expr, "<value>")
           .add(spec, "<spec>")
           .parse(inv, ctx));
@@ -63,10 +65,12 @@ public:
                 check(b.AppendNull());
                 continue;
               }
-              if constexpr (Ceil) {
+              if constexpr (Mode == mode::ceil) {
                 check(b.Append(std::ceil(arg.Value(row))));
-              } else {
+              } else if constexpr (Mode == mode::floor) {
                 check(b.Append(std::floor(arg.Value(row))));
+              } else {
+                check(b.Append(std::round(arg.Value(row))));
               }
             }
             return series{ty, finish(b)};
@@ -74,15 +78,15 @@ public:
           [&]<concepts::one_of<arrow::DurationArray, arrow::TimestampArray> T>(
             const T&) {
             diagnostic::warning("`{}` with duration requires second argument",
-                                name())
+                                function_name())
               .primary(value)
-              .hint("for example `{}(x, 1h)`", name())
+              .hint("for example `{}(x, 1h)`", function_name())
               .emit(ctx);
             return series::null(ty, length);
           },
           [&](const auto&) {
-            diagnostic::warning("`{}` expected `number`, got `{}`", name(),
-                                ty.kind())
+            diagnostic::warning("`{}` expected `number`, got `{}`",
+                                function_name(), ty.kind())
               // TODO: Wrong location.
               .primary(value)
               .emit(ctx);
@@ -107,29 +111,42 @@ public:
             }
             const auto val = array.Value(i);
             const auto count = std::abs(spec->inner.count());
-            const auto rem = val % count;
-            if constexpr (Ceil) {
-              check(b->Append(val + (count - rem)));
+            const auto rem = std::abs(val % count);
+            if (rem == 0) {
+              check(b->Append(val));
+              continue;
+            }
+            const auto ceil = val >= 0 ? count - rem : rem;
+            const auto floor = val >= 0 ? -rem : rem - count;
+            if constexpr (Mode == mode::ceil) {
+              check(b->Append(val + ceil));
+            } else if constexpr (Mode == mode::floor) {
+              check(b->Append(val + floor));
             } else {
-              check(b->Append(val - rem));
+              check(b->Append(val + (std::abs(floor) < ceil ? floor : ceil)));
             }
           }
           return {duration_type{}, finish(*b)};
         },
         [&](const arrow::TimestampArray& array) -> series {
           auto opts = make_round_temporal_options(spec->inner);
-          if constexpr (Ceil) {
+          if constexpr (Mode == mode::ceil) {
             return {time_type{},
                     check(arrow::compute::CeilTemporal(array, std::move(opts)))
                       .array_as<arrow::TimestampArray>()};
-          } else {
+          } else if constexpr (Mode == mode::floor) {
             return {time_type{},
                     check(arrow::compute::FloorTemporal(array, std::move(opts)))
+                      .array_as<arrow::TimestampArray>()};
+          } else {
+            return {time_type{},
+                    check(arrow::compute::RoundTemporal(array, std::move(opts)))
                       .array_as<arrow::TimestampArray>()};
           }
         },
         [&](const auto&) {
-          diagnostic::warning("{}(_, _) is not implemented for {}", name(), ty)
+          diagnostic::warning("{}(_, _) is not implemented for {}",
+                              function_name(), ty)
             .primary(value)
             .emit(ctx);
           return series::null(ty, length);
@@ -139,8 +156,13 @@ public:
   }
 };
 
+using ceil_plugin = plugin<mode::ceil>;
+using floor_plugin = plugin<mode::floor>;
+using round_plugin = plugin<mode::round>;
+
 } // namespace
 } // namespace tenzir::plugins::numeric
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::plugin<false>)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::plugin<true>)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::ceil_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::floor_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::round_plugin)
