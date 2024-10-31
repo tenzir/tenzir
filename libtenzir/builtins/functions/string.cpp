@@ -363,14 +363,19 @@ public:
       auto b = arrow::StringBuilder{};
       for (auto&& value : subject.values()) {
         auto f = detail::overload{
-          [](int64_t x) {
-            return fmt::to_string(x);
-          },
           [](const std::string& x) {
             return x;
           },
-          [&](auto&) {
-            // TODO: How to stringify everything else?
+          [](int64_t x) {
+            return fmt::to_string(x);
+          },
+          [&](enumeration x) {
+            return std::string{
+              caf::get<enumeration_type>(subject.type).field(x)};
+          },
+          [&](const auto&) {
+            // TODO: This should probably use the TQL printer, once it exists.
+            // Then we can also remove the special cases above.
             return fmt::to_string(value);
           },
         };
