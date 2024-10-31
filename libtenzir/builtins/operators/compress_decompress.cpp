@@ -197,7 +197,7 @@ public:
             co_return;
           }
           out_buffer.resize(
-            std::max(out_buffer.max_size(), out_buffer.size() * 2));
+            std::min(out_buffer.max_size(), out_buffer.size() * 2));
         } else {
           in_buffer.drop_front_n(result->bytes_read);
         }
@@ -223,7 +223,7 @@ public:
           co_return;
         }
         out_buffer.resize(
-          std::max(out_buffer.max_size(), out_buffer.size() * 2));
+          std::min(out_buffer.max_size(), out_buffer.size() * 2));
         continue;
       }
       if (result->bytes_written > 0) {
@@ -308,7 +308,7 @@ public:
             co_return;
           }
           out_buffer.resize(
-            std::max(out_buffer.max_size(), out_buffer.size() * 2));
+            std::min(out_buffer.max_size(), out_buffer.size() * 2));
         }
         if (result->bytes_written > 0) {
           TENZIR_ASSERT(result->bytes_written
