@@ -63,7 +63,6 @@ Disable TSL certificate verification.
 Include fields with null values in the transmitted event data. By default they
 are dropped before sending to splunk
 
-
 ### `max_content_length = int (optional)`
 
 The maximum size of the message body. A message may consist of multiple events.
