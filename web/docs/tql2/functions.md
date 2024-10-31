@@ -17,14 +17,15 @@ f(arg1:<type>, arg2=<type>, [arg3=type]) -> <type>
 
 TQL features the [uniform function call syntax
 (UFCS)](https://en.wikipedia.org/wiki/Uniform_Function_Call_Syntax), which
-allows you to interchangeably call a function with more than argument either as
-*free function* or *method*. For example, `length(str)` and `str.length()`
+allows you to interchangeably call a function with more than one argument either
+as *free function* or *method*. For example, `length(str)` and `str.length()`
 resolve to the identical function call. The latter syntax is particularly
 suitable for function chaining, e.g., `x.f().g().h()` reads left-to-right as
 "start with `x`, apply `f()`, then `g()` and then `h()`," compared to
 `h(g(f(x)))`, which reads "inside out."
 
-Throughout our documentation, we use the free function syntax.
+Throughout our documentation, we use the free function style in the synopsis
+but often resort to the method style when it is more idiomatic.
 
 ## String
 
