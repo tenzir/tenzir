@@ -20,13 +20,13 @@ Defaults to `10`.
 
 ## Examples
 
-Get the first ten events:
+### Get the first 10 events
 
 ```tql
 head
 ```
 
-Get the first five events:
+### Get the first 5 events
 
 ```tql
 head 5

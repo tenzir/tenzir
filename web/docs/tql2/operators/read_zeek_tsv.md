@@ -44,15 +44,9 @@ Here's an example of a typical Zeek `conn.log` in TSV form:
 ```
 ## Examples
 
-Read a Zeek `conn.log` from a file:
+### Read a Zeek `conn.log` from a file
 
 ```tql
 load_file "/tmp/conn.log" 
 read_zeek_tsv
-```
-
-Read compressed Zeek TSV logs in one shot:
-
-```bash
-gunzip -c *.gz | tenzir --tql2 'read_zeek_tsv | ...'
 ```

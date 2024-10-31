@@ -80,14 +80,14 @@ The `owner`, `group`, and `others` records contain the following fields:
 
 ## Examples
 
-Compute the total file size of the current directory:
+### Compute the total file size of the current directory
 
 ```tql
 files recurse=true
 summarize total_size=sum(file_size)
 ```
 
-Find all named pipes in `/tmp`:
+### Find all named pipes in `/tmp`
 
 ```tql
 files "/tmp", recurse=true, skip_permission_denied=true

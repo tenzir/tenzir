@@ -24,10 +24,10 @@ publishes events to a global unnamed feed.
 
 ## Examples
 
-Publish Zeek connection logs under the topic `"zeek-conn"`.
+### Publish Zeek connection logs under the topic `zeek`
 
 ```tql
 load_file "conn.log"
 read_zeek_tsv
-publish "zeek-conn"
+publish "zeek"
 ```

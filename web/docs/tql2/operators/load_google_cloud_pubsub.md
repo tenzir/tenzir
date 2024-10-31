@@ -31,7 +31,10 @@ The default value is `0s`.
 
 ## Examples
 
-Subscribe to `my-subscription` in the project `amazing-project-123456` and parse the messages as JSON:
+### Read JSON messages from a subscription
+
+Subscribe to `my-subscription` in the project `amazing-project-123456` and parse
+the messages as JSON:
 
 ```tql
 load_google_cloud_pubsub project_id="amazing-project-123456", subscription_id="my-subscription"

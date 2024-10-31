@@ -131,7 +131,9 @@ text 42 "1.1.1.1"
 ```tql
 load "input.ssv"
 read_ssv
-―――――――――――――――――――――――――――――――――――――――――――――――――――――
-{ message: "text", count: 42, ip: 1.1.1.1 }
-{ message: "longer string", count: 100, ip: 1.1.1.2 }
+```
+
+```tql
+{message: "text", count: 42, ip: 1.1.1.1}
+{message: "longer string", count: 100, ip: 1.1.1.2}
 ```

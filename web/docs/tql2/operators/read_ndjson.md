@@ -106,28 +106,28 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 ### Read a newline-delimited JSON file
 
 ```json title="versions.json"
-{ "product": "Tenzir", "version.major": 4, "version.minor": 22 }
-{ "product": "Tenzir", "version.major": 4, "version.minor": 21 }
+{"product": "Tenzir", "version.major": 4, "version.minor": 22}
+{"product": "Tenzir", "version.major": 4, "version.minor": 21}
 ```
 
-```tql title="Pipeline"
+```tql
 load_file "versions.json"
 read_ndjson unflatten="."
 ```
 
-```json title="Output"
+```tql
 {
-  "product": "Tenzir",
-  "version": {
-    "major": 4,
-    "minor": 22
+  product: "Tenzir",
+  version: {
+    major: 4,
+    minor: 22,
   }
 }
 {
-  "product": "Tenzir",
-  "version": {
-    "major": 4,
-    "minor": 21
+  product: "Tenzir",
+  version: {
+    major: 4,
+    minor: 21,
   }
 }
 ```

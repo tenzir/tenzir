@@ -96,24 +96,24 @@ top-level. The data is best modeled as an `id` record with four nested fields
 
 Without an unflatten separator, the data looks like this:
 
-```json title="Without unflattening"
+```tql title="Without unflattening"
 {
-	"id.orig_h": "1.1.1.1",
-	"id.orig_p": 10,
-	"id.resp_h": "1.1.1.2",
-	"id.resp_p": 5
+	id.orig_h: 1.1.1.1,
+	id.orig_p: 10,
+	id.resp_h: 1.1.1.2,
+	id.resp_p: 5,
 }
 ```
 
 With the unflatten separator set to `.`, Tenzir reads the events like this:
 
-```json title="With 'unflatten'"
+```tql title="With 'unflatten'"
 {
-	"id": {
-		"orig_h": "1.1.1.1",
-		"orig_p": 10,
-		"resp_h": "1.1.1.2",
-		"resp_p": 5
+	id: {
+		orig_h: 1.1.1.1,
+		orig_p: 10,
+		resp_h: 1.1.1.2,
+		resp_p: 5,
 	}
 }
 ```
@@ -130,8 +130,10 @@ text	42	"1.1.1.1"
 
 ```tql
 load "input.tsv"
-read_tsv h
-―――――――――――――――――――――――――――――――――――――――――――――――――――――
-{ message: "text", count: 42, ip: 1.1.1.1 }
-{ message: "longer string", count: 100, ip: 1.1.1.2 }
+read_tsv
+```
+
+```tql
+{message: "text", count: 42, ip: 1.1.1.1}
+{message: "longer string", count: 100, ip: 1.1.1.2}
 ```

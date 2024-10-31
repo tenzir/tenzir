@@ -40,14 +40,14 @@ Contains detailed information about the process.
 
 ## Examples
 
-Show running processes sorted by how long they've been running:
+### Show running processes by runtime
 
 ```tql
 processes
 sort -startup
 ```
 
-Show the top five running processes by name:
+### Show the top five running processes by name
 
 ```tql
 processes

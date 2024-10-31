@@ -13,6 +13,8 @@ present.
 
 ## Examples
 
+### Drop fields from the input
+
 ```tql
 from {
   src: 192.168.0.4,
@@ -24,7 +26,9 @@ from {
   },
 }
 drop role, info.id
-――――――――――――――――――――
+```
+
+```tql
 {
   src: 192.168.0.4,
   dst: 192.168.0.31,

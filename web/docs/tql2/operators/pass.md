@@ -14,13 +14,13 @@ as `{}` is a record, while `{ pass }` is a pipeline.
 
 ## Examples
 
-Forward the input without any changes:
+### Forward the input without any changes
 
 ```tql
 pass
 ```
 
-Do nothing every 10s:
+### Do nothing every 10s
 
 ```tql
 every 10s {

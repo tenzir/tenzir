@@ -27,19 +27,21 @@ An expression that is evaluated for each event. Normally, events are sorted in a
 
 ## Examples
 
-Sort by the `timestamp` field in ascending order.
+### Sort by a field in ascending order
 
 ```tql
 sort timestamp
 ```
 
-Sort by the `timestamp` field in descending order.
+### Sort by a field in descending order
 
 ```tql
 sort -timestamp
 ```
 
-Sort by the field `src_ip` and, in case of matching values, sort by `dest_ip`.
+### Sort by multiple fields
+
+Sort by a field `src_ip` and, in case of matching values, sort by `dest_ip`:
 
 ```tql
 sort src_ip, dest_ip

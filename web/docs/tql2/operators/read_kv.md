@@ -164,12 +164,14 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
-Read comma-separated key-value pairs:
+### Read comma-separated key-value pairs
 
 ```tql
 // Input: surname:"John Norman", family_name:Smith, date_of_birth: 1995-05-26
 read_kv r"\s*,\s*", r"\s*:\s*"
-―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
+```
+
+```tql
 {
   surname: "John Norman",
   family_name: "Smith",
@@ -177,12 +179,14 @@ read_kv r"\s*,\s*", r"\s*:\s*"
 }
 ```
 
-Extract key-value pairs with more complex rules:
+### Extract key-value pairs with more complex rules
 
 ```tql
 // Input: PATH: C:\foo INPUT_MESSAGE: hello world
 read_kv r"(\s+)[A-Z][A-Z_]+:", r":\s*"
-――――――――――――――――――――――――――――――――――――――
+```
+
+```tql
 {
   PATH: "C:\\foo",
   INPUT_MESSAGE: "hello world",

@@ -63,7 +63,7 @@ option, this does not refresh when the cache is accessed.
 
 ## Examples
 
-Cache the results of an expensive query:
+### Cache the results of an expensive query
 
 ```tql
 export
@@ -72,9 +72,10 @@ summarize total=sum(bytes_toserver), src_ip, dest_ip
 cache "some-unique-identifier"
 ```
 
-Get some high-level statistics about the query, calculating the cache again only
-if it does not exist anymore and deleting the cache if it's unused for more than
-a minute.
+### Get high-level statistics about a query
+
+This calculates the cache again only if the query does not exist anymore, and
+delete the cache if it's unused for more than a minute.
 
 ```tql
 export

@@ -59,11 +59,15 @@ separate them with a space: `requirements="foo bar"`.
 
 ## Examples
 
-Insert or modify the field `x` and set it to `"hello, world"`:
+### Insert or modify a field
+
+Set field `x` to `"hello, world"`
 
 ```tql
 python "self.x = 'hello, world'"
 ```
+
+### Remove all fields from an event
 
 Clear the contents of `self` to remove the implicit input values from the
 output:
@@ -71,9 +75,10 @@ output:
 ```tql
 python "
   self.clear()
-  self.x = 23
 "
 ```
+
+### Insert a new field
 
 Define a new field `x` as the square root of the field `y`, and remove `y` from
 the output:
@@ -86,7 +91,7 @@ python "
 "
 ```
 
-Make use of third party packages:
+### Make use of third party packages
 
 ```tql
 python r#"

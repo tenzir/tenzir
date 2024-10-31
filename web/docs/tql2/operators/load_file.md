@@ -42,7 +42,7 @@ processing forward.
 
 ## Examples
 
-Load the raw contents of `example.txt`:
+### Load the raw contents of a file
 
 ```tql
 load_file "example.txt"

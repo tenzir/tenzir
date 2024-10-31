@@ -32,6 +32,8 @@ combined with `append=true`.
 
 ## Examples
 
+### Save bytes to a file
+
 ```tql
 save_file "/tmp/out.txt"
 ```

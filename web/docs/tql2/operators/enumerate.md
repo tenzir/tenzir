@@ -19,7 +19,7 @@ Defaults to `"#"`.
 
 ## Examples
 
-Enumerate the input by prepending row numbers:
+### Enumerate the input by prepending row numbers
 
 ```tql
 from [
@@ -28,13 +28,15 @@ from [
   {x: "c"},
 ]
 enumerate
-――――――――――――――――
+```
+
+```tql
 {"#": 0, x: "a"}
 {"#": 1, x: "b"}
 {"#": 2, x: "c"}
 ```
 
-Use `index` as field name instead of the default:
+### Use a custom field for the row numbers
 
 ```tql
 from [
@@ -42,7 +44,9 @@ from [
   {x: false},
 ]
 enumerate index
-――――――――――――――――――――
+```
+
+```tql
 {index: 0, x: true}
 {index: 1, x: false}
 ```

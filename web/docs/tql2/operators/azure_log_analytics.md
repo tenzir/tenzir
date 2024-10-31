@@ -47,7 +47,7 @@ The table to upload events to.
 
 ## Examples
 
-Upload `custom.mydata` events to a table `Custom-MyData`:
+### Upload `custom.mydata` events to a table `Custom-MyData`
 
 ```tql
 export

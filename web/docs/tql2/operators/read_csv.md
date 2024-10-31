@@ -120,7 +120,7 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
-### Header in input
+### Read a CSV file with header
 
 ```txt title="input.csv"
 message,count,ip
@@ -131,12 +131,14 @@ more text,100,"1.1.1.2"
 ```tql
 load "input.csv"
 read_csv
-―――――――――――――――――――――――――――――――――――――――――――――――――
-{ message: "some text", count: 42, ip: 1.1.1.1 }
-{ message: "more text", count: 100, ip: 1.1.1.2 }
 ```
 
-### Manually specified header
+```tql
+{message: "some text", count: 42, ip: 1.1.1.1}
+{message: "more text", count: 100, ip: 1.1.1.2}
+```
+
+### Manually specify a header
 
 ```txt title="input_no_header.csv"
 some text,42,"1.1.1.1"
@@ -146,7 +148,9 @@ more text,100,"1.1.1.2"
 ```tql
 load "input_no_header.csv"
 read_csv header="message,count,ip"
-―――――――――――――――――――――――――――――――――――――――――――――――――
-{ message: "some text", count: 42, ip: 1.1.1.1 }
-{ message: "more text", count: 100, ip: 1.1.1.2 }
+```
+
+```tql
+{message: "some text", count: 42, ip: 1.1.1.1}
+{message: "more text", count: 100, ip: 1.1.1.2}
 ```

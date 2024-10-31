@@ -108,12 +108,17 @@ Defaults to `5s`.
 
 ## Examples
 
-Apply a Sigma rule to an EVTX file using
-[`evtx_dump`](https://github.com/omerbenamram/evtx):
+### Apply a Sigma rule to an EVTX file
+
+The tool [`evtx_dump`](https://github.com/omerbenamram/evtx) turns an EVTX file
+into a JSON object. On the command line, use the `tenzir` binary to pipe the
+`evtx_dump` output to a Tenzir pipeline using the `sigma` operator:
 
 ```bash
 evtx_dump -o jsonl file.evtx | tenzir --tql2 'read_json | sigma "rule.yaml"'
 ```
+
+### Run a Sigma rule on historical data
 
 Apply a Sigma rule over historical data in a node from the last day:
 
@@ -122,6 +127,8 @@ export
 where ts > now() - 1d
 sigma "rule.yaml"
 ```
+
+### Stream a file and apply a set of Sigma rules to it
 
 Watch a directory of Sigma rules and apply all of them on a continuous stream of
 Suricata events:

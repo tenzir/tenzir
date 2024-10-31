@@ -42,7 +42,7 @@ because it opens a new file when only after it is exceeded. Defaults to `100M`.
 
 ## Examples
 
-Partition by a single field into local JSON files:
+### Partition by a single field into local JSON files
 
 ```tql
 from [{a: 0, b: 0}, {a: 0, b: 1}, {a: 1, b: 2}]
@@ -55,6 +55,8 @@ to_hive "/tmp/out/", partition_by=[a], format="json"
 //    {"b": 2}
 ```
 
+### Write a Parquet file into Azure Blob Store
+
 Write as Parquet into the Azure Blob Filesystem, partitioned by year, month and
 day.
 
@@ -62,6 +64,8 @@ day.
 to_hive "abfs://domain/bucket", partition_by=[year, month, day], format="parquet"
 // -> abfs://domain/bucket/year=<year>/month=<month>/day=<day>/<num>.parquet
 ```
+
+### Write partitioned JSON into an S3 bucket
 
 Write JSON into S3, partitioned by year and month, opening a new file after
 1 GB.

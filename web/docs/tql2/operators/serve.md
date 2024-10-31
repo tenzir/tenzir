@@ -32,7 +32,7 @@ Defaults to `1Ki`.
 
 ## Examples
 
-### Normal Usage
+### Make the input available as REST API
 
 Read a Zeek `conn.log` and make it available as `zeek-conn-logs`:
 
@@ -59,7 +59,7 @@ Subsequent results for further events must specify a continuation token. The
 token is included in the response under `next_continuation_token` if there are
 further events to be retrieved from the endpoint.
 
-### Wait for First Event
+### Wait for the first event
 
 This pipeline will produce 10 events after 3 seconds of doing nothing.
 
@@ -78,5 +78,6 @@ curl \
   http://localhost:5160/api/v0/serve
 ```
 
-The call to `/serve` will wait up to 5 seconds for the first event from the pipeline arriving at the serve operator,
-and return immediately once the first event arrives.
+The call to `/serve` will wait up to 5 seconds for the first event from the
+pipeline arriving at the serve operator, and return immediately once the first
+event arrives.

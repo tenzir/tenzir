@@ -22,13 +22,15 @@ Defaults to `10`.
 
 ## Examples
 
-Retrieve at most 10 events of each unique schema:
+### Retrieve at most 10 events of each unique schema
+
 ```tql
 export
 taste
 ```
 
-Get only one sample for every unique event type:
+### Get only one sample for every unique event type
+
 ```tql
 export
 taste 1

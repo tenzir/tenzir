@@ -49,6 +49,8 @@ Defaults to 1.0.
 
 ## Examples
 
+### Replay logs in real time
+
 Replay the M57 Zeek logs with real-world inter-arrival times from the `ts`
 field. For example, if an event arrives at time *t* and the next event at
 time *u*, then the `delay` operator will wait time *u - t* between emitting the
@@ -60,7 +62,7 @@ read_zeek_tsv
 delay ts
 ```
 
-Replay the M57 Zeek logs at 10.5 times the original speed.
+### Replay logs at 10.5 times the original speed
 
 ```tql
 load_http "https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst"
@@ -68,8 +70,10 @@ read_zeek_tsv
 delay ts, speed=10.5
 ```
 
-Replay as above, but start delaying only after `ts` exceeds `2021-11-17T16:35`
-and emit all events prior to that timestamp immediately.
+### Replay and delay after a given timestamp
+
+Replay and start delaying only after `ts` exceeds `2021-11-17T16:35` and emit
+all events prior to that timestamp immediately.
 
 ```tql
 load_file "https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst"

@@ -33,10 +33,10 @@ Contains detailed information about the available plugins.
 
 ## Examples
 
-Show all functions currently available in TQL2:
+### Show all currently available functions
 
 ```tql
 plugins
-where "tql2.function" in types
+where "function" in types
 summarize functions=collect(name)
 ```

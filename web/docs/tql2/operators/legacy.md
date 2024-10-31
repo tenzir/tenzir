@@ -21,6 +21,8 @@ The TQL1 pipeline to evaluate.
 
 ## Examples
 
+### Use the legacy chart operator
+
 ```tql
 summarize ts, count()
 legacy "chart area"

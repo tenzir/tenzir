@@ -24,11 +24,13 @@ If not specified, the operator repeats its input indefinitely.
 
 ## Examples
 
-Given the following events as JSON:
+### Repeat input indefinitely
 
-```json
-{"number": 1, "text": "one"}
-{"number": 2, "text": "two"}
+Given the following events:
+
+```tql
+{number: 1, "text": "one"}
+{number: 2, "text": "two"}
 ```
 
 The `repeat` operator will repeat them indefinitely, in order:
@@ -37,27 +39,27 @@ The `repeat` operator will repeat them indefinitely, in order:
 repeat
 ```
 
-```json
-{"number": 1, "text": "one"}
-{"number": 2, "text": "two"}
-{"number": 1, "text": "one"}
-{"number": 2, "text": "two"}
-{"number": 1, "text": "one"}
-{"number": 2, "text": "two"}
+```tql
+{number: 1, "text": "one"}
+{number: 2, "text": "two"}
+{number: 1, "text": "one"}
+{number: 2, "text": "two"}
+{number: 1, "text": "one"}
+{number: 2, "text": "two"}
 // …
 ```
 
-To just repeat the first event 5 times, use:
+### Repeat the first event 5 times
 
 ```tql
 head 1
 repeat 5
 ```
 
-```json
-{"number": 1, "text": "one"}
-{"number": 1, "text": "one"}
-{"number": 1, "text": "one"}
-{"number": 1, "text": "one"}
-{"number": 1, "text": "one"}
+```tql
+{number: 1, "text": "one"}
+{number: 1, "text": "one"}
+{number: 1, "text": "one"}
+{number: 1, "text": "one"}
+{number: 1, "text": "one"}
 ```

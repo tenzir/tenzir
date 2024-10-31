@@ -21,15 +21,21 @@ An assignment of the form `<field>=<expr>`.
 
 ## Examples
 
+### Select and create columns
+
 Keep `a` and introduce `y` with the value of `b`:
+
 ```tql
 from {a: 1, b: 2, c: 3}
 select a, y=b
-―――――――――――――――――――――――
+```
+
+```tql
 {a: 1, y: 2}
 ```
 
 A more complex example with expressions and selection through records:
+
 ```tql
 from {
   name: "foo",
@@ -40,7 +46,9 @@ from {
   state: "active",
 }
 select id=name.to_upper(), pos.x, added=true
-――――――――――――――――――――――――――――――――――――――――――――
+```
+
+```tql
 {
   id: "FOO",
   pos: {

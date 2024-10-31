@@ -30,7 +30,7 @@ The headers for the request.
 
 ## Examples
 
-Fetch the API response of `example.org/api`:
+### Perform an API call and get the response
 
 ```tql
 load_http "example.org/api", headers={"X-API-Token": "0000-0000-0000"}

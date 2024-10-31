@@ -47,8 +47,7 @@ The records `store`, `indexes`, and `sketches` have the following schema:
 
 ## Examples
 
-Get an overview of the memory and disk requirements for all stored data sorted
-by schema:
+### Get memory and disk requirements of all stored data
 
 ```tql
 partitions
@@ -59,14 +58,14 @@ summarize schema,
 sort schema
 ```
 
-Get an upper bound for the number of events that have `src_ip` set to 127.0.0.1:
+### Get an upper bound of events that have a field `src_ip` with 127.0.0.1
 
 ```tql
 partitions src_ip == 127.0.0.1
 summarize candidates=sum(events)
 ```
 
-See how many partitions contain a non-null value for the field `hostname`:
+### See how many partitions contain a non-null value for the field `hostname`
 
 ```tql
 partitions hostname != null

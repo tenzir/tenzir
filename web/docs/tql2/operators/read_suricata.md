@@ -40,6 +40,8 @@ This option requires either `schema` or `selector` to be set.
 
 ## Examples
 
+### Parse a Suricata EVE JSON log file
+
 Here's an `eve.log` sample:
 
 ```json
@@ -48,7 +50,7 @@ Here's an `eve.log` sample:
 {"timestamp":"2011-08-12T16:59:22.181050+0200","flow_id":472067367468746,"pcap_cnt":25767,"event_type":"fileinfo","src_ip":"74.207.254.18","src_port":80,"dest_ip":"147.32.84.165","dest_port":1046,"proto":"TCP","http":{"hostname":"www.nmap.org","url":"/","http_user_agent":"Mozilla/4.0 (compatible)","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":301,"redirect":"http://nmap.org/","length":301},"app_proto":"http","fileinfo":{"filename":"/","magic":"HTML document, ASCII text","gaps":false,"state":"CLOSED","md5":"70041821acf87389e40ddcb092004184","sha1":"10395ab3566395ca050232d2c1a0dbad69eb5fd2","sha256":"2e4c462b3424afcc04f43429d5f001e4ef9a28143bfeefb9af2254b4df3a7c1a","stored":true,"file_id":1,"size":301,"tx_id":0}}
 ```
 
-Import the log as follows:
+Import it as follows:
 
 ```tql
 read_file "eve.log"
@@ -56,7 +58,9 @@ read_suricata
 import
 ```
 
-Instead of writing to a file, Suricata can also log to a UNIX domain socket that
+### Read Suricata EVE JSON from a Unix domain socket
+
+Instead of writing to a file, Suricata can also log to a Unix domain socket that
 Tenzir can then read from. This saves a filesystem round-trip. This requires the
 following settings in your `suricata.yaml`:
 

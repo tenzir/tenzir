@@ -51,20 +51,25 @@ The maximum number of events to emit per `period`.
 
 ## Examples
 
+### Sample the input every 30s dynamically
+
 Sample a feed `log-stream` every 30s dynamically, only changing rate when more
 than 50 events (`min_events`) are received. Additionally, cap the max sampling
-rate to `1:500`, i.e. 1 sample for every 500 events or more (`max_rate`).
+rate to `1:500`, i.e., 1 sample for every 500 events or more (`max_rate`).
 
 ```tql
 subscribe "log-stream"
 sample 30s, min_events=50, max_rate=500
 ```
-Sample some `metrics` every hour, limiting the max samples per period to 5000
-samples (`max_samples`) and limiting the overall sample count to 100k samples
+
+### Sample metrics every hour
+
+Sample some `metrics` every hour, limiting the max samples per period to 5,000
+samples (`max_samples`) and limiting the overall sample count to 100,000 samples
 ([`head`](head.md)).
 
 ```tql
 subscribe "metrics"
-sample 1h, max_samples 5k
+sample 1h, max_samples=5k
 head 100k
 ```

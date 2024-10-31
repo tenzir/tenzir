@@ -22,18 +22,24 @@ yet.
 
 ## Examples
 
-Append a new field:
+### Append a new field
+
 ```tql
 from {a: 1, b: 2}
 c = a + b
-――――――――――――――――――
+```
+
+```tql
 {a: 1, b: 2, c: 3}
 ```
 
-Update an existing field:
+### Update an existing field
+
 ```tql
 from {a: 1, b: 2}
 a = "Hello"
-――――――――――――――――――
+```
+
+```tql
 {a: "Hello", b: 2}
 ```

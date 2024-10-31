@@ -59,14 +59,14 @@ The records in `annotations` have the following schema:
 
 ## Examples
 
-View all diagnostics generated in the past five minutes.
+### View all diagnostics generated in the past 5 minutes
 
 ```tql
 diagnostics
 where timestamp > now() - 5min
 ```
 
-Get a live feed of error diagnostics as they are emitted.
+### Get a live feed of error diagnostics
 
 ```tql
 diagnostics live=true

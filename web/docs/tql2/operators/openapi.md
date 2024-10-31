@@ -13,7 +13,7 @@ specification](/api) for all available REST endpoint plugins.
 
 ## Examples
 
-Render the OpenAPI specification as YAML:
+### Render the OpenAPI specification as YAML
 
 ```tql
 openapi

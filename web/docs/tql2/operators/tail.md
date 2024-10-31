@@ -20,14 +20,14 @@ Defaults to `10`.
 
 ## Examples
 
-Get the last ten results:
+### Get the last 10 results
 
 ```tql
 export
 tail
 ```
 
-Get the last five results:
+### Get the last 5 results
 
 ```tql
 export

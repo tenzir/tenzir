@@ -26,7 +26,7 @@ The field to find the most common values for.
 
 ## Examples
 
-Find the most common values for `x`.
+### Find the most common values
 
 ```tql
 from [
@@ -40,14 +40,16 @@ from [
   {x: "C"},
 ]
 top x
-――――――――――――――――――
+```
+
+```
 {x: "A", count: 3}
 {x: "B", count: 2}
 {x: "C", count: 2}
 {x: "D", count: 1}
 ```
 
-Show the five most common values for `id.orig_h`:
+### Show the 5 top-most values
 
 ```tql
 top id.orig_h

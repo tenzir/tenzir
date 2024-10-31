@@ -25,7 +25,7 @@ fluent-bit -o plugin -p key1=value1 -p key2=value2 -p ...
 translates to our `fluent-bit` operator as follows:
 
 ```tql
-fluentbit "plugin",
+fluentbit "plugin", ...
 ```
 
 ### `plugin: str`
@@ -116,12 +116,12 @@ top-level. The data is best modeled as an `id` record with four nested fields
 
 Without an unflatten separator, the data looks like this:
 
-```json
+```tql
 {
-  "id.orig_h": "1.1.1.1",
-  "id.orig_p": 10,
-  "id.resp_h": "1.1.1.2",
-  "id.resp_p": 5
+  id.orig_h: 1.1.1.1,
+  id.orig_p: 10,
+  id.resp_h: 1.1.1.2,
+  id.resp_p: 5,
 }
 ```
 
@@ -139,10 +139,7 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 ```
 ## Examples
 
-### Source
-
-Ingest [OpenTelemetry](https://docs.fluentbit.io/manual/pipeline/inputs/slack)
-logs, metrics, and traces:
+### Ingest OpenTelemetry logs, metrics, and traces
 
 ```tql
 fluentbit "opentelemetry"
@@ -158,38 +155,33 @@ curl \
   http://0.0.0.0:4318/v1/logs
 ```
 
-Handle [Splunk](https://docs.fluentbit.io/manual/pipeline/inputs/splunk) HTTP
-HEC requests:
+### Imitate a Splunk HEC endpoint
 
 ```tql
 fluentbit "splunk", options = { port: 8088 }
 ```
 
-Handle [ElasticSearch &
-OpenSearch](https://docs.fluentbit.io/manual/pipeline/inputs/elasticsearch)
-Bulk API requests or ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat):
+### Imitate an ElasticSearch & OpenSearch Bulk API endpoint
+
+This allows you to ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat).
 
 ```tql
 fluentbit "elasticsearch", options = { port: 9200 }
 ```
 
-### Sink
-
-Send events to [Slack](https://docs.fluentbit.io/manual/pipeline/outputs/slack):
+### Send to Slack
 
 ```tql
 fluentbit "slack", options = { webhook: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX" }
 ```
 
-Send events to
-[Splunk](https://docs.fluentbit.io/manual/pipeline/outputs/splunk):
+### Send to Splunk
 
 ```tql
 fluentbit "splunk", options = { host=127.0.0.1, port: 8088, tls:"on", tls.verify=:off", splunk_token:"11111111-2222-3333-4444-555555555555" }
 ```
 
-Send events to
-[ElasticSearch](https://docs.fluentbit.io/manual/pipeline/outputs/elasticsearch):
+### Send ElasticSearch
 
 ```tql
 fluentbit "es", options = { host: 192.168.2.3, port: 9200, index: "my_index", type: "my_type" }

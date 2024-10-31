@@ -13,7 +13,7 @@ available schemas.
 
 ## Examples
 
-See the top five fields counted by how many schemas they occur in:
+### Get the top-5 most frequently used fields across schemas
 
 ```tql
 fields

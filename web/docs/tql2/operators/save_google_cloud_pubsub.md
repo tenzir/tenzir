@@ -25,7 +25,9 @@ The topic to publish to.
 
 ## Examples
 
-Publish `suricata.alert` events as JSON to `alerts-topic`.
+### Publish alerts to a given topic
+
+Publish `suricata.alert` events as JSON to `alerts-topic`:
 
 ```tql
 export
