@@ -147,16 +147,19 @@ Function | Description | Example
 [`str`](functions/str.md) | Casts an expression to string | `str(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
 
+## Runtime
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`env`](functions/env.md) | Reads an environment variable | `env("PATH")`
+[`secret`](functions/secret.md) | Reads a secret from a store | `secret("PATH")`
+
 <!--
 
 ## Aggregation (?)
 - `count`
 - `quantile`
 - `sum`
-
-## ???
-- `env`
-- `secret`
 
 ## List and String ?
 - `reverse`
@@ -166,8 +169,7 @@ Function | Description | Example
 - `unflatten`
 - `format`
 - `parse_json`
+- `parse_cef`
 - `print_json`
 - `grok`
-- `parse_cef`
-- `parse_json`
 -->
