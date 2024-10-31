@@ -7,13 +7,17 @@ save_splunk url:str, hec_token=str,
            [host=str, source=str,
             sourcetype=str, sourcetype_field=field,
             index=str, index_field=field,
-            tls_no_verify=bool, print_nulls=bool]
+            tls_no_verify=bool, print_nulls=bool,
+            max_content_length=int, send_timeout=duration]
 ```
 
 ## Description
 
 The `splunk` sends events to a [Splunk HEC endpoint](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector).
 Events are sent as JSON.
+
+The operator aggregates multiple events to send as a single message. The size
+and timeout can be configured.
 
 ### `url: str`
 
@@ -58,6 +62,21 @@ Disable TSL certificate verification.
 
 Include fields with null values in the transmitted event data. By default they
 are dropped before sending to splunk
+
+
+### `max_content_length = int (optional)`
+
+The maximum size of the message body. A message may consist of multiple events.
+If a single event is larger than this limit, it is dropped.
+
+The default is `5MB`.
+
+### `send_timeout = duration (optional)`
+
+The maximum amount of time for which the `splunk` operator aggregates messages
+before sending them out to Splunk.
+
+The default is `5s`.
 
 ## Examples
 ```tql

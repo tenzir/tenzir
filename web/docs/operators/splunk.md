@@ -13,12 +13,16 @@ Sends events to a [Splunk HEC](https://docs.splunk.com/Documentation/Splunk/9.3.
 ```
 splunk <url> <hec_token> [--host <string>] [--source <string>] [--sourcetype <string>]
        [--index <string>] [--tls-no-verify] [--print-nulls]
+       [--max-content-length <int>] [--send-timeout <duration>]
 ```
 
 ## Description
 
 The `splunk` sends events to a [Splunk HEC endpoint](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector).
 Events are sent as JSON.
+
+The operator aggregates multiple events to send as a single message. The size
+and timeout can be configured.
 
 ### `<url>`
 
@@ -54,7 +58,19 @@ Disable TSL certificate verification.
 Include fields with null values in the transmitted event data. By default they
 are dropped before sending to splunk
 
+### `--max-content-length <int>`
 
+The maximum size of the message body. A message may consist of multiple events.
+If a single event is larger than this limit, it is dropped.
+
+The default is `5MB`.
+
+### `--send-timeout <duration>`
+
+The maximum amount of time for which the `splunk` operator aggregates messages
+before sending them out to Splunk.
+
+The default is `5s`.
 
 ## Examples
 ```
