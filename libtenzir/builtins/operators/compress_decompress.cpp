@@ -196,8 +196,11 @@ public:
               .emit(ctrl.diagnostics());
             co_return;
           }
-          out_buffer.resize(
-            std::min(out_buffer.max_size(), out_buffer.size() * 2));
+          if (out_buffer.size() < out_buffer.max_size() / 2) {
+            out_buffer.resize(out_buffer.size() * 2);
+          } else {
+            out_buffer.resize(out_buffer.max_size());
+          }
         } else {
           in_buffer.drop_front_n(result->bytes_read);
         }
@@ -222,8 +225,11 @@ public:
           diagnostic::error("failed to resize buffer").emit(ctrl.diagnostics());
           co_return;
         }
-        out_buffer.resize(
-          std::min(out_buffer.max_size(), out_buffer.size() * 2));
+        if (out_buffer.size() < out_buffer.max_size() / 2) {
+          out_buffer.resize(out_buffer.size() * 2);
+        } else {
+          out_buffer.resize(out_buffer.max_size());
+        }
         continue;
       }
       if (result->bytes_written > 0) {
@@ -307,8 +313,11 @@ public:
               .emit(ctrl.diagnostics());
             co_return;
           }
-          out_buffer.resize(
-            std::min(out_buffer.max_size(), out_buffer.size() * 2));
+          if (out_buffer.size() < out_buffer.max_size() / 2) {
+            out_buffer.resize(out_buffer.size() * 2);
+          } else {
+            out_buffer.resize(out_buffer.max_size());
+          }
         }
         if (result->bytes_written > 0) {
           TENZIR_ASSERT(result->bytes_written
