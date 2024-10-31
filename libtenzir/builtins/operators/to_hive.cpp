@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/url.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -17,12 +18,6 @@
 #include <ranges>
 
 // TODO: This implementation is a rough sketch and needs some cleanup eventually.
-
-template <>
-struct fmt::formatter<boost::urls::url> : fmt::ostream_formatter {};
-
-template <>
-struct fmt::formatter<boost::urls::url_view> : fmt::ostream_formatter {};
 
 namespace tenzir::plugins::to_hive {
 
