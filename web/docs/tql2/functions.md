@@ -53,6 +53,8 @@ Function | Description | Example
 [`trim_start`](functions/trim_start.md) | Trims whitespace from the start of a string | `" hello".trim_start()`
 [`trim_end`](functions/trim_end.md) | Trims whitespace from the end of a string | `"hello ".trim_end()`
 [`capitalize`](functions/capitalize.md) | Capitalizes the first character of a string | `"hello".capitalize()`
+[`replace`](functions/replace.md) | Replaces characters within a string | `"hello".replace("o", "a")`
+[`replace_regex`](functions/replace_regex.md) | Reverses the characters of a string | `"hello".replace("l+o", "y")`
 [`reverse`](functions/reverse.md) | Reverses the characters of a string | `"hello".reverse()`
 [`to_lower`](functions/to_lower.md) | Converts a string to lowercase | `"HELLO".to_lower()`
 [`to_title`](functions/to_title.md) | Converts a string to title case | `"hello world".to_title()`
