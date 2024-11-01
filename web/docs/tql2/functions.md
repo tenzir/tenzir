@@ -1,5 +1,23 @@
 # Functions
 
+<!--
+
+TODO: the following functions still need to be documented:
+
+- `format`
+- `parse_*`
+- `print_*`
+- `grok`
+
+## OCSF
+
+- `ocsf::category_name`
+- `ocsf::category_uid`
+- `ocsf::class_name`
+- `ocsf::class_uid`
+
+-->
+
 Functions appear in [expressions](../language/expressions.md) and take
 positional and/or named arguments, producing a value as a result of their
 computation.
@@ -10,21 +28,45 @@ Function signatures have the following notation:
 f(arg1:<type>, arg2=<type>, [arg3=type]) -> <type>
 ```
 
-- `arg:<type>`: postional argument
+- `arg:<type>`: positional argument
 - `arg=<type>`: named argument
 - `[arg=type]`: optional (named) argument
 - `-> <type>`: function return type
 
 TQL features the [uniform function call syntax
 (UFCS)](https://en.wikipedia.org/wiki/Uniform_Function_Call_Syntax), which
-allows you to interchangeably call a function with more than argument either as
-*free function* or *method*. For example, `length(str)` and `str.length()`
+allows you to interchangeably call a function with more than one argument either
+as *free function* or *method*. For example, `length(str)` and `str.length()`
 resolve to the identical function call. The latter syntax is particularly
 suitable for function chaining, e.g., `x.f().g().h()` reads left-to-right as
 "start with `x`, apply `f()`, then `g()` and then `h()`," compared to
 `h(g(f(x)))`, which reads "inside out."
 
-Throughout our documentation, we use the free function syntax.
+Throughout our documentation, we use the free function style in the synopsis
+but often resort to the method style when it is more idiomatic.
+
+## Aggregation
+
+Function | Description | Example
+:--------|:------------|:-------
+`all` | Computes the conjunction (AND) of all grouped boolean values | `all([true,true,false])`
+`any` | Computes the disjunction (OR) of all grouped boolean values | `any([true,false,true])`
+`collect` | Creates a list of all non-null grouped values, preserving duplicates | `collect([1,2,2,3])`
+`count` | Counts the events or non-null grouped values | `count([1,2,null])`
+`count_distinct` | Counts all distinct non-null grouped values | `count_distinct([1,2,2,3])`
+`distinct` | Creates a sorted list without duplicates of non-null grouped values | `distinct([1,2,2,3])`
+`first` | Takes the first non-null grouped value | `first([null,2,3])`
+`last` | Takes the last non-null grouped value | `last([1,2,null])`
+`max` | Computes the maximum of all grouped values | `max([1,2,3])`
+`mean` | Computes the mean of all grouped values | `mean([1,2,3])`
+`median` | Computes the approximate median with a t-digest algorithm | `median([1,2,3,4])`
+`min` | Computes the minimum of all grouped values | `min([1,2,3])`
+`mode` | Takes the most common non-null grouped value | `mode([1,1,2,3])`
+`quantile` | Computes the specified quantile `q` of grouped values | `quantile([1,2,3,4], q=0.5)`
+`stddev` | Computes the standard deviation of all grouped values | `stddev([1,2,3])`
+`sum` | Computes the sum of all grouped values | `sum([1,2,3])`
+`value_counts` | Returns a list of grouped values with their frequency | `value_counts([1,2,2,3])`
+`variance` | Computes the variance of all grouped values | `variance([1,2,3])`
 
 ## String
 
@@ -52,6 +94,9 @@ Function | Description | Example
 [`trim_start`](functions/trim_start.md) | Trims whitespace from the start of a string | `" hello".trim_start()`
 [`trim_end`](functions/trim_end.md) | Trims whitespace from the end of a string | `"hello ".trim_end()`
 [`capitalize`](functions/capitalize.md) | Capitalizes the first character of a string | `"hello".capitalize()`
+[`replace`](functions/replace.md) | Replaces characters within a string | `"hello".replace("o", "a")`
+[`replace_regex`](functions/replace_regex.md) | Reverses the characters of a string | `"hello".replace("l+o", "y")`
+[`reverse`](functions/reverse.md) | Reverses the characters of a string | `"hello".reverse()`
 [`to_lower`](functions/to_lower.md) | Converts a string to lowercase | `"HELLO".to_lower()`
 [`to_title`](functions/to_title.md) | Converts a string to title case | `"hello world".to_title()`
 [`to_upper`](functions/to_upper.md) | Converts a string to uppercase | `"hello".to_upper()`
@@ -117,16 +162,6 @@ Function | Description | Example
 [`hash_sha512`](functions/hash_sha512.md) | Computes a SHA512 hash digest | `hash_sha512("foo")`
 [`hash_xxh3`](functions/hash_xxh3.md) | Computes a XXH3 hash digest | `hash_xxh3("foo")`
 
-<!--
-
-## OCSF
-- `ocsf::category_name`
-- `ocsf::category_uid`
-- `ocsf::class_name`
-- `ocsf::class_uid`
-
--->
-
 ## Type System
 
 ### Introspection
@@ -135,6 +170,7 @@ Function | Description | Example
 :--------|:-------------|:-------
 [`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
 [`has`](functions/has.md) | Checks whether a record has a field | `record.has("field")`
+[`length`](functions/length.md) | Retrieves the length of a list | `[1,2,3].length()`
 
 ### Conversion
 
@@ -147,27 +183,16 @@ Function | Description | Example
 [`str`](functions/str.md) | Casts an expression to string | `str(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
 
-<!--
+### Transposition
 
-## Aggregation (?)
-- `count`
-- `quantile`
-- `sum`
+Function | Description | Example
+:--------|:-------------|:-------
+[`flatten`](functions/flatten.md) | Flattens nested data | `flatten(this)`
+[`unflatten`](functions/unflatten.md) | Unflattens nested structures | `unflatten(this)`
 
-## ???
-- `env`
-- `secret`
+## Runtime
 
-## List and String ?
-- `reverse`
-
-## TODO
-- `flatten`
-- `unflatten`
-- `format`
-- `parse_json`
-- `print_json`
-- `grok`
-- `parse_cef`
-- `parse_json`
--->
+Function | Description | Example
+:--------|:-------------|:-------
+[`env`](functions/env.md) | Reads an environment variable | `env("PATH")`
+[`secret`](functions/secret.md) | Reads a secret from a store | `secret("PATH")`

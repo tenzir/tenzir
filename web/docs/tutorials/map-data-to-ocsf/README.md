@@ -264,7 +264,7 @@ this = {
   // --- Classification ---
   activity_id: activity_id,
   class_uid: class_uid,
-  type_id: class_uid * 100 + activity_id,
+  type_uid: class_uid * 100 + activity_id,
   ...
   // --- Occurrence ---
   ...
@@ -317,7 +317,7 @@ this = {
   activity_id: activity_id,
   category_uid: 4,
   class_uid: class_uid,
-  type_id: class_uid * 100 + activity_id,
+  type_uid: class_uid * 100 + activity_id,
   severity_id: 1,
   // --- Classification (optional) ---
   activity_name: activity_name,
@@ -326,11 +326,11 @@ this = {
   severity: "Informational",
 }
 // TODO: provide a function for this and make it possible to reference
-// `type_id` from the same assignment.
-//type_name: ocsf_type_name(type_id),
+// `type_uid` from the same assignment.
+//type_name: ocsf_type_name(type_uid),
 ```
 
-Because we want to compute the `type_id` as `class_uid * 100 activity_id`, we
+Because we want to compute the `type_uid` as `class_uid * 100 activity_id`, we
 assign these variables in dedicated fields beforehand.
 
 #### Occurrence Attributes
@@ -521,7 +521,7 @@ this = {
   activity_id: activity_id,
   category_uid: 4,
   class_uid: class_uid,
-  type_id: class_uid * 100 + activity_id,
+  type_uid: class_uid * 100 + activity_id,
   severity_id: 1,
   // --- Classification (optional) ---
   activity_name: activity_name,
@@ -529,8 +529,8 @@ this = {
   class_name: "Network Activity",
   severity: "Informational",
   // TODO: provide a function for this and make it possible to reference
-  // `type_id` from the same assignment.
-  //type_name: ocsf_type_name(type_id),
+  // `type_uid` from the same assignment.
+  //type_name: ocsf_type_name(type_uid),
   // --- Occurrence (required) ---
   time: event.ts,
   // --- Occurrence (recommended) ---
@@ -646,7 +646,7 @@ You should get the following output:
     "version": "1.3.0"
   },
   "time": "2021-11-17T13:45:03.913656",
-  "type_id": 400106,
+  "type_uid": 400106,
   "status": "Other",
   "status_code": "OTH",
   "status_id": 99,
