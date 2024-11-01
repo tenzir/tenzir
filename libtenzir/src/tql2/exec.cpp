@@ -71,7 +71,9 @@ public:
     }
     auto it = map_.find(dollar_var->name);
     if (it == map_.end()) {
-      diagnostic::error("unresolved variable").primary(x).emit(ctx_);
+      diagnostic::error("variable `{}` was not declared", dollar_var->name)
+        .primary(x)
+        .emit(ctx_);
       return;
     }
     if (not it->second) {
@@ -79,6 +81,70 @@ public:
       return;
     }
     x = ast::constant{*it->second, x.get_location()};
+  }
+
+  void load_balance(ast::invocation& x) {
+    auto args = std::move(x.args);
+    // TODO
+    x.args.clear();
+    if (args.size() < 2) {
+      // TODO
+      return;
+    }
+    auto var = std::get_if<ast::dollar_var>(&*args[0].kind);
+    if (not var) {
+      // TODO
+      return;
+    }
+    auto it = map_.find(var->name);
+    if (it == map_.end()) {
+      // TODO
+      return;
+    }
+    if (not it->second) {
+      // TODO
+      return;
+    }
+    auto pipe = std::get_if<ast::pipeline_expr>(&*args.back().kind);
+    if (not pipe) {
+      // TODO
+      return;
+    }
+    auto actual_var_data = std::move(*it->second);
+    auto entries = std::get_if<list>(&actual_var_data);
+    if (not entries) {
+      // TODO
+      return;
+    }
+    for (auto& entry : *entries) {
+      auto f = detail::overload{
+        [](const auto& x) -> ast::constant::kind {
+          return x;
+        },
+        [](const pattern&) -> ast::constant::kind {
+          TENZIR_UNREACHABLE();
+        },
+      };
+      auto constant = caf::visit(f, entry);
+      map_.insert_or_assign(var->name, constant);
+      auto pipe_copy = *pipe;
+      visit(pipe_copy);
+      x.args.emplace_back(std::move(pipe_copy));
+    }
+    // Restore the original value in case it's used elsewhere.
+    map_.insert_or_assign(var->name, std::move(actual_var_data));
+    // TENZIR_WARN("{}", *entries);
+    // TENZIR_WARN("inv: {:#?}", use_default_formatter(x));
+  }
+
+  void visit(ast::invocation& x) {
+    if (x.op.ref.resolved() and x.op.ref.segments().size() == 1
+        and x.op.ref.segments()[0] == "load_balance") {
+      // We special case this as a temporary solution.
+      load_balance(x);
+      return;
+    }
+    enter(x);
   }
 
   template <class T>
