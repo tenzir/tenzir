@@ -117,7 +117,7 @@ void serialize(
                 *self->state.synopsis_path, std::move(ps_chunk))
       .then(
         [=](atom::ok) {
-          TENZIR_DEBUG("{} persisted partition synopsis", *self);
+          TENZIR_TRACE("{} persisted partition synopsis", *self);
         },
         [=](const caf::error& err) {
           TENZIR_WARN("{} failed to persist partition synopsis to {} and will "
@@ -129,7 +129,7 @@ void serialize(
                 "restore it on the next start",
                 *self);
   }
-  TENZIR_DEBUG("{} persists partition with a total size of "
+  TENZIR_TRACE("{} persists partition with a total size of "
                "{} bytes",
                *self, (*partition)->size());
   self->state.data.synopsis.unshared().indexes_file = {
@@ -312,14 +312,14 @@ active_partition_actor::behavior_type active_partition(
   self->state.data.store_header = chunk::make_empty();
   self->state.data.store_header = header;
   self->state.store_builder = builder;
-  TENZIR_DEBUG("{} spawned new active store at {}", *self, builder);
+  TENZIR_TRACE("{} spawned new active store at {}", *self, builder);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
+    TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self, msg.source,
                  msg.reason);
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
       std::call_once(self->state.shutdown_once, [=] {
-        TENZIR_DEBUG("{} delays partition shutdown because it is still "
+        TENZIR_TRACE("{} delays partition shutdown because it is still "
                      "writing to disk",
                      *self);
       });
@@ -333,7 +333,7 @@ active_partition_actor::behavior_type active_partition(
       caf::delayed_anon_send(caf::actor_cast<caf::actor>(self), 100ms, msg);
       return;
     }
-    TENZIR_DEBUG("{} shuts down after persisting partition state", *self);
+    TENZIR_TRACE("{} shuts down after persisting partition state", *self);
     if (msg.reason) {
       self->quit(
         diagnostic::error(msg.reason).note("via exit handler").to_error());
@@ -356,7 +356,7 @@ active_partition_actor::behavior_type active_partition(
     [self](atom::persist, const std::filesystem::path& part_path,
            const std::filesystem::path& synopsis_path)
       -> caf::result<partition_synopsis_ptr> {
-      TENZIR_DEBUG("{} got persist atom", *self);
+      TENZIR_TRACE("{} got persist atom", *self);
       // Ensure that the response promise has not already been initialized.
       TENZIR_ASSERT(!self->state.persistence_promise.source());
       self->state.persist_path = part_path;

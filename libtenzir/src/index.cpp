@@ -297,7 +297,7 @@ partition_actor partition_factory::operator()(const uuid& id) const {
                 "to load it regardless",
                 *state_.self, id);
   const auto path = state_.partition_path(id);
-  TENZIR_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
+  TENZIR_TRACE("{} loads partition {} for path {}", *state_.self, id, path);
   materializations_++;
   return state_.self->spawn(passive_partition, id, filesystem_, path);
 }
@@ -521,7 +521,7 @@ caf::error index_state::load_from_disk() {
     auto partition_uuid = partitions[idx];
     auto error = [&]() -> caf::error {
       auto part_path = partition_path(partition_uuid);
-      TENZIR_DEBUG("{} unpacks partition {} ({}/{})", *self, partition_uuid,
+      TENZIR_TRACE("{} unpacks partition {} ({}/{})", *self, partition_uuid,
                    idx, partitions.size());
       // Generate external partition synopsis file if it doesn't exist.
       auto synopsis_path = partition_synopsis_path(partition_uuid);
@@ -680,7 +680,7 @@ void index_state::handle_slice(table_slice x) {
     }
     active_partition = *part;
   } else if (x.rows() > active_partition->second.capacity) {
-    TENZIR_DEBUG("{} flushes active partition {} with {} rows and {}/{} events",
+    TENZIR_TRACE("{} flushes active partition {} with {} rows and {}/{} events",
                  *self, schema, x.rows(),
                  partition_capacity - active_partition->second.capacity,
                  partition_capacity);
@@ -732,7 +732,7 @@ index_state::create_active_partition(const type& schema) {
       // If the partition was already rotated then there's nothing to do for us.
       return;
     }
-    TENZIR_DEBUG("{} flushes active partition {} with {}/{} {} events "
+    TENZIR_TRACE("{} flushes active partition {} with {}/{} {} events "
                  "after {} timeout",
                  *self, it->second.id, partition_capacity - it->second.capacity,
                  partition_capacity, schema, data{active_partition_timeout});
@@ -746,7 +746,7 @@ index_state::create_active_partition(const type& schema) {
     });
     flush_to_disk();
   });
-  TENZIR_DEBUG("{} created new partition {}", *self, id);
+  TENZIR_TRACE("{} created new partition {}", *self, id);
   return active_partition;
 }
 
@@ -864,13 +864,13 @@ auto index_state::schedule_lookups() -> size_t {
     // 1. Get the partition with the highest accumulated priority.
     auto next = pending_queries.next();
     if (!next) {
-      TENZIR_DEBUG("{} did not find a partition to query", *self);
+      TENZIR_TRACE("{} did not find a partition to query", *self);
       break;
     }
     auto immediate_completion = [&](const query_queue::entry& x) {
       for (auto qid : x.queries) {
         if (auto client = pending_queries.handle_completion(qid)) {
-          TENZIR_DEBUG("{} completes query {} immediately", *self, qid);
+          TENZIR_TRACE("{} completes query {} immediately", *self, qid);
           self->send(*client, atom::done_v);
         }
       }
@@ -886,7 +886,7 @@ auto index_state::schedule_lookups() -> size_t {
                      *self, next->partition);
       continue;
     }
-    TENZIR_DEBUG("{} schedules partition {} for {}", *self, next->partition,
+    TENZIR_TRACE("{} schedules partition {} for {}", *self, next->partition,
                  next->queries);
     // 2. Acquire the actor for the selected partition, potentially materializing
     //    it from its persisted state.
@@ -957,7 +957,7 @@ auto index_state::schedule_lookups() -> size_t {
           --running_partition_lookups;
           active_lookups.erase(active_lookup);
           const auto num_scheduled = schedule_lookups();
-          TENZIR_DEBUG("{} scheduled {} partitions after completion of a "
+          TENZIR_TRACE("{} scheduled {} partitions after completion of a "
                        "previously scheduled lookup",
                        *self, num_scheduled);
         }
@@ -977,7 +977,7 @@ auto index_state::schedule_lookups() -> size_t {
                   context_it->second)
         .then(
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
-            TENZIR_DEBUG("{} received {} results for query {} from partition "
+            TENZIR_TRACE("{} received {} results for query {} from partition "
                          "{}",
                          *self, n, qid, pid);
             handle_completion();
@@ -1140,7 +1140,7 @@ index(index_actor::stateful_pointer<index_state> self,
     });
   return {
     [self](atom::done, uuid partition_id) {
-      TENZIR_DEBUG("{} queried partition {} successfully", *self, partition_id);
+      TENZIR_TRACE("{} queried partition {} successfully", *self, partition_id);
     },
     [self](table_slice& slice) {
       self->state.handle_slice(std::move(slice));
@@ -1246,7 +1246,7 @@ index(index_actor::stateful_pointer<index_state> self,
                  lookup_result.candidate_infos) {
               query_contexts[type] = query_context;
               query_contexts[type].expr = lookup_result.exp;
-              TENZIR_DEBUG(
+              TENZIR_TRACE(
                 "{} got initial candidates {} for schema {} and from "
                 "catalog {}",
                 *self, candidates, type, lookup_result.partition_infos);
@@ -1262,7 +1262,7 @@ index(index_actor::stateful_pointer<index_state> self,
               },
               query_context.cmd);
             if (lookup_result.empty()) {
-              TENZIR_DEBUG("{} returns without result: no partitions qualify",
+              TENZIR_TRACE("{} returns without result: no partitions qualify",
                            *self);
               rp.deliver(query_cursor{query_id, 0u, 0u});
               self->send(client, atom::done_v);
@@ -1283,7 +1283,7 @@ index(index_actor::stateful_pointer<index_state> self,
               rp.deliver(err);
             rp.deliver(query_cursor{query_id, num_candidates, scheduled});
             const auto num_scheduled = self->state.schedule_lookups();
-            TENZIR_DEBUG("{} scheduled {} partitions for lookup after a new "
+            TENZIR_TRACE("{} scheduled {} partitions for lookup after a new "
                          "query came in",
                          *self, num_scheduled);
           },
@@ -1305,7 +1305,7 @@ index(index_actor::stateful_pointer<index_state> self,
           = self->state.pending_queries.activate(query_id, num_partitions))
         TENZIR_WARN("{} can't activate unknown query: {}", *self, err);
       const auto num_scheduled = self->state.schedule_lookups();
-      TENZIR_DEBUG("{} scheduled {} partitions following the request to "
+      TENZIR_TRACE("{} scheduled {} partitions following the request to "
                    "activate {} partitions for query {}",
                    *self, num_scheduled, num_partitions, query_id);
     },
@@ -1348,7 +1348,7 @@ index(index_actor::stateful_pointer<index_state> self,
                                                      synopsis_path)
               .then(
                 [self, partition_id](atom::done) {
-                  TENZIR_DEBUG("{} erased partition synopsis {} from "
+                  TENZIR_TRACE("{} erased partition synopsis {} from "
                                "filesystem",
                                *self, partition_id);
                 },
@@ -1365,7 +1365,7 @@ index(index_actor::stateful_pointer<index_state> self,
                   self->state.filesystem, caf::infinite, atom::erase_v, path)
                 .then(
                   [self, partition_id](atom::done) {
-                    TENZIR_DEBUG("{} erased partition {} from filesystem",
+                    TENZIR_TRACE("{} erased partition {} from filesystem",
                                  *self, partition_id);
                   },
                   [self, partition_id, path](const caf::error& err) {
@@ -1532,7 +1532,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // We set the query priority for partition transforms to zero so they
       // always get less priority than queries.
       query_context.priority = 0;
-      TENZIR_DEBUG("{} emplaces {} for pipeline {:?}", *self, query_context,
+      TENZIR_TRACE("{} emplaces {} for pipeline {:?}", *self, query_context,
                    pipe);
       auto query_contexts = query_state::type_query_context_map{};
       for (const auto& [type, _] : corrected_partitions.candidate_infos) {

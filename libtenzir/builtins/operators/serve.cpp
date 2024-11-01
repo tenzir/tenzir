@@ -508,10 +508,10 @@ struct serve_manager_state {
           TENZIR_DEBUG("unable to find serve request after timeout expired");
           return;
         }
-        if (found->done) {
+        // In case the client re-sent the request in the meantime we are done.
+        if (found->done or found->continuation_token != continuation_token) {
           return;
         }
-        TENZIR_ASSERT(found->continuation_token == continuation_token);
         TENZIR_ASSERT(not found->get_rps.empty());
         const auto delivered = found->try_deliver_results(true);
         TENZIR_ASSERT(delivered);

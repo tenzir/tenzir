@@ -1020,7 +1020,6 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
                current, request);
   root_->finish_previous_events(this);
   if (length() > 0) {
-    TENZIR_VERBOSE("switching to conflict builder");
     builder_
       = std::make_unique<detail::conflict_builder>(root_, std::move(builder_));
     root_->set_conflict_flag();
