@@ -1,20 +1,28 @@
 # splunk
 
-Sends events to a [Splunk HEC](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector).
+Sends events to a Splunk [HTTP Event Collector (HEC)][hec].
+
+[hec]: https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector
 
 ```tql
 splunk url:str, hec_token=str,
-           [host=str, source=str, sourcetype=expr, index=expr,
-            tls_no_verify=bool, print_nulls=bool,
-            max_content_length=int, send_timeout=duration, compress=bool]
+      [host=str, source=str, sourcetype=expr, index=expr,
+       tls_no_verify=bool, print_nulls=bool,
+       max_content_length=int, send_timeout=duration, compress=bool]
 ```
 
 ## Description
 
-The `splunk` operator sends events to a Splunk instance using the [HTTP Event Collector (HEC)](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector) protocol. Events are sent as JSON.
+The `splunk` operator sends events to a Splunk [HTTP Event Collector
+(HEC)][hec].
 
-The operator aggregates multiple events to send as a single message. The size
-and timeout can be configured.
+The source type defaults to `_json` and the operator renders incoming events as
+JSON. You can specify a different source type via the `sourcetype` option.
+
+The operator accumulates multiple events before sending them as a single
+message to the HEC endpoint. You can control the maximum message size via the
+`max_content_length` and the timeout before sending all accumulated events via
+the `send_timeout` option.
 
 ### `url: str`
 
@@ -22,7 +30,9 @@ The address of the Splunk indexer.
 
 ### `hec_token = str`
 
-A [Splunk HEC token](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector#Create_an_Event_Collector_token_on_Splunk_Cloud_Platform) used for authorization.
+The [HEC
+token](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector#Create_an_Event_Collector_token_on_Splunk_Cloud_Platform)
+for authentication.
 
 ### `host = str (optional)`
 
@@ -34,54 +44,62 @@ An optional value for the [Splunk `source`](https://docs.splunk.com/Splexicon:So
 
 ### `sourcetype = expr (optional)`
 
-An optional expression for [Splunk's `sourcetype`](https://docs.splunk.com/Splexicon:Sourcetype).
-This can be any expression that evaluates to `string`.
-The default is the string `"_json"`. You can use this to set the Splunk
-`sourcetype` based on each event, by providing a filename instead.
+An optional expression for [Splunk's
+`sourcetype`](https://docs.splunk.com/Splexicon:Sourcetype) that evaluates to a
+`string`. You can use this to set the `sourcetype` per event.
 
-Be aware that the Splunk HEC silently drops events with an invalid `sourcetype`
+Defaults to `_json`.
 
 ### `index = expr (optional)`
 
-An optional expression for the [Splunk `index`](https://docs.splunk.com/Splexicon:Index).
-This can be any expression that evaluates to `string`.
-If this option is not given, the `index` is omitted, effectively using the Splunk
-default index. You can use this to set the Splunk `index` based on each event,
-by providing a filename instead.
+An optional expression for the [Splunk
+`index`](https://docs.splunk.com/Splexicon:Index) that evaluates to a `string`.
 
-Be aware that the Splunk HEC silently drops events with an invalid `index`
+If you do not provide this option, Splunk will use the default index.
+
+**NB**: HEC silently drops events with an invalid `index`.
 
 ### `tls_no_verify = bool (optional)`
 
-Disable TSL certificate verification.
+Toggles TLS certificate verification.
 
 ### `include_nulls = bool (optional)`
 
-Include fields with null values in the transmitted event data. By default they
-are dropped before sending to splunk
+Include fields with null values in the transmitted event data. By default, the
+operator drops all null values to save space.
 
 ### `max_content_length = int (optional)`
 
-The maximum size of the message body. A message may consist of multiple events.
+The maximum size of the message body in bytes. A message may consist of multiple events.
 If a single event is larger than this limit, it is dropped and a warning is emitted.
-The default is `5MB`.
 
-This corresponds with Splunk's [`max_content_length`](https://docs.splunk.com/Documentation/Splunk/9.3.1/Admin/Limitsconf#.5Bhttp_input.5D) option. Be aware that [Splunk Cloud has a default of `1MB`](https://docs.splunk.com/Documentation/SplunkCloud/9.2.2406/Service/SplunkCloudservice#Using_HTTP_Event_Collector_.28HEC.29)
+This corresponds with Splunk's
+[`max_content_length`](https://docs.splunk.com/Documentation/Splunk/9.3.1/Admin/Limitsconf#.5Bhttp_input.5D)
+option. Be aware that [Splunk Cloud has a default of
+`1MB`](https://docs.splunk.com/Documentation/SplunkCloud/9.2.2406/Service/SplunkCloudservice#Using_HTTP_Event_Collector_.28HEC.29)
 for `max_content_length`.
+
+Defaults to `5Mi`.
 
 ### `send_timeout = duration (optional)`
 
-The maximum amount of time for which the `splunk` operator aggregates messages
-before sending them out to Splunk.
+The maximum amount of time for which the operator accumulates messages before
+sending them out to the HEC endpoint as a single message.
+
+Defaults to `5s`.
 
 ### `compress = bool (optional)`
 
-Whether to compress the message body using standard gzip. Compression is enabled
-by default.
+Whether to compress the message body using standard gzip.
+
+Defaults to `true`.
 
 ## Examples
+
+### Send a JSON file to a HEC endpoint
+
 ```tql
-load_file "example.yaml"
-parse_yaml
-splunk "https://localhost:8088", hec_token="example-token-1234"
+load_file "example.json"
+read_json
+save_splunk "https://localhost:8088", hec_token="example-token-1234"
 ```

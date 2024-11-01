@@ -9,7 +9,7 @@ costs and gaining additional flexibility of data processing and routing.
 ## Send data to an existing HEC endpoint
 
 To send data from a pipeline to a Splunk [HTTP Event Collector (HEC)][hec]
-endpoint, use the [`save_splunk`](../tql2/operators/save_splunk.md) sink operator.
+endpoint, use the [`splunk`](../tql2/operators/splunk.md) sink operator.
 
 For example, deploy the following pipeline to forward all
 [Suricata](suricata.md) alerts arriving at a node to Splunk:
@@ -18,13 +18,13 @@ For example, deploy the following pipeline to forward all
 // tql2
 export live=true
 where @name == "suricata.alert"
-save_splunk "https://1.2.3.4:8088", hec_token="TOKEN", tls_no_verify=true
+splunk "https://1.2.3.4:8088", hec_token="TOKEN", tls_no_verify=true
 ```
 
-Replace `1.2.3.4` with the IP address of your splunk host and `TOKEN` with your
+Replace `1.2.3.4` with the IP address of your Splunk host and `TOKEN` with your
 HEC token.
 
-For more details, see the documentation for the [`save_splunk` operator](../tql2/operators/save_splunk.md).
+For more details, see the documentation for the [`splunk` operator](../tql2/operators/splunk.md).
 
 ## Spawn a HEC endpoint as pipeline source
 
