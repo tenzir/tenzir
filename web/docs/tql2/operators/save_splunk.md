@@ -1,20 +1,17 @@
 # save_splunk
 
-Sends events to a [Splunk HEC](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector)
+Sends events to a [Splunk HEC](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector).
 
 ```tql
 save_splunk url:str, hec_token=str,
-           [host=str, source=str,
-            sourcetype=str, sourcetype_field=field,
-            index=str, index_field=field,
+           [host=str, source=str, sourcetype=expr, index=expr,
             tls_no_verify=bool, print_nulls=bool,
-            max_content_length=int, send_timeout=duration]
+            max_content_length=int, send_timeout=duration, compress=bool]
 ```
 
 ## Description
 
-The `splunk` sends events to a [Splunk HEC endpoint](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector).
-Events are sent as JSON.
+The `splunk` operator sends events to a Splunk instance using the [HTTP Event Collector (HEC)](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector) protocol. Events are sent as JSON.
 
 The operator aggregates multiple events to send as a single message. The size
 and timeout can be configured.
@@ -25,34 +22,34 @@ The address of the Splunk indexer.
 
 ### `hec_token = str`
 
-A Splunk HEC token used for authorization.
+A [Splunk HEC token](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector#Create_an_Event_Collector_token_on_Splunk_Cloud_Platform) used for authorization.
 
 ### `host = str (optional)`
 
-An optional value for the `host` field.
+An optional value for the [Splunk `host`](https://docs.splunk.com/Splexicon:Host).
 
 ### `source = str (optional)`
 
-An optional value for the `source` field.
+An optional value for the [Splunk `source`](https://docs.splunk.com/Splexicon:Source).
 
-### `sourcetype = str (optional)`
+### `sourcetype = expr (optional)`
 
-An optional value for the `sourcetype` field. If its not given, it will be set
-to `_json`.
+An optional expression for [Splunk's `sourcetype`](https://docs.splunk.com/Splexicon:Sourcetype).
+This can be any expression that evaluates to `string`.
+The default is the string `"_json"`. You can use this to set the Splunk
+`sourcetype` based on each event, by providing a filename instead.
 
-### `sourcetype_field = field (optional)`
+Be aware that the Splunk HEC silently drops events with an invalid `sourcetype`
 
-If the `sourcetype_field` is present in the input data, the `sourcetype` will be
-set to the value of that field. This takes precedence over the `sourcetype` option.
+### `index = expr (optional)`
 
-### `index = str (optional)`
+An optional expression for the [Splunk `index`](https://docs.splunk.com/Splexicon:Index).
+This can be any expression that evaluates to `string`.
+If this option is not given, the `index` is omitted, effectively using the Splunk
+default index. You can use this to set the Splunk `index` based on each event,
+by providing a filename instead.
 
-An optional value for the `index` field.
-
-### `index_field = field (optional)`
-
-If the `index_field` is present in the input data, the `index` will be set to
-the value of that field. This takes precedence over the `index` option.
+Be aware that the Splunk HEC silently drops events with an invalid `index`
 
 ### `tls_no_verify = bool (optional)`
 
@@ -66,16 +63,21 @@ are dropped before sending to splunk
 ### `max_content_length = int (optional)`
 
 The maximum size of the message body. A message may consist of multiple events.
-If a single event is larger than this limit, it is dropped.
-
+If a single event is larger than this limit, it is dropped and a warning is emitted.
 The default is `5MB`.
+
+This corresponds with Splunk's [`max_content_length`](https://docs.splunk.com/Documentation/Splunk/9.3.1/Admin/Limitsconf#.5Bhttp_input.5D) option. Be aware that [Splunk Cloud has a default of `1MB`](https://docs.splunk.com/Documentation/SplunkCloud/9.2.2406/Service/SplunkCloudservice#Using_HTTP_Event_Collector_.28HEC.29)
+for `max_content_length`.
 
 ### `send_timeout = duration (optional)`
 
 The maximum amount of time for which the `splunk` operator aggregates messages
 before sending them out to Splunk.
 
-The default is `5s`.
+### `compress = bool (optional)`
+
+Whether to compress the message body using standard gzip. Compression is enabled
+by default.
 
 ## Examples
 ```tql
