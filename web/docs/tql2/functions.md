@@ -1,5 +1,23 @@
 # Functions
 
+<!--
+
+TODO: the following functions still need to be documented:
+
+- `format`
+- `parse_*`
+- `print_*`
+- `grok`
+
+## OCSF
+
+- `ocsf::category_name`
+- `ocsf::category_uid`
+- `ocsf::class_name`
+- `ocsf::class_uid`
+
+-->
+
 Functions appear in [expressions](../language/expressions.md) and take
 positional and/or named arguments, producing a value as a result of their
 computation.
@@ -144,16 +162,6 @@ Function | Description | Example
 [`hash_sha512`](functions/hash_sha512.md) | Computes a SHA512 hash digest | `hash_sha512("foo")`
 [`hash_xxh3`](functions/hash_xxh3.md) | Computes a XXH3 hash digest | `hash_xxh3("foo")`
 
-<!--
-
-## OCSF
-- `ocsf::category_name`
-- `ocsf::category_uid`
-- `ocsf::class_name`
-- `ocsf::class_uid`
-
--->
-
 ## Type System
 
 ### Introspection
@@ -188,13 +196,3 @@ Function | Description | Example
 :--------|:-------------|:-------
 [`env`](functions/env.md) | Reads an environment variable | `env("PATH")`
 [`secret`](functions/secret.md) | Reads a secret from a store | `secret("PATH")`
-
-<!--
-
-## TODO
-- `format`
-- `parse_json`
-- `parse_cef`
-- `print_json`
-- `grok`
--->
