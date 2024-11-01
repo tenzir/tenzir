@@ -27,6 +27,29 @@ suitable for function chaining, e.g., `x.f().g().h()` reads left-to-right as
 Throughout our documentation, we use the free function style in the synopsis
 but often resort to the method style when it is more idiomatic.
 
+## Aggregation
+
+Function | Description | Example
+:--------|:------------|:-------
+`all` | Computes the conjunction (AND) of all grouped boolean values | `all([true,true,false])`
+`any` | Computes the disjunction (OR) of all grouped boolean values | `any([true,false,true])`
+`collect` | Creates a list of all non-null grouped values, preserving duplicates | `collect([1,2,2,3])`
+`count` | Counts the events or non-null grouped values | `count([1,2,null])`
+`count_distinct` | Counts all distinct non-null grouped values | `count_distinct([1,2,2,3])`
+`distinct` | Creates a sorted list without duplicates of non-null grouped values | `distinct([1,2,2,3])`
+`first` | Takes the first non-null grouped value | `first([null,2,3])`
+`last` | Takes the last non-null grouped value | `last([1,2,null])`
+`max` | Computes the maximum of all grouped values | `max([1,2,3])`
+`mean` | Computes the mean of all grouped values | `mean([1,2,3])`
+`median` | Computes the approximate median with a t-digest algorithm | `median([1,2,3,4])`
+`min` | Computes the minimum of all grouped values | `min([1,2,3])`
+`mode` | Takes the most common non-null grouped value | `mode([1,1,2,3])`
+`quantile` | Computes the specified quantile `q` of grouped values | `quantile([1,2,3,4], q=0.5)`
+`stddev` | Computes the standard deviation of all grouped values | `stddev([1,2,3])`
+`sum` | Computes the sum of all grouped values | `sum([1,2,3])`
+`value_counts` | Returns a list of grouped values with their frequency | `value_counts([1,2,2,3])`
+`variance` | Computes the variance of all grouped values | `variance([1,2,3])`
+
 ## String
 
 ### Inspection
@@ -167,11 +190,6 @@ Function | Description | Example
 [`secret`](functions/secret.md) | Reads a secret from a store | `secret("PATH")`
 
 <!--
-
-## Aggregation (?)
-- `count`
-- `quantile`
-- `sum`
 
 ## TODO
 - `format`
