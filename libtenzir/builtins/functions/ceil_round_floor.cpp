@@ -32,7 +32,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto spec = std::optional<located<duration>>{};
-    TRY(argument_parser2::function(function_name())
+    TRY(argument_parser2::function(name())
           .add(expr, "<value>")
           .add(spec, "<spec>")
           .parse(inv, ctx));
@@ -58,35 +58,56 @@ public:
             return value.inner;
           },
           [&](const arrow::DoubleArray& arg) {
-            auto b = arrow::DoubleBuilder{};
+            // overflow logic from int.cpp
+            auto b = arrow::Int64Builder{};
             check(b.Reserve(length));
+            constexpr auto min
+              = static_cast<double>(std::numeric_limits<int64_t>::lowest())
+                - 1.0;
+            constexpr auto max
+              = static_cast<double>(std::numeric_limits<int64_t>::max()) + 1.0;
+            auto overflow = false;
             for (auto row = int64_t{0}; row < length; ++row) {
               if (arg.IsNull(row) or not std::isfinite(arg.Value(row))) {
                 check(b.AppendNull());
                 continue;
               }
-              if constexpr (Mode == mode::ceil) {
-                check(b.Append(std::ceil(arg.Value(row))));
-              } else if constexpr (Mode == mode::floor) {
-                check(b.Append(std::floor(arg.Value(row))));
-              } else {
-                check(b.Append(std::round(arg.Value(row))));
+              auto val = [&]() {
+                if constexpr (Mode == mode::ceil) {
+                  return std::ceil(arg.Value(row));
+                } else if constexpr (Mode == mode::floor) {
+                  return std::floor(arg.Value(row));
+                } else {
+                  TENZIR_ASSERT(Mode == mode::round);
+                  return std::round(arg.Value(row));
+                }
+              }();
+              if (not(val > min) || not(val < max)) {
+                check(b.AppendNull());
+                overflow = true;
+                continue;
               }
+              check(b.Append(static_cast<int64_t>(val)));
             }
-            return series{ty, finish(b)};
+            if (overflow) {
+              diagnostic::warning("integer overflow in `{}`", name())
+                .primary(expr)
+                .emit(ctx);
+            }
+            return series{int64_type{}, finish(b)};
           },
           [&]<concepts::one_of<arrow::DurationArray, arrow::TimestampArray> T>(
             const T&) {
             diagnostic::warning("`{}` with duration requires second argument",
-                                function_name())
+                                name())
               .primary(value)
-              .hint("for example `{}(x, 1h)`", function_name())
+              .hint("for example `{}(x, 1h)`", name())
               .emit(ctx);
             return series::null(ty, length);
           },
           [&](const auto&) {
-            diagnostic::warning("`{}` expected `number`, got `{}`",
-                                function_name(), ty.kind())
+            diagnostic::warning("`{}` expected `number`, got `{}`", name(),
+                                ty.kind())
               // TODO: Wrong location.
               .primary(value)
               .emit(ctx);
@@ -145,8 +166,7 @@ public:
           }
         },
         [&](const auto&) {
-          diagnostic::warning("{}(_, _) is not implemented for {}",
-                              function_name(), ty)
+          diagnostic::warning("{}(_, _) is not implemented for {}", name(), ty)
             .primary(value)
             .emit(ctx);
           return series::null(ty, length);
