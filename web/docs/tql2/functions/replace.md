@@ -24,7 +24,7 @@ The pattern to replace in `x`.
 
 The replacement value for `pattern`.
 
-### `max = string` (optional)
+### `max = string (optional)`
 
 The maximum number of replacements to perform.
 

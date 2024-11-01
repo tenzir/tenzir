@@ -12,6 +12,22 @@ The `replace_regex` function returns a new string where substrings in `x` that
 match `pattern` are replaced with `replacement`, up to `max` times. If `max` is
 omitted, all matches are replaced.
 
+### `x: string`
+
+The subject to replace the action on.
+
+### `pattern: string`
+
+The pattern (as regular expression) to replace in `x`.
+
+### `replacement: string`
+
+The replacement value for `pattern`.
+
+### `max = string (optional)`
+
+The maximum number of replacements to perform.
+
 ## Examples
 
 ### Replace all matches of a regular expression

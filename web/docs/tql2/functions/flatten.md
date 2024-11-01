@@ -89,7 +89,7 @@ becomes
 
 As you can see from the above examples, flattening also removes `null` values.
 
-### `sep = string` (optional)
+### `sep = string (optional)`
 
 The separator to use for joining field names.
 

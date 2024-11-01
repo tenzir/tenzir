@@ -18,7 +18,7 @@ unflattened afterwards may not be identical to the schema of the unmodified
 record.
 :::
 
-### `sep = string` (optional)
+### `sep = string (optional)`
 
 The separator to use for splitting field names.
 
