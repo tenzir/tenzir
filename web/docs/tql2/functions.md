@@ -28,7 +28,7 @@ Function signatures have the following notation:
 f(arg1:<type>, arg2=<type>, [arg3=type]) -> <type>
 ```
 
-- `arg:<type>`: postional argument
+- `arg:<type>`: positional argument
 - `arg=<type>`: named argument
 - `[arg=type]`: optional (named) argument
 - `-> <type>`: function return type
