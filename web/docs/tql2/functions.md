@@ -152,6 +152,13 @@ Function | Description | Example
 [`str`](functions/str.md) | Casts an expression to string | `str(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
 
+### Transposition
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`flatten`](functions/flatten.md) | Flattens nested data | `flatten(this)`
+[`unflatten`](functions/unflatten.md) | Unflattens nested structures | `unflatten(this)`
+
 ## Runtime
 
 Function | Description | Example
@@ -167,8 +174,6 @@ Function | Description | Example
 - `sum`
 
 ## TODO
-- `flatten`
-- `unflatten`
 - `format`
 - `parse_json`
 - `parse_cef`
