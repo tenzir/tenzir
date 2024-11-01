@@ -1,9 +1,9 @@
-# save_splunk
+# splunk
 
 Sends events to a [Splunk HEC](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector).
 
 ```tql
-save_splunk url:str, hec_token=str,
+splunk url:str, hec_token=str,
            [host=str, source=str, sourcetype=expr, index=expr,
             tls_no_verify=bool, print_nulls=bool,
             max_content_length=int, send_timeout=duration, compress=bool]
@@ -83,5 +83,5 @@ by default.
 ```tql
 load_file "example.yaml"
 parse_yaml
-save_splunk "https://localhost:8088", hec_token="example-token-1234"
+splunk "https://localhost:8088", hec_token="example-token-1234"
 ```
