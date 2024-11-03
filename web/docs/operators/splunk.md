@@ -25,7 +25,7 @@ splunk <url> <hec_token> [--host <string>] [--source <string>]
 ## Description
 
 The `splunk` sends events to a [Splunk HEC endpoint](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector).
-Events are sent as JSON.
+Events are send as a JSON object in the `event` field, with Splunk `sourcetype` `_json`.
 
 The operator aggregates multiple events to send as a single message. The size
 and timeout can be configured.

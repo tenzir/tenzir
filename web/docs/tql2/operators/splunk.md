@@ -48,6 +48,9 @@ An optional expression for [Splunk's
 `sourcetype`](https://docs.splunk.com/Splexicon:Sourcetype) that evaluates to a
 `string`. You can use this to set the `sourcetype` per event.
 
+Regardless of the chosen `sourcetype`, the event itself is given as the value to
+the `event` key in the top level object being send.
+
 Defaults to `_json`.
 
 ### `index = expr (optional)`
