@@ -63,6 +63,13 @@ public:
     }
   }
 
+  void emit_not_found(const ast::dollar_var& var) {
+    diagnostic::error("variable `{}` was not declared", var.name)
+      .primary(var)
+      .emit(ctx_);
+    failure_ = failure::promise();
+  }
+
   void visit(ast::expression& x) {
     auto dollar_var = std::get_if<ast::dollar_var>(&*x.kind);
     if (not dollar_var) {
@@ -71,9 +78,7 @@ public:
     }
     auto it = map_.find(dollar_var->name);
     if (it == map_.end()) {
-      diagnostic::error("variable `{}` was not declared", dollar_var->name)
-        .primary(x)
-        .emit(ctx_);
+      emit_not_found(*dollar_var);
       return;
     }
     if (not it->second) {
@@ -84,36 +89,57 @@ public:
   }
 
   void load_balance(ast::invocation& x) {
+    // TODO: Remove special casing.
+    auto docs = "https://docs.tenzir.com/tql2/operators/load_balance";
+    auto usage = "load_balance over:list { … }";
+    auto emit = [&](diagnostic_builder d) {
+      if (d.inner().severity == severity::error) {
+        failure_ = failure::promise();
+      }
+      std::move(d).docs(docs).usage(usage).emit(ctx_);
+    };
+    // Remove all the arguments, as we will be replacing them anyway.
     auto args = std::move(x.args);
-    // TODO
     x.args.clear();
-    if (args.size() < 2) {
-      // TODO
+    if (args.empty()) {
+      emit(
+        diagnostic::error("expected two positional arguments").primary(x.op));
       return;
     }
     auto var = std::get_if<ast::dollar_var>(&*args[0].kind);
     if (not var) {
-      // TODO
+      emit(diagnostic::error("expected a `$`-variable").primary(args[0]));
+      return;
+    }
+    if (args.size() < 2) {
+      emit(diagnostic::error("expected a pipeline afterwards").primary(*var));
       return;
     }
     auto it = map_.find(var->name);
     if (it == map_.end()) {
-      // TODO
+      emit_not_found(*var);
       return;
     }
     if (not it->second) {
-      // TODO
+      // Variable exists, but there was an error during evaluation.
       return;
     }
-    auto pipe = std::get_if<ast::pipeline_expr>(&*args.back().kind);
+    auto pipe = std::get_if<ast::pipeline_expr>(&*args[1].kind);
     if (not pipe) {
-      // TODO
+      emit(
+        diagnostic::error("expected a pipeline expression").primary(args[1]));
       return;
     }
-    auto actual_var_data = std::move(*it->second);
-    auto entries = std::get_if<list>(&actual_var_data);
+    // We now expand the pipeline once for each entry in the list, replacing the
+    // original variable with the list items.
+    auto original = std::move(*it->second);
+    auto entries = std::get_if<list>(&original);
     if (not entries) {
-      // TODO
+      auto got = original.match([]<class T>(const T&) {
+        return type_kind::of<data_to_type_t<T>>;
+      });
+      emit(diagnostic::error("expected a list, got `{}`", got).primary(*var));
+      *it->second = std::move(original);
       return;
     }
     for (auto& entry : *entries) {
@@ -131,10 +157,13 @@ public:
       visit(pipe_copy);
       x.args.emplace_back(std::move(pipe_copy));
     }
+    if (args.size() > 2) {
+      emit(
+        diagnostic::error("expected exactly two arguments, got {}", args.size())
+          .primary(args[2]));
+    }
     // Restore the original value in case it's used elsewhere.
-    map_.insert_or_assign(var->name, std::move(actual_var_data));
-    // TENZIR_WARN("{}", *entries);
-    // TENZIR_WARN("inv: {:#?}", use_default_formatter(x));
+    map_.insert_or_assign(var->name, std::move(original));
   }
 
   void visit(ast::invocation& x) {

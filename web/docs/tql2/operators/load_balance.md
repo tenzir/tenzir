@@ -1,6 +1,6 @@
 # load_balance
 
- Routes the data through alternating subpipelines.
+Routes the data through alternating subpipelines.
 
 ```tql
 load_balance over:list { … }

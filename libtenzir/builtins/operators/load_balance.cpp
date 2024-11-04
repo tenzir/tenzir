@@ -274,6 +274,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    // TODO: Handle empty list.
     // TODO: Re-batch before?
     auto load_balancer = scope_linked{ctrl.self().spawn<caf::linked>(
       make_load_balancer, pipes_, ctrl.shared_diagnostics(),
