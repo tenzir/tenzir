@@ -1,11 +1,12 @@
-# splunk
+# to_splunk
 
 Sends events to a Splunk [HTTP Event Collector (HEC)][hec].
 
 [hec]: https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector
 
 ```tql
-splunk url:str, hec_token=str,
+to_splunk
+ url:str, hec_token=str,
       [host=str, source=str, sourcetype=expr, index=expr,
        tls_no_verify=bool, print_nulls=bool,
        max_content_length=int, send_timeout=duration, compress=bool]
@@ -13,7 +14,7 @@ splunk url:str, hec_token=str,
 
 ## Description
 
-The `splunk` operator sends events to a Splunk [HTTP Event Collector
+The `to_splunk` operator sends events to a Splunk [HTTP Event Collector
 (HEC)][hec].
 
 The source type defaults to `_json` and the operator renders incoming events as
@@ -46,10 +47,11 @@ An optional value for the [Splunk `source`](https://docs.splunk.com/Splexicon:So
 
 An optional expression for [Splunk's
 `sourcetype`](https://docs.splunk.com/Splexicon:Sourcetype) that evaluates to a
-`string`. You can use this to set the `sourcetype` per event.
+`string`. You can use this to set the `sourcetype` per event, by providing a
+field instead of a string.
 
-Regardless of the chosen `sourcetype`, the event itself is given as the value to
-the `event` key in the top level object being send.
+Regardless of the chosen `sourcetype`, the event itself is passed as a json object
+in `event` key of level object that is sent.
 
 Defaults to `_json`.
 
@@ -73,7 +75,7 @@ operator drops all null values to save space.
 
 ### `max_content_length = int (optional)`
 
-The maximum size of the message body in bytes. A message may consist of multiple events.
+The maximum size of the message uncompressed body in bytes. A message may consist of multiple events.
 If a single event is larger than this limit, it is dropped and a warning is emitted.
 
 This corresponds with Splunk's
@@ -84,7 +86,7 @@ for `max_content_length`.
 
 Defaults to `5Mi`.
 
-### `send_timeout = duration (optional)`
+### `buffer_timeout = duration (optional)`
 
 The maximum amount of time for which the operator accumulates messages before
 sending them out to the HEC endpoint as a single message.
@@ -104,5 +106,5 @@ Defaults to `true`.
 ```tql
 load_file "example.json"
 read_json
-save_splunk "https://localhost:8088", hec_token="example-token-1234"
+to_splunk "https://localhost:8088", hec_token="example-token-1234"
 ```

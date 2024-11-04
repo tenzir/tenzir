@@ -4,12 +4,12 @@ sidebar_custom_props:
     sink: true
 ---
 
-# splunk
+# to-splunk
 
 Sends events to a [Splunk HEC](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector)
 
-:::tip Consider the TQL2 `save_splunk` operator
-The TQL2 [`save_splunk` operator](../tql2/operators/splunk.md) providing
+:::tip Consider the TQL2 `to_splunk` operator
+The TQL2 [`to_splunk` operator](../tql2/operators/to_splunk.md) providing
 multiple additional options. It allows you to set Splunk's `index` and
 `sourcetype` fields.
 :::
@@ -17,7 +17,7 @@ multiple additional options. It allows you to set Splunk's `index` and
 ## Synopsis
 
 ```
-splunk <url> <hec_token> [--host <string>] [--source <string>]
+to-splunk <url> <hec_token> [--host <string>] [--source <string>]
        [--tls-no-verify] [--print-nulls] [--max-content-length <int>]
        [--send-timeout <duration>] [--no-compress]
 ```
@@ -53,18 +53,18 @@ Disable TSL certificate verification.
 ### `--include-nulls`
 
 Include fields with null values in the transmitted event data. By default null
-values are dropped before sending to splunk.
+values are dropped before sending to Splunk.
 
 ### `--max-content-length <int>`
 
-The maximum size of the message body. A message may consist of multiple events.
+The maximum size of the uncompressed message body. A message may consist of multiple events.
 If a single event is larger than this limit, it is dropped and a warning is emitted.
 The default is `5Mi`.
 
 This corresponds with Splunk's [`max_content_length`](https://docs.splunk.com/Documentation/Splunk/9.3.1/Admin/Limitsconf#.5Bhttp_input.5D) option. Be aware that [Splunk Cloud has a default of `1MB`](https://docs.splunk.com/Documentation/SplunkCloud/9.2.2406/Service/SplunkCloudservice#Using_HTTP_Event_Collector_.28HEC.29)
 for `max_content_length`.
 
-### `--send-timeout <duration>`
+### `--buffer-timeout <duration>`
 
 The maximum amount of time for which the `splunk` operator aggregates messages
 before sending them out to Splunk.
@@ -79,5 +79,5 @@ events using gzip.
 ## Examples
 ```
 from "example.yaml"
-| splunk "https://localhost:8088" "example-token-1234"
+| to-splunk "https://localhost:8088" "example-token-1234"
 ```
