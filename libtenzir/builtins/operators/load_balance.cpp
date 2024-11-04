@@ -33,16 +33,21 @@ struct load_balancer_state {
 
   load_balancer_actor::pointer self{};
   shared_diagnostic_handler diagnostics;
+  metrics_receiver_actor metrics;
   std::vector<pipeline_executor_actor> executors;
   std::deque<caf::typed_response_promise<table_slice>> reads;
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> writes;
   bool finished = false;
+  uint64_t operator_index{};
+  uint64_t next_metrics_id = 0;
+  detail::stable_map<std::pair<uint64_t, uint64_t>, uint64_t> metrics_id_map;
 
   void finish() {
     TENZIR_WARN("marking load_balancer as finished");
     finished = true;
     // If there are any outstanding reads, we know that there are no remaining
     // writes. Thus it's fine to mark all outstanding reads as done.
+    TENZIR_WARN("marking {} outstanding reads as done", reads.size());
     for (auto& read : reads) {
       read.deliver(table_slice{});
     }
@@ -50,7 +55,6 @@ struct load_balancer_state {
   }
 };
 
-// TODO: Plugin?
 class load_balance_source final : public crtp_operator<load_balance_source> {
 public:
   load_balance_source() = default;
@@ -77,8 +81,11 @@ public:
             result = std::move(slice);
             ctrl.set_waiting(false);
           },
-          [](const caf::error&) {
-
+          [&](const caf::error& err) {
+            // TODO
+            TENZIR_WARN("read failed: {}", err);
+            diagnostic::error("load balancer read failed: {}", err)
+              .emit(ctrl.diagnostics());
           });
       co_yield {};
       // We signal completion with an empty table slice.
@@ -105,26 +112,46 @@ private:
   load_balancer_actor load_balancer_;
 };
 
+template <class Map, class Key, class F>
+auto get_or_compute(Map& map, Key&& key, F&& f) -> decltype(auto) {
+  class implicit_caller {
+  public:
+    explicit implicit_caller(F&& f) : f_{std::forward<F>(f)} {
+    }
+
+    explicit(false) operator typename Map::mapped_type() {
+      return std::forward<F>(f_)();
+    }
+
+  private:
+    F&& f_;
+  };
+  return map
+    .try_emplace(std::forward<Key>(key), implicit_caller(std::forward<F>(f)))
+    .first->second;
+}
+
 auto make_load_balancer(
   load_balancer_actor::stateful_pointer<load_balancer_state> self,
-  std::vector<pipeline> pipes, const shared_diagnostic_handler& diagnostics,
-  const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
-  bool is_hidden, const node_actor& node)
-  -> load_balancer_actor::behavior_type {
+  std::vector<pipeline> pipes, shared_diagnostic_handler diagnostics,
+  metrics_receiver_actor metrics, uint64_t operator_index, bool is_hidden,
+  const node_actor& node) -> load_balancer_actor::behavior_type {
   TENZIR_WARN("spawning load balancer");
   self->attach_functor([] {
     TENZIR_WARN("destroyed load balancer");
   });
   self->state.self = self;
-  self->state.diagnostics = diagnostics;
+  self->state.diagnostics = std::move(diagnostics);
+  self->state.metrics = std::move(metrics);
+  self->state.operator_index = operator_index;
   self->state.executors.reserve(pipes.size());
   for (auto& pipe : pipes) {
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
     // TODO: Link? Monitor?
     TENZIR_WARN("spawning inner executor");
-    auto executor = self->spawn(pipeline_executor, pipe, self, self, node,
-                                has_terminal, is_hidden);
+    auto executor = self->spawn<caf::monitored>(
+      pipeline_executor, pipe, self, self, node, has_terminal, is_hidden);
     executor->attach_functor([] {
       TENZIR_WARN("inner executor terminated");
     });
@@ -135,16 +162,35 @@ auto make_load_balancer(
           TENZIR_WARN("started pipeline executor successfully");
         },
         [](const caf::error& err) {
-          // TODO
+          // TODO: This should probably forward the diagnostic.
           TENZIR_WARN("failed to start pipeline executor: {}", err);
         });
     self->state.executors.push_back(std::move(executor));
   }
   self->set_exit_handler([self](caf::exit_msg& msg) {
-    TENZIR_WARN("load balancer got exit msg: {}", msg.reason);
-    // TODO: Let sources know that we are done.
-    // TODO: Wait for executors to terminate?
+    if (msg.reason != caf::exit_reason::user_shutdown) {
+      // Unexpected error.
+      TENZIR_WARN("load balancer got unexpected exit msg: {}", msg.reason);
+      self->quit(msg.reason);
+    }
+    // Let sources know that we are done.
     self->state.finish();
+    // Wait for the inner executors to terminate.
+    // Or is this the wrong place?
+    // We want to wait with the termination of the outer executor.
+    // How can we enforce that? It probably assumes that it's done when the
+    // generator returns. Or is it only after destruction of the generator?
+    // self->quit(msg.reason);
+  });
+  self->set_down_handler([self](const caf::down_msg& msg) {
+    auto it = std::ranges::find(self->state.executors, msg.source,
+                                &pipeline_executor_actor::address);
+    TENZIR_ASSERT(it != self->state.executors.end());
+    self->state.executors.erase(it);
+    // TODO: What if not finished?
+    if (self->state.finished) {
+      self->quit();
+    }
   });
   return {
     [self](atom::write, table_slice events) -> caf::result<void> {
@@ -179,20 +225,33 @@ auto make_load_balancer(
     },
     [self](uint64_t op_index, uint64_t metric_index,
            type& schema) -> caf::result<void> {
-      // TODO
-      return {};
+      // TODO: Why does this allocate twice?
+      auto id = get_or_compute(
+        self->state.metrics_id_map, std::pair{op_index, metric_index}, [&] {
+          TENZIR_WARN(
+            "load_balancer allocates new metrics for {}/{} with {} ({})",
+            op_index, metric_index, schema, schema.make_fingerprint());
+          auto id = self->state.next_metrics_id;
+          self->state.next_metrics_id += 1;
+          return id;
+        });
+      return self->delegate(self->state.metrics, self->state.operator_index, id,
+                            schema);
     },
     [self](uint64_t op_index, uint64_t metric_index,
            record& metric) -> caf::result<void> {
-      // TODO
-      return {};
+      auto id
+        = self->state.metrics_id_map.find(std::pair{op_index, metric_index});
+      TENZIR_ASSERT(id != self->state.metrics_id_map.end());
+      return self->delegate(self->state.metrics, self->state.operator_index,
+                            id->second, std::move(metric));
     },
     [](const operator_metric& op_metric) -> caf::result<void> {
-      // TODO
+      // There currently is no way to have subpipeline metrics.
+      TENZIR_UNUSED(op_metric);
       return {};
     },
     [self](diagnostic& diagnostic) -> caf::result<void> {
-      // TODO: Can we assume this?
       TENZIR_ASSERT(diagnostic.severity != severity::error);
       self->state.diagnostics.emit(std::move(diagnostic));
       return {};
@@ -232,7 +291,7 @@ public:
                  std::move(slice))
         .then(
           [&]() {
-            TENZIR_WARN("successfully sent events");
+            TENZIR_WARN("successfully sent events to load_balancer");
             ctrl.set_waiting(false);
           },
           [&](const caf::error& err) {
@@ -242,7 +301,19 @@ public:
           });
       co_yield {};
     }
-    TENZIR_WARN("terminating load_balance");
+    // TODO: What if the generator is destroyed from the outside?
+    // Then we will only call destructors. These destructors should make sure
+    // that the inner executors terminate.
+    TENZIR_WARN("waiting for termination of load_balancer");
+    ctrl.set_waiting(true);
+    load_balancer.get()->attach_functor([&] {
+      // TODO: Do we know that `ctrl` still lives here?
+      ctrl.set_waiting(false);
+    });
+    // TODO: Is this what we want?
+    caf::anon_send_exit(load_balancer.get(), caf::exit_reason::user_shutdown);
+    co_yield {};
+    TENZIR_WARN("load_balance (probably) terminated");
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -276,7 +347,7 @@ public:
         return failure::promise();
       }
       if (not output->is<void>()) {
-        diagnostic::error("pipeline must end with a sink")
+        diagnostic::error("pipeline must currently end with a sink")
           .primary(pipe->end)
           .emit(ctx);
         return failure::promise();
