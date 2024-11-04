@@ -9,28 +9,22 @@ costs and gaining additional flexibility of data processing and routing.
 ## Send data to an existing HEC endpoint
 
 To send data from a pipeline to a Splunk [HTTP Event Collector (HEC)][hec]
-endpoint, use the [`fluent-bit`](../operators/fluent-bit.md) sink operator.
+endpoint, use the [`to_splunk`](../tql2/operators/to_splunk.md) sink operator.
 
 For example, deploy the following pipeline to forward all
 [Suricata](suricata.md) alerts arriving at a node to Splunk:
 
-```
-export --live
-| where #schema == "suricata.alert"
-| fluent-bit
-    splunk
-    host=1.2.3.4
-    port=8088
-    tls=on
-    tls.verify=off
-    splunk_token=TOKEN
+```tql
+// tql2
+export live=true
+where @name == "suricata.alert"
+to_splunk "https://1.2.3.4:8088", hec_token="TOKEN", tls_no_verify=true
 ```
 
-Replace `1.2.3.4` with the IP address of your splunk host and `TOKEN` with your
+Replace `1.2.3.4` with the IP address of your Splunk host and `TOKEN` with your
 HEC token.
 
-For more details, read the official [Fluent Bit documentation of the Splunk
-output][fluentbit-splunk-output].
+For more details, see the documentation for the [`to_splunk` operator](../tql2/operators/to_splunk.md).
 
 ## Spawn a HEC endpoint as pipeline source
 

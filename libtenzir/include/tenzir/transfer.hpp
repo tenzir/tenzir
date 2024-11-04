@@ -24,12 +24,12 @@ struct transfer_options {
   bool verbose = false;
   std::string default_protocol{};
   std::chrono::milliseconds poll_timeout{100};
-  std::optional<std::string> username;
-  std::optional<std::string> password;
-  std::optional<std::string> authzid;
-  std::optional<std::string> authorization;
-  bool skip_peer_verification;
-  bool skip_hostname_verification;
+  std::optional<std::string> username = {};
+  std::optional<std::string> password = {};
+  std::optional<std::string> authzid = {};
+  std::optional<std::string> authorization = {};
+  bool skip_peer_verification = false;
+  bool skip_hostname_verification = false;
 
   friend auto inspect(auto& f, transfer_options& x) -> bool {
     return f.object(x)

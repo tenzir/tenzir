@@ -66,7 +66,7 @@ The `schema` option is incompatible with the `selector` option.
 Designates a field value as [schema](../../data-model/schemas.md) name with an
 optional dot-separated prefix.
 
-The string is parsed as `<filename>[:<prefix>]`. The `prefix` is optional and
+The string is parsed as `<fieldname>[:<prefix>]`. The `prefix` is optional and
 will be prepended to the field value to generate the schema name.
 
 For example, the Suricata EVE JSON format includes a field

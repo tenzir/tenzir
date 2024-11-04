@@ -88,6 +88,7 @@ Operator | Description | Example
 [`save_http`](./operators/save_http.md) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
 [`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
+[`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "https://localhost:8088", …`
 [`import`](./operators/import.md) | Stores events at the node | `import`
 [`publish`](./operators/publish.md) | Publishes events to a certain topic | `publish "topic"`
 
