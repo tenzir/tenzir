@@ -20,7 +20,10 @@ by `load_balance $cfg { … }`.
 
 ### `{ … }`
 
-The nested pipeline to spawn. This pipeline can use the same variable as passed to `over`, which will be resolved to one of the list items. The following example spawns three nested pipelines, where `$port` is bound to `8080`, `8081` and `8082`, respectively.
+The nested pipeline to spawn. This pipeline can use the same variable as passed
+to `over`, which will be resolved to one of the list items. The following
+example spawns three nested pipelines, where `$port` is bound to `8080`, `8081`
+and `8082`, respectively.
 
 ```tql
 let $cfg = [8080, 8081, 8082]
@@ -30,7 +33,8 @@ load_balance $cfg {
 }
 ```
 
-The given subpipeline must end with a sink. This limitation might be removed in future versions.
+The given subpipeline must end with a sink. This limitation might be removed in
+future versions.
 
 ## Examples
 
