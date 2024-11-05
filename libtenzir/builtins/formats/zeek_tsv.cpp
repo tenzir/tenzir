@@ -922,13 +922,49 @@ public:
 };
 
 using zeek_tsv_parser_adapter = parser_adapter<zeek_tsv_parser, "zeek_tsv">;
+using zeek_tsv_writer_adapter = writer_adapter<zeek_tsv_printer, "zeek_tsv">;
 
 class read_zeek_tsv final
   : public virtual operator_plugin2<zeek_tsv_parser_adapter> {
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("read_zeek_tsv").parse(inv, ctx).ignore();
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_("read_zeek_tsv").parse(inv, ctx));
     return std::make_unique<zeek_tsv_parser_adapter>();
+  }
+};
+
+class write_zeek_tsv final
+  : public virtual operator_plugin2<zeek_tsv_writer_adapter> {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = zeek_tsv_printer::args{};
+    auto set_separator = std::optional<located<std::string>>{};
+    TRY(argument_parser2::operator_("write_zeek_tsv")
+          .add("set_separator", set_separator)
+          .add("empty_field", args.empty_field)
+          .add("unset_field", args.unset_field)
+          .add("disable_timestamp_tags", args.disable_timestamp_tags)
+          .parse(inv, ctx));
+    if (set_separator) {
+      auto converted = to_xsv_sep(set_separator->inner);
+      if (!converted) {
+        diagnostic::error("`{}` is not a valid separator", set_separator->inner)
+          .primary(set_separator->source)
+          .note(fmt::to_string(converted.error()))
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (*converted == '\t') {
+        diagnostic::error("the `\\t` separator is not allowed here",
+                          set_separator->inner)
+          .primary(set_separator->source)
+          .emit(ctx);
+        return failure::promise();
+      }
+      args.set_sep = *converted;
+    }
+    return std::make_unique<zeek_tsv_writer_adapter>(
+      zeek_tsv_printer{std::move(args)});
   }
 };
 
@@ -938,3 +974,4 @@ class read_zeek_tsv final
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::read_zeek_tsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::write_zeek_tsv)
