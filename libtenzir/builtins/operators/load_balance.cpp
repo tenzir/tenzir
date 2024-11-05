@@ -28,6 +28,21 @@ using load_balancer_actor = caf::typed_actor<
   // Handle diagnostics of the nested pipelines.
   ::extend_with<receiver_actor<diagnostic>>;
 
+/// Load balancing is currently done in a naive, yet hopefully effective way:
+/// - Every subpipeline configuration gets its own executor.
+/// - When the source of that pipeline is pulled from, it requests a batch from
+///   the load balancer.
+/// - The input of the `load_balance` operator is sent to the load balancer as
+///   well in order to be forwarded to these read requests.
+/// - Read requests are fulfilled in a FIFO manner, guaranteeing some degree of
+///   fairness.
+/// - The write operation only returns when the batch has been read from.
+/// - Because of the implicit buffering between operators, upstream can still
+///   continue even if the write is being blocked.
+/// - We currently hand out batches exactly as they come in. Thus, their size
+///   can vary significantly, producing an uneven load across the instances.
+/// If our handover strategy here unexpectedly turns out to be a bottleneck,
+/// then it should not be too hard to switch to a different mechanism.
 struct load_balancer_state {
   [[maybe_unused]] static constexpr auto name = "load-balancer";
 
@@ -43,15 +58,14 @@ struct load_balancer_state {
   detail::stable_map<std::pair<uint64_t, uint64_t>, uint64_t> metrics_id_map;
 
   auto write(table_slice events) -> caf::result<void> {
-    // TODO: If `events` is too big, we could consider splitting it up.
     TENZIR_ASSERT(events.rows() > 0);
     if (not reads.empty()) {
-      TENZIR_WARN("writing {} events directly", events.rows());
+      TENZIR_VERBOSE("writing {} events directly", events.rows());
       reads.front().deliver(std::move(events));
       reads.pop_front();
       return {};
     }
-    TENZIR_WARN("writing {} events delayed", events.rows());
+    TENZIR_VERBOSE("writing {} events delayed", events.rows());
     writes.emplace_back(std::move(events), self->make_response_promise<void>());
     return writes.back().second;
   }
@@ -59,7 +73,7 @@ struct load_balancer_state {
   auto read() -> caf::result<table_slice> {
     if (not writes.empty()) {
       auto events = std::move(writes.front().first);
-      TENZIR_WARN("reading {} events directly", events.rows());
+      TENZIR_VERBOSE("reading {} events directly", events.rows());
       writes.front().second.deliver();
       writes.pop_front();
       return events;
@@ -67,17 +81,21 @@ struct load_balancer_state {
     if (finished) {
       return table_slice{};
     }
-    TENZIR_WARN("reading events delayed");
+    TENZIR_VERBOSE("reading events delayed");
     reads.emplace_back(self->make_response_promise<table_slice>());
     return reads.back();
   }
 
   void finish() {
-    TENZIR_WARN("marking load_balancer as finished");
+    if (finished) {
+      return;
+    }
     finished = true;
+    TENZIR_VERBOSE("load_balancer finished and marks {} outstanding reads as "
+                   "done",
+                   reads.size());
     // If there are any outstanding reads, we know that there are no remaining
     // writes. Thus it's fine to mark all outstanding reads as done.
-    TENZIR_WARN("marking {} outstanding reads as done", reads.size());
     for (auto& read : reads) {
       read.deliver(table_slice{});
     }
@@ -99,7 +117,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    TENZIR_WARN("beginning execution of load_balance_source");
+    TENZIR_VERBOSE("beginning execution of load_balance_source");
     TENZIR_ASSERT(load_balancer_);
     while (true) {
       auto result = table_slice{};
@@ -112,18 +130,17 @@ public:
             ctrl.set_waiting(false);
           },
           [&](const caf::error& err) {
-            // TODO
-            TENZIR_WARN("read failed: {}", err);
+            // This should never happen.
             diagnostic::error("load balancer read failed: {}", err)
               .emit(ctrl.diagnostics());
           });
       co_yield {};
       // We signal completion with an empty table slice.
       if (result.rows() == 0) {
-        TENZIR_WARN("load_balance_source detected end");
+        TENZIR_VERBOSE("load_balance_source detected end");
         break;
       }
-      TENZIR_WARN("load_balance_source read {} events", result.rows());
+      TENZIR_VERBOSE("load_balance_source read {} events", result.rows());
       co_yield std::move(result);
     }
   }
@@ -142,6 +159,7 @@ private:
   load_balancer_actor load_balancer_;
 };
 
+/// Inserts the result of a function call if the key does not exist yet.
 template <class Map, class Key, class F>
 auto get_or_compute(Map& map, Key&& key, F&& f) -> decltype(auto) {
   class implicit_caller {
@@ -166,9 +184,9 @@ auto make_load_balancer(
   std::vector<pipeline> pipes, shared_diagnostic_handler diagnostics,
   metrics_receiver_actor metrics, uint64_t operator_index, bool is_hidden,
   const node_actor& node) -> load_balancer_actor::behavior_type {
-  TENZIR_WARN("spawning load balancer");
+  TENZIR_VERBOSE("spawning load balancer");
   self->attach_functor([] {
-    TENZIR_WARN("destroyed load balancer");
+    TENZIR_VERBOSE("destroyed load balancer");
   });
   self->state.self = self;
   self->state.diagnostics = std::move(diagnostics);
@@ -178,40 +196,33 @@ auto make_load_balancer(
   for (auto& pipe : pipes) {
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
-    // TODO: Link? Monitor?
-    TENZIR_WARN("spawning inner executor");
+    TENZIR_VERBOSE("spawning inner executor");
     auto executor = self->spawn<caf::monitored>(
       pipeline_executor, pipe, self, self, node, has_terminal, is_hidden);
     executor->attach_functor([] {
-      TENZIR_WARN("inner executor terminated");
+      TENZIR_VERBOSE("inner executor terminated");
     });
     self->request(executor, caf::infinite, atom::start_v)
       .then(
         []() {
-          // TODO
-          TENZIR_WARN("started pipeline executor successfully");
+          TENZIR_VERBOSE("started inner pipeline successfully");
         },
-        [](const caf::error& err) {
-          // TODO: This should probably forward the diagnostic.
-          TENZIR_WARN("failed to start pipeline executor: {}", err);
+        [self](const caf::error& err) {
+          // This error should be enough to cause the outer pipeline to get
+          // cleaned up.
+          diagnostic::error(err).emit(self->state.diagnostics);
         });
     self->state.executors.push_back(std::move(executor));
   }
   self->set_exit_handler([self](caf::exit_msg& msg) {
-    // TODO: Duplicate exit message.
     if (msg.reason != caf::exit_reason::user_shutdown) {
-      // Unexpected error.
+      // This should never happen.
       TENZIR_WARN("load balancer got unexpected exit msg: {}", msg.reason);
       self->quit(msg.reason);
+      return;
     }
-    // Let sources know that we are done.
+    // Let the sources know we are done and wait for their termination.
     self->state.finish();
-    // Wait for the inner executors to terminate.
-    // Or is this the wrong place?
-    // We want to wait with the termination of the outer executor.
-    // How can we enforce that? It probably assumes that it's done when the
-    // generator returns. Or is it only after destruction of the generator?
-    // self->quit(msg.reason);
   });
   self->set_down_handler([self](const caf::down_msg& msg) {
     auto it = std::ranges::find(self->state.executors, msg.source,
@@ -224,7 +235,7 @@ auto make_load_balancer(
     }
   });
   return {
-    [self](atom::write, table_slice events) -> caf::result<void> {
+    [self](atom::write, table_slice& events) -> caf::result<void> {
       return self->state.write(std::move(events));
     },
     [self](atom::read) -> caf::result<table_slice> {
@@ -232,12 +243,10 @@ auto make_load_balancer(
     },
     [self](uint64_t op_index, uint64_t metric_index,
            type& schema) -> caf::result<void> {
-      // TODO: Why does this allocate twice?
       auto id = get_or_compute(
         self->state.metrics_id_map, std::pair{op_index, metric_index}, [&] {
-          TENZIR_WARN(
-            "load_balancer allocates new metrics for {}/{} with {} ({})",
-            op_index, metric_index, schema, schema.make_fingerprint());
+          TENZIR_VERBOSE("load_balancer allocates metrics id for {}/{}",
+                         op_index, metric_index);
           auto id = self->state.next_metrics_id;
           self->state.next_metrics_id += 1;
           return id;
@@ -281,7 +290,21 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    // TODO: Re-batch before?
+    // The exit handling strategy is a bit of a mess here. We potentially have
+    // three sources of exit messages:
+    // 1) Spawning the actor with `caf::linked`, which is bidirectional. Exit
+    //    messages are exchanges when the load balancer dies or after the
+    //    execution node has terminated.
+    // 2) Wrapping the actor with `scope_linked`, which sends an exit message at
+    //    the end of the scope. This can thus happen before the previous one and
+    //    ensures that we still have access to all resources. It is also called
+    //    when we destroy the generator from the outside.
+    // 3) At the end of the generator, an explicit exit messages is sent we wait
+    //    until the actor terminates. This is important because we only want to
+    //    return from the generator (which signals completion) when all
+    //    subpipelines are fully completed.
+    // In case of subtle problems around the shutdown logic here, this could
+    // potentially be simplified.
     auto load_balancer = scope_linked{ctrl.self().spawn<caf::linked>(
       make_load_balancer, pipes_, ctrl.shared_diagnostics(),
       ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
@@ -291,27 +314,24 @@ public:
         co_yield {};
         continue;
       }
-      // TODO: Is this form of back pressure what we want?
       ctrl.set_waiting(true);
       ctrl.self()
         .request(load_balancer.get(), caf::infinite, atom::write_v,
                  std::move(slice))
         .then(
           [&]() {
-            TENZIR_WARN("successfully sent events to load_balancer");
+            TENZIR_VERBOSE("successfully sent events to load_balancer");
             ctrl.set_waiting(false);
           },
           [&](const caf::error& err) {
+            // This should never happen.
             diagnostic::error("failed to write data to load balancer")
               .note("reason: {}", err)
               .emit(ctrl.diagnostics());
           });
       co_yield {};
     }
-    // TODO: What if the generator is destroyed from the outside?
-    // Then we will only call destructors. These destructors should make sure
-    // that the inner executors terminate.
-    TENZIR_WARN("waiting for termination of load_balancer");
+    TENZIR_VERBOSE("waiting for termination of load_balancer");
     ctrl.set_waiting(true);
     auto self = caf::actor_cast<caf::actor>(&ctrl.self());
     load_balancer.get()->attach_functor([self, &ctrl] {
@@ -321,7 +341,7 @@ public:
     });
     caf::anon_send_exit(load_balancer.get(), caf::exit_reason::user_shutdown);
     co_yield {};
-    TENZIR_WARN("load_balance terminated");
+    TENZIR_VERBOSE("load_balance terminated");
   }
 
   auto optimize(expression const& filter, event_order order) const
