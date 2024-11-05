@@ -804,6 +804,9 @@ jobs:
           - name: AMQP
             target: amqp
             path: plugins/amqp
+          - name: Azure Blob Storage
+            target: azure-blob-storage
+            path: plugins/azure-blob-storage
           - name: Azure Log Analytics
             target: azure-log-analytics
             path: contrib/tenzir-plugins/azure-log-analytics
@@ -813,6 +816,13 @@ jobs:
           - name: Context
             target: context
             path: contrib/tenzir-plugins/context
+          # We would need to build the google-cloud-cpp library from source
+          # here, which takes too much time for everyday CI runs, so until that
+          # is available in a prebuilt form we do not build it in CI outside of
+          # Nix and the Docker image.
+          # - name: Google Cloud Pub/Sub
+          #   target: google-cloud-pubsub
+          #   path: plugins/google-cloud-pubsub
           - name: Kafka
             target: kafka
             path: plugins/kafka
@@ -841,12 +851,15 @@ jobs:
           - name: Sigma
             target: sigma
             path: plugins/sigma
+          - name: Splunk
+            target: to_splunk
+            path: contrib/tenzir-plugins/to_splunk
           - name: VAST
             target: vast
             path: contrib/tenzir-plugins/vast
           - name: Velociraptor
-            target: velociraptor
-            path: plugins/velociraptor
+            target: from_velociraptor
+            path: plugins/from_velociraptor
           - name: Web
             target: web
             path: plugins/web

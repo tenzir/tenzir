@@ -1,16 +1,16 @@
-# azure_log_analytics
+# to_azure_log_analytics
 
 Sends events via the [Microsoft Azure Logs Ingestion API][api].
 
 [api]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview
 
 ```tql
-azure_log_analytics tenant_id=str, client_id=str, client_secret=str, dce=str, dcr=str, table=str
+to_azure_log_analytics tenant_id=str, client_id=str, client_secret=str, dce=str, dcr=str, table=str
 ```
 
 ## Description
 
-The `azure_log_analytics` operator makes it possible to upload events to
+The `to_azure_log_analytics` operator makes it possible to upload events to
 [supported tables][supported] or to [custom tables][custom] in Microsoft Azure.
 
 [supported]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview#supported-tables
@@ -52,7 +52,7 @@ The table to upload events to.
 ```tql
 export
 where @name == "custom.mydata"
-azure_log_analytics tenant_id="00a00a00-0a00-0a00-00aa-000aa0a0a000",
+to_azure_log_analytics tenant_id="00a00a00-0a00-0a00-00aa-000aa0a0a000",
   client_id="000a00a0-0aa0-00a0-0000-00a000a000a0",
   client_secret="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   dce="https://my-stuff-a0a0.westeurope-1.ingest.monitor.azure.com",

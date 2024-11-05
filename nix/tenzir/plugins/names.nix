@@ -5,6 +5,6 @@
   "packages"
   "pipeline-manager"
   "platform"
-  "splunk"
+  "to_splunk"
   "vast"
 ]

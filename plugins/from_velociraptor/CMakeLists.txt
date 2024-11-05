@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19...3.28 FATAL_ERROR)
 
 project(
-  velociraptor
+  from_velociraptor
   DESCRIPTION "velociraptor plugin for Tenzir"
   LANGUAGES CXX)
 
@@ -10,7 +10,7 @@ include(CTest)
 find_package(Tenzir REQUIRED)
 
 TenzirRegisterPlugin(
-  TARGET velociraptor
+  TARGET from_velociraptor
   ENTRYPOINT src/plugin.cpp
   SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
@@ -60,7 +60,7 @@ protobuf_generate(
 set_source_files_properties(${PROTO_GENERATED_FILES}
                             PROPERTIES SKIP_UNITY_BUILD_INCLUSION on)
 
-target_include_directories(velociraptor SYSTEM
+target_include_directories(from_velociraptor SYSTEM
                            PUBLIC "$<BUILD_INTERFACE:${PROTO_BINARY_DIR}>")
 
-target_link_libraries(velociraptor PRIVATE velociraptor-proto)
+target_link_libraries(from_velociraptor PRIVATE velociraptor-proto)

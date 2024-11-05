@@ -279,14 +279,14 @@ RUN cmake -S plugins/sqs -B build-sqs -G Ninja \
       DESTDIR=/plugin/sqs cmake --install build-sqs --strip --component Runtime && \
       rm -rf build-build-sqs
 
-FROM plugins-source AS velociraptor-plugin
+FROM plugins-source AS from_velociraptor-plugin
 
-RUN cmake -S plugins/velociraptor -B build-velociraptor -G Ninja \
+RUN cmake -S plugins/from_velociraptor -B build-from_velociraptor -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-velociraptor --parallel && \
-      cmake --build build-velociraptor --target integration && \
-      DESTDIR=/plugin/velociraptor cmake --install build-velociraptor --strip --component Runtime && \
-      rm -rf build-build-velociraptor
+      cmake --build build-from_velociraptor --parallel && \
+      cmake --build build-from_velociraptor --target integration && \
+      DESTDIR=/plugin/from_velociraptor cmake --install build-from_velociraptor --strip --component Runtime && \
+      rm -rf build-build-from_velociraptor
 
 FROM plugins-source AS web-plugin
 
@@ -372,6 +372,15 @@ RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime && \
       rm -rf build-platform
 
+FROM plugins-source AS to_splunk-plugin
+
+RUN cmake -S contrib/tenzir-plugins/to_splunk -B build-to_splunk -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-to_splunk --parallel && \
+      cmake --build build-to_splunk --target integration && \
+      DESTDIR=/plugin/to_splunk cmake --install build-to_splunk --strip --component Runtime && \
+      rm -rf build-to_splunk
+
 FROM plugins-source AS vast-plugin
 
 RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
@@ -395,7 +404,7 @@ COPY --from=nic-plugin --chown=tenzir:tenzir /plugin/nic /
 COPY --from=s3-plugin --chown=tenzir:tenzir /plugin/s3 /
 COPY --from=sigma-plugin --chown=tenzir:tenzir /plugin/sigma /
 COPY --from=sqs-plugin --chown=tenzir:tenzir /plugin/sqs /
-COPY --from=velociraptor-plugin --chown=tenzir:tenzir /plugin/velociraptor /
+COPY --from=from_velociraptor-plugin --chown=tenzir:tenzir /plugin/from_velociraptor /
 COPY --from=web-plugin --chown=tenzir:tenzir /plugin/web /
 COPY --from=yara-plugin --chown=tenzir:tenzir /plugin/yara /
 COPY --from=zmq-plugin --chown=tenzir:tenzir /plugin/zmq /
@@ -406,6 +415,7 @@ COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
+COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 # -- tenzir-node-ce ------------------------------------------------------------
