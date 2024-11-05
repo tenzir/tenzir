@@ -1,2 +1,1 @@
-The new `load_balance` operator can be used to distribute events over a set of
-subpipelines.
+The new `load_balance` operator distributes events over a set of subpipelines.
