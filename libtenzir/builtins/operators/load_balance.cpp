@@ -334,12 +334,12 @@ public:
     }
     TENZIR_VERBOSE("waiting for termination of load_balancer");
     ctrl.set_waiting(true);
-    auto self = caf::actor_cast<caf::actor>(&ctrl.self());
-    load_balancer.get()->attach_functor([self, &ctrl] {
-      caf::anon_send(self, caf::make_action([&ctrl] {
-                       ctrl.set_waiting(false);
-                     }));
-    });
+    load_balancer.get()->attach_functor(
+      [self = caf::actor_cast<caf::actor>(&ctrl.self()), &ctrl] {
+        caf::anon_send(self, caf::make_action([&ctrl] {
+                         ctrl.set_waiting(false);
+                       }));
+      });
     caf::anon_send_exit(load_balancer.get(), caf::exit_reason::user_shutdown);
     co_yield {};
     TENZIR_VERBOSE("load_balance terminated");
