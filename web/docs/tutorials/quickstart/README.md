@@ -43,13 +43,13 @@ The easiest way to get started with Tenzir is using our cloud demo setup:
 Now that you got a first impression of Tenzir, [onboard your own
 node](installation/deploy-a-node.md) and dive deeper by
 
+- understanding [how Tenzir works](how-tenzir-works/README.md)
+  other systems,
 - following the [user guides](installation.md) with step-by-step tutorials of
   common use cases,
 - learning more about the [language](language.md), [operators](operators.md),
   [connectors](connectors.md), [formats](formats.md), the [data
-  model](data-model.md), and
-- understanding [why](why-tenzir.md) we built Tenzir and how it compares to
-  other systems.
+  model](data-model.md).
 
 Don't forget that we're here to help! If you have any questions, swing by our
 friendly [community Discord](/discord) or open a [GitHub

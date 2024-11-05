@@ -2,14 +2,22 @@
 
 ### Tenzir is the data pipeline engine for security teams
 
-If you need to collect, parse, shape, normalize, aggregate, store, query, and
-route security telemetry data at scale, you'll love how our pipelines manage
-your dataflows. Tenzir makes it easy to quickly onboard and store data from
-numerous sources, reduce data volumes to optimize cloud and data costs, and
-execute detections and run analytics in-stream.
+![Before & After](before-and-after-tenzir-detailed.svg)
 
-Whether your architecture is a centralized **security data lake** or a
-decentralized **security data fabric**—we got you covered.
+**Why Tenzir?** Tenzir decouples data acquisition from downstream analytics,
+giving you full control over your data flows. By using Tenzir as your data
+pipeline, you can streamline and trim your security events down to the essence,
+significantly reducing SIEM costs.
+
+**Building a security data lake?** Tenzir serves as your ETL layer, delivering
+data as your lake requires it. Our growing [open-source library of
+packages](https://github.com/tenzir/library) includes turn-key integrations for
+popular security products and mappings to [OCSF](https://schema.ocsf.io). Don't
+use your precious security resources to do mundane data plumbing. We got this.
+
+**Join the community!** Tenzir is more than just software: it's a
+community-driven open-source project. Contribute, collaborate, and
+[join](/discord) our mission to make working with security simple and enjoyable!
 
 <div class="container">
   <div class="row">
@@ -50,8 +58,8 @@ decentralized **security data fabric**—we got you covered.
 
 ## Documentation Types
 
-Our documentation site consists of four different types of materials, each of
-which addresses a specific user need.
+Our documentation consists of four different types of materials, each of which
+addresses a specific user need.
 
 ![Docs Structure](docs-structure.excalidraw.svg)
 
