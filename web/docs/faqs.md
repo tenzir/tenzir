@@ -27,13 +27,13 @@ There exist three moving parts:
    multiple pipelines and offers additional features, such as contexts for
    enrichment and an indexed storage engine.
 3. **Platform**: The platform is the control plane for managing nodes and offers
-   a web-based interface. We host one instance at
-   [app.tenzir.com](https://app.tenzir.com).
+   a web-based interface.
 
 You can either [build the open source version](development/build-from-source.md)
 yourself and [add your own plugins](architecture/plugins.md), or use our
 compiled binary packages that include the command line tool and the node. We
-offer the platform as Docker Compose files.
+offer the platform as Docker Compose files. We host one platform instance at
+[app.tenzir.com](https://app.tenzir.com).
 
 Tenzir comes in severals editions, including a free [Community
 Edition](https://tenzir.com/pricing). If you have any questions, don't hesitate
