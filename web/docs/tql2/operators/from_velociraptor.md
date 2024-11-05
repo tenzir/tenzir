@@ -1,15 +1,15 @@
-# velociraptor
+# from_velociraptor
 
 Submits VQL to a Velociraptor server and returns the response as events.
 
 ```tql
-velociraptor [request_name=str, org_id=str, max_rows=int,
+to_velociraptor [request_name=str, org_id=str, max_rows=int,
               subscribe=str, query=str, max_wait=duration, profile=str]
 ```
 
 ## Description
 
-The `velociraptor` source operator provides a request-response interface to a
+The `from_velociraptor` source operator provides a request-response interface to a
 [Velociraptor](https://docs.velociraptor.app) server:
 
 ![Velociraptor](velociraptor.excalidraw.svg)
@@ -21,9 +21,9 @@ Velociraptor server. The client request contains a query written in the
 
 [vql]: https://docs.velociraptor.app/docs/vql
 
-You can either send a raw VQL query via `velociraptor query "<vql>"` to a
+You can either send a raw VQL query via `from_velociraptor query "<vql>"` to a
 server and processs the response, or hook into a continuous feed of artifacts
-via `velociraptor subscribe <artifact>`. Whenever a hunt runs that contains
+via `from_velociraptor subscribe <artifact>`. Whenever a hunt runs that contains
 this artifact, the server will forward it to the pipeline and emit the artifact
 payload in the response field `HuntResults`.
 
@@ -118,11 +118,11 @@ If profiles are defined, the operator defaults to the first profile.
 ### Show all processes
 
 ```tql
-velociraptor query="select * from pslist()"
+from_velociraptor query="select * from pslist()"
 ```
 
 ### Subscribe to a hunt flow containing the `Windows` artifact
 
 ```tql
-velociraptor subscribe="Windows"
+from_velociraptor subscribe="Windows"
 ```

@@ -369,7 +369,7 @@ public:
     auto max_wait = std::optional<located<duration>>{};
     auto query = std::optional<located<std::string>>{};
     auto profile = std::optional<located<std::string>>{};
-    argument_parser2::operator_("velociraptor")
+    argument_parser2::operator_("from_velociraptor")
       .add("request_name", request_name)
       .add("org_id", org_id)
       .add("query", query)
@@ -570,6 +570,10 @@ public:
   }
 
   auto name() const -> std::string override {
+    return "from_velociraptor";
+  }
+
+  auto operator_name() const -> std::string override {
     return "velociraptor";
   }
 
