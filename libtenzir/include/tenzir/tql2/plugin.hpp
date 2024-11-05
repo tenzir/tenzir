@@ -192,6 +192,18 @@ public:
     }
   }
 
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto internal() const -> bool override {
+    return loader_.internal();
+  }
+
   auto
   optimize(expression const&, event_order) const -> optimize_result override {
     return do_not_optimize(*this);
@@ -239,7 +251,7 @@ public:
   }
 
   auto detached() const -> bool override {
-    return true; // XXX: Should this be true for all adapters?
+    return true;
   }
 
   auto location() const -> operator_location override {
