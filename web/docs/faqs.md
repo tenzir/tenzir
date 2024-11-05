@@ -4,43 +4,51 @@ This page provides answers to frequently asked questions (FAQs) about Tenzir.
 
 ## What is Tenzir?
 
-Tenzir is a platform that pioneers open-source security data pipelines.
+Tenzir is the data pipeline engine for security teams, enabling you to
+collect, parse, shape, normalize, aggregate, route, store, and query your
+security telemetry at ease.
 
-Tenzir is also the name of the Germany-based startup behind the product.
+Tenzir is also the name of the startup behind the product.
 
 ## What part of Tenzir is open and what part is closed source?
 
-The diagram below illustrates the high-level components, indicating what parts
-are *open* and what are *closed* source:
+To create a healthy open core business with a thriving open source foundation,
+we aim to find the right balance between enabling open source enthusiast whilst
+offering a commercial package for those seeking a turn-key solution:
 
-![Open source vs. closed source](open-vs-closed-source.excalidraw.svg)
+![Open source vs. closed source](open-vs-closed-source.svg)
 
-The majority of code is open source and available at under a permissive BSD
-3-clause licence, available at [GitHub](https://github.com/tenzir/tenzir). This
-code implements the `tenzir` and `tenzir-node` [command line
-tools](configuration.md) that execute pipelines and store data. A flexible
-[plugin infrastructure](architecture/plugins.md) allows for enhancing the
-open-source core with closed-source plugins.
+There exist three moving parts:
 
-The Tenzir stack also consists of a cloud platform and web app, accessible via
-[app.tenzir.com](https://app.tenzir.com). Both of these components are not
-openly available. The platform is the *control plane* that manages the fleet of
-nodes and their pipelines, whereas the nodes are the *data plane* for compute
-and storage.
+1. **Executor**: The pipeline executor is open source and available at under a
+   permissive BSD 3-clause licence at
+   [GitHub](https://github.com/tenzir/tenzir). The `tenzir`
+   command line tool is the primary interface.
+2. **Node**: The node makes pipeline management easy. A node orchestrates
+   multiple pipelines and offers additional features, such as contexts for
+   enrichment and an indexed storage engine.
+3. **Platform**: The platform is the control plane for managing nodes and offers
+   a web-based interface. We host one instance at
+   [app.tenzir.com](https://app.tenzir.com).
 
-We offer the [Community Edition](https://tenzir.com/pricing) as a binary package
-that consists of all open-source plugins, plus our own additional closed source
-plugins, such as a plugin that connects the nodes to our platform.
+You can either [build the open source version](development/build-from-source.md)
+yourself and [add your own plugins](architecture/plugins.md), or use our
+compiled binary packages that include the command line tool and the node. We
+offer the platform as Docker Compose files.
+
+Tenzir comes in severals editions, including a free [Community
+Edition](https://tenzir.com/pricing). If you have any questions, don't hesitate
+to [reach out](https://tenzir.com/contact) what best suits your needs.
 
 ## Can Tenzir see my data?
 
-In theory *yes*, in practice *no*. Let us explain.
+*No*, but let us explain.
 
-A Tenzir deployment consists of *nodes* that you manage, and a *platform*. The
-*app* runs in your browser to access the platform. All computation and storage
-takes place only at your nodes. The platform acts as rendezvous point that
-connects two TLS-encrypted channels, one from the node to the platform, and one
-from the browser to the platform:
+A Tenzir deployment consists of *nodes* that you manage, and a *platform*
+available as SaaS from us or operated by you. The *app* runs in your browser to
+access the platform. All computation and storage takes place at your nodes. The
+platform acts as rendezvous point that connects two TLS-encrypted channels, one
+from the node to the platform, and one from the browser to the platform:
 
 ![Platform Connections](platform-connections.excalidraw.svg)
 
@@ -63,21 +71,24 @@ with the [Sovereign Edition](https://tenzir.com/pricing).
 ## Does Tenzir run on-premise?
 
 Yes, Tenzir can run on premise and support fully air-gapped environments. The
-[Sovereign Edition](https://tenzir.com/pricing) allows you to deploy the entire
-platform in a dockerized environment, such as Docker Compose.
+[Sovereign Edition](https://tenzir.com/pricing) allows you to [deploy the entire
+platform](installation/deploy-the-platform.md) in a dockerized environment, such
+as Docker Compose.
 
-The [Professional Edition](https://tenzir.com/pricing) and [Enterprise
+The [Community Edition](https://tenzir.com/pricing), [Professional
+Edition](https://tenzir.com/pricing) and [Enterprise
 Edition](https://tenzir.com/pricing) are backed by a Tenzir-hosted instance of
 the platform in the public cloud (AWS in Europe):
 
-![Tenzir Moving Parts](platform-and-nodes.excalidraw.svg)
+Read more on [how Tenzir works](how-tenzir-works/README.md) to understand the
+key differences.
 
 ## Does Tenzir offer cloud-native nodes?
 
 Tenzir currently does not offer cloud-hosted nodes. You can only run nodes in
 your own environment, including your cloud environment.
 
-However, we offer a cloud-native *demo* node that you can deploy as part of
+However, we offer a cloud-native *demo node* that you can deploy as part of
 every account.
 
 ## Why did you invent yet another query language? Why not SQL?
