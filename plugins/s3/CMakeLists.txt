@@ -17,4 +17,6 @@ find_package(Tenzir REQUIRED)
 
 TenzirRegisterPlugin(
   TARGET s3
-  ENTRYPOINT src/plugin.cpp)
+  ENTRYPOINT src/plugin.cpp
+  INCLUDE_DIRECTORIES include
+  BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")

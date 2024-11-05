@@ -6,34 +6,18 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
-#include <tenzir/location.hpp>
-#include <tenzir/plugin.hpp>
-
-#include <arrow/filesystem/filesystem.h>
-#include <arrow/filesystem/s3fs.h>
-#include <arrow/filesystem/type_fwd.h>
-#include <arrow/io/api.h>
-#include <arrow/util/uri.h>
-#include <fmt/core.h>
+#include <tenzir/tql2/plugin.hpp>
 
 #include "operator.hpp"
 
 namespace tenzir::plugins::s3 {
 
-namespace {
-
-class plugin final : public virtual loader_plugin<s3_loader>,
-                     public virtual saver_plugin<s3_saver> {
+template <template <class, detail::string_literal = ""> class Adapter,
+          class Plugin>
+class plugin2 final : public virtual operator_plugin2<Adapter<Plugin>> {
 public:
-  ~plugin() noexcept override {
-    const auto finalized = arrow::fs::FinalizeS3();
-    TENZIR_ASSERT(finalized.ok(), finalized.ToString().c_str());
-  }
-
   auto initialize(const record& plugin_config,
-                  const record& global_config) -> caf::error override {
-    (void)global_config;
+                  const record&) -> caf::error override {
     auto initialized = arrow::fs::EnsureS3Initialized();
     if (not initialized.ok()) {
       return caf::make_error(ec::filesystem_error,
@@ -72,45 +56,29 @@ public:
     return {};
   }
 
-  auto parse_loader(parser_interface& p) const
-    -> std::unique_ptr<plugin_loader> override {
-    auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
+  auto make(operator_factory_plugin::invocation inv,
+            session ctx) const -> failure_or<operator_ptr> override {
     auto args = s3_args{};
-    parser.add("--anonymous", args.anonymous);
-    parser.add(args.uri, "<uri>");
-    parser.parse(p);
+    TRY(argument_parser2::operator_(this->name())
+          .add("anonymous", args.anonymous)
+          .add(args.uri, "<uri>")
+          .parse(inv, ctx));
     // TODO: URI parser.
     if (not args.uri.inner.starts_with("s3://")) {
       args.uri.inner = fmt::format("s3://{}", args.uri.inner);
     }
     args.config = config_;
-    return std::make_unique<s3_loader>(std::move(args));
+    return std::make_unique<Adapter<Plugin>>(Plugin{std::move(args)});
   }
 
-  auto parse_saver(parser_interface& p) const
-    -> std::unique_ptr<plugin_saver> override {
-    auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
-    auto args = s3_args{};
-    parser.add("--anonymous", args.anonymous);
-    parser.add(args.uri, "<uri>");
-    parser.parse(p);
-    // TODO: URI parser.
-    if (not args.uri.inner.starts_with("s3://")) {
-      args.uri.inner = fmt::format("s3://{}", args.uri.inner);
-    }
-    args.config = config_;
-    return std::make_unique<s3_saver>(std::move(args));
-  }
-
-  auto name() const -> std::string override {
-    return "s3";
-  }
-
+private:
   std::optional<s3_config> config_ = {};
 };
 
-} // namespace
+using load_plugin = plugin2<loader_adapter, s3_loader>;
+using save_plugin = plugin2<saver_adapter, s3_saver>;
+
 } // namespace tenzir::plugins::s3
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::s3::plugin)
+
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::s3::load_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::s3::save_plugin)
