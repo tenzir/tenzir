@@ -234,6 +234,7 @@ auto argument_parser2::parse(const ast::entity& self,
         if (positional_idx == positional_.size()) {
           emit(diagnostic::error("did not expect more positional arguments")
                  .primary(*arg));
+          return;
         }
         positional_[positional_idx].set.match(
           [&](setter<located<pipeline>>& set) {
