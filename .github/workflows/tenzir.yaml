@@ -816,9 +816,13 @@ jobs:
           - name: Context
             target: context
             path: contrib/tenzir-plugins/context
-          - name: Google Cloud PubSub
-            target: google-cloud-pubsub
-            path: plugins/google-cloud-pubsub
+          # We would need to build the google-cloud-cpp library from source
+          # here, which takes too much time for everyday CI runs, so until that
+          # is available in a prebuilt form we do not build it in CI outside of
+          # Nix and the Docker image.
+          # - name: Google Cloud Pub/Sub
+          #   target: google-cloud-pubsub
+          #   path: plugins/google-cloud-pubsub
           - name: Kafka
             target: kafka
             path: plugins/kafka
