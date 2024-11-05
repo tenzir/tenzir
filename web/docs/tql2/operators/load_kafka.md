@@ -4,7 +4,6 @@ Loads a byte stream from a Apache Kafka topic.
 
 ```tql
 load_kafka [topic=str, count=int, exit=bool, offset=str, options=record]
-
 ```
 
 ## Description
@@ -13,10 +12,12 @@ The `load_kafka` operator reads bytes from a Kafka topic.
 
 The implementation uses the official [librdkafka][librdkafka] from Confluent and
 supports all [configuration options][librdkafka-options]. You can specify them
-via `options` parameter as `{key: value, ...}`. We recommend putting your Kafka options into the
-dedicated `kafka.yaml` [plugin config file](../../configuration.md#load-plugins).
-This way you can configure your all your environment-specific options once,
-independent of the per-connector invocations.
+via `options` parameter as `{key: value, ...}`.
+
+We recommend putting your Kafka options into the dedicated `kafka.yaml` [plugin
+config file](../../configuration.md#load-plugins). This way you can configure
+your all your environment-specific options once, independent of the
+per-connector invocations.
 
 [librdkafka]: https://github.com/confluentinc/librdkafka
 [librdkafka-options]: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
@@ -28,8 +29,6 @@ include them:
 - `bootstrap.servers`: `localhost`
 - `client.id`: `tenzir`
 - `group.id`: `tenzir`
-
-<!-- The default format for the `kafka` connector is `json`. -->
 
 ### `topic=str (optional)`
 
@@ -45,7 +44,7 @@ Exit successfully after having consumed `count` messages.
 
 Exit successfully after having received the last message.
 
-Without this option, the loader waits for new messages after having consumed the
+Without this option, the operator waits for new messages after having consumed the
 last one.
 
 ### `offset=str (optional)`
@@ -78,14 +77,14 @@ that they are indpendent of the `load_kafka` arguments.
 
 ## Examples
 
-Read 100 JSON messages from the topic `tenzir`:
+### Read 100 JSON messages from the topic `tenzir`
 
 ```tql
 load_kafka count=100
 read_json
 ```
 
-Read Zeek Streaming JSON logs from topic `zeek` starting at the beginning:
+### Read Zeek Streaming JSON logs starting at the beginning
 
 ```tql
 load_kafka topic="zeek", offset="beginning"

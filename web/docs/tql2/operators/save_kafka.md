@@ -4,7 +4,6 @@ Saves a byte stream to a Apache Kafka topic.
 
 ```tql
 save_kafka [topic=str, key=str, timestamp=time, options=record]
-
 ```
 
 ## Description
@@ -13,10 +12,12 @@ The `save_kafka` operator saves bytes to a Kafka topic.
 
 The implementation uses the official [librdkafka][librdkafka] from Confluent and
 supports all [configuration options][librdkafka-options]. You can specify them
-via `options` parameter as `{key: value, ...}`. We recommend putting your Kafka options into the
-dedicated `kafka.yaml` [plugin config file](../../configuration.md#load-plugins).
-This way you can configure your all your environment-specific options once,
-independent of the per-connector invocations.
+via `options` parameter as `{key: value, ...}`.
+
+We recommend putting your Kafka options into the dedicated `kafka.yaml` [plugin
+config file](../../configuration.md#load-plugins). This way you can configure
+your all your environment-specific options once, independent of the
+per-connector invocations.
 
 [librdkafka]: https://github.com/confluentinc/librdkafka
 [librdkafka-options]: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
@@ -28,9 +29,6 @@ include them:
 - `bootstrap.servers`: `localhost`
 - `client.id`: `tenzir`
 - `group.id`: `tenzir`
-
-<!-- Is still this true? -->
-<!-- The default format for the `kafka` connector is `json`. -->
 
 ### `topic=str (optional)`
 
@@ -61,7 +59,7 @@ that they are indpendent of the `save_kafka` arguments.
 
 ## Examples
 
-Write the Tenzir version to topic `tenzir` with timestamp from the past:
+### Write the Tenzir version to topic `tenzir` with timestamp from the past
 
 ```tql
 version
@@ -69,7 +67,7 @@ write_json
 save_kafka timestamp=1984-01-01
 ```
 
-Follow a CSV file and publish it to topic `data`:
+### Follow a CSV file and publish it to topic `data`
 
 ```tql
 load_file "/tmp/data.csv"
