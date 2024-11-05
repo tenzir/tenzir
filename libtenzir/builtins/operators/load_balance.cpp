@@ -19,17 +19,17 @@ namespace tenzir::plugins::load_balance {
 namespace {
 
 using load_balancer_actor = caf::typed_actor<
-  //
+  // Write events to a consumer pipeline, waiting for a read.
   auto(atom::write, table_slice events)->caf::result<void>,
-  //
+  // Read events, waiting for a write.
   auto(atom::read)->caf::result<table_slice>>
-  //
+  // Handle metrics of the nested pipelines.
   ::extend_with<metrics_receiver_actor>
-  //
+  // Handle diagnostics of the nested pipelines.
   ::extend_with<receiver_actor<diagnostic>>;
 
 struct load_balancer_state {
-  [[maybe_unused]] static constexpr auto name = "load-balance-host";
+  [[maybe_unused]] static constexpr auto name = "load-balancer";
 
   load_balancer_actor::pointer self{};
   shared_diagnostic_handler diagnostics;
@@ -41,6 +41,36 @@ struct load_balancer_state {
   uint64_t operator_index{};
   uint64_t next_metrics_id = 0;
   detail::stable_map<std::pair<uint64_t, uint64_t>, uint64_t> metrics_id_map;
+
+  auto write(table_slice events) -> caf::result<void> {
+    // TODO: If `events` is too big, we could consider splitting it up.
+    TENZIR_ASSERT(events.rows() > 0);
+    if (not reads.empty()) {
+      TENZIR_WARN("writing {} events directly", events.rows());
+      reads.front().deliver(std::move(events));
+      reads.pop_front();
+      return {};
+    }
+    TENZIR_WARN("writing {} events delayed", events.rows());
+    writes.emplace_back(std::move(events), self->make_response_promise<void>());
+    return writes.back().second;
+  }
+
+  auto read() -> caf::result<table_slice> {
+    if (not writes.empty()) {
+      auto events = std::move(writes.front().first);
+      TENZIR_WARN("reading {} events directly", events.rows());
+      writes.front().second.deliver();
+      writes.pop_front();
+      return events;
+    }
+    if (finished) {
+      return table_slice{};
+    }
+    TENZIR_WARN("reading events delayed");
+    reads.emplace_back(self->make_response_promise<table_slice>());
+    return reads.back();
+  }
 
   void finish() {
     TENZIR_WARN("marking load_balancer as finished");
@@ -168,6 +198,7 @@ auto make_load_balancer(
     self->state.executors.push_back(std::move(executor));
   }
   self->set_exit_handler([self](caf::exit_msg& msg) {
+    // TODO: Duplicate exit message.
     if (msg.reason != caf::exit_reason::user_shutdown) {
       // Unexpected error.
       TENZIR_WARN("load balancer got unexpected exit msg: {}", msg.reason);
@@ -188,40 +219,16 @@ auto make_load_balancer(
     TENZIR_ASSERT(it != self->state.executors.end());
     self->state.executors.erase(it);
     // TODO: What if not finished?
-    if (self->state.finished) {
+    if (self->state.executors.empty() and self->state.finished) {
       self->quit();
     }
   });
   return {
     [self](atom::write, table_slice events) -> caf::result<void> {
-      // TODO: If `events` is too big, we could consider splitting it up.
-      TENZIR_ASSERT(events.rows() > 0);
-      if (not self->state.reads.empty()) {
-        TENZIR_WARN("writing {} events directly", events.rows());
-        self->state.reads.front().deliver(std::move(events));
-        self->state.reads.pop_front();
-        return {};
-      }
-      TENZIR_WARN("writing {} events delayed", events.rows());
-      self->state.writes.emplace_back(std::move(events),
-                                      self->make_response_promise<void>());
-      return self->state.writes.back().second;
+      return self->state.write(std::move(events));
     },
     [self](atom::read) -> caf::result<table_slice> {
-      if (not self->state.writes.empty()) {
-        auto events = std::move(self->state.writes.front().first);
-        TENZIR_WARN("reading {} events directly", events.rows());
-        self->state.writes.front().second.deliver();
-        self->state.writes.pop_front();
-        return events;
-      }
-      if (self->state.finished) {
-        return table_slice{};
-      }
-      TENZIR_WARN("reading events delayed");
-      self->state.reads.emplace_back(
-        self->make_response_promise<table_slice>());
-      return self->state.reads.back();
+      return self->state.read();
     },
     [self](uint64_t op_index, uint64_t metric_index,
            type& schema) -> caf::result<void> {
@@ -274,7 +281,6 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    // TODO: Handle empty list.
     // TODO: Re-batch before?
     auto load_balancer = scope_linked{ctrl.self().spawn<caf::linked>(
       make_load_balancer, pipes_, ctrl.shared_diagnostics(),
@@ -307,14 +313,15 @@ public:
     // that the inner executors terminate.
     TENZIR_WARN("waiting for termination of load_balancer");
     ctrl.set_waiting(true);
-    load_balancer.get()->attach_functor([&] {
-      // TODO: Do we know that `ctrl` still lives here?
-      ctrl.set_waiting(false);
+    auto self = caf::actor_cast<caf::actor>(&ctrl.self());
+    load_balancer.get()->attach_functor([self, &ctrl] {
+      caf::anon_send(self, caf::make_action([&ctrl] {
+                       ctrl.set_waiting(false);
+                     }));
     });
-    // TODO: Is this what we want?
     caf::anon_send_exit(load_balancer.get(), caf::exit_reason::user_shutdown);
     co_yield {};
-    TENZIR_WARN("load_balance (probably) terminated");
+    TENZIR_WARN("load_balance terminated");
   }
 
   auto optimize(expression const& filter, event_order order) const

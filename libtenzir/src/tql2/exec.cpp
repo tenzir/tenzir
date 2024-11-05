@@ -89,7 +89,12 @@ public:
   }
 
   void load_balance(ast::invocation& x) {
-    // TODO: Remove special casing.
+    // We currently have some special casing here for the `load_balance`
+    // operator. The `let_resolver` must somehow interact with operators that
+    // modify the constant environment. There are probably better ways to do
+    // this, but putting everything here was easy to do. We should reconsider
+    // this strategy when introducing a second operator that can modify the
+    // constant environment.
     auto docs = "https://docs.tenzir.com/tql2/operators/load_balance";
     auto usage = "load_balance over:list { … }";
     auto emit = [&](diagnostic_builder d) {
@@ -139,6 +144,11 @@ public:
         return type_kind::of<data_to_type_t<T>>;
       });
       emit(diagnostic::error("expected a list, got `{}`", got).primary(*var));
+      *it->second = std::move(original);
+      return;
+    }
+    if (entries->empty()) {
+      emit(diagnostic::error("expected list to not be empty").primary(*var));
       *it->second = std::move(original);
       return;
     }

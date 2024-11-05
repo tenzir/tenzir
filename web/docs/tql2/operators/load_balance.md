@@ -35,11 +35,17 @@ load_balance $cfg {
 ### Route data to multiple Splunk endpoints
 
 ```tql
-let $cfg = [192.168.0.30, 192.168.0.31]
+let $cfg = [{
+  ip: 192.168.0.30,
+  token: "example-token-1234",
+}, {
+  ip: 192.168.0.31,
+  token: "example-token-5678",
+}]
 
 subscribe "input"
 load_balance $cfg {
-  let $endpoint = str($cfg) + ":8080"
-  to_splunk $endpoint, hec_token="example-token-1234"
+  let $endpoint = str($cfg.ip) + ":8080"
+  to_splunk $endpoint, hec_token=$cfg.token
 }
 ```
