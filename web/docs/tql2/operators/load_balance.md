@@ -10,7 +10,7 @@ load_balance over:list { … }
 
 The `load_balance` operator spawns a nested pipeline for each element in the
 given list. Incoming events are distributed to exactly one of the nested
-pipelines.
+pipelines. This operator may reorder the event stream.
 
 ### `over: list`
 
