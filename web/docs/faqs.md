@@ -22,8 +22,7 @@ There exist three moving parts:
 
 1. **Executor**: The pipeline executor is open source and available under a
    permissive BSD 3-clause licence at
-   [GitHub](https://github.com/tenzir/tenzir). The `tenzir`
-   command line tool is the primary interface.
+   [GitHub](https://github.com/tenzir/tenzir).
 2. **Node**: The node makes pipeline management easy. A node orchestrates
    multiple pipelines and offers additional features, such as contexts for
    enrichment and an indexed storage engine.
