@@ -93,6 +93,11 @@ auto main(int argc, char** argv) -> int {
                           ? app_path
                           : app_path.substr(last_slash + 1);
   bool is_server = (app_name == "tenzir-node");
+  // Create log context as soon as we know the correct configuration.
+  auto log_context = create_log_context(is_server, *invocation, cfg.content);
+  if (!log_context) {
+    return EXIT_FAILURE;
+  }
   if (!is_server) {
     // Force the use of $TMPDIR as cache directory when running as a client.
     auto ec = std::error_code{};
@@ -110,11 +115,6 @@ auto main(int argc, char** argv) -> int {
                      "{}",
                      path, *previous_value);
     }
-  }
-  // Create log context as soon as we know the correct configuration.
-  auto log_context = create_log_context(is_server, *invocation, cfg.content);
-  if (!log_context) {
-    return EXIT_FAILURE;
   }
 #if TENZIR_POSIX
   struct rlimit rlimit {};
