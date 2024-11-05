@@ -71,7 +71,7 @@ struct loader_args {
   std::optional<located<size_t>> count;
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
-  std::optional<located<std::string>> options;
+  located<std::vector<std::pair<std::string, std::string>>> options;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
@@ -126,22 +126,14 @@ public:
       return {};
     }
     // Override configuration with arguments.
-    if (args_.options) {
-      std::vector<std::pair<std::string, std::string>> options;
-      if (!parsers::kvp_list(args_.options->inner, options)) {
-        ctrl.diagnostics().emit(
-          diagnostic::error("invalid list of key=value pairs")
-            .primary(args_.options->source)
-            .done());
-        return {};
-      }
-      for (const auto& [key, value] : options) {
+    if (not args_.options.inner.empty()) {
+      for (const auto& [key, value] : args_.options.inner) {
         TENZIR_INFO("providing librdkafka option {}={}", key, value);
         if (auto err = cfg->set(key, value)) {
           ctrl.diagnostics().emit(
             diagnostic::error("failed to set librdkafka option {}={}: {}", key,
                               value, err)
-              .primary(args_.options->source)
+              .primary(args_.options.source)
               .done());
           return {};
         }
@@ -217,7 +209,7 @@ struct saver_args {
   std::optional<located<std::string>> topic;
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
-  std::optional<located<std::string>> options;
+  located<std::vector<std::pair<std::string, std::string>>> options;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
@@ -244,19 +236,13 @@ public:
       return cfg.error();
     };
     // Override configuration with arguments.
-    if (args_.options) {
-      std::vector<std::pair<std::string, std::string>> options;
-      if (!parsers::kvp_list(args_.options->inner, options)) {
-        diagnostic::error("invalid list of key=value pairs")
-          .primary(args_.options->source)
-          .throw_();
-      }
-      for (const auto& [key, value] : options) {
+    if (not args_.options.inner.empty()) {
+      for (const auto& [key, value] : args_.options.inner) {
         TENZIR_INFO("providing librdkafka option {}={}", key, value);
         if (auto err = cfg->set(key, value)) {
           diagnostic::error("failed to set librdkafka option {}={}: {}", key,
                             value, err)
-            .primary(args_.options->source)
+            .primary(args_.options.source)
             .throw_();
         }
       }

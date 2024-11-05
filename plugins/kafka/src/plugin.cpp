@@ -48,12 +48,13 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = loader_args{};
+    auto options = std::optional<located<std::string>>{};
     parser.add("-t,--topic", args.topic, "<topic>");
     parser.add("-c,--count", args.count, "<n>");
     parser.add("-e,--exit", args.exit);
     parser.add("-o,--offset", args.offset, "<offset>");
     // We use -X because that's standard in Kafka applications, cf. kcat.
-    parser.add("-X,--set", args.options, "<key=value>,...");
+    parser.add("-X,--set", options, "<key=value>,...");
     parser.parse(p);
     if (args.offset) {
       if (!offset_parser()(args.offset->inner)) {
@@ -64,6 +65,15 @@ public:
           .throw_();
       }
     }
+    if (options) {
+      args.options.source = options->source;
+      if (!parsers::kvp_list(options->inner, args.options.inner)) {
+        diagnostic::error("invalid list of key=value pairs")
+          .primary(options->source)
+          .throw_();
+        return {};
+      }
+    }
     return std::make_unique<kafka_loader>(std::move(args), config_);
   }
 
@@ -72,17 +82,27 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = saver_args{};
+    auto options = std::optional<located<std::string>>{};
     parser.add("-t,--topic", args.topic, "<topic>");
     parser.add("-k,--key", args.key, "<key>");
     parser.add("-T,--timestamp", args.timestamp, "<time>");
     // We use -X because that's standard in Kafka applications, cf. kcat.
-    parser.add("-X,--set", args.options, "<key=value>,...");
+    parser.add("-X,--set", options, "<key=value>,...");
     parser.parse(p);
     if (args.timestamp) {
       if (!parsers::time(args.timestamp->inner)) {
         diagnostic::error("could not parse `--timestamp` as time")
           .primary(args.timestamp->source)
           .throw_();
+      }
+    }
+    if (options) {
+      args.options.source = options->source;
+      if (!parsers::kvp_list(options->inner, args.options.inner)) {
+        diagnostic::error("invalid list of key=value pairs")
+          .primary(options->source)
+          .throw_();
+        return {};
       }
     }
     return std::make_unique<kafka_saver>(std::move(args), config_);
