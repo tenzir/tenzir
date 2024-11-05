@@ -51,7 +51,7 @@ Operator | Description | Example
 [`every`](./operators/every.md) | Restarts a pipeline periodically | `every 10s { summarize sum(amount) }`
 [`fork`](./operators/fork.md) | Forwards a copy of the events to another pipeline | `fork { to "copy.json" }`
 [`if`](language/statements.md#if) | Splits the flow based on a predicate | `if transaction > 0 { … } else { … }`
-[`load_balance`](./operators/load_balance.md) | Routes the data through alternating subpipelines | `load_balance $over { publish $over }`
+[`load_balance`](./operators/load_balance.md) | Routes the data to one of multiple subpipelines | `load_balance $over { publish $over }`
 
 <!--
 [`group`]() | Starts a new pipeline for each group | `group path { to $path }`
