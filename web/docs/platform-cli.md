@@ -79,6 +79,48 @@ following images:
 - `tenzir/tenzir:latest` to use the last release.
 - `tenzir/tenzir:main` to use the currnet development version.
 
+## Manage Alerts
+
+### Synopsis
+
+```
+tenzir-platform alert add <node> <duration> <webhook_url> [<webhook_body>]
+tenzir-platform alert delete <alert_id>
+tenzir-platform alert list
+```
+
+### Description
+
+The following commands allow for setting up alerts for specific nodes. After a
+node has been disconnected for the configured amount of time, an alert fires by
+performing a POST request against the configured webhook URL.
+
+#### `<node>`
+
+The node to be monitored. Can be given provided as a node ID or a node name,
+as long as the name is unambiguous.
+
+#### `<duration>`
+
+The amount of time to wait before triggering the alert.
+
+#### `<webhook_url>`
+
+The platform performs a POST request against this URL when the alert triggers.
+
+#### `<webhook_body>`
+
+The body to send along with the webhook. Must be valid JSON. The body may
+contain the string `$NODE_ID`, which will be replaced by the node id that
+triggered the alert.
+
+Defaults to `{"text": "Node {node_id} disconnected for more than {duration}s"}`,
+where `node_id` and `duration` are set dynamically from the CLI parameters.
+
+#### `<node_name>`
+
+The name of the node to be monitored.
+
 ## Manage Workspaces
 
 :::warning On-Premise Setup Required
