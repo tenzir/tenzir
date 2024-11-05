@@ -21,8 +21,6 @@ following abstractions:
 - Interconnected nodes form a **data fabric** and pipelines can span across them
   to implement sophisticated security architectures.
 
-![Tenzir Building Blocks](/img/architecture-nodes.excalidraw.svg)
-
 ## What can I do with Tenzir?
 
 Use Tenzir if you want to:
