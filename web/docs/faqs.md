@@ -71,7 +71,7 @@ with the [Sovereign Edition](https://tenzir.com/pricing).
 
 Yes, Tenzir can run on premise and support fully air-gapped environments. The
 [Sovereign Edition](https://tenzir.com/pricing) allows you to [deploy the entire
-platform](installation/deploy-the-platform.md) in a dockerized environment, such
+platform](installation/deploy-the-platform.md) in a Dockerized environment, such
 as Docker Compose.
 
 The [Community Edition](https://tenzir.com/pricing), [Professional
