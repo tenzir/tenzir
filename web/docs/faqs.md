@@ -20,7 +20,7 @@ offering a commercial package for those seeking a turn-key solution:
 
 There exist three moving parts:
 
-1. **Executor**: The pipeline executor is open source and available at under a
+1. **Executor**: The pipeline executor is open source and available under a
    permissive BSD 3-clause licence at
    [GitHub](https://github.com/tenzir/tenzir). The `tenzir`
    command line tool is the primary interface.
