@@ -9,8 +9,8 @@ summarize (group|aggregation)...
 ## Description
 
 The `summarize` operator groups events according to certain fields and applies
-aggregation functions to each group. The operator consumes the entire input
-before producing any output.
+[aggregation functions](../functions.md#aggregation) to each group. The operator
+consumes the entire input before producing any output.
 
 The order of the output fields follows the sequence of the provided arguments.
 Unspecified fields are dropped.
@@ -27,44 +27,14 @@ returned.
 
 ### `aggregation`
 
-The aggregation functions applied to each group are specified with `f(…)` or
-`<field>=f(…)`, where `f` is the name of an aggregation function (see below) and
-`<field>` is an optional name for the result. The aggregation function will
-produce a single result for each group.
+The [aggregation functions](../functions.md#aggregation) applied to each group
+are specified with `f(…)` or `<field>=f(…)`, where `f` is the name of an
+aggregation function (see below) and `<field>` is an optional name for the
+result. The aggregation function will produce a single result for each group.
 
-If no name is specified, it will be automatically generated from the aggregation
-function call. If processing continues after `summarize`, it is strongly
-recommended to specify a custom name.
-
-The following aggregation functions are available and, unless specified
-differently, take exactly one argument:
-
-- `sum`: Computes the sum of all grouped values.
-- `min`: Computes the minimum of all grouped values.
-- `max`: Computes the maximum of all grouped values.
-- `any`: Computes the disjunction (OR) of all grouped values. Requires the
-  values to be booleans.
-- `all`: Computes the conjunction (AND) of all grouped values. Requires the
-  values to be booleans.
-- `first`: Takes the first of all grouped values that is not null.
-- `last`: Takes the last of all grouped values that is not null.
-- `mean`: Computes the mean of all grouped values.
-- `median`: Computes the approximate median of all grouped values with a
-  t-digest algorithm.
-- `mode`: Takes the most common of all grouped values that is not null.
-- `value_counts`: Returns a list of all grouped values alongside their
-  frequency.
-- `quantile`: Computes the quantile specified by the named argument `q`, for
-  example: `quantile(x, q=0.2)`.
-- `stddev`: Computes the standard deviation of all grouped values.
-- `variance`: Computes the variance of all grouped values.
-- `distinct`: Creates a sorted list without duplicates of all grouped values
-  that are not null.
-- `collect`: Creates a list of all grouped values that are not null, preserving
-  duplicates.
-- `count`: When used as `count()`, simply counts the events in the group. When
-  used as `count(x)`, counts all grouped values that are not null.
-- `count_distinct`: Counts all distinct grouped values that are not null.
+If no name is specified, the aggregation function call will automatically
+generate one. If processing continues after `summarize`, we strongly recommend
+to specify a custom name.
 
 ## Examples
 
