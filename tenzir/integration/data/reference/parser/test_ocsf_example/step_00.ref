@@ -523,7 +523,7 @@
           expr: list {
             begin: 1135..1136,
             items: [
-              constant {
+              expression constant {
                 value: string "host",
                 source: 1136..1142
               }

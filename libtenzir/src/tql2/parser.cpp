@@ -589,8 +589,8 @@ public:
   }
 
   auto parse_record_item() -> ast::record::item {
-    if (accept(tk::dot_dot_dot)) {
-      return ast::record::spread{parse_expression()};
+    if (auto dots = accept(tk::dot_dot_dot)) {
+      return ast::spread{dots.location, parse_expression()};
     }
     // TODO: Decide how to represent string fields in the AST.
     auto ident = [this]() {
@@ -729,7 +729,7 @@ public:
   auto parse_list() -> ast::list {
     auto begin = expect(tk::lbracket);
     auto scope = ignore_newlines(true);
-    auto items = std::vector<ast::expression>{};
+    auto items = std::vector<ast::list::item>{};
     while (true) {
       if (auto end = accept(tk::rbracket)) {
         return ast::list{
@@ -738,7 +738,11 @@ public:
           end.location,
         };
       }
-      items.push_back(parse_expression());
+      if (auto dots = accept(tk::dot_dot_dot)) {
+        items.emplace_back(ast::spread{dots.location, parse_expression()});
+      } else {
+        items.emplace_back(parse_expression());
+      }
       if (not peek(tk::rbracket)) {
         expect(tk::comma);
       }

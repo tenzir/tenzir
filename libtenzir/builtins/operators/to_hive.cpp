@@ -382,7 +382,14 @@ public:
     auto by = std::vector<ast::simple_selector>{};
     by.reserve(by_list->items.size());
     for (auto& item : by_list->items) {
-      auto sel = ast::simple_selector::try_from(item);
+      auto expr = std::get_if<ast::expression>(&item);
+      if (not expr) {
+        diagnostic::error("expected a selector")
+          .primary(into_location(item))
+          .emit(ctx);
+        return failure::promise();
+      }
+      auto sel = ast::simple_selector::try_from(*expr);
       if (not sel) {
         diagnostic::error("expected a selector").primary(item).emit(ctx);
         return failure::promise();

@@ -454,15 +454,35 @@ struct index_expr {
   }
 };
 
+struct spread {
+  spread() = default;
+
+  spread(location dots, expression expr) : dots{dots}, expr{std::move(expr)} {
+  }
+
+  location dots;
+  expression expr;
+
+  friend auto inspect(auto& f, spread& x) -> bool {
+    return f.object(x).fields(f.field("dots", x.dots), f.field("expr", x.expr));
+  }
+
+  auto get_location() const -> location {
+    return dots.combine(expr);
+  }
+};
+
 struct list {
+  using item = variant<expression, spread>;
+
   list() = default;
 
-  list(location begin, std::vector<expression> items, location end)
-    : begin{begin}, items(std::move(items)), end{end} {
+  list(location begin, std::vector<item> items, location end)
+    : begin{begin}, items{std::move(items)}, end{end} {
   }
 
   location begin;
-  std::vector<expression> items;
+  std::vector<item> items;
   location end;
 
   friend auto inspect(auto& f, list& x) -> bool {
@@ -476,14 +496,6 @@ struct list {
 };
 
 struct record {
-  struct spread {
-    expression expr;
-
-    friend auto inspect(auto& f, spread& x) -> bool {
-      return f.object(x).fields(f.field("expr", x.expr));
-    }
-  };
-
   struct field {
     field() = default;
 
@@ -775,12 +787,16 @@ protected:
     go(x.expr);
   }
 
-  void enter(record::spread& x) {
+  void enter(spread& x) {
     go(x.expr);
   }
 
   void enter(list& x) {
     go(x.items);
+  }
+
+  void enter(list::item& x) {
+    match(x);
   }
 
   void enter(field_access& x) {
