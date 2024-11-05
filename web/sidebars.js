@@ -176,14 +176,6 @@ const sidebars = {
       id: 'packages',
     },
     {
-      type: 'doc',
-      id: 'why-tenzir',
-    },
-    {
-      type: 'doc',
-      id: 'target-audience',
-    },
-    {
       type: 'category',
       label: 'Use Cases',
       link: {
