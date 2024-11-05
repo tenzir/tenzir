@@ -60,12 +60,12 @@ struct load_balancer_state {
   auto write(table_slice events) -> caf::result<void> {
     TENZIR_ASSERT(events.rows() > 0);
     if (not reads.empty()) {
-      TENZIR_WARN("writing {} events directly", events.rows());
+      TENZIR_VERBOSE("writing {} events directly", events.rows());
       reads.front().deliver(std::move(events));
       reads.pop_front();
       return {};
     }
-    TENZIR_WARN("writing {} events delayed", events.rows());
+    TENZIR_VERBOSE("writing {} events delayed", events.rows());
     writes.emplace_back(std::move(events), self->make_response_promise<void>());
     return writes.back().second;
   }
@@ -73,7 +73,7 @@ struct load_balancer_state {
   auto read() -> caf::result<table_slice> {
     if (not writes.empty()) {
       auto events = std::move(writes.front().first);
-      TENZIR_WARN("reading {} events directly", events.rows());
+      TENZIR_VERBOSE("reading {} events directly", events.rows());
       writes.front().second.deliver();
       writes.pop_front();
       return events;
@@ -81,7 +81,7 @@ struct load_balancer_state {
     if (finished) {
       return table_slice{};
     }
-    TENZIR_WARN("reading events delayed");
+    TENZIR_VERBOSE("reading events delayed");
     reads.emplace_back(self->make_response_promise<table_slice>());
     return reads.back();
   }
@@ -91,9 +91,9 @@ struct load_balancer_state {
       return;
     }
     finished = true;
-    TENZIR_WARN("load_balancer finished and marks {} outstanding reads as "
-                "done",
-                reads.size());
+    TENZIR_VERBOSE("load_balancer finished and marks {} outstanding reads as "
+                   "done",
+                   reads.size());
     // If there are any outstanding reads, we know that there are no remaining
     // writes. Thus it's fine to mark all outstanding reads as done.
     for (auto& read : reads) {
@@ -117,7 +117,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    TENZIR_WARN("beginning execution of load_balance_source");
+    TENZIR_VERBOSE("beginning execution of load_balance_source");
     TENZIR_ASSERT(load_balancer_);
     while (true) {
       auto result = table_slice{};
@@ -137,10 +137,10 @@ public:
       co_yield {};
       // We signal completion with an empty table slice.
       if (result.rows() == 0) {
-        TENZIR_WARN("load_balance_source detected end");
+        TENZIR_VERBOSE("load_balance_source detected end");
         break;
       }
-      TENZIR_WARN("load_balance_source read {} events", result.rows());
+      TENZIR_VERBOSE("load_balance_source read {} events", result.rows());
       co_yield std::move(result);
     }
   }
@@ -184,9 +184,9 @@ auto make_load_balancer(
   std::vector<pipeline> pipes, shared_diagnostic_handler diagnostics,
   metrics_receiver_actor metrics, uint64_t operator_index, bool is_hidden,
   const node_actor& node) -> load_balancer_actor::behavior_type {
-  TENZIR_WARN("spawning load balancer");
+  TENZIR_VERBOSE("spawning load balancer");
   self->attach_functor([] {
-    TENZIR_WARN("destroyed load balancer");
+    TENZIR_VERBOSE("destroyed load balancer");
   });
   self->state.self = self;
   self->state.diagnostics = std::move(diagnostics);
@@ -196,16 +196,16 @@ auto make_load_balancer(
   for (auto& pipe : pipes) {
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
-    TENZIR_WARN("spawning inner executor");
+    TENZIR_VERBOSE("spawning inner executor");
     auto executor = self->spawn<caf::monitored>(
       pipeline_executor, pipe, self, self, node, has_terminal, is_hidden);
     executor->attach_functor([] {
-      TENZIR_WARN("inner executor terminated");
+      TENZIR_VERBOSE("inner executor terminated");
     });
     self->request(executor, caf::infinite, atom::start_v)
       .then(
         []() {
-          TENZIR_WARN("started inner pipeline successfully");
+          TENZIR_VERBOSE("started inner pipeline successfully");
         },
         [self](const caf::error& err) {
           // This error should be enough to cause the outer pipeline to get
@@ -217,7 +217,7 @@ auto make_load_balancer(
   self->set_exit_handler([self](caf::exit_msg& msg) {
     if (msg.reason != caf::exit_reason::user_shutdown) {
       // This should never happen.
-      TENZIR_WARN("load balancer got unexpected exit msg: {}", msg.reason);
+      TENZIR_VERBOSE("load balancer got unexpected exit msg: {}", msg.reason);
       self->quit(msg.reason);
       return;
     }
@@ -245,8 +245,8 @@ auto make_load_balancer(
            type& schema) -> caf::result<void> {
       auto id = get_or_compute(
         self->state.metrics_id_map, std::pair{op_index, metric_index}, [&] {
-          TENZIR_WARN("load_balancer allocates metrics id for {}/{}", op_index,
-                      metric_index);
+          TENZIR_VERBOSE("load_balancer allocates metrics id for {}/{}",
+                         op_index, metric_index);
           auto id = self->state.next_metrics_id;
           self->state.next_metrics_id += 1;
           return id;
@@ -321,7 +321,7 @@ public:
                  std::move(slice))
         .then(
           [&]() {
-            TENZIR_WARN("successfully sent events to load_balancer");
+            TENZIR_VERBOSE("successfully sent events to load_balancer");
             ctrl.set_waiting(false);
           },
           [&](const caf::error& err) {
@@ -332,7 +332,7 @@ public:
           });
       co_yield {};
     }
-    TENZIR_WARN("waiting for termination of load_balancer");
+    TENZIR_VERBOSE("waiting for termination of load_balancer");
     ctrl.set_waiting(true);
     auto self = caf::actor_cast<caf::actor>(&ctrl.self());
     load_balancer.get()->attach_functor([self, &ctrl] {
@@ -342,7 +342,7 @@ public:
     });
     caf::anon_send_exit(load_balancer.get(), caf::exit_reason::user_shutdown);
     co_yield {};
-    TENZIR_WARN("load_balance terminated");
+    TENZIR_VERBOSE("load_balance terminated");
   }
 
   auto optimize(expression const& filter, event_order order) const
