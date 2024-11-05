@@ -4,7 +4,7 @@ sidebar_custom_props:
     sink: true
 ---
 
-# to-splunk
+# splunk
 
 Sends events to a [Splunk HEC](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector)
 
@@ -17,7 +17,7 @@ multiple additional options. It allows you to set Splunk's `index` and
 ## Synopsis
 
 ```
-to-splunk <url> <hec_token> [--host <string>] [--source <string>]
+splunk <url> <hec_token> [--host <string>] [--source <string>]
        [--tls-no-verify] [--print-nulls] [--max-content-length <int>]
        [--send-timeout <duration>] [--no-compress]
 ```
@@ -79,5 +79,5 @@ events using gzip.
 ## Examples
 ```
 from "example.yaml"
-| to-splunk "https://localhost:8088" "example-token-1234"
+| splunk "https://localhost:8088" "example-token-1234"
 ```
