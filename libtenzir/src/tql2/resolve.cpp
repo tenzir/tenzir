@@ -70,15 +70,7 @@ public:
       result_ = failure::promise();
       return;
     }
-    entity->match(
-      [&](std::reference_wrapper<const function_plugin> function) {
-        TENZIR_ASSERT(ns == entity_ns::fn);
-        x.ref = std::move(path);
-      },
-      [&](std::reference_wrapper<const operator_factory_plugin>) {
-        TENZIR_ASSERT(ns == entity_ns::op);
-        x.ref = std::move(path);
-      });
+    x.ref = std::move(path);
   }
 
   void visit(ast::invocation& x) {
