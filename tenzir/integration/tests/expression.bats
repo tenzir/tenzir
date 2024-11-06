@@ -43,6 +43,18 @@ write_json
 EOF
 }
 
+@test "list spread" {
+  check tenzir -f '/dev/stdin' <<EOF
+from [
+  {x: []},
+  {x: [1]},
+  {x: [1, 2]},
+]
+y = [...x]
+z = [...x, 3, ...y, ...42]
+EOF
+}
+
 @test "list indexing" {
   check tenzir -f '/dev/stdin' <<EOF
 from [
@@ -124,7 +136,7 @@ EOF
 
 @test "in list" {
   check tenzir --tql2 -f /dev/stdin <<EOF
-  from "${INPUTSDIR}/json/lists.json" 
+  from "${INPUTSDIR}/json/lists.json"
   exists = x in y
 EOF
 }
