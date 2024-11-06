@@ -3,7 +3,7 @@
 Loads a byte stream from a Apache Kafka topic.
 
 ```tql
-load_kafka [topic=str, count=int, exit=bool, offset=str, options=record]
+load_kafka [topic=str, count=int, exit=bool, offset=int|str, options=record]
 ```
 
 ## Description
@@ -30,30 +30,30 @@ include them:
 - `client.id`: `tenzir`
 - `group.id`: `tenzir`
 
-### `topic=str (optional)`
+### `topic = str (optional)`
 
 The Kafka topic to use.
 
 Defaults to `"tenzir"`.
 
-### `count=int (optional)`
+### `count = int (optional)`
 
 Exit successfully after having consumed `count` messages.
 
-### `exit=bool (optional)`
+### `exit = bool (optional)`
 
 Exit successfully after having received the last message.
 
 Without this option, the operator waits for new messages after having consumed the
 last one.
 
-### `offset=str (optional)`
+### `offset = int|str (optional)`
 
 The offset to start consuming from. Possible values are:
 
-- `beginning`: first offset
-- `end`: last offset
-- `stored`: stored offset
+- `"beginning"`: first offset
+- `"end"`: last offset
+- `"stored"`: stored offset
 - `<value>`: absolute offset
 - `-<value>`: relative offset from end
 
@@ -62,7 +62,7 @@ The offset to start consuming from. Possible values are:
 - `e@<value>`: timestamp in ms to stop at (not included)
 -->
 
-### `options=record (optional)`
+### `options = record (optional)`
 
 A record of key-value configuration options for
 [librdkafka][librdkafka], e.g., `{"auto.offset.reset" : "earliest",

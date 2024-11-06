@@ -129,7 +129,6 @@ class save_plugin final
           .add("options", options)
           .parse(inv, ctx));
     // HACK: Should directly accept a time
-    // XXX: Verify if to_string gives the same representation as parser::time.
     if (ts) {
       args.timestamp = located{fmt::to_string(ts->inner), ts->source};
     }

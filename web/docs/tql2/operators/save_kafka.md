@@ -30,21 +30,21 @@ include them:
 - `client.id`: `tenzir`
 - `group.id`: `tenzir`
 
-### `topic=str (optional)`
+### `topic = str (optional)`
 
 The Kafka topic to use.
 
 Defaults to `"tenzir"`.
 
-### `key=str (optional)`
+### `key = str (optional)`
 
 Sets a fixed key for all messages.
 
-### `timestamp=time (optional)`
+### `timestamp = time (optional)`
 
 Sets a fixed timestamp for all messages.
 
-### `options=record (optional)`
+### `options = record (optional)`
 
 A record of key-value configuration options for
 [librdkafka][librdkafka], e.g., `{"auto.offset.reset" : "earliest",
