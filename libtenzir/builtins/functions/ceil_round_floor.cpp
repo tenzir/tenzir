@@ -43,6 +43,7 @@ public:
       return failure::promise();
     }
     return function_use::make([expr = std::move(expr), spec = std::move(spec),
+                               inv_loc = inv.call.get_location(),
                                this](evaluator eval, session ctx) -> series {
       const auto value = located{eval(expr), expr.get_location()};
       const auto& ty = value.inner.type;
@@ -98,8 +99,8 @@ public:
           },
           [&]<concepts::one_of<arrow::DurationArray, arrow::TimestampArray> T>(
             const T&) {
-            diagnostic::warning("`{}` with duration requires second argument",
-                                name())
+            diagnostic::warning("`{}` with `{}` requires a resolution", name(),
+                                ty.kind())
               .primary(value)
               .hint("for example `{}(x, 1h)`", name())
               .emit(ctx);
@@ -108,7 +109,6 @@ public:
           [&](const auto&) {
             diagnostic::warning("`{}` expected `number`, got `{}`", name(),
                                 ty.kind())
-              // TODO: Wrong location.
               .primary(value)
               .emit(ctx);
             return series::null(ty, length);
@@ -166,8 +166,9 @@ public:
           }
         },
         [&](const auto&) {
-          diagnostic::warning("{}(_, _) is not implemented for {}", name(), ty)
-            .primary(value)
+          diagnostic::warning(
+            "`{}(value, resolution)` is not implemented for {}", name(), ty)
+            .primary(inv_loc)
             .emit(ctx);
           return series::null(ty, length);
         }};
