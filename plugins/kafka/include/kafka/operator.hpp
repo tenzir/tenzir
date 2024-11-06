@@ -68,7 +68,7 @@ inline auto offset_parser() {
 
 struct loader_args {
   std::optional<located<std::string>> topic;
-  std::optional<located<size_t>> count;
+  std::optional<located<uint64_t>> count;
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
   located<std::vector<std::pair<std::string, std::string>>> options;
