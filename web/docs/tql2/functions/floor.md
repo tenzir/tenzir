@@ -41,7 +41,7 @@ from {
 
 ```tql
 from {
-  x: floor(2024-02-24, 1y)
+  x: floor(2024-02-24, 1y),
   y: floor(1h52m, 1h)
 }
 ```

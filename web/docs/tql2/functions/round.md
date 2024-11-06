@@ -39,7 +39,7 @@ from {
 
 ```tql
 from {
-  x: round(2024-08-23, 1y)
+  x: round(2024-08-23, 1y),
   y: round(42m, 1h)
 }
 ```

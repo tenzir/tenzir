@@ -41,7 +41,7 @@ from {
 
 ```tql
 from {
-  x: ceil(2024-02-24, 1y)
+  x: ceil(2024-02-24, 1y),
   y: ceil(10m, 1h)
 }
 ```
