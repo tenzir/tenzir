@@ -70,11 +70,11 @@ public:
     auto offset = std::optional<ast::expression>{};
     auto options = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
-          .add("topic", args.topic)
-          .add("count", args.count)
-          .add("exit", args.exit)
-          .add("offset", offset)
-          .add("options", options)
+          .key("topic", args.topic)
+          .key("count", args.count)
+          .key("exit", args.exit)
+          .key("offset", offset, "string|int")
+          .key("options", options)
           .parse(inv, ctx));
     if (offset) {
       TRY(auto evaluated, const_eval(offset.value(), ctx.dh()));
@@ -169,10 +169,10 @@ class save_plugin final
     auto ts = std::optional<located<time>>{};
     auto options = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
-          .add("topic", args.topic)
-          .add("key", args.key)
-          .add("timestamp", ts)
-          .add("options", options)
+          .key("topic", args.topic)
+          .key("key", args.key)
+          .key("timestamp", ts)
+          .key("options", options)
           .parse(inv, ctx));
     // HACK: Should directly accept a time
     if (ts) {

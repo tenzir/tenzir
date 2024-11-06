@@ -4,5 +4,5 @@ error: expected additional positional argument `<string>`
 1 | from { x: "abc".starts_with() }
   |                 ^^^^^^^^^^^ 
   |
-  = usage: starts_with(<string>, <string>)
+  = usage: starts_with(<string>:any, <string>:any)
   = docs: https://docs.tenzir.com/functions/starts_with

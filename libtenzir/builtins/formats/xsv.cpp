@@ -144,19 +144,19 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
   }
   auto add_to_parser(argument_parser2& parser) -> void {
     if (mode_ == mode::special_optional) {
-      parser.add("list_sep", list_sep_str_);
-      parser.add("null_value", null_value_);
+      parser.key("list_sep", list_sep_str_);
+      parser.key("null_value", null_value_);
     } else {
       field_sep_str_ = located{"REQUIRED", location::unknown};
       list_sep_str_ = located{"REQUIRED", location::unknown};
       null_value_ = located{"REQUIRED", location::unknown};
-      parser.add(*field_sep_str_, "<field-sep>");
-      parser.add(*list_sep_str_, "<list-sep>");
-      parser.add(*null_value_, "<null-value>");
+      parser.pos("field_sep", *field_sep_str_);
+      parser.pos("list_sep", *list_sep_str_);
+      parser.pos("null_value", *null_value_);
     }
-    parser.add("comments", allow_comments_);
-    parser.add("header", header_);
-    parser.add("auto_expand", auto_expand_);
+    parser.key("comments", allow_comments_);
+    parser.key("header", header_);
+    parser.key("auto_expand", auto_expand_);
     multi_series_builder_argument_parser::add_policy_to_parser(parser);
     multi_series_builder_argument_parser::add_settings_to_parser(parser, true,
                                                                  false);

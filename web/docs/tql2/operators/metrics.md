@@ -3,7 +3,7 @@
 Retrieves metrics events from a Tenzir node.
 
 ```tql
-metrics [name:str, live=bool, retro=bool]
+metrics [name:string, live=bool, retro=bool]
 ```
 
 ## Description
@@ -11,7 +11,7 @@ metrics [name:str, live=bool, retro=bool]
 The `metrics` operator retrieves metrics events from a Tenzir node. Metrics
 events are collected every second.
 
-### `name: str (optional)`
+### `name: string (optional)`
 
 Show only metrics with the specified name. For example, `metrics "cpu"` only shows
 CPU metrics.

@@ -157,11 +157,11 @@ public:
     auto str = std::optional<located<std::string>>{};
     auto args = operator_args{};
     TRY(argument_parser2::operator_("sample")
-          .add(args.period, "<duration>")
-          .add("mode", str)
-          .add("min_events", args.min_events)
-          .add("max_rate", args.max_rate)
-          .add("max_samples", args.max_samples)
+          .pos("period", args.period)
+          .key("mode", str)
+          .key("min_events", args.min_events)
+          .key("max_rate", args.max_rate)
+          .key("max_samples", args.max_samples)
           .parse(inv, ctx));
     if (args.period->inner <= duration::zero()) {
       diagnostic::error("`period` must be a positive duration")

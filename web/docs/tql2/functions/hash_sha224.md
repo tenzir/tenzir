@@ -3,7 +3,7 @@
 Computes a SHA-224 hash digest.
 
 ```tql
-hash_sha224(x:any, [seed=str]) -> string
+hash_sha224(x:any, [seed=string]) -> string
 ```
 
 ## Description

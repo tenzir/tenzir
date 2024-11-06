@@ -121,8 +121,8 @@ public:
     auto endpoint = located<std::string>{};
     auto request_body = std::optional<located<record>>{};
     argument_parser2::operator_("api")
-      .add(endpoint, "<endpoint>")
-      .add(request_body, "<request-body>")
+      .pos("endpoint", endpoint)
+      .pos("request_body", request_body)
       .parse(inv, ctx)
       .ignore();
     if (not request_body) {

@@ -306,8 +306,8 @@ public:
       "=",
       location::unknown,
     };
-    parser.add(field_split, "<field_split>");
-    parser.add(value_split, "<value_split>");
+    parser.pos("field_split", field_split);
+    parser.pos("value_split", value_split);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx));

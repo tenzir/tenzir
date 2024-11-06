@@ -78,14 +78,13 @@ public:
     auto expr = ast::expression{};
     auto sep = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<expr>")
-          .add("sep", sep)
+          .pos("x", expr, "any")
+          .key("sep", sep)
           .parse(inv, ctx));
     return function_use::make([expr = std::move(expr), sep = std::move(sep)](
                                 evaluator eval, session) -> series {
       auto s = eval(expr);
-      auto unflattened = tenzir::unflatten(
-        std::dynamic_pointer_cast<arrow::Array>(s.array), sep.value_or("."));
+      auto unflattened = tenzir::unflatten(s.array, sep.value_or("."));
       auto schema = type::from_arrow(*unflattened->type());
       return {type{s.type.name(), schema}, unflattened};
     });

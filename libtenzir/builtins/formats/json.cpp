@@ -1135,7 +1135,7 @@ public:
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     std::optional<location> arrays_of_objects;
-    parser.add("arrays_of_objects", arrays_of_objects);
+    parser.key("arrays_of_objects", arrays_of_objects);
     auto result = parser.parse(inv, ctx);
     auto args = parser_args{"json"};
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
@@ -1241,7 +1241,7 @@ public:
     // TODO: Consider adding a `many` option to expect multiple json values.
     // TODO: Consider adding a `precise` option (this needs evaluator support).
     TRY(argument_parser2::function("parse_json")
-          .add(expr, "<string>")
+          .pos("x", expr, "string")
           .parse(inv, ctx));
     return function_use::make(
       [call = inv.call.get_location(),
@@ -1314,7 +1314,7 @@ public:
     auto args = printer_args{};
     TRY(argument_parser2::operator_("write_json")
           // TODO: Perhaps "indent=0"?
-          .add("color", args.color_output)
+          .key("color", args.color_output)
           .parse(inv, ctx));
     return std::make_unique<write_json>(args);
   }
@@ -1331,7 +1331,7 @@ public:
     auto args = printer_args{};
     args.compact_output = location::unknown;
     TRY(argument_parser2::operator_(name())
-          .add("color", args.color_output)
+          .key("color", args.color_output)
           .parse(inv, ctx));
     return std::make_unique<write_json>(args);
   }

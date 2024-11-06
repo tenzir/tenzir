@@ -353,7 +353,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
     TRY(
-      argument_parser2::operator_("assert").add(expr, "<expr>").parse(inv, ctx));
+      argument_parser2::operator_("assert").pos("invariant", expr, "bool").parse(inv, ctx));
     return std::make_unique<tql2_where_assert_operator>(std::move(expr), true);
   }
 };
@@ -369,7 +369,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
     TRY(
-      argument_parser2::operator_("where").add(expr, "<expr>").parse(inv, ctx));
+      argument_parser2::operator_("where").pos("predicate", expr, "bool").parse(inv, ctx));
     return std::make_unique<tql2_where_assert_operator>(std::move(expr), false);
   }
 

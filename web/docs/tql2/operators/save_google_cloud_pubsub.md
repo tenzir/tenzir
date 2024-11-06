@@ -3,7 +3,7 @@
 Publishes to a Google Cloud Pub/Sub topic.
 
 ```tql
-save_google_cloud_pubsub project_id=str, topic_id=str
+save_google_cloud_pubsub project_id=string, topic_id=string
 ```
 
 :::note Authentication
@@ -15,11 +15,11 @@ The connector tries to retrieve the appropriate credentials using Google's
 
 The `google_cloud_pubsub` saver publishes bytes to a Google Cloud Pub/Sub topic.
 
-### `project_id = str`
+### `project_id = string`
 
 The project to connect to. Note that this is the project_id, not the display name.
 
-### `topic_id = str`
+### `topic_id = string`
 
 The topic to publish to.
 

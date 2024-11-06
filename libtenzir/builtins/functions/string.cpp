@@ -30,8 +30,8 @@ public:
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(arg_expr, "<string>")
+          .pos("x", subject_expr, "string")
+          .pos("prefix", arg_expr, "string")
           .parse(inv, ctx));
     // TODO: This shows the need for some abstraction.
     return function_use::make([subject_expr = std::move(subject_expr),
@@ -88,8 +88,8 @@ public:
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(characters, "<characters>")
+          .pos("x", subject_expr, "string")
+          .pos("chars", characters)
           .parse(inv, ctx));
     auto options = std::optional<arrow::compute::TrimOptions>{};
     if (characters) {
@@ -160,8 +160,9 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
+    // TODO: Use `result_arrow_ty` to derive type name.
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
+          .pos("x", subject_expr, "")
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr)](
                                 evaluator eval, session ctx) -> series {
@@ -221,10 +222,10 @@ public:
     auto replacement = std::string{};
     auto max_replacements = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(pattern, "<pattern>")
-          .add(replacement, "<replacement>")
-          .add("max", max_replacements)
+          .pos("x", subject_expr, "string")
+          .pos("pattern", pattern)
+          .pos("replacement", replacement)
+          .key("max", max_replacements)
           .parse(inv, ctx));
     if (max_replacements) {
       if (max_replacements->inner < 0) {
@@ -293,10 +294,10 @@ public:
     auto end = std::optional<located<int64_t>>{};
     auto stride = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add("begin", begin)
-          .add("end", end)
-          .add("stride", stride)
+          .pos("x", subject_expr, "string")
+          .key("begin", begin)
+          .key("end", end)
+          .key("stride", stride)
           .parse(inv, ctx));
     if (stride) {
       if (stride->inner <= 0) {
@@ -355,7 +356,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     TRY(argument_parser2::function("string")
-          .add(subject_expr, "<expr>")
+          .pos("x", subject_expr, "any")
           .parse(inv, ctx));
     return function_use::make([subject_expr = std::move(subject_expr)](
                                 evaluator eval, session) -> series {

@@ -584,10 +584,10 @@ public:
     auto args = loader_args{};
     auto timeout = std::optional<located<duration>>{};
     TRY(argument_parser2::operator_("load_file")
-          .add(args.path, "<path>")
-          .add("follow", args.follow)
-          .add("mmap", args.mmap)
-          .add("timeout", timeout)
+          .pos("path", args.path)
+          .key("follow", args.follow)
+          .key("mmap", args.mmap)
+          .key("timeout", timeout)
           .parse(inv, ctx));
     args.path.inner = expand_path(args.path.inner);
     if (timeout) {
@@ -648,10 +648,10 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     TRY(argument_parser2::operator_("save_file")
-          .add(args.path, "<path>")
-          .add("append", args.append)
-          .add("real_time", args.real_time)
-          .add("uds", args.uds)
+          .pos("path", args.path)
+          .key("append", args.append)
+          .key("real_time", args.real_time)
+          .key("uds", args.uds)
           .parse(inv, ctx));
     return std::make_unique<save_file_operator>(std::move(args));
   }

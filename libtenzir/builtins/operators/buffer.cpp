@@ -402,8 +402,8 @@ public:
     auto capacity = located<uint64_t>{};
     auto policy_str = std::optional<located<std::string>>{};
     argument_parser2::operator_("buffer")
-      .add(capacity, "<capacity>")
-      .add("policy", policy_str)
+      .pos("capacity", capacity)
+      .key("policy", policy_str)
       .parse(inv, ctx)
       .ignore();
     auto failed = false;

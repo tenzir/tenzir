@@ -211,8 +211,8 @@ class fun : public virtual function_plugin {
     auto expr = ast::expression{};
     auto seed = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<expr>")
-          .add("seed", seed)
+          .pos("x", expr, "any")
+          .key("seed", seed)
           .parse(inv, ctx));
     return function_use::make(
       [expr_ = std::move(expr), seed_ = std::move(seed)](evaluator eval,

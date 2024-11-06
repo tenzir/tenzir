@@ -90,9 +90,7 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
     -> failure_or<operator_ptr> override {
     auto selector = ast::simple_selector{};
     const auto loc = inv.self.get_location();
-    TRY(argument_parser2::operator_(name())
-          .add(selector, "<field>")
-          .parse(inv, ctx));
+    TRY(argument_parser2::operator_(name()).pos("x", selector).parse(inv, ctx));
     const auto* summarize
       = plugins::find<operator_factory_plugin>("tql2.summarize");
     const auto* sort = plugins::find<operator_factory_plugin>("tql2.sort");

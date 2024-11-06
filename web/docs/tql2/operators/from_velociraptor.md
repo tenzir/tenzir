@@ -3,8 +3,8 @@
 Submits VQL to a Velociraptor server and returns the response as events.
 
 ```tql
-to_velociraptor [request_name=str, org_id=str, max_rows=int,
-              subscribe=str, query=str, max_wait=duration, profile=str]
+to_velociraptor [request_name=string, org_id=string, max_rows=int,
+              subscribe=string, query=string, max_wait=duration, profile=string]
 ```
 
 ## Description
@@ -55,19 +55,19 @@ binary that we refer to as `velociraptor-binary` here.)
 
 Now you are ready to run VQL queries!
 
-### `request_name = str (optional)`
+### `request_name = string (optional)`
 
 An identifier for the request to the Velociraptor server.
 
 Defaults to a randoum UUID.
 
-### `org_id = str (optional)`
+### `org_id = string (optional)`
 
 The ID of the Velociraptor organization.
 
 Defaults to `"root"`.
 
-### `query = str (optional)`
+### `query = string (optional)`
 
 The [VQL][vql] query string.
 
@@ -78,7 +78,7 @@ the server.
 
 Defaults to `1000`.
 
-### `subscribe = str (optional)`
+### `subscribe = string (optional)`
 
 Subscribes to a flow artifact.
 
@@ -92,7 +92,7 @@ Controls how long to wait before releasing a partial result set.
 
 Defaults to `1s`.
 
-### `profile = str (optional)`
+### `profile = string (optional)`
 
 Specifies the configuration profile for the Velociraptor instance. This enables
 connecting to multiple Velociraptor instances from the same Tenzir node.

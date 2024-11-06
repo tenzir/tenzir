@@ -278,7 +278,9 @@ class plugin : public virtual aggregation_function_plugin,
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .pos("x", expr, Mode == mode::stddev ? "number|duration" : "number")
+          .parse(inv, ctx));
     return std::make_unique<stddev_variance_instance>(std::move(expr), Mode);
   }
 

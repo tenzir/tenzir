@@ -664,10 +664,10 @@ public:
     auto raw_pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
-    parser.add(raw_pattern, "<pattern>");
-    parser.add("pattern_definitions", pattern_definitions);
-    parser.add("indexed_captures", indexed_captures);
-    parser.add("include_unnamed", include_unnamed);
+    parser.pos("pattern", raw_pattern);
+    parser.key("pattern_definitions", pattern_definitions);
+    parser.key("indexed_captures", indexed_captures);
+    parser.key("include_unnamed", include_unnamed);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx));
@@ -696,10 +696,10 @@ public:
     auto indexed_captures = false;
     auto include_unnamed = false;
     TRY(argument_parser2::function("grok")
-          .add(input, "<input>")
-          .add(pattern, "<pattern>")
-          .add("indexed_captures", indexed_captures)
-          .add("include_unnamed", include_unnamed)
+          .pos("input", input, "string")
+          .pos("pattern", pattern)
+          .key("indexed_captures", indexed_captures)
+          .key("include_unnamed", include_unnamed)
           .parse(inv, ctx));
     auto parser = grok_parser{
       std::nullopt,

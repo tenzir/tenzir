@@ -467,10 +467,10 @@ auto parse_http_args(std::string name,
   auto params = std::optional<located<record>>{};
   auto headers = std::optional<located<record>>{};
   argument_parser2::operator_(std::move(name))
-    .add(url, "<url>")
-    .add("method", method)
-    .add("params", params)
-    .add("headers", headers)
+    .pos("url", url)
+    .key("method", method)
+    .key("params", params)
+    .key("headers", headers)
     .parse(inv, ctx)
     .ignore();
   auto args = connector_args{};

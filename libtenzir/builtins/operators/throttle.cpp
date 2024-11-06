@@ -158,8 +158,8 @@ public:
     auto bandwidth = located<uint64_t>{};
     auto window = std::optional<located<duration>>{};
     argument_parser2::operator_("throttle")
-      .add(bandwidth, "<bandwith>")
-      .add("within", window)
+      .pos("bandwidth", bandwidth)
+      .key("within", window)
       .parse(inv, ctx)
       .ignore();
     if (bandwidth.inner == 0) {

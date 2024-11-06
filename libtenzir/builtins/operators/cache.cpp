@@ -664,11 +664,11 @@ public:
     auto read_timeout = std::optional<located<duration>>{};
     auto write_timeout = std::optional<located<duration>>{};
     argument_parser2::operator_("cache")
-      .add(id, "<id>")
-      .add("mode", mode)
-      .add("capacity", capacity)
-      .add("read_timeout", read_timeout)
-      .add("write_timeout", write_timeout)
+      .pos("id", id)
+      .key("mode", mode)
+      .key("capacity", capacity)
+      .key("read_timeout", read_timeout)
+      .key("write_timeout", write_timeout)
       .parse(inv, ctx)
       .ignore();
     auto failed = false;

@@ -3,7 +3,7 @@
 Use Tenzir's REST API directly from a pipeline.
 
 ```tql
-api endpoint:str, [request_body=str]
+api endpoint:string, [request_body:string]
 ```
 
 ## Description
@@ -11,13 +11,13 @@ api endpoint:str, [request_body=str]
 The `api` operator interacts with Tenzir's REST API without needing to spin up a
 web server, making all APIs accessible from within pipelines.
 
-### `endpoint: str`
+### `endpoint: string`
 
 The endpoint to request, e.g., `/pipeline/list` to list all managed pipelines.
 
 Tenzir's [REST API specification](/api) lists all available endpoints.
 
-### `request_body = str (optional)`
+### `request_body: string (optional)`
 
 A single string containing the JSON request body to send with the request.
 
@@ -32,5 +32,9 @@ api "/pipeline/list"
 ### Create a new pipeline and start it immediately
 
 ```tql
-api "/pipeline/create", request_body=r#"{"name": "Suricata Import", "definition": "from file /tmp/eve.sock read suricata", "autostart": {"created": true}}"#
+api "/pipeline/create", {
+  name: "Suricata Import",
+  definition: "from file /tmp/eve.sock read suricata",
+  autostart: { created: true },
+}
 ```

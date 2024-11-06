@@ -3,7 +3,7 @@
 Computes a SHA-512 hash digest.
 
 ```tql
-hash_sha512(x:any, [seed=str]) -> string
+hash_sha512(x:any, [seed=string]) -> string
 ```
 
 ## Description

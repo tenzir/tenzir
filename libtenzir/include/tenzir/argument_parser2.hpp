@@ -69,29 +69,33 @@ public:
 
   /// Adds a required positional argument.
   template <argument_parser_type T>
-  auto add(T& x, std::string meta) -> argument_parser2&;
+  auto pos(std::string name, T& x, std::string type = maybe_default<T>)
+    -> argument_parser2&;
 
   /// Adds an optional positional argument.
   template <argument_parser_type T>
-  auto add(std::optional<T>& x, std::string meta) -> argument_parser2&;
+  auto pos(std::string name, std::optional<T>& x,
+           std::string type = maybe_default<T>) -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
   /// Adds a required named argument.
   template <argument_parser_type T>
-  auto add(std::string name, T& x) -> argument_parser2&;
-
-  // ------------------------------------------------------------------------
+  auto key(std::string name, T& x, std::string type = maybe_default<T>)
+    -> argument_parser2&;
 
   /// Adds an optional named argument.
   template <argument_parser_type T>
-  auto add(std::string name, std::optional<T>& x) -> argument_parser2&;
+  auto key(std::string name, std::optional<T>& x,
+           std::string type = maybe_default<T>) -> argument_parser2&;
 
   /// Adds an optional named argument.
-  auto add(std::string name, std::optional<location>& x) -> argument_parser2&;
+  auto key(std::string name, std::optional<location>& x, std::string type = "")
+    -> argument_parser2&;
 
   /// Adds an optional named argument.
-  auto add(std::string name, bool& x) -> argument_parser2&;
+  auto key(std::string name, bool& x, std::string type = "")
+    -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
@@ -107,6 +111,16 @@ public:
   auto docs() const -> std::string;
 
 private:
+  /// For some types, we do not want to implicit default to a generic string. If
+  /// your code fails to compile because of this constraint, add a third
+  /// parameter which described the argument "type".
+  ///
+  /// Records could also be disallowed here, but unlike lists, it seems like we
+  /// use "record" anyway and do not specify a more concrete type.
+  template <class T>
+    requires(not concepts::one_of<T, ast::expression, list, located<list>>)
+  static constexpr char const* maybe_default = "";
+
   enum class kind { op, fn };
 
   argument_parser2(kind kind, std::string name)
@@ -118,6 +132,9 @@ private:
   }
 
   template <class T>
+  static auto make_setter(T& x) -> auto;
+
+  template <class T>
   using setter = std::function<void(T)>;
 
   template <class... Ts>
@@ -127,12 +144,25 @@ private:
     = caf::detail::tl_apply_t<argument_parser_full_types, setter_variant>;
 
   struct positional {
+    positional(std::string name, std::string type, any_setter set)
+      : name{std::move(name)}, type{std::move(type)}, set{std::move(set)} {
+    }
+
+    std::string name;
+    std::string type;
     any_setter set;
-    std::string meta;
   };
 
   struct named {
+    named(std::string name, std::string type, any_setter set, bool required)
+      : name{std::move(name)},
+        type{std::move(type)},
+        set{std::move(set)},
+        required{required} {
+    }
+
     std::string name;
+    std::string type;
     any_setter set;
     bool required = false;
     std::optional<location> found = std::nullopt;
