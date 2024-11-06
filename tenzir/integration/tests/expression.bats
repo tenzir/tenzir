@@ -124,7 +124,7 @@ EOF
 
 @test "in list" {
   check tenzir --tql2 -f /dev/stdin <<EOF
-  from "${INPUTSDIR}/json/lists.json" 
+  from "${INPUTSDIR}/json/lists.json"
   exists = x in y
 EOF
 }
@@ -135,6 +135,10 @@ from {
   x: "abc".starts_with("ab"),
   y: starts_with("abc", "ab"),
 }
+EOF
+  check tenzir -f '/dev/stdin' <<EOF
+from [{x: 1}, {x: 2}]
+summarize x.sum()
 EOF
   check ! tenzir -f '/dev/stdin' <<EOF
 from { x: "abc".starts_with() }

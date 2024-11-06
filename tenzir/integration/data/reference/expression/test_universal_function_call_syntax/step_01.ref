@@ -1,8 +1,1 @@
-error: expected additional positional argument `<string>`
- --> /dev/stdin:1:17
-  |
-1 | from { x: "abc".starts_with() }
-  |                 ^^^^^^^^^^^ 
-  |
-  = usage: starts_with(<string>, <string>)
-  = docs: https://docs.tenzir.com/functions/starts_with
+{"sum(x)": 3}
