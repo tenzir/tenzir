@@ -20,17 +20,6 @@ namespace {
 class load_plugin final
   : public virtual operator_plugin2<loader_adapter<zmq_loader>> {
 public:
-  ~load_plugin() noexcept override {
-    // Destroy the singleton.
-    context.reset();
-  }
-
-  auto initialize(const record&, const record&) -> caf::error override {
-    // Create the singleton.
-    context = std::make_shared<::zmq::context_t>();
-    return {};
-  }
-
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = loader_args{};
@@ -69,17 +58,6 @@ public:
 class save_plugin final
   : public virtual operator_plugin2<saver_adapter<zmq_saver>> {
 public:
-  ~save_plugin() noexcept override {
-    // Destroy the singleton.
-    context.reset();
-  }
-
-  auto initialize(const record&, const record&) -> caf::error override {
-    // Create the singleton.
-    context = std::make_shared<::zmq::context_t>();
-    return {};
-  }
-
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = saver_args{};

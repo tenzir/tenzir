@@ -22,16 +22,19 @@ using namespace std::chrono_literals;
 
 namespace tenzir::plugins::zmq {
 
+/// This is the 0mq context singleton. There exists exactly one context per
+/// process so that inproc sockets can be used across pipelines within the same
+/// node. Since accessing a 0mq context instance is thread-safe, we can share it
+/// globally.
+inline auto global_context() -> ::zmq::context_t& {
+  static auto ctx = ::zmq::context_t{};
+  return ctx;
+}
+
 namespace {
 
 /// The default ZeroMQ socket endpoint.
 constexpr auto default_endpoint = "tcp://127.0.0.1:5555";
-
-/// This is the 0mq context singleton. There exists exactly one context per
-/// process so that inproc sockets can be used across pipelines within the same
-/// node. The plugin initializes and deinitializes the singleton. Since
-/// accessing a 0mq context instance is thread-safe, we can share it globally.
-std::shared_ptr<::zmq::context_t> context;
 
 struct saver_args {
   std::optional<located<std::string>> endpoint;
@@ -167,10 +170,9 @@ class connection {
 
 public:
   static auto
-  make_source(std::shared_ptr<::zmq::context_t> ctx, const loader_args& args)
-    -> caf::expected<connection> {
+  make_source(const loader_args& args) -> caf::expected<connection> {
     try {
-      auto result = connection{std::move(ctx), ::zmq::socket_type::sub};
+      auto result = connection{::zmq::socket_type::sub};
       const auto& endpoint = args.endpoint->inner;
       if (args.monitor) {
         TENZIR_ASSERT(endpoint.starts_with("tcp://"));
@@ -189,10 +191,9 @@ public:
     }
   }
 
-  static auto make_sink(std::shared_ptr<::zmq::context_t> ctx,
-                        const saver_args& args) -> caf::expected<connection> {
+  static auto make_sink(const saver_args& args) -> caf::expected<connection> {
     try {
-      auto result = connection{std::move(ctx), ::zmq::socket_type::pub};
+      auto result = connection{::zmq::socket_type::pub};
       const auto& endpoint = args.endpoint->inner;
       if (args.monitor) {
         TENZIR_ASSERT(endpoint.starts_with("tcp://"));
@@ -315,9 +316,8 @@ private:
 
   connection() = default;
 
-  connection(std::shared_ptr<::zmq::context_t> ctx,
-             ::zmq::socket_type socket_type)
-    : ctx_{std::move(ctx)}, socket_{*ctx_, socket_type} {
+  connection(::zmq::socket_type socket_type)
+    : socket_{global_context(), socket_type} {
     // The linger period determines how long pending messages which have yet
     // to be sent to a peer shall linger in memory after a socket is closed
     // with zmq_close(3), and further affects the termination of the socket's
@@ -330,7 +330,7 @@ private:
 
   /// Sets up a monitoring socket for this connection.
   auto monitor() -> void {
-    monitor_ = {*ctx_, socket_};
+    monitor_ = {global_context(), socket_};
   }
 
   /// Starts listening on the provided endpoint.
@@ -351,7 +351,6 @@ private:
     socket_.connect(endpoint);
   }
 
-  std::shared_ptr<::zmq::context_t> ctx_;
   ::zmq::socket_t socket_;
   std::optional<class monitor> monitor_;
   size_t num_peers_{0};
@@ -366,7 +365,7 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    auto conn = connection::make_source(context, args_);
+    auto conn = connection::make_source(args_);
     if (not conn) {
       TENZIR_ERROR(conn.error());
       return std::nullopt;
@@ -428,7 +427,7 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto conn = connection::make_sink(context, args_);
+    auto conn = connection::make_sink(args_);
     if (not conn) {
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to setup ZeroMQ: {}",
@@ -476,4 +475,5 @@ public:
 private:
   saver_args args_;
 };
-}}
+} // namespace
+} // namespace tenzir::plugins::zmq
