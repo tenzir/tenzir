@@ -232,7 +232,7 @@ public:
       // instead. This could be done differently by slightly rewriting the
       // parser. Because this is not (yet) reflected in the AST, the optional
       // parenthesis are not reflected.
-      if (call->subject) {
+      if (call->method) {
         // TODO: We could consider rewriting method calls to mutate their
         // subject, e.g., `foo.bar.baz(qux) => foo.bar = foo.bar.baz(qux)`.
         diagnostic::error("expected operator invocation, found method call")
@@ -750,13 +750,18 @@ public:
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
     auto args = std::vector<ast::expression>{};
+    auto method = false;
+    if (subject) {
+      method = true;
+      args.push_back(std::move(*subject));
+    }
     while (true) {
       if (auto rpar = accept(tk::rpar)) {
         return ast::function_call{
-          std::move(subject),
           std::move(fn),
           std::move(args),
           rpar.location,
+          method,
         };
       }
       if (auto comma = accept(tk::comma)) {

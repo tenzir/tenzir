@@ -528,7 +528,7 @@ private:
 };
 
 class plugin2 final : public virtual operator_plugin2<sort_operator2>,
-                      public virtual method_plugin {
+                      public virtual function_plugin {
 public:
   auto make(operator_factory_plugin::invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -558,10 +558,10 @@ public:
     return std::make_unique<sort_operator2>(std::move(sort_exprs));
   }
 
-  auto make_function(method_plugin::invocation inv, session ctx) const
+  auto make_function(function_plugin::invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::method(name()).add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
     return function_use::make(
       [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
         auto arg = eval(expr);

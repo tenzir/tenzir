@@ -16,7 +16,7 @@ namespace tenzir::plugins::string {
 
 namespace {
 
-class starts_or_ends_with : public virtual method_plugin {
+class starts_or_ends_with : public virtual function_plugin {
 public:
   explicit starts_or_ends_with(bool starts_with) : starts_with_{starts_with} {
   }
@@ -29,7 +29,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .add(arg_expr, "<string>")
           .parse(inv, ctx));
@@ -73,7 +73,7 @@ private:
   bool starts_with_;
 };
 
-class trim : public virtual method_plugin {
+class trim : public virtual function_plugin {
 public:
   explicit trim(std::string name, std::string fn_name)
     : name_{std::move(name)}, fn_name_{std::move(fn_name)} {
@@ -87,7 +87,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .add(characters, "<characters>")
           .parse(inv, ctx));
@@ -131,7 +131,7 @@ private:
   std::string fn_name_;
 };
 
-class nullary_method : public virtual method_plugin {
+class nullary_method : public virtual function_plugin {
 public:
   nullary_method(std::string name, std::string fn_name, type result_ty)
     : name_{std::move(name)},
@@ -160,7 +160,7 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr)](
@@ -204,7 +204,7 @@ private:
   std::shared_ptr<arrow::DataType> result_arrow_ty_;
 };
 
-class replace : public virtual method_plugin {
+class replace : public virtual function_plugin {
 public:
   replace() = default;
   explicit replace(bool regex) : regex_{regex} {
@@ -220,7 +220,7 @@ public:
     auto pattern = located<std::string>{};
     auto replacement = std::string{};
     auto max_replacements = std::optional<located<int64_t>>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .add(pattern, "<pattern>")
           .add(replacement, "<replacement>")
@@ -280,7 +280,7 @@ private:
   bool regex_ = {};
 };
 
-class slice : public virtual method_plugin {
+class slice : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.slice";
@@ -292,7 +292,7 @@ public:
     auto begin = std::optional<located<int64_t>>{};
     auto end = std::optional<located<int64_t>>{};
     auto stride = std::optional<located<int64_t>>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .add("begin", begin)
           .add("end", end)
@@ -354,7 +354,7 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    TRY(argument_parser2::method("string")
+    TRY(argument_parser2::function("string")
           .add(subject_expr, "<expr>")
           .parse(inv, ctx));
     return function_use::make([subject_expr = std::move(subject_expr)](

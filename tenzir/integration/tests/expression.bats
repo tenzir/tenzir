@@ -128,3 +128,18 @@ EOF
   exists = x in y
 EOF
 }
+
+@test "universal function call syntax" {
+  check tenzir -f '/dev/stdin' <<EOF
+from {
+  x: "abc".starts_with("ab"),
+  y: starts_with("abc", "ab"),
+}
+EOF
+  check ! tenzir -f '/dev/stdin' <<EOF
+from { x: "abc".starts_with() }
+EOF
+  check ! tenzir -f '/dev/stdin' <<EOF
+from { x: starts_with("abc") }
+EOF
+}

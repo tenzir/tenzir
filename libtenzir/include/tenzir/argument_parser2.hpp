@@ -56,11 +56,7 @@ public:
   }
 
   static auto function(std::string name) -> argument_parser2 {
-    return argument_parser2{kind::function, std::move(name)};
-  }
-
-  static auto method(std::string name) -> argument_parser2 {
-    return argument_parser2{kind::method, std::move(name)};
+    return argument_parser2{kind::fn, std::move(name)};
   }
 
   // ------------------------------------------------------------------------
@@ -105,7 +101,7 @@ public:
   auto docs() const -> std::string;
 
 private:
-  enum class kind { op, function, method };
+  enum class kind { op, fn };
 
   argument_parser2(kind kind, std::string name)
     : kind_{kind}, name_{std::move(name)} {
