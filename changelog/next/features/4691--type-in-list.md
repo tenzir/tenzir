@@ -1,3 +1,3 @@
-Existence of elements in lists can now be checked using the `in` binary
-operator. This can be used for simpler filtering. For example: `where x in
-["Some", "important", "value"]`
+The relational operator `in` now supports checking for existence of an element
+in a list. For example, `where x in ["important", "values"]` is functionally
+equivalent to `where x == "important" or x == "values"`.
