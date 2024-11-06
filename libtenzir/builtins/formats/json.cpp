@@ -1229,7 +1229,7 @@ using read_suricata_plugin
 using read_zeek_plugin
   = configured_read_plugin<"zeek_json", "_path", "zeek", ".">;
 
-class parse_json_plugin final : public virtual method_plugin {
+class parse_json_plugin final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parse_json";
@@ -1240,7 +1240,7 @@ public:
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     // TODO: Consider adding a `precise` option (this needs evaluator support).
-    TRY(argument_parser2::method("parse_json")
+    TRY(argument_parser2::function("parse_json")
           .add(expr, "<string>")
           .parse(inv, ctx));
     return function_use::make(

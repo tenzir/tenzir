@@ -30,20 +30,13 @@ auto argument_parser2::parse(const operator_factory_plugin::invocation& inv,
 
 auto argument_parser2::parse(const function_plugin::invocation& inv,
                              session ctx) -> failure_or<void> {
-  TENZIR_ASSERT(kind_ != kind::op);
-  if (inv.call.subject) {
-    auto args = std::vector<ast::expression>{};
-    args.reserve(1 + inv.call.args.size());
-    args.push_back(*inv.call.subject);
-    args.insert(args.end(), inv.call.args.begin(), inv.call.args.end());
-    return parse(inv.call.fn, args, ctx);
-  }
+  TENZIR_ASSERT(kind_ == kind::fn);
   return parse(inv.call.fn, inv.call.args, ctx);
 }
 
 auto argument_parser2::parse(const ast::function_call& call, session ctx)
   -> failure_or<void> {
-  TENZIR_ASSERT(kind_ != kind::op);
+  TENZIR_ASSERT(kind_ == kind::fn);
   return parse(call.fn, call.args, ctx);
 }
 
@@ -268,23 +261,14 @@ auto argument_parser2::parse(const ast::entity& self,
 
 auto argument_parser2::usage() const -> std::string {
   if (usage_cache_.empty()) {
-    if (kind_ == kind::method) {
-      TENZIR_ASSERT(not positional_.empty());
-      usage_cache_ += positional_[0].meta;
-      usage_cache_ += '.';
-    }
     usage_cache_ += name_;
     usage_cache_ += kind_ == kind::op ? ' ' : '(';
     auto has_previous = false;
     for (auto [idx, positional] : detail::enumerate(positional_)) {
-      auto first = idx == 0;
       auto last = idx == positional_.size() - 1;
-      if (first && kind_ == kind::method) {
-        continue;
-      }
       auto is_pipeline
         = std::holds_alternative<setter<located<pipeline>>>(positional.set);
-      if (last && is_pipeline) {
+      if (last && is_pipeline && kind_ == kind::op) {
         usage_cache_ += ' ';
       } else if (std::exchange(has_previous, true)) {
         usage_cache_ += ", ";
@@ -345,10 +329,8 @@ auto argument_parser2::docs() const -> std::string {
     switch (kind_) {
       case kind::op:
         return "tql2/operators";
-      case kind::function:
+      case kind::fn:
         return "functions";
-      case kind::method:
-        return "methods";
     }
     TENZIR_UNREACHABLE();
   });

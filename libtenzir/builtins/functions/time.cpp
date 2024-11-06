@@ -74,7 +74,7 @@ public:
   }
 };
 
-class since_epoch final : public method_plugin {
+class since_epoch final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "since_epoch";
@@ -195,7 +195,7 @@ public:
   }
 };
 
-class year_month_day final : public method_plugin {
+class year_month_day final : public function_plugin {
 public:
   explicit year_month_day(ymd_subtype field) : ymd_subtype_(field) {
   }
@@ -260,7 +260,7 @@ private:
   ymd_subtype ymd_subtype_;
 };
 
-class as_secs final : public method_plugin {
+class as_secs final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "as_secs";

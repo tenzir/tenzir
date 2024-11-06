@@ -18,7 +18,8 @@
       args: [
         
       ],
-      rpar: 6..7
+      rpar: 6..7,
+      method: false
     }
   },
   assignment {
@@ -40,7 +41,8 @@
       args: [
         root_field `c` @ 14..15
       ],
-      rpar: 15..16
+      rpar: 15..16,
+      method: false
     }
   },
   assignment {
@@ -72,7 +74,8 @@
           right: root_field `d` @ 25..26
         }
       ],
-      rpar: 26..27
+      rpar: 26..27,
+      method: false
     }
   },
   assignment {
@@ -105,7 +108,8 @@
           right: root_field `e` @ 39..40
         }
       ],
-      rpar: 40..41
+      rpar: 40..41,
+      method: false
     }
   },
   assignment {
@@ -150,7 +154,8 @@
         },
         root_field `i` @ 61..62
       ],
-      rpar: 63..64
+      rpar: 63..64,
+      method: false
     }
   },
   invocation {
@@ -162,7 +167,6 @@
     },
     args: [
       function_call {
-        subject: root_field `a` @ 69..70,
         fn: {
           path: [
             `b` @ 71..72
@@ -170,9 +174,10 @@
           ref: unresolved
         },
         args: [
-          
+          root_field `a` @ 69..70
         ],
-        rpar: 73..74
+        rpar: 73..74,
+        method: true
       }
     ]
   },
@@ -185,7 +190,6 @@
     },
     args: [
       function_call {
-        subject: root_field `a` @ 79..80,
         fn: {
           path: [
             `b` @ 81..82
@@ -193,9 +197,11 @@
           ref: unresolved
         },
         args: [
+          root_field `a` @ 79..80,
           root_field `c` @ 83..84
         ],
-        rpar: 84..85
+        rpar: 84..85,
+        method: true
       }
     ]
   },
@@ -208,7 +214,6 @@
     },
     args: [
       function_call {
-        subject: root_field `a` @ 90..91,
         fn: {
           path: [
             `b` @ 92..93
@@ -216,6 +221,7 @@
           ref: unresolved
         },
         args: [
+          root_field `a` @ 90..91,
           assignment {
             left: simple_selector {
               expr: root_field `c` @ 94..95,
@@ -228,7 +234,8 @@
             right: root_field `d` @ 96..97
           }
         ],
-        rpar: 97..98
+        rpar: 97..98,
+        method: true
       }
     ]
   },
@@ -241,7 +248,6 @@
     },
     args: [
       function_call {
-        subject: root_field `a` @ 103..104,
         fn: {
           path: [
             `b` @ 105..106
@@ -249,6 +255,7 @@
           ref: unresolved
         },
         args: [
+          root_field `a` @ 103..104,
           root_field `c` @ 107..108,
           assignment {
             left: simple_selector {
@@ -262,7 +269,8 @@
             right: root_field `e` @ 112..113
           }
         ],
-        rpar: 113..114
+        rpar: 113..114,
+        method: true
       }
     ]
   },
@@ -275,7 +283,6 @@
     },
     args: [
       function_call {
-        subject: root_field `a` @ 119..120,
         fn: {
           path: [
             `b` @ 121..122
@@ -283,6 +290,7 @@
           ref: unresolved
         },
         args: [
+          root_field `a` @ 119..120,
           assignment {
             left: simple_selector {
               expr: root_field `c` @ 123..124,
@@ -308,7 +316,8 @@
           },
           root_field `i` @ 136..137
         ],
-        rpar: 138..139
+        rpar: 138..139,
+        method: true
       }
     ]
   }

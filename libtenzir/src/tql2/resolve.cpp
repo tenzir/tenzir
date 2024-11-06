@@ -46,8 +46,6 @@ public:
           return "operator";
         case context_t::fn_name:
           return "function";
-        case context_t::method_name:
-          return "method";
         case context_t::none:
           TENZIR_UNREACHABLE();
       }
@@ -55,18 +53,16 @@ public:
     });
     if (not entity) {
       auto available = std::invoke([&] {
-        switch (context_) {
-          case context_t::op_name:
+        switch (ns) {
+          case entity_ns::op:
             return reg_.operator_names();
-          case context_t::fn_name:
+          case entity_ns::fn:
             return reg_.function_names();
-          case context_t::method_name:
-            return reg_.method_names();
-          case context_t::none:
-            TENZIR_UNREACHABLE();
         }
         TENZIR_UNREACHABLE();
       });
+      // TODO: Consider reporting whether an entity with this name of another
+      // type would be found.
       diagnostic::error("{} `{}` not found", expected, name)
         .primary(x)
         .hint("must be one of: {}", fmt::join(available, ", "))
@@ -74,36 +70,7 @@ public:
       result_ = failure::promise();
       return;
     }
-    // TODO: Check if this entity has right type?
-    entity->match(
-      [&](std::reference_wrapper<const function_plugin> function) {
-        if (dynamic_cast<const method_plugin*>(&function.get())) {
-          if (context_ != context_t::method_name) {
-            diagnostic::error("expected {}, got method", expected)
-              .primary(x)
-              .emit(diag_);
-            result_ = failure::promise();
-            return;
-          }
-        } else if (context_ != context_t::fn_name) {
-          diagnostic::error("expected {}, got function", expected)
-            .primary(x)
-            .emit(diag_);
-          result_ = failure::promise();
-          return;
-        }
-        x.ref = std::move(path);
-      },
-      [&](std::reference_wrapper<const operator_factory_plugin>) {
-        if (context_ != context_t::op_name) {
-          diagnostic::error("expected {}, got operator", expected)
-            .primary(x)
-            .emit(diag_);
-          result_ = failure::promise();
-          return;
-        }
-        x.ref = std::move(path);
-      });
+    x.ref = std::move(path);
   }
 
   void visit(ast::invocation& x) {
@@ -116,11 +83,7 @@ public:
   }
 
   void visit(ast::function_call& x) {
-    if (x.subject) {
-      visit(*x.subject);
-    }
-    auto prev = std::exchange(context_, x.subject ? context_t::method_name
-                                                  : context_t::fn_name);
+    auto prev = std::exchange(context_, context_t::fn_name);
     visit(x.fn);
     context_ = prev;
     for (auto& y : x.args) {
@@ -138,7 +101,7 @@ public:
   }
 
 private:
-  enum class context_t { none, op_name, fn_name, method_name };
+  enum class context_t { none, op_name, fn_name };
   const registry& reg_;
   diagnostic_handler& diag_;
   context_t context_ = context_t::none;

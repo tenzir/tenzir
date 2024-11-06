@@ -99,7 +99,7 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
     TENZIR_ASSERT(summarize);
     TENZIR_ASSERT(sort);
     auto ident = ast::identifier{"count", loc};
-    auto call = ast::function_call{std::nullopt, ast::entity{{ident}}, {}, loc};
+    auto call = ast::function_call{ast::entity{{ident}}, {}, loc, false};
     auto out
       = ast::simple_selector::try_from(ast::root_field{std::move(ident)});
     TENZIR_ASSERT(out);

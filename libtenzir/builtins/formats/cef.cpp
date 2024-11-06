@@ -268,7 +268,7 @@ public:
   }
 };
 
-class parse_cef final : public virtual method_plugin {
+class parse_cef final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "parse_cef";
@@ -277,7 +277,8 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::method(name()).add(expr, "<string>").parse(inv, ctx));
+    TRY(
+      argument_parser2::function(name()).add(expr, "<string>").parse(inv, ctx));
     return function_use::make(
       [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
         auto arg = eval(expr);

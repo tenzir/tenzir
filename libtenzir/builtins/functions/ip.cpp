@@ -70,7 +70,7 @@ public:
   }
 };
 
-class is_v4_or_v6 final : public method_plugin {
+class is_v4_or_v6 final : public function_plugin {
 public:
   is_v4_or_v6(bool v4) : v4_{v4} {
   }

@@ -114,18 +114,7 @@ auto registry::operator_names() const -> std::vector<std::string_view> {
 auto registry::function_names() const -> std::vector<std::string_view> {
   auto result = std::vector<std::string_view>{};
   for (auto& [name, def] : defs_) {
-    if (def.fn and not dynamic_cast<const method_plugin*>(def.fn)) {
-      result.push_back(name);
-    }
-  }
-  std::ranges::sort(result);
-  return result;
-}
-
-auto registry::method_names() const -> std::vector<std::string_view> {
-  auto result = std::vector<std::string_view>{};
-  for (auto& [name, def] : defs_) {
-    if (def.fn and dynamic_cast<const method_plugin*>(def.fn)) {
+    if (def.fn) {
       result.push_back(name);
     }
   }

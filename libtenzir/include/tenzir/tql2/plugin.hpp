@@ -88,8 +88,6 @@ public:
   virtual auto function_name() const -> std::string;
 };
 
-class method_plugin : public virtual function_plugin {};
-
 class aggregation_instance {
 public:
   virtual ~aggregation_instance() = default;

@@ -75,7 +75,8 @@
                       name: `ParentImage` @ 135..146
                     }
                   ],
-                  rpar: 146..147
+                  rpar: 146..147,
+                  method: false
                 }
               },
               field {
@@ -100,7 +101,8 @@
                       name: `ParentImage` @ 193..204
                     }
                   ],
-                  rpar: 204..205
+                  rpar: 204..205,
+                  method: false
                 }
               },
               field {
@@ -141,7 +143,8 @@
                 name: `ParentProcessId` @ 277..292
               }
             ],
-            rpar: 292..293
+            rpar: 292..293,
+            method: false
           }
         }
       ],
@@ -318,7 +321,8 @@
       args: [
         root_field `category_name` @ 637..650
       ],
-      rpar: 650..651
+      rpar: 650..651,
+      method: false
     }
   },
   assignment {
@@ -355,7 +359,8 @@
       args: [
         root_field `class_name` @ 711..721
       ],
-      rpar: 721..722
+      rpar: 721..722,
+      method: false
     }
   },
   assignment {
@@ -637,7 +642,8 @@
                       name: `Image` @ 1376..1381
                     }
                   ],
-                  rpar: 1381..1382
+                  rpar: 1381..1382,
+                  method: false
                 }
               },
               field {
@@ -662,7 +668,8 @@
                       name: `Image` @ 1428..1433
                     }
                   ],
-                  rpar: 1433..1434
+                  rpar: 1433..1434,
+                  method: false
                 }
               },
               field {
@@ -703,7 +710,8 @@
                 name: `ProcessId` @ 1506..1515
               }
             ],
-            rpar: 1515..1516
+            rpar: 1515..1516,
+            method: false
           }
         }
       ],
@@ -822,22 +830,6 @@
       args: [
         binary_expr {
           left: function_call {
-            subject: function_call {
-              fn: {
-                path: [
-                  `time` @ 1689..1693
-                ],
-                ref: unresolved
-              },
-              args: [
-                field_access {
-                  left: root_field `metadata` @ 1694..1702,
-                  dot: 1702..1703,
-                  name: `original_time` @ 1703..1716
-                }
-              ],
-              rpar: 1716..1717
-            },
             fn: {
               path: [
                 `timestamp` @ 1718..1727
@@ -845,9 +837,26 @@
               ref: unresolved
             },
             args: [
-              
+              function_call {
+                fn: {
+                  path: [
+                    `time` @ 1689..1693
+                  ],
+                  ref: unresolved
+                },
+                args: [
+                  field_access {
+                    left: root_field `metadata` @ 1694..1702,
+                    dot: 1702..1703,
+                    name: `original_time` @ 1703..1716
+                  }
+                ],
+                rpar: 1716..1717,
+                method: false
+              }
             ],
-            rpar: 1728..1729
+            rpar: 1728..1729,
+            method: true
           },
           op: "mul" @ 1730..1731,
           right: constant {
@@ -856,7 +865,8 @@
           }
         }
       ],
-      rpar: 1736..1737
+      rpar: 1736..1737,
+      method: false
     }
   },
   assignment {

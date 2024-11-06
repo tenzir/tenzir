@@ -40,7 +40,6 @@ public:
   // TODO: Everything below assumes that there are no modules.
   auto operator_names() const -> std::vector<std::string_view>;
   auto function_names() const -> std::vector<std::string_view>;
-  auto method_names() const -> std::vector<std::string_view>;
 
   void add(std::string name, entity_def def);
 
