@@ -36,7 +36,7 @@ namespace tenzir::plugins::kafka {
 namespace {
 
 // Default topic if the user doesn't provide one.
-static constexpr auto default_topic = "tenzir";
+inline constexpr auto default_topic = "tenzir";
 
 // Valid values:
 // - beginning | end | stored
