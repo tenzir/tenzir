@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "kafka/operator.hpp"
+#include "tenzir/tql2/eval.hpp"
 
 #include <tenzir/tql2/plugin.hpp>
 
@@ -43,20 +44,43 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = loader_args{};
+    auto offset = std::optional<ast::expression>{};
     auto options = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
           .add("topic", args.topic)
           .add("count", args.count)
           .add("exit", args.exit)
-          .add("offset", args.offset)
+          .add("offset", offset)
           .add("options", options)
           .parse(inv, ctx));
-    if (args.offset and not offset_parser()(args.offset->inner)) {
-      diagnostic::error("invalid `offset` value")
-        .primary(args.offset->source)
-        .note("must be `beginning`, `end`, `store`, `<offset>` or `-<offset>`")
-        .emit(ctx);
-      return failure::promise();
+    if (offset) {
+      TRY(auto evaluated, const_eval(offset.value(), ctx.dh()));
+      constexpr auto f = detail::overload{
+        [](const std::integral auto& value) -> std::optional<std::string> {
+          return fmt::to_string(value);
+        },
+        [](const std::string& value) -> std::optional<std::string> {
+          return value;
+        },
+        [](const auto&) -> std::optional<std::string> {
+          return std::nullopt;
+        }};
+      auto result = caf::visit(f, evaluated);
+      if (not result) {
+        diagnostic::error("expected `string` or `int`")
+          .primary(offset->get_location())
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (not offset_parser()(result.value())) {
+        diagnostic::error("invalid `offset` value")
+          .primary(offset->get_location())
+          .note(
+            "must be `beginning`, `end`, `store`, `<offset>` or `-<offset>`")
+          .emit(ctx);
+        return failure::promise();
+      }
+      args.offset = located{std::move(result).value(), offset->get_location()};
     }
     if (options) {
       for (auto& [k, v] : options->inner) {
