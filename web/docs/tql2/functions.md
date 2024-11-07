@@ -35,7 +35,7 @@ f(arg1:<type>, arg2=<type>, [arg3=type]) -> <type>
 
 TQL features the [uniform function call syntax
 (UFCS)](https://en.wikipedia.org/wiki/Uniform_Function_Call_Syntax), which
-allows you to interchangeably call a function with more than one argument either
+allows you to interchangeably call a function with at least one argument either
 as *free function* or *method*. For example, `length(str)` and `str.length()`
 resolve to the identical function call. The latter syntax is particularly
 suitable for function chaining, e.g., `x.f().g().h()` reads left-to-right as
