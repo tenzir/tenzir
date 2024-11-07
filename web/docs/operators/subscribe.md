@@ -31,6 +31,8 @@ data rather than slow down their publishers.
 
 An optional topic identifying the channel events are published under.
 
+Defaults to `main`.
+
 ## Examples
 
 Subscribe to the events under the topic `zeek-conn`:

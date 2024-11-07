@@ -20,7 +20,7 @@ original order.
 ### `topic: str (optional)`
 
 An optional topic for publishing events under. If unspecified, the operator
-publishes events to a global unnamed feed.
+publishes events to the topic `main`.
 
 ## Examples
 

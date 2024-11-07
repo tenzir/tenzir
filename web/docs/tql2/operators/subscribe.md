@@ -22,7 +22,7 @@ data rather than slow down their publishers.
 ### `topic: str (optional)`
 
 An optional channel name to subscribe to. If unspecified, the operator
-subscribes to the global unnamed feed.
+subscribes to the topic `main`.
 
 ## Examples
 
