@@ -12,10 +12,10 @@ Operator | Description | Example
 [`select`](./operators/select.md) | Selects some values and discard the rest | `select name, id=metadata.id`
 [`drop`](./operators/drop.md) | Removes fields from the event | `drop name, metadata.id`
 [`enumerate`](./operators/enumerate.md) | Adds a field with the number of the event | `enumerate num`
+[`unroll`](./operators/unroll.md) | Unrolls a field of type list, duplicating the surrounding event | `unroll names` |
 
 <!--
 TODO: Do we want to document set, and if so, how?
-[`unroll`]() | … | `…`
 [`yield`]() | … | `…`
 -->
 
