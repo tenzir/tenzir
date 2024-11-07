@@ -213,8 +213,8 @@ This behavior is different from engines that work with structured data where
 operators typically work with fixed set of tables. While schema-less systems,
 such as document-oriented databases, offer more simplicity, their
 one-record-at-a-time processing comes at the cost of performance. In the
-spectrum of performance and ease of use, Tenzir therefore [fills a
-gap](/why-tenzir):
+spectrum of performance and ease of use, Tenzir therefore fills a
+gap:
 
 ![Structured vs.
 Document-Oriented](structured-vs-document-oriented.excalidraw.svg)
