@@ -74,6 +74,7 @@ public:
   struct invocation {
     explicit invocation(const ast::function_call& call) : call{call} {
     }
+    ~invocation() = default;
     invocation(const invocation&) = delete;
     invocation(invocation&&) = delete;
     auto operator=(const invocation&) -> invocation& = delete;
@@ -94,7 +95,14 @@ public:
 
   virtual void update(const table_slice& input, session ctx) = 0;
 
-  virtual auto finish() -> data = 0;
+  virtual auto get() const -> data = 0;
+
+  /// Save and restore the state of the aggregation instance. Note that the
+  /// restore function should eventually be moved into `aggregation_plugin`, but
+  /// we cannot do that yet as quite a few aggregation instances store
+  /// `ast::expression`, which is not yet serializable.
+  virtual auto save() const -> chunk_ptr = 0;
+  virtual auto restore(chunk_ptr chunk, session ctx) -> void = 0;
 };
 
 class aggregation_plugin : public virtual function_plugin {

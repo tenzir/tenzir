@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -43,7 +45,7 @@ public:
     }
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     if constexpr (Kind == kind::mode) {
       const auto comp = [](const auto& lhs, const auto& rhs) {
         return lhs.second < rhs.second;
@@ -66,6 +68,69 @@ public:
         return as_vector(caf::get<record>(x))[0].second;
       });
       return result;
+    }
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    auto offsets
+      = std::vector<flatbuffers::Offset<fbs::aggregation::ValueCount>>{};
+    offsets.reserve(counts_.size());
+    for (const auto& [value, count] : counts_) {
+      offsets.push_back(
+        fbs::aggregation::CreateValueCount(fbb, pack(fbb, value), count));
+    }
+    const auto fb_result = fbb.CreateVector(offsets);
+    const auto fb_min_max
+      = fbs::aggregation::CreateModeValueCounts(fbb, fb_result);
+    fbb.Finish(fb_min_max);
+    return chunk::make(fbb.Release());
+  }
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::ModeValueCounts>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `{}` aggregation instance",
+              Kind == kind::mode ? "mode" : "value_counts")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_result = (*fb)->result();
+    if (not fb_result) {
+      diagnostic::warning("missing field `result`")
+        .note("failed to restore `{}` aggregation instance",
+              Kind == kind::mode ? "mode" : "value_counts")
+        .emit(ctx);
+      return;
+    }
+    counts_.clear();
+    counts_.reserve(fb_result->size());
+    for (const auto* fb_element : *fb_result) {
+      if (not fb_element) {
+        diagnostic::warning("missing element in field `result`")
+          .note("failed to restore `{}` aggregation instance",
+                Kind == kind::mode ? "mode" : "value_counts")
+          .emit(ctx);
+        return;
+      }
+      const auto* fb_element_value = fb_element->value();
+      if (not fb_element_value) {
+        diagnostic::warning("missing value for element in field `result`")
+          .note("failed to restore `{}` aggregation instance",
+                Kind == kind::mode ? "mode" : "value_counts")
+          .emit(ctx);
+        return;
+      }
+      auto value = data{};
+      if (auto err = unpack(*fb_element_value, value)) {
+        diagnostic::warning("{}", err)
+          .note("failed to restore `{}` aggregation instance",
+                Kind == kind::mode ? "mode" : "value_counts")
+          .emit(ctx);
+        return;
+      }
+      counts_.emplace(std::move(value), fb_element->count());
     }
   }
 

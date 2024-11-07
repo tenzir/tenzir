@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/aggregation_function.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -85,7 +87,7 @@ public:
     caf::visit(f, *arg.array);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     switch (state_) {
       case state::none:
         return all_;
@@ -95,6 +97,50 @@ public:
         return data{};
     }
     TENZIR_UNREACHABLE();
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto fb_state = [&] {
+      switch (state_) {
+        case state::none:
+          return fbs::aggregation::AnyAllState::None;
+        case state::failed:
+          return fbs::aggregation::AnyAllState::Failed;
+        case state::nulled:
+          return fbs::aggregation::AnyAllState::Nulled;
+      }
+      TENZIR_UNREACHABLE();
+    }();
+    const auto fb_any_all = fbs::aggregation::CreateAnyAll(fbb, all_, fb_state);
+    fbb.Finish(fb_any_all);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::AnyAll>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `all` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    all_ = (*fb)->result();
+    switch ((*fb)->state()) {
+      case fbs::aggregation::AnyAllState::None:
+        state_ = state::none;
+        return;
+      case fbs::aggregation::AnyAllState::Failed:
+        state_ = state::failed;
+        return;
+      case fbs::aggregation::AnyAllState::Nulled:
+        state_ = state::nulled;
+        return;
+    }
+    diagnostic::warning("unknown `state` value")
+      .note("failed to restore `all` aggregation instance")
+      .emit(ctx);
   }
 
 private:

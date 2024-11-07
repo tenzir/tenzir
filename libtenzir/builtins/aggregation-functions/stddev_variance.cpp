@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/aggregation_function.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -160,7 +162,7 @@ public:
     caf::visit(f, *arg.array);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     if (count_ == 0) {
       return data{};
     }
@@ -176,6 +178,60 @@ public:
         return result;
     }
     TENZIR_UNREACHABLE();
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto fb_state = [&] {
+      switch (state_) {
+        case state::none:
+          return fbs::aggregation::StddevVarianceState::None;
+        case state::failed:
+          return fbs::aggregation::StddevVarianceState::Failed;
+        case state::dur:
+          return fbs::aggregation::StddevVarianceState::Duration;
+        case state::numeric:
+          return fbs::aggregation::StddevVarianceState::Numeric;
+      }
+      TENZIR_UNREACHABLE();
+    }();
+    const auto fb_mean = fbs::aggregation::CreateStddevVariance(
+      fbb, mean_, mean_squared_, count_, fb_state);
+    fbb.Finish(fb_mean);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::StddevVariance>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `{}` aggregation instance",
+              mode_ == mode::stddev ? "stddev" : "variance")
+        .emit(ctx);
+      return;
+    }
+    mean_ = (*fb)->result();
+    mean_squared_ = (*fb)->result_squared();
+    count_ = (*fb)->count();
+    switch ((*fb)->state()) {
+      case fbs::aggregation::StddevVarianceState::None:
+        state_ = state::none;
+        return;
+      case fbs::aggregation::StddevVarianceState::Failed:
+        state_ = state::failed;
+        return;
+      case fbs::aggregation::StddevVarianceState::Duration:
+        state_ = state::dur;
+        return;
+      case fbs::aggregation::StddevVarianceState::Numeric:
+        state_ = state::numeric;
+        return;
+    }
+    diagnostic::warning("unknown `state` value")
+      .note("failed to restore `{}` aggregation instance",
+            mode_ == mode::stddev ? "stddev" : "variance")
+      .emit(ctx);
   }
 
 private:

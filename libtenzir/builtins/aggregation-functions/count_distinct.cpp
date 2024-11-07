@@ -8,6 +8,8 @@
 
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/detail/passthrough.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/hash/hash.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -110,8 +112,58 @@ public:
     }
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     return data{uint64_t{distinct_.size()}};
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    auto offsets = std::vector<flatbuffers::Offset<fbs::Data>>{};
+    offsets.reserve(distinct_.size());
+    for (const auto& element : distinct_) {
+      offsets.push_back(pack(fbb, element));
+    }
+    const auto fb_result = fbb.CreateVector(offsets);
+    const auto fb_min_max
+      = fbs::aggregation::CreateCollectDistinct(fbb, fb_result);
+    fbb.Finish(fb_min_max);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::CollectDistinct>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `count_distinct` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_result = (*fb)->result();
+    if (not fb_result) {
+      diagnostic::warning("missing field `result`")
+        .note("failed to restore `count_distinct` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    distinct_.clear();
+    distinct_.reserve(fb_result->size());
+    for (const auto* fb_element : *fb_result) {
+      if (not fb_element) {
+        diagnostic::warning("missing element in field `result`")
+          .note("failed to restore `count_distinct` aggregation instance")
+          .emit(ctx);
+        return;
+      }
+      auto element = data{};
+      if (auto err = unpack(*fb_element, element)) {
+        diagnostic::warning("{}", err)
+          .note("failed to restore `count_distinct` aggregation instance")
+          .emit(ctx);
+        return;
+      }
+      distinct_.insert(std::move(element));
+    }
   }
 
 private:
