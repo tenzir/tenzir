@@ -1035,7 +1035,7 @@ public:
       for (auto index : cfg_.indices) {
         if (index >= 0) {
           auto& dest = cfg_.aggregates[index].dest;
-          auto value = group->aggregations[index]->finish();
+          auto value = group->aggregations[index]->get();
           if (dest) {
             emplace(result, *dest, value);
           } else {

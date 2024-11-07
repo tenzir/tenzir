@@ -7,6 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/aggregation_function.hpp>
+#include <tenzir/data.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -155,13 +158,82 @@ public:
     caf::visit(f, *arg.array);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     if (result_) {
       return result_->match([](auto result) {
         return data{result};
       });
     }
     return {};
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto result
+      = not result_ ? data{} : result_->match<data>([](const auto& x) {
+          return data{x};
+        });
+    const auto fb_result = pack(fbb, result);
+    const auto type_bytes = as_bytes(type_);
+    auto fb_type = fbb.CreateVector(
+      reinterpret_cast<const uint8_t*>(type_bytes.data()), type_bytes.size());
+    const auto fb_min_max
+      = fbs::aggregation::CreateMinMaxSum(fbb, fb_result, fb_type);
+    fbb.Finish(fb_min_max);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::MinMaxSum>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `{}` aggregation instance",
+              Mode == mode::min ? "min" : "max")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_result = (*fb)->result();
+    if (not fb_result) {
+      diagnostic::warning("missing field `result`")
+        .note("failed to restore `{}` aggregation instance",
+              Mode == mode::min ? "min" : "max")
+        .emit(ctx);
+      return;
+    }
+    auto result = data{};
+    if (auto err = unpack(*fb_result, result)) {
+      diagnostic::warning("{}", err)
+        .note("failed to restore `{}` aggregation instance",
+              Mode == mode::min ? "min" : "max")
+        .emit(ctx);
+      return;
+    }
+    caf::visit(
+      [&]<class T>(const T& x) {
+        if constexpr (std::is_same_v<T, caf::none_t>) {
+          result_.reset();
+        } else if constexpr (result_t::can_have<T>) {
+          result_.emplace(x);
+        } else {
+          diagnostic::warning("invalid value for field `result`: `{}`", result)
+            .note("failed to restore `{}` aggregation instance",
+                  Mode == mode::min ? "min" : "max")
+            .emit(ctx);
+        }
+      },
+      result);
+    const auto* fb_type = (*fb)->type();
+    if (not fb_type) {
+      diagnostic::warning("missing field `type`")
+        .note("failed to restore `{}` aggregation instance",
+              Mode == mode::min ? "min" : "max")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_type_nested_root = (*fb)->type_nested_root();
+    TENZIR_ASSERT(fb_type_nested_root);
+    type_ = type{fb->slice(*fb_type_nested_root, *fb_type)};
   }
 
 private:
@@ -188,7 +260,8 @@ public:
       []<complex_type Type>(const Type& type)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
         return caf::make_error(ec::invalid_configuration,
-                               fmt::format("max aggregation function does not "
+                               fmt::format("max aggregation function does "
+                                           "not "
                                            "support complex type {}",
                                            type));
       },

@@ -10,6 +10,8 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -128,8 +130,26 @@ public:
     count_ += arg.array->length() - arg.array->null_count();
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     return count_;
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto fb_count = fbs::aggregation::CreateCount(fbb, count_);
+    fbb.Finish(fb_count);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb = flatbuffer<fbs::aggregation::Count>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `count` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    count_ = (*fb)->result();
   }
 
 private:
@@ -215,7 +235,7 @@ public:
     caf::visit(f, arg.type);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     switch (state_) {
       case state::none:
       case state::failed:
@@ -227,6 +247,17 @@ public:
         return digest_.Quantile(quantile_);
     }
     TENZIR_UNREACHABLE();
+  }
+
+  auto save() const -> chunk_ptr override {
+    return {};
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    TENZIR_UNUSED(chunk);
+    diagnostic::warning(
+      "restoring `quantile` aggregation instances is not implemented")
+      .emit(ctx);
   }
 
 private:

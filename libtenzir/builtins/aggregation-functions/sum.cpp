@@ -8,6 +8,8 @@
 
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/checked_math.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -159,13 +161,77 @@ public:
     caf::visit(f, *s.array);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     if (sum_) {
       return sum_->match([](auto sum) {
         return data{sum};
       });
     }
     return data{};
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto result
+      = not sum_ ? data{} : sum_->match<data>([](const auto& x) {
+          return data{x};
+        });
+    const auto fb_result = pack(fbb, result);
+    const auto type_bytes = as_bytes(type_);
+    auto fb_type = fbb.CreateVector(
+      reinterpret_cast<const uint8_t*>(type_bytes.data()), type_bytes.size());
+    const auto fb_min_max
+      = fbs::aggregation::CreateMinMaxSum(fbb, fb_result, fb_type);
+    fbb.Finish(fb_min_max);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::MinMaxSum>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `sum` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_result = (*fb)->result();
+    if (not fb_result) {
+      diagnostic::warning("missing field `result`")
+        .note("failed to restore `sum` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    auto result = data{};
+    if (auto err = unpack(*fb_result, result)) {
+      diagnostic::warning("{}", err)
+        .note("failed to restore `sum` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    caf::visit(
+      [&]<class T>(const T& x) {
+        if constexpr (std::is_same_v<T, caf::none_t>) {
+          sum_.reset();
+        } else if constexpr (sum_t::can_have<T>) {
+          sum_.emplace(x);
+        } else {
+          diagnostic::warning("invalid value for field `result`: `{}`", result)
+            .note("failed to restore `sum` aggregation instance")
+            .emit(ctx);
+        }
+      },
+      result);
+    const auto* fb_type = (*fb)->type();
+    if (not fb_type) {
+      diagnostic::warning("missing field `type`")
+        .note("failed to restore `sum` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_type_nested_root = (*fb)->type_nested_root();
+    TENZIR_ASSERT(fb_type_nested_root);
+    type_ = type{fb->slice(*fb_type_nested_root, *fb_type)};
   }
 
 private:
