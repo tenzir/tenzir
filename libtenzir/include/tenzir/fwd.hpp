@@ -312,7 +312,10 @@ using time = caf::timestamp;
 using enumeration = uint8_t;
 
 /// Blob type.
-using blob = std::basic_string<std::byte>;
+struct blob : std::vector<std::byte> {
+  using super = std::vector<std::byte>;
+  using super::super;
+};
 
 namespace fbs {
 
