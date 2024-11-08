@@ -133,12 +133,14 @@ using variant_alternative = std::remove_cvref_t<
 template <has_variant_traits V, class T>
 constexpr auto variant_index = std::invoke(
   []<size_t... Is>(std::index_sequence<Is...>) {
-    constexpr bool arr[] = {std::same_as<variant_alternative<V, Is>, T>...};
+    constexpr auto arr
+      = std::array{std::same_as<variant_alternative<V, Is>, T>...};
     constexpr auto occurrence_count
       = std::count(std::begin(arr), std::end(arr), true);
     static_assert(occurrence_count == 1,
                   "variant must contain exactly one copy of T");
-    return std::distance(std::begin(arr), std::ranges::find(arr, true));
+    return std::distance(std::begin(arr),
+                         std::find(arr.begin(), arr.end(), true));
   },
   std::make_index_sequence<variant_traits<V>::count>());
 
