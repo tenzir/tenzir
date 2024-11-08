@@ -499,8 +499,6 @@ public:
     if (auto token = accept(tk::this_)) {
       return ast::this_{token.location};
     }
-    TENZIR_WARN("{} -> {} ({})", next_, next_description(),
-                to_string(tokens_[next_].kind));
     auto ident = accept(tk::identifier);
     if (not ident) {
       diagnostic::error("expected expression, got {}", next_description())
