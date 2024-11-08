@@ -62,5 +62,5 @@ YAML to another bucket `examplebucket2`:
 load_s3 "s3://examplebucket/obj.csv"
 read_csv
 write_yaml
-load_s3 "s3://examplebucket2/obj.yaml"
+save_s3 "s3://examplebucket2/obj.yaml"
 ```

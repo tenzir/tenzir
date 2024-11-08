@@ -17,7 +17,7 @@ tools support.
 
 :::tip MMAP Parsing
 When using theis with the [`load_file`](load_file.md) operator, we
-recommend passing the `mmap=true` option to `file` to give the parser full control
+recommend passing the `mmap=true` option to `load_file` to give the parser full control
 over the reads, which leads to better performance and memory usage.
 :::
 

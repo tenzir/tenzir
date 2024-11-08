@@ -5,7 +5,7 @@ Saves bytes to [Amazon SQS][sqs] queues.
 [sqs]: https://docs.aws.amazon.com/sqs/
 
 ```tql
-sqs queue:str, [poll_time=duration]
+save_sqs queue:str, [poll_time=duration]
 ```
 
 ## Description
@@ -14,7 +14,7 @@ sqs queue:str, [poll_time=duration]
 queuing service to decouple and scale microservices, distributed systems, and
 serverless applications. The `save_sqs` operator writes bytes as messages into an SQS queue.
 
-The `sqs` connector uses long polling, which helps reduce your cost of using SQS
+The `save_sqs` operator uses long polling, which helps reduce your cost of using SQS
 by reducing the number of empty responses when there are no messages available
 to return in reply to a message request. Use the `poll_time` option to adjust
 the timeout.
@@ -38,5 +38,5 @@ Write JSON messages from a source feed to the SQS queue `tenzir`:
 ```tql
 subscribe "to-sqs"
 write_json
-load_sqs "sqs://tenzir"
+save_sqs "sqs://tenzir"
 ```

@@ -45,10 +45,11 @@ Defaults to `false`.
 
 ## Examples
 
-Write filtered Zeek `conn.log` to a topic:
+Write filtered Zeek to `filtered_conn.log`:
 
 ```tql
 subscribe "zeek-logs"
 where duration > 2s and id.orig_p != 80
-publish "threat-alerts"
+write_zeek_tsv
+save_file "filtered_conn.log"
 ```

@@ -13,11 +13,6 @@ tools support.
 
 [parquet]: https://parquet.apache.org/
 
-:::warning Limitation
-Tenzir currently assumes that all Parquet files use metadata recognized by
-Tenzir. We plan to lift this restriction in the future.
-:::
-
 ### `compression_level = int (optional)`
 
 An optional compression level for the corresponding compression type. This
@@ -27,11 +22,15 @@ Defaults to the compression type's default compression level.
 
 ### `compression_type = str (optional)`
 
-Supported options are `zstd` for [Zstandard][zstd-docs] compression
-and `lz4` for [LZ4 Frame][lz4-docs] compression.
+Specifies an optional compression type. Supported options are `zstd` for
+[Zstandard][zstd-docs] compression, `brotli` for [brotli][brotli-docs]
+compression, `gzip` for [gzip][gzip-docs] compression, and `snappy` for
+[snappy][snappy-docs] compression.
 
 [zstd-docs]: http://facebook.github.io/zstd/
-[lz4-docs]: https://android.googlesource.com/platform/external/lz4/+/HEAD/doc/lz4_Frame_format.md
+[gzip-docs]: https://www.gzip.org
+[brotli-docs]: https://www.brotli.org
+[snappy-docs]: https://google.github.io/snappy/
 
 :::tip Why would I use this over the `compress` operator?
 The Parquet format offers more efficient compression compared to the

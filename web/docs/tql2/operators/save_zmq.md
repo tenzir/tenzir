@@ -10,7 +10,7 @@ save_zmq [endpoint:str, listen=bool, connect=bool, monitor=bool]
 
 The `save_zmq` operator sends bytes as a ZeroMQ message via a `PUB` socket.
 
-Indpendent of the socket type, the `zmq` connector supports specfiying the
+Indpendent of the socket type, the `save_zmq` operator supports specfiying the
 direction of connection establishment with `listen` and `connect`. This can be
 helpful to work around firewall restrictions and fit into broader set of
 existing ZeroMQ applications.
@@ -31,13 +31,13 @@ Defaults to `tcp://127.0.0.1:5555`.
 
 Bind to the ZeroMQ socket.
 
-By default, the loader connects and the saver listens.
+Defaults to `true`.
 
 ### `connect = bool (optional)`
 
 Connect to the ZeroMQ socket.
 
-By default, the loader connects and the saver listens.
+Defaults to `false`.
 
 ### `monitor = bool (optional)`
 

@@ -14,6 +14,17 @@ The `read_xsv` operator transforms a byte stream into a event stream by parsing
 the bytes as [XSV](https://en.wikipedia.org/wiki/Delimiter-separated_values), a
 generalization of CSV with a more flexible separator specification.
 
+The following table lists existing XSV configurations:
+
+|Format               |Field Separator|List Separator|Null Value|
+|---------------------|:-------------:|:------------:|:--------:|
+|[`csv`](read_csv.md)|`,`            |`;`           | empty    |
+|[`ssv`](read_ssv.md)|`<space>`      |`,`           |`-`       |
+|[`tsv`](read_tsv.md)|`\t`           |`,`           |`-`       |
+
+[csv]: https://en.wikipedia.org/wiki/Comma-separated_values
+[xsv]: https://en.wikipedia.org/wiki/Delimiter-separated_values
+
 ### `field_sep: str`
 
 The string separating different fields.

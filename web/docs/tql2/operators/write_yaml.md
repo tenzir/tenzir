@@ -12,7 +12,7 @@ Transforms the input event stream to YAML byte stream.
 
 ## Examples
 
-### Convert a JSON stream into a YAML file
+### Convert a JSON file into a YAML file
 
 ```tql
 load_file "input.json"

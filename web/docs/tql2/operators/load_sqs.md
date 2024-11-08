@@ -5,7 +5,7 @@ Loads bytes from [Amazon SQS][sqs] queues.
 [sqs]: https://docs.aws.amazon.com/sqs/
 
 ```tql
-sqs queue:str, [poll_time=duration]
+load_sqs queue:str, [poll_time=duration]
 ```
 
 ## Description
@@ -15,7 +15,7 @@ queuing service to decouple and scale microservices, distributed systems, and
 serverless applications. The `load_sqs` operator reads bytes from messages of an
 SQS queue.
 
-The `sqs` connector uses long polling, which helps reduce your cost of using SQS
+The `load_sqs` operator uses long polling, which helps reduce your cost of using SQS
 by reducing the number of empty responses when there are no messages available
 to return in reply to a message request. Use the `poll_time` option to adjust
 the timeout.

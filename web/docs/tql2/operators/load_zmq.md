@@ -8,8 +8,8 @@ load_zmq [endpoint:str, filter=str, listen=bool, connect=bool, monitor=bool]
 
 ## Description
 
-The `zmq` loader processes the bytes in a ZeroMQ message received by a `SUB`
-socket. The `zmq` saver sends bytes as a ZeroMQ message via a `PUB` socket.
+The `load_zmq` operator processes the bytes in a ZeroMQ message received by a `SUB`
+socket.
 
 Indpendent of the socket type, the `zmq` connector supports specfiying the
 direction of connection establishment with `listen` and `connect`. This can be
@@ -39,13 +39,13 @@ Defaults to the empty string, which is equivalent to no filtering.
 
 Bind to the ZeroMQ socket.
 
-By default, the loader connects and the saver listens.
+Defaults to `false`.
 
 ### `connect = bool (optional)`
 
 Connect to the ZeroMQ socket.
 
-By default, the loader connects and the saver listens.
+Defaults to `true`.
 
 ### `monitor = bool (optional)`
 

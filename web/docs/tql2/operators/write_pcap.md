@@ -30,6 +30,8 @@ The current implementation does *not* support [PCAPNG][pcapng-rfc]. Please
 [reach out](/discord) if you would like to see support.
 :::
 
+[pcapng-rfc]: https://www.ietf.org/archive/id/draft-tuexen-opsawg-pcapng-05.html
+
 ## Examples
 
 ### Write packets as PCAP to a file

@@ -3,7 +3,7 @@
 Loads from an Amazon S3 object.
 
 ```tql
-s3 uri:str, [anonymous=bool]
+load_s3 uri:str, [anonymous=bool]
 ```
 
 ## Description

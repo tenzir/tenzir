@@ -113,6 +113,7 @@ Operator | Description | Example
 [`read_bitz`](./operators/read_bitz.md) | Parses Tenzir's internal wire format | `read_bitz`
 [`read_cef`](./operators/read_cef.md) | Parses the Common Event Format | `read_cef`
 [`read_csv`](./operators/read_csv.md) | Parses comma-separated values | `read_csv null_value="-"`
+[`read_feather`](./operators/read_feather.md) | Parses Feather format | `read_feather`
 [`read_gelf`](./operators/read_gelf.md) | Parses the Graylog Extended Log Format | `read_gelf`
 [`read_grok`](./operators/read_grok.md) | Parses events using a Grok pattern | `read_grok "%{IP:client} %{WORD:action}"`
 [`read_json`](./operators/read_json.md) | Parses JSON objects | `read_json arrays_of_objects=true`
@@ -120,6 +121,7 @@ Operator | Description | Example
 [`read_leef`](./operators/read_leef.md) | Parses the Log Event Extended Format | `read_leef`
 [`read_lines`](./operators/read_lines.md) | Parses each line into a separate event | `read_lines`
 [`read_ndjson`](./operators/read_ndjson.md) | Parses newline-delimited JSON | `read_ndjson`
+[`read_parquet`](./operators/read_parquet.md) | Parses Parquet format | `read_parquet`
 [`read_ssv`](./operators/read_ssv.md) | Parses space-separated values | `read_ssv header="name count"`
 [`read_suricata`](./operators/read_suricata.md) | Parses Suricata's Eve format | `read_suricata`
 [`read_syslog`](./operators/read_syslog.md) | Parses syslog | `read_syslog`
