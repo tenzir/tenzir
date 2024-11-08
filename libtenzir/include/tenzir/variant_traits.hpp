@@ -115,7 +115,7 @@ public:
 namespace detail {
 
 /// Dispatches to `variant_traits<V>::get` and also transfers qualifiers.
-template <size_t I, class V>
+template <size_t I, has_variant_traits V>
 constexpr auto variant_get(V&& v) -> decltype(auto) {
   static_assert(
     std::is_reference_v<
@@ -125,7 +125,47 @@ constexpr auto variant_get(V&& v) -> decltype(auto) {
     as_mutable(variant_traits<std::remove_cvref_t<V>>::template get<I>(v)));
 }
 
-template <class V, class F>
+template <has_variant_traits V, size_t I>
+using variant_alternative = std::remove_cvref_t<
+  decltype(variant_traits<std::remove_cvref_t<V>>::template get<I>(
+    std::declval<V>()))>;
+
+template <has_variant_traits V, class T>
+constexpr auto variant_index = std::invoke(
+  []<size_t... Is>(std::index_sequence<Is...>) {
+    constexpr bool arr[] = {std::same_as<variant_alternative<V, Is>, T>...};
+    constexpr auto occurrence_count
+      = std::count(std::begin(arr), std::end(arr), true);
+    static_assert(occurrence_count == 1,
+                  "variant must contain exactly one copy of T");
+    return std::distance(std::begin(arr), std::ranges::find(arr, true));
+  },
+  std::make_index_sequence<variant_traits<V>::count>());
+
+// Ensures that `F` can be invoked with alternative `I` in `V`, yielding result
+// type `R`
+template <class F, class V, class R, size_t I>
+concept variant_invocable_for_r = requires(F f, V v) {
+  requires std::invocable<F, decltype(variant_get<I>(std::forward<V>(v)))>;
+  // requires std::is_invocable_r_v<R, F, decltype(variant_get<I>(v))>;
+};
+
+template <class F, class V, class R, size_t... Is>
+consteval auto check_matcher(std::index_sequence<Is...>) {
+  return (variant_invocable_for_r<F, V, R, Is> && ...);
+}
+
+// Ensures that the Functor `F` can be invoked with every alternative in `V`,
+// respecting value categories
+template <class F, class V>
+concept variant_matcher_for = has_variant_traits<V> and requires {
+  typename std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>;
+  requires check_matcher<
+    F, V, std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>>(
+    std::make_index_sequence<variant_traits<std::remove_cvref_t<V>>::count>{});
+};
+
+template <class V, variant_matcher_for<V> F>
 constexpr auto match_one(V&& v, F&& f) -> decltype(auto) {
   using traits = variant_traits<std::remove_cvref_t<V>>;
   using return_type = std::invoke_result_t<F, decltype(variant_get<0>(v))>;
@@ -180,33 +220,6 @@ constexpr auto match_tuple(std::tuple<Xs...> xs, F&& f) -> decltype(auto) {
                      });
   }
 }
-
-template <class V, class T>
-constexpr auto variant_index = std::invoke(
-  []<size_t... Is>(std::index_sequence<Is...>) {
-    auto result = 0;
-    auto found
-      = (std::invoke([&] {
-           if (std::same_as<
-                 std::decay_t<decltype(variant_traits<V>::template get<Is>(
-                   std::declval<V>()))>,
-                 T>) {
-             result = Is;
-             return 1;
-           }
-           return 0;
-         })
-         + ... + 0);
-    if (found == 0) {
-      throw std::runtime_error{"type was not found in variant"};
-    }
-    if (found > 1) {
-      throw std::runtime_error{"type was found multiple times in variant"};
-    }
-    return result;
-  },
-  std::make_index_sequence<variant_traits<V>::count>());
-
 } // namespace detail
 
 /// Calls one of the given functions with the current variant inhabitant.
@@ -239,6 +252,7 @@ auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
   }
   return &detail::variant_get<index>(v);
 };
+/// Tries to extract a `T` from the variant, returning `nullptr` otherwise.
 template <concepts::unqualified T, has_variant_traits V>
 auto try_as(V* v) -> std::remove_reference_t<forward_like_t<V, T>>* {
   if (not v) {

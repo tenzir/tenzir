@@ -78,6 +78,10 @@ TEST(match) {
 
 TEST(match const ref) {
   auto v = std::variant<int, std::unique_ptr<int>>{std::make_unique<int>(42)};
+// This `match` yields a `const unique_ptr&`, which correctly refers to the
+// value in `v`. For some reason GCC incorrectly diagnoses this as dangling.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
   auto& result = match(
     std::as_const(v),
     [](int) -> const std::unique_ptr<int>& {
@@ -87,6 +91,7 @@ TEST(match const ref) {
       static_assert(std::same_as<T, const std::unique_ptr<int>&>);
       return x;
     });
+#pragma GCC diagnostic pop
   REQUIRE(result);
   REQUIRE(*result == 42);
   REQUIRE(*as<std::unique_ptr<int>>(v) == 42);
