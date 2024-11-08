@@ -49,19 +49,17 @@ auto global_registry() -> const registry& {
 
 auto registry::get(const ast::function_call& call) const
   -> const function_plugin& {
-  auto def = try_get(call.fn.ref);
-  TENZIR_ASSERT(def);
-  auto fn = std::get_if<std::reference_wrapper<const function_plugin>>(&*def);
+  auto def = get(call.fn.ref);
+  auto fn = std::get_if<std::reference_wrapper<const function_plugin>>(&def);
   TENZIR_ASSERT(fn);
   return *fn;
 }
 
 auto registry::get(const ast::invocation& call) const
   -> const operator_factory_plugin& {
-  auto def = try_get(call.op.ref);
-  TENZIR_ASSERT(def);
+  auto def = get(call.op.ref);
   auto op
-    = std::get_if<std::reference_wrapper<const operator_factory_plugin>>(&*def);
+    = std::get_if<std::reference_wrapper<const operator_factory_plugin>>(&def);
   TENZIR_ASSERT(op);
   return *op;
 }

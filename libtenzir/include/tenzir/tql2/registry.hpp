@@ -41,6 +41,7 @@ public:
   auto operator_names() const -> std::vector<std::string_view>;
   auto function_names() const -> std::vector<std::string_view>;
 
+  /// Register an entity. This should only be done on startup.
   void add(std::string name, entity_def def);
 
 private:
