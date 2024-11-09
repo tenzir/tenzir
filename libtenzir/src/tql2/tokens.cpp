@@ -137,16 +137,6 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   // clang-format on
   auto current = content.begin();
   while (current != content.end()) {
-    // // This is a workaround in order to make `::` in `pkg::add` tokenize as
-    // // `pkg`, `::` (double colon), `add`, instead of `pkg`, `::add` (IPv6).
-    // TENZIR_WARN("rest: {:?}", std::string_view{current, content.end()});
-    // if (std::string_view{current, content.end()}.starts_with("::")
-    //     and not result.empty()
-    //     and result.back().kind == token_kind::identifier) {
-    //   current += 2;
-    //   result.emplace_back(token_kind::colon_colon, current -
-    //   content.begin()); continue;
-    // }
     auto kind = tk{};
     if (p.parse(current, content.end(), kind)) {
       result.emplace_back(kind, current - content.begin());
