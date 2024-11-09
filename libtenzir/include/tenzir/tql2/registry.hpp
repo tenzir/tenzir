@@ -15,36 +15,58 @@
 
 namespace tenzir {
 
-/// Reference to a single entity definition (currently always a plugin).
-using entity_def
-  = variant<std::reference_wrapper<const function_plugin>,
-            std::reference_wrapper<const operator_factory_plugin>>;
+struct module_def;
 
 /// A set of entities, with a most one entity per entity namespace.
 struct entity_set {
   const function_plugin* fn;
   const operator_factory_plugin* op;
+  std::unique_ptr<module_def> mod;
 };
 
+struct module_def {
+  // TODO: Why are these needed?
+  module_def() = default;
+  module_def(const module_def&) = delete;
+  module_def(module_def&&) = default;
+  auto operator=(const module_def&) = delete;
+  auto operator=(module_def&&) -> module_def& = default;
+
+  std::unordered_map<std::string, entity_set> defs;
+};
+
+/// Reference to a single entity definition.
+using entity_def
+  = variant<std::reference_wrapper<const function_plugin>,
+            std::reference_wrapper<const operator_factory_plugin>,
+            std::reference_wrapper<const module_def>>;
+
 // TODO: The interface of this class is drastically simplified for now. It
-// must be changed eventually to properly enable modules and use an interned
-// representation of `entity_path`.
+// must be changed eventually to properly enable modules and use an
+// interned representation of `entity_path`.
 class registry {
 public:
-  auto try_get(const entity_path& path) const -> std::optional<entity_def>;
+  struct error {
+    size_t segment{};
+    bool other_exists{};
+  };
+
+  auto try_get(const entity_path& path) const -> variant<entity_def, error>;
 
   auto get(const ast::function_call& call) const -> const function_plugin&;
   auto get(const ast::invocation& call) const -> const operator_factory_plugin&;
   auto get(const entity_path& path) const -> entity_def;
 
-  // TODO: Everything below assumes that there are no modules.
-  auto operator_names() const -> std::vector<std::string_view>;
-  auto function_names() const -> std::vector<std::string_view>;
+  auto operator_names() const -> std::vector<std::string>;
+  auto function_names() const -> std::vector<std::string>;
 
+  /// Register an entity. This should only be done on startup.
   void add(std::string name, entity_def def);
 
+  auto root_module() const -> const module_def&;
+
 private:
-  detail::heterogeneous_string_hashmap<entity_set> defs_;
+  module_def root_;
 };
 
 // TODO: This should be attached to the `session` object. However, because we

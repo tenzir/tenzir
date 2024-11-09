@@ -25,10 +25,11 @@ auto tokenize(std::string_view content,
 }
 
 auto tokenize_permissive(std::string_view content) -> std::vector<token> {
+  using namespace parsers;
+  using tk = token_kind;
   auto result = std::vector<token>{};
   // TODO: The char-class parsers (such as `parsers::alnum`) can cause undefined
   // behavior. We should fix them or use something different here.
-  using namespace parsers;
   auto continue_ident = alnum | '_';
   auto identifier = (alpha | '_') >> *continue_ident;
   auto digit_us = digit | '_';
@@ -38,38 +39,41 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   auto ipv4 = +digit >> '.' >> +digit >> +('.' >> +digit);
   auto ipv6 = *xdigit >> ':' >> *xdigit >> ':' >> *xdigit
               >> *(('.' >> +digit) | (':' >> *xdigit));
-  auto ip = ipv4 | ipv6;
+  auto ipv6_enabled = true;
+  auto ip = ipv4 | ipv6.when([&] {
+    return ipv6_enabled;
+  });
   // clang-format off
   auto p
     = ignore(ip >> "/" >> *digit)
-      ->* [] { return token_kind::subnet; }
+      ->* [] { return tk::subnet; }
     | ignore(ip)
-      ->* [] { return token_kind::ip; }
+      ->* [] { return tk::ip; }
     | ignore(+digit >> '-' >> +digit >> '-' >> +digit >> *(alnum | ':' | '+' | '-'))
-      ->* [] { return token_kind::datetime; }
+      ->* [] { return tk::datetime; }
     | ignore(digit >> *digit_us >> -('.' >> digit >> *digit_us) >> -identifier)
-      ->* [] { return token_kind::scalar; }
+      ->* [] { return tk::scalar; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')) >> '"')
-      ->* [] { return token_kind::string; }
+      ->* [] { return tk::string; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')))
-      ->* [] { return token_kind::error; } // non-terminated string
+      ->* [] { return tk::error; } // non-terminated string
     | ignore("r\"" >> *(any - '"') >> '"')
-      ->* [] { return token_kind::raw_string; }
+      ->* [] { return tk::raw_string; }
     | ignore("r\"" >> *(any - '"'))
-      ->* [] { return token_kind::error; } // non-terminated raw string
+      ->* [] { return tk::error; } // non-terminated raw string
     | ignore("r#\"" >> *(any - "\"#") >> "\"#")
-      ->* [] { return token_kind::raw_string; }
+      ->* [] { return tk::raw_string; }
     | ignore("r#\"" >> *(any - "\"#"))
-      ->* [] { return token_kind::error; } // non-terminated raw string
+      ->* [] { return tk::error; } // non-terminated raw string
     | ignore("//" >> *(any - '\n'))
-      ->* [] { return token_kind::line_comment; }
+      ->* [] { return tk::line_comment; }
     | ignore("/*" >> *(any - "*/") >> "*/")
-      ->* [] { return token_kind::delim_comment; }
+      ->* [] { return tk::delim_comment; }
     | ignore("/*" >> *(any - "*/"))
-      ->* [] { return token_kind::error; } // non-terminated comment
+      ->* [] { return tk::error; } // non-terminated comment
     | ignore(ch<'@'>)
-      ->* [] { return token_kind::at; }
-#define X(x, y) ignore(lit{x}) ->* [] { return token_kind::y; }
+      ->* [] { return tk::at; }
+#define X(x, y) ignore(lit{x}) ->* [] { return tk::y; }
     | X("=>", fat_arrow)
     | X("==", equal_equal)
     | X("!=", bang_equal)
@@ -92,11 +96,13 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("[", lbracket)
     | X("]", rbracket)
     | X(",", comma)
+    // The double colon is shadowed by IPv6 unless that is disabled.
+    | X("::", colon_colon)
     | X(":", colon)
     | X("'", single_quote)
     | X("\n", newline)
 #undef X
-#define X(x, y) ignore(lit{x} >> !continue_ident) ->* [] { return token_kind::y; }
+#define X(x, y) ignore(lit{x} >> !continue_ident) ->* [] { return tk::y; }
     | X("and", and_)
     | X("else", else_)
     | X("false", false_)
@@ -114,24 +120,24 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | ignore((
         lit{"self"} | "is" | "as" | "use" /*| "type"*/ | "return" | "def" | "function"
         | "fn" | "pipeline" | "meta" | "super" | "for" | "while" | "mod" | "module"
-      ) >> !continue_ident) ->* [] { return token_kind::reserved_keyword; }
+      ) >> !continue_ident) ->* [] { return tk::reserved_keyword; }
     | ignore('$' >> identifier)
-      ->* [] { return token_kind::dollar_ident; }
+      ->* [] { return tk::dollar_ident; }
     | ignore('_' >> !continue_ident)
-      ->* [] { return token_kind::underscore; }
+      ->* [] { return tk::underscore; }
     | ignore(identifier)
-      ->* [] { return token_kind::identifier; }
+      ->* [] { return tk::identifier; }
     | ignore(
         +((space - '\n') |
         ("\\" >> *(space - '\n') >> '\n')) |
         ("#!" >> *(any - '\n')).when([&] { return result.empty(); })
       )
-      ->* [] { return token_kind::whitespace; }
+      ->* [] { return tk::whitespace; }
   ;
   // clang-format on
   auto current = content.begin();
   while (current != content.end()) {
-    auto kind = token_kind{};
+    auto kind = tk{};
     if (p.parse(current, content.end(), kind)) {
       result.emplace_back(kind, current - content.begin());
     } else {
@@ -139,13 +145,16 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       // special `error` token and go to the next character.
       ++current;
       auto end = current - content.begin();
-      if (result.empty() || result.back().kind != token_kind::error) {
-        result.emplace_back(token_kind::error, end);
+      if (result.empty() || result.back().kind != tk::error) {
+        result.emplace_back(tk::error, end);
       } else {
         // If the last token is already an error, we just expand it instead.
         result.back().end = end;
       }
+      kind = tk::error;
     }
+    // Disable IPv6 in the next iteration of we previously read `ident` or `::`.
+    ipv6_enabled = kind != tk::identifier and kind != tk::colon_colon;
   }
   return result;
 }
@@ -177,6 +186,7 @@ auto describe(token_kind k) -> std::string_view {
     X(and_, "`and`");
     X(at, "@");
     X(bang_equal, "`!=`");
+    X(colon_colon, "`::`");
     X(colon, "`:`");
     X(comma, "`,`");
     X(datetime, "datetime");
