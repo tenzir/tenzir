@@ -70,8 +70,20 @@ public:
         .emit(diag_);
       result_ = failure::promise();
     } else {
+      // TODO: This list is too long. Suggest only close matches instead. Also,
+      // we should maybe only suggest things in the same module.
+      auto available = std::invoke([&] {
+        switch (ns) {
+          case entity_ns::op:
+            return reg_.operator_names();
+          case entity_ns::fn:
+            return reg_.function_names();
+        }
+        TENZIR_UNREACHABLE();
+      });
       diagnostic::error("{} `{}` not found", type, x.path[err->segment].name)
         .primary(x.path[err->segment])
+        .hint("must be one of: {}", fmt::join(available, ", "))
         .emit(diag_);
       result_ = failure::promise();
     }
