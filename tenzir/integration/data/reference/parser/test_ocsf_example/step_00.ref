@@ -59,771 +59,771 @@
                   fn: {
                     path: [
                       `std` @ 104..107,
-                      `path` @ 108..112,
-                      `parent` @ 113..119
+                      `path` @ 109..113,
+                      `parent` @ 115..121
                     ],
                     ref: unresolved
                   },
                   args: [
                     field_access {
                       left: field_access {
-                        left: root_field `src` @ 120..123,
-                        dot: 123..124,
-                        name: `event_data` @ 124..134
+                        left: root_field `src` @ 122..125,
+                        dot: 125..126,
+                        name: `event_data` @ 126..136
                       },
-                      dot: 134..135,
-                      name: `ParentImage` @ 135..146
+                      dot: 136..137,
+                      name: `ParentImage` @ 137..148
                     }
                   ],
-                  rpar: 146..147,
+                  rpar: 148..149,
                   method: false
                 }
               },
               field {
-                name: `name` @ 153..157,
+                name: `name` @ 155..159,
                 expr: function_call {
                   fn: {
                     path: [
-                      `std` @ 159..162,
-                      `path` @ 163..167,
-                      `file_name` @ 168..177
+                      `std` @ 161..164,
+                      `path` @ 166..170,
+                      `file_name` @ 172..181
                     ],
                     ref: unresolved
                   },
                   args: [
                     field_access {
                       left: field_access {
-                        left: root_field `src` @ 178..181,
-                        dot: 181..182,
-                        name: `event_data` @ 182..192
+                        left: root_field `src` @ 182..185,
+                        dot: 185..186,
+                        name: `event_data` @ 186..196
                       },
-                      dot: 192..193,
-                      name: `ParentImage` @ 193..204
+                      dot: 196..197,
+                      name: `ParentImage` @ 197..208
                     }
                   ],
-                  rpar: 204..205,
+                  rpar: 208..209,
                   method: false
                 }
               },
               field {
-                name: `type` @ 211..217,
+                name: `type` @ 215..221,
                 expr: constant {
                   value: string "Unknown",
-                  source: 219..228
+                  source: 223..232
                 }
               },
               field {
-                name: `type_id` @ 234..241,
+                name: `type_id` @ 238..245,
                 expr: constant {
                   value: int64 0,
-                  source: 243..244
+                  source: 247..248
                 }
               }
             ],
-            end: 248..249
+            end: 252..253
           }
         },
         field {
-          name: `pid` @ 253..256,
+          name: `pid` @ 257..260,
           expr: function_call {
             fn: {
               path: [
-                `int` @ 258..261
+                `int` @ 262..265
               ],
               ref: unresolved
             },
             args: [
               field_access {
                 left: field_access {
-                  left: root_field `src` @ 262..265,
-                  dot: 265..266,
-                  name: `event_data` @ 266..276
+                  left: root_field `src` @ 266..269,
+                  dot: 269..270,
+                  name: `event_data` @ 270..280
                 },
-                dot: 276..277,
-                name: `ParentProcessId` @ 277..292
+                dot: 280..281,
+                name: `ParentProcessId` @ 281..296
               }
             ],
-            rpar: 292..293,
+            rpar: 296..297,
             method: false
           }
         }
       ],
-      end: 295..296
+      end: 299..300
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 297..301
+        `drop` @ 301..305
       ],
       ref: unresolved
     },
     args: [
       field_access {
         left: field_access {
-          left: root_field `src` @ 302..305,
-          dot: 305..306,
-          name: `event_data` @ 306..316
+          left: root_field `src` @ 306..309,
+          dot: 309..310,
+          name: `event_data` @ 310..320
         },
-        dot: 316..317,
-        name: `ParentImage` @ 317..328
+        dot: 320..321,
+        name: `ParentImage` @ 321..332
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 330..333,
-          dot: 333..334,
-          name: `event_data` @ 334..344
+          left: root_field `src` @ 334..337,
+          dot: 337..338,
+          name: `event_data` @ 338..348
         },
-        dot: 344..345,
-        name: `ParentProcessId` @ 345..360
+        dot: 348..349,
+        name: `ParentProcessId` @ 349..364
       }
     ]
   },
   assignment {
     left: simple_selector {
       expr: field_access {
-        left: root_field `actor` @ 361..366,
-        dot: 366..367,
-        name: `user` @ 367..371
+        left: root_field `actor` @ 365..370,
+        dot: 370..371,
+        name: `user` @ 371..375
       },
       has_this: false,
       path: [
-        `actor` @ 361..366,
-        `user` @ 367..371
+        `actor` @ 365..370,
+        `user` @ 371..375
       ]
     },
-    equals: 372..373,
+    equals: 376..377,
     right: record {
-      begin: 374..375,
+      begin: 378..379,
       items: [
         field {
-          name: `account_type` @ 378..390,
+          name: `account_type` @ 382..394,
           expr: constant {
             value: string "Windows Account",
-            source: 392..409
+            source: 396..413
           }
         },
         field {
-          name: `account_type_id` @ 413..428,
+          name: `account_type_id` @ 417..432,
           expr: constant {
             value: int64 2,
-            source: 430..431
+            source: 434..435
           }
         },
         field {
-          name: `domain` @ 435..441,
+          name: `domain` @ 439..445,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 443..446,
-              dot: 446..447,
-              name: `user` @ 447..451
+              left: root_field `src` @ 447..450,
+              dot: 450..451,
+              name: `user` @ 451..455
             },
-            dot: 451..452,
-            name: `domain` @ 452..458
+            dot: 455..456,
+            name: `domain` @ 456..462
           }
         },
         field {
-          name: `name` @ 462..466,
+          name: `name` @ 466..470,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 468..471,
-              dot: 471..472,
-              name: `user` @ 472..476
+              left: root_field `src` @ 472..475,
+              dot: 475..476,
+              name: `user` @ 476..480
             },
-            dot: 476..477,
-            name: `name` @ 477..481
+            dot: 480..481,
+            name: `name` @ 481..485
           }
         },
         field {
-          name: `uid` @ 485..488,
+          name: `uid` @ 489..492,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 490..493,
-              dot: 493..494,
-              name: `user` @ 494..498
+              left: root_field `src` @ 494..497,
+              dot: 497..498,
+              name: `user` @ 498..502
             },
-            dot: 498..499,
-            name: `identifier` @ 499..509
+            dot: 502..503,
+            name: `identifier` @ 503..513
           }
         }
       ],
-      end: 511..512
+      end: 515..516
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 513..517
+        `drop` @ 517..521
       ],
       ref: unresolved
     },
     args: [
       field_access {
         left: field_access {
-          left: root_field `src` @ 518..521,
-          dot: 521..522,
-          name: `user` @ 522..526
+          left: root_field `src` @ 522..525,
+          dot: 525..526,
+          name: `user` @ 526..530
         },
-        dot: 526..527,
-        name: `domain` @ 527..533
+        dot: 530..531,
+        name: `domain` @ 531..537
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 535..538,
-          dot: 538..539,
-          name: `user` @ 539..543
+          left: root_field `src` @ 539..542,
+          dot: 542..543,
+          name: `user` @ 543..547
         },
-        dot: 543..544,
-        name: `name` @ 544..548
+        dot: 547..548,
+        name: `name` @ 548..552
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 550..553,
-          dot: 553..554,
-          name: `user` @ 554..558
+          left: root_field `src` @ 554..557,
+          dot: 557..558,
+          name: `user` @ 558..562
         },
-        dot: 558..559,
-        name: `identifier` @ 559..569
+        dot: 562..563,
+        name: `identifier` @ 563..573
       }
     ]
   },
   assignment {
     left: simple_selector {
-      expr: root_field `category_name` @ 570..583,
+      expr: root_field `category_name` @ 574..587,
       has_this: false,
       path: [
-        `category_name` @ 570..583
+        `category_name` @ 574..587
       ]
     },
-    equals: 584..585,
+    equals: 588..589,
     right: constant {
       value: string "System Activity",
-      source: 586..603
+      source: 590..607
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `category_uid` @ 604..616,
+      expr: root_field `category_uid` @ 608..620,
       has_this: false,
       path: [
-        `category_uid` @ 604..616
+        `category_uid` @ 608..620
       ]
     },
-    equals: 617..618,
+    equals: 621..622,
     right: function_call {
       fn: {
         path: [
-          `ocsf` @ 619..623,
-          `category_uid` @ 624..636
+          `ocsf` @ 623..627,
+          `category_uid` @ 629..641
         ],
         ref: unresolved
       },
       args: [
-        root_field `category_name` @ 637..650
+        root_field `category_name` @ 642..655
       ],
-      rpar: 650..651,
+      rpar: 655..656,
       method: false
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `class_name` @ 652..662,
+      expr: root_field `class_name` @ 657..667,
       has_this: false,
       path: [
-        `class_name` @ 652..662
+        `class_name` @ 657..667
       ]
     },
-    equals: 663..664,
+    equals: 668..669,
     right: constant {
       value: string "Process Activity",
-      source: 665..683
+      source: 670..688
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `class_uid` @ 684..693,
+      expr: root_field `class_uid` @ 689..698,
       has_this: false,
       path: [
-        `class_uid` @ 684..693
+        `class_uid` @ 689..698
       ]
     },
-    equals: 694..695,
+    equals: 699..700,
     right: function_call {
       fn: {
         path: [
-          `ocsf` @ 696..700,
-          `class_uid` @ 701..710
+          `ocsf` @ 701..705,
+          `class_uid` @ 707..716
         ],
         ref: unresolved
       },
       args: [
-        root_field `class_name` @ 711..721
+        root_field `class_name` @ 717..727
       ],
-      rpar: 721..722,
+      rpar: 727..728,
       method: false
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `device` @ 723..729,
+      expr: root_field `device` @ 729..735,
       has_this: false,
       path: [
-        `device` @ 723..729
+        `device` @ 729..735
       ]
     },
-    equals: 730..731,
+    equals: 736..737,
     right: record {
-      begin: 732..733,
+      begin: 738..739,
       items: [
         field {
-          name: `hostname` @ 736..744,
+          name: `hostname` @ 742..750,
           expr: field_access {
-            left: root_field `src` @ 746..749,
-            dot: 749..750,
-            name: `computer_name` @ 750..763
+            left: root_field `src` @ 752..755,
+            dot: 755..756,
+            name: `computer_name` @ 756..769
           }
         },
         field {
-          name: `os` @ 767..769,
+          name: `os` @ 773..775,
           expr: record {
-            begin: 771..772,
+            begin: 777..778,
             items: [
               field {
-                name: `name` @ 777..781,
+                name: `name` @ 783..787,
                 expr: constant {
                   value: string "Windows",
-                  source: 783..792
+                  source: 789..798
                 }
               },
               field {
-                name: `type` @ 798..804,
+                name: `type` @ 804..810,
                 expr: constant {
                   value: string "Windows",
-                  source: 806..815
+                  source: 812..821
                 }
               },
               field {
-                name: `type_id` @ 821..828,
+                name: `type_id` @ 827..834,
                 expr: constant {
                   value: int64 100,
-                  source: 830..833
+                  source: 836..839
                 }
               }
             ],
-            end: 837..838
+            end: 843..844
           }
         },
         field {
-          name: `type` @ 842..848,
+          name: `type` @ 848..854,
           expr: constant {
             value: string "Unknown",
-            source: 850..859
+            source: 856..865
           }
         },
         field {
-          name: `type_id` @ 863..870,
+          name: `type_id` @ 869..876,
           expr: constant {
             value: int64 0,
-            source: 872..873
+            source: 878..879
           }
         }
       ],
-      end: 875..876
+      end: 881..882
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 877..881
+        `drop` @ 883..887
       ],
       ref: unresolved
     },
     args: [
       field_access {
-        left: root_field `src` @ 882..885,
-        dot: 885..886,
-        name: `computer_name` @ 886..899
+        left: root_field `src` @ 888..891,
+        dot: 891..892,
+        name: `computer_name` @ 892..905
       }
     ]
   },
   assignment {
     left: simple_selector {
-      expr: root_field `message` @ 900..907,
+      expr: root_field `message` @ 906..913,
       has_this: false,
       path: [
-        `message` @ 900..907
+        `message` @ 906..913
       ]
     },
-    equals: 908..909,
+    equals: 914..915,
     right: constant {
       value: string "A new process has been created.",
-      source: 910..943
+      source: 916..949
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `metadata` @ 944..952,
+      expr: root_field `metadata` @ 950..958,
       has_this: false,
       path: [
-        `metadata` @ 944..952
+        `metadata` @ 950..958
       ]
     },
-    equals: 953..954,
+    equals: 959..960,
     right: record {
-      begin: 955..956,
+      begin: 961..962,
       items: [
         field {
-          name: `original_time` @ 959..972,
+          name: `original_time` @ 965..978,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 974..977,
-              dot: 977..978,
-              name: `event_data` @ 978..988
+              left: root_field `src` @ 980..983,
+              dot: 983..984,
+              name: `event_data` @ 984..994
             },
-            dot: 988..989,
-            name: `UtcTime` @ 989..996
+            dot: 994..995,
+            name: `UtcTime` @ 995..1002
           }
         },
         field {
-          name: `product` @ 1000..1007,
+          name: `product` @ 1006..1013,
           expr: record {
-            begin: 1009..1010,
+            begin: 1015..1016,
             items: [
               field {
-                name: `feature` @ 1015..1022,
+                name: `feature` @ 1021..1028,
                 expr: record {
-                  begin: 1024..1025,
+                  begin: 1030..1031,
                   items: [
                     field {
-                      name: `name` @ 1032..1036,
+                      name: `name` @ 1038..1042,
                       expr: constant {
                         value: string "Security",
-                        source: 1038..1048
+                        source: 1044..1054
                       }
                     }
                   ],
-                  end: 1054..1055
+                  end: 1060..1061
                 }
               },
               field {
-                name: `name` @ 1061..1065,
+                name: `name` @ 1067..1071,
                 expr: constant {
                   value: string "Microsoft Windows",
-                  source: 1067..1086
+                  source: 1073..1092
                 }
               },
               field {
-                name: `vendor_name` @ 1092..1103,
+                name: `vendor_name` @ 1098..1109,
                 expr: constant {
                   value: string "Microsoft",
-                  source: 1105..1116
+                  source: 1111..1122
                 }
               }
             ],
-            end: 1120..1121
+            end: 1126..1127
           }
         },
         field {
-          name: `profiles` @ 1125..1133,
+          name: `profiles` @ 1131..1139,
           expr: list {
-            begin: 1135..1136,
+            begin: 1141..1142,
             items: [
               expression constant {
                 value: string "host",
-                source: 1136..1142
+                source: 1142..1148
               }
             ],
-            end: 1142..1143
+            end: 1148..1149
           }
         },
         field {
-          name: `uid` @ 1147..1150,
+          name: `uid` @ 1153..1156,
           expr: field_access {
-            left: root_field `src` @ 1152..1155,
-            dot: 1155..1156,
-            name: `record_id` @ 1156..1165
+            left: root_field `src` @ 1158..1161,
+            dot: 1161..1162,
+            name: `record_id` @ 1162..1171
           }
         },
         field {
-          name: `version` @ 1169..1176,
+          name: `version` @ 1175..1182,
           expr: constant {
             value: string "1.1.0",
-            source: 1178..1185
+            source: 1184..1191
           }
         }
       ],
-      end: 1187..1188
+      end: 1193..1194
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 1189..1193
+        `drop` @ 1195..1199
       ],
       ref: unresolved
     },
     args: [
       field_access {
         left: field_access {
-          left: root_field `src` @ 1194..1197,
-          dot: 1197..1198,
-          name: `event_data` @ 1198..1208
+          left: root_field `src` @ 1200..1203,
+          dot: 1203..1204,
+          name: `event_data` @ 1204..1214
         },
-        dot: 1208..1209,
-        name: `UtcTime` @ 1209..1216
+        dot: 1214..1215,
+        name: `UtcTime` @ 1215..1222
       },
       field_access {
-        left: root_field `src` @ 1218..1221,
-        dot: 1221..1222,
-        name: `record_id` @ 1222..1231
+        left: root_field `src` @ 1224..1227,
+        dot: 1227..1228,
+        name: `record_id` @ 1228..1237
       }
     ]
   },
   assignment {
     left: simple_selector {
-      expr: root_field `process` @ 1232..1239,
+      expr: root_field `process` @ 1238..1245,
       has_this: false,
       path: [
-        `process` @ 1232..1239
+        `process` @ 1238..1245
       ]
     },
-    equals: 1240..1241,
+    equals: 1246..1247,
     right: record {
-      begin: 1242..1243,
+      begin: 1248..1249,
       items: [
         field {
-          name: `cmd_line` @ 1246..1254,
+          name: `cmd_line` @ 1252..1260,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 1256..1259,
-              dot: 1259..1260,
-              name: `event_data` @ 1260..1270
+              left: root_field `src` @ 1262..1265,
+              dot: 1265..1266,
+              name: `event_data` @ 1266..1276
             },
-            dot: 1270..1271,
-            name: `CommandLine` @ 1271..1282
+            dot: 1276..1277,
+            name: `CommandLine` @ 1277..1288
           }
         },
         field {
-          name: `file` @ 1286..1290,
+          name: `file` @ 1292..1296,
           expr: record {
-            begin: 1292..1293,
+            begin: 1298..1299,
             items: [
               field {
-                name: `path` @ 1298..1302,
+                name: `path` @ 1304..1308,
                 expr: field_access {
                   left: field_access {
-                    left: root_field `src` @ 1304..1307,
-                    dot: 1307..1308,
-                    name: `event_data` @ 1308..1318
+                    left: root_field `src` @ 1310..1313,
+                    dot: 1313..1314,
+                    name: `event_data` @ 1314..1324
                   },
-                  dot: 1318..1319,
-                  name: `Image` @ 1319..1324
+                  dot: 1324..1325,
+                  name: `Image` @ 1325..1330
                 }
               },
               field {
-                name: `parent_folder` @ 1330..1343,
+                name: `parent_folder` @ 1336..1349,
                 expr: function_call {
                   fn: {
                     path: [
-                      `std` @ 1345..1348,
-                      `path` @ 1349..1353,
-                      `parent` @ 1354..1360
+                      `std` @ 1351..1354,
+                      `path` @ 1356..1360,
+                      `parent` @ 1362..1368
                     ],
                     ref: unresolved
                   },
                   args: [
                     field_access {
                       left: field_access {
-                        left: root_field `src` @ 1361..1364,
-                        dot: 1364..1365,
-                        name: `event_data` @ 1365..1375
+                        left: root_field `src` @ 1369..1372,
+                        dot: 1372..1373,
+                        name: `event_data` @ 1373..1383
                       },
-                      dot: 1375..1376,
-                      name: `Image` @ 1376..1381
+                      dot: 1383..1384,
+                      name: `Image` @ 1384..1389
                     }
                   ],
-                  rpar: 1381..1382,
+                  rpar: 1389..1390,
                   method: false
                 }
               },
               field {
-                name: `name` @ 1388..1392,
+                name: `name` @ 1396..1400,
                 expr: function_call {
                   fn: {
                     path: [
-                      `std` @ 1394..1397,
-                      `path` @ 1398..1402,
-                      `file_name` @ 1403..1412
+                      `std` @ 1402..1405,
+                      `path` @ 1407..1411,
+                      `file_name` @ 1413..1422
                     ],
                     ref: unresolved
                   },
                   args: [
                     field_access {
                       left: field_access {
-                        left: root_field `src` @ 1413..1416,
-                        dot: 1416..1417,
-                        name: `event_data` @ 1417..1427
+                        left: root_field `src` @ 1423..1426,
+                        dot: 1426..1427,
+                        name: `event_data` @ 1427..1437
                       },
-                      dot: 1427..1428,
-                      name: `Image` @ 1428..1433
+                      dot: 1437..1438,
+                      name: `Image` @ 1438..1443
                     }
                   ],
-                  rpar: 1433..1434,
+                  rpar: 1443..1444,
                   method: false
                 }
               },
               field {
-                name: `type` @ 1440..1446,
+                name: `type` @ 1450..1456,
                 expr: constant {
                   value: string "Unknown",
-                  source: 1448..1457
+                  source: 1458..1467
                 }
               },
               field {
-                name: `type_id` @ 1463..1470,
+                name: `type_id` @ 1473..1480,
                 expr: constant {
                   value: int64 0,
-                  source: 1472..1473
+                  source: 1482..1483
                 }
               }
             ],
-            end: 1477..1478
+            end: 1487..1488
           }
         },
         field {
-          name: `pid` @ 1482..1485,
+          name: `pid` @ 1492..1495,
           expr: function_call {
             fn: {
               path: [
-                `int` @ 1487..1490
+                `int` @ 1497..1500
               ],
               ref: unresolved
             },
             args: [
               field_access {
                 left: field_access {
-                  left: root_field `src` @ 1491..1494,
-                  dot: 1494..1495,
-                  name: `event_data` @ 1495..1505
+                  left: root_field `src` @ 1501..1504,
+                  dot: 1504..1505,
+                  name: `event_data` @ 1505..1515
                 },
-                dot: 1505..1506,
-                name: `ProcessId` @ 1506..1515
+                dot: 1515..1516,
+                name: `ProcessId` @ 1516..1525
               }
             ],
-            rpar: 1515..1516,
+            rpar: 1525..1526,
             method: false
           }
         }
       ],
-      end: 1518..1519
+      end: 1528..1529
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 1520..1524
+        `drop` @ 1530..1534
       ],
       ref: unresolved
     },
     args: [
       field_access {
         left: field_access {
-          left: root_field `src` @ 1525..1528,
-          dot: 1528..1529,
-          name: `event_data` @ 1529..1539
+          left: root_field `src` @ 1535..1538,
+          dot: 1538..1539,
+          name: `event_data` @ 1539..1549
         },
-        dot: 1539..1540,
-        name: `CommandLine` @ 1540..1551
+        dot: 1549..1550,
+        name: `CommandLine` @ 1550..1561
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 1553..1556,
-          dot: 1556..1557,
-          name: `event_data` @ 1557..1567
+          left: root_field `src` @ 1563..1566,
+          dot: 1566..1567,
+          name: `event_data` @ 1567..1577
         },
-        dot: 1567..1568,
-        name: `Image` @ 1568..1573
+        dot: 1577..1578,
+        name: `Image` @ 1578..1583
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 1575..1578,
-          dot: 1578..1579,
-          name: `event_data` @ 1579..1589
+          left: root_field `src` @ 1585..1588,
+          dot: 1588..1589,
+          name: `event_data` @ 1589..1599
         },
-        dot: 1589..1590,
-        name: `ProcessId` @ 1590..1599
+        dot: 1599..1600,
+        name: `ProcessId` @ 1600..1609
       }
     ]
   },
   assignment {
     left: simple_selector {
-      expr: root_field `severity` @ 1600..1608,
+      expr: root_field `severity` @ 1610..1618,
       has_this: false,
       path: [
-        `severity` @ 1600..1608
+        `severity` @ 1610..1618
       ]
     },
-    equals: 1609..1610,
+    equals: 1619..1620,
     right: constant {
       value: string "Informational",
-      source: 1611..1626
+      source: 1621..1636
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `severity_id` @ 1627..1638,
+      expr: root_field `severity_id` @ 1637..1648,
       has_this: false,
       path: [
-        `severity_id` @ 1627..1638
+        `severity_id` @ 1637..1648
       ]
     },
-    equals: 1639..1640,
+    equals: 1649..1650,
     right: constant {
       value: int64 1,
-      source: 1641..1642
+      source: 1651..1652
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `status` @ 1643..1649,
+      expr: root_field `status` @ 1653..1659,
       has_this: false,
       path: [
-        `status` @ 1643..1649
+        `status` @ 1653..1659
       ]
     },
-    equals: 1650..1651,
+    equals: 1660..1661,
     right: constant {
       value: string "Success",
-      source: 1652..1661
+      source: 1662..1671
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `status_id` @ 1662..1671,
+      expr: root_field `status_id` @ 1672..1681,
       has_this: false,
       path: [
-        `status_id` @ 1662..1671
+        `status_id` @ 1672..1681
       ]
     },
-    equals: 1672..1673,
+    equals: 1682..1683,
     right: constant {
       value: int64 1,
-      source: 1674..1675
+      source: 1684..1685
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `time` @ 1676..1680,
+      expr: root_field `time` @ 1686..1690,
       has_this: false,
       path: [
-        `time` @ 1676..1680
+        `time` @ 1686..1690
       ]
     },
-    equals: 1681..1682,
+    equals: 1691..1692,
     right: function_call {
       fn: {
         path: [
-          `round` @ 1683..1688
+          `round` @ 1693..1698
         ],
         ref: unresolved
       },
@@ -832,7 +832,7 @@
           left: function_call {
             fn: {
               path: [
-                `timestamp` @ 1718..1727
+                `timestamp` @ 1728..1737
               ],
               ref: unresolved
             },
@@ -840,83 +840,83 @@
               function_call {
                 fn: {
                   path: [
-                    `time` @ 1689..1693
+                    `time` @ 1699..1703
                   ],
                   ref: unresolved
                 },
                 args: [
                   field_access {
-                    left: root_field `metadata` @ 1694..1702,
-                    dot: 1702..1703,
-                    name: `original_time` @ 1703..1716
+                    left: root_field `metadata` @ 1704..1712,
+                    dot: 1712..1713,
+                    name: `original_time` @ 1713..1726
                   }
                 ],
-                rpar: 1716..1717,
+                rpar: 1726..1727,
                 method: false
               }
             ],
-            rpar: 1728..1729,
+            rpar: 1738..1739,
             method: true
           },
-          op: "mul" @ 1730..1731,
+          op: "mul" @ 1740..1741,
           right: constant {
             value: int64 1000,
-            source: 1732..1736
+            source: 1742..1746
           }
         }
       ],
-      rpar: 1736..1737,
+      rpar: 1746..1747,
       method: false
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `type_name` @ 1738..1747,
+      expr: root_field `type_name` @ 1748..1757,
       has_this: false,
       path: [
-        `type_name` @ 1738..1747
+        `type_name` @ 1748..1757
       ]
     },
-    equals: 1748..1749,
+    equals: 1758..1759,
     right: constant {
       value: string "Process Activity: Launch",
-      source: 1750..1776
+      source: 1760..1786
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `type_uid` @ 1777..1785,
+      expr: root_field `type_uid` @ 1787..1795,
       has_this: false,
       path: [
-        `type_uid` @ 1777..1785
+        `type_uid` @ 1787..1795
       ]
     },
-    equals: 1786..1787,
+    equals: 1796..1797,
     right: constant {
       value: int64 100701,
-      source: 1788..1794
+      source: 1798..1804
     }
   },
   assignment {
     left: simple_selector {
-      expr: root_field `unmapped` @ 1795..1803,
+      expr: root_field `unmapped` @ 1805..1813,
       has_this: false,
       path: [
-        `unmapped` @ 1795..1803
+        `unmapped` @ 1805..1813
       ]
     },
-    equals: 1804..1805,
-    right: root_field `src` @ 1806..1809
+    equals: 1814..1815,
+    right: root_field `src` @ 1816..1819
   },
   invocation {
     op: {
       path: [
-        `drop` @ 1810..1814
+        `drop` @ 1820..1824
       ],
       ref: unresolved
     },
     args: [
-      root_field `src` @ 1815..1818
+      root_field `src` @ 1825..1828
     ]
   }
 ]
