@@ -156,18 +156,6 @@ Operator | Description | Example
 [`line_chart`]() | |
 -->
 
-## Internals
-
-Operator | Description | Example
-:--------|:------------|:-------
-[`api`](./operators/api.md) | Calls Tenzir's REST API from a pipeline | `api "/pipeline/list"`
-[`batch`](./operators/batch.md) | Controls the batch size of events | `batch timeout=1s`
-[`buffer`](./operators/buffer.md) | Adds additional buffering to handle spikes | `buffer 10M, policy="drop"`
-[`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
-[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
-[`cache`](./operators/cache.md) | In-memory cache shared between pipelines | `cache "w01wyhTZm3", ttl=10min`
-[`legacy`](./operators/legacy.md) | Provides a compatibility fallback to TQL1 pipelines | `legacy "chart area"`
-
 ## Node Inspection
 
 Operator | Description | Example
@@ -189,17 +177,39 @@ Operator | Description | Example
 [`processes`](./operators/processes.md) | Lists running processes | `processes`
 [`sockets`](./operators/sockets.md) | Lists open sockets | `sockets`
 
-## Uncategorized
+## Detection
+
+Operator | Description | Example
+:--------|:------------|:-------
+[`sigma`](./operators/sigma.md) | Matches incoming events against Sigma rules | `sigma "/tmp/rules/"`
+[`yara`](./operators/yara.md) | Matches the incoming byte stream against YARA rules | `yara "/path/to/rules", blockwise=true`
+
+## Internals
+
+Operator | Description | Example
+:--------|:------------|:-------
+[`api`](./operators/api.md) | Calls Tenzir's REST API from a pipeline | `api "/pipeline/list"`
+[`batch`](./operators/batch.md) | Controls the batch size of events | `batch timeout=1s`
+[`buffer`](./operators/buffer.md) | Adds additional buffering to handle spikes | `buffer 10M, policy="drop"`
+[`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
+[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
+[`cache`](./operators/cache.md) | In-memory cache shared between pipelines | `cache "w01wyhTZm3", ttl=10min`
+[`legacy`](./operators/legacy.md) | Provides a compatibility fallback to TQL1 pipelines | `legacy "chart area"`
+
+## Encode & Decode
 
 Operator | Description | Example
 :--------|:------------|:-------
 [`compress`](./operators/compress.md) | Compresses a stream of bytes | `compress "zstd", level=18`
 [`decompress`](./operators/decompress.md) | Decompresses a stream of bytes | `decompress "brotli"`
+
+## Uncategorized
+
+Operator | Description | Example
+:--------|:------------|:-------
 [`delay`](./operators/delay.md) | Delays events relative to a start time | `delay ts, speed=2.5`
 [`pass`](./operators/pass.md) | Does nothing with the input | `pass`
 [`repeat`](./operators/repeat.md) | Repeats the input after it has finished | `repeat 100`
-[`sigma`](./operators/sigma.md) | Matches incoming events against Sigma rules | `sigma "/tmp/rules/"`
 [`timeshift`](./operators/timeshift.md) | Adjusts timestamps relative to a given start time | `timeshift ts, start=2020-01-01`
-[`yara`](./operators/yara.md) | Matches the incoming byte stream against YARA rules | `yara "/path/to/rules", blockwise=true`
 [`python`](./operators/python.md) | Executes a Python snippet for each event | `python "self.x = self.y"`
 [`shell`](./operators/shell.md) | Runs a shell command within the pipeline | <code>shell "./process.sh \| tee copy.txt"</code>
