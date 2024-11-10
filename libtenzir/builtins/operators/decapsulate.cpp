@@ -34,70 +34,61 @@ auto to_uint16(std::span<const std::byte, 2> bytes) {
 }
 
 /// An 802.3 Ethernet frame.
-struct frame {
-  static auto make(std::span<const std::byte> bytes,
-                   frame_type type) -> std::optional<frame> {
+struct ethernet_frame {
+  // 2 MAC addresses and the 2-byte EtherType.
+  static constexpr size_t header_size = 6 + 6 + 2;
+
+  static auto make(std::span<const std::byte> bytes)
+    -> std::optional<ethernet_frame> {
+    if (bytes.size() < header_size) {
+      return std::nullopt;
+    }
+    auto result = ethernet_frame{};
+    result.dst = mac{bytes.subspan<0, 6>()};
+    result.src = mac{bytes.subspan<6, 6>()};
+    auto type = as_ether_type(bytes.subspan<12, 2>());
     switch (type) {
       default:
+        result.type = type;
+        result.payload = bytes.subspan<header_size>();
         break;
-      case frame_type::ethernet: {
-        // Need at least 2 MAC addresses and the 2-byte EtherType.
-        constexpr size_t ethernet_header_size = 6 + 6 + 2;
-        if (bytes.size() < ethernet_header_size) {
+      case ether_type::ieee_802_1aq: {
+        size_t min_frame_size = 6 + 6 + 4 + 2;
+        if (bytes.size() < min_frame_size) {
           return std::nullopt;
         }
-        auto dst = mac{bytes.subspan<0, 6>()};
-        auto src = mac{bytes.subspan<6, 6>()};
-        auto result = frame{dst, src};
-        auto type = as_ether_type(bytes.subspan<12, 2>());
-        switch (type) {
-          default:
-            result.type = type;
-            result.payload = bytes.subspan<ethernet_header_size>();
-            break;
-          case ether_type::ieee_802_1aq: {
-            size_t min_frame_size = 6 + 6 + 4 + 2;
-            if (bytes.size() < min_frame_size) {
-              return std::nullopt;
-            }
-            result.outer_vid = to_uint16(bytes.subspan<14, 2>());
-            *result.outer_vid &= 0x0FFF; // lower 12 bits only
-            result.type = as_ether_type(bytes.subspan<16, 2>());
-            result.payload = bytes.subspan(min_frame_size);
-            // Keep going for QinQ frames (TPID = 0x8100).
-            if (result.type == ether_type::ieee_802_1aq) {
-              min_frame_size += 4;
-              if (bytes.size() < min_frame_size) {
-                return std::nullopt;
-              }
-              result.inner_vid = to_uint16(bytes.subspan<18, 2>());
-              *result.inner_vid &= 0x0FFF; // lower 12 bits only
-              result.type = as_ether_type(bytes.subspan<20, 2>());
-              result.payload = bytes.subspan(min_frame_size);
-            }
-            break;
+        result.outer_vid = to_uint16(bytes.subspan<14, 2>());
+        *result.outer_vid &= 0x0FFF; // lower 12 bits only
+        result.type = as_ether_type(bytes.subspan<16, 2>());
+        result.payload = bytes.subspan(min_frame_size);
+        // Keep going for QinQ frames (TPID = 0x8100).
+        if (result.type == ether_type::ieee_802_1aq) {
+          min_frame_size += 4;
+          if (bytes.size() < min_frame_size) {
+            return std::nullopt;
           }
-          case ether_type::ieee_802_1q_db: {
-            constexpr size_t min_frame_size = 6 + 6 + 4 + 4 + 2;
-            if (bytes.size() < min_frame_size) {
-              return std::nullopt;
-            }
-            result.outer_vid = to_uint16(bytes.subspan<14, 2>());
-            *result.outer_vid &= 0x0FFF; // lower 12 bits only
-            result.inner_vid = to_uint16(bytes.subspan<18, 2>());
-            *result.inner_vid &= 0x0FFF; // lower 12 bits only
-            result.type = as_ether_type(bytes.subspan<20, 2>());
-            result.payload = bytes.subspan<min_frame_size>();
-            break;
-          }
+          result.inner_vid = to_uint16(bytes.subspan<18, 2>());
+          *result.inner_vid &= 0x0FFF; // lower 12 bits only
+          result.type = as_ether_type(bytes.subspan<20, 2>());
+          result.payload = bytes.subspan(min_frame_size);
         }
-        return result;
+        break;
+      }
+      case ether_type::ieee_802_1q_db: {
+        constexpr size_t min_frame_size = 6 + 6 + 4 + 4 + 2;
+        if (bytes.size() < min_frame_size) {
+          return std::nullopt;
+        }
+        result.outer_vid = to_uint16(bytes.subspan<14, 2>());
+        *result.outer_vid &= 0x0FFF; // lower 12 bits only
+        result.inner_vid = to_uint16(bytes.subspan<18, 2>());
+        *result.inner_vid &= 0x0FFF; // lower 12 bits only
+        result.type = as_ether_type(bytes.subspan<20, 2>());
+        result.payload = bytes.subspan<min_frame_size>();
+        break;
       }
     }
-    return std::nullopt;
-  }
-
-  frame(mac dst, mac src) : dst{dst}, src{src} {
+    return result;
   }
 
   mac dst;                             ///< Destination MAC address
@@ -110,8 +101,8 @@ struct frame {
 
 /// An IP packet.
 struct packet {
-  static auto make(std::span<const std::byte> bytes,
-                   ether_type type) -> std::optional<packet> {
+  static auto make(std::span<const std::byte> bytes, ether_type type)
+    -> std::optional<packet> {
     packet result;
     switch (type) {
       default:
@@ -154,8 +145,8 @@ struct packet {
 
 /// A layer 4 segment.
 struct segment {
-  static auto make(std::span<const std::byte> bytes,
-                   uint8_t type) -> std::optional<segment> {
+  static auto make(std::span<const std::byte> bytes, uint8_t type)
+    -> std::optional<segment> {
     segment result;
     switch (type) {
       default:
@@ -215,26 +206,49 @@ struct segment {
 auto parse(record_ref builder, std::span<const std::byte> bytes,
            frame_type type) -> std::optional<diagnostic> {
   // Parse layer 2.
-  auto frame = frame::make(bytes, type);
-  if (!frame) {
-    TENZIR_TRACE("failed to parse layer-2 frame");
-    return std::nullopt;
-  }
-  auto ether = builder.field("ether").record();
-  auto src_str = fmt::to_string(frame->src);
-  auto dst_str = fmt::to_string(frame->dst);
-  ether.field("src").data(std::string_view{src_str});
-  ether.field("dst").data(std::string_view{dst_str});
-  if (frame->outer_vid) {
-    auto vlan = builder.field("vlan").record();
-    vlan.field("outer").data(static_cast<uint64_t>(*frame->outer_vid));
-    if (frame->inner_vid) {
-      vlan.field("inner").data(static_cast<uint64_t>(*frame->inner_vid));
+  auto frame_payload = std::span<const std::byte>{};
+  auto frame_type = ether_type::invalid;
+  switch (type) {
+    default:
+      TENZIR_TRACE("failed to parse layer-2 frame");
+      return std::nullopt;
+    case frame_type::ethernet: {
+      // Parse Ethernet frame.
+      auto frame = ethernet_frame::make(bytes);
+      if (!frame) {
+        TENZIR_TRACE("failed to parse layer-2 frame");
+        return std::nullopt;
+      }
+      auto ether = builder.field("ether").record();
+      auto src_str = fmt::to_string(frame->src);
+      auto dst_str = fmt::to_string(frame->dst);
+      ether.field("src").data(std::string_view{src_str});
+      ether.field("dst").data(std::string_view{dst_str});
+      if (frame->outer_vid) {
+        auto vlan = builder.field("vlan").record();
+        vlan.field("outer").data(static_cast<uint64_t>(*frame->outer_vid));
+        if (frame->inner_vid) {
+          vlan.field("inner").data(static_cast<uint64_t>(*frame->inner_vid));
+        }
+      }
+      ether.field("type").data(static_cast<uint64_t>(frame->type));
+      frame_payload = frame->payload;
+      frame_type = frame->type;
+      break;
+    }
+    case frame_type::sll2: {
+      constexpr size_t sll2_header_size = 20;
+      if (bytes.size() < sll2_header_size) {
+        TENZIR_TRACE("skipping invalid SLL2 frame");
+        return std::nullopt;
+      }
+      frame_payload = bytes.subspan(sll2_header_size);
+      frame_type = static_cast<ether_type>(to_uint16(bytes.subspan<0, 2>()));
+      break;
     }
   }
-  ether.field("type").data(static_cast<uint64_t>(frame->type));
   // Parse layer 3.
-  auto packet = packet::make(frame->payload, frame->type);
+  auto packet = packet::make(frame_payload, frame_type);
   if (!packet) {
     TENZIR_TRACE("failed to parse layer-3 packet");
     return std::nullopt;
@@ -281,8 +295,8 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
   return std::nullopt;
 }
 
-auto decapsulate(const series& s, diagnostic_handler& dh,
-                 bool include_old) -> std::optional<series> {
+auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
+  -> std::optional<series> {
   // Get the packet payload.
   if (s.type.kind().is_not<record_type>()) {
     if (s.type.kind().is_not<null_type>()) {
@@ -365,8 +379,8 @@ public:
   decapsulate_operator() = default;
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -385,8 +399,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }
@@ -411,8 +425,8 @@ public:
     return {.transformation = true};
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("tql2.decapsulate")
           .add(expr, "<expr>")
