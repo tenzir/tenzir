@@ -203,6 +203,13 @@ Operator | Description | Example
 [`compress`](./operators/compress.md) | Compresses a stream of bytes | `compress "zstd", level=18`
 [`decompress`](./operators/decompress.md) | Decompresses a stream of bytes | `decompress "brotli"`
 
+## Packages
+
+Operator | Description | Example
+:--------|:------------|:-------
+[`package::add`](./operators/package/add.md) | Installs a package | `package::add "suricata-ocsf`
+[`package::remove`](./operators/package/add.md) | Uninstalls a package | `package::remove "suricata-ocsf`
+
 ## Uncategorized
 
 Operator | Description | Example
