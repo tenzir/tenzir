@@ -16,8 +16,8 @@
 
 namespace tenzir {
 
-auto tokenize(std::string_view content,
-              session ctx) -> failure_or<std::vector<token>> {
+auto tokenize(std::string_view content, session ctx)
+  -> failure_or<std::vector<token>> {
   TRY(validate_utf8(content, ctx));
   auto tokens = tokenize_permissive(content);
   TRY(verify_tokens(tokens, ctx));
@@ -119,7 +119,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
 #undef X
     | ignore((
         lit{"self"} | "is" | "as" | "use" /*| "type"*/ | "return" | "def" | "function"
-        | "fn" | "pipeline" | "meta" | "super" | "for" | "while" | "mod" | "module"
+        | "fn" | "meta" | "super" | "for" | "while" | "mod" | "module"
       ) >> !continue_ident) ->* [] { return tk::reserved_keyword; }
     | ignore('$' >> identifier)
       ->* [] { return tk::dollar_ident; }
@@ -159,8 +159,8 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   return result;
 }
 
-auto verify_tokens(std::span<const token> tokens,
-                   session ctx) -> failure_or<void> {
+auto verify_tokens(std::span<const token> tokens, session ctx)
+  -> failure_or<void> {
   auto result = failure_or<void>{};
   for (auto& token : tokens) {
     if (token.kind == token_kind::error) {
