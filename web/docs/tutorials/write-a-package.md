@@ -89,7 +89,6 @@ Okay, a simple CSV table with comments. We can write a pipeline for reading
 that:
 
 ```tql
-// tql2
 load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
 read_csv comments=true, header="timestamp,SHA1,reason"
 ```
@@ -98,7 +97,6 @@ Now that we have onboarded the data into a pipeline, we just need to push it
 into the context by piping it to `context update`:
 
 ```tql
-// tql2
 load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
 read_csv comments=true, header="timestamp,SHA1,reason"
 legacy "context update sslbl --key=SHA1"
@@ -116,7 +114,6 @@ lookup table in sync with the latest version.
 To this end, we do the data onboarding periodically with `every`:
 
 ```tql
-// tql2
 every 1h {
   load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
   read_csv comments=true, header="timestamp,SHA1,reason"
@@ -258,11 +255,11 @@ discuss it with us.
 :::
 
 [Installing a package](installation/install-a-package.md) given a `package.yaml`
-file is easiest with the [`package_add`](operators/package.md) operator, since
-a package is just data:
+file is easiest with the [`package::add`](tql2/operators/package/add.md)
+operator, since a package is just data:
 
 ```tql
-package_add "/path/to/package.yaml"
+package::add "/path/to/package.yaml"
 ```
 
 This fails with the following error:
@@ -277,7 +274,7 @@ Doh, we didn't substitute the template `{{ inputs.refresh-interval }}`. We can
 do this by passing one additional argument:
 
 ```tql
-package_add "/path/to/package.yaml", inputs={
+package::add "/path/to/package.yaml", inputs={
   "refresh-interval": 1h
 }
 ```
@@ -285,24 +282,21 @@ package_add "/path/to/package.yaml", inputs={
 The package should show up in the list of packages after installation:
 
 ```tql
-// tql2
-packages
+package::list
 where id == "sslbl"
 ```
 
 The pipelines that came with the package also have its ID prefixed:
 
 ```tql
-// tql2
-pipelines
+pipeline::list
 where id.starts_with("sslbl")
 ```
 
 And the context is also there:
 
 ```tql
-// tql2
-contexts
+context::list
 where id.starts_with("sslbl")
 ```
 
@@ -310,8 +304,7 @@ Since we checked that everything works as expected, we now remove our package
 with:
 
 ```tql
-// tql2
-package_remove "sslbl"
+package::remove "sslbl"
 ```
 
 ## Share and contribute

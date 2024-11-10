@@ -37,7 +37,7 @@ package::add
 ### Add a package with inputs
 
 ```tql
-package_add "https://github.com/tenzir/library/raw/main/zeek/package.yaml",
+package::add "https://github.com/tenzir/library/raw/main/zeek/package.yaml",
   inputs={format: "tsv", "log-directory": "/opt/tenzir/logs"}
 ```
 
