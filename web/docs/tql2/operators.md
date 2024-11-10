@@ -130,14 +130,6 @@ Operator | Description | Example
 [`write_json`](./operators/write_json.md) | Writes events as JSON | `write_json ndjson=true`
 
 <!--
-## Packages
-
-Operator | Description | Example
-:--------|:------------|:-------
-[`package::add`]() | |
-[`package::remove`]() | |
-[`package::list`]() | |
-
 ## Contexts
 
 Operator | Description | Example
@@ -207,8 +199,9 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`package::add`](./operators/package/add.md) | Installs a package | `package::add "suricata-ocsf`
-[`package::remove`](./operators/package/add.md) | Uninstalls a package | `package::remove "suricata-ocsf`
+[`package::add`](./operators/package/add.md) | Installs a package | `package::add "suricata-ocsf"`
+[`package::list`](./operators/package/list.md) | Shows installed packages | `package::list`
+[`package::remove`](./operators/package/add.md) | Uninstalls a package | `package::remove "suricata-ocsf"`
 
 ## Uncategorized
 
