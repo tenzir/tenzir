@@ -49,7 +49,7 @@ access the platform. All computation and storage takes place at your nodes. The
 platform acts as rendezvous point that connects two TLS-encrypted channels, one
 from the node to the platform, and one from the browser to the platform:
 
-![Platform Connections](platform-connections.excalidraw.svg)
+![Platform Connections](platform-connections.svg)
 
 We connect these two channels at the platform. Therefore, whoever operates the
 platform *could* interpose on data that travels from the nodes to the app. In
