@@ -11,6 +11,7 @@
 #include "caf/detail/pretty_type_name.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/policy/merge_lists.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/expected.hpp>
@@ -87,3 +88,22 @@ unpack_config_list_to_vector(const caf::actor_system_config& cfg,
 }
 
 } // namespace tenzir::detail
+
+namespace tenzir {
+template <>
+class variant_traits<caf::config_value> {
+  using backing_traits = variant_traits<caf::config_value::variant_type>;
+
+public:
+  static constexpr auto count = backing_traits::count;
+
+  static auto index(const caf::config_value& x) -> size_t {
+    return backing_traits::index(x.get_data());
+  }
+
+  template <size_t I>
+  static auto get(const caf::config_value& x) -> decltype(auto) {
+    return backing_traits::template get<I>(x.get_data());
+  }
+};
+} // namespace tenzir
