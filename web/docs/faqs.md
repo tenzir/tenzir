@@ -187,11 +187,9 @@ on the inner workings.
 We currently support the platforms that we mention in our [deployment
 instructions](installation/deploy-a-node.md).
 
-For any other platform, the answer is most likely *no*. While we would love to
-support a wide variety of platforms, we are still a small team with limited
-engineering bandwidth. Please [talk to us](/discord) to let us know what is
-missing and consider contributing support for additional platforms to our [open
-source project](https://github.com/tenzir/tenzir).
+For any other platform, the answer is most likely *no*. Please [talk to
+us](/discord) to let us know what is missing, or dive right in by contributing
+to our [open source repository](https://github.com/tenzir/tenzir).
 
 ## Do you have an integration for *X*?
 
