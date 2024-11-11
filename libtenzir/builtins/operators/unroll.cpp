@@ -186,10 +186,10 @@ public:
           }
           const auto& field_type
             = as<record_type>(slice.schema()).field(offsets.front()).type;
-          if (caf::holds_alternative<null_type>(field_type)) {
+          if (is<null_type>(field_type)) {
             return {};
           }
-          if (not caf::holds_alternative<list_type>(field_type)) {
+          if (not is<list_type>(field_type)) {
             diagnostic::warning("expected `list`, but got `{}`",
                                 field_type.kind())
               .primary(field)
@@ -206,10 +206,10 @@ public:
               [&](offset result) -> std::optional<offset> {
                 const auto& field_type
                   = as<record_type>(slice.schema()).field(result).type;
-                if (caf::holds_alternative<null_type>(field_type)) {
+                if (is<null_type>(field_type)) {
                   return {};
                 }
-                if (not caf::holds_alternative<list_type>(field_type)) {
+                if (not is<list_type>(field_type)) {
                   diagnostic::warning("expected `list`, but got `{}`",
                                       field_type.kind())
                     .primary(field)

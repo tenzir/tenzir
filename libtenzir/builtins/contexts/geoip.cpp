@@ -322,17 +322,16 @@ public:
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
     auto builder = series_builder{};
-    if (not caf::holds_alternative<ip_type>(array.type)
-        and not caf::holds_alternative<string_type>(array.type)) {
+    if (not is<ip_type>(array.type) and not is<string_type>(array.type)) {
       return caf::make_error(ec::lookup_error,
                              fmt::format("error looking up IP address in "
                                          "GeoIP database: invalid column "
                                          "type, only IP or string types are "
                                          "allowed"));
     }
-    const auto is_ip = caf::holds_alternative<ip_type>(array.type);
+    const auto is_ip = is<ip_type>(array.type);
     for (const auto& value : array.values()) {
-      if (caf::holds_alternative<caf::none_t>(value)) {
+      if (is<caf::none_t>(value)) {
         builder.null();
         continue;
       }
@@ -355,7 +354,7 @@ public:
                                         ip_string, MMDB_strerror(status)));
       }
       if (not result.found_entry) {
-        if (replace and not caf::holds_alternative<caf::none_t>(value)) {
+        if (replace and not is<caf::none_t>(value)) {
           builder.data(value);
         } else {
           builder.null();

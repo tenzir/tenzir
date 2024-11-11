@@ -88,7 +88,7 @@ bool operator<(const predicate& x, const predicate& y) {
 // -- curried_predicate --------------------------------------------------------
 
 curried_predicate curried(const predicate& pred) {
-  TENZIR_ASSERT(caf::holds_alternative<data>(pred.rhs));
+  TENZIR_ASSERT(is<data>(pred.rhs));
   return {pred.op, as<data>(pred.rhs)};
 }
 
@@ -199,18 +199,20 @@ caf::expected<expression> normalize_and_validate(expression expr) {
 }
 
 caf::expected<expression> tailor(expression expr, const type& schema) {
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(schema));
-  if (caf::holds_alternative<caf::none_t>(expr))
+  TENZIR_ASSERT(is<record_type>(schema));
+  if (is<caf::none_t>(expr)) {
     return caf::make_error(ec::unspecified, fmt::format("unable to tailor "
                                                         "empty expression"));
+  }
   auto result = caf::visit(type_resolver{schema}, std::move(expr));
   if (!result)
     return result;
-  if (caf::holds_alternative<caf::none_t>(*result))
+  if (is<caf::none_t>(*result)) {
     return caf::make_error(ec::unspecified, fmt::format("failed to tailor "
                                                         "expression {} for "
                                                         "schema {}",
                                                         expr, schema));
+  }
   return result;
 }
 

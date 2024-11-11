@@ -104,7 +104,7 @@ public:
                            std::shared_ptr<arrow::Array> array)
         -> std::vector<
           std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-        if (not caf::holds_alternative<record_type>(field.type)) {
+        if (not is<record_type>(field.type)) {
           diagnostic::error("field {} is not of type record", field.name)
             .primary(input_.source)
             .throw_();

@@ -98,14 +98,14 @@ TEST(map view) {
 
 TEST(make_data_view) {
   auto x = make_data_view(true);
-  CHECK(caf::holds_alternative<bool>(x));
+  CHECK(is<bool>(x));
   auto str = "foo"s;
   x = make_data_view(str);
-  CHECK(caf::holds_alternative<view<std::string>>(x));
-  CHECK(caf::holds_alternative<std::string_view>(x));
+  CHECK(is<view<std::string>>(x));
+  CHECK(is<std::string_view>(x));
   auto xs = list{int64_t{42}, true, "foo"};
   x = make_data_view(xs);
-  REQUIRE(caf::holds_alternative<view<list>>(x));
+  REQUIRE(is<view<list>>(x));
   auto v = as<view<list>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
   CHECK_VARIANT_EQUAL(materialize(v->at(0)), int64_t{42});

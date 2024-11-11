@@ -90,8 +90,9 @@ public:
         return {};
       case relational_operator::equal: {
         if constexpr (std::is_same_v<view_type, view<std::string>>) {
-          if (caf::holds_alternative<view<pattern>>(rhs))
+          if (is<view<pattern>>(rhs)) {
             return {};
+          }
         }
         // TODO: Switch to tsl::robin_set here for heterogeneous lookup.
         return data_.count(materialize(as<view_type>(rhs)));

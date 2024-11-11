@@ -252,8 +252,7 @@ struct binding {
     for (const auto& column : group_by_columns) {
       if (column) {
         auto array = column->offset.get(batch);
-        if (config.time_resolution
-            && caf::holds_alternative<time_type>(column->type)) {
+        if (config.time_resolution && is<time_type>(column->type)) {
           array = arrow::compute::FloorTemporal(
                     array, make_round_temporal_options(*config.time_resolution))
                     .ValueOrDie()

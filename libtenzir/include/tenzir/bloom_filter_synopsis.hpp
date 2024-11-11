@@ -34,7 +34,7 @@ public:
   }
 
   void add(data_view x) override {
-    TENZIR_ASSERT(caf::holds_alternative<view<T>>(x), "invalid data");
+    TENZIR_ASSERT(is<view<T>>(x), "invalid data");
     bloom_filter_.add(as<view<T>>(x));
   }
 
@@ -47,22 +47,27 @@ public:
         // TODO: We should treat 'null' as a normal value and
         // hash it, so we can exclude synopsis where all values
         // are non-null.
-        if (caf::holds_alternative<view<caf::none_t>>(rhs))
+        if (is<view<caf::none_t>>(rhs)) {
           return {};
-        if constexpr (std::is_same_v<T, std::string>) {
-          if (caf::holds_alternative<view<pattern>>(rhs))
-            return {};
         }
-        if (!caf::holds_alternative<view<T>>(rhs))
+        if constexpr (std::is_same_v<T, std::string>) {
+          if (is<view<pattern>>(rhs)) {
+            return {};
+          }
+        }
+        if (!is<view<T>>(rhs)) {
           return false;
+        }
         return bloom_filter_.lookup(as<view<T>>(rhs));
       case relational_operator::in: {
         if (auto xs = try_as<view<list>>(&rhs)) {
           for (auto x : **xs) {
-            if (caf::holds_alternative<view<caf::none_t>>(x))
+            if (is<view<caf::none_t>>(x)) {
               return {};
-            if (!caf::holds_alternative<view<T>>(x))
+            }
+            if (!is<view<T>>(x)) {
               continue;
+            }
             if (bloom_filter_.lookup(as<view<T>>(x))) {
               return true;
             }

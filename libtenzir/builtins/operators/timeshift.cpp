@@ -57,8 +57,7 @@ public:
             .emit(ctrl.diagnostics());
           resolved_field = resolved_fields.emplace_hint(
             resolved_field, slice.schema(), std::nullopt);
-        } else if (auto t = layout.field(*index).type;
-                   not caf::holds_alternative<time_type>(t)) {
+        } else if (auto t = layout.field(*index).type; not is<time_type>(t)) {
           diagnostic::warning("field `{}` for schema `{}` has type `{}`",
                               field_, slice.schema(), t.kind())
             .note("expected `{}`", type{time_type{}}.kind())
@@ -78,7 +77,7 @@ public:
       auto transform_fn = [&](struct record_type::field field,
                               std::shared_ptr<arrow::Array> array) noexcept
         -> indexed_transformation::result_type {
-        TENZIR_ASSERT(caf::holds_alternative<time_type>(field.type));
+        TENZIR_ASSERT(is<time_type>(field.type));
         auto builder = series_builder{};
         for (auto element : values(
                time_type{},
@@ -99,7 +98,7 @@ public:
         }
         auto arrays = builder.finish();
         TENZIR_ASSERT(arrays.size() == 1);
-        TENZIR_ASSERT(caf::holds_alternative<time_type>(arrays[0].type));
+        TENZIR_ASSERT(is<time_type>(arrays[0].type));
         return {{field, std::move(arrays[0].array)}};
       };
       auto transformations = std::vector<indexed_transformation>{

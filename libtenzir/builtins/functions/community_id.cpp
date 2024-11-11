@@ -50,35 +50,35 @@ public:
         return series::null(string_type{}, eval.length());
       };
       auto src_ip_series = eval(args.src_ip);
-      if (caf::holds_alternative<null_type>(src_ip_series.type)) {
+      if (is<null_type>(src_ip_series.type)) {
         return null_series();
       }
       auto dst_ip_series = eval(args.dst_ip);
-      if (caf::holds_alternative<null_type>(dst_ip_series.type)) {
+      if (is<null_type>(dst_ip_series.type)) {
         return null_series();
       }
       auto proto_series = eval(args.proto);
-      if (caf::holds_alternative<null_type>(proto_series.type)) {
+      if (is<null_type>(proto_series.type)) {
         return null_series();
       }
       auto src_port_series = std::optional<series>{};
       if (args.src_port) {
         src_port_series = eval(*args.src_port);
-        if (caf::holds_alternative<null_type>(src_port_series->type)) {
+        if (is<null_type>(src_port_series->type)) {
           src_port_series = std::nullopt;
         }
       }
       auto dst_port_series = std::optional<series>{};
       if (args.dst_port) {
         dst_port_series = eval(*args.dst_port);
-        if (caf::holds_alternative<null_type>(dst_port_series->type)) {
+        if (is<null_type>(dst_port_series->type)) {
           dst_port_series = std::nullopt;
         }
       }
       auto seed_series = std::optional<series>{};
       if (args.seed) {
         seed_series = eval(*args.seed);
-        if (caf::holds_alternative<null_type>(seed_series->type)) {
+        if (is<null_type>(seed_series->type)) {
           seed_series = std::nullopt;
         }
       }

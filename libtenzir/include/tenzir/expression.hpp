@@ -379,7 +379,7 @@ caf::expected<expression> normalize_and_validate(expression expr);
 /// Tailors an expression to a specific type.
 /// @param expr The expression to tailor to *schema*.
 /// @param schema The schema to tailor *expr* to.
-/// @pre `caf::holds_alternative<record_type>(schema)`
+/// @pre `is<record_type>(schema)`
 /// @returns An optimized version of *expr* specifically for evaluating events
 ///          of type *schema*.
 caf::expected<expression> tailor(expression expr, const type& schema);

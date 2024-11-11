@@ -370,7 +370,7 @@ auto list_generator::writable() -> bool {
 
 auto series_to_table_slice(series array,
                            std::string_view fallback_name) -> table_slice {
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(array.type));
+  TENZIR_ASSERT(is<record_type>(array.type));
   TENZIR_ASSERT(array.length() > 0);
   if (array.type.name().empty()) {
     array.type = tenzir::type{fallback_name, array.type};

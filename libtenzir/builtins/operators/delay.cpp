@@ -58,8 +58,7 @@ public:
             .emit(ctrl.diagnostics());
           resolved_field = resolved_fields.emplace_hint(
             resolved_field, slice.schema(), std::nullopt);
-        } else if (auto t = layout.field(*index).type;
-                   not caf::holds_alternative<time_type>(t)) {
+        } else if (auto t = layout.field(*index).type; not is<time_type>(t)) {
           diagnostic::warning("field `{}` for schema `{}` has type `{}`",
                               field_.inner, slice.schema(), t.kind())
             .note("expected `{}`", type{time_type{}}.kind())

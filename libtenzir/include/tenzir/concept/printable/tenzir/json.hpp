@@ -241,17 +241,17 @@ struct json_printer : printer_base<json_printer> {
 
   private:
     auto should_skip(view<data> x) noexcept -> bool {
-      if (options_.omit_nulls && caf::holds_alternative<caf::none_t>(x)) {
+      if (options_.omit_nulls && is<caf::none_t>(x)) {
         return true;
       }
-      if (options_.omit_empty_lists && caf::holds_alternative<view<list>>(x)) {
+      if (options_.omit_empty_lists && is<view<list>>(x)) {
         const auto& ys = as<view<list>>(x);
         return std::all_of(ys.begin(), ys.end(),
                            [this](const view<data>& y) noexcept {
                              return should_skip(y);
                            });
       }
-      if (options_.omit_empty_maps && caf::holds_alternative<view<map>>(x)) {
+      if (options_.omit_empty_maps && is<view<map>>(x)) {
         const auto& ys = as<view<map>>(x);
         return std::all_of(
           ys.begin(), ys.end(),
@@ -259,8 +259,7 @@ struct json_printer : printer_base<json_printer> {
             return should_skip(y.second);
           });
       }
-      if (options_.omit_empty_records
-          && caf::holds_alternative<view<record>>(x)) {
+      if (options_.omit_empty_records && is<view<record>>(x)) {
         const auto& ys = as<view<record>>(x);
         return std::all_of(
           ys.begin(), ys.end(),

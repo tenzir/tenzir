@@ -31,7 +31,7 @@ private:
 
   auto add(const data_view& view) -> void override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
     const auto x = static_cast<double>(as<view_type>(view));

@@ -136,7 +136,7 @@ public:
         return std::nullopt;
       }
     }
-    if (not caf::holds_alternative<record_type>(current)) {
+    if (not is<record_type>(current)) {
       diagnostic::warning("expected a record, but got a {}", current.kind())
         .primary(path.back().source)
         .note("for schema `{}`", schema)

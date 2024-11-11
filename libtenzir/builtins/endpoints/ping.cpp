@@ -72,7 +72,7 @@ class plugin final : public virtual rest_endpoint_plugin {
       return tenzir::record{};
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result);
-    TENZIR_ASSERT(caf::holds_alternative<record>(*result));
+    TENZIR_ASSERT(is<record>(*result));
     return as<record>(*result);
   }
 

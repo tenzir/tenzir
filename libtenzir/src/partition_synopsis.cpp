@@ -129,8 +129,9 @@ void partition_synopsis::add(const table_slice& slice,
         // TODO: It would probably make sense to allow `null` in the
         // synopsis API, so we can treat queries like `x == null` just
         // like normal queries.
-        if (!caf::holds_alternative<caf::none_t>(view))
+        if (!is<caf::none_t>(view)) {
           syn->add(std::move(view));
+        }
       }
     };
     // Make a field synopsis if it was configured.

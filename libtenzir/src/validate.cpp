@@ -37,8 +37,9 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
     return caf::make_error(
       ec::invalid_configuration,
       fmt::format("too many layers of nesting at prefix {}", prefix));
-  if (caf::holds_alternative<caf::none_t>(data))
+  if (is<caf::none_t>(data)) {
     return caf::none;
+  }
   if (!type)
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("expected type for non-null value at {}",

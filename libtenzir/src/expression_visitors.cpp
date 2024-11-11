@@ -69,9 +69,9 @@ expression meta_pruner::operator()(const negation& n) const {
 }
 
 expression meta_pruner::operator()(const predicate& p) const {
-  if (caf::holds_alternative<meta_extractor>(p.lhs)
-      || caf::holds_alternative<meta_extractor>(p.rhs))
+  if (is<meta_extractor>(p.lhs) || is<meta_extractor>(p.rhs)) {
     return expression{};
+  }
   return {p};
 }
 
@@ -133,7 +133,7 @@ expression aligner::operator()(const negation& n) const {
 
 expression aligner::operator()(const predicate& p) const {
   auto is_extractor = [](auto& operand) {
-    return !caf::holds_alternative<data>(operand);
+    return !is<data>(operand);
   };
   // Already aligned if LHS is an extractor or no extractor present.
   if (is_extractor(p.lhs) || !is_extractor(p.rhs))
@@ -287,30 +287,31 @@ caf::expected<void> validator::operator()(const predicate& p) {
 caf::expected<void>
 validator::operator()(const meta_extractor& ex, const data& d) {
   if (ex.kind == meta_extractor::schema
-      && !(caf::holds_alternative<std::string>(d)
-           || caf::holds_alternative<pattern>(d)))
+      && !(is<std::string>(d) || is<pattern>(d))) {
     return caf::make_error(ec::syntax_error,
                            "schema meta extractor requires string or pattern "
                            "operand",
                            "#schema", op_, d);
+  }
   if (ex.kind == meta_extractor::schema_id
-      && !(caf::holds_alternative<std::string>(d)
-           || caf::holds_alternative<pattern>(d)))
+      && !(is<std::string>(d) || is<pattern>(d))) {
     return caf::make_error(ec::syntax_error,
                            "schema_id meta extractor requires string or "
                            "pattern operand",
                            "#schema_id", op_, d);
+  }
   if (ex.kind == meta_extractor::import_time) {
-    if (!caf::holds_alternative<time>(d)
+    if (!is<time>(d)
         || !(op_ == relational_operator::less
              || op_ == relational_operator::less_equal
              || op_ == relational_operator::greater
-             || op_ == relational_operator::greater_equal))
+             || op_ == relational_operator::greater_equal)) {
       return caf::make_error(ec::syntax_error,
                              fmt::format("import_time attribute extractor only "
                                          "supports time comparisons "
                                          "#import_time {} {}",
                                          op_, d));
+    }
   }
   return {};
 }
@@ -348,9 +349,9 @@ caf::expected<expression> type_resolver::operator()(const conjunction& c) {
     auto r = caf::visit(*this, op);
     if (!r)
       return r;
-    else if (caf::holds_alternative<caf::none_t>(*r))
+    else if (is<caf::none_t>(*r)) {
       return expression{};
-    else
+    } else
       result.push_back(std::move(*r));
   }
   if (result.empty())
@@ -367,8 +368,9 @@ caf::expected<expression> type_resolver::operator()(const disjunction& d) {
     auto r = caf::visit(*this, op);
     if (!r)
       return r;
-    else if (!caf::holds_alternative<caf::none_t>(*r))
+    else if (!is<caf::none_t>(*r)) {
       result.push_back(std::move(*r));
+    }
   }
   if (result.empty())
     return expression{};
@@ -382,9 +384,9 @@ caf::expected<expression> type_resolver::operator()(const negation& n) {
   auto r = caf::visit(*this, n.expr());
   if (!r)
     return r;
-  else if (!caf::holds_alternative<caf::none_t>(*r))
+  else if (!is<caf::none_t>(*r)) {
     return {negation{std::move(*r)}};
-  else
+  } else
     return expression{};
 }
 
@@ -484,13 +486,13 @@ bool matcher::operator()(const predicate& p) {
 
 bool matcher::operator()(const meta_extractor& e, const data& d) {
   if (e.kind == meta_extractor::schema) {
-    TENZIR_ASSERT(caf::holds_alternative<std::string>(d));
+    TENZIR_ASSERT(is<std::string>(d));
     // TODO: It's kind of non-sensical that evaluate operates on data rather
     // than data_view, forcing us to copy the type's name here.
     return evaluate(d, op_, std::string{type_.name()});
   }
   if (e.kind == meta_extractor::schema_id) {
-    TENZIR_ASSERT(caf::holds_alternative<std::string>(d));
+    TENZIR_ASSERT(is<std::string>(d));
     return evaluate(d, op_, type_.make_fingerprint());
   }
   return false;

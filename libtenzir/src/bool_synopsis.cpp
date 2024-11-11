@@ -13,7 +13,7 @@
 namespace tenzir {
 
 bool_synopsis::bool_synopsis(tenzir::type x) : synopsis{std::move(x)} {
-  TENZIR_ASSERT(caf::holds_alternative<bool_type>(type()));
+  TENZIR_ASSERT(is<bool_type>(type()));
 }
 
 bool_synopsis::bool_synopsis(bool true_, bool false_)
@@ -25,7 +25,7 @@ synopsis_ptr bool_synopsis::clone() const {
 }
 
 void bool_synopsis::add(data_view x) {
-  TENZIR_ASSERT(caf::holds_alternative<view<bool>>(x));
+  TENZIR_ASSERT(is<view<bool>>(x));
   if (as<view<bool>>(x)) {
     true_ = true;
   } else

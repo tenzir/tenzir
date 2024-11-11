@@ -273,7 +273,7 @@ auto package_pipeline::parse(const view<record>& data)
     TRY_ASSIGN_BOOL_TO_RESULT(disabled)
     TRY_ASSIGN_BOOL_TO_RESULT(unstoppable)
     if (key == "restart-on-error") {
-      if (caf::holds_alternative<caf::none_t>(value)) {
+      if (is<caf::none_t>(value)) {
         continue;
       }
       // As a convenience for users, we also allow a string here and try to

@@ -444,15 +444,18 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         return predicate{extractor, op, value};
       };
       // Parse RHS.
-      if (caf::holds_alternative<record>(rhs))
+      if (is<record>(rhs)) {
         return caf::make_error(ec::type_clash, "nested records not allowed");
+      }
       if (auto values = try_as<list>(&rhs)) {
         std::vector<expression> connective;
         for (const auto& value : *values) {
-          if (caf::holds_alternative<list>(value))
+          if (is<list>(value)) {
             return caf::make_error(ec::type_clash, "nested lists disallowed");
-          if (caf::holds_alternative<record>(value))
+          }
+          if (is<record>(value)) {
             return caf::make_error(ec::type_clash, "nested records disallowed");
+          }
           if (auto x = modify(value))
             connective.emplace_back(make_predicate_expr(*x));
           else

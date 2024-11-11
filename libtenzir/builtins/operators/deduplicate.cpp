@@ -284,7 +284,7 @@ private:
       auto projected_value_view = value_at(projected_type, projected_elements,
                                            static_cast<int64_t>(row));
       auto projected_value = materialize(projected_value_view);
-      TENZIR_ASSERT(caf::holds_alternative<record>(projected_value));
+      TENZIR_ASSERT(is<record>(projected_value));
       auto& projected_record = as<record>(projected_value);
       auto match_it = matches.find(projected_record);
       if (match_it == matches.end()) {
@@ -380,7 +380,7 @@ auto deduplicate_operator::cached_projection::make(
   std::vector<offset> indices{};
   std::vector<std::string> missing_fields{};
   const auto& schema = flattened_slice.schema();
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(schema));
+  TENZIR_ASSERT(is<record_type>(schema));
   // Resolve indices in `schema`.
   // If a field is missing, the field name is added to `missing_fields`.
   for (const auto& field : fields) {

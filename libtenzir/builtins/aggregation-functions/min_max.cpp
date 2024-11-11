@@ -36,13 +36,13 @@ public:
 
 private:
   auto output_type() const -> type override {
-    TENZIR_ASSERT(caf::holds_alternative<Type>(input_type()));
+    TENZIR_ASSERT(is<Type>(input_type()));
     return input_type();
   }
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
     const auto comp = [](const auto& lhs, const auto& rhs) {

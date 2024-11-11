@@ -73,7 +73,7 @@ public:
           .emit(ctrl.diagnostics());
         return;
       }
-      if (not caf::holds_alternative<record>(*yaml)) {
+      if (not is<record>(*yaml)) {
         diagnostic::warning("sigma operator ignores rule '{}'", path.string())
           .note("rule is not a YAML dictionary")
           .emit(ctrl.diagnostics());

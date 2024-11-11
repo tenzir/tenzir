@@ -522,7 +522,7 @@ public:
     // Find the value from the record
     auto it = src.find(field.name);
     const auto& value = it != src.end() ? it->second : data{};
-    if (!field.type && caf::holds_alternative<caf::none_t>(value)) {
+    if (!field.type && is<caf::none_t>(value)) {
       return caf::make_error(ec::convert_error, fmt::format("failed to convert "
                                                             "field {} because "
                                                             "it has no type",

@@ -32,7 +32,7 @@ private:
 
   auto add(const data_view& view) -> void override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
     result_.push_back(materialize(as<view_type>(view)));
@@ -64,7 +64,7 @@ public:
 
   auto update(const table_slice& input, session ctx) -> void override {
     auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
+    if (is<null_type>(arg.type)) {
       return;
     }
     // NOTE: Currently, different types end up coerced to strings.

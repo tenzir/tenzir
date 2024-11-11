@@ -525,14 +525,13 @@ void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
         dst_rec = try_as<record>(&dst[k]);
       }
       merge(*src_rec, *dst_rec, merge_lists, max_recursion - 1);
-    } else if (merge_lists == policy::merge_lists::yes
-               && caf::holds_alternative<list>(v)) {
+    } else if (merge_lists == policy::merge_lists::yes && is<list>(v)) {
       const auto& src_list = as<list>(v);
       if (auto* dst_list = try_as<list>(&dst[k])) {
         dst_list->insert(dst_list->end(), src_list.begin(), src_list.end());
       } else if (auto it = dst.find(k); it != dst.end()) {
         auto dst_list = list{};
-        if (!caf::holds_alternative<caf::none_t>(it->second)) {
+        if (!is<caf::none_t>(it->second)) {
           dst_list.reserve(src_list.size() + 1);
           dst_list.push_back(std::move(it->second));
         } else {
@@ -695,8 +694,9 @@ bool convert(const caf::config_value& x, data& y) {
 record strip(const record& xs) {
   record result;
   for (const auto& [k, v] : xs) {
-    if (caf::holds_alternative<caf::none_t>(v))
+    if (is<caf::none_t>(v)) {
       continue;
+    }
     if (const auto* vr = try_as<record>(&v)) {
       auto nested = strip(*vr);
       if (!nested.empty())

@@ -1349,7 +1349,7 @@ auto series_builder::finish_as_table_slice(std::string_view name)
   auto result = std::vector<table_slice>{};
   result.reserve(arrays.size());
   for (auto& array : arrays) {
-    TENZIR_ASSERT(caf::holds_alternative<record_type>(array.type));
+    TENZIR_ASSERT(is<record_type>(array.type));
     TENZIR_ASSERT(array.length() > 0);
     if (not name.empty()) {
       // The following check is not an optimization, but prevents

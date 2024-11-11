@@ -29,7 +29,7 @@ public:
 
   auto update(const table_slice& input, session ctx) -> void override {
     auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
+    if (is<null_type>(arg.type)) {
       return;
     }
     for (int64_t i = 0; i < arg.array->length(); ++i) {

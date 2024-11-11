@@ -168,7 +168,7 @@ private:
     }
     auto current_key_type
       = as<record_type>(schema).field(*key_path->second).type.prune();
-    if (caf::holds_alternative<subnet_type>(current_key_type)) {
+    if (is<subnet_type>(current_key_type)) {
       // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
       // supported for extension types. We can fall back to the storage array
       // for all types but subnet, which has a nested extension type.

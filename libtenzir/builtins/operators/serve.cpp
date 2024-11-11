@@ -955,7 +955,7 @@ public:
         [&](record& response) {
           TENZIR_ASSERT(response.size() == 1);
           TENZIR_ASSERT(response.contains("requests"));
-          TENZIR_ASSERT(caf::holds_alternative<list>(response["requests"]));
+          TENZIR_ASSERT(is<list>(response["requests"]));
           serves = std::move(as<list>(response["requests"]));
         },
         [&](const caf::error& err) {
@@ -984,7 +984,7 @@ public:
     }
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
-    TENZIR_ASSERT(caf::holds_alternative<record>(*result));
+    TENZIR_ASSERT(is<record>(*result));
     return as<record>(*result);
   }
 

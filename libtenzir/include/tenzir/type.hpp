@@ -318,7 +318,7 @@ public:
 
   /// Converts the type into an Arrow Schema.
   /// @pre `!name().empty()`
-  /// @pre `caf::holds_alternative<record_type>(*this)`
+  /// @pre `is<record_type>(*this)`
   [[nodiscard]] std::shared_ptr<arrow::Schema> to_arrow_schema() const noexcept;
 
   /// Creates an Arrow ArrayBuilder from the type.

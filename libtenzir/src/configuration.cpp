@@ -19,6 +19,7 @@
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/installdirs.hpp"
 #include "tenzir/detail/load_contents.hpp"
+#include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -233,7 +234,7 @@ auto load_config_files(std::vector<config_file> config_files)
                                            config.path, yaml.error()));
       }
       // Skip empty config files.
-      if (caf::holds_alternative<caf::none_t>(*yaml)) {
+      if (is<caf::none_t>(*yaml)) {
         continue;
       }
       auto* rec = try_as<record>(&*yaml);
@@ -300,7 +301,7 @@ auto to_settings(record config) -> caf::expected<caf::settings> {
   // Pre-process our configuration so that it can be properly parsed later.
   // Erase all null values because a caf::config_value has no such notion.
   for (auto i = config.begin(); i != config.end();) {
-    if (caf::holds_alternative<caf::none_t>(i->second)) {
+    if (is<caf::none_t>(i->second)) {
       i = config.erase(i);
     } else {
       ++i;
@@ -618,8 +619,7 @@ auto configuration::embed_config(const caf::settings& settings) -> caf::error {
   for (const auto& [key, value] : settings) {
     // The configuration must have been fully flattened because we cannot
     // mangle dictionaries in here.
-    TENZIR_ASSERT(
-      !caf::holds_alternative<caf::config_value::dictionary>(value));
+    TENZIR_ASSERT(!is<caf::config_value::dictionary>(value));
     // The member custom_options_ (a config_option_set) is the only place that
     // contains the valid type information, as defined by the command
     // hierarchy. The passed in config (file and environment) must abide to it.

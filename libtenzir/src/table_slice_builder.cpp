@@ -38,7 +38,7 @@ table_slice_builder::table_slice_builder(type schema,
     arrow_builder_{
       this->schema().make_arrow_builder(arrow::default_memory_pool())},
     builder_{initial_buffer_size} {
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(schema_));
+  TENZIR_ASSERT(is<record_type>(schema_));
   TENZIR_ASSERT(!schema_.name().empty());
   for (auto&& leaf : as<record_type>(schema_).leaves()) {
     leaves_.push_back(std::move(leaf));
@@ -229,8 +229,9 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
           // This special case handles the situation where we have a record
           // inside a list or a map, for which we do not add null values for
           // missing fields.
-          if (caf::holds_alternative<caf::none_t>(x))
+          if (is<caf::none_t>(x)) {
             return caf::none;
+          }
           auto* l = try_as<list>(&x);
           TENZIR_ASSERT(l);
           TENZIR_ASSERT(l->size() == rt->num_fields());
@@ -446,8 +447,9 @@ append_builder(const record_type& hint,
 arrow::Status append_builder(const type& hint,
                              std::same_as<arrow::ArrayBuilder> auto& builder,
                              const view<type_to_data_t<type>>& value) noexcept {
-  if (caf::holds_alternative<caf::none_t>(value))
+  if (is<caf::none_t>(value)) {
     return builder.AppendNull();
+  }
   auto f = [&]<concrete_type Type>(const Type& hint) {
     return append_builder(hint, as<type_to_arrow_builder_t<Type>>(builder),
                           as<view<type_to_data_t<Type>>>(value));

@@ -474,7 +474,7 @@ select(const table_slice& slice, expression expr, const ids& hints) {
     co_return;
   }
   // Evaluate the filter expression.
-  if (!caf::holds_alternative<caf::none_t>(expr)) {
+  if (!is<caf::none_t>(expr)) {
     // Tailor the expression to the type; this is required for using the
     // evaluate function, which expects field and type extractors to be resolved
     // already.
@@ -656,7 +656,7 @@ table_slice resolve_enumerations(table_slice slice) {
   // Resolve enumeration types, if there are any.
   auto transformations = std::vector<indexed_transformation>{};
   for (const auto& [field, index] : type.leaves()) {
-    if (!caf::holds_alternative<enumeration_type>(field.type)) {
+    if (!is<enumeration_type>(field.type)) {
       continue;
     }
     static auto transformation =

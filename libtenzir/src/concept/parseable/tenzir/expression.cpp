@@ -82,7 +82,7 @@ struct expander {
       if (auto t = try_as<type_extractor>(&lhs)) {
         if (auto d = try_as<data>(&rhs)) {
           if (op == relational_operator::equal) {
-            if (caf::holds_alternative<subnet_type>(t->type)) {
+            if (is<subnet_type>(t->type)) {
               if (auto sn = try_as<subnet>(d)) {
                 return predicate{type_extractor{type{ip_type{}}},
                                  relational_operator::in, *d};

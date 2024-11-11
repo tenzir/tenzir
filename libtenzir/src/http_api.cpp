@@ -118,8 +118,9 @@ auto http_parameter_map::from_json(std::string_view json)
     for (auto obj : doc.get_object()) {
       auto value = parse_skeleton(obj.value());
       // Discard null values
-      if (caf::holds_alternative<caf::none_t>(value))
+      if (is<caf::none_t>(value)) {
         continue;
+      }
       result.params_.emplace(std::string{obj.unescaped_key().value()}, value);
     }
     return result;
@@ -162,7 +163,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
     if (maybe_param == params.end())
       continue;
     auto const& param_data = maybe_param->second;
-    auto is_string = caf::holds_alternative<std::string>(param_data);
+    auto is_string = is<std::string>(param_data);
     auto typed_value = caf::visit(
       detail::overload{
         [&](const string_type&) -> caf::expected<data> {
@@ -189,10 +190,10 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
             return caf::make_error(ec::invalid_argument, "expected a list");
           auto result = tenzir::list{};
           for (auto const& x : *list) {
-            if (!caf::holds_alternative<std::string>(x)
-                and !caf::holds_alternative<tenzir::record>(x))
+            if (!is<std::string>(x) and !is<tenzir::record>(x)) {
               return caf::make_error(ec::invalid_argument,
                                      "expected a string or record");
+            }
             auto const& x_as_string = as<std::string>(x);
             auto parsed = caf::visit(
               detail::overload{

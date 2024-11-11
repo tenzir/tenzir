@@ -170,7 +170,7 @@ auto catalog_state::lookup(expression expr) const
 auto catalog_state::lookup_impl(const expression& expr,
                                 const type& schema) const
   -> catalog_lookup_result::candidate_info {
-  TENZIR_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
+  TENZIR_ASSERT(!is<caf::none_t>(expr));
   auto synopsis_map_per_type_it = synopses_per_type.find(schema);
   TENZIR_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
   const auto& partition_synopses = synopsis_map_per_type_it->second;
@@ -239,7 +239,7 @@ auto catalog_state::lookup_impl(const expression& expr,
       // uses a qualified_record_field to determine whether the synopsis
       // should be queried.
       auto search = [&](auto match) {
-        TENZIR_ASSERT(caf::holds_alternative<data>(x.rhs));
+        TENZIR_ASSERT(is<data>(x.rhs));
         const auto& rhs = as<data>(x.rhs);
         catalog_lookup_result::candidate_info result;
         // dont iterate through all synopses, rewrite lookup_impl to use a
@@ -454,9 +454,9 @@ auto catalog_state::memusage() const -> size_t {
 
 void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
   for (auto const& [field, synopsis] : ps.field_synopses_)
-    if (synopsis != nullptr
-        && caf::holds_alternative<string_type>(field.type()))
+    if (synopsis != nullptr && is<string_type>(field.type())) {
       unprunable_fields.insert(std::string{field.name()});
+    }
   // TODO/BUG: We also need to prevent pruning for enum types,
   // which also use string literals for lookup. We must be even
   // more strict here than with string fields, because incorrectly

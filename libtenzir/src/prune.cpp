@@ -35,11 +35,11 @@ struct pruner {
     for (const auto& operand : connective) {
       bool optimized = false;
       if (const auto* pred = try_as<predicate>(&operand)) {
-        if (caf::holds_alternative<field_extractor>(pred->lhs)
-            || (caf::holds_alternative<type_extractor>(pred->lhs)
+        if (is<field_extractor>(pred->lhs)
+            || (is<type_extractor>(pred->lhs)
                 && as<type_extractor>(pred->lhs).type == string_type{})) {
           if (const auto* d = try_as<data>(&pred->rhs)) {
-            if (caf::holds_alternative<std::string>(*d)) {
+            if (is<std::string>(*d)) {
               auto const* fe = try_as<field_extractor>(&pred->lhs);
               if (!fe || !unprunable_fields_.contains(fe->field)) {
                 optimized = true;

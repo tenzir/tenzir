@@ -442,7 +442,7 @@ struct cast_helper<record_type, record_type> {
         if (not input_at_path) {
           return std::move(input_at_path.error());
         }
-        if (caf::holds_alternative<view<caf::none_t>>(*input_at_path)) {
+        if (is<view<caf::none_t>>(*input_at_path)) {
           ret[to_field.name] = caf::none;
           continue;
         }
@@ -1035,7 +1035,7 @@ struct cast_helper<string_type, ToType> {
   static auto from_str(std::string_view in, const record_type&)
     -> caf::expected<record> {
     if (auto ret = data{}; parsers::data(in, ret)) {
-      TENZIR_ASSERT(caf::holds_alternative<record>(ret));
+      TENZIR_ASSERT(is<record>(ret));
       return as<record>(ret);
     }
     return caf::make_error(
@@ -1045,7 +1045,7 @@ struct cast_helper<string_type, ToType> {
   static auto from_str(std::string_view in, const list_type&)
     -> caf::expected<list> {
     if (auto ret = data{}; parsers::data(in, ret)) {
-      TENZIR_ASSERT(caf::holds_alternative<list>(ret));
+      TENZIR_ASSERT(is<list>(ret));
       return as<list>(ret);
     }
     return caf::make_error(ec::convert_error,

@@ -205,8 +205,9 @@ arrow::Status
 append_builder(const Type& hint,
                std::same_as<arrow::ArrayBuilder> auto& builder,
                const std::same_as<data_view> auto& view) noexcept {
-  if (caf::holds_alternative<caf::none_t>(view))
+  if (is<caf::none_t>(view)) {
     return builder.AppendNull();
+  }
   if constexpr (concrete_type<Type>) {
     return append_builder(hint, as<type_to_arrow_builder_t<Type>>(builder),
                           as<tenzir::view<type_to_data_t<Type>>>(view));

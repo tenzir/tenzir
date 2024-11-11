@@ -39,7 +39,7 @@ value_index_ptr make(type x, caf::settings opts) {
   using int_type = caf::config_value::integer;
   // The cardinality must be an integer.
   if (auto i = opts.find("cardinality"); i != opts.end()) {
-    if (!caf::holds_alternative<int_type>(i->second)) {
+    if (!is<int_type>(i->second)) {
       TENZIR_ERROR("{} invalid cardinality type", __func__);
       return nullptr;
     }
