@@ -82,7 +82,7 @@ private:
     // with named fields. Allowing a mixture of both would mean we'd
     // have to deal with ambiguous inputs.
     auto record_parser =
-        '<' >> ~as<record>(named_field % ',') >> trailing_comma >> '>'
+        '<' >> ~parse_as<record>(named_field % ',') >> trailing_comma >> '>'
         // Creating a record with repeated field names technically violates
         // the consistency of the underlying stable_map. We live with that
         // until record is refactored into a proper type (FIXME).
@@ -101,12 +101,12 @@ private:
       | parsers::qqstr
       | parsers::pattern
       | '[' >> ~(x % ',') >> trailing_comma >> ']'
-      | '{' >> ~as<map>(kvp % ',') >> trailing_comma >> '}'
+      | '{' >> ~parse_as<map>(kvp % ',') >> trailing_comma >> '}'
       | record_parser
       // TODO: We have two representations for the null type: `null` and `_`,
       // but should consider dropping `_` eventually.
       | parsers::null
-      | as<caf::none_t>(parsers::ch<'_'>)
+      | parse_as<caf::none_t>(parsers::ch<'_'>)
       ;
     // clang-format on
     return p;

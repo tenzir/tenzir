@@ -35,7 +35,8 @@ private:
 };
 
 template <class Attribute, parser Parser>
-constexpr auto as(Parser&& p) -> as_parser<std::decay_t<Parser>, Attribute> {
+constexpr auto
+parse_as(Parser&& p) -> as_parser<std::decay_t<Parser>, Attribute> {
   return as_parser<std::decay_t<Parser>, Attribute>{std::forward<Parser>(p)};
 }
 
