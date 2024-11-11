@@ -26,14 +26,24 @@ public:
                                          initialized.ToString()));
     }
     if (not unused_plugin_config.empty()) {
-      return caf::make_error("`{}.yaml` is unused; Use `s3.yaml` instead",
-                             this->name());
+      return caf::make_error(ec::diagnostic,
+                             fmt::format("`{}.yaml` is unused; Use `s3.yaml` "
+                                         "instead",
+                                         this->name()));
     }
-    auto* plugin_config = caf::get_if<record>(&global_config.at("plugins"));
+    auto ptr = global_config.find("plugins");
+    if (ptr == global_config.end()) {
+      return {};
+    }
+    auto* plugin_config = caf::get_if<record>(&ptr->second);
     if (not plugin_config) {
       return {};
     }
-    auto* s3_config = caf::get_if<record>(&plugin_config->at("s3"));
+    auto s3_config_ptr = plugin_config->find("s3");
+    if (s3_config_ptr == plugin_config->end()) {
+      return {};
+    }
+    auto s3_config = caf::get_if<record>(&s3_config_ptr->second);
     if (not s3_config or s3_config->empty()) {
       return {};
     }
