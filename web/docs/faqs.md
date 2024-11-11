@@ -177,7 +177,7 @@ files, accessible via the [`import`](operators/import.md) and
 [`export`](operators/export.md) operators.
 
 The storage engine comes with a catalog that tracks schema meta data and a thin
-layer of sketches to accelerate queries.
+layer of indexing to accelerate queries.
 
 Our [tuning guide](installation/tune-performance/README.md) has further details
 on the inner workings.
