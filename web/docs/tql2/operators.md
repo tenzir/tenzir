@@ -71,7 +71,10 @@ Operator | Description | Example
 [`load_google…`](./operators/load_google_cloud_pubsub.md) | Listen to a Google Cloud Pub/Sub subscription | `load_google_cloud_pubsub "…", "…"`
 [`load_http`](./operators/load_http.md) | Receives bytes from a HTTP request | `load_http "example.org", params={n: 5}`
 [`load_kafka`](./operators/load_kafka.md) | Receives bytes from an Apache Kafka topic | `load_kafka topic="example"`
+[`load_s3`](./operators/load_s3.md) | Receives bytes from an Amazon S3 object | `load_s3 "s3://examplebucket/obj.csv`
+[`load_sqs`](./operators/load_sqs.md) | Receives bytes from an Amazon SQS queue | `load_sqs "sqs://tenzir"`
 [`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
+[`load_zmq`](./operators/load_zmq.md) | Receives bytes from ZeroMQ messages | `load_zmq`
 [`metrics`](./operators/metrics.md) | Retrieves metrics events from a Tenzir node | `metrics "cpu"`
 [`subscribe`](./operators/subscribe.md) | Subscribes to events of a certain topic | `subscribe "topic"`
 
@@ -91,6 +94,9 @@ Operator | Description | Example
 [`save_google_cloud…`](./operators/save_google_cloud_pubsub.md) | Publishes to a Google Cloud Pub/Sub topic | `save_google_cloud_pubsub "…", "…"`
 [`save_http`](./operators/save_http.md) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
 [`save_kafka`](./operators/save_kafka.md) | Saves incoming bytes to an Apache Kafka topic | `save_kafka topic="example"`
+[`save_s3`](./operators/save_s3.md) | Saves incoming bytes to an Amazon S3 object | `save_s3 "s3://examplebucket/obj.csv`
+[`save_sqs`](./operators/save_sqs.md) | Saves incoming bytes to an Amazon SQS queue | `save_sqs "sqs://tenzir"`
+[`save_zmq`](./operators/save_zmq.md) | Saves incoming bytes to ZeroMQ messages | `save_zmq`
 [`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
 [`to_azure_log_analytics`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
@@ -107,6 +113,7 @@ Operator | Description | Example
 [`read_bitz`](./operators/read_bitz.md) | Parses Tenzir's internal wire format | `read_bitz`
 [`read_cef`](./operators/read_cef.md) | Parses the Common Event Format | `read_cef`
 [`read_csv`](./operators/read_csv.md) | Parses comma-separated values | `read_csv null_value="-"`
+[`read_feather`](./operators/read_feather.md) | Parses Feather format | `read_feather`
 [`read_gelf`](./operators/read_gelf.md) | Parses the Graylog Extended Log Format | `read_gelf`
 [`read_grok`](./operators/read_grok.md) | Parses events using a Grok pattern | `read_grok "%{IP:client} %{WORD:action}"`
 [`read_json`](./operators/read_json.md) | Parses JSON objects | `read_json arrays_of_objects=true`
@@ -114,6 +121,7 @@ Operator | Description | Example
 [`read_leef`](./operators/read_leef.md) | Parses the Log Event Extended Format | `read_leef`
 [`read_lines`](./operators/read_lines.md) | Parses each line into a separate event | `read_lines`
 [`read_ndjson`](./operators/read_ndjson.md) | Parses newline-delimited JSON | `read_ndjson`
+[`read_parquet`](./operators/read_parquet.md) | Parses Parquet format | `read_parquet`
 [`read_ssv`](./operators/read_ssv.md) | Parses space-separated values | `read_ssv header="name count"`
 [`read_suricata`](./operators/read_suricata.md) | Parses Suricata's Eve format | `read_suricata`
 [`read_syslog`](./operators/read_syslog.md) | Parses syslog | `read_syslog`
@@ -128,7 +136,17 @@ Operator | Description | Example
 Operator | Description | Example
 :--------|:------------|:-------
 [`write_bitz`](./operators/write_bitz.md) | Writes events as Tenzir's internal wire format | `write_bitz`
+[`write_csv`](./operators/write_csv.md) | Writes events as CSV | `write_csv`
+[`write_feather`](./operators/write_feather.md) | Writes events as Feather | `write_feather`
 [`write_json`](./operators/write_json.md) | Writes events as JSON | `write_json ndjson=true`
+[`write_lines`](./operators/write_lines.md) | Writes events as lines | `write_lines`
+[`write_parquet`](./operators/write_parquet.md) | Writes events as Parquet | `write_parquet`
+[`write_pcap`](./operators/write_pcap.md) | Writes events as PCAP | `write_pcap`
+[`write_ssv`](./operators/write_ssv.md) | Writes events as SSV | `write_ssv`
+[`write_tsv`](./operators/write_tsv.md) | Writes events as TSV | `write_tsv`
+[`write_xsv`](./operators/write_xsv.md) | Writes events as XSV | `write_xsv`
+[`write_yaml`](./operators/write_yaml.md) | Writes events as YAML | `write_yaml`
+[`write_zeek_tsv`](./operators/write_zeek_tsv.md) | Writes events as Zeek TSV | `write_zeek_tsv`
 
 <!--
 ## Contexts
