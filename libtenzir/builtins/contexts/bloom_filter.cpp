@@ -252,14 +252,10 @@ struct v1_loader : public context_loader {
   }
 };
 
-class plugin : public virtual context_plugin {
+class plugin : public virtual context_factory_plugin<"bloom-filter"> {
   auto initialize(const record&, const record&) -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
     return caf::none;
-  }
-
-  auto name() const -> std::string override {
-    return "bloom-filter";
   }
 
   auto make_context(context_parameter_map parameters) const
@@ -297,6 +293,39 @@ class plugin : public virtual context_plugin {
                              "--fp-probability not in (0,1)");
     }
     return std::make_unique<bloom_filter_context>(n, p);
+  }
+
+  auto make_context(invocation inv, session ctx) const
+    -> failure_or<make_context_result> override {
+    auto name = located<std::string>{};
+    auto capacity = located<uint64_t>{};
+    auto fp_probability = located<double>{};
+    auto parser = argument_parser2::context("bloom-filter");
+    parser.add(name, "<name>");
+    parser.add("capacity", capacity);
+    parser.add("fp_probability", fp_probability);
+    TRY(parser.parse(inv, ctx));
+    auto failed = false;
+    if (capacity.inner == 0) {
+      diagnostic::error("capacity must be greater than zero")
+        .primary(capacity)
+        .emit(ctx);
+      failed = true;
+    }
+    if (fp_probability.inner <= 0.0 or fp_probability.inner >= 1.0) {
+      diagnostic::error("false-positive probability must be in (0, 1)")
+        .primary(fp_probability)
+        .emit(ctx);
+      failed = true;
+    }
+    if (failed) {
+      return failure::promise();
+    }
+    return make_context_result{
+      std::move(name),
+      std::make_unique<bloom_filter_context>(capacity.inner,
+                                             fp_probability.inner),
+    };
   }
 };
 

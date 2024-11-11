@@ -100,11 +100,11 @@ struct current_dump {
   series_builder builder;
 };
 
-class ctx final : public virtual context {
+class geoip_context final : public virtual context {
 public:
-  ctx() noexcept = default;
+  geoip_context() noexcept = default;
 
-  explicit ctx(mmdb_ptr mmdb, chunk_ptr mapped_mmdb_)
+  explicit geoip_context(mmdb_ptr mmdb, chunk_ptr mapped_mmdb_)
     : mapped_mmdb_{std::move(mapped_mmdb_)}, mmdb_{std::move(mmdb)} {
   }
 
@@ -541,7 +541,7 @@ struct v1_loader : public context_loader {
                              "context: invalid type or value for "
                              "DB path entry");
     }
-    const auto* plugin = plugins::find<context_plugin>("geoip");
+    const auto* plugin = plugins::find_context("geoip");
     TENZIR_ASSERT(plugin);
     return plugin->make_context({{path_key, serialized_string->str()}});
   }
@@ -600,24 +600,20 @@ struct v2_loader : public context_loader {
                                          detail::describe_errno()));
     }
     std::filesystem::remove(temp_file_name);
-    return std::make_unique<ctx>(std::move(*mmdb),
-                                 std::move(mapped_mmdb.value()));
+    return std::make_unique<geoip_context>(std::move(*mmdb),
+                                           std::move(mapped_mmdb.value()));
   }
 
 private:
   const record global_config_;
 };
 
-class plugin : public virtual context_plugin {
+class plugin : public virtual context_factory_plugin<"geoip"> {
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
     register_loader(std::make_unique<v2_loader>(global_config));
     return caf::none;
-  }
-
-  auto name() const -> std::string override {
-    return "geoip";
   }
 
   auto make_context(context_parameter_map parameters) const
@@ -638,7 +634,7 @@ class plugin : public virtual context_plugin {
         .to_error();
     }
     if (db_path.empty()) {
-      return std::make_unique<ctx>(nullptr, nullptr);
+      return std::make_unique<geoip_context>(nullptr, nullptr);
     }
     auto mmdb = make_mmdb(db_path);
     auto mapped_mmdb = chunk::mmap(db_path);
@@ -649,8 +645,48 @@ class plugin : public virtual context_plugin {
     if (not mmdb) {
       return mmdb.error();
     }
-    return std::make_unique<ctx>(std::move(*mmdb),
-                                 std::move(mapped_mmdb.value()));
+    return std::make_unique<geoip_context>(std::move(*mmdb),
+                                           std::move(mapped_mmdb.value()));
+  }
+
+  auto make_context(invocation inv, session ctx) const
+    -> failure_or<make_context_result> override {
+    auto name = located<std::string>{};
+    auto db_path = std::optional<located<std::string>>{};
+    auto parser = argument_parser2::context("geoip");
+    parser.add(name, "<name>");
+    parser.add("db_path", db_path);
+    TRY(parser.parse(inv, ctx));
+    if (not db_path) {
+      return make_context_result{
+        std::move(name),
+        std::make_unique<geoip_context>(nullptr, nullptr),
+      };
+    }
+    auto failed = false;
+    auto mapped_mmdb = chunk::mmap(db_path->inner);
+    if (not mapped_mmdb) {
+      diagnostic::error("unable to retrieve file contents into memory")
+        .primary(*db_path)
+        .emit(ctx);
+      failed = true;
+    }
+    auto mmdb = make_mmdb(db_path->inner);
+    if (not mmdb) {
+      diagnostic::error(mmdb.error())
+        .primary(*db_path)
+        .note("failed to open the GeoIP database")
+        .emit(ctx);
+      failed = true;
+    }
+    if (failed) {
+      return failure::promise();
+    }
+    return make_context_result{
+      std::move(name),
+      std::make_unique<geoip_context>(std::move(*mmdb),
+                                      std::move(*mapped_mmdb)),
+    };
   }
 };
 

@@ -27,6 +27,7 @@
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/array.h>
@@ -243,11 +244,11 @@ struct value_data {
 using map_type = tsl::robin_map<key_data, value_data>;
 using subnet_tree_type = detail::subnet_tree<value_data>;
 
-class ctx final : public virtual context {
+class lookup_table_context final : public virtual context {
 public:
-  ctx() noexcept = default;
-  explicit ctx(map_type context_entries,
-               subnet_tree_type subnet_entries) noexcept
+  lookup_table_context() noexcept = default;
+  explicit lookup_table_context(map_type context_entries,
+                                subnet_tree_type subnet_entries) noexcept
     : context_entries{std::move(context_entries)},
       subnet_entries{std::move(subnet_entries)} {
     // nop
@@ -796,24 +797,32 @@ struct v1_loader : public context_loader {
         context_entries.emplace(std::move(key), std::move(value));
       }
     }
-    return std::make_unique<ctx>(std::move(context_entries),
-                                 std::move(subnet_entries));
+    return std::make_unique<lookup_table_context>(std::move(context_entries),
+                                                  std::move(subnet_entries));
   }
 };
 
-class plugin : public virtual context_plugin {
+class plugin : public virtual context_factory_plugin<"lookup-table"> {
   auto initialize(const record&, const record&) -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
     return caf::none;
   }
 
-  auto name() const -> std::string override {
-    return "lookup-table";
-  }
-
   auto make_context(context_parameter_map) const
     -> caf::expected<std::unique_ptr<context>> override {
-    return std::make_unique<ctx>();
+    return std::make_unique<lookup_table_context>();
+  }
+
+  auto make_context(invocation inv, session ctx) const
+    -> failure_or<make_context_result> override {
+    auto name = located<std::string>{};
+    auto parser = argument_parser2::context("lookup-table");
+    parser.add(name, "<name>");
+    TRY(parser.parse(inv, ctx));
+    return make_context_result{
+      std::move(name),
+      std::make_unique<lookup_table_context>(),
+    };
   }
 };
 
