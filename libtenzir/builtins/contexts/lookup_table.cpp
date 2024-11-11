@@ -11,6 +11,7 @@
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/range_map.hpp>
@@ -20,7 +21,6 @@
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/operator.hpp>
-#include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>

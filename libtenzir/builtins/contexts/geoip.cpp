@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/error.hpp>
@@ -15,7 +16,6 @@
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/logger.hpp>
-#include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/uuid.hpp>

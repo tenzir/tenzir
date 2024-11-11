@@ -463,31 +463,6 @@ store_plugin::make_store(filesystem_actor fs,
     default_passive_store, std::move(*store), fs, std::move(path), name());
 }
 
-// -- context plugin -----------------------------------------------------------
-
-auto context_plugin::get_latest_loader() const -> const context_loader& {
-  TENZIR_ASSERT(not loaders_.empty());
-  return **std::ranges::max_element(loaders_, std::ranges::less{},
-                                    [](const auto& loader) {
-                                      return loader->version();
-                                    });
-}
-
-auto context_plugin::get_versioned_loader(int version) const
-  -> const context_loader* {
-  auto it = std::ranges::find(loaders_, version, [](const auto& loader) {
-    return loader->version();
-  });
-  if (it == loaders_.end()) {
-    return nullptr;
-  }
-  return it->get();
-}
-
-void context_plugin::register_loader(std::unique_ptr<context_loader> loader) {
-  loaders_.emplace_back(std::move(loader));
-}
-
 // -- aspect plugin ------------------------------------------------------------
 
 auto aspect_plugin::aspect_name() const -> std::string {
