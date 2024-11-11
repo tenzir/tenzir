@@ -23,8 +23,10 @@
 #include <tenzir/operator.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/array.h>
@@ -216,20 +218,24 @@ namespace {
 
 struct value_data {
   data raw_data;
-  // TODO: update_timeout and update_duration can move into the same optional as
-  // they cannot be set independently
-  std::optional<time> update_timeout;
+
   std::optional<time> create_timeout;
-  std::optional<duration> update_duration;
+  std::optional<time> write_timeout;
+
+  // TODO: read_timeout and read_duration can move into the same optional as
+  // they cannot be set independently
+  std::optional<duration> read_timeout_duration;
+  std::optional<time> read_timeout;
 
   auto is_expired(time now) const -> bool {
-    return (update_timeout and *update_timeout < now)
+    return (read_timeout and *read_timeout < now)
+           or (write_timeout and *write_timeout < now)
            or (create_timeout and *create_timeout < now);
   }
 
-  auto update(time now) -> void {
-    if (update_duration) {
-      update_timeout = now + *update_duration;
+  auto refresh_read_timeout(time now) -> void {
+    if (read_timeout_duration) {
+      read_timeout = now + *read_timeout_duration;
     }
   }
 };
@@ -277,7 +283,7 @@ public:
           context_entries.erase(it);
           goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
         }
-        it.value().update(now);
+        it.value().refresh_read_timeout(now);
         builder.data(it->second.raw_data);
         continue;
       }
@@ -289,7 +295,7 @@ public:
           subnet_entries.erase(subnet);
           goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
         }
-        entry->update(now);
+        entry->refresh_read_timeout(now);
         builder.data(entry->raw_data);
         continue;
       }
@@ -406,8 +412,8 @@ public:
                                            "valid duration: {}",
                                            update_timeout.error()));
       }
-      context_value.update_timeout = now + *update_timeout;
-      context_value.update_duration = *update_timeout;
+      context_value.read_timeout = now + *update_timeout;
+      context_value.read_timeout_duration = *update_timeout;
     }
     auto erase = parameters.contains("erase");
     if (erase and parameters["erase"].has_value()) {
@@ -509,6 +515,74 @@ public:
     };
   }
 
+  auto update2(const table_slice& events, const context_update_args& args,
+               session ctx) -> failure_or<context_update_result> override {
+    for (const auto& timeout :
+         {args.create_timeout, args.write_timeout, args.read_timeout}) {
+      if (timeout) {
+        diagnostic::warning("unsupported option for bloom-filter context")
+          .primary(*timeout)
+          .emit(ctx);
+      }
+    }
+    auto keys = eval(args.key, events, ctx);
+    auto key_values_list = list{};
+    const auto update_entry
+      = [&, now = time::clock::now()](bool created, value_data& entry,
+                                      record context) {
+          entry.raw_data = std::move(context);
+          if (created and args.create_timeout) {
+            entry.create_timeout = now + args.create_timeout->inner;
+          }
+          if (args.write_timeout) {
+            entry.write_timeout = now + args.write_timeout->inner;
+          }
+          if (args.read_timeout) {
+            entry.read_timeout = now + args.read_timeout->inner;
+            entry.read_timeout_duration = args.read_timeout->inner;
+          }
+        };
+    auto context_gen = events.values();
+    for (const auto& key : keys.values()) {
+      auto materialized_key = materialize(key);
+      auto context = context_gen.next();
+      TENZIR_ASSERT(context);
+      if (const auto* sn = caf::get_if<subnet>(&materialized_key)) {
+        const auto created = subnet_entries.insert(*sn, value_data{});
+        auto* entry = subnet_entries.lookup(*sn);
+        TENZIR_ASSERT(entry);
+        update_entry(created, *entry, materialize(*context));
+      } else {
+        auto [entry, created]
+          = context_entries.emplace(materialized_key, value_data{});
+        TENZIR_ASSERT(entry != context_entries.end());
+        update_entry(created, entry.value(), materialize(*context));
+      }
+      key_values_list.emplace_back(std::move(materialized_key));
+    }
+    auto make_query
+      = [key_values_list = std::move(key_values_list)](
+          context_parameter_map, const std::vector<std::string>& fields)
+      -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
+      result.reserve(fields.size());
+      for (const auto& field : fields) {
+        auto lhs = to<operand>(field);
+        TENZIR_ASSERT(lhs);
+        result.emplace_back(predicate{
+          *lhs,
+          relational_operator::in,
+          data{key_values_list},
+        });
+      }
+      return result;
+    };
+    return context_update_result{
+      .update_info = show(),
+      .make_query = std::move(make_query),
+    };
+  }
+
   auto reset() -> caf::expected<void> override {
     context_entries.clear();
     subnet_entries.clear();
@@ -539,13 +613,13 @@ public:
           builder, builder.CreateSharedString("create-timeout"),
           pack(builder, data{*value.create_timeout})));
       }
-      if (value.update_timeout) {
+      if (value.read_timeout) {
         field_offsets.emplace_back(fbs::data::CreateRecordField(
           builder, builder.CreateSharedString("update-timeout"),
-          pack(builder, data{*value.update_timeout})));
+          pack(builder, data{*value.read_timeout})));
         field_offsets.emplace_back(fbs::data::CreateRecordField(
           builder, builder.CreateSharedString("update-duration"),
-          pack(builder, data{*value.update_duration})));
+          pack(builder, data{*value.read_timeout_duration})));
       }
       const auto record_offset
         = fbs::data::CreateRecordDirect(builder, &field_offsets);
@@ -678,7 +752,7 @@ struct v1_loader : public context_loader {
                                    "context: invalid update-timeout "
                                    "must be a time");
           }
-          value.update_timeout = *update_timeout_time;
+          value.read_timeout = *update_timeout_time;
           continue;
         }
         if (field->name()->string_view() == "update-duration") {
@@ -698,7 +772,7 @@ struct v1_loader : public context_loader {
                                    "context: invalid update-duration "
                                    "must be a time");
           }
-          value.update_duration = *update_duration_duration;
+          value.read_timeout_duration = *update_duration_duration;
           continue;
         }
         return caf::make_error(ec::serialization_error,
@@ -706,8 +780,8 @@ struct v1_loader : public context_loader {
                                            "context: unexpected key {}",
                                            field->name()->string_view()));
       }
-      if (value.update_timeout.has_value()
-          != value.update_duration.has_value()) {
+      if (value.read_timeout.has_value()
+          != value.read_timeout_duration.has_value()) {
         return caf::make_error(ec::serialization_error,
                                "failed to deserialize lookup table context: "
                                "update-timeout and update-duration must be "

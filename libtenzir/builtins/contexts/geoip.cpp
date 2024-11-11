@@ -17,6 +17,7 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/uuid.hpp>
 #include <tenzir/view.hpp>
@@ -491,6 +492,13 @@ public:
     -> caf::expected<context_update_result> override {
     return caf::make_error(ec::unimplemented,
                            "geoip context can not be updated with events");
+  }
+
+  auto update2(const table_slice& events, const context_update_args& args,
+               session ctx) -> failure_or<context_update_result> override {
+    TENZIR_UNUSED(events, args);
+    diagnostic::error("geoip context cannot be updated").emit(ctx);
+    return failure::promise();
   }
 
   auto reset() -> caf::expected<void> override {

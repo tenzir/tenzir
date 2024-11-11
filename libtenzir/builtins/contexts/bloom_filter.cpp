@@ -21,8 +21,10 @@
 #include <tenzir/operator.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/array.h>
@@ -30,6 +32,7 @@
 #include <arrow/array/builder_primitive.h>
 #include <arrow/type.h>
 #include <caf/error.hpp>
+#include <caf/sum_type.hpp>
 
 #include <memory>
 #include <string>
@@ -170,6 +173,46 @@ public:
     return context_update_result{
       .update_info = show(),
       .make_query = std::move(query_f),
+    };
+  }
+
+  auto update2(const table_slice& events, const context_update_args& args,
+               session ctx) -> failure_or<context_update_result> override {
+    for (const auto& timeout :
+         {args.create_timeout, args.write_timeout, args.read_timeout}) {
+      if (timeout) {
+        diagnostic::warning("unsupported option for bloom-filter context")
+          .primary(*timeout)
+          .emit(ctx);
+      }
+    }
+    auto keys = eval(args.key, events, ctx);
+    auto key_values_list = list{};
+    for (const auto& key : keys.values()) {
+      auto materialized_key = materialize(key);
+      bloom_filter_.add(materialized_key);
+      key_values_list.emplace_back(std::move(materialized_key));
+    }
+    auto make_query
+      = [key_values_list = std::move(key_values_list)](
+          context_parameter_map, const std::vector<std::string>& fields)
+      -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
+      result.reserve(fields.size());
+      for (const auto& field : fields) {
+        auto lhs = to<operand>(field);
+        TENZIR_ASSERT(lhs);
+        result.emplace_back(predicate{
+          *lhs,
+          relational_operator::in,
+          data{key_values_list},
+        });
+      }
+      return result;
+    };
+    return context_update_result{
+      .update_info = show(),
+      .make_query = std::move(make_query),
     };
   }
 

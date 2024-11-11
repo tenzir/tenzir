@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/plugin.hpp"
+#include "tenzir/tql2/ast.hpp"
 
 namespace tenzir {
 
@@ -19,6 +20,20 @@ struct context_parameter_map
 
   friend auto inspect(auto& f, context_parameter_map& x) -> bool {
     return f.apply(static_cast<super&>(x));
+  }
+};
+
+struct context_update_args {
+  ast::expression key = {};
+  std::optional<located<duration>> create_timeout = {};
+  std::optional<located<duration>> write_timeout = {};
+  std::optional<located<duration>> read_timeout = {};
+
+  friend auto inspect(auto& f, context_update_args& x) -> bool {
+    return f.object(x).fields(f.field("key", x.key),
+                              f.field("create_timeout", x.create_timeout),
+                              f.field("update_timeout", x.write_timeout),
+                              f.field("read_timeout", x.read_timeout));
   }
 };
 
@@ -70,7 +85,10 @@ public:
 
   /// Updates the context.
   virtual auto update(table_slice events, context_parameter_map parameters)
-    -> caf::expected<context_update_result>
+    -> caf::expected<context_update_result>;
+  virtual auto update2(const table_slice& events,
+                       const context_update_args& args, session ctx)
+    -> failure_or<context_update_result>
     = 0;
 
   /// Clears the context state, with optional parameters.

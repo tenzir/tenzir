@@ -8,7 +8,15 @@
 
 #include "tenzir/context.hpp"
 
+#include "tenzir/detail/assert.hpp"
+
 namespace tenzir {
+
+auto context::update(table_slice events, context_parameter_map parameters)
+  -> caf::expected<context_update_result> {
+  TENZIR_UNUSED(events, parameters);
+  TENZIR_UNIMPLEMENTED();
+}
 
 auto context_plugin::get_latest_loader() const -> const context_loader& {
   TENZIR_ASSERT(not loaders_.empty());
