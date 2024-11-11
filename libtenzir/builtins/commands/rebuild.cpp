@@ -27,7 +27,6 @@
 #include <tenzir/query_context.hpp>
 #include <tenzir/query_cursor.hpp>
 #include <tenzir/read_query.hpp>
-#include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/uuid.hpp>
@@ -101,7 +100,7 @@ using rebuilder_actor = typed_actor_fwd<
   auto(atom::internal, atom::rebuild)->caf::result<void>,
   // INTERNAL: Continue working on the currently in-progress rebuild.
   auto(atom::internal, atom::schedule)->caf::result<void>>
-  // Conform to the protocol of the STATUS CLIENT actor.
+  // Conform to the protocol of the COMPONENT PLUGIN actor.
   ::extend_with<component_plugin_actor>::unwrap;
 
 /// The state of the REBUILDER actor.
@@ -127,33 +126,6 @@ struct rebuilder_state {
   /// The state of the ongoing rebuild.
   std::optional<struct run> run = {};
   bool stopping = false;
-
-  /// Shows the status of a currently ongoing rebuild.
-  auto status(status_verbosity) -> record {
-    if (!run)
-      return {};
-    return {
-      {"partitions",
-       record{
-         {"total", run->statistics.num_total},
-         {"transforming", run->statistics.num_rebuilding},
-         {"transformed", run->statistics.num_completed},
-         {"remaining",
-          run->statistics.num_total - run->statistics.num_completed},
-         {"results", run->statistics.num_results},
-       }},
-      {"options",
-       record{
-         {"all", run->options.all},
-         {"undersized", run->options.undersized},
-         {"parallel", run->options.parallel},
-         {"max-partitions", run->options.max_partitions},
-         {"expression", fmt::to_string(run->options.expression)},
-         {"detached", run->options.detached},
-         {"automatic", run->options.automatic},
-       }},
-    };
-  }
 
   /// Start a new rebuild.
   auto start(start_options options) -> caf::result<void> {
@@ -539,8 +511,8 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
       });
   }
   return {
-    [self](atom::status, status_verbosity verbosity, duration) {
-      return self->state.status(verbosity);
+    [self](atom::ping) -> caf::result<void> {
+      return {};
     },
     [self](atom::start, start_options& options) {
       return self->state.start(std::move(options));

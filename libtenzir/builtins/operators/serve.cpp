@@ -216,6 +216,8 @@ using serve_manager_actor = typed_actor_fwd<
   auto(atom::get, std::string serve_id, std::string continuation_token,
        uint64_t min_events, duration timeout, uint64_t max_events)
     ->caf::result<std::tuple<std::string, std::vector<table_slice>>>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>
   // Conform to the protocol of the COMPONENT PLUGIN actor interface.
   ::extend_with<component_plugin_actor>::unwrap;
 
@@ -588,6 +590,9 @@ auto serve_manager(
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
       return self->state.status(verbosity);
+    },
+    [](atom::ping) -> caf::result<void> {
+      return {};
     },
   };
 }

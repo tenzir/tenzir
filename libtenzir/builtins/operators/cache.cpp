@@ -267,7 +267,7 @@ auto make_cache_manager(
                                 std::move(diagnostics),
                                 {capacity, capacity_loc}, ttl, max_ttl);
     },
-    [](atom::status, status_verbosity, duration) -> caf::result<record> {
+    [](atom::ping) -> caf::result<void> {
       return {};
     },
   };
