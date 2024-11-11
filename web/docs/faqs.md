@@ -69,18 +69,17 @@ with the [Sovereign Edition](https://tenzir.com/pricing).
 
 ## Does Tenzir run on-premise?
 
-Yes, Tenzir can run on premise and support fully air-gapped environments. The
+Yes, Tenzir can run on premise and supports fully air-gapped environments. The
 [Sovereign Edition](https://tenzir.com/pricing) allows you to [deploy the entire
-platform](installation/deploy-the-platform.md) in a Dockerized environment, such
-as Docker Compose.
+platform](installation/deploy-the-platform.md) in a Dockerized environment.
 
 The [Community Edition](https://tenzir.com/pricing), [Professional
 Edition](https://tenzir.com/pricing) and [Enterprise
 Edition](https://tenzir.com/pricing) are backed by a Tenzir-hosted instance of
 the platform in the public cloud (AWS in Europe):
 
-Read more on [how Tenzir works](how-tenzir-works/README.md) to understand the
-key differences.
+Read more on [how Tenzir works](how-tenzir-works/README.md) to understand what
+component of Tenzir runs where.
 
 ## Does Tenzir offer cloud-native nodes?
 
@@ -184,7 +183,7 @@ on the inner workings.
 
 ## Does a Tenzir node run on platform *X*?
 
-We currently support the platforms that we mention in our [deployment
+We support the platforms that we mention in our [deployment
 instructions](installation/deploy-a-node.md).
 
 For any other platform, the answer is most likely *no*. Please [talk to
