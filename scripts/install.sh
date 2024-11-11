@@ -213,7 +213,7 @@ fi
 action "Installing package into ${prefix}"
 if [ "${platform}" = "RPM" ]
 then
-  cmd1="$sudo yum -y localinstall \"${tmpdir}/${package}\""
+  cmd1="$sudo yum -y --nogpgcheck localinstall \"${tmpdir}/${package}\""
   cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
   echo
