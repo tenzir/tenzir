@@ -39,7 +39,7 @@ bool ip_index::inspect_impl(supported_inspectors& inspector) {
 }
 
 bool ip_index::append_impl(data_view x, id pos) {
-  auto addr = caf::get_if<view<ip>>(&x);
+  auto addr = try_as<view<ip>>(&x);
   if (!addr)
     return false;
   for (auto i = 0u; i < 16; ++i) {

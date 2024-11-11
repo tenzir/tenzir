@@ -300,8 +300,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh,
   }
   const auto linktype_array
     = linktype_index->get(as<arrow::StructArray>(*s.array));
-  const auto linktype_values
-    = caf::get_if<arrow::UInt64Array>(&*linktype_array);
+  const auto linktype_values = try_as<arrow::UInt64Array>(&*linktype_array);
   if (!linktype_values) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("field 'linktype' not of type uint64")
@@ -316,7 +315,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh,
     return std::nullopt;
   }
   const auto data_array = data_index->get(as<arrow::StructArray>(*s.array));
-  const auto data_values = caf::get_if<arrow::BinaryArray>(&*data_array);
+  const auto data_values = try_as<arrow::BinaryArray>(&*data_array);
   if (!data_values) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("field 'data' not of type blob")
@@ -376,7 +375,7 @@ public:
         co_yield {};
         continue;
       }
-      auto* ptr = caf::get_if<arrow::StructArray>(&*s->array);
+      auto* ptr = try_as<arrow::StructArray>(&*s->array);
       TENZIR_ASSERT(ptr);
       auto batch = arrow::RecordBatch::Make(s->type.to_arrow_schema(),
                                             s->length(), ptr->fields());

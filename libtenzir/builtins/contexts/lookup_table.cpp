@@ -650,7 +650,7 @@ struct v1_loader : public context_loader {
                                                "create-timeout: {}",
                                                err));
           }
-          const auto* create_timeout_time = caf::get_if<time>(&create_timeout);
+          const auto* create_timeout_time = try_as<time>(&create_timeout);
           if (not create_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
@@ -669,7 +669,7 @@ struct v1_loader : public context_loader {
                                                "update-timeout: {}",
                                                err));
           }
-          const auto* update_timeout_time = caf::get_if<time>(&update_timeout);
+          const auto* update_timeout_time = try_as<time>(&update_timeout);
           if (not update_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
@@ -689,7 +689,7 @@ struct v1_loader : public context_loader {
                                                err));
           }
           const auto* update_duration_duration
-            = caf::get_if<duration>(&update_duration);
+            = try_as<duration>(&update_duration);
           if (not update_duration_duration) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
@@ -714,7 +714,7 @@ struct v1_loader : public context_loader {
       if (value.is_expired(now)) {
         continue;
       }
-      if (const auto* x = caf::get_if<subnet>(&key)) {
+      if (const auto* x = try_as<subnet>(&key)) {
         subnet_entries.insert(*x, std::move(value));
       } else {
         context_entries.emplace(std::move(key), std::move(value));

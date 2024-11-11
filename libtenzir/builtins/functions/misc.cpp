@@ -64,7 +64,7 @@ public:
         .to_error();
     }
     for (const auto& [key, value] : *secrets) {
-      const auto* str = caf::get_if<std::string>(&value);
+      const auto* str = try_as<std::string>(&value);
       if (not str) {
         return diagnostic::error("secrets must be strings")
           .note("configuration key `tenzir.secrets.{}` is of type `{}`", key,

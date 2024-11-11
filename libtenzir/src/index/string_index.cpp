@@ -43,7 +43,7 @@ bool string_index::inspect_impl(supported_inspectors& inspector) {
 }
 
 bool string_index::append_impl(data_view x, id pos) {
-  auto str = caf::get_if<view<std::string>>(&x);
+  auto str = try_as<view<std::string>>(&x);
   if (!str)
     return false;
   auto length = str->size();

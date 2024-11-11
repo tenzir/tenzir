@@ -125,11 +125,11 @@ TEST(parseable - expression) {
   CHECK(parsers::expr(
     ":timestamp > 2018-07-04+12:00:00.0 && :timestamp < 2018-07-04+23:55:04.0"s,
     expr));
-  auto x = caf::get_if<conjunction>(&expr);
+  auto x = try_as<conjunction>(&expr);
   REQUIRE(x);
   REQUIRE_EQUAL(x->size(), 2u);
-  auto x0 = caf::get_if<predicate>(&x->at(0));
-  auto x1 = caf::get_if<predicate>(&x->at(1));
+  auto x0 = try_as<predicate>(&x->at(0));
+  auto x1 = try_as<predicate>(&x->at(1));
   CHECK(caf::holds_alternative<type_extractor>(x0->lhs));
   CHECK(caf::holds_alternative<type_extractor>(x1->lhs));
   MESSAGE("disjunction");
@@ -161,13 +161,13 @@ TEST(parseable - expression) {
 TEST(parseable - value predicate) {
   expression expr;
   CHECK(parsers::expr("42"s, expr));
-  auto disj = caf::get_if<disjunction>(&expr);
+  auto disj = try_as<disjunction>(&expr);
   REQUIRE(disj);
   REQUIRE_EQUAL(disj->size(), 3u);
   {
-    auto pred = caf::get_if<predicate>(&(*disj)[0]);
+    auto pred = try_as<predicate>(&(*disj)[0]);
     REQUIRE(pred);
-    auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+    auto extractor = try_as<type_extractor>(&pred->lhs);
     REQUIRE(extractor);
     CHECK(caf::holds_alternative<int64_type>(extractor->type));
     CHECK(caf::holds_alternative<data>(pred->rhs));
@@ -175,9 +175,9 @@ TEST(parseable - value predicate) {
     CHECK(as<data>(pred->rhs) == data{int64_t{42}});
   }
   {
-    auto pred = caf::get_if<predicate>(&(*disj)[1]);
+    auto pred = try_as<predicate>(&(*disj)[1]);
     REQUIRE(pred);
-    auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+    auto extractor = try_as<type_extractor>(&pred->lhs);
     REQUIRE(extractor);
     CHECK(caf::holds_alternative<uint64_type>(extractor->type));
     CHECK(caf::holds_alternative<data>(pred->rhs));
@@ -185,9 +185,9 @@ TEST(parseable - value predicate) {
     CHECK(as<data>(pred->rhs) == data{42u});
   }
   {
-    auto pred = caf::get_if<predicate>(&(*disj)[2]);
+    auto pred = try_as<predicate>(&(*disj)[2]);
     REQUIRE(pred);
-    auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+    auto extractor = try_as<type_extractor>(&pred->lhs);
     REQUIRE(extractor);
     CHECK(caf::holds_alternative<double_type>(extractor->type));
     CHECK(caf::holds_alternative<data>(pred->rhs));
@@ -199,9 +199,9 @@ TEST(parseable - value predicate) {
 TEST(parseable - field extractor predicate) {
   expression expr;
   CHECK(parsers::expr("foo.bar"s, expr));
-  auto pred = caf::get_if<predicate>(&expr);
+  auto pred = try_as<predicate>(&expr);
   REQUIRE(pred);
-  auto extractor = caf::get_if<field_extractor>(&pred->lhs);
+  auto extractor = try_as<field_extractor>(&pred->lhs);
   REQUIRE(extractor);
   CHECK_EQUAL(extractor->field, "foo.bar");
   CHECK_EQUAL(pred->op, relational_operator::not_equal);
@@ -211,9 +211,9 @@ TEST(parseable - field extractor predicate) {
 TEST(parseable - type extractor predicate) {
   expression expr;
   CHECK(parsers::expr(":ip"s, expr));
-  auto pred = caf::get_if<predicate>(&expr);
+  auto pred = try_as<predicate>(&expr);
   REQUIRE(pred);
-  auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+  auto extractor = try_as<type_extractor>(&pred->lhs);
   REQUIRE(extractor);
   CHECK_EQUAL(extractor->type, ip_type{});
   CHECK_EQUAL(pred->op, relational_operator::not_equal);
@@ -223,9 +223,9 @@ TEST(parseable - type extractor predicate) {
 TEST(parseable - custom type extractor predicate) {
   expression expr;
   CHECK(parsers::expr(":foo.bar"s, expr));
-  auto pred = caf::get_if<predicate>(&expr);
+  auto pred = try_as<predicate>(&expr);
   REQUIRE(pred);
-  auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+  auto extractor = try_as<type_extractor>(&pred->lhs);
   REQUIRE(extractor);
   auto expected = type{"foo.bar", type{}};
   CHECK_EQUAL(extractor->type, expected);

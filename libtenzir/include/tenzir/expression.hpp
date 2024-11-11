@@ -402,6 +402,23 @@ const expression* at(const expression& expr, const offset& o);
 std::vector<std::pair<offset, predicate>>
 resolve(const expression& expr, const type& t);
 
+template <>
+class variant_traits<expression> {
+public:
+  using backing_trait = variant_traits<expression::node>;
+
+  static constexpr auto count = backing_trait::count;
+
+  static auto index(const expression& x) -> size_t {
+    return backing_trait::index(x.get_data());
+  }
+
+  template <size_t I>
+  static auto get(const expression& x) -> decltype(auto) {
+    return backing_trait::get<I>(x.get_data());
+  }
+};
+
 } // namespace tenzir
 
 namespace caf {

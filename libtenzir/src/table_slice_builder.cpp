@@ -215,8 +215,8 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
       auto unwrap_nested = [](auto&& self, data x, const type& t) -> data {
         // (1) Try to unwrap list into lists by applying unwrap_nested
         // recursively.
-        if (const auto* lt = caf::get_if<list_type>(&t)) {
-          auto* l = caf::get_if<list>(&x);
+        if (const auto* lt = try_as<list_type>(&t)) {
+          auto* l = try_as<list>(&x);
           TENZIR_ASSERT(l);
           auto result = list{};
           result.reserve(l->size());
@@ -225,13 +225,13 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
           return result;
         }
         // (2) Try to unwrap list into records.
-        if (const auto* rt = caf::get_if<record_type>(&t)) {
+        if (const auto* rt = try_as<record_type>(&t)) {
           // This special case handles the situation where we have a record
           // inside a list or a map, for which we do not add null values for
           // missing fields.
           if (caf::holds_alternative<caf::none_t>(x))
             return caf::none;
-          auto* l = caf::get_if<list>(&x);
+          auto* l = try_as<list>(&x);
           TENZIR_ASSERT(l);
           TENZIR_ASSERT(l->size() == rt->num_fields());
           auto result = record{};

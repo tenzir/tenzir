@@ -420,8 +420,9 @@ size_t depth(const record& r) {
     result = std::max(result, depth);
     while (begin != end) {
       const auto& x = (begin++)->second;
-      if (const auto* nested = caf::get_if<record>(&x))
+      if (const auto* nested = try_as<record>(&x)) {
         stack.emplace_back(nested->begin(), nested->end(), depth + 1);
+      }
     }
   }
   return result;
@@ -437,10 +438,10 @@ record flatten(const record& r, size_t max_recursion) {
     return result;
   }
   for (const auto& [k, v] : r) {
-    if (const auto* nested = caf::get_if<record>(&v))
+    if (const auto* nested = try_as<record>(&v)) {
       for (auto& [nk, nv] : flatten(*nested, --max_recursion))
         result.emplace(fmt::format("{}.{}", k, nk), std::move(nv));
-    else
+    } else
       result.emplace(k, v);
   }
   return result;
@@ -455,13 +456,13 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
     return result;
   }
   for (const auto& [k, v] : r) {
-    if (const auto* ir = caf::get_if<record>(&v)) {
+    if (const auto* ir = try_as<record>(&v)) {
       // Look for a matching field of type record.
       const auto offset = rt.resolve_key(k);
       if (!offset.has_value())
         return {};
       auto field = rt.field(*offset);
-      const auto* irt = caf::get_if<record_type>(&field.type);
+      const auto* irt = try_as<record_type>(&field.type);
       if (!irt)
         return {};
       // Recurse.
@@ -485,8 +486,8 @@ flatten(const data& x, const type& t, size_t max_recursion) {
                 defaults::max_recursion);
     return caf::none;
   }
-  const auto* xs = caf::get_if<record>(&x);
-  const auto* rt = caf::get_if<record_type>(&t);
+  const auto* xs = try_as<record>(&x);
+  const auto* rt = try_as<record_type>(&t);
   if (xs && rt)
     return flatten(*xs, *rt, --max_recursion);
   return caf::none;
@@ -516,18 +517,18 @@ void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
     return;
   }
   for (const auto& [k, v] : src) {
-    if (const auto* src_rec = caf::get_if<record>(&v)) {
-      auto* dst_rec = caf::get_if<record>(&dst[k]);
+    if (const auto* src_rec = try_as<record>(&v)) {
+      auto* dst_rec = try_as<record>(&dst[k]);
       if (!dst_rec) {
         // Overwrite key with empty record on type mismatch.
         dst[k] = record{};
-        dst_rec = caf::get_if<record>(&dst[k]);
+        dst_rec = try_as<record>(&dst[k]);
       }
       merge(*src_rec, *dst_rec, merge_lists, max_recursion - 1);
     } else if (merge_lists == policy::merge_lists::yes
                && caf::holds_alternative<list>(v)) {
       const auto& src_list = as<list>(v);
-      if (auto* dst_list = caf::get_if<list>(&dst[k])) {
+      if (auto* dst_list = try_as<list>(&dst[k])) {
         dst_list->insert(dst_list->end(), src_list.begin(), src_list.end());
       } else if (auto it = dst.find(k); it != dst.end()) {
         auto dst_list = list{};
@@ -696,7 +697,7 @@ record strip(const record& xs) {
   for (const auto& [k, v] : xs) {
     if (caf::holds_alternative<caf::none_t>(v))
       continue;
-    if (const auto* vr = caf::get_if<record>(&v)) {
+    if (const auto* vr = try_as<record>(&v)) {
       auto nested = strip(*vr);
       if (!nested.empty())
         result.emplace(k, std::move(nested));

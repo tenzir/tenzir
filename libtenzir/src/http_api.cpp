@@ -184,7 +184,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
           return data{result};
         },
         [&](const list_type& lt) -> caf::expected<data> {
-          auto const* list = caf::get_if<tenzir::list>(&param_data);
+          auto const* list = try_as<tenzir::list>(&param_data);
           if (!list)
             return caf::make_error(ec::invalid_argument, "expected a list");
           auto result = tenzir::list{};
@@ -213,7 +213,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                 [&](const record_type&) -> caf::expected<data> {
                   // TODO: This currently works with records containing only
                   // strings, but is untested with other value types.
-                  const auto* result = caf::get_if<record>(&x);
+                  const auto* result = try_as<record>(&x);
                   if (!result)
                     return caf::make_error(ec::invalid_argument,
                                            fmt::format("invalid record "
@@ -234,13 +234,13 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
           return result;
         },
         [&](const record_type&) -> caf::expected<data> {
-          const auto* parsed = caf::get_if<record>(&param_data);
+          const auto* parsed = try_as<record>(&param_data);
           if (!parsed)
             return caf::make_error(ec::invalid_argument, "expected a record");
           auto result = record{};
           for (const auto& x : *parsed) {
             auto parse_result = false;
-            const auto* str = caf::get_if<std::string>(&x.second);
+            const auto* str = try_as<std::string>(&x.second);
             if (not str) {
               return caf::make_error(ec::invalid_argument,
                                      "currently only non-null boolean values "

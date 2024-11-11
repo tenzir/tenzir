@@ -61,7 +61,7 @@ struct basic_series {
     if constexpr (std::same_as<Other, tenzir::type>) {
       return *this;
     } else {
-      auto other_type = caf::get_if<Other>(&type);
+      auto other_type = try_as<Other>(&type);
       if (not other_type) {
         return std::nullopt;
       }
@@ -120,7 +120,7 @@ struct basic_series {
     requires(std::same_as<Type, type>)
   auto values() const {
     if constexpr (concrete_type<Cast>) {
-      const auto* ct = caf::get_if<Cast>(&type);
+      const auto* ct = try_as<Cast>(&type);
       TENZIR_ASSERT(ct);
       TENZIR_ASSERT(array);
       return tenzir::values(

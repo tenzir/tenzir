@@ -66,7 +66,7 @@ bool subnet_index::inspect_impl(supported_inspectors& inspector) {
 }
 
 bool subnet_index::append_impl(data_view x, id pos) {
-  if (auto sn = caf::get_if<view<subnet>>(&x)) {
+  if (auto sn = try_as<view<subnet>>(&x)) {
     length_.skip(pos - length_.size());
     length_.append(sn->length());
     return static_cast<bool>(network_->append(sn->network(), pos));

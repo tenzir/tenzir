@@ -52,11 +52,11 @@ TEST(choice - LHS and RHS) {
   auto p = chr{'x'} | i32;
   caf::variant<char, int32_t> x;
   CHECK(p("123", x));
-  auto i = caf::get_if<int32_t>(&x);
+  auto i = try_as<int32_t>(&x);
   REQUIRE(i);
   CHECK_EQUAL(*i, 123);
   CHECK(p("x", x));
-  auto c = caf::get_if<char>(&x);
+  auto c = try_as<char>(&x);
   REQUIRE(c);
   CHECK_EQUAL(*c, 'x');
 }
@@ -964,9 +964,8 @@ TEST(option set - long form options) {
   REQUIRE(success);
   REQUIRE_EQUAL(parsed_options.size(), size_t{2});
   REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
-  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
-                "value");
-  REQUIRE_EQUAL((*caf::get_if<uint64_t>(&parsed_options.at("valid"))), 12345u);
+  REQUIRE_EQUAL((*try_as<std::string>(&parsed_options.at("option"))), "value");
+  REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("valid"))), 12345u);
 }
 
 TEST(option set - short form options) {
@@ -980,9 +979,8 @@ TEST(option set - short form options) {
   REQUIRE(success);
   REQUIRE_EQUAL(parsed_options.size(), size_t{2});
   REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
-  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
-                "value");
-  REQUIRE_EQUAL((*caf::get_if<uint64_t>(&parsed_options.at("valid"))), 12345u);
+  REQUIRE_EQUAL((*try_as<std::string>(&parsed_options.at("option"))), "value");
+  REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("valid"))), 12345u);
 }
 
 TEST(option set - long form options mixed with short form options) {
@@ -997,10 +995,9 @@ TEST(option set - long form options mixed with short form options) {
   REQUIRE(success);
   REQUIRE_EQUAL(parsed_options.size(), size_t{3});
   REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
-  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
-                "value");
-  REQUIRE_EQUAL((*caf::get_if<uint64_t>(&parsed_options.at("valid"))), 12345u);
-  REQUIRE_EQUAL((*caf::get_if<uint64_t>(&parsed_options.at("short"))), 2u);
+  REQUIRE_EQUAL((*try_as<std::string>(&parsed_options.at("option"))), "value");
+  REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("valid"))), 12345u);
+  REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("short"))), 2u);
 }
 
 TEST(option set - invalid long form option syntax) {
@@ -1040,8 +1037,7 @@ TEST(option set - option value defined twice gets overwritten) {
   REQUIRE(success);
   REQUIRE_EQUAL(parsed_options.size(), size_t{1});
   REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
-  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
-                "value2");
+  REQUIRE_EQUAL((*try_as<std::string>(&parsed_options.at("option"))), "value2");
 }
 
 TEST(option set - missing option value) {

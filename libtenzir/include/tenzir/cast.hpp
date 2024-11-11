@@ -379,7 +379,7 @@ struct cast_helper<record_type, record_type> {
                            ? std::string{to_field.name}
                            : fmt::format("{}.{}", key_prefix, to_field.name);
         fields.push_back(to_field.type.to_arrow_field(to_field.name));
-        if (const auto* r = caf::get_if<record_type>(&to_field.type)) {
+        if (const auto* r = try_as<record_type>(&to_field.type)) {
           children.push_back(impl(impl, *r, key));
           continue;
         }
@@ -423,7 +423,7 @@ struct cast_helper<record_type, record_type> {
         const auto key = key_prefix.empty()
                            ? std::string{to_field.name}
                            : fmt::format("{}.{}", key_prefix, to_field.name);
-        if (const auto* r = caf::get_if<record_type>(&to_field.type)) {
+        if (const auto* r = try_as<record_type>(&to_field.type)) {
           auto maybe_nested_record = impl(impl, *r, key);
           if (not maybe_nested_record) {
             return std::move(maybe_nested_record.error());

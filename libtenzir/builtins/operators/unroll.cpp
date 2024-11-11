@@ -23,11 +23,11 @@ namespace {
 auto unroll_type(const type& src, const offset& off, size_t index = 0) -> type {
   TENZIR_ASSERT(index <= off.size());
   if (index == off.size()) {
-    auto list = caf::get_if<list_type>(&src);
+    auto list = try_as<list_type>(&src);
     TENZIR_ASSERT(list);
     return list->value_type();
   }
-  auto record = caf::get_if<record_type>(&src);
+  auto record = try_as<record_type>(&src);
   TENZIR_ASSERT(record);
   auto fields = std::vector<struct record_type::field_view>{};
   auto current = size_t{0};
@@ -100,7 +100,7 @@ private:
     TENZIR_ASSERT(fb);
     auto fs = dynamic_cast<const arrow::StructArray*>(&source);
     TENZIR_ASSERT(fs);
-    auto ty2 = caf::get_if<record_type>(&ty);
+    auto ty2 = try_as<record_type>(&ty);
     TENZIR_ASSERT(ty2);
     process_struct(*fb, *fs, *ty2, index);
   }

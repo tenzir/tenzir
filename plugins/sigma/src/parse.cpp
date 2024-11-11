@@ -71,11 +71,13 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
       return expression{Connective{std::move(xs)}};
     };
     if constexpr (std::is_same_v<Connective, conjunction>)
-      if (auto xs = caf::get_if<disjunction>(&x))
+      if (auto xs = try_as<disjunction>(&x)) {
         return transform(std::move(*xs));
+      }
     if constexpr (std::is_same_v<Connective, disjunction>)
-      if (auto xs = caf::get_if<conjunction>(&x))
+      if (auto xs = try_as<conjunction>(&x)) {
         return transform(std::move(*xs));
+      }
     return x;
   }
 
@@ -252,7 +254,7 @@ transform_sigma_string(std::string_view str, std::string_view fmt) {
 } // namespace
 
 caf::expected<expression> parse_search_id(const data& yaml) {
-  if (auto xs = caf::get_if<record>(&yaml)) {
+  if (auto xs = try_as<record>(&yaml)) {
     conjunction result;
     for (auto& [key, rhs] : *xs) {
       auto keys = detail::split(key, "|");
@@ -295,15 +297,16 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           transforms.emplace_back(to_re);
         } else if (*i == "base64") {
           auto encode = [](const data& x) -> caf::expected<data> {
-            if (const auto* str = caf::get_if<std::string>(&x))
+            if (const auto* str = try_as<std::string>(&x)) {
               return detail::base64::encode(*str);
+            }
             return caf::make_error(ec::type_clash, //
                                    "base64 only works with strings");
           };
           transforms.emplace_back(encode);
         } else if (*i == "base64offset") {
           auto encode = [](const data& x) -> caf::expected<data> {
-            const auto* str = caf::get_if<std::string>(&x);
+            const auto* str = try_as<std::string>(&x);
             if (!str)
               return caf::make_error(ec::type_clash, //
                                      "base64offset only works with strings");
@@ -325,7 +328,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           // FIXME: the attempt below doesn't work yet, but gives an idea on
           // what needs to be done algorithmically.
           auto convert = [](const data& x) -> caf::expected<data> {
-            const auto* str = caf::get_if<std::string>(&x);
+            const auto* str = try_as<std::string>(&x);
             if (!str)
               return caf::make_error(ec::type_clash, //
                                      "utf16le/wide only works with strings");
@@ -420,14 +423,15 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       // Helper to create an expression from a (transformed) value.
       auto make_predicate_expr = [&](const data& value) -> expression {
         // Convert strings to case-insensitive patterns.
-        if (auto str = caf::get_if<std::string>(&value))
+        if (auto str = try_as<std::string>(&value)) {
           if (auto pat = transform_sigma_string(*str, {}))
             return predicate{extractor, op, data{std::move(*pat)}};
+        }
         // The modifier 'base64offset' is unique in that it creates
         // multiple values represented as list. If followed by 'contains', then
         // we have substring search on each value; otherwise we can use equality
         // comparison.
-        if (auto xs = caf::get_if<list>(&value)) {
+        if (auto xs = try_as<list>(&value)) {
           // Only 'base64offset' creates a list value. Lists are otherwise not
           // allowed as values.
           TENZIR_ASSERT(xs->size() == 3);
@@ -442,7 +446,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       // Parse RHS.
       if (caf::holds_alternative<record>(rhs))
         return caf::make_error(ec::type_clash, "nested records not allowed");
-      if (auto values = caf::get_if<list>(&rhs)) {
+      if (auto values = try_as<list>(&rhs)) {
         std::vector<expression> connective;
         for (const auto& value : *values) {
           if (caf::holds_alternative<list>(value))
@@ -465,7 +469,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       }
     }
     return result.size() == 1 ? result[0] : result;
-  } else if (auto xs = caf::get_if<list>(&yaml)) {
+  } else if (auto xs = try_as<list>(&yaml)) {
     disjunction result;
     for (auto& search_id : *xs)
       if (auto expr = parse_search_id(search_id))
@@ -473,7 +477,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       else
         return expr.error();
     return result.size() == 1 ? result[0] : result;
-    // } else if (auto x = caf::get_if<std::string>(&yaml)) {
+    // } else if (auto x = try_as<std::string>(&yaml)) {
     //   return parse_search_id(*x);
   } else {
     return caf::make_error(
@@ -482,7 +486,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
 }
 
 caf::expected<expression> parse_rule(const data& yaml) {
-  auto xs = caf::get_if<record>(&yaml);
+  auto xs = try_as<record>(&yaml);
   if (!xs)
     return caf::make_error(ec::type_clash, "rule must be a record");
   // Extract detection attribute.
@@ -490,7 +494,7 @@ caf::expected<expression> parse_rule(const data& yaml) {
   if (auto i = xs->find("detection"); i == xs->end())
     return caf::make_error(ec::invalid_query, "no detection attribute");
   else
-    detection = caf::get_if<record>(&i->second);
+    detection = try_as<record>(&i->second);
   if (!detection)
     return caf::make_error(ec::type_clash, "detection not a record");
   // Resolve all named sub-expression except for "condition".
@@ -508,7 +512,7 @@ caf::expected<expression> parse_rule(const data& yaml) {
   if (auto i = detection->find("condition"); i == detection->end())
     return caf::make_error(ec::invalid_query, "no condition key");
   else
-    condition = caf::get_if<std::string>(&i->second);
+    condition = try_as<std::string>(&i->second);
   if (!condition)
     return caf::make_error(ec::type_clash, "condition not a string");
   // Parse condition.

@@ -236,7 +236,7 @@ auto load_config_files(std::vector<config_file> config_files)
       if (caf::holds_alternative<caf::none_t>(*yaml)) {
         continue;
       }
-      auto* rec = caf::get_if<record>(&*yaml);
+      auto* rec = try_as<record>(&*yaml);
       if (not rec) {
         return caf::make_error(ec::parse_error,
                                fmt::format("failed to read config file {}: not "

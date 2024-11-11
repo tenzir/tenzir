@@ -132,9 +132,10 @@ caf::error unpack(const fbs::ValueIndex& from, value_index_ptr& to) {
     if (auto err = unpack(*base.options(), options_data))
       return err;
     auto options = caf::settings{};
-    if (const auto* options_record = caf::get_if<record>(&options_data))
+    if (const auto* options_record = try_as<record>(&options_data)) {
       if (auto err = convert(*options_record, options))
         return err;
+    }
     to = factory<value_index>::make(type, options);
     if (!to)
       return caf::make_error(ec::format_error,

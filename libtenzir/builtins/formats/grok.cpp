@@ -715,7 +715,7 @@ public:
         if (values.type.kind().is<null_type>()) {
           return values;
         }
-        auto strings = caf::get_if<arrow::StringArray>(&*values.array);
+        auto strings = try_as<arrow::StringArray>(&*values.array);
         if (not strings) {
           diagnostic::warning("expected string, got `{}`", values.type.kind())
             .primary(input)

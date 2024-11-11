@@ -330,7 +330,7 @@ auto descend(view<record> r, std::string_view path)
       // Path was completely processed.
       return field;
     }
-    auto maybe_rec = caf::get_if<view<record>>(&field);
+    auto maybe_rec = try_as<view<record>>(&field);
     if (!maybe_rec) {
       // This is not a record, but path continues.
       return caf::make_error(

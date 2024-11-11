@@ -62,7 +62,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
     // the catalog, but for the active partition we create an ad-hoc time
     // synopsis here to do the lookup.
     if constexpr (std::is_same_v<PartitionState, active_partition_state>) {
-      if (const auto* t = caf::get_if<time>(&x)) {
+      if (const auto* t = try_as<time>(&x)) {
         auto ts = time_synopsis{
           state.data.synopsis->min_import_time,
           state.data.synopsis->max_import_time,

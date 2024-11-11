@@ -36,7 +36,7 @@ bool enumeration_index::inspect_impl(supported_inspectors& inspector) {
 }
 
 bool enumeration_index::append_impl(data_view x, id pos) {
-  if (auto e = caf::get_if<view<enumeration>>(&x)) {
+  if (auto e = try_as<view<enumeration>>(&x)) {
     index_.skip(pos - index_.size());
     index_.append(*e);
     return true;

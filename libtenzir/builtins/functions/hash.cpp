@@ -177,7 +177,7 @@ public:
     config.field = parsed_extractors.front();
     config.out = parsed_extractors.front() + "_hashed";
     for (const auto& [key, value] : parsed_options) {
-      auto value_str = caf::get_if<std::string>(&value);
+      auto value_str = try_as<std::string>(&value);
       if (!value_str) {
         return {
           std::string_view{f, l},

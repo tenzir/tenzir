@@ -156,7 +156,7 @@ public:
         continue;
       }
       auto filter = eval(expr_, slice, ctrl.diagnostics());
-      auto array = caf::get_if<arrow::BooleanArray>(&*filter.array);
+      auto array = try_as<arrow::BooleanArray>(&*filter.array);
       if (not array) {
         diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
           .primary(expr_)

@@ -57,7 +57,7 @@ public:
           return false;
         return bloom_filter_.lookup(as<view<T>>(rhs));
       case relational_operator::in: {
-        if (auto xs = caf::get_if<view<list>>(&rhs)) {
+        if (auto xs = try_as<view<list>>(&rhs)) {
           for (auto x : **xs) {
             if (caf::holds_alternative<view<caf::none_t>>(x))
               return {};

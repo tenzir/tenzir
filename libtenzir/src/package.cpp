@@ -15,7 +15,7 @@ namespace tenzir {
 
 #define TRY_CONVERT_TO_STRING(name, field)                                     \
   if (key == #name) {                                                          \
-    const auto* null = caf::get_if<caf::none_t>(&value);                       \
+    const auto* null = try_as<caf::none_t>(&value);                            \
     if (null) {                                                                \
       result.field = std::nullopt;                                             \
       continue;                                                                \
@@ -33,12 +33,12 @@ namespace tenzir {
 
 #define TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)                             \
   if (key == #name) {                                                          \
-    const auto* null = caf::get_if<caf::none_t>(&value);                       \
+    const auto* null = try_as<caf::none_t>(&value);                            \
     if (null) {                                                                \
       result.name = std::nullopt;                                              \
       continue;                                                                \
     }                                                                          \
-    const auto* id = caf::get_if<std::string_view>(&value);                    \
+    const auto* id = try_as<std::string_view>(&value);                         \
     if (not id) {                                                              \
       return diagnostic::error(#name " must be a string")                      \
         .note("invalid package definition")                                    \
@@ -50,7 +50,7 @@ namespace tenzir {
 
 #define TRY_ASSIGN_STRING_TO_RESULT(name)                                      \
   if (key == #name) {                                                          \
-    const auto* id = caf::get_if<std::string_view>(&value);                    \
+    const auto* id = try_as<std::string_view>(&value);                         \
     if (not id) {                                                              \
       return diagnostic::error(#name " must be a string")                      \
         .note("invalid package definition")                                    \
@@ -62,7 +62,7 @@ namespace tenzir {
 
 #define TRY_ASSIGN_BOOL_TO_RESULT(name)                                        \
   if (key == #name) {                                                          \
-    const auto* x = caf::get_if<view<bool>>(&value);                           \
+    const auto* x = try_as<view<bool>>(&value);                                \
     if (not x) {                                                               \
       return diagnostic::error(#name " must be a bool").to_error();            \
     }                                                                          \
@@ -72,7 +72,7 @@ namespace tenzir {
 
 #define TRY_ASSIGN_RECORD_TO_RESULT(name)                                      \
   if (key == #name) {                                                          \
-    auto const* x = caf::get_if<view<record>>(&value);                         \
+    auto const* x = try_as<view<record>>(&value);                              \
     if (not x) {                                                               \
       return diagnostic::error(#name " must be a record")                      \
         .note("invalid package definition")                                    \
@@ -84,7 +84,7 @@ namespace tenzir {
 
 #define TRY_ASSIGN_MAP_TO_RESULT(name, value_type)                             \
   if (key == #name) {                                                          \
-    const auto* x = caf::get_if<view<record>>(&value);                         \
+    const auto* x = try_as<view<record>>(&value);                              \
     if (not x) {                                                               \
       return diagnostic::error(#name " must be a record")                      \
         .note("got {}", value)                                                 \
@@ -92,7 +92,7 @@ namespace tenzir {
         .to_error();                                                           \
     }                                                                          \
     for (auto const& [key, value] : *x) {                                      \
-      auto const* value_record = caf::get_if<view<record>>(&value);            \
+      auto const* value_record = try_as<view<record>>(&value);                 \
       if (not value_record) {                                                  \
         return diagnostic::error(#name " values must be records")              \
           .note("while parsing key {} for field " #name, key)                  \
@@ -113,14 +113,14 @@ namespace tenzir {
 
 #define TRY_ASSIGN_STRINGMAP_TO_RESULT(name)                                   \
   if (key == #name) {                                                          \
-    const auto* x = caf::get_if<view<record>>(&value);                         \
+    const auto* x = try_as<view<record>>(&value);                              \
     if (not x) {                                                               \
       return diagnostic::error(#name " must be a record")                      \
         .note("invalid package definition")                                    \
         .to_error();                                                           \
     }                                                                          \
     for (auto const& [key, value] : *x) {                                      \
-      auto const* value_string = caf::get_if<std::string_view>(&value);        \
+      auto const* value_string = try_as<std::string_view>(&value);             \
       if (not value_string) {                                                  \
         return diagnostic::error(#name " values must be strings")              \
           .note("while parsing key {} for field " #name, key)                  \
@@ -134,7 +134,7 @@ namespace tenzir {
 
 #define TRY_ASSIGN_STRINGMAP_CONVERSION_TO_RESULT(name)                        \
   if (key == #name) {                                                          \
-    const auto* x = caf::get_if<view<record>>(&value);                         \
+    const auto* x = try_as<view<record>>(&value);                              \
     if (not x) {                                                               \
       return diagnostic::error(#name " must be a record")                      \
         .note("invalid package definition")                                    \
@@ -162,7 +162,7 @@ namespace tenzir {
 
 #define TRY_ASSIGN_STRUCTURE_TO_RESULT(name, type)                             \
   if (key == #name) {                                                          \
-    const auto* x = caf::get_if<view<record>>(&value);                         \
+    const auto* x = try_as<view<record>>(&value);                              \
     if (not x) {                                                               \
       return diagnostic::error(#name " values must be records")                \
         .note("invalid package definition")                                    \
@@ -181,7 +181,7 @@ namespace tenzir {
 
 #define TRY_ASSIGN_LIST(name, inner_type, target)                              \
   if (key == #name) {                                                          \
-    const auto* item_list = caf::get_if<view<list>>(&value);                   \
+    const auto* item_list = try_as<view<list>>(&value);                        \
     if (not item_list) {                                                       \
       return diagnostic::error(#name " must be a list")                        \
         .note("got a {} instead", type::infer(materialize(value)))             \
@@ -189,7 +189,7 @@ namespace tenzir {
     }                                                                          \
     size_t pos = 0;                                                            \
     for (auto item_view : *item_list) {                                        \
-      const auto* item_record = caf::get_if<view<record>>(&item_view);         \
+      const auto* item_record = try_as<view<record>>(&item_view);              \
       if (not item_record) {                                                   \
         return diagnostic::error("list item must be a record")                 \
           .note("while trying to parse item {} of list " #name, pos)           \
@@ -279,7 +279,7 @@ auto package_pipeline::parse(const view<record>& data)
       // As a convenience for users, we also allow a string here and try to
       // parse the inner value in that case.
       auto value_copy = materialize(value);
-      if (const auto* as_string = caf::get_if<std::string_view>(&value)) {
+      if (const auto* as_string = try_as<std::string_view>(&value)) {
         auto inner_value = from_yaml(*as_string);
         if (!inner_value) {
           return diagnostic::error("failed to parse `restart-on-error` field")
@@ -288,8 +288,8 @@ auto package_pipeline::parse(const view<record>& data)
         }
         value_copy = *inner_value;
       }
-      const auto* on_off = caf::get_if<bool>(&value_copy);
-      const auto* retry_delay = caf::get_if<duration>(&value_copy);
+      const auto* on_off = try_as<bool>(&value_copy);
+      const auto* retry_delay = try_as<duration>(&value_copy);
       if (not on_off and not retry_delay) {
         return diagnostic::error("`restart-on-error` must be a "
                                  "be a "

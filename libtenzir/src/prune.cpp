@@ -34,13 +34,13 @@ struct pruner {
     std::vector<tenzir::predicate*> memo;
     for (const auto& operand : connective) {
       bool optimized = false;
-      if (const auto* pred = caf::get_if<predicate>(&operand)) {
+      if (const auto* pred = try_as<predicate>(&operand)) {
         if (caf::holds_alternative<field_extractor>(pred->lhs)
             || (caf::holds_alternative<type_extractor>(pred->lhs)
                 && as<type_extractor>(pred->lhs).type == string_type{})) {
-          if (const auto* d = caf::get_if<data>(&pred->rhs)) {
+          if (const auto* d = try_as<data>(&pred->rhs)) {
             if (caf::holds_alternative<std::string>(*d)) {
-              auto const* fe = caf::get_if<field_extractor>(&pred->lhs);
+              auto const* fe = try_as<field_extractor>(&pred->lhs);
               if (!fe || !unprunable_fields_.contains(fe->field)) {
                 optimized = true;
                 // Replace the concrete field name by `:string` if this is
@@ -57,7 +57,7 @@ struct pruner {
                   continue;
                 } else {
                   result.push_back(operand);
-                  memo.push_back(caf::get_if<predicate>(&result.back()));
+                  memo.push_back(try_as<predicate>(&result.back()));
                 }
               }
             }

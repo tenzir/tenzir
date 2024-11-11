@@ -18,7 +18,26 @@
 #include <caf/settings.hpp>
 #include <fmt/format.h>
 
-namespace tenzir::detail {
+namespace tenzir {
+
+template <>
+class variant_traits<caf::config_value> {
+  using backing_traits = variant_traits<caf::config_value::variant_type>;
+
+public:
+  static constexpr auto count = backing_traits::count;
+
+  static auto index(const caf::config_value& x) -> size_t {
+    return backing_traits::index(x.get_data());
+  }
+
+  template <size_t I>
+  static auto get(const caf::config_value& x) -> decltype(auto) {
+    return backing_traits::template get<I>(x.get_data());
+  }
+};
+
+namespace detail {
 
 /// Merge settings of `src` into `dst`, overwriting existing values from `dst`
 /// if necessary.
@@ -44,22 +63,24 @@ get_bytesize(caf::settings opts, std::string_view key, uint64_t defval);
 template <class T>
 caf::expected<std::vector<T>>
 unpack_config_list_to_vector(const caf::config_value& cfg_value) {
-  const auto* list = caf::get_if<caf::config_value::list>(&cfg_value);
-  if (!list)
+  const auto* list = try_as<caf::config_value::list>(&cfg_value);
+  if (!list) {
     return caf::make_error(ec::invalid_configuration, "failed to extract "
                                                       "config value as list");
+  }
 
   std::vector<T> ret;
   ret.reserve(list->size());
   for (const auto& e : *list) {
-    const auto* val = caf::get_if<T>(&e);
-    if (!val)
+    const auto* val = try_as<T>(&e);
+    if (!val) {
       return caf::make_error(
         ec::invalid_configuration,
         fmt::format("type mismatch while unpacking config list: expected {}, "
                     "got {}",
                     caf::detail::pretty_type_name(typeid(T)),
                     caf::detail::pretty_type_name(typeid(e))));
+    }
     ret.push_back(*val);
   }
 
@@ -80,30 +101,13 @@ unpack_config_list_to_vector(const caf::actor_system_config& cfg,
                              std::string_view cfg_list_key) {
   const auto& content = caf::content(cfg);
   const auto* cfg_value = caf::get_if(&content, cfg_list_key);
-  if (!cfg_value)
+  if (!cfg_value) {
     return caf::make_error(
       ec::invalid_configuration,
       fmt::format("failed to find key '{}' in configuration", cfg_list_key));
+  }
   return unpack_config_list_to_vector<T>(*cfg_value);
 }
 
-} // namespace tenzir::detail
-
-namespace tenzir {
-template <>
-class variant_traits<caf::config_value> {
-  using backing_traits = variant_traits<caf::config_value::variant_type>;
-
-public:
-  static constexpr auto count = backing_traits::count;
-
-  static auto index(const caf::config_value& x) -> size_t {
-    return backing_traits::index(x.get_data());
-  }
-
-  template <size_t I>
-  static auto get(const caf::config_value& x) -> decltype(auto) {
-    return backing_traits::template get<I>(x.get_data());
-  }
-};
+} // namespace detail
 } // namespace tenzir

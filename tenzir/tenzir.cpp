@@ -207,15 +207,14 @@ auto main(int argc, char** argv) -> int {
   // Set up pipeline aliases.
   using namespace std::literals;
   auto aliases = std::unordered_map<std::string, std::string>{};
-  if (auto const* settings
-      = caf::get_if<caf::settings>(&cfg, "tenzir.operators")) {
+  if (auto const* settings = try_as<caf::settings>(&cfg, "tenzir.operators")) {
     auto r = to<record>(*settings);
     if (!r) {
       TENZIR_ERROR("could not load `tenzir.operators`: invalid record");
       return EXIT_FAILURE;
     }
     for (auto&& [name, value] : *r) {
-      auto* definition = caf::get_if<std::string>(&value);
+      auto* definition = try_as<std::string>(&value);
       if (!definition) {
         TENZIR_ERROR("could not load `tenzir.operators`: alias `{}` does not "
                      "resolve to a string",

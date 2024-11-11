@@ -74,7 +74,7 @@ public:
 
   // Implementation of the remainder of the `synopsis` API.
   void add(data_view x) override {
-    auto v = caf::get_if<view_type>(&x);
+    auto v = try_as<view_type>(&x);
     TENZIR_ASSERT(v);
     data_.insert(materialize(*v));
   }
@@ -97,7 +97,7 @@ public:
         return data_.count(materialize(as<view_type>(rhs)));
       }
       case relational_operator::in: {
-        if (auto xs = caf::get_if<view<list>>(&rhs)) {
+        if (auto xs = try_as<view<list>>(&rhs)) {
           for (auto x : **xs)
             if (data_.count(materialize(as<view_type>(x)))) {
               return true;

@@ -211,7 +211,7 @@ struct json_printer : printer_base<json_printer> {
                                             std::string{element.first})
                               : fmt::format(options_.style.field, "{}.{}",
                                             prefix, element.first);
-          if (const auto* r = caf::get_if<view<record>>(&element.second)) {
+          if (const auto* r = try_as<view<record>>(&element.second)) {
             if (!(*this)(*r, name))
               return false;
           } else {

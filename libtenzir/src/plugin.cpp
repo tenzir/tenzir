@@ -355,8 +355,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
   }
   auto plugins_record = record{};
   if (global_config.contains("plugins")) {
-    if (auto* plugins_entry
-        = caf::get_if<record>(&global_config.at("plugins"))) {
+    if (auto* plugins_entry = try_as<record>(&global_config.at("plugins"))) {
       plugins_record = std::move(*plugins_entry);
     }
   }
@@ -367,7 +366,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
     // Try to read the configurations from the merged Tenzir configuration.
     if (plugins_record.contains(plugin->name())) {
       if (auto* plugins_entry
-          = caf::get_if<record>(&plugins_record.at(plugin->name()))) {
+          = try_as<record>(&plugins_record.at(plugin->name()))) {
         merged_config = std::move(*plugins_entry);
       } else {
         return caf::make_error(ec::invalid_configuration,

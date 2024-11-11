@@ -65,17 +65,17 @@ struct fixture {
 FIXTURE_SCOPE(expr_tests, fixture)
 
 TEST(construction) {
-  auto n = caf::get_if<negation>(&expr0);
+  auto n = try_as<negation>(&expr0);
   REQUIRE(n);
-  auto c = caf::get_if<conjunction>(&n->expr());
+  auto c = try_as<conjunction>(&n->expr());
   REQUIRE(c);
   REQUIRE(c->size() == 2);
-  auto p0 = caf::get_if<predicate>(&c->at(0));
+  auto p0 = try_as<predicate>(&c->at(0));
   REQUIRE(p0);
   CHECK_EQUAL(get<field_extractor>(p0->lhs).field, "x.y.z");
   CHECK_EQUAL(p0->op, relational_operator::less_equal);
   CHECK_EQUAL(get<data>(p0->rhs), int64_t{42});
-  auto p1 = caf::get_if<predicate>(&c->at(1));
+  auto p1 = try_as<predicate>(&c->at(1));
   REQUIRE(p1);
   CHECK_EQUAL(get<meta_extractor>(p1->lhs).kind, meta_extractor::schema);
   CHECK_EQUAL(p1->op, relational_operator::equal);
@@ -87,15 +87,15 @@ TEST(serialization) {
   caf::byte_buffer buf;
   CHECK(detail::serialize(buf, expr0, expr1));
   CHECK_EQUAL(detail::legacy_deserialize(buf, ex0, ex1), true);
-  auto d = caf::get_if<disjunction>(&ex1);
+  auto d = try_as<disjunction>(&ex1);
   REQUIRE(d);
   REQUIRE(!d->empty());
-  auto n = caf::get_if<negation>(&d->at(0));
+  auto n = try_as<negation>(&d->at(0));
   REQUIRE(n);
-  auto c = caf::get_if<conjunction>(&n->expr());
+  auto c = try_as<conjunction>(&n->expr());
   REQUIRE(c);
   REQUIRE_EQUAL(c->size(), 2u);
-  auto p = caf::get_if<predicate>(&c->at(1));
+  auto p = try_as<predicate>(&c->at(1));
   REQUIRE(p);
   CHECK_EQUAL(p->op, relational_operator::equal);
 }

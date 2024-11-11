@@ -64,7 +64,7 @@ struct schema_context {
 auto traverse(type t) -> generator<schema_context> {
   schema_context result;
   // Unpack lists. Note that we lose type metadata of lists.
-  while (const auto* list = caf::get_if<list_type>(&t)) {
+  while (const auto* list = try_as<list_type>(&t)) {
     ++result.type.lists;
     t = list->value_type();
   }
@@ -80,7 +80,7 @@ auto traverse(type t) -> generator<schema_context> {
     result.type.category = "atomic";
   TENZIR_ASSERT(not caf::holds_alternative<list_type>(t));
   TENZIR_ASSERT(not caf::holds_alternative<map_type>(t));
-  if (const auto* record = caf::get_if<record_type>(&t)) {
+  if (const auto* record = try_as<record_type>(&t)) {
     auto i = size_t{0};
     for (const auto& field : record->fields()) {
       result.field.name = field.name;

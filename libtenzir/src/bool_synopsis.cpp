@@ -38,7 +38,7 @@ size_t bool_synopsis::memusage() const {
 
 std::optional<bool>
 bool_synopsis::lookup(relational_operator op, data_view rhs) const {
-  if (auto b = caf::get_if<view<bool>>(&rhs)) {
+  if (auto b = try_as<view<bool>>(&rhs)) {
     if (op == relational_operator::equal)
       return *b ? true_ : false_;
     if (op == relational_operator::not_equal)

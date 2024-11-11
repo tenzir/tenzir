@@ -166,7 +166,7 @@ public:
         continue;
       }
       auto ser = eval(expr_, slice, ctrl.diagnostics());
-      auto* ptr = caf::get_if<arrow::TimestampArray>(ser.array.get());
+      auto* ptr = try_as<arrow::TimestampArray>(ser.array.get());
       if (not ptr) {
         if (ser.type.kind().is_not<null_type>()) {
           diagnostic::warning("expected `time`, got `{}`", ser.type.kind())

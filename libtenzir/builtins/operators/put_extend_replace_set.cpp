@@ -329,9 +329,8 @@ public:
         if constexpr (Mode != mode::extend) {
           auto* op_ptr = op ? &*op : nullptr;
           // FIXME: Chaining `caf::get_if` leads to a segfault.
-          auto* data_ptr = op_ptr ? caf::get_if<data>(op_ptr) : nullptr;
-          auto* str_ptr
-            = data_ptr ? caf::get_if<std::string>(data_ptr) : nullptr;
+          auto* data_ptr = op_ptr ? try_as<data>(op_ptr) : nullptr;
+          auto* str_ptr = data_ptr ? try_as<std::string>(data_ptr) : nullptr;
           if (not str_ptr) {
             return {
               std::string_view{f, l},

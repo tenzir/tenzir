@@ -82,10 +82,10 @@ expression hoister::operator()(caf::none_t) const {
 expression hoister::operator()(const conjunction& c) const {
   conjunction hoisted;
   for (auto& op : c)
-    if (auto inner = caf::get_if<conjunction>(&op))
+    if (auto inner = try_as<conjunction>(&op)) {
       for (auto& inner_op : *inner)
         hoisted.push_back(caf::visit(*this, inner_op));
-    else
+    } else
       hoisted.push_back(caf::visit(*this, op));
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
@@ -93,10 +93,10 @@ expression hoister::operator()(const conjunction& c) const {
 expression hoister::operator()(const disjunction& d) const {
   disjunction hoisted;
   for (auto& op : d)
-    if (auto inner = caf::get_if<disjunction>(&op))
+    if (auto inner = try_as<disjunction>(&op)) {
       for (auto& inner_op : *inner)
         hoisted.push_back(caf::visit(*this, inner_op));
-    else
+    } else
       hoisted.push_back(caf::visit(*this, op));
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
@@ -168,8 +168,9 @@ expression denegator::operator()(const disjunction& d) const {
 
 expression denegator::operator()(const negation& n) const {
   // Step through double negations.
-  if (auto inner = caf::get_if<negation>(&n.expr()))
+  if (auto inner = try_as<negation>(&n.expr())) {
     return caf::visit(*this, inner->expr());
+  }
   // Apply De Morgan from here downward.
   return caf::visit(denegator{!negate_}, n.expr());
 }

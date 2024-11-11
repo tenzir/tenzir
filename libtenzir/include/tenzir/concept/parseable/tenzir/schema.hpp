@@ -112,12 +112,12 @@ struct symbol_resolver {
     }
     if (has_algebra_attribute(x)) {
       TENZIR_ASSERT(x.fields.size() >= 2);
-      const auto* base = caf::get_if<legacy_record_type>(&x.fields[0].type);
+      const auto* base = try_as<legacy_record_type>(&x.fields[0].type);
       TENZIR_ASSERT(base);
       auto acc = *base;
       auto it = ++x.fields.begin();
       for (; it < x.fields.end(); ++it) {
-        const auto* rhs = caf::get_if<legacy_record_type>(&it->type);
+        const auto* rhs = try_as<legacy_record_type>(&it->type);
         TENZIR_ASSERT(rhs);
         if (it->name == "+") {
           auto result = merge(acc, *rhs);

@@ -79,13 +79,18 @@ struct expander {
     // additional :ip in S predicate gets appended as disjunction afterwards.
     auto build_addr_pred
       = [](auto& lhs, auto op, auto& rhs) -> caf::optional<expression> {
-      if (auto t = caf::get_if<type_extractor>(&lhs))
-        if (auto d = caf::get_if<data>(&rhs))
-          if (op == relational_operator::equal)
-            if (caf::holds_alternative<subnet_type>(t->type))
-              if (auto sn = caf::get_if<subnet>(d))
+      if (auto t = try_as<type_extractor>(&lhs)) {
+        if (auto d = try_as<data>(&rhs)) {
+          if (op == relational_operator::equal) {
+            if (caf::holds_alternative<subnet_type>(t->type)) {
+              if (auto sn = try_as<subnet>(d)) {
                 return predicate{type_extractor{type{ip_type{}}},
                                  relational_operator::in, *d};
+              }
+            }
+          }
+        }
+      }
       return caf::none;
     };
     auto make_disjunction = [](auto x, auto y) {
@@ -222,7 +227,7 @@ auto make_predicate_parser() {
     | "!in"_p ->* [] { return relational_operator::not_in; }
     | "ni"_p  ->* [] { return relational_operator::ni; }
     | "!ni"_p ->* [] { return relational_operator::not_ni; }
-    | ("not"_p >> !&identifier) >> required_ws_or_comment >> "in"_p 
+    | ("not"_p >> !&identifier) >> required_ws_or_comment >> "in"_p
       ->* [] { return relational_operator::not_in; }
     ;
   auto pred

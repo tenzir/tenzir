@@ -90,10 +90,10 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         // TODO: Make this more beautiful.
         auto storage = T{};
-        auto cast = caf::get_if<T>(&*value);
+        auto cast = try_as<T>(&*value);
         if constexpr (std::same_as<T, uint64_t>) {
           if (not cast) {
-            auto other = caf::get_if<int64_t>(&*value);
+            auto other = try_as<int64_t>(&*value);
             if (other) {
               if (*other < 0) {
                 emit(diagnostic::error("expected positive integer, got `{}`",
@@ -171,10 +171,10 @@ auto argument_parser2::parse(const ast::entity& self,
               result = value.error();
               return;
             }
-            auto cast = caf::get_if<T>(&*value);
+            auto cast = try_as<T>(&*value);
             if constexpr (std::same_as<T, uint64_t>) {
               if (not cast) {
-                auto other = caf::get_if<int64_t>(&*value);
+                auto other = try_as<int64_t>(&*value);
                 if (other) {
                   if (*other < 0) {
                     emit(diagnostic::error(
@@ -183,7 +183,7 @@ auto argument_parser2::parse(const ast::entity& self,
                     return;
                   }
                   value = static_cast<uint64_t>(*other);
-                  cast = caf::get_if<T>(&*value);
+                  cast = try_as<T>(&*value);
                 }
               }
             }

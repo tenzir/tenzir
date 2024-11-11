@@ -1011,7 +1011,7 @@ public:
       = [](record& root, const ast::simple_selector& sel, data value) {
           if (sel.path().empty()) {
             // TODO
-            if (auto rec = caf::get_if<record>(&value)) {
+            if (auto rec = try_as<record>(&value)) {
               root = std::move(*rec);
             }
             return;
@@ -1022,7 +1022,7 @@ public:
             if (&segment == &sel.path().back()) {
               val = std::move(value);
             } else {
-              current = caf::get_if<record>(&val);
+              current = try_as<record>(&val);
               if (not current) {
                 val = record{};
                 current = &as<record>(val);
