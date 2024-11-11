@@ -195,32 +195,38 @@ source project](https://github.com/tenzir/tenzir).
 
 ## Do you have an integration for *X*?
 
-Our [integrations page](integrations.md) includes descriptions of use cases
-with third-party products and tools. If *X* is not in that list, it does not
-mean that *X* is not supported. The steps below help you understand whether
-there exists an integration:
+Tenzir has several layers where integrations can occur. If *X* is not supported,
+then we need to find out at what level it should be.
 
-1. Check the available [formats](formats.md). Sometimes an integration is just a
-   lower-level building block, such as the [Syslog parser](formats/syslog.md).
-2. Check the available [connectors](connectors.md). An integration can also be
-   generic communication primitive, such as the [AMQP](connectors/amqp.md) that
-   acts as client to speak with a RabbitMQ server, or the
-   [HTTP](connectors/http.md) connector to perform an API call.
-3. Check Fluent Bit [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs].
-   Our [`fluent-bit`](operators/fluent-bit.md) operator makes it possible to use
-   the entire ecosystem of Fluent Bit integrations.
-4. Call a command-line tool. It is always possible to integrate a command line
-   tool using the [`shell`](operators/shell.md) operator, by hooking
-   standard input and output of a forked child as a byte stream into a
-   pipeline.
-5. Use Python. The [`python`](operators/python.md) operator allows you to
-   perform arbitrary event-to-event transformation using the full power of
-   Python.
+1. **Application**. If *X* is a specific tool and you'd like to get data in from
+   *X* or send data to *X*, then the best place to start is our [Community
+   Library](https://github.com/tenzir/library) where we package integrations for
+   applications and use cases. Application-level integrations are often just a
+   composition of existing pipeline operators. Our [integrations
+   page](integrations.md) includes a few such examples.
 
-Please do not hesitate to reach out to us if you think something is missing, by
-[opening a GitHub
-Discussion](https://github.com/orgs/tenzir/discussions/new/choose) or swinging
-by our [Discord server](/discord).
+2. **Format**. If you *X* is a wire encoding, either text-based like JSON or
+   binary like PCAP, then look for available [formats](formats.md).
+
+3. **Connector**. If you *X* is a way to send or receive data, like HTTP, Kafka,
+   or TCP, then look for available [connectors](connectors.md).
+
+4. **Fluent Bit**. Tenzir ships with all of Fluent Bit's
+   [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs], since the Fluent
+   Bit library is baked into every Tenzir binary. Use the
+   [`fluent-bit`](operators/fluent-bit.md) operator makes to access Fluent Bit
+   integrations.
+
+5. **Escape Hatches**. As last resort, you can bring in Shell and Python scripts
+   to compensate for native support for *X*. The [`shell`](operators/shell.md)
+   operator brings byte streams via standard input and output into a pipeline,
+   and the [`python`](operators/python.md) operator allows you to perform
+   arbitrary event-to-event transformation using the full power of Python.
 
 [fluentbit-inputs]: https://docs.fluentbit.io/manual/pipeline/inputs/
 [fluentbit-outputs]: https://docs.fluentbit.io/manual/pipeline/outputs/
+
+Please do not hesitate to reach out to us if you think something is missing, by
+[opening a GitHub
+Discussion](https://github.com/orgs/tenzir/discussions/new/choose) or asking us
+directly in our [Discord server](/discord).
