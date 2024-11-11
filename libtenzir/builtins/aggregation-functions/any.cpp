@@ -36,14 +36,14 @@ private:
       return;
     }
     if (!any_) {
-      any_ = materialize(caf::get<view_type>(view));
+      any_ = materialize(as<view_type>(view));
     } else {
-      any_ = *any_ || caf::get<view_type>(view);
+      any_ = *any_ || as<view_type>(view);
     }
   }
 
   void add(const arrow::Array& array) override {
-    const auto& bool_array = caf::get<type_to_arrow_array_t<bool_type>>(array);
+    const auto& bool_array = as<type_to_arrow_array_t<bool_type>>(array);
     if (!any_) {
       any_ = bool_array.true_count() > 0;
     } else {

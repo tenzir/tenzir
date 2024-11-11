@@ -645,7 +645,7 @@ public:
           .emit(ctx);
         return failure::promise();
       }
-      args.rules.push_back(std::move(caf::get<std::string>(rule)));
+      args.rules.push_back(std::move(as<std::string>(rule)));
     }
     if (args.rules.empty()) {
       diagnostic::error("no rules provided").emit(ctx);

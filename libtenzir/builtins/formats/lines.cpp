@@ -205,7 +205,7 @@ public:
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        const auto& input_type = caf::get<record_type>(input_schema);
+        const auto& input_type = as<record_type>(input_schema);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values(input_type, *array)) {

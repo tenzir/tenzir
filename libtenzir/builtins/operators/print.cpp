@@ -111,7 +111,7 @@ public:
         }
         field.type = type{
           fmt::format("{}.{}", slice.schema().name(),
-                      caf::get<record_type>(slice.schema()).key(*target_index)),
+                      as<record_type>(slice.schema()).key(*target_index)),
           field.type,
         };
         auto rb = arrow::RecordBatch::Make(

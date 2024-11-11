@@ -78,7 +78,16 @@ class variant_traits;
 
 template <class T>
 concept has_variant_traits
-  = caf::detail::is_complete<variant_traits<std::remove_cvref_t<T>>>;
+  = caf::detail::is_complete<variant_traits<std::remove_cvref_t<T>>>
+    and requires(const std::remove_cvref_t<T>& v) {
+          {
+            variant_traits<std::remove_cvref_t<T>>::count
+          } -> std::same_as<const std::size_t&>;
+          {
+            variant_traits<std::remove_cvref_t<T>>::index(v)
+          } -> std::same_as<std::size_t>;
+          variant_traits<std::remove_cvref_t<T>>::template get<0>(v);
+        };
 
 template <class... Ts>
 class variant_traits<std::variant<Ts...>> {

@@ -196,7 +196,7 @@ public:
           return;
         }
         state_ = state::numeric;
-        auto& array = caf::get<type_to_arrow_array_t<Type>>(*arg.array);
+        auto& array = as<type_to_arrow_array_t<Type>>(*arg.array);
         for (auto value : values(ty, array)) {
           if (value) {
             digest_.NanAdd(*value);
@@ -213,8 +213,7 @@ public:
           return;
         }
         state_ = state::dur;
-        for (auto value :
-             values(ty, caf::get<arrow::DurationArray>(*arg.array))) {
+        for (auto value : values(ty, as<arrow::DurationArray>(*arg.array))) {
           if (value) {
             digest_.Add(value->count());
           }

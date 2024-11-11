@@ -149,12 +149,12 @@ auto value_at([[maybe_unused]] const Type& type,
     return int64_t{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, duration_type>) {
     TENZIR_ASSERT_EXPENSIVE(
-      caf::get<type_to_arrow_type_t<duration_type>>(*arr.type()).unit()
+      as<type_to_arrow_type_t<duration_type>>(*arr.type()).unit()
       == arrow::TimeUnit::NANO);
     return duration{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, time_type>) {
     TENZIR_ASSERT_EXPENSIVE(
-      caf::get<type_to_arrow_type_t<time_type>>(*arr.type()).unit()
+      as<type_to_arrow_type_t<time_type>>(*arr.type()).unit()
       == arrow::TimeUnit::NANO);
     return time{} + duration{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, string_type>) {
@@ -170,9 +170,10 @@ auto value_at([[maybe_unused]] const Type& type,
     return ip::v6(std::span<const uint8_t, 16>{bytes, 16});
   } else if constexpr (std::is_same_v<Type, subnet_type>) {
     TENZIR_ASSERT_EXPENSIVE(arr.num_fields() == 2);
-    auto network = value_at(
-      ip_type{},
-      *caf::get<type_to_arrow_array_t<ip_type>>(*arr.field(0)).storage(), row);
+    auto network
+      = value_at(ip_type{},
+                 *as<type_to_arrow_array_t<ip_type>>(*arr.field(0)).storage(),
+                 row);
     auto length
       = static_cast<const arrow::UInt8Array&>(*arr.field(1)).GetView(row);
     return {network, length};
@@ -288,10 +289,9 @@ auto value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
   TENZIR_ASSERT_EXPENSIVE(!arr.IsNull(row));
   if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value)
-    return value_at(type, *caf::get<type_to_arrow_array_t<Type>>(arr).storage(),
-                    row);
+    return value_at(type, *as<type_to_arrow_array_t<Type>>(arr).storage(), row);
   else
-    return value_at(type, caf::get<type_to_arrow_array_t<Type>>(arr), row);
+    return value_at(type, as<type_to_arrow_array_t<Type>>(arr), row);
 }
 
 auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
@@ -336,8 +336,7 @@ auto values(const type& type,
   const auto f
     = []<concrete_type Type>(
         const Type& type, const arrow::Array& array) -> generator<data_view> {
-    for (auto&& result :
-         values(type, caf::get<type_to_arrow_array_t<Type>>(array))) {
+    for (auto&& result : values(type, as<type_to_arrow_array_t<Type>>(array))) {
       if (!result)
         co_yield {};
       else

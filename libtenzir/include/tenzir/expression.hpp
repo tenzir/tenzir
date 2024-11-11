@@ -261,7 +261,7 @@ public:
     requires(detail::contains_type_v<types, std::decay_t<T>>)
   expression(T&& x) : node_(std::forward<T>(x)) {
     if constexpr (detail::is_any_v<std::decay_t<T>, conjunction, disjunction>)
-      TENZIR_ASSERT(!caf::get<std::decay_t<T>>(node_).empty());
+      TENZIR_ASSERT(!as<std::decay_t<T>>(node_).empty());
   }
 
   /// @cond PRIVATE

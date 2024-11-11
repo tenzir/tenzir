@@ -285,7 +285,7 @@ private:
                                            static_cast<int64_t>(row));
       auto projected_value = materialize(projected_value_view);
       TENZIR_ASSERT(caf::holds_alternative<record>(projected_value));
-      auto& projected_record = caf::get<record>(projected_value);
+      auto& projected_record = as<record>(projected_value);
       auto match_it = matches.find(projected_record);
       if (match_it == matches.end()) {
         std::tie(match_it, std::ignore)
@@ -422,7 +422,7 @@ auto deduplicate_operator::cached_projection::make(
                             missing_fields.begin(), missing_fields.end())
                             .size()
                           == missing_fields.size());
-  const auto& layout = caf::get<record_type>(schema);
+  const auto& layout = as<record_type>(schema);
   auto transformation_callback =
     [missing_fields](int64_t rows, struct record_type::field input_field,
                      std::shared_ptr<arrow::Array> input_array) {

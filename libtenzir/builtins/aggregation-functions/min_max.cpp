@@ -48,8 +48,8 @@ private:
     const auto comp = [](const auto& lhs, const auto& rhs) {
       return Mode == mode::min ? lhs < rhs : lhs > rhs;
     };
-    if (not result_ or comp(caf::get<view_type>(view), *result_)) {
-      result_ = materialize(caf::get<view_type>(view));
+    if (not result_ or comp(as<view_type>(view), *result_)) {
+      result_ = materialize(as<view_type>(view));
     }
   }
 

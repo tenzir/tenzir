@@ -46,7 +46,7 @@ public:
         co_yield {};
         continue;
       }
-      const auto& layout = caf::get<record_type>(slice.schema());
+      const auto& layout = as<record_type>(slice.schema());
       auto resolved_field = resolved_fields.find(slice.schema());
       if (resolved_field == resolved_fields.end()) {
         const auto index = slice.schema().resolve_key_or_concept_once(field_);
@@ -164,7 +164,7 @@ public:
         co_yield std::move(slice);
         continue;
       }
-      const auto& array = caf::get<arrow::TimestampArray>(*s.array);
+      const auto& array = as<arrow::TimestampArray>(*s.array);
       auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
       for (const auto& value : values(time_type{}, array)) {
         if (not value) {

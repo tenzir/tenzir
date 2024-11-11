@@ -239,7 +239,7 @@ public:
           TENZIR_TRACE("creating group for: {}", key_data);
           auto relative_path = std::string{};
           for (auto [sel, data] :
-               detail::zip_equal(args_.by, caf::get<list>(key_data))) {
+               detail::zip_equal(args_.by, as<list>(key_data))) {
             auto f = detail::overload{
               [](int64_t x) {
                 return fmt::to_string(x);

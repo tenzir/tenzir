@@ -473,7 +473,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
       if (!any(selection))
         return ids{offset + num_rows, false};
       const auto index
-        = caf::get<record_type>(slice.schema()).resolve_flat_index(lhs.column);
+        = as<record_type>(slice.schema()).resolve_flat_index(lhs.column);
       const auto type_and_array = index.get(slice);
       TENZIR_ASSERT(type_and_array.second);
       switch (op) {

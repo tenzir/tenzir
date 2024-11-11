@@ -91,7 +91,7 @@ private:
     if (index == offset_.size()) {
       // We arrived at the offset where the list values shall be placed.
       auto result
-        = append_array_slice(builder, caf::get<list_type>(ty).value_type(),
+        = append_array_slice(builder, as<list_type>(ty).value_type(),
                              *list_array_.values(), list_begin_, list_length_);
       TENZIR_ASSERT(result.ok());
       return;
@@ -139,8 +139,8 @@ auto unroll(const table_slice& slice, const offset& offset) -> table_slice {
     auto source = to_record_batch(slice)->ToStructArray();
     TENZIR_ASSERT(source.ok());
     TENZIR_ASSERT(*source);
-    unroller{offset, *list_array, row}.run(
-      *builder, **source, caf::get<record_type>(slice.schema()));
+    unroller{offset, *list_array, row}.run(*builder, **source,
+                                           as<record_type>(slice.schema()));
   }
   auto result = std::shared_ptr<arrow::StructArray>{};
   auto status = builder->Finish(&result);
@@ -185,7 +185,7 @@ public:
             return {};
           }
           const auto& field_type
-            = caf::get<record_type>(slice.schema()).field(offsets.front()).type;
+            = as<record_type>(slice.schema()).field(offsets.front()).type;
           if (caf::holds_alternative<null_type>(field_type)) {
             return {};
           }
@@ -205,7 +205,7 @@ public:
             .match(
               [&](offset result) -> std::optional<offset> {
                 const auto& field_type
-                  = caf::get<record_type>(slice.schema()).field(result).type;
+                  = as<record_type>(slice.schema()).field(result).type;
                 if (caf::holds_alternative<null_type>(field_type)) {
                   return {};
                 }

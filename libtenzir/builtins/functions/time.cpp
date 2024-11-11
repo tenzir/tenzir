@@ -92,7 +92,7 @@ public:
           return series::null(duration_type{}, arg.length());
         },
         [&](const arrow::TimestampArray& arg) {
-          auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+          auto& ty = as<arrow::TimestampType>(*arg.type());
           TENZIR_ASSERT(ty.timezone().empty());
           auto b
             = duration_type::make_arrow_builder(arrow::default_memory_pool());
@@ -216,7 +216,7 @@ public:
             return series::null(int64_type{}, arg.length());
           },
           [&](const arrow::TimestampArray& arg) {
-            auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+            auto& ty = as<arrow::TimestampType>(*arg.type());
             TENZIR_ASSERT(ty.timezone().empty());
             auto b = arrow::Int64Builder{};
             check(b.Reserve(arg.length()));
@@ -280,7 +280,7 @@ public:
             return series::null(double_type{}, arg.length());
           },
           [&](const arrow::DurationArray& arg) {
-            auto& ty = caf::get<arrow::DurationType>(*arg.type());
+            auto& ty = as<arrow::DurationType>(*arg.type());
             TENZIR_ASSERT(ty.unit() == arrow::TimeUnit::NANO);
             auto factor = 1000 * 1000 * 1000;
             auto b = arrow::DoubleBuilder{};

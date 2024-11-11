@@ -513,7 +513,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       return;
     }
     auto& last = output.back();
-    auto null_builder = caf::get<record_type>(last.schema())
+    auto null_builder = as<record_type>(last.schema())
                           .make_arrow_builder(arrow::default_memory_pool());
     TENZIR_ASSERT(null_builder->AppendNull().ok());
     auto null_array = std::shared_ptr<arrow::StructArray>{};

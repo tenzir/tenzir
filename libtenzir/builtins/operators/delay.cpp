@@ -46,7 +46,7 @@ public:
         co_yield {};
         continue;
       }
-      const auto& layout = caf::get<record_type>(slice.schema());
+      const auto& layout = as<record_type>(slice.schema());
       auto resolved_field = resolved_fields.find(slice.schema());
       if (resolved_field == resolved_fields.end()) {
         const auto index

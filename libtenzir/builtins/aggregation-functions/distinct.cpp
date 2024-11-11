@@ -74,7 +74,7 @@ private:
     if (caf::holds_alternative<caf::none_t>(view)) {
       return;
     }
-    const auto& typed_view = caf::get<view_type>(view);
+    const auto& typed_view = as<view_type>(view);
     if (!distinct_.contains(typed_view)) {
       const auto [it, inserted] = distinct_.insert(materialize(typed_view));
       TENZIR_ASSERT(inserted);

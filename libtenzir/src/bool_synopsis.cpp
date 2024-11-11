@@ -26,9 +26,9 @@ synopsis_ptr bool_synopsis::clone() const {
 
 void bool_synopsis::add(data_view x) {
   TENZIR_ASSERT(caf::holds_alternative<view<bool>>(x));
-  if (caf::get<view<bool>>(x))
+  if (as<view<bool>>(x)) {
     true_ = true;
-  else
+  } else
     false_ = true;
 }
 

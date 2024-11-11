@@ -35,7 +35,7 @@ public:
 
   void add(data_view x) override {
     TENZIR_ASSERT(caf::holds_alternative<view<T>>(x), "invalid data");
-    bloom_filter_.add(caf::get<view<T>>(x));
+    bloom_filter_.add(as<view<T>>(x));
   }
 
   [[nodiscard]] std::optional<bool>
@@ -55,7 +55,7 @@ public:
         }
         if (!caf::holds_alternative<view<T>>(rhs))
           return false;
-        return bloom_filter_.lookup(caf::get<view<T>>(rhs));
+        return bloom_filter_.lookup(as<view<T>>(rhs));
       case relational_operator::in: {
         if (auto xs = caf::get_if<view<list>>(&rhs)) {
           for (auto x : **xs) {
@@ -63,8 +63,9 @@ public:
               return {};
             if (!caf::holds_alternative<view<T>>(x))
               continue;
-            if (bloom_filter_.lookup(caf::get<view<T>>(x)))
+            if (bloom_filter_.lookup(as<view<T>>(x))) {
               return true;
+            }
           }
           return false;
         }

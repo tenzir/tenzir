@@ -30,9 +30,9 @@ TEST(parseable / printable - predicate) {
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<field_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
-  CHECK(caf::get<field_extractor>(pred.lhs) == field_extractor{"x.y.z"});
+  CHECK(as<field_extractor>(pred.lhs) == field_extractor{"x.y.z"});
   CHECK(pred.op == relational_operator::equal);
-  CHECK(caf::get<data>(pred.rhs) == data{42u});
+  CHECK(as<data>(pred.rhs) == data{42u});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: schema
   MESSAGE("T.x == Foo");
@@ -40,8 +40,8 @@ TEST(parseable / printable - predicate) {
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<field_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<field_extractor>(pred.rhs));
-  CHECK(caf::get<field_extractor>(pred.lhs) == field_extractor{"T.x"});
-  CHECK(caf::get<field_extractor>(pred.rhs) == field_extractor{"Foo"});
+  CHECK(as<field_extractor>(pred.lhs) == field_extractor{"T.x"});
+  CHECK(as<field_extractor>(pred.rhs) == field_extractor{"Foo"});
   CHECK(pred.op == relational_operator::equal);
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: data
@@ -50,9 +50,9 @@ TEST(parseable / printable - predicate) {
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
-  CHECK(caf::get<data>(pred.lhs) == data{42u});
+  CHECK(as<data>(pred.lhs) == data{42u});
   CHECK(pred.op == relational_operator::in);
-  CHECK((caf::get<data>(pred.rhs) == data{list{21u, 42u, 84u}}));
+  CHECK((as<data>(pred.rhs) == data{list{21u, 42u, 84u}}));
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
   MESSAGE("#schema != \"foo\"");
@@ -60,10 +60,9 @@ TEST(parseable / printable - predicate) {
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<meta_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
-  CHECK(caf::get<meta_extractor>(pred.lhs)
-        == meta_extractor{meta_extractor::schema});
+  CHECK(as<meta_extractor>(pred.lhs) == meta_extractor{meta_extractor::schema});
   CHECK(pred.op == relational_operator::not_equal);
-  CHECK(caf::get<data>(pred.rhs) == data{"foo"});
+  CHECK(as<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: type
   MESSAGE("10.0.0.0/8 ni :ip");
@@ -71,9 +70,9 @@ TEST(parseable / printable - predicate) {
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(caf::holds_alternative<type_extractor>(pred.rhs));
-  CHECK(caf::get<data>(pred.lhs) == data{*to<subnet>("10.0.0.0/8")});
+  CHECK(as<data>(pred.lhs) == data{*to<subnet>("10.0.0.0/8")});
   CHECK(pred.op == relational_operator::ni);
-  CHECK(caf::get<type_extractor>(pred.rhs) == type_extractor{type{ip_type{}}});
+  CHECK(as<type_extractor>(pred.rhs) == type_extractor{type{ip_type{}}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
   MESSAGE(":double >= -4.8");
@@ -81,10 +80,9 @@ TEST(parseable / printable - predicate) {
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<type_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
-  CHECK(caf::get<type_extractor>(pred.lhs)
-        == type_extractor{type{double_type{}}});
+  CHECK(as<type_extractor>(pred.lhs) == type_extractor{type{double_type{}}});
   CHECK(pred.op == relational_operator::greater_equal);
-  CHECK(caf::get<data>(pred.rhs) == data{-4.8});
+  CHECK(as<data>(pred.rhs) == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: typename
   MESSAGE("\"zeek.\" in #schema");
@@ -93,17 +91,16 @@ TEST(parseable / printable - predicate) {
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(caf::holds_alternative<meta_extractor>(pred.rhs));
   CHECK(pred.op == relational_operator::in);
-  CHECK(caf::get<meta_extractor>(pred.rhs)
-        == meta_extractor{meta_extractor::schema});
+  CHECK(as<meta_extractor>(pred.rhs) == meta_extractor{meta_extractor::schema});
   // LHS: schema, RHS: schema
   MESSAGE("x.a_b == y.c_d");
   str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<field_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<field_extractor>(pred.rhs));
-  CHECK(caf::get<field_extractor>(pred.lhs) == field_extractor{"x.a_b"});
+  CHECK(as<field_extractor>(pred.lhs) == field_extractor{"x.a_b"});
   CHECK(pred.op == relational_operator::equal);
-  CHECK(caf::get<field_extractor>(pred.rhs) == field_extractor{"y.c_d"});
+  CHECK(as<field_extractor>(pred.rhs) == field_extractor{"y.c_d"});
   CHECK_EQUAL(to_string(pred), str);
   // User defined type name:
   MESSAGE(":foo == -42");
@@ -175,7 +172,7 @@ TEST(parseable - value predicate) {
     CHECK(caf::holds_alternative<int64_type>(extractor->type));
     CHECK(caf::holds_alternative<data>(pred->rhs));
     CHECK_EQUAL(pred->op, relational_operator::equal);
-    CHECK(caf::get<data>(pred->rhs) == data{int64_t{42}});
+    CHECK(as<data>(pred->rhs) == data{int64_t{42}});
   }
   {
     auto pred = caf::get_if<predicate>(&(*disj)[1]);
@@ -185,7 +182,7 @@ TEST(parseable - value predicate) {
     CHECK(caf::holds_alternative<uint64_type>(extractor->type));
     CHECK(caf::holds_alternative<data>(pred->rhs));
     CHECK_EQUAL(pred->op, relational_operator::equal);
-    CHECK(caf::get<data>(pred->rhs) == data{42u});
+    CHECK(as<data>(pred->rhs) == data{42u});
   }
   {
     auto pred = caf::get_if<predicate>(&(*disj)[2]);
@@ -195,7 +192,7 @@ TEST(parseable - value predicate) {
     CHECK(caf::holds_alternative<double_type>(extractor->type));
     CHECK(caf::holds_alternative<data>(pred->rhs));
     CHECK_EQUAL(pred->op, relational_operator::equal);
-    CHECK(caf::get<data>(pred->rhs) == data{42.0});
+    CHECK(as<data>(pred->rhs) == data{42.0});
   }
 }
 

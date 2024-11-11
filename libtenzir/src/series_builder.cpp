@@ -1142,7 +1142,7 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
     static_assert(atom_type<ToType>);
     static_assert(atom_type<FromType>);
     auto full_ty = type();
-    auto ty = caf::get<ToType>(full_ty);
+    auto ty = as<ToType>(full_ty);
     // TODO: Refactor this logic.
     if constexpr (std::same_as<FromType, enumeration_type>) {
       // We have to special case this, because we cannot construct a proper

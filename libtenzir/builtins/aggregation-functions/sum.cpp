@@ -38,9 +38,9 @@ private:
       return;
     }
     if (!sum_) {
-      sum_ = materialize(caf::get<view_type>(view));
+      sum_ = materialize(as<view_type>(view));
     } else {
-      sum_ = *sum_ + materialize(caf::get<view_type>(view));
+      sum_ = *sum_ + materialize(as<view_type>(view));
     }
   }
 

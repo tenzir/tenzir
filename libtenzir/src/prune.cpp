@@ -37,7 +37,7 @@ struct pruner {
       if (const auto* pred = caf::get_if<predicate>(&operand)) {
         if (caf::holds_alternative<field_extractor>(pred->lhs)
             || (caf::holds_alternative<type_extractor>(pred->lhs)
-                && caf::get<type_extractor>(pred->lhs).type == string_type{})) {
+                && as<type_extractor>(pred->lhs).type == string_type{})) {
           if (const auto* d = caf::get_if<data>(&pred->rhs)) {
             if (caf::holds_alternative<std::string>(*d)) {
               auto const* fe = caf::get_if<field_extractor>(&pred->lhs);

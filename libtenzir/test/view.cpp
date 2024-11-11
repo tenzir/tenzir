@@ -106,7 +106,7 @@ TEST(make_data_view) {
   auto xs = list{int64_t{42}, true, "foo"};
   x = make_data_view(xs);
   REQUIRE(caf::holds_alternative<view<list>>(x));
-  auto v = caf::get<view<list>>(x);
+  auto v = as<view<list>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
   CHECK_VARIANT_EQUAL(materialize(v->at(0)), int64_t{42});
   CHECK_VARIANT_EQUAL(materialize(v->at(1)), true);
@@ -147,7 +147,7 @@ TEST(container comparison) {
   data ys = list{int64_t{42}};
   CHECK(make_view(xs) == make_view(ys));
   CHECK(!(make_view(xs) < make_view(ys)));
-  caf::get<list>(ys).push_back(int64_t{0});
+  as<list>(ys).push_back(int64_t{0});
   CHECK(make_view(xs) != make_view(ys));
   CHECK(make_view(xs) < make_view(ys));
   ys = map{{int64_t{42}, true}};

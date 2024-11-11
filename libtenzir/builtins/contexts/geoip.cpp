@@ -337,9 +337,8 @@ public:
         continue;
       }
       auto address_info_error = 0;
-      const auto ip_string = is_ip
-                               ? fmt::to_string(value)
-                               : materialize(caf::get<std::string_view>(value));
+      const auto ip_string = is_ip ? fmt::to_string(value)
+                                   : materialize(as<std::string_view>(value));
       auto result = MMDB_lookup_string(mmdb_.get(), ip_string.data(),
                                        &address_info_error, &status);
       if (address_info_error != MMDB_SUCCESS) {

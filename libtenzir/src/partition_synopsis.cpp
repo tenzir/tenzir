@@ -110,7 +110,7 @@ void partition_synopsis::add(const table_slice& slice,
   if (!schema)
     schema = slice.schema();
   TENZIR_ASSERT_EXPENSIVE(schema == slice.schema());
-  auto each = caf::get<record_type>(schema).leaves();
+  auto each = as<record_type>(schema).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
   // These options must be kept in sync with tenzir/ip_synopsis.hpp and

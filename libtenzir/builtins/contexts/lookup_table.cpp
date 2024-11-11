@@ -181,11 +181,11 @@ private:
   auto to_original_data_impl() const -> data {
     switch (original_type_index_) {
       case i64_index:
-        return data{static_cast<int64_t>(caf::get<StoredType>(data_))};
+        return data{static_cast<int64_t>(as<StoredType>(data_))};
       case u64_index:
-        return data{static_cast<uint64_t>(caf::get<StoredType>(data_))};
+        return data{static_cast<uint64_t>(as<StoredType>(data_))};
       case double_index:
-        return data{static_cast<double>(caf::get<StoredType>(data_))};
+        return data{static_cast<double>(as<StoredType>(data_))};
       default:
         TENZIR_UNREACHABLE();
     }
@@ -372,7 +372,7 @@ public:
     -> caf::expected<update_result> override {
     // context does stuff on its own with slice & parameters
     TENZIR_ASSERT(slice.rows() != 0);
-    if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+    if (as<record_type>(slice.schema()).num_fields() == 0) {
       return caf::make_error(ec::invalid_argument,
                              "context update cannot handle empty input events");
     }
@@ -447,7 +447,7 @@ public:
       if (caf::holds_alternative<subnet_type>(key_type)) {
         for (const auto& key :
              values(subnet_type{},
-                    caf::get<type_to_arrow_array_t<subnet_type>>(*key_array))) {
+                    as<type_to_arrow_array_t<subnet_type>>(*key_array))) {
           if (not key) {
             continue;
           }
@@ -475,7 +475,7 @@ public:
       auto materialized_key = materialize(*key_it);
       // Subnets never make it into the regular map of entries.
       if (caf::holds_alternative<subnet_type>(key_type)) {
-        const auto& key = caf::get<subnet>(materialized_key);
+        const auto& key = as<subnet>(materialized_key);
         subnet_entries.insert(key, std::move(value_val));
       } else {
         context_entries.insert_or_assign(materialized_key,

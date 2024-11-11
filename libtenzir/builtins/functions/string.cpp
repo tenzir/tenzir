@@ -370,8 +370,7 @@ public:
             return fmt::to_string(x);
           },
           [&](enumeration x) {
-            return std::string{
-              caf::get<enumeration_type>(subject.type).field(x)};
+            return std::string{as<enumeration_type>(subject.type).field(x)};
           },
           [&](const auto&) {
             // TODO: This should probably use the TQL printer, once it exists.

@@ -290,7 +290,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh,
     }
     return std::nullopt;
   }
-  const auto& layout = caf::get<record_type>(s.type);
+  const auto& layout = as<record_type>(s.type);
   const auto linktype_index = layout.resolve_key("linktype");
   if (!linktype_index) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
@@ -299,7 +299,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh,
     return std::nullopt;
   }
   const auto linktype_array
-    = linktype_index->get(caf::get<arrow::StructArray>(*s.array));
+    = linktype_index->get(as<arrow::StructArray>(*s.array));
   const auto linktype_values
     = caf::get_if<arrow::UInt64Array>(&*linktype_array);
   if (!linktype_values) {
@@ -315,8 +315,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh,
       .emit(dh);
     return std::nullopt;
   }
-  const auto data_array
-    = data_index->get(caf::get<arrow::StructArray>(*s.array));
+  const auto data_array = data_index->get(as<arrow::StructArray>(*s.array));
   const auto data_values = caf::get_if<arrow::BinaryArray>(&*data_array);
   if (!data_values) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
@@ -341,7 +340,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh,
   if (include_old) {
     // Add back the untouched data column at the end.
     auto transformation = indexed_transformation{
-      .index = {caf::get<record_type>(new_s.type).num_fields() - 1},
+      .index = {as<record_type>(new_s.type).num_fields() - 1},
       .fun = [&](struct record_type::field in_field,
                  std::shared_ptr<arrow::Array> in_array)
         -> indexed_transformation::result_type {

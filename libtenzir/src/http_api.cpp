@@ -178,7 +178,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
           if (!is_string)
             return caf::make_error(ec::invalid_argument, "expected bool");
           bool result = false;
-          auto const& string_value = caf::get<std::string>(param_data);
+          auto const& string_value = as<std::string>(param_data);
           if (!parsers::boolean(string_value, result))
             return caf::make_error(ec::invalid_argument, "not a boolean value");
           return data{result};
@@ -193,7 +193,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                 and !caf::holds_alternative<tenzir::record>(x))
               return caf::make_error(ec::invalid_argument,
                                      "expected a string or record");
-            auto const& x_as_string = caf::get<std::string>(x);
+            auto const& x_as_string = as<std::string>(x);
             auto parsed = caf::visit(
               detail::overload{
                 [&](const string_type&) -> caf::expected<data> {
@@ -261,7 +261,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
           using data_t = type_to_data_t<Type>;
           if (!is_string)
             return caf::make_error(ec::invalid_argument, "expected basic type");
-          auto const& string_value = caf::get<std::string>(param_data);
+          auto const& string_value = as<std::string>(param_data);
           auto result = to<data_t>(string_value);
           if (!result)
             return std::move(result.error());

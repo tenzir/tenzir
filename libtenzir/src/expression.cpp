@@ -89,7 +89,7 @@ bool operator<(const predicate& x, const predicate& y) {
 
 curried_predicate curried(const predicate& pred) {
   TENZIR_ASSERT(caf::holds_alternative<data>(pred.rhs));
-  return {pred.op, caf::get<data>(pred.rhs)};
+  return {pred.op, as<data>(pred.rhs)};
 }
 
 // -- conjunction --------------------------------------------------------------

@@ -238,7 +238,7 @@ public:
           co_yield {};
           co_return;
         }
-        auto input_type = caf::get<record_type>(slice.schema());
+        auto input_type = as<record_type>(slice.schema());
         auto resolved_slice = resolve_enumerations(slice);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
@@ -247,7 +247,7 @@ public:
         out->SetNullFormat(YAML::LowerNull);
         out->SetIndent(2);
         for (const auto& row :
-             values(caf::get<record_type>(resolved_slice.schema()), *array)) {
+             values(as<record_type>(resolved_slice.schema()), *array)) {
           TENZIR_ASSERT(row);
           print_document(*out, *row);
         }

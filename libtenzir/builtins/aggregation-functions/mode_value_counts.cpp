@@ -65,7 +65,7 @@ public:
         });
       }
       std::ranges::sort(result, std::less<>{}, [](const auto& x) {
-        return as_vector(caf::get<record>(x))[0].second;
+        return as_vector(as<record>(x))[0].second;
       });
       return result;
     }

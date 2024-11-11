@@ -146,7 +146,7 @@ caf::error list_index::unpack_impl(const fbs::ValueIndex& from) {
     return err;
   // The value type can simply be retreived from the base classes' type, not
   // sure why it is stored separately. — DL
-  value_type_ = caf::get<list_type>(type()).value_type();
+  value_type_ = as<list_type>(type()).value_type();
   return caf::none;
 }
 

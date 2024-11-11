@@ -240,7 +240,7 @@ auto catalog_state::lookup_impl(const expression& expr,
       // should be queried.
       auto search = [&](auto match) {
         TENZIR_ASSERT(caf::holds_alternative<data>(x.rhs));
-        const auto& rhs = caf::get<data>(x.rhs);
+        const auto& rhs = as<data>(x.rhs);
         catalog_lookup_result::candidate_info result;
         // dont iterate through all synopses, rewrite lookup_impl to use a
         // singular type all synopses loops -> relevant anymore? Use type as
@@ -342,7 +342,7 @@ auto catalog_state::lookup_impl(const expression& expr,
                   part_syn->min_import_time,
                   part_syn->max_import_time,
                 };
-                auto add = ts.lookup(x.op, caf::get<tenzir::time>(d));
+                auto add = ts.lookup(x.op, as<tenzir::time>(d));
                 if (!add || *add) {
                   result.partition_infos.emplace_back(part_id, *part_syn);
                 }

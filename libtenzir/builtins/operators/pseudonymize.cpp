@@ -60,7 +60,7 @@ public:
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
       auto builder = ip_type::make_arrow_builder(arrow::default_memory_pool());
       auto address_view_generator
-        = values(ip_type{}, caf::get<type_to_arrow_array_t<ip_type>>(*array));
+        = values(ip_type{}, as<type_to_arrow_array_t<ip_type>>(*array));
       for (const auto& address : address_view_generator) {
         auto append_status = arrow::Status{};
         if (address) {
@@ -80,7 +80,7 @@ public:
     };
     for (const auto& field_name : config_.fields) {
       if (auto index = schema.resolve_key_or_concept_once(field_name)) {
-        auto index_type = caf::get<record_type>(schema).field(*index).type;
+        auto index_type = as<record_type>(schema).field(*index).type;
         if (!caf::holds_alternative<ip_type>(index_type)) {
           TENZIR_DEBUG("pseudonymize operator skips field '{}' of unsupported "
                        "type '{}'",

@@ -111,7 +111,7 @@ public:
   auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<update_result> override {
     TENZIR_ASSERT(slice.rows() != 0);
-    if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+    if (as<record_type>(slice.schema()).num_fields() == 0) {
       return caf::make_error(ec::invalid_argument,
                              "context update cannot handle empty input events");
     }

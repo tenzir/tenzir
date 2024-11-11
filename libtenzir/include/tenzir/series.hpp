@@ -38,7 +38,7 @@ struct basic_series {
 
   explicit basic_series(const table_slice& slice)
     requires(std::same_as<Type, record_type>)
-    : type{caf::get<record_type>(slice.schema())},
+    : type{as<record_type>(slice.schema())},
       array{to_record_batch(slice)->ToStructArray().ValueOrDie()} {
   }
 
@@ -94,7 +94,7 @@ struct basic_series {
     if constexpr (Inspector::is_loading) {
       table_slice slice;
       auto callback = [&]() noexcept {
-        x.type = caf::get<record_type>(slice.schema()).field(0).type;
+        x.type = ::tenzir::as<record_type>(slice.schema()).field(0).type;
         x.array = to_record_batch(slice)->column(0);
         return true;
       };

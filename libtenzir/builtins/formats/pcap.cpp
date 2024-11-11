@@ -284,7 +284,7 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
     return std::nullopt;
   }
   auto result = file_header{};
-  const auto& input_record = caf::get<record_type>(slice.schema());
+  const auto& input_record = as<record_type>(slice.schema());
   auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
   auto xs = values(input_record, *array);
   auto begin = xs.begin();
@@ -469,7 +469,7 @@ public:
           return {};
         };
         // Extract PCAP data from input.
-        const auto& input_record = caf::get<record_type>(slice.schema());
+        const auto& input_record = as<record_type>(slice.schema());
         if (slice.schema().name() == "pcap.packet") {
           auto resolved_slice = resolve_enumerations(slice);
           auto array

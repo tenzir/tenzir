@@ -526,7 +526,7 @@ void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
       merge(*src_rec, *dst_rec, merge_lists, max_recursion - 1);
     } else if (merge_lists == policy::merge_lists::yes
                && caf::holds_alternative<list>(v)) {
-      const auto& src_list = caf::get<list>(v);
+      const auto& src_list = as<list>(v);
       if (auto* dst_list = caf::get_if<list>(&dst[k])) {
         dst_list->insert(dst_list->end(), src_list.begin(), src_list.end());
       } else if (auto it = dst.find(k); it != dst.end()) {

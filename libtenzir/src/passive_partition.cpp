@@ -66,7 +66,7 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
     auto lrt = legacy_record_type{};
     if (auto error = fbs::deserialize_bytes(data, lrt))
       return error;
-    return caf::get<record_type>(type::from_legacy_type(lrt));
+    return as<record_type>(type::from_legacy_type(lrt));
   }
   if (auto const* data = partition.schema()) {
     auto chunk = chunk::copy(as_bytes(*data));

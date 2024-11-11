@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+#include <tenzir/variant_traits.hpp>
 
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
@@ -67,3 +68,43 @@ struct sum_type_access<tenzir::detail::passthrough_type<T, Forward>> final {
 };
 
 } // namespace caf
+
+namespace tenzir {
+template <class T, class Forward>
+  requires has_variant_traits<std::remove_cvref_t<Forward>>
+class variant_traits<detail::passthrough_type<T, Forward>> {
+  using V = detail::passthrough_type<T, Forward>;
+  using backing_traits = variant_traits<std::remove_cvref_t<Forward>>;
+
+public:
+  static constexpr auto count = backing_traits::count;
+
+  static auto index(const V& x) -> size_t {
+    return backing_traits::index(x.ref);
+  }
+
+  template <size_t I>
+  static auto get(const V& x) -> decltype(auto) {
+    return backing_traits::template get<I>(x.ref);
+  }
+};
+
+template <class T, class Forward>
+  requires(not has_variant_traits<std::remove_cvref_t<Forward>>)
+class variant_traits<detail::passthrough_type<T, Forward>> {
+  using V = detail::passthrough_type<T, Forward>;
+
+public:
+  static constexpr auto count = size_t{1};
+
+  static auto index(const V&) -> size_t {
+    return 0;
+  }
+
+  template <size_t I>
+    requires(I == 0)
+  static auto get(const V& x) -> decltype(auto) {
+    return x.ref;
+  }
+};
+} // namespace tenzir

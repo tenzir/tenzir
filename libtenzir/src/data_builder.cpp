@@ -1081,7 +1081,7 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
         return;
       }
       r = tenzir::list{};
-      v.commit_to(caf::get<tenzir::list>(r), rb, ls, mark_dead);
+      v.commit_to(as<tenzir::list>(r), rb, ls, mark_dead);
     },
     [&r, &rb, seed, mark_dead](node_record& v) {
       if (v.is_dead()) {
@@ -1095,7 +1095,7 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
         return;
       }
       r = tenzir::record{};
-      v.commit_to(caf::get<tenzir::record>(r), rb, rs, mark_dead);
+      v.commit_to(as<tenzir::record>(r), rb, rs, mark_dead);
     },
     [&r, mark_dead]<non_structured_data_type T>(T& v) {
       if (mark_dead) {

@@ -45,8 +45,8 @@ TEST(offset finding) {
   CHECK_EQUAL(foo_record.field(offset{1}).type, double_type{});
   CHECK_EQUAL(foo_record.field(offset{2}).name, "c");
   CHECK(caf::holds_alternative<record_type>(foo_record.field(offset{2}).type));
-  CHECK_EQUAL(
-    caf::get<record_type>(foo_record.field(offset{2}).type).num_fields(), 3u);
+  CHECK_EQUAL(as<record_type>(foo_record.field(offset{2}).type).num_fields(),
+              3u);
   CHECK_EQUAL(foo_record.field(offset{2, 0}).name, "a");
   CHECK_EQUAL(foo_record.field(offset{2, 1, 0}).type, string_type{});
   CHECK_EQUAL(foo_record.field(offset{2, 2}).type, int64_type{});

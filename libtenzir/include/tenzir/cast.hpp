@@ -152,12 +152,12 @@ struct cast_helper<FromType, ToType> {
 private:
   template <concrete_type To>
   static auto get_underlying_data(const data& d) {
-    return caf::get<type_to_data_t<To>>(d);
+    return as<type_to_data_t<To>>(d);
   }
 
   template <concrete_type To>
   static auto get_underlying_data(const data_view& d) {
-    return caf::get<view<type_to_data_t<To>>>(d);
+    return as<view<type_to_data_t<To>>>(d);
   }
 
   template <concrete_type To>
@@ -1036,7 +1036,7 @@ struct cast_helper<string_type, ToType> {
     -> caf::expected<record> {
     if (auto ret = data{}; parsers::data(in, ret)) {
       TENZIR_ASSERT(caf::holds_alternative<record>(ret));
-      return caf::get<record>(ret);
+      return as<record>(ret);
     }
     return caf::make_error(
       ec::convert_error, fmt::format("unable to convert {} into a record", in));
@@ -1046,7 +1046,7 @@ struct cast_helper<string_type, ToType> {
     -> caf::expected<list> {
     if (auto ret = data{}; parsers::data(in, ret)) {
       TENZIR_ASSERT(caf::holds_alternative<list>(ret));
-      return caf::get<list>(ret);
+      return as<list>(ret);
     }
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert {} into a list", in));

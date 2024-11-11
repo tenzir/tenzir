@@ -245,14 +245,14 @@ struct json_printer : printer_base<json_printer> {
         return true;
       }
       if (options_.omit_empty_lists && caf::holds_alternative<view<list>>(x)) {
-        const auto& ys = caf::get<view<list>>(x);
+        const auto& ys = as<view<list>>(x);
         return std::all_of(ys.begin(), ys.end(),
                            [this](const view<data>& y) noexcept {
                              return should_skip(y);
                            });
       }
       if (options_.omit_empty_maps && caf::holds_alternative<view<map>>(x)) {
-        const auto& ys = caf::get<view<map>>(x);
+        const auto& ys = as<view<map>>(x);
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<map>::view_type::value_type& y) noexcept {
@@ -261,7 +261,7 @@ struct json_printer : printer_base<json_printer> {
       }
       if (options_.omit_empty_records
           && caf::holds_alternative<view<record>>(x)) {
-        const auto& ys = caf::get<view<record>>(x);
+        const auto& ys = as<view<record>>(x);
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<record>::view_type::value_type& y) noexcept {

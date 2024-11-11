@@ -333,7 +333,7 @@ caf::expected<void> validator::operator()(const field_extractor&, const data&) {
 }
 
 type_resolver::type_resolver(const type& schema)
-  : schema_{caf::get<record_type>(schema)}, schema_name_{schema.name()} {
+  : schema_{as<record_type>(schema)}, schema_name_{schema.name()} {
   // nop
 }
 

@@ -34,7 +34,7 @@ private:
     if (caf::holds_alternative<caf::none_t>(view)) {
       return;
     }
-    const auto x = static_cast<double>(caf::get<view_type>(view));
+    const auto x = static_cast<double>(as<view_type>(view));
     if constexpr (std::is_same_v<Type, double_type>) {
       if (std::isnan(x)) {
         return;
@@ -44,7 +44,7 @@ private:
   }
 
   auto add(const arrow::Array& array) -> void override {
-    const auto& typed_array = caf::get<type_to_arrow_array_t<Type>>(array);
+    const auto& typed_array = as<type_to_arrow_array_t<Type>>(array);
     for (auto&& value : values(Type{}, typed_array)) {
       if (not value) {
         continue;

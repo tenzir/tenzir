@@ -208,15 +208,14 @@ append_builder(const Type& hint,
   if (caf::holds_alternative<caf::none_t>(view))
     return builder.AppendNull();
   if constexpr (concrete_type<Type>) {
-    return append_builder(hint,
-                          caf::get<type_to_arrow_builder_t<Type>>(builder),
-                          caf::get<tenzir::view<type_to_data_t<Type>>>(view));
+    return append_builder(hint, as<type_to_arrow_builder_t<Type>>(builder),
+                          as<tenzir::view<type_to_data_t<Type>>>(view));
   } else {
     auto f
       = [&]<concrete_type ResolvedType>(const ResolvedType& hint) noexcept {
           return append_builder(
-            hint, caf::get<type_to_arrow_builder_t<ResolvedType>>(builder),
-            caf::get<tenzir::view<type_to_data_t<ResolvedType>>>(view));
+            hint, as<type_to_arrow_builder_t<ResolvedType>>(builder),
+            as<tenzir::view<type_to_data_t<ResolvedType>>>(view));
         };
     return caf::visit(f, hint);
   }

@@ -322,7 +322,7 @@ struct zeek_printer {
       header.append(fmt::format("\n#open{}{}", sep, generate_timestamp()));
     }
     header.append("\n#fields");
-    auto r = caf::get<record_type>(t);
+    auto r = as<record_type>(t);
     for (const auto& [_, offset] : r.leaves()) {
       header.append(fmt::format("{}{}", sep, to_string(r.key(offset))));
     }
@@ -823,7 +823,7 @@ public:
       auto out_iter = std::back_inserter(buffer);
       auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
       auto input_schema = resolved_slice.schema();
-      auto input_type = caf::get<record_type>(input_schema);
+      auto input_type = as<record_type>(input_schema);
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto first = true;
