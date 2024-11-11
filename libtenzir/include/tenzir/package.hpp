@@ -104,7 +104,7 @@ struct package_context final {
   std::string type
     = "string"; // A type hint for the frontend, ignored by the node.
   std::optional<std::string> description = {};
-  tenzir::context::parameter_map arguments = {};
+  context_parameter_map arguments = {};
   bool disabled = false;
 
   auto to_record() const -> record;

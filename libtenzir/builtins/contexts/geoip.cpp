@@ -487,8 +487,8 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice, context::parameter_map)
-    -> caf::expected<update_result> override {
+  auto update(table_slice, context_parameter_map)
+    -> caf::expected<context_update_result> override {
     return caf::make_error(ec::unimplemented,
                            "geoip context can not be updated with events");
   }
@@ -497,13 +497,13 @@ public:
     return {};
   }
 
-  auto save() const -> caf::expected<save_result> override {
+  auto save() const -> caf::expected<context_save_result> override {
     if (!mapped_mmdb_) {
       return caf::make_error(ec::lookup_error,
                              fmt::format("no GeoIP data currently exists for "
                                          "this context"));
     }
-    return save_result{.data = mapped_mmdb_, .version = latest_version};
+    return context_save_result{.data = mapped_mmdb_, .version = latest_version};
   }
 
 private:
@@ -612,7 +612,7 @@ class plugin : public virtual context_plugin {
     return "geoip";
   }
 
-  auto make_context(context::parameter_map parameters) const
+  auto make_context(context_parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
     auto db_path = std::string{};
     for (const auto& [key, value] : parameters) {

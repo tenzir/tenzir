@@ -368,8 +368,8 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, context::parameter_map parameters)
-    -> caf::expected<update_result> override {
+  auto update(table_slice slice, context_parameter_map parameters)
+    -> caf::expected<context_update_result> override {
     // context does stuff on its own with slice & parameters
     TENZIR_ASSERT(slice.rows() != 0);
     if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
@@ -458,7 +458,7 @@ public:
           context_entries.erase(materialize(key));
         }
       }
-      return update_result{
+      return context_update_result{
         .update_info = show(),
         .make_query = {},
       };
@@ -486,8 +486,9 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT(context_it == context_values.end());
-    auto query_f = [key_values_list = std::move(key_values_list)](
-                     parameter_map, const std::vector<std::string>& fields)
+    auto query_f
+      = [key_values_list = std::move(key_values_list)](
+          context_parameter_map, const std::vector<std::string>& fields)
       -> caf::expected<std::vector<expression>> {
       auto result = std::vector<expression>{};
       result.reserve(fields.size());
@@ -502,7 +503,7 @@ public:
       }
       return result;
     };
-    return update_result{
+    return context_update_result{
       .update_info = show(),
       .make_query = std::move(query_f),
     };
@@ -514,7 +515,7 @@ public:
     return {};
   }
 
-  auto save() const -> caf::expected<save_result> override {
+  auto save() const -> caf::expected<context_save_result> override {
     // We save the context by formatting into a record of this format:
     //   [{key: key, value: value}, ...]
     auto builder = flatbuffers::FlatBufferBuilder{};
@@ -563,7 +564,8 @@ public:
     const auto data_offset
       = fbs::CreateData(builder, fbs::data::Data::list, list_offset.Union());
     fbs::FinishDataBuffer(builder, data_offset);
-    return save_result{.data = chunk::make(builder.Release()), .version = 1};
+    return context_save_result{.data = chunk::make(builder.Release()),
+                               .version = 1};
   }
 
 private:
@@ -735,7 +737,7 @@ class plugin : public virtual context_plugin {
     return "lookup-table";
   }
 
-  auto make_context(context::parameter_map) const
+  auto make_context(context_parameter_map) const
     -> caf::expected<std::unique_ptr<context>> override {
     return std::make_unique<ctx>();
   }

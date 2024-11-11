@@ -108,8 +108,8 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, context::parameter_map parameters)
-    -> caf::expected<update_result> override {
+  auto update(table_slice slice, context_parameter_map parameters)
+    -> caf::expected<context_update_result> override {
     TENZIR_ASSERT(slice.rows() != 0);
     if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
       return caf::make_error(ec::invalid_argument,
@@ -150,8 +150,9 @@ public:
       bloom_filter_.add(materialized_key);
       key_values_list.emplace_back(std::move(materialized_key));
     }
-    auto query_f = [key_values_list = std::move(key_values_list)](
-                     parameter_map, const std::vector<std::string>& fields)
+    auto query_f
+      = [key_values_list = std::move(key_values_list)](
+          context_parameter_map, const std::vector<std::string>& fields)
       -> caf::expected<std::vector<expression>> {
       auto result = std::vector<expression>{};
       result.reserve(fields.size());
@@ -166,7 +167,7 @@ public:
       }
       return result;
     };
-    return update_result{
+    return context_update_result{
       .update_info = show(),
       .make_query = std::move(query_f),
     };
@@ -179,12 +180,13 @@ public:
     return {};
   }
 
-  auto save() const -> caf::expected<save_result> override {
+  auto save() const -> caf::expected<context_save_result> override {
     std::vector<std::byte> buffer;
     if (auto err = convert(bloom_filter_, buffer)) {
       return add_context(err, "failed to serialize Bloom filter context");
     }
-    return save_result{.data = chunk::make(std::move(buffer)), .version = 1};
+    return context_save_result{.data = chunk::make(std::move(buffer)),
+                               .version = 1};
   }
 
 private:
@@ -217,7 +219,7 @@ class plugin : public virtual context_plugin {
     return "bloom-filter";
   }
 
-  auto make_context(context::parameter_map parameters) const
+  auto make_context(context_parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
     auto n = uint64_t{0};
     auto p = double{0.0};
