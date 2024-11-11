@@ -14,12 +14,14 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/range.hpp"
 #include "tenzir/detail/stack_vector.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/operator.hpp"
 #include "tenzir/time.hpp"
+#include "tenzir/variant.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/detail/apply_args.hpp>
@@ -707,9 +709,26 @@ remove_field(const legacy_record_type& r, std::vector<std::string_view> path);
 std::optional<legacy_record_type>
 remove_field(const legacy_record_type& r, offset o);
 
-// -- helpers ----------------------------------------------------------------
+template <>
+class variant_traits<legacy_type> {
+public:
+  static constexpr auto count
+    = caf::detail::tl_size<legacy_concrete_types>::value;
+
+  static auto index(const legacy_type& x) -> size_t {
+    return detail::narrow<size_t>(x->index());
+  }
+
+  template <size_t I>
+  static auto get(const legacy_type& x) -> decltype(auto) {
+    return static_cast<const caf::detail::tl_at_t<legacy_concrete_types, I>&>(
+      *x);
+  }
+};
 
 } // namespace tenzir
+
+// -- helpers ----------------------------------------------------------------
 
 namespace caf {
 

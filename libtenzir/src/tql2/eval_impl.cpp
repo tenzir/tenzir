@@ -138,7 +138,7 @@ auto evaluator::eval(const ast::field_access& x) -> series {
   if (auto null = l.as<null_type>()) {
     return std::move(*null);
   }
-  auto rec_ty = caf::get_if<record_type>(&l.type);
+  auto rec_ty = try_as<record_type>(l.type);
   if (not rec_ty) {
     diagnostic::warning("cannot access field of non-record type")
       .primary(x.name)
@@ -146,7 +146,7 @@ auto evaluator::eval(const ast::field_access& x) -> series {
       .emit(ctx_);
     return null();
   }
-  auto& s = caf::get<arrow::StructArray>(*l.array);
+  auto& s = as<arrow::StructArray>(*l.array);
   for (auto [i, field] : detail::enumerate<int>(rec_ty->fields())) {
     if (field.name == x.name.name) {
       auto has_null = s.null_count() != 0;
@@ -188,7 +188,7 @@ auto evaluator::eval(const ast::this_& x) -> series {
 
 auto evaluator::eval(const ast::root_field& x) -> series {
   auto& input = input_or_throw(x);
-  auto& rec_ty = caf::get<record_type>(input.schema());
+  auto& rec_ty = as<record_type>(input.schema());
   for (auto [i, field] : detail::enumerate<int>(rec_ty.fields())) {
     if (field.name == x.ident.name) {
       // TODO: Is this correct?

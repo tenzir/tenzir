@@ -892,6 +892,23 @@ private:
 
 namespace tenzir {
 
+template <>
+class variant_traits<ast::expression> {
+public:
+  static constexpr auto count
+    = caf::detail::tl_size<ast::expression_kinds>::value;
+
+  static auto index(const ast::expression& x) -> size_t {
+    TENZIR_ASSERT(x.kind);
+    return x.kind->index();
+  }
+
+  template <size_t I>
+  static auto get(const ast::expression& x) -> decltype(auto) {
+    return *std::get_if<I>(&*x.kind);
+  }
+};
+
 auto is_true_literal(const ast::expression& y) -> bool;
 
 /// Partially converts an expression into a legacy expression.

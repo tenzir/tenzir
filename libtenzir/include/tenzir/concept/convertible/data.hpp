@@ -519,7 +519,17 @@ public:
 
   template <class To>
   caf::error apply(const record_type::field_view& field, To& dst) {
-    auto f = detail::overload{
+    // Find the value from the record
+    auto it = src.find(field.name);
+    const auto& value = it != src.end() ? it->second : data{};
+    if (!field.type && caf::holds_alternative<caf::none_t>(value)) {
+      return caf::make_error(ec::convert_error, fmt::format("failed to convert "
+                                                            "field {} because "
+                                                            "it has no type",
+                                                            field));
+    }
+    return match(
+      std::tie(value, field.type),
       [&]<concrete_type Type>(const caf::none_t&, const Type&) -> caf::error {
         // If the data is null then we leave the value untouched.
         return caf::none;
@@ -538,18 +548,7 @@ public:
                                              data{d}, t,
                                              detail::pretty_type_name(dst)));
         }
-      },
-    };
-    // Find the value from the record
-    auto it = src.find(field.name);
-    const auto& value = it != src.end() ? it->second : data{};
-    if (!field.type && caf::holds_alternative<caf::none_t>(value)) {
-      return caf::make_error(ec::convert_error, fmt::format("failed to convert "
-                                                            "field {} because "
-                                                            "it has no type",
-                                                            field));
-    }
-    return caf::visit(f, value, field.type);
+      });
   }
 
   template <class T>
@@ -641,21 +640,20 @@ concept is_concrete_untyped_convertible = requires(const From& src, To& dst) {
 // of the non-explicit constructor of `data`.
 template <class To>
 caf::error convert(const data& src, To& dst, const type& t) {
-  return caf::visit(
-    [&]<class From, class Type>(const From& x, const Type& t) {
-      if constexpr (is_concrete_typed_convertible<From, To, Type>) {
-        return convert(x, dst, t);
-      } else if constexpr (is_concrete_untyped_convertible<From, To>) {
-        return convert(x, dst);
-      } else {
-        return caf::make_error(ec::convert_error,
-                               fmt::format("can't convert from {} to {} with "
-                                           "type {}",
-                                           detail::pretty_type_name(x),
-                                           detail::pretty_type_name(dst), t));
-      }
-    },
-    src, t);
+  return match(std::tie(src, t), [&]<class From, class Type>(const From& x,
+                                                             const Type& t) {
+    if constexpr (is_concrete_typed_convertible<From, To, Type>) {
+      return convert(x, dst, t);
+    } else if constexpr (is_concrete_untyped_convertible<From, To>) {
+      return convert(x, dst);
+    } else {
+      return caf::make_error(ec::convert_error,
+                             fmt::format("can't convert from {} to {} with "
+                                         "type {}",
+                                         detail::pretty_type_name(x),
+                                         detail::pretty_type_name(dst), t));
+    }
+  });
 }
 
 } // namespace tenzir

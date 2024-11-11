@@ -56,7 +56,7 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
     // values assigning to a `record` type.
     return consume_path(left, std::move(right));
   }
-  auto rec_ty = caf::get_if<record_type>(&input.type);
+  auto rec_ty = try_as<record_type>(input.type);
   if (not rec_ty) {
     diagnostic::warning("implicit record for `{}` field overwrites `{}` value",
                         left[0].name, input.type.kind())
@@ -65,7 +65,7 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
       .emit(dh);
     return consume_path(left, std::move(right));
   }
-  auto& array = caf::get<arrow::StructArray>(*input.array);
+  auto& array = as<arrow::StructArray>(*input.array);
   auto new_ty_fields = collect(rec_ty->fields());
   // We flatten the input fields here because the input `{foo: null}` of type
   // `{foo: {bar: int64}` should become `{foo: {bar: null, qux: 42}}` for the
@@ -174,7 +174,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       }
       auto new_type = type{
         input.schema().name(),
-        caf::get<record_type>(input.schema()),
+        as<record_type>(input.schema()),
         std::move(new_attributes),
       };
       auto new_batch
@@ -190,7 +190,7 @@ auto assign(const ast::simple_selector& left, series right,
             const table_slice& input, diagnostic_handler& dh) -> table_slice {
   auto array = to_record_batch(input)->ToStructArray().ValueOrDie();
   auto result = assign(left.path(), std::move(right), series{input}, dh);
-  auto rec_ty = caf::get_if<record_type>(&result.type);
+  auto rec_ty = try_as<record_type>(result.type);
   if (not rec_ty) {
     diagnostic::warning("assignment to `this` requires `record`, but got "
                         "`{}`",
@@ -201,9 +201,8 @@ auto assign(const ast::simple_selector& left, series right,
   }
   result.type.assign_metadata(input.schema());
   auto slice = table_slice{
-    arrow::RecordBatch::Make(
-      result.type.to_arrow_schema(), result.length(),
-      caf::get<arrow::StructArray>(*result.array).fields()),
+    arrow::RecordBatch::Make(result.type.to_arrow_schema(), result.length(),
+                             as<arrow::StructArray>(*result.array).fields()),
     result.type,
   };
   slice.import_time(input.import_time());

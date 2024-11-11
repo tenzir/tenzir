@@ -673,13 +673,14 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
     = [&]<ast::binary_op Op>(const series& l, const series& r) -> series {
     TENZIR_ASSERT(x.op.inner == Op);
     TENZIR_ASSERT(l.length() == r.length());
-    return caf::visit(
+    return match(
+      std::tie(l.type, r.type),
       [&]<concrete_type L, concrete_type R>(const L&, const R&) -> series {
         if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
           using LA = type_to_arrow_array_t<L>;
           using RA = type_to_arrow_array_t<R>;
-          auto& la = caf::get<LA>(*l.array);
-          auto& ra = caf::get<RA>(*r.array);
+          auto& la = as<LA>(*l.array);
+          auto& ra = as<RA>(*r.array);
           auto oa = EvalBinOp<Op, L, R>::eval(la, ra, [&](const char* w) {
             diagnostic::warning("{}", w).primary(x).emit(ctx_);
           });
@@ -695,8 +696,7 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
             .emit(ctx_);
           return null();
         }
-      },
-      l.type, r.type);
+      });
   };
   using enum ast::binary_op;
   switch (x.op.inner) {

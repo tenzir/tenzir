@@ -23,6 +23,7 @@
 #include "tenzir/policy/merge_lists.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/time.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
@@ -496,6 +497,23 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion
 /// @param x The data instance.
 /// @returns The YAML representation of *x*, or an error.
 caf::expected<std::string> to_yaml(const data& x);
+
+template <>
+class variant_traits<data> {
+public:
+  using impl = variant_traits<data::variant>;
+
+  static constexpr auto count = impl::count;
+
+  static auto index(const data& x) -> size_t {
+    return impl::index(x.get_data());
+  }
+
+  template <size_t I>
+  static auto get(const data& x) -> decltype(auto) {
+    return impl::get<I>(x.get_data());
+  }
+};
 
 } // namespace tenzir
 
