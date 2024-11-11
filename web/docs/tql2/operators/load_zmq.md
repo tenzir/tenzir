@@ -11,7 +11,7 @@ load_zmq [endpoint:str, filter=str, listen=bool, connect=bool, monitor=bool]
 The `load_zmq` operator processes the bytes in a ZeroMQ message received by a `SUB`
 socket.
 
-Indpendent of the socket type, the `zmq` connector supports specfiying the
+Indpendent of the socket type, the `load_zmq` operator supports specfiying the
 direction of connection establishment with `listen` and `connect`. This can be
 helpful to work around firewall restrictions and fit into broader set of
 existing ZeroMQ applications.
