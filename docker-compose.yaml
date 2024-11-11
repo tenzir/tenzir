@@ -15,9 +15,8 @@ services:
     entrypoint:
       - tenzir-node
     volumes:
-      - tenzir-node:/var/lib/tenzir/
-      - tenzir-node:/var/log/tenzir/
-      - tenzir-node:/var/cache/tenzir/
+      - tenzir-lib:/var/lib/tenzir/
+      - tenzir-log:/var/log/tenzir/
     healthcheck:
       test: tenzir --connection-timeout=30s --connection-retry-delay=1s 'api /ping'
       interval: 30s
@@ -51,9 +50,9 @@ services:
       - tenzir-node
     environment:
       - TENZIR_ENDPOINT=tenzir-node:5158
-    volumes:
-      - tenzir-node:/var/cache/tenzir/
 
 volumes:
-  tenzir-node:
+  tenzir-lib:
+    driver: local
+  tenzir-log:
     driver: local
