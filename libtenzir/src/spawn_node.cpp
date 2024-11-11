@@ -73,13 +73,17 @@ caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self) {
   auto signal_reflector
     = self->system().registry().get<signal_reflector_actor>("signal-reflector");
   self->send(signal_reflector, atom::subscribe_v);
-  // Wipe the old cache directory.
+  // Wipe the contents of the old cache directory.
   {
     auto cache_directory = get_if<std::string>(&opts, "tenzir.cache-directory");
     if (cache_directory && std::filesystem::exists(*cache_directory)) {
-      std::filesystem::remove_all(*cache_directory, err);
-      if (err) {
-        TENZIR_WARN("failed to remove cache at {}: {}", *cache_directory, err);
+      for (auto const& item :
+           std::filesystem::directory_iterator{*cache_directory}) {
+        std::filesystem::remove_all(item.path(), err);
+        if (err) {
+          TENZIR_WARN("failed to remove {} from cache: {}", *cache_directory,
+                      err);
+        }
       }
     }
   }
