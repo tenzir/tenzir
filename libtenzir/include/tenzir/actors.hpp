@@ -62,6 +62,13 @@ using receiver_actor = typename typed_actor_fwd<
   // Add a new source.
   auto(T, Ts...)->caf::result<void>>::unwrap;
 
+/// The PINGABLE actor interface.
+using pingable_actor = typed_actor_fwd<
+  // Reply to a ping.
+  // Implementations should respond immediately. The consumption of this message
+  // should not trigger any side effects.
+  auto(atom::ping)->caf::result<void>>::unwrap;
+
 /// The STATUS CLIENT actor interface.
 using status_client_actor = typed_actor_fwd<
   // Reply to a status request from the NODE.
@@ -301,8 +308,8 @@ using rest_handler_actor = typed_actor_fwd<
 
 /// The interface of a COMPONENT PLUGIN actor.
 using component_plugin_actor = typed_actor_fwd<
-  // Conform to the protocol of the STATUS CLIENT actor.
-  >::extend_with<status_client_actor>::unwrap;
+  // Conform to the protocol of the PINGABLE actor.
+  >::extend_with<pingable_actor>::unwrap;
 
 /// The receiving part of interface of an EXEC NODE actor.
 using exec_node_sink_actor = typed_actor_fwd<

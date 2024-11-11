@@ -125,10 +125,8 @@ auto metrics_collector(
     return metrics_collector_actor::behavior_type::make_empty_behavior();
   }
   return {
-    [](atom::status, status_verbosity, duration) -> caf::result<record> {
-      // The `tenzir-ctl status` command is on its way out, so there is no need
-      // to implement this.
-      return record{};
+    [](atom::ping) -> caf::result<void> {
+      return {};
     },
   };
 }
