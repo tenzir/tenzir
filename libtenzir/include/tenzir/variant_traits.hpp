@@ -246,6 +246,13 @@ constexpr auto match(std::tuple<Ts...> v, Fs&&... fs) -> decltype(auto) {
   return match_tuple(std::move(v), detail::overload{std::forward<Fs>(fs)...});
 }
 
+/// Checks whether the variant currently holds alternative `T`
+template <concepts::unqualified T, has_variant_traits V>
+auto is(const V& v) -> bool {
+  using bare = std::remove_cvref_t<V>;
+  return variant_traits<bare>::index(v) == detail::variant_index<bare, T>;
+}
+
 /// Extracts a `T` from the given variant, asserting success.
 template <concepts::unqualified T, has_variant_traits V>
 auto as(V&& v) -> forward_like_t<V, T> {
