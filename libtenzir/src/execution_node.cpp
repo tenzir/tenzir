@@ -793,8 +793,9 @@ auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
   operator_ptr op, const node_actor& node,
   const receiver_actor<diagnostic>& diagnostic_handler,
-  const metrics_receiver_actor& metrics_receiver, int index, bool has_terminal,
-  bool is_hidden, uuid run_id) -> exec_node_actor::behavior_type {
+  const metrics_receiver_actor& metrics_receiver, pipeline_path position,
+  int index, bool has_terminal, bool is_hidden, uuid run_id)
+  -> exec_node_actor::behavior_type {
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
     const auto name = fmt::format("tnz.{}", op->name());
     caf::detail::set_thread_name(name.c_str());
@@ -819,6 +820,7 @@ auto exec_node(
     self->state.metrics.time_scheduled, self->state.metrics.time_starting);
   self->state.metrics_receiver = metrics_receiver;
   self->state.metrics.operator_index = index;
+  self->state.metrics.position = std::move(position);
   self->state.metrics.operator_name = self->state.op->name();
   self->state.metrics.inbound_measurement.unit = operator_type_name<Input>();
   self->state.metrics.outbound_measurement.unit = operator_type_name<Output>();
@@ -932,8 +934,9 @@ auto exec_node(
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
-                     metrics_receiver_actor metrics_receiver, int index,
-                     bool has_terminal, bool is_hidden, uuid run_id)
+                     metrics_receiver_actor metrics_receiver,
+                     pipeline_path position, int index, bool has_terminal,
+                     bool is_hidden, uuid run_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
@@ -956,8 +959,8 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
         = std::conditional_t<std::is_void_v<Output>, std::monostate, Output>;
       auto result = self->spawn<SpawnOptions>(
         exec_node<input_type, output_type>, std::move(op), std::move(node),
-        std::move(diagnostics_handler), std::move(metrics_receiver), index,
-        has_terminal, is_hidden, run_id);
+        std::move(diagnostics_handler), std::move(metrics_receiver),
+        std::move(position), index, has_terminal, is_hidden, run_id);
       return result;
     };
   };

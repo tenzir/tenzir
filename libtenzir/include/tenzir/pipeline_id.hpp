@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <fmt/format.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -33,3 +35,20 @@ struct operator_index {
 using pipeline_path = std::vector<operator_index>;
 
 } // namespace tenzir
+
+namespace fmt {
+
+template <>
+struct formatter<tenzir::operator_index> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const tenzir::operator_index& x, FormatContext& ctx) const {
+    return fmt::format_to(ctx.out(), "[{}:{}]", x.position, x.id_fragment);
+  }
+};
+
+} // namespace fmt

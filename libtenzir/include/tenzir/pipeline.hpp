@@ -181,6 +181,7 @@ struct operator_measurement {
 // pass through this operator.
 struct [[nodiscard]] operator_metric {
   uint64_t operator_index = {};
+  pipeline_path position = {};
   std::string operator_name = {};
   operator_measurement inbound_measurement = {};
   operator_measurement outbound_measurement = {};
@@ -203,6 +204,7 @@ struct [[nodiscard]] operator_metric {
   friend auto inspect(Inspector& f, operator_metric& x) -> bool {
     return f.object(x).pretty_name("metric").fields(
       f.field("operator_index", x.operator_index),
+      f.field("position", x.position),
       f.field("operator_name", x.operator_name),
       f.field("time_starting", x.time_starting),
       f.field("time_processing", x.time_processing),
@@ -227,6 +229,10 @@ struct [[nodiscard]] operator_metric {
         {"run", uint64_type{}},
         {"hidden", bool_type{}},
         {"operator_id", uint64_type{}},
+        {"operator_path", list_type{record_type{
+                            {"position", uint64_type{}},
+                            {"id_fragment", string_type{}},
+                          }}},
         {"source", bool_type{}},
         {"transformation", bool_type{}},
         {"sink", bool_type{}},
