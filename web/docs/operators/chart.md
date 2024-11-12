@@ -13,11 +13,15 @@ Add metadata to a schema, necessary for rendering as a chart.
 ```
 chart line [-x|--x-axis <fields>] [-y|--y-axis <field>]
            [--x-axis-type <x-axis-type>]  [--y-axis-type <y-axis-type>]
+           [--limit <uint>]
 chart area [-x|--x-axis <fields>] [-y|--y-axis <field>]
            [--x-axis-type <x-axis-type>]  [--y-axis-type <y-axis-type>]
+           [--limit <uint>]
 chart bar  [-x|--x-axis <fields>] [-y|--y-axis <field>]
            [--x-axis-type <x-axis-type>]  [--y-axis-type <y-axis-type>]
+           [--limit <uint>]
 chart pie  [--name <field>] [--value <fields>]
+           [--limit <uint>]
 ```
 
 ## Description
@@ -80,6 +84,11 @@ Sets the fields used for the value of a segment.
 
 Defaults to every field but the first one.
 
+### `--limit <uint>`
+
+Limit the chart to `<uint>` data points. This will discard any further events
+and raise a warning.
+
 ## Examples
 
 Render most common `src_ip` values in `suricata.flow` events as a bar chart:
@@ -99,6 +108,6 @@ metrics
 | where #schema == "tenzir.metrics.operator"
 | where source == true
 | summarize bytes=sum(output.approx_bytes) by timestamp resolution 1s
-| sort timestamp desc
+| sort timestamp
 | chart line -x timestamp -y bytes --y-axis-type "log"
 ```

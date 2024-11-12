@@ -140,6 +140,22 @@ struct configuration_item {
 
 using configuration = std::vector<configuration_item>;
 
+auto limit_as_number(const configuration& cfg) -> std::optional<uint64_t> {
+  auto cfg_it = std::ranges::find(cfg, "limit", &configuration_item::key);
+  TENZIR_ASSERT(cfg_it != cfg.end());
+  auto& cfg_item = *cfg_it;
+  TENZIR_ASSERT(std::holds_alternative<attribute_value>(cfg_item.field_value));
+  auto& attr_value = std::get<attribute_value>(cfg_item.field_value);
+  const auto attr_begin = attr_value.attr.c_str();
+  const auto attr_end = attr_begin + attr_value.attr.size();
+  auto res = uint64_t{};
+  auto [ptr, ec] = std::from_chars(attr_begin, attr_end, res);
+  if (ec != std::errc{}) {
+    return std::nullopt;
+  }
+  return res;
+}
+
 class chart_operator final : public crtp_operator<chart_operator> {
 public:
   chart_operator() = default;
@@ -162,12 +178,32 @@ public:
     // Cache attribute-enriched schemas, to avoid the potentially expensive
     // operation of building a list of attributes by visiting `cfg_` for every
     // iteration
+    auto limit = uint64_t{0};
+    {
+      auto l = limit_as_number(cfg_);
+      TENZIR_ASSERT(l);
+      limit = *l;
+    }
+    auto remaining = limit;
     std::unordered_map<type, type> enriched_schemas_cache{};
     previous_values_type previous_values{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
+      }
+      if (remaining == 0) {
+        co_yield {};
+        continue;
+      }
+      if (slice.rows() > remaining) {
+        slice = subslice(slice, 0, remaining);
+        diagnostic::warning("reached event limit of `{}`", limit)
+          .hint("You can use `--limit `value` to change this limit")
+          .emit(ctrl.diagnostics());
+        remaining = 0;
+      } else {
+        remaining -= slice.rows();
       }
       auto original_schema = slice.schema();
       if (auto it = enriched_schemas_cache.find(original_schema);
@@ -709,6 +745,19 @@ auto require_attribute_value_one_of(std::string_view attr,
   };
 }
 
+auto require_limit_is_valid_number() -> chart_definition::verification_callback {
+  return [](configuration& cfg) -> std::optional<diagnostic> {
+    auto res = limit_as_number(cfg);
+    if (not res) {
+      return diagnostic::error("invalid value for option `limit`")
+        .hint("argument must a positive integer")
+        .done();
+    }
+    return std::nullopt;
+  };
+}
+
+constexpr std::string_view default_limit = "10000";
 // Definitions of all supported chart types
 chart_definition chart_definitions[] = {
   // `line` chart has flags `x`, `y`, and `position`.
@@ -724,12 +773,14 @@ chart_definition chart_definitions[] = {
       {.attr = "position", .flag = "--position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
       {.attr = "x_axis_type", .flag = "--x-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
       {.attr = "y_axis_type", .flag = "--y-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
+      {.attr = "limit", .flag = "--limit", .type = flag_type::attribute_value, .default_ = attribute_value{std::string{default_limit}}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
       require_attribute_value_one_of("position", {"grouped", "stacked"}),
       require_attribute_value_one_of("x_axis_type", {"log", "linear"}),
       require_attribute_value_one_of("y_axis_type", {"log", "linear"}),
+      require_limit_is_valid_number(),
     },
   },
   // `area` is equivalent to `line`.
@@ -742,12 +793,14 @@ chart_definition chart_definitions[] = {
       {.attr = "position", .flag = "--position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
       {.attr = "x_axis_type", .flag = "--x-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
       {.attr = "y_axis_type", .flag = "--y-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
+      {.attr = "limit", .flag = "--limit", .type = flag_type::attribute_value, .default_ = attribute_value{std::string{default_limit}}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
       require_attribute_value_one_of("position", {"grouped", "stacked"}),
       require_attribute_value_one_of("x_axis_type", {"log", "linear"}),
       require_attribute_value_one_of("y_axis_type", {"log", "linear"}),
+      require_limit_is_valid_number(),
     },
   },
   // `bar` is equivalent to `line`, except the requirement on `x` is for the values to be unique.
@@ -760,12 +813,14 @@ chart_definition chart_definitions[] = {
       {.attr = "position", .flag = "--position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
       {.attr = "x_axis_type", .flag = "--x-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
       {.attr = "y_axis_type", .flag = "--y-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
+      {.attr = "limit", .flag = "--limit", .type = flag_type::attribute_value, .default_ = attribute_value{std::string{default_limit}}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
       require_attribute_value_one_of("position", {"grouped", "stacked"}),
       require_attribute_value_one_of("x_axis_type", {"log", "linear"}),
       require_attribute_value_one_of("y_axis_type", {"log", "linear"}),
+      require_limit_is_valid_number(),
     },
   },
   // `pie` chart is equivalent to `line` and `bar`, except
@@ -776,9 +831,11 @@ chart_definition chart_definitions[] = {
     .optional_flags = {
       {.attr = "x", .flag = "--name", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::unique,},
       {.attr = "y", .flag = "--value", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
+      {.attr = "limit", .flag = "--limit", .type = flag_type::attribute_value, .default_ = attribute_value{std::string{default_limit}}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
+      require_limit_is_valid_number(),
     },
   },
 };
