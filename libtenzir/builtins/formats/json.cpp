@@ -1321,6 +1321,23 @@ public:
   }
 };
 
+class write_ndjson_plugin final : public virtual operator_plugin2<write_json> {
+public:
+  auto name() const -> std::string override {
+    return "write_ndjson";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = printer_args{};
+    args.compact_output = location::unknown;
+    TRY(argument_parser2::operator_(name())
+          .add("color", args.color_output)
+          .parse(inv, ctx));
+    return std::make_unique<write_json>(args);
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::json
@@ -1336,3 +1353,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_zeek_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_suricata_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)
