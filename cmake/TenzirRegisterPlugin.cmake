@@ -789,11 +789,10 @@ function (TenzirRegisterPlugin)
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
     TenzirTargetEnableTooling(${PLUGIN_TARGET}-test)
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE tenzir::test
-                                                        tenzir::internal)
+                                                        tenzir::internal
+                                                        tenzir::libtenzir_builtins)
     TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
                                  ${PLUGIN_TARGET}-static)
-    TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
-                                 tenzir::libtenzir_builtins)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)

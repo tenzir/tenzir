@@ -182,7 +182,7 @@ add_library(libtenzir ${libtenzir_sources})
 TenzirTargetEnableTooling(libtenzir)
 add_library(tenzir::libtenzir ALIAS libtenzir)
 
-add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources})
+add_library(libtenzir_builtins OBJECT ${libtenzir_builtins_sources})
 TenzirTargetEnableTooling(libtenzir_builtins)
 target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_target_properties(libtenzir_builtins PROPERTIES OUTPUT_NAME tenzir_builtins)
