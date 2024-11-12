@@ -82,6 +82,8 @@ public:
   virtual auto apply(series array, bool replace)
     -> caf::expected<std::vector<series>>
     = 0;
+  virtual auto apply2(const series& array, session ctx) -> std::vector<series>
+    = 0;
 
   /// Inspects the context.
   virtual auto show() const -> record = 0;

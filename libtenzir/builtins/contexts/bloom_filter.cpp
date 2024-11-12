@@ -71,6 +71,20 @@ public:
     return builder.finish();
   }
 
+  auto apply2(const series& array, session ctx)
+    -> std::vector<series> override {
+    TENZIR_UNUSED(ctx);
+    auto builder = series_builder{};
+    for (const auto& value : array.values()) {
+      if (bloom_filter_.lookup(value)) {
+        builder.data(true);
+      } else {
+        builder.null();
+      }
+    }
+    return builder.finish();
+  }
+
   /// Inspects the context.
   auto show() const -> record override {
     return record{

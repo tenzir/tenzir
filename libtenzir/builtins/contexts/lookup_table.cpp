@@ -309,6 +309,39 @@ public:
     return builder.finish();
   }
 
+  auto apply2(const series& array, session ctx)
+    -> std::vector<series> override {
+    TENZIR_UNUSED(ctx);
+    auto builder = series_builder{};
+    const auto now = time::clock::now();
+    for (auto value : array.values()) {
+      if (auto it = context_entries.find(materialize(value));
+          it != context_entries.end()) {
+        if (it->second.is_expired(now)) {
+          context_entries.erase(it);
+          goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
+        }
+        it.value().refresh_read_timeout(now);
+        builder.data(it->second.raw_data);
+        continue;
+      }
+      // We need to retry the lookup if we had an expired hit, as a matched IP
+      // address that was expired may very well be part of another subnet.
+    retry:
+      if (auto [subnet, entry] = subnet_lookup(value); entry) {
+        if (entry->is_expired(now)) {
+          subnet_entries.erase(subnet);
+          goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
+        }
+        entry->refresh_read_timeout(now);
+        builder.data(entry->raw_data);
+        continue;
+      }
+      builder.null();
+    }
+    return builder.finish();
+  }
+
   /// Inspects the context.
   auto show() const -> record override {
     // There's no size() function for the PATRICIA trie, so we walk the tree

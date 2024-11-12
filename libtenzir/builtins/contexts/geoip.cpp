@@ -391,6 +391,81 @@ public:
     return builder.finish();
   }
 
+  auto apply2(const series& array, session ctx)
+    -> std::vector<series> override {
+    if (not mmdb_) {
+      diagnostic::warning("geoip context has no database").emit(ctx);
+      return {series::null(null_type{}, array.length())};
+    }
+    auto status = 0;
+    MMDB_entry_data_list_s* entry_data_list = nullptr;
+    auto builder = series_builder{};
+    if (not caf::holds_alternative<ip_type>(array.type)
+        and not caf::holds_alternative<string_type>(array.type)) {
+      diagnostic::warning("expected `ip` or `string`, but got `{}`",
+                          array.type.kind())
+        .emit(ctx);
+      return {series::null(null_type{}, array.length())};
+    }
+    const auto is_ip = caf::holds_alternative<ip_type>(array.type);
+    for (const auto& value : array.values()) {
+      if (caf::holds_alternative<caf::none_t>(value)) {
+        builder.null();
+        continue;
+      }
+      auto address_info_error = 0;
+      const auto ip_string = is_ip
+                               ? fmt::to_string(value)
+                               : materialize(caf::get<std::string_view>(value));
+      auto result = MMDB_lookup_string(mmdb_.get(), ip_string.data(),
+                                       &address_info_error, &status);
+      if (address_info_error != MMDB_SUCCESS) {
+        diagnostic::warning("{}", gai_strerror(address_info_error))
+          .note("failed to look up `{}`", ip_string)
+          .emit(ctx);
+        builder.null();
+        continue;
+      }
+      if (status != MMDB_SUCCESS) {
+        diagnostic::warning("{}", MMDB_strerror(status))
+          .note("failed to look up `{}`", ip_string)
+          .emit(ctx);
+        builder.null();
+        continue;
+      }
+      if (not result.found_entry) {
+        builder.null();
+        continue;
+      }
+      status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
+      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+        if (entry_data_list) {
+          MMDB_free_entry_data_list(entry_data_list);
+        }
+      });
+      if (status != MMDB_SUCCESS) {
+        diagnostic::warning("{}", MMDB_strerror(status))
+          .note("failed to look up `{}`", ip_string)
+          .emit(ctx);
+        builder.null();
+        continue;
+      }
+      auto* entry_data_list_it = entry_data_list;
+      auto output = record{};
+      entry_data_list_it
+        = entry_data_list_to_record(entry_data_list_it, &status, output);
+      if (status != MMDB_SUCCESS) {
+        diagnostic::warning("{}", MMDB_strerror(status))
+          .note("failed to look up `{}`", ip_string)
+          .emit(ctx);
+        builder.null();
+        continue;
+      }
+      builder.data(output);
+    }
+    return builder.finish();
+  }
+
   /// Inspects the context.
   auto show() const -> record override {
     return {};
