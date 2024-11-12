@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/pipeline_executor.hpp"
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/tql2/exec.hpp"
@@ -54,6 +55,7 @@ struct load_balancer_state {
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> writes;
   bool finished = false;
   uint64_t operator_index{};
+  pipeline_path parent_id_path = {};
   uint64_t next_metrics_id = 0;
   detail::stable_map<std::pair<uint64_t, uint64_t>, uint64_t> metrics_id_map;
 
@@ -187,12 +189,19 @@ auto make_load_balancer(
   self->state.metrics = std::move(metrics);
   self->state.operator_index = operator_index;
   self->state.executors.reserve(pipes.size());
-  for (auto& pipe : pipes) {
+  for (const auto& [num, pipe] : detail::enumerate(pipes)) {
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
     TENZIR_DEBUG("spawning inner executor");
-    auto executor = self->spawn<caf::monitored>(
-      pipeline_executor, pipe, self, self, node, has_terminal, is_hidden);
+    auto nested_position = pipeline_path{self->state.parent_id_path};
+    nested_position.push_back({
+      .position = self->state.operator_index,
+      .id_fragment = fmt::to_string(num),
+    });
+    auto executor
+      = self->spawn<caf::monitored>(pipeline_executor,
+                                    std::move(nested_position), pipe, self,
+                                    self, node, has_terminal, is_hidden);
     executor->attach_functor([] {
       TENZIR_DEBUG("inner executor terminated");
     });

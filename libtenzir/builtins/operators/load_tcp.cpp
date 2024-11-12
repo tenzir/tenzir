@@ -16,6 +16,7 @@
 #include <tenzir/location.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
+#include <tenzir/pipeline_id.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -271,6 +272,7 @@ struct connection_manager_state {
   static constexpr auto tcp_metrics_id = uint64_t{0};
   uint64_t next_metrics_id = tcp_metrics_id + 1;
   uint64_t operator_id = {};
+  pipeline_path parent_id_path = {};
 
   // Everything required for the I/O worker.
   std::vector<std::thread> io_workers = {};
@@ -584,9 +586,15 @@ struct connection_manager_state {
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
+    auto nested_location = pipeline_path{parent_id_path};
+    nested_location.push_back({
+      .position = operator_id,
+      .id_fragment = fmt::to_string(connection->socket->native_handle()),
+    });
     connection->pipeline_executor = self->template spawn<caf::monitored>(
-      pipeline_executor, std::move(pipeline), receiver_actor<diagnostic>{self},
-      metrics_receiver_actor{self}, node, has_terminal, is_hidden);
+      pipeline_executor, std::move(nested_location), std::move(pipeline),
+      receiver_actor<diagnostic>{self}, metrics_receiver_actor{self}, node,
+      has_terminal, is_hidden);
     if (std::is_same_v<Elements, chunk_ptr> and connections.size() > 1) {
       diagnostic::warning(
         "potentially interleaved bytes from parallel connections")

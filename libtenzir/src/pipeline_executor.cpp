@@ -15,6 +15,7 @@
 #include "tenzir/error.hpp"
 #include "tenzir/execution_node.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/pipeline_id.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
@@ -265,15 +266,17 @@ auto pipeline_executor_state::resume() -> caf::result<void> {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  metrics_receiver_actor metrics, node_actor node, bool has_terminal,
-  bool is_hidden) -> pipeline_executor_actor::behavior_type {
+  pipeline_path pipeline_id_path, pipeline pipe,
+  receiver_actor<diagnostic> diagnostics, metrics_receiver_actor metrics,
+  node_actor node, bool has_terminal, bool is_hidden)
+  -> pipeline_executor_actor::behavior_type {
   TENZIR_TRACE("{} was created", *self);
   self->state.self = self;
-  self->state.node = std::move(node);
+  self->state.pipeline_id_path = std::move(pipeline_id_path);
   self->state.pipe = std::move(pipe);
   self->state.diagnostics = std::move(diagnostics);
   self->state.metrics = std::move(metrics);
+  self->state.node = std::move(node);
   self->state.no_location_overrides = caf::get_or(
     self->system().config(), "tenzir.no-location-overrides", false);
   self->state.has_terminal = has_terminal;
