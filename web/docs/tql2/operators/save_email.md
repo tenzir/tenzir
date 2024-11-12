@@ -1,6 +1,6 @@
 # save_email
 
-Saves bytes through a SMTP server.
+Saves bytes through an SMTP server.
 
 ```tql
 save_email recipient:str, [endpoint:str, from=str, subject=str, username=str,
@@ -102,7 +102,7 @@ Defaults to `false`.
 
 If to wrap the chunk into a MIME part.
 
-The operator takes the uses the metadata of the byte chunk for the
+The operator uses the metadata of the byte chunk for the
 `Content-Type` MIME header.
 
 Defaults to `false`.

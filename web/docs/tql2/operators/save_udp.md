@@ -3,7 +3,7 @@
 Saves bytes to a UDP socket.
 
 ```tql
-save_udp endpoint:str, [insert_newlines=bool]
+save_udp endpoint:str
 ```
 
 ## Description
@@ -14,15 +14,6 @@ Saves bytes to a UDP socket.
 
 The address of the remote endpoint to load bytes from. Must be of the format:
 `[udp://]host:port`.
-
-### `insert_newlines = bool (optional)`
-
-Append a newline character (`\n`) at the end of every datagram.
-
-This option comes in handy in combination with line-based parsers downstream,
-such as NDJSON.
-
-Defaults to `false`.
 
 ## Examples
 

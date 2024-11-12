@@ -91,7 +91,7 @@ Operator | Description | Example
 [`publish`](./operators/publish.md) | Publishes events to a certain topic | `publish "topic"`
 [`import`](./operators/import.md) | Stores events at the node | `import`
 [`discard`](./operators/discard.md) | Discards incoming bytes or events | `discard`
-[`save_email`](./operators/save_email.md) | Saves incoming bytes through a SMTP server | `save_email "user@example.org"`
+[`save_email`](./operators/save_email.md) | Saves incoming bytes through an SMTP server | `save_email "user@example.org"`
 [`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`
 [`save_google_cloud…`](./operators/save_google_cloud_pubsub.md) | Publishes to a Google Cloud Pub/Sub topic | `save_google_cloud_pubsub "…", "…"`
 [`save_http`](./operators/save_http.md) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
