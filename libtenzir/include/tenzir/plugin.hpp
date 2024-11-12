@@ -16,7 +16,6 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/pp.hpp"
-#include "tenzir/expression.hpp"
 #include "tenzir/http_api.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
