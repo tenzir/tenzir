@@ -17,6 +17,8 @@
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
 
+#include <ranges>
+
 namespace tenzir {
 
 namespace {
@@ -25,8 +27,12 @@ auto format_metric(const operator_metric& metric) -> std::string {
   auto result = std::string{};
   auto it = std::back_inserter(result);
   constexpr auto indent = std::string_view{"  "};
-  it = fmt::format_to(it, "operator #{} ({})", metric.operator_index + 1,
-                      metric.operator_name);
+  it = fmt::format_to(it, "operator #{}", metric.operator_index + 1);
+  if (metric.position.size() > 1) {
+    it = fmt::format_to(it, "{}",
+                        fmt::join(metric.position | std::views::drop(1), ""));
+  }
+  it = fmt::format_to(it, " ({})", metric.operator_name);
   if (metric.internal) {
     it = fmt::format_to(it, " (internal)");
   }
