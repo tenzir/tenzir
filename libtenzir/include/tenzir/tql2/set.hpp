@@ -15,10 +15,11 @@
 namespace tenzir {
 
 auto assign(const ast::selector& left, series right, const table_slice& input,
-            diagnostic_handler& dh) -> table_slice;
+            diagnostic_handler& dh, bool prepend = false) -> table_slice;
 
 auto assign(const ast::simple_selector& left, series right,
-            const table_slice& input, diagnostic_handler& dh) -> table_slice;
+            const table_slice& input, diagnostic_handler& dh,
+            bool prepend = false) -> table_slice;
 
 auto assign(const ast::meta& left, series right, const table_slice& input,
             diagnostic_handler& diag) -> table_slice;
@@ -43,8 +44,8 @@ public:
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<table_slice>;
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }

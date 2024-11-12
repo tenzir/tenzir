@@ -33,8 +33,8 @@ namespace {
 //
 /// ["foo", "bar"] -> {"foo": {"bar": value}}
 /// [] -> value
-auto consume_path(std::span<const ast::identifier> path,
-                  series value) -> series {
+auto consume_path(std::span<const ast::identifier> path, series value)
+  -> series {
   if (path.empty()) {
     return value;
   }
@@ -45,7 +45,7 @@ auto consume_path(std::span<const ast::identifier> path,
 }
 
 auto assign(std::span<const ast::identifier> left, series right, series input,
-            diagnostic_handler& dh) -> series {
+            diagnostic_handler& dh, bool prepend) -> series {
   TENZIR_ASSERT(right.length() == input.length());
   if (left.empty()) {
     return right;
@@ -84,13 +84,18 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
     auto& field_ty = new_ty_fields[*index].type;
     auto& field_array = new_field_arrays[*index];
     auto new_field = assign(left.subspan(1), std::move(right),
-                            series{field_ty, field_array}, dh);
+                            series{field_ty, field_array}, dh, prepend);
     field_ty = std::move(new_field.type);
     field_array = std::move(new_field.array);
   } else {
     auto inner = consume_path(left.subspan(1), std::move(right));
-    new_ty_fields.emplace_back(left[0].name, inner.type);
-    new_field_arrays.push_back(inner.array);
+    if (prepend) {
+      new_ty_fields.emplace(new_ty_fields.begin(), left[0].name, inner.type);
+      new_field_arrays.emplace(new_field_arrays.begin(), inner.array);
+    } else {
+      new_ty_fields.emplace_back(left[0].name, inner.type);
+      new_field_arrays.push_back(inner.array);
+    }
   }
   auto new_ty_field_names
     = new_ty_fields | std::views::transform(&record_type::field_view::name);
@@ -187,9 +192,11 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
 }
 
 auto assign(const ast::simple_selector& left, series right,
-            const table_slice& input, diagnostic_handler& dh) -> table_slice {
+            const table_slice& input, diagnostic_handler& dh, bool prepend)
+  -> table_slice {
   auto array = to_record_batch(input)->ToStructArray().ValueOrDie();
-  auto result = assign(left.path(), std::move(right), series{input}, dh);
+  auto result
+    = assign(left.path(), std::move(right), series{input}, dh, prepend);
   auto rec_ty = try_as<record_type>(result.type);
   if (not rec_ty) {
     diagnostic::warning("assignment to `this` requires `record`, but got "
@@ -210,13 +217,13 @@ auto assign(const ast::simple_selector& left, series right,
 }
 
 auto assign(const ast::selector& left, series right, const table_slice& input,
-            diagnostic_handler& dh) -> table_slice {
+            diagnostic_handler& dh, bool prepend) -> table_slice {
   return left.match(
     [&](const ast::meta& left) {
       return assign(left, std::move(right), input, dh);
     },
     [&](const ast::simple_selector& left) {
-      return assign(left, std::move(right), input, dh);
+      return assign(left, std::move(right), input, dh, prepend);
     });
 }
 
