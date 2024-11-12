@@ -229,6 +229,7 @@ struct model;
 struct negation;
 struct node_state;
 struct offset;
+struct operator_index;
 struct operator_metric;
 struct package;
 struct package_pipelines_map;
@@ -299,6 +300,7 @@ using ids = bitmap; // temporary; until we have a real type for 'ids'
 using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
+using pipeline_path = std::vector<operator_index>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.
@@ -466,6 +468,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::negation))
   TENZIR_ADD_TYPE_ID((tenzir::null_bitmap))
   TENZIR_ADD_TYPE_ID((tenzir::operator_box))
+  TENZIR_ADD_TYPE_ID((tenzir::operator_index))
   TENZIR_ADD_TYPE_ID((tenzir::operator_metric))
   TENZIR_ADD_TYPE_ID((tenzir::operator_type))
   TENZIR_ADD_TYPE_ID((tenzir::package))
@@ -474,6 +477,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::pattern))
   TENZIR_ADD_TYPE_ID((tenzir::pipeline))
+  TENZIR_ADD_TYPE_ID((tenzir::pipeline_path))
   TENZIR_ADD_TYPE_ID((tenzir::port))
   TENZIR_ADD_TYPE_ID((tenzir::port_type))
   TENZIR_ADD_TYPE_ID((tenzir::predicate))

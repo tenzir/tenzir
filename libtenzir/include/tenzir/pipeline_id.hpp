@@ -20,8 +20,16 @@ struct operator_index {
   // id fragment used to identify an instantiated subpipeline.
   // TODO: consider using a data instead.
   std::string id_fragment = {};
+
+  friend auto inspect(auto& f, operator_index& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.operator_index")
+      .fields(f.field("position", x.position),
+              f.field("id_fragment", x.id_fragment));
+  }
 };
 
+// Also defined in fwd.hpp.
 using pipeline_path = std::vector<operator_index>;
 
 } // namespace tenzir

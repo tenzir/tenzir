@@ -14,6 +14,7 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http_api.hpp"
+#include "tenzir/pipeline_id.hpp"
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
@@ -355,7 +356,8 @@ using node_actor = typed_actor_fwd<
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
   auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
-       metrics_receiver_actor, int index, bool is_hidden, uuid run_id)
+       metrics_receiver_actor, pipeline_path, int index, bool is_hidden,
+       uuid run_id)
     ->caf::result<exec_node_actor>>::unwrap;
 
 /// The interface of a PIPELINE EXECUTOR actor.

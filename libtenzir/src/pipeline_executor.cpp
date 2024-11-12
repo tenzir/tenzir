@@ -111,7 +111,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       self
         ->request(node, caf::infinite, atom::spawn_v,
                   operator_box{std::move(op)}, input_type, diagnostics, metrics,
-                  op_index, is_hidden, run_id)
+                  pipeline_id_path, op_index, is_hidden, run_id)
         .then(
           [this, description, index](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
@@ -129,7 +129,8 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       TENZIR_TRACE("{} spawns {} locally", *self, description);
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type, node, diagnostics,
-                          metrics, op_index, has_terminal, is_hidden, run_id);
+                          metrics, pipeline_id_path, op_index, has_terminal,
+                          is_hidden, run_id);
       if (not spawn_result) {
         abort_start(diagnostic::error(spawn_result.error())
                       .note("failed to spawn {} locally", description)
