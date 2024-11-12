@@ -140,7 +140,7 @@ public:
         check(b->Append(idx++));
       }
       co_yield assign(selector_, series{int64_type{}, finish(*b)}, slice,
-                      ctrl.diagnostics(), true);
+                      ctrl.diagnostics(), assign_position::front);
     }
   }
 
