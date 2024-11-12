@@ -441,8 +441,8 @@ public:
   auto record() -> node_record*;
   auto list() -> node_list*;
 
-  node_object() : data_{std::in_place_type<caf::none_t>} {
-  }
+  node_object();
+
   template <non_structured_data_type T>
   node_object(T data) : data_{std::in_place_type<T>, data} {
   }
@@ -521,6 +521,9 @@ struct node_record::entry_type {
   entry_type(std::string_view name) : key{name} {
   }
 };
+
+inline node_object::node_object() : data_{std::in_place_type<caf::none_t>} {
+}
 
 constexpr static std::byte record_start_marker{0xfa};
 constexpr static std::byte record_end_marker{0xfb};
