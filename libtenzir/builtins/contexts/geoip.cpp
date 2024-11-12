@@ -313,7 +313,7 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series array, bool replace)
+  auto legacy_apply(series array, bool replace)
     -> caf::expected<std::vector<series>> override {
     if (!mmdb_) {
       return caf::make_error(ec::lookup_error,
@@ -391,8 +391,7 @@ public:
     return builder.finish();
   }
 
-  auto apply2(const series& array, session ctx)
-    -> std::vector<series> override {
+  auto apply(const series& array, session ctx) -> std::vector<series> override {
     if (not mmdb_) {
       diagnostic::warning("geoip context has no database").emit(ctx);
       return {series::null(null_type{}, array.length())};
@@ -563,14 +562,14 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice, context_parameter_map)
+  auto legacy_update(table_slice, context_parameter_map)
     -> caf::expected<context_update_result> override {
     return caf::make_error(ec::unimplemented,
                            "geoip context can not be updated with events");
   }
 
-  auto update2(const table_slice& events, const context_update_args& args,
-               session ctx) -> failure_or<context_update_result> override {
+  auto update(const table_slice& events, const context_update_args& args,
+              session ctx) -> failure_or<context_update_result> override {
     TENZIR_UNUSED(events, args);
     diagnostic::error("geoip context cannot be updated").emit(ctx);
     return failure::promise();

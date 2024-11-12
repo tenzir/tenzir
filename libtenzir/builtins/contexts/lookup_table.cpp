@@ -273,7 +273,7 @@ public:
     return caf::visit(match, value);
   };
 
-  auto apply(series array, bool replace)
+  auto legacy_apply(series array, bool replace)
     -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
     const auto now = time::clock::now();
@@ -309,8 +309,7 @@ public:
     return builder.finish();
   }
 
-  auto apply2(const series& array, session ctx)
-    -> std::vector<series> override {
+  auto apply(const series& array, session ctx) -> std::vector<series> override {
     TENZIR_UNUSED(ctx);
     auto builder = series_builder{};
     const auto now = time::clock::now();
@@ -408,7 +407,7 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, context_parameter_map parameters)
+  auto legacy_update(table_slice slice, context_parameter_map parameters)
     -> caf::expected<context_update_result> override {
     // context does stuff on its own with slice & parameters
     TENZIR_ASSERT(slice.rows() != 0);
@@ -549,8 +548,8 @@ public:
     };
   }
 
-  auto update2(const table_slice& events, const context_update_args& args,
-               session ctx) -> failure_or<context_update_result> override {
+  auto update(const table_slice& events, const context_update_args& args,
+              session ctx) -> failure_or<context_update_result> override {
     for (const auto& timeout :
          {args.create_timeout, args.write_timeout, args.read_timeout}) {
       if (timeout) {

@@ -79,10 +79,10 @@ public:
   /// @param array The values to look up in the context.
   /// @param replace If true, return the input values for missing fields rather
   /// than nulls.
-  virtual auto apply(series array, bool replace)
+  virtual auto legacy_apply(series array, bool replace)
     -> caf::expected<std::vector<series>>
     = 0;
-  virtual auto apply2(const series& array, session ctx) -> std::vector<series>
+  virtual auto apply(const series& array, session ctx) -> std::vector<series>
     = 0;
 
   /// Inspects the context.
@@ -92,11 +92,12 @@ public:
   virtual auto dump() -> generator<table_slice> = 0;
 
   /// Updates the context.
-  virtual auto update(table_slice events, context_parameter_map parameters)
+  virtual auto
+  legacy_update(table_slice events, context_parameter_map parameters)
     -> caf::expected<context_update_result>
     = 0;
-  virtual auto update2(const table_slice& events,
-                       const context_update_args& args, session ctx)
+  virtual auto update(const table_slice& events,
+                      const context_update_args& args, session ctx)
     -> failure_or<context_update_result>
     = 0;
 
