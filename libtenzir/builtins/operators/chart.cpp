@@ -160,7 +160,8 @@ class chart_operator final : public crtp_operator<chart_operator> {
 public:
   chart_operator() = default;
 
-  explicit chart_operator(configuration&& cfg) : cfg_(std::move(cfg)) {
+  explicit chart_operator(struct location loc, configuration&& cfg)
+    : loc_{loc}, cfg_(std::move(cfg)) {
   }
 
   // Keys are keys into `cfg_`, combined with an index
@@ -198,8 +199,9 @@ public:
       }
       if (slice.rows() > remaining) {
         slice = subslice(slice, 0, remaining);
-        diagnostic::warning("reached event limit of `{}`", limit)
+        diagnostic::warning("chart reached event limit of `{}`", limit)
           .hint("You can use `--limit `value` to change this limit")
+          .primary(loc_)
           .emit(ctrl.diagnostics());
         remaining = 0;
       } else {
@@ -238,7 +240,8 @@ public:
   }
 
   friend auto inspect(auto& f, chart_operator& x) -> bool {
-    return f.object(x).pretty_name("chart").fields(f.field("config", x.cfg_));
+    return f.object(x).pretty_name("chart").fields(f.field("config", x.cfg_),
+                                                   f.field("loc", x.loc_));
   }
 
 private:
@@ -468,7 +471,7 @@ private:
     };
     return std::visit(visitor, item.field_value);
   }
-
+  struct location loc_ {};
   configuration cfg_{};
 };
 
@@ -851,6 +854,9 @@ public:
     // The chart operator is of the form
     // `chart <type> [args...]`
     // Here, we'll parse the <type>
+    auto loc = p.current_span();
+    loc.begin -= 5;
+    loc.end -= 1;
     auto type = p.accept_shell_arg();
     if (not type) {
       diagnostic::error("expected chart type as an argument")
@@ -876,7 +882,7 @@ public:
     // `parse_arguments` member of the chart definition
     const auto& chart_def = *chart_def_iterator;
     auto config = chart_def.parse_arguments(p, std::move(docs));
-    return std::make_unique<chart_operator>(std::move(config));
+    return std::make_unique<chart_operator>(loc, std::move(config));
   }
 };
 
