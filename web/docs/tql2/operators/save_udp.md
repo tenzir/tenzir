@@ -3,7 +3,7 @@
 Saves bytes to a UDP socket.
 
 ```tql
-save_udp endpoint:str, [connect=bool, insert_newlines=bool]
+save_udp endpoint:str, [insert_newlines=bool]
 ```
 
 ## Description

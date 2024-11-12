@@ -13,7 +13,7 @@ in listening mode. Use `connect=true` if the operator should initiate the
 connection instead.
 
 When you have a socket in listening mode, use `0.0.0.0` to accept connections
-on all interfaces. The [`nics`](./operators/nics.md) operator lists all all
+on all interfaces. The [`nics`](nics.md) operator lists all all
 available interfaces.
 
 ### `endpoint: str`

@@ -1,6 +1,6 @@
 # save_email
 
-Saves bytes through an SMTP server.
+Saves bytes through a SMTP server.
 
 ```tql
 save_email recipient:str, [endpoint:str, from=str, subject=str, username=str,
