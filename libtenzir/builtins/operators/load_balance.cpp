@@ -191,8 +191,11 @@ auto make_load_balancer(
     auto has_terminal = false;
     TENZIR_DEBUG("spawning inner executor");
     auto nested_position = pipeline_path{position};
-    position.back().id_fragment = fmt::to_string(num);
-    nested_position.emplace_back(operator_index{});
+    nested_position.emplace_back(operator_index{
+      .parent_id = fmt::to_string(num),
+      .run = 0,
+      .position = 0,
+    });
     auto executor
       = self->spawn<caf::monitored>(pipeline_executor,
                                     std::move(nested_position), pipe, self,

@@ -367,7 +367,7 @@ struct connection_manager_state {
   connection_manager_actor::pointer self = {};
   detail::weak_handle<bridge_actor> bridge = {};
   tcp_listen_args args = {};
-  pipeline_path parent_id_path = {};
+  pipeline_path position = {};
   shared_diagnostic_handler diagnostics = {};
 
   std::shared_ptr<boost::asio::io_context> io_context = {};
@@ -397,10 +397,13 @@ struct connection_manager_state {
         self->quit();
         return;
       }
-      auto nested_position = pipeline_path{/*FIXME*/};
+      auto nested_position = pipeline_path{position};
       nested_position.push_back({
-        .position = args.operator_index,
-        .id_fragment = fmt::to_string(socket.native_handle()),
+        // TODO: Attempt to get the hostname of the client.
+        .parent_id = socket.remote_endpoint().address().to_string(),
+        // TODO: Keep a counter per souce address.
+        .run = 0,
+        .position = 0,
       });
       connections.push_back(self->spawn<caf::linked + caf::detached>(
         make_connection, io_context, std::move(socket), std::move(handle),
@@ -428,13 +431,13 @@ struct connection_manager_state {
 
 auto make_connection_manager(
   connection_manager_actor::stateful_pointer<connection_manager_state> self,
-  bridge_actor bridge, pipeline_path parent_id_path, tcp_listen_args args,
+  bridge_actor bridge, pipeline_path position, tcp_listen_args args,
   shared_diagnostic_handler diagnostics)
   -> connection_manager_actor::behavior_type {
   self->state.self = self;
   self->state.io_context = std::make_shared<boost::asio::io_context>();
   self->state.bridge = std::move(bridge);
-  self->state.parent_id_path = std::move(parent_id_path);
+  self->state.position = std::move(position);
   self->state.args = std::move(args);
   self->state.diagnostics = std::move(diagnostics);
   self->set_exception_handler(
@@ -496,11 +499,11 @@ struct bridge_state {
 };
 
 auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
-                 pipeline_path parent_id_path, tcp_listen_args args,
+                 pipeline_path position, tcp_listen_args args,
                  shared_diagnostic_handler diagnostics)
   -> bridge_actor::behavior_type {
   self->state.connection_manager = self->spawn<caf::linked + caf::detached>(
-    make_connection_manager, bridge_actor{self}, std::move(parent_id_path),
+    make_connection_manager, bridge_actor{self}, std::move(position),
     std::move(args), std::move(diagnostics));
   return {
     [self](table_slice& slice) -> caf::result<void> {

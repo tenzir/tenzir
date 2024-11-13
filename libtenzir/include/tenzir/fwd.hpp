@@ -238,6 +238,7 @@ struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
 struct passive_partition_state;
+struct pipeline_path;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
@@ -300,7 +301,6 @@ using ids = bitmap; // temporary; until we have a real type for 'ids'
 using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
-using pipeline_path = std::vector<operator_index>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.

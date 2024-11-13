@@ -272,7 +272,7 @@ struct connection_manager_state {
   static constexpr auto tcp_metrics_id = uint64_t{0};
   uint64_t next_metrics_id = tcp_metrics_id + 1;
   uint64_t operator_id = {};
-  pipeline_path parent_id_path = {};
+  pipeline_path position = {};
 
   // Everything required for the I/O worker.
   std::vector<std::thread> io_workers = {};
@@ -448,7 +448,7 @@ struct connection_manager_state {
       },
     };
     self
-      ->request(metrics_receiver, caf::infinite, parent_id_path, tcp_metrics_id,
+      ->request(metrics_receiver, caf::infinite, position, tcp_metrics_id,
                 std::move(tcp_metrics_schema))
       .then([]() {},
             [this](const caf::error& err) {
@@ -528,9 +528,18 @@ struct connection_manager_state {
     }
     connection->metrics_receiver = metrics_receiver;
     connection->operator_id = operator_id;
-    auto nested_position = pipeline_path{parent_id_path};
-    nested_position.back().id_fragment
-      = fmt::to_string(connection->socket->native_handle());
+    auto nested_position = pipeline_path{position};
+    // This is a bit annoying, the tcp metrics will be at the same operator path
+    // as the first operator of the nested pipeline. Given that there is an
+    // implicitly injected operator at this position anyways, this is
+    // acceptable.
+    nested_position.push_back({
+      // TODO: Attempt to get the hostname of the client.
+      .parent_id = connection->socket->remote_endpoint().address().to_string(),
+      // TODO: Keep a counter per souce address.
+      .run = 0,
+      .position = 0,
+    });
     connection->position = std::move(nested_position);
     connection->emit_metrics(self);
     if (args.tls) {

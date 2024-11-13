@@ -118,7 +118,7 @@ auto format_metric(const pipeline_path& position, const metrics_wrapper& metric)
   -> std::string {
   auto result = std::string{};
   auto it = std::back_inserter(result);
-  it = fmt::format_to(it, "operator #{}", fmt::join(position, ""));
+  it = fmt::format_to(it, "operator #{}", position);
   it = fmt::format_to(it, " ({})", metric.op.operator_name);
   if (metric.op.internal) {
     it = fmt::format_to(it, " (internal)");
@@ -237,7 +237,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
         self->quit();
       });
       self->state.executor = self->spawn<caf::monitored>(
-        pipeline_executor, pipeline_path{{0, "<cli-pipeline>"}},
+        pipeline_executor, pipeline_path{{"<cli-pipeline>", 0, 0}},
         std::move(pipe), caf::actor_cast<receiver_actor<diagnostic>>(self),
         caf::actor_cast<metrics_receiver_actor>(self), node_actor{}, true,
         true);

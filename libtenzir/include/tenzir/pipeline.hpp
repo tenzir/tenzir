@@ -229,10 +229,7 @@ struct [[nodiscard]] operator_metric {
         {"run", uint64_type{}},
         {"hidden", bool_type{}},
         {"operator_id", uint64_type{}},
-        {"operator_path", list_type{record_type{
-                            {"position", uint64_type{}},
-                            {"id_fragment", string_type{}},
-                          }}},
+        {"operator_path", pipeline_path::layout()},
         {"source", bool_type{}},
         {"transformation", bool_type{}},
         {"sink", bool_type{}},
