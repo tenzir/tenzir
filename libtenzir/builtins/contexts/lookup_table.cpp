@@ -550,14 +550,6 @@ public:
 
   auto update(const table_slice& events, const context_update_args& args,
               session ctx) -> failure_or<context_update_result> override {
-    for (const auto& timeout :
-         {args.create_timeout, args.write_timeout, args.read_timeout}) {
-      if (timeout) {
-        diagnostic::warning("unsupported option for bloom-filter context")
-          .primary(*timeout)
-          .emit(ctx);
-      }
-    }
     auto keys = eval(args.key, events, ctx);
     auto key_values_list = list{};
     const auto update_entry
