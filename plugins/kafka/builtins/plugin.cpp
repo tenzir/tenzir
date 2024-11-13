@@ -32,10 +32,9 @@ public:
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
     if (not unused_plugin_config.empty()) {
-      return caf::make_error(ec::diagnostic,
-                             fmt::format("`{}.yaml` is unused; Use `s3.yaml` "
-                                         "instead",
-                                         this->name()));
+      return diagnostic::error("`{}.yaml` is unused; Use `kafka.yaml` instead",
+                               this->name())
+        .to_error();
     }
     [&] {
       auto ptr = global_config.find("plugins");
@@ -132,10 +131,9 @@ class save_plugin final
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
     if (not unused_plugin_config.empty()) {
-      return caf::make_error(ec::diagnostic,
-                             fmt::format("`{}.yaml` is unused; Use `s3.yaml` "
-                                         "instead",
-                                         this->name()));
+      return diagnostic::error("`{}.yaml` is unused; Use `kafka.yaml` instead",
+                               this->name())
+        .to_error();
     }
     [&] {
       auto ptr = global_config.find("plugins");
