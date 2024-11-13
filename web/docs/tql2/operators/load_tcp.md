@@ -3,7 +3,7 @@
 Loads bytes from a TCP or TLS connection.
 
 ```tql
-load_tcp endpoint:str, [connect=bool, parallel=int, tls=bool, certfile=str, keyfile=str { … }]
+load_tcp endpoint:str, [parallel=int, tls=bool, certfile=str, keyfile=str { … }]
 ```
 
 ## Description
@@ -16,10 +16,6 @@ The endpoint at which the server will listen. If `connect=true`, this is instead
 the remote endpoint to connect to. Must be of the form
 `[tcp://]<hostname>:<port>`. Use the hostname `0.0.0.0` o accept connections on
 all interfaces.
-
-### `connect = bool (optional)`
-
-Connect to the endpoint instead of listening at it.
 
 ### `parallel = int (optional)`
 
