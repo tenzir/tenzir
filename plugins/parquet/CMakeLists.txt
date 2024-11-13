@@ -16,7 +16,8 @@ TenzirRegisterPlugin(
   TARGET parquet
   ENTRYPOINT parquet.cpp
   SOURCES GLOB "src/*.cpp"
-  INCLUDE_DIRECTORIES include)
+  INCLUDE_DIRECTORIES include
+  BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 
 if (BUILD_SHARED_LIBS)
   set(PARQUET_LIBRARY Parquet::parquet_shared)

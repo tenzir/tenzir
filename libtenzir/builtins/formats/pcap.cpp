@@ -17,6 +17,7 @@
 #include <tenzir/pcapng.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/view.hpp>
 
@@ -578,8 +579,19 @@ private:
   record config_;
 };
 
+class write_plugin final
+  : public virtual operator_plugin2<writer_adapter<pcap_printer>> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
+    return std::make_unique<writer_adapter<pcap_printer>>(pcap_printer{});
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::pcap
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::pcap::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::pcap::write_plugin)
