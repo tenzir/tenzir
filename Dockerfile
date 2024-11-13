@@ -251,6 +251,15 @@ RUN cmake -S plugins/nic -B build-nic -G Ninja \
       DESTDIR=/plugin/nic cmake --install build-nic --strip --component Runtime && \
       rm -rf build-build-nic
 
+FROM plugins-source AS parquet-plugin
+
+RUN cmake -S plugins/parquet -B build-parquet -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+    cmake --build build-parquet --parallel && \
+    cmake --build build-parquet --target integration && \
+    DESTDIR=/plugin/parquet cmake --install build-parquet --strip --component Runtime && \
+    rm -rf build-build-parquet
+
 FROM plugins-source AS s3-plugin
 
 RUN cmake -S plugins/s3 -B build-s3 -G Ninja \
@@ -401,6 +410,7 @@ COPY --from=gcs-plugin --chown=tenzir:tenzir /plugin/gcs /
 COPY --from=google-cloud-pubsub-plugin --chown=tenzir:tenzir /plugin/google-cloud-pubsub /
 COPY --from=kafka-plugin --chown=tenzir:tenzir /plugin/kafka /
 COPY --from=nic-plugin --chown=tenzir:tenzir /plugin/nic /
+COPY --from=parquet-plugin --chown=tenzir:tenzir /plugin/parquet /
 COPY --from=s3-plugin --chown=tenzir:tenzir /plugin/s3 /
 COPY --from=sigma-plugin --chown=tenzir:tenzir /plugin/sigma /
 COPY --from=sqs-plugin --chown=tenzir:tenzir /plugin/sqs /
