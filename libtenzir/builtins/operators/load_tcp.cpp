@@ -864,7 +864,6 @@ public:
     auto args = load_tcp_args{};
     auto parser = argument_parser2::operator_("load_tcp");
     parser.add(endpoint, "<endpoint>");
-    parser.add("connect", args.connect);
     parser.add("parallel", parallel);
     parser.add("tls", tls);
     parser.add("certfile", args.certfile);
