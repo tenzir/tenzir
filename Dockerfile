@@ -295,7 +295,6 @@ RUN apt-get update && \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \
-      librdkafka++1 \
       libre2-9 \
       libspdlog1.10 \
       libunwind8 \

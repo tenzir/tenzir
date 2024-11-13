@@ -13,9 +13,9 @@
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
-#include <librdkafka/rdkafkacpp.h>
 
 #include <memory>
+#include <rdkafkacpp.h>
 #include <string>
 
 namespace tenzir::plugins::kafka {

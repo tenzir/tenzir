@@ -39,3 +39,6 @@
 	path = tenzir/integration/lib/bats-assert
 	url = https://github.com/bats-core/bats-assert
 	shallow = true
+[submodule "plugins/kafka/aux/librdkafka"]
+	path = plugins/kafka/aux/librdkafka
+	url = https://github.com/UrbanCompass/librdkafka

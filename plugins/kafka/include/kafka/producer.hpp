@@ -12,11 +12,11 @@
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
-#include <librdkafka/rdkafkacpp.h>
 
 #include <chrono>
 #include <cstddef>
 #include <memory>
+#include <rdkafkacpp.h>
 #include <span>
 
 namespace tenzir::plugins::kafka {

@@ -16,12 +16,21 @@ TenzirRegisterPlugin(
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
   INCLUDE_DIRECTORIES include)
 
-find_package(RdKafka QUIET)
-if (NOT RdKafka_FOUND)
-  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-  find_package(RdKafka QUIET REQUIRED)
-  list(POP_BACK CMAKE_MODULE_PATH)
-endif ()
+set(RDKAFKA_BUILD_STATIC ON CACHE STRING "")
+set(RDKAFKA_BUILD_EXAMPLES OFF CACHE STRING "")
+set(RDKAFKA_BUILD_TESTS OFF CACHE STRING "")
 
-dependency_summary("rdkafka" RdKafka::rdkafka++ "Dependencies")
+add_subdirectory(aux/librdkafka)
+target_compile_definitions(rdkafka PUBLIC WITH_SASL_AWS_MSK_IAM=1)
+target_compile_definitions(rdkafka++ PUBLIC WITH_SASL_AWS_MSK_IAM=1)
+add_library(RdKafka::rdkafka++ ALIAS rdkafka++)
+
+#find_package(RdKafka QUIET)
+#if (NOT RdKafka_FOUND)
+#  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+#  find_package(RdKafka QUIET REQUIRED)
+#  list(POP_BACK CMAKE_MODULE_PATH)
+#endif ()
+
+#dependency_summary("rdkafka" RdKafka::rdkafka++ "Dependencies")
 target_link_libraries(kafka PUBLIC RdKafka::rdkafka++)

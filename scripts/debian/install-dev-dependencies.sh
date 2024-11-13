@@ -32,7 +32,6 @@ apt-get -y --no-install-recommends install \
     libpcap-dev tcpdump \
     libprotobuf-dev \
     librabbitmq-dev \
-    librdkafka-dev \
     libre2-dev \
     libspdlog-dev \
     libssl-dev \
