@@ -23,20 +23,9 @@ namespace tenzir {
 
 namespace {
 
-auto format_metric(const operator_metric& metric) -> std::string {
-  auto result = std::string{};
-  auto it = std::back_inserter(result);
+auto format_metric(std::back_insert_iterator<std::string>& it,
+                   const operator_metric& metric) -> void {
   constexpr auto indent = std::string_view{"  "};
-  it = fmt::format_to(it, "operator #{}", metric.operator_index + 1);
-  if (metric.position.size() > 1) {
-    it = fmt::format_to(it, "{}",
-                        fmt::join(metric.position | std::views::drop(1), ""));
-  }
-  it = fmt::format_to(it, " ({})", metric.operator_name);
-  if (metric.internal) {
-    it = fmt::format_to(it, " (internal)");
-  }
-  it = fmt::format_to(it, "\n");
   it = fmt::format_to(it, "{}total: {}\n", indent, data{metric.time_total});
   it = fmt::format_to(it, "{}scheduled: {} ({:.2f}%)\n", indent,
                       data{metric.time_scheduled},
@@ -117,6 +106,31 @@ auto format_metric(const operator_metric& metric) -> std::string {
       static_cast<double>(metric.outbound_measurement.num_elements)
         / static_cast<double>(metric.outbound_measurement.num_batches),
       metric.outbound_measurement.unit);
+  }
+}
+
+struct metrics_wrapper {
+  operator_metric op = {};
+  std::vector<record> custom = {};
+};
+
+auto format_metric(const pipeline_path& position, const metrics_wrapper& metric)
+  -> std::string {
+  auto result = std::string{};
+  auto it = std::back_inserter(result);
+  it = fmt::format_to(it, "operator #{}", fmt::join(position, ""));
+  it = fmt::format_to(it, " ({})", metric.op.operator_name);
+  if (metric.op.internal) {
+    it = fmt::format_to(it, " (internal)");
+  }
+  it = fmt::format_to(it, "\n");
+  format_metric(it, metric.op);
+  if (metric.custom.empty()) {
+    return result;
+  }
+  fmt::format_to(it, "custom metrics:\n");
+  for (const auto& custom_metric : metric.custom) {
+    fmt::format_to(it, "{}\n", custom_metric);
   }
   return result;
 }
@@ -202,7 +216,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   pipe = pipe.optimize_if_closed();
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
-  auto metrics = std::vector<operator_metric>{};
+  auto metrics = std::map<pipeline_path, metrics_wrapper>{};
   auto custom_metrics = std::vector<std::vector<record>>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This
@@ -223,8 +237,8 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
         self->quit();
       });
       self->state.executor = self->spawn<caf::monitored>(
-        pipeline_executor, pipeline_path{{0, ""}}, std::move(pipe),
-        caf::actor_cast<receiver_actor<diagnostic>>(self),
+        pipeline_executor, pipeline_path{{0, "<cli-pipeline>"}},
+        std::move(pipe), caf::actor_cast<receiver_actor<diagnostic>>(self),
         caf::actor_cast<metrics_receiver_actor>(self), node_actor{}, true,
         true);
       self->request(self->state.executor, caf::infinite, atom::start_v)
@@ -247,24 +261,17 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
             dh.emit(std::move(d));
           }
         },
-        [&](uint64_t, uint64_t, type&) {
+        [&](pipeline_path&, uint64_t, type&) {
           // Don't register types here.
         },
-        [&](uint64_t op_index, uint64_t, record& r) {
+        [&](pipeline_path& position, uint64_t, record& r) {
           if (cfg.dump_metrics) {
-            if (op_index >= custom_metrics.size()) {
-              custom_metrics.resize(op_index + 1);
-            }
-            custom_metrics[op_index].emplace_back(std::move(r));
+            metrics[position].custom.push_back(std::move(r));
           }
         },
         [&](operator_metric& m) {
           if (cfg.dump_metrics) {
-            const auto idx = m.operator_index;
-            if (idx >= metrics.size()) {
-              metrics.resize(idx + 1);
-            }
-            metrics[idx] = std::move(m);
+            metrics[m.position].op = std::move(m);
           }
         },
       };
@@ -272,16 +279,8 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   self->wait_for(handler);
   TENZIR_DEBUG("command is done");
   if (cfg.dump_metrics) {
-    for (auto i = size_t{0}; i < metrics.size(); ++i) {
-      const auto& metric = metrics[i];
-      fmt::print(stderr, "{}", format_metric(metric));
-      if (i < custom_metrics.size()) {
-        fmt::print(stderr, "custom metrics for operator #{} ({}):\n",
-                   metric.operator_index + 1, metric.operator_name);
-        for (const auto& custom_metric : custom_metrics[i]) {
-          fmt::print(stderr, "{}\n", custom_metric);
-        }
-      }
+    for (const auto& [position, metric] : metrics) {
+      fmt::print(stderr, "{}\n", format_metric(position, metric));
     }
   }
   return result;

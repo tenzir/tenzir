@@ -23,6 +23,15 @@ struct operator_index {
   // TODO: consider using a data instead.
   std::string id_fragment = {};
 
+  friend auto
+  operator<=>(const operator_index& lhs, const operator_index& rhs) noexcept
+    -> std::strong_ordering {
+    if (lhs.position != rhs.position) {
+      return lhs.position <=> rhs.position;
+    }
+    return lhs.id_fragment <=> rhs.id_fragment;
+  }
+
   friend auto inspect(auto& f, operator_index& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.operator_index")

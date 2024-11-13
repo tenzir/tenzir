@@ -146,14 +146,14 @@ struct exec_node_control_plane final : public operator_control_plane {
   exec_node_control_plane(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
     receiver_actor<diagnostic> diagnostic_handler,
-    metrics_receiver_actor metric_receiver, uint64_t op_index,
+    metrics_receiver_actor metric_receiver, pipeline_path position,
     bool has_terminal, bool is_hidden)
     : state{self->state},
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
           self, std::move(diagnostic_handler))},
       metrics_receiver_{std::move(metric_receiver)},
-      operator_index_{op_index},
+      position_{std::move(position)},
       has_terminal_{has_terminal},
       is_hidden_{is_hidden} {
   }
@@ -171,7 +171,11 @@ struct exec_node_control_plane final : public operator_control_plane {
   }
 
   auto operator_index() const noexcept -> uint64_t override {
-    return operator_index_;
+    return position_[0].position;
+  }
+
+  auto operator_path() const noexcept -> pipeline_path override {
+    return position_;
   }
 
   auto diagnostics() noexcept -> diagnostic_handler& override {
@@ -181,7 +185,7 @@ struct exec_node_control_plane final : public operator_control_plane {
   auto metrics(type t) noexcept -> metric_handler override {
     return metric_handler{
       metrics_receiver_,
-      operator_index_,
+      position_,
       metric_index++,
       t,
     };
@@ -215,7 +219,7 @@ struct exec_node_control_plane final : public operator_control_plane {
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler
     = {};
   metrics_receiver_actor metrics_receiver_ = {};
-  uint64_t operator_index_ = {};
+  pipeline_path position_ = {};
   uint64_t metric_index = {};
   bool has_terminal_ = {};
   bool is_hidden_ = {};
@@ -831,8 +835,8 @@ auto exec_node(
       and (std::is_same_v<Input, std::monostate>
            or std::is_same_v<Output, std::monostate>);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self, diagnostic_handler, self->state.metrics_receiver, index, has_terminal,
-    is_hidden);
+    self, diagnostic_handler, self->state.metrics_receiver,
+    self->state.metrics.position, has_terminal, is_hidden);
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->state.on_error(caf::make_error(

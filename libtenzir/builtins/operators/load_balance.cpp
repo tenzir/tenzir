@@ -54,8 +54,6 @@ struct load_balancer_state {
   std::deque<caf::typed_response_promise<table_slice>> reads;
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> writes;
   bool finished = false;
-  uint64_t operator_index{};
-  pipeline_path parent_id_path = {};
   uint64_t next_metrics_id = 0;
   detail::stable_map<std::pair<uint64_t, uint64_t>, uint64_t> metrics_id_map;
 
@@ -178,7 +176,7 @@ auto get_or_compute(Map& map, Key&& key, F&& f) -> decltype(auto) {
 auto make_load_balancer(
   load_balancer_actor::stateful_pointer<load_balancer_state> self,
   std::vector<pipeline> pipes, shared_diagnostic_handler diagnostics,
-  metrics_receiver_actor metrics, uint64_t operator_index, bool is_hidden,
+  metrics_receiver_actor metrics, pipeline_path position, bool is_hidden,
   const node_actor& node) -> load_balancer_actor::behavior_type {
   TENZIR_DEBUG("spawning load balancer");
   self->attach_functor([] {
@@ -187,17 +185,14 @@ auto make_load_balancer(
   self->state.self = self;
   self->state.diagnostics = std::move(diagnostics);
   self->state.metrics = std::move(metrics);
-  self->state.operator_index = operator_index;
   self->state.executors.reserve(pipes.size());
   for (const auto& [num, pipe] : detail::enumerate(pipes)) {
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
     TENZIR_DEBUG("spawning inner executor");
-    auto nested_position = pipeline_path{self->state.parent_id_path};
-    nested_position.push_back({
-      .position = self->state.operator_index,
-      .id_fragment = fmt::to_string(num),
-    });
+    auto nested_position = pipeline_path{position};
+    position.back().id_fragment = fmt::to_string(num);
+    nested_position.emplace_back(operator_index{});
     auto executor
       = self->spawn<caf::monitored>(pipeline_executor,
                                     std::move(nested_position), pipe, self,
@@ -244,29 +239,27 @@ auto make_load_balancer(
     [self](atom::read) -> caf::result<table_slice> {
       return self->state.read();
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](pipeline_path position, uint64_t metric_index,
            type& schema) -> caf::result<void> {
-      auto id = get_or_compute(self->state.metrics_id_map,
-                               std::pair{op_index, metric_index}, [&] {
-                                 auto id = self->state.next_metrics_id;
-                                 self->state.next_metrics_id += 1;
-                                 return id;
-                               });
-      return self->delegate(self->state.metrics, self->state.operator_index, id,
-                            schema);
-    },
-    [self](uint64_t op_index, uint64_t metric_index,
-           record& metric) -> caf::result<void> {
       auto id
-        = self->state.metrics_id_map.find(std::pair{op_index, metric_index});
-      TENZIR_ASSERT(id != self->state.metrics_id_map.end());
-      return self->delegate(self->state.metrics, self->state.operator_index,
-                            id->second, std::move(metric));
+        = get_or_compute(self->state.metrics_id_map,
+                         std::pair{position[0].position, metric_index}, [&] {
+                           auto id = self->state.next_metrics_id;
+                           self->state.next_metrics_id += 1;
+                           return id;
+                         });
+      return self->delegate(self->state.metrics, position, id, schema);
     },
-    [](const operator_metric& op_metric) -> caf::result<void> {
-      // There currently is no way to have subpipeline metrics.
-      TENZIR_UNUSED(op_metric);
-      return {};
+    [self](pipeline_path position, uint64_t metric_index,
+           record& metric) -> caf::result<void> {
+      auto id = self->state.metrics_id_map.find(
+        std::pair{position[0].position, metric_index});
+      TENZIR_ASSERT(id != self->state.metrics_id_map.end());
+      return self->delegate(self->state.metrics, position, id->second,
+                            std::move(metric));
+    },
+    [self](operator_metric& op_metric) -> caf::result<void> {
+      return self->delegate(self->state.metrics, std::move(op_metric));
     },
     [self](diagnostic& diagnostic) -> caf::result<void> {
       TENZIR_ASSERT(diagnostic.severity != severity::error);
@@ -309,7 +302,7 @@ public:
     // potentially be simplified.
     auto load_balancer = scope_linked{ctrl.self().spawn<caf::linked>(
       make_load_balancer, pipes_, ctrl.shared_diagnostics(),
-      ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
+      ctrl.metrics_receiver(), ctrl.operator_path(), ctrl.is_hidden(),
       ctrl.node())};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {

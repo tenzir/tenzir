@@ -71,6 +71,7 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
 }
 
 void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
+  TENZIR_ASSERT(not pipeline_id_path.empty());
   TENZIR_TRACE("{} spawns execution nodes", *self);
   auto input_type = operator_type::make<void>();
   auto previous = exec_node_actor{};
@@ -142,6 +143,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       self->monitor(previous);
       exec_nodes.push_back(previous);
     }
+    ++(pipeline_id_path.back().position);
     ++op_index;
   }
   if (exec_nodes.empty()) {

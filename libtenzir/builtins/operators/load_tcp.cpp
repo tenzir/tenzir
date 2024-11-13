@@ -318,6 +318,7 @@ struct connection_manager_state {
 
     metrics_receiver_actor metrics_receiver = {};
     uint64_t operator_id = {};
+    pipeline_path position = {};
     uint64_t reads = {};
     uint64_t bytes_read = {};
     caf::disposable next_emit_metrics = {};
@@ -332,7 +333,7 @@ struct connection_manager_state {
         {"bytes_read", std::exchange(bytes_read, {})},
         {"bytes_written", uint64_t{0}},
       };
-      caf::anon_send(metrics_receiver, operator_id, tcp_metrics_id,
+      caf::anon_send(metrics_receiver, position, tcp_metrics_id,
                      std::move(metric));
       if (self) {
         next_emit_metrics
@@ -447,7 +448,7 @@ struct connection_manager_state {
       },
     };
     self
-      ->request(metrics_receiver, caf::infinite, operator_id, tcp_metrics_id,
+      ->request(metrics_receiver, caf::infinite, parent_id_path, tcp_metrics_id,
                 std::move(tcp_metrics_schema))
       .then([]() {},
             [this](const caf::error& err) {
@@ -527,6 +528,10 @@ struct connection_manager_state {
     }
     connection->metrics_receiver = metrics_receiver;
     connection->operator_id = operator_id;
+    auto nested_position = pipeline_path{parent_id_path};
+    nested_position.back().id_fragment
+      = fmt::to_string(connection->socket->native_handle());
+    connection->position = std::move(nested_position);
     connection->emit_metrics(self);
     if (args.tls) {
       TENZIR_ASSERT(not connection->ssl_ctx);
@@ -586,13 +591,8 @@ struct connection_manager_state {
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
-    auto nested_location = pipeline_path{parent_id_path};
-    nested_location.push_back({
-      .position = operator_id,
-      .id_fragment = fmt::to_string(connection->socket->native_handle()),
-    });
     connection->pipeline_executor = self->template spawn<caf::monitored>(
-      pipeline_executor, std::move(nested_location), std::move(pipeline),
+      pipeline_executor, connection->position, std::move(pipeline),
       receiver_actor<diagnostic>{self}, metrics_receiver_actor{self}, node,
       has_terminal, is_hidden);
     if (std::is_same_v<Elements, chunk_ptr> and connections.size() > 1) {
@@ -757,26 +757,24 @@ auto make_connection_manager(
     [self](atom::read) -> caf::result<Elements> {
       return self->state.read_elements();
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](pipeline_path position, uint64_t metric_index,
            type& schema) -> caf::result<void> {
-      auto& id = self->state.metrics_id_map[op_index][metric_index];
+      auto& id = self->state.metrics_id_map[position[0].position][metric_index];
       if (id == 0) {
         id = self->state.next_metrics_id++;
       }
-      return self->delegate(self->state.metrics_receiver,
-                            self->state.operator_id, id, std::move(schema));
+      return self->delegate(self->state.metrics_receiver, position, id,
+                            std::move(schema));
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](pipeline_path position, uint64_t metric_index,
            record& metric) -> caf::result<void> {
-      const auto& id = self->state.metrics_id_map[op_index][metric_index];
-      return self->delegate(self->state.metrics_receiver,
-                            self->state.operator_id, id, std::move(metric));
+      const auto& id
+        = self->state.metrics_id_map[position[0].position][metric_index];
+      return self->delegate(self->state.metrics_receiver, position, id,
+                            std::move(metric));
     },
-    [](const operator_metric& op_metric) -> caf::result<void> {
-      // We have no mechanism for forwarding operator metrics. That's a bit
-      // annoying, but there also really isn't a good solution to this.
-      TENZIR_UNUSED(op_metric);
-      return {};
+    [self](operator_metric& op_metric) -> caf::result<void> {
+      return self->delegate(self->state.metrics_receiver, std::move(op_metric));
     },
     [self](diagnostic& diagnostic) -> caf::result<void> {
       TENZIR_ASSERT(diagnostic.severity != severity::error);

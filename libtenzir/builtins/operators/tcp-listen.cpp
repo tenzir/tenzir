@@ -68,11 +68,11 @@ class tcp_listen_control_plane final : public operator_control_plane {
 public:
   tcp_listen_control_plane(shared_diagnostic_handler diagnostics,
                            metrics_receiver_actor metrics_receiver,
-                           uint64_t operator_index, bool has_terminal,
+                           pipeline_path position, bool has_terminal,
                            bool no_location_overrides, bool is_hidden)
     : diagnostics_{std::move(diagnostics)},
       metrics_receiver_{std::move(metrics_receiver)},
-      operator_index_{operator_index},
+      position{std::move(position)},
       no_location_overrides_{no_location_overrides},
       has_terminal_{has_terminal},
       is_hidden_{is_hidden} {
@@ -91,7 +91,11 @@ public:
   }
 
   auto operator_index() const noexcept -> uint64_t override {
-    return operator_index_;
+    return position[0].position;
+  }
+
+  auto operator_path() const noexcept -> pipeline_path override {
+    return position;
   }
 
   auto diagnostics() noexcept -> diagnostic_handler& override {
@@ -101,7 +105,7 @@ public:
   auto metrics(type t) noexcept -> metric_handler override {
     return metric_handler{
       metrics_receiver_,
-      operator_index_,
+      position,
       metric_index++,
       t,
     };
@@ -131,7 +135,7 @@ public:
 private:
   shared_diagnostic_handler diagnostics_;
   metrics_receiver_actor metrics_receiver_;
-  uint64_t operator_index_ = {};
+  pipeline_path position = {};
   uint64_t metric_index = 0;
   bool no_location_overrides_;
   bool has_terminal_;
@@ -184,6 +188,7 @@ struct connection_state {
   detail::weak_handle<bridge_actor> bridge;
   tcp_listen_args args;
   std::unique_ptr<operator_control_plane> ctrl;
+  pipeline_path position = {};
 
   class metric_handler metric_handler = {};
   size_t length = 0;
@@ -195,7 +200,7 @@ struct connection_state {
 auto make_connection(connection_actor::stateful_pointer<connection_state> self,
                      std::shared_ptr<boost::asio::io_context> io_context,
                      boost::asio::ip::tcp::socket socket, bridge_actor bridge,
-                     tcp_listen_args args,
+                     pipeline_path position, tcp_listen_args args,
                      shared_diagnostic_handler diagnostics)
   -> connection_actor::behavior_type {
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
@@ -206,11 +211,12 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
   self->state.io_context = std::move(io_context);
   self->state.socket = std::move(socket);
   self->state.bridge = std::move(bridge);
+  self->state.position = std::move(position);
   self->state.args = std::move(args);
   self->state.ctrl = std::make_unique<tcp_listen_control_plane>(
-    std::move(diagnostics), self->state.args.metrics_receiver,
-    self->state.args.operator_index, self->state.args.no_location_overrides,
-    self->state.args.has_terminal, self->state.args.is_hidden);
+    std::move(diagnostics), self->state.args.metrics_receiver, position,
+    self->state.args.no_location_overrides, self->state.args.has_terminal,
+    self->state.args.is_hidden);
   self->state.metric_handler = self->state.ctrl->metrics({
     "tenzir.metrics.tcp",
     record_type{
@@ -361,6 +367,7 @@ struct connection_manager_state {
   connection_manager_actor::pointer self = {};
   detail::weak_handle<bridge_actor> bridge = {};
   tcp_listen_args args = {};
+  pipeline_path parent_id_path = {};
   shared_diagnostic_handler diagnostics = {};
 
   std::shared_ptr<boost::asio::io_context> io_context = {};
@@ -390,9 +397,14 @@ struct connection_manager_state {
         self->quit();
         return;
       }
+      auto nested_position = pipeline_path{/*FIXME*/};
+      nested_position.push_back({
+        .position = args.operator_index,
+        .id_fragment = fmt::to_string(socket.native_handle()),
+      });
       connections.push_back(self->spawn<caf::linked + caf::detached>(
-        make_connection, io_context, std::move(socket), std::move(handle), args,
-        diagnostics));
+        make_connection, io_context, std::move(socket), std::move(handle),
+        std::move(nested_position), args, diagnostics));
     });
     run();
   }
@@ -416,12 +428,13 @@ struct connection_manager_state {
 
 auto make_connection_manager(
   connection_manager_actor::stateful_pointer<connection_manager_state> self,
-  bridge_actor bridge, tcp_listen_args args,
+  bridge_actor bridge, pipeline_path parent_id_path, tcp_listen_args args,
   shared_diagnostic_handler diagnostics)
   -> connection_manager_actor::behavior_type {
   self->state.self = self;
   self->state.io_context = std::make_shared<boost::asio::io_context>();
   self->state.bridge = std::move(bridge);
+  self->state.parent_id_path = std::move(parent_id_path);
   self->state.args = std::move(args);
   self->state.diagnostics = std::move(diagnostics);
   self->set_exception_handler(
@@ -483,11 +496,12 @@ struct bridge_state {
 };
 
 auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
-                 tcp_listen_args args, shared_diagnostic_handler diagnostics)
+                 pipeline_path parent_id_path, tcp_listen_args args,
+                 shared_diagnostic_handler diagnostics)
   -> bridge_actor::behavior_type {
   self->state.connection_manager = self->spawn<caf::linked + caf::detached>(
-    make_connection_manager, bridge_actor{self}, std::move(args),
-    std::move(diagnostics));
+    make_connection_manager, bridge_actor{self}, std::move(parent_id_path),
+    std::move(args), std::move(diagnostics));
   return {
     [self](table_slice& slice) -> caf::result<void> {
       if (self->state.buffer_rp.pending()) {
@@ -527,8 +541,10 @@ public:
     args.no_location_overrides = ctrl.no_location_overrides();
     args.has_terminal = ctrl.has_terminal();
     args.is_hidden = ctrl.is_hidden();
-    auto bridge = ctrl.self().spawn<caf::linked>(make_bridge, std::move(args),
-                                                 ctrl.shared_diagnostics());
+    auto bridge
+      = ctrl.self().spawn<caf::linked>(make_bridge, ctrl.operator_path(),
+                                       std::move(args),
+                                       ctrl.shared_diagnostics());
     while (true) {
       auto slice = table_slice{};
       ctrl.set_waiting(true);
