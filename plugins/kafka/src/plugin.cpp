@@ -33,7 +33,7 @@ class plugin final : public virtual loader_plugin<kafka_loader>,
 public:
   auto initialize(const record& config,
                   const record& /* global_config */) -> caf::error override {
-    config_ = config;
+    config_ = flatten(config);
     if (!config_.contains("bootstrap.servers")) {
       config_["bootstrap.servers"] = "localhost";
     }
