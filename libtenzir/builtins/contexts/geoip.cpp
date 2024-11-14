@@ -112,9 +112,9 @@ public:
     return "geoip";
   }
 
-  auto entry_data_list_to_list(MMDB_entry_data_list_s* entry_data_list,
-                               int* status, list& l) const
-    -> MMDB_entry_data_list_s* {
+  auto
+  entry_data_list_to_list(MMDB_entry_data_list_s* entry_data_list, int* status,
+                          list& l) const -> MMDB_entry_data_list_s* {
     switch (entry_data_list->entry_data.type) {
       case MMDB_DATA_TYPE_MAP: {
         auto size = entry_data_list->entry_data.data_size;
@@ -161,9 +161,10 @@ public:
         break;
       }
       case MMDB_DATA_TYPE_BYTES: {
-        auto bytes = blob{
-          reinterpret_cast<const std::byte*>(entry_data_list->entry_data.bytes),
-          entry_data_list->entry_data.data_size};
+        const auto* ptr = reinterpret_cast<const std::byte*>(
+          entry_data_list->entry_data.bytes);
+        auto bytes
+          = blob{ptr, std::next(ptr, entry_data_list->entry_data.data_size)};
         l.emplace_back(std::move(bytes));
         entry_data_list = entry_data_list->next;
         break;
@@ -211,8 +212,8 @@ public:
 
   auto entry_data_list_to_record(MMDB_entry_data_list_s* entry_data_list,
                                  int* status, record& r,
-                                 const std::string& key = {}) const
-    -> MMDB_entry_data_list_s* {
+                                 const std::string& key
+                                 = {}) const -> MMDB_entry_data_list_s* {
     switch (entry_data_list->entry_data.type) {
       case MMDB_DATA_TYPE_MAP: {
         auto size = entry_data_list->entry_data.data_size;
@@ -265,9 +266,10 @@ public:
         break;
       }
       case MMDB_DATA_TYPE_BYTES: {
-        auto bytes = blob{
-          reinterpret_cast<const std::byte*>(entry_data_list->entry_data.bytes),
-          entry_data_list->entry_data.data_size};
+        const auto* ptr = reinterpret_cast<const std::byte*>(
+          entry_data_list->entry_data.bytes);
+        auto bytes
+          = blob{ptr, std::next(ptr, entry_data_list->entry_data.data_size)};
         r[key] = std::move(bytes);
         entry_data_list = entry_data_list->next;
         break;
@@ -313,8 +315,9 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto legacy_apply(series array, bool replace)
-    -> caf::expected<std::vector<series>> override {
+  auto
+  legacy_apply(series array,
+               bool replace) -> caf::expected<std::vector<series>> override {
     if (!mmdb_) {
       return caf::make_error(ec::lookup_error,
                              fmt::format("no GeoIP data currently exists for "
@@ -599,8 +602,8 @@ struct v1_loader : public context_loader {
     return 1;
   }
 
-  auto load(chunk_ptr serialized) const
-    -> caf::expected<std::unique_ptr<context>> {
+  auto
+  load(chunk_ptr serialized) const -> caf::expected<std::unique_ptr<context>> {
     const auto* serialized_data
       = fbs::context::geoip::GetGeoIPData(serialized->data());
     if (not serialized_data) {
@@ -630,8 +633,8 @@ struct v2_loader : public context_loader {
     return 2;
   }
 
-  auto load(chunk_ptr serialized) const
-    -> caf::expected<std::unique_ptr<context>> {
+  auto
+  load(chunk_ptr serialized) const -> caf::expected<std::unique_ptr<context>> {
     const auto* cache_dir
       = get_if<std::string>(&global_config_, "tenzir.cache-directory");
     TENZIR_ASSERT(cache_dir);
@@ -683,8 +686,8 @@ private:
 };
 
 class plugin : public virtual context_factory_plugin<"geoip"> {
-  auto initialize(const record&, const record& global_config)
-    -> caf::error override {
+  auto initialize(const record&,
+                  const record& global_config) -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
     register_loader(std::make_unique<v2_loader>(global_config));
     return caf::none;
@@ -723,8 +726,9 @@ class plugin : public virtual context_factory_plugin<"geoip"> {
                                            std::move(mapped_mmdb.value()));
   }
 
-  auto make_context(invocation inv, session ctx) const
-    -> failure_or<make_context_result> override {
+  auto
+  make_context(invocation inv,
+               session ctx) const -> failure_or<make_context_result> override {
     auto name = located<std::string>{};
     auto db_path = std::optional<located<std::string>>{};
     auto parser = argument_parser2::context("geoip");

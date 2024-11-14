@@ -315,6 +315,15 @@ using enumeration = uint8_t;
 struct blob : std::vector<std::byte> {
   using super = std::vector<std::byte>;
   using super::super;
+
+  friend constexpr auto operator+(blob l, const blob& r) -> blob {
+    return l += r;
+  }
+
+  constexpr auto operator+=(const blob& r) -> blob& {
+    insert(end(), r.begin(), r.end());
+    return *this;
+  }
 };
 
 namespace fbs {
