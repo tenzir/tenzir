@@ -246,11 +246,11 @@ public:
 private:
   auto name() const -> std::string final {
     return fmt::format("context::create_{}",
-                       detail::replace_all(std::string{Name.str()}, "-", "_"));
+                       detail::replace_all(Name, "-", "_"));
   }
 
   auto context_name() const -> std::string final {
-    return std::string{Name.str()};
+    return Name;
   }
 
   auto make(invocation inv, session ctx) const
