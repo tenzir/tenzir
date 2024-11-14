@@ -314,7 +314,7 @@ class plugin : public virtual context_factory_plugin<"bloom-filter"> {
     auto capacity = located<uint64_t>{};
     auto fp_probability = located<double>{};
     auto parser = argument_parser2::context("bloom-filter");
-    parser.add(name, "<name>");
+    parser.add(name, "<context>");
     parser.add("capacity", capacity);
     parser.add("fp_probability", fp_probability);
     TRY(parser.parse(inv, ctx));

@@ -841,7 +841,7 @@ class plugin : public virtual context_factory_plugin<"lookup-table"> {
     -> failure_or<make_context_result> override {
     auto name = located<std::string>{};
     auto parser = argument_parser2::context("lookup-table");
-    parser.add(name, "<name>");
+    parser.add(name, "<context>");
     TRY(parser.parse(inv, ctx));
     return make_context_result{
       std::move(name),
