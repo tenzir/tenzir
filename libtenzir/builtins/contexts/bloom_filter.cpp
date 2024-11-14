@@ -184,7 +184,6 @@ public:
       return result;
     };
     return context_update_result{
-      .update_info = show(),
       .make_query = std::move(query_f),
     };
   }
@@ -224,7 +223,6 @@ public:
       return result;
     };
     return context_update_result{
-      .update_info = show(),
       .make_query = std::move(make_query),
     };
   }

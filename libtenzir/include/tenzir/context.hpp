@@ -50,9 +50,6 @@ struct context_update_result {
                          const std::vector<std::string>& fields)
                       ->caf::expected<std::vector<expression>>>;
 
-  // TODO The update info is no longer needed since context update became a
-  // sink operator.
-  record update_info;
   // Function for emitting an updated expression. Used for retroactive lookups.
   make_query_type make_query = {};
 };
