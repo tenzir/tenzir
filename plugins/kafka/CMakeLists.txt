@@ -16,11 +16,22 @@ TenzirRegisterPlugin(
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
   INCLUDE_DIRECTORIES include)
 
-set(RDKAFKA_BUILD_STATIC ON CACHE STRING "")
-set(RDKAFKA_BUILD_EXAMPLES OFF CACHE STRING "")
-set(RDKAFKA_BUILD_TESTS OFF CACHE STRING "")
+set(RDKAFKA_BUILD_STATIC
+    ON
+    CACHE STRING "")
+set(RDKAFKA_BUILD_EXAMPLES
+    OFF
+    CACHE STRING "")
+set(RDKAFKA_BUILD_TESTS
+    OFF
+    CACHE STRING "")
 
 add_subdirectory(aux/librdkafka)
+target_sources(
+  rdkafka
+  PRIVATE aux/librdkafka/src/rdkafka_aws.c
+          aux/librdkafka/src/rdkafka_sasl_aws_msk_iam.c
+          aux/librdkafka/src/rdstringbuilder.c)
 target_compile_definitions(rdkafka PUBLIC WITH_SASL_AWS_MSK_IAM=1)
 target_compile_definitions(rdkafka++ PUBLIC WITH_SASL_AWS_MSK_IAM=1)
 add_library(RdKafka::rdkafka++ ALIAS rdkafka++)
