@@ -223,8 +223,8 @@ struct value_data {
   std::optional<time> create_timeout;
   std::optional<time> write_timeout;
 
-  // TODO: read_timeout and read_duration can move into the same optional as
-  // they cannot be set independently
+  // TODO: read_timeout and read_timeout_duration can move into the same
+  // optional as they cannot be set independently
   std::optional<duration> read_timeout_duration;
   std::optional<time> read_timeout;
 
@@ -289,7 +289,7 @@ public:
         continue;
       }
       // We need to retry the lookup if we had an expired hit, as a matched IP
-      // address that was expired may very well be part of another subnet.
+      // address in an expired subnet may very well be part of another subnet.
     retry:
       if (auto [subnet, entry] = subnet_lookup(value); entry) {
         if (entry->is_expired(now)) {

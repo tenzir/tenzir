@@ -88,7 +88,7 @@ public:
   /// Inspects the context.
   virtual auto show() const -> record = 0;
 
-  /// Dumps the context content or a dumping error.
+  /// Dumps the context's contents.
   virtual auto dump() -> generator<table_slice> = 0;
 
   /// Updates the context.
