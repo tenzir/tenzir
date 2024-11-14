@@ -278,6 +278,10 @@ public:
     auto builder = series_builder{};
     const auto now = time::clock::now();
     for (auto value : array.values()) {
+      // TODO: This should really be making use of heterogeneous map lookups
+      // instead of materializing, but we're not using `data` and `data_view`
+      // directly here, but rather a custom wrapper around them to make mixed
+      // number types
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
         if (it->second.is_expired(now)) {
@@ -314,6 +318,10 @@ public:
     auto builder = series_builder{};
     const auto now = time::clock::now();
     for (auto value : array.values()) {
+      // TODO: This should really be making use of heterogeneous map lookups
+      // instead of materializing, but we're not using `data` and `data_view`
+      // directly here, but rather a custom wrapper around them to make mixed
+      // number types
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
         if (it->second.is_expired(now)) {
