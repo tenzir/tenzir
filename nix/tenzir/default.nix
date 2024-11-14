@@ -171,6 +171,7 @@
             "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
             "-DTENZIR_ENABLE_MANPAGES=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
+            "-DTENZIR_ENABLE_BUNDLED_LIBRDKAFKA=OFF"
             "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
             "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
             "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"

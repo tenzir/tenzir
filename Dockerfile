@@ -292,13 +292,13 @@ RUN apt-get update && \
       libfmt9 \
       libgrpc++1.51 \
       libhttp-parser2.9 \
-      liblz4 \
+      liblz4-1 \
       libmaxminddb0 \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \
       libre2-9 \
-      libsasl2 \
+      libsasl2-2 \
       libspdlog1.10 \
       libunwind8 \
       libxml2 \

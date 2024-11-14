@@ -18,6 +18,12 @@
 #include <rdkafkacpp.h>
 #include <string>
 
+#if TENZIR_ENABLE_BUNDLED_LIBRDKAFKA
+#  include <rdkafkacpp.h>
+#else
+#  include <librdkafka/rdkafkacpp.h>
+#endif
+
 namespace tenzir::plugins::kafka {
 
 /// Wraps a global Kafka configuration.

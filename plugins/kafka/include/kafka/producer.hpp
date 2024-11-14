@@ -16,8 +16,13 @@
 #include <chrono>
 #include <cstddef>
 #include <memory>
-#include <rdkafkacpp.h>
 #include <span>
+
+#if TENZIR_ENABLE_BUNDLED_LIBRDKAFKA
+#  include <rdkafkacpp.h>
+#else
+#  include <librdkafka/rdkafkacpp.h>
+#endif
 
 namespace tenzir::plugins::kafka {
 
