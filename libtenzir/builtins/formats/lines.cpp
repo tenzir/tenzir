@@ -271,8 +271,8 @@ class read_lines final
     return "read_lines";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = parser_args{};
     argument_parser2::operator_(name())
       .add("skip_empty", args.skip_empty)
@@ -286,8 +286,8 @@ class read_lines final
 
 class write_lines final
   : public virtual operator_plugin2<writer_adapter<lines_printer>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("write_lines").parse(inv, ctx));
     return std::make_unique<writer_adapter<lines_printer>>(lines_printer{});
   }

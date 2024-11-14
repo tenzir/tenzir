@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/error.hpp>
@@ -15,8 +16,8 @@
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/logger.hpp>
-#include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/uuid.hpp>
 #include <tenzir/view.hpp>
@@ -99,11 +100,11 @@ struct current_dump {
   series_builder builder;
 };
 
-class ctx final : public virtual context {
+class geoip_context final : public virtual context {
 public:
-  ctx() noexcept = default;
+  geoip_context() noexcept = default;
 
-  explicit ctx(mmdb_ptr mmdb, chunk_ptr mapped_mmdb_)
+  explicit geoip_context(mmdb_ptr mmdb, chunk_ptr mapped_mmdb_)
     : mapped_mmdb_{std::move(mapped_mmdb_)}, mmdb_{std::move(mmdb)} {
   }
 
@@ -312,7 +313,7 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series array, bool replace)
+  auto legacy_apply(series array, bool replace)
     -> caf::expected<std::vector<series>> override {
     if (!mmdb_) {
       return caf::make_error(ec::lookup_error,
@@ -384,6 +385,80 @@ public:
           ec::lookup_error, fmt::format("error looking up IP address '{}' in "
                                         "GeoIP database: {}",
                                         ip_string, MMDB_strerror(status)));
+      }
+      builder.data(output);
+    }
+    return builder.finish();
+  }
+
+  auto apply(const series& array, session ctx) -> std::vector<series> override {
+    if (not mmdb_) {
+      diagnostic::warning("geoip context has no database").emit(ctx);
+      return {series::null(null_type{}, array.length())};
+    }
+    auto status = 0;
+    MMDB_entry_data_list_s* entry_data_list = nullptr;
+    auto builder = series_builder{};
+    if (not caf::holds_alternative<ip_type>(array.type)
+        and not caf::holds_alternative<string_type>(array.type)) {
+      diagnostic::warning("expected `ip` or `string`, but got `{}`",
+                          array.type.kind())
+        .emit(ctx);
+      return {series::null(null_type{}, array.length())};
+    }
+    const auto is_ip = caf::holds_alternative<ip_type>(array.type);
+    for (const auto& value : array.values()) {
+      if (caf::holds_alternative<caf::none_t>(value)) {
+        builder.null();
+        continue;
+      }
+      auto address_info_error = 0;
+      const auto ip_string = is_ip
+                               ? fmt::to_string(value)
+                               : materialize(caf::get<std::string_view>(value));
+      auto result = MMDB_lookup_string(mmdb_.get(), ip_string.data(),
+                                       &address_info_error, &status);
+      if (address_info_error != MMDB_SUCCESS) {
+        diagnostic::warning("{}", gai_strerror(address_info_error))
+          .note("failed to look up `{}`", ip_string)
+          .emit(ctx);
+        builder.null();
+        continue;
+      }
+      if (status != MMDB_SUCCESS) {
+        diagnostic::warning("{}", MMDB_strerror(status))
+          .note("failed to look up `{}`", ip_string)
+          .emit(ctx);
+        builder.null();
+        continue;
+      }
+      if (not result.found_entry) {
+        builder.null();
+        continue;
+      }
+      status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
+      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+        if (entry_data_list) {
+          MMDB_free_entry_data_list(entry_data_list);
+        }
+      });
+      if (status != MMDB_SUCCESS) {
+        diagnostic::warning("{}", MMDB_strerror(status))
+          .note("failed to look up `{}`", ip_string)
+          .emit(ctx);
+        builder.null();
+        continue;
+      }
+      auto* entry_data_list_it = entry_data_list;
+      auto output = record{};
+      entry_data_list_it
+        = entry_data_list_to_record(entry_data_list_it, &status, output);
+      if (status != MMDB_SUCCESS) {
+        diagnostic::warning("{}", MMDB_strerror(status))
+          .note("failed to look up `{}`", ip_string)
+          .emit(ctx);
+        builder.null();
+        continue;
       }
       builder.data(output);
     }
@@ -487,23 +562,30 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice, context::parameter_map)
-    -> caf::expected<update_result> override {
+  auto legacy_update(table_slice, context_parameter_map)
+    -> caf::expected<context_update_result> override {
     return caf::make_error(ec::unimplemented,
                            "geoip context can not be updated with events");
+  }
+
+  auto update(const table_slice& events, const context_update_args& args,
+              session ctx) -> failure_or<context_update_result> override {
+    TENZIR_UNUSED(events, args);
+    diagnostic::error("geoip context cannot be updated").emit(ctx);
+    return failure::promise();
   }
 
   auto reset() -> caf::expected<void> override {
     return {};
   }
 
-  auto save() const -> caf::expected<save_result> override {
+  auto save() const -> caf::expected<context_save_result> override {
     if (!mapped_mmdb_) {
       return caf::make_error(ec::lookup_error,
                              fmt::format("no GeoIP data currently exists for "
                                          "this context"));
     }
-    return save_result{.data = mapped_mmdb_, .version = latest_version};
+    return context_save_result{.data = mapped_mmdb_, .version = latest_version};
   }
 
 private:
@@ -533,7 +615,7 @@ struct v1_loader : public context_loader {
                              "context: invalid type or value for "
                              "DB path entry");
     }
-    const auto* plugin = plugins::find<context_plugin>("geoip");
+    const auto* plugin = plugins::find_context("geoip");
     TENZIR_ASSERT(plugin);
     return plugin->make_context({{path_key, serialized_string->str()}});
   }
@@ -592,15 +674,15 @@ struct v2_loader : public context_loader {
                                          detail::describe_errno()));
     }
     std::filesystem::remove(temp_file_name);
-    return std::make_unique<ctx>(std::move(*mmdb),
-                                 std::move(mapped_mmdb.value()));
+    return std::make_unique<geoip_context>(std::move(*mmdb),
+                                           std::move(mapped_mmdb.value()));
   }
 
 private:
   const record global_config_;
 };
 
-class plugin : public virtual context_plugin {
+class plugin : public virtual context_factory_plugin<"geoip"> {
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
@@ -608,11 +690,7 @@ class plugin : public virtual context_plugin {
     return caf::none;
   }
 
-  auto name() const -> std::string override {
-    return "geoip";
-  }
-
-  auto make_context(context::parameter_map parameters) const
+  auto make_context(context_parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
     auto db_path = std::string{};
     for (const auto& [key, value] : parameters) {
@@ -630,7 +708,7 @@ class plugin : public virtual context_plugin {
         .to_error();
     }
     if (db_path.empty()) {
-      return std::make_unique<ctx>(nullptr, nullptr);
+      return std::make_unique<geoip_context>(nullptr, nullptr);
     }
     auto mmdb = make_mmdb(db_path);
     auto mapped_mmdb = chunk::mmap(db_path);
@@ -641,8 +719,48 @@ class plugin : public virtual context_plugin {
     if (not mmdb) {
       return mmdb.error();
     }
-    return std::make_unique<ctx>(std::move(*mmdb),
-                                 std::move(mapped_mmdb.value()));
+    return std::make_unique<geoip_context>(std::move(*mmdb),
+                                           std::move(mapped_mmdb.value()));
+  }
+
+  auto make_context(invocation inv, session ctx) const
+    -> failure_or<make_context_result> override {
+    auto name = located<std::string>{};
+    auto db_path = std::optional<located<std::string>>{};
+    auto parser = argument_parser2::context("geoip");
+    parser.add(name, "<context>");
+    parser.add("db_path", db_path);
+    TRY(parser.parse(inv, ctx));
+    if (not db_path) {
+      return make_context_result{
+        std::move(name),
+        std::make_unique<geoip_context>(nullptr, nullptr),
+      };
+    }
+    auto failed = false;
+    auto mapped_mmdb = chunk::mmap(db_path->inner);
+    if (not mapped_mmdb) {
+      diagnostic::error("unable to retrieve file contents into memory")
+        .primary(*db_path)
+        .emit(ctx);
+      failed = true;
+    }
+    auto mmdb = make_mmdb(db_path->inner);
+    if (not mmdb) {
+      diagnostic::error(mmdb.error())
+        .primary(*db_path)
+        .note("failed to open the GeoIP database")
+        .emit(ctx);
+      failed = true;
+    }
+    if (failed) {
+      return failure::promise();
+    }
+    return make_context_result{
+      std::move(name),
+      std::make_unique<geoip_context>(std::move(*mmdb),
+                                      std::move(*mapped_mmdb)),
+    };
   }
 };
 

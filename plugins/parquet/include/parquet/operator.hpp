@@ -25,8 +25,8 @@ namespace tenzir::plugins::parquet {
 
 namespace {
 
-auto parse_parquet(generator<chunk_ptr> input,
-                   operator_control_plane& ctrl) -> generator<table_slice> {
+auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
+  -> generator<table_slice> {
   auto parquet_chunk = chunk_ptr{};
   for (auto&& chunk : drain_bytes(std::move(input))) {
     if (not chunk) {

@@ -546,8 +546,8 @@ private:
 class plugin final : public virtual parser_plugin<pcap_parser>,
                      public virtual printer_plugin<pcap_printer> {
 public:
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
+  auto initialize(const record& config, const record& /* global_config */)
+    -> caf::error override {
     config_ = config;
     return caf::none;
   }
@@ -582,8 +582,8 @@ private:
 class write_plugin final
   : public virtual operator_plugin2<writer_adapter<pcap_printer>> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<pcap_printer>>(pcap_printer{});
   }

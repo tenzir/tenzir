@@ -51,8 +51,8 @@ struct saver_args {
   }
 };
 
-auto udp_loader_impl(operator_control_plane& ctrl,
-                     loader_args args) -> generator<chunk_ptr> {
+auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
+  -> generator<chunk_ptr> {
   // A UDP packet contains its length as 16-bit field in the header, giving
   // rise to packets sized up to 65,535 bytes (including the header). When we
   // go over IPv4, we have a limit of 65,507 bytes (65,535 bytes − 8-byte UDP
@@ -302,8 +302,8 @@ public:
 
 class load_plugin final
   : public virtual operator_plugin2<loader_adapter<loader>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     auto parser = argument_parser2::operator_(name());
     parser.add(args.url, "<endpoint>");
@@ -319,8 +319,8 @@ class load_plugin final
 
 class save_plugin final
   : public virtual operator_plugin2<saver_adapter<saver>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto parser = argument_parser2::operator_(name());
     parser.add(args.url, "<endpoint>");

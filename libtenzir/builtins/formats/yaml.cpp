@@ -335,8 +335,8 @@ class read_yaml final
 
 class write_yaml final
   : public virtual operator_plugin2<writer_adapter<yaml_printer>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<yaml_printer>>(yaml_printer{});
   }

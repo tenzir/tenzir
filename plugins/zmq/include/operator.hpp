@@ -169,8 +169,8 @@ class connection {
   };
 
 public:
-  static auto
-  make_source(const loader_args& args) -> caf::expected<connection> {
+  static auto make_source(const loader_args& args)
+    -> caf::expected<connection> {
     try {
       auto result = connection{::zmq::socket_type::sub};
       const auto& endpoint = args.endpoint->inner;

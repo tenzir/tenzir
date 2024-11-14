@@ -31,8 +31,8 @@ public:
     TENZIR_ASSERT(finalized.ok(), finalized.ToString().c_str());
   }
 
-  auto initialize(const record& plugin_config,
-                  const record& global_config) -> caf::error override {
+  auto initialize(const record& plugin_config, const record& global_config)
+    -> caf::error override {
     (void)global_config;
     auto initialized = arrow::fs::EnsureS3Initialized();
     if (not initialized.ok()) {

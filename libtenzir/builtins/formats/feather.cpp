@@ -295,8 +295,8 @@ public:
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
 };
 
-auto parse_feather(generator<chunk_ptr> input,
-                   operator_control_plane& ctrl) -> generator<table_slice> {
+auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
+  -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
   auto listener = std::make_shared<callback_listener>();
   auto stream_decoder = arrow::ipc::StreamDecoder(listener);
@@ -568,8 +568,8 @@ class plugin final : public virtual parser_plugin<feather_parser>,
 class read_plugin final
   : public virtual operator_plugin2<parser_adapter<feather_parser>> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<parser_adapter<feather_parser>>(feather_parser{});
   }
@@ -578,8 +578,8 @@ public:
 class write_plugin final
   : public virtual operator_plugin2<writer_adapter<feather_printer>> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto options = feather_options{};
     TRY(argument_parser2::operator_(name())
           .add("compression_level", options.compression_level)

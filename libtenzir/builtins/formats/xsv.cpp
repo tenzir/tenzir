@@ -742,8 +742,8 @@ public:
 
 class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = xsv_options{};
     auto field_sep_str = located<std::string>{};
     auto list_sep_str = located<std::string>{};
@@ -837,8 +837,8 @@ public:
     return fmt::format("write_{}", Name);
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto no_header = bool{};
     TRY(argument_parser2::operator_(name())
           .add("no_header", no_header)

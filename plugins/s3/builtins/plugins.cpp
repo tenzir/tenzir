@@ -75,8 +75,8 @@ public:
     return {};
   }
 
-  auto make(operator_factory_plugin::invocation inv,
-            session ctx) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_plugin::invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = s3_args{};
     TRY(argument_parser2::operator_(this->name())
           .add("anonymous", args.anonymous)

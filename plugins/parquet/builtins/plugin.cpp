@@ -19,8 +19,8 @@ namespace {
 class read_plugin final
   : public virtual operator_plugin2<parser_adapter<parquet_parser>> {
 public:
-  auto make(operator_factory_plugin::invocation inv,
-            session ctx) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_plugin::invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(this->name()).parse(inv, ctx));
     return std::make_unique<parser_adapter<parquet_parser>>(parquet_parser{});
   }
@@ -29,8 +29,8 @@ public:
 class write_plugin final
   : public virtual operator_plugin2<writer_adapter<parquet_printer>> {
 public:
-  auto make(operator_factory_plugin::invocation inv,
-            session ctx) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_plugin::invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto options = parquet_options{};
     TRY(argument_parser2::operator_(this->name())
           .add("compression_level", options.compression_level)

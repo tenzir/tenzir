@@ -106,6 +106,7 @@ public:
           {"build", "version | set build.features = features | unflatten | "
                     "yield build | set #schema = \"tenzir.build\""},
           {"config", "config"},
+          {"contexts", "contexts"},
           {"dependencies", "version | yield dependencies[] | set #schema = "
                            "\"tenzir.dependency\""},
           {"partitions", "partitions"},
