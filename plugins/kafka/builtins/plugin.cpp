@@ -29,9 +29,32 @@ constexpr auto stringify = detail::overload{
 class load_plugin final
   : public virtual operator_plugin2<loader_adapter<kafka_loader>> {
 public:
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
-    config_ = config;
+  auto initialize(const record& unused_plugin_config,
+                  const record& global_config) -> caf::error override {
+    if (not unused_plugin_config.empty()) {
+      return diagnostic::error("`{}.yaml` is unused; Use `kafka.yaml` instead",
+                               this->name())
+        .to_error();
+    }
+    [&] {
+      auto ptr = global_config.find("plugins");
+      if (ptr == global_config.end()) {
+        return;
+      }
+      const auto* plugin_config = caf::get_if<record>(&ptr->second);
+      if (not plugin_config) {
+        return;
+      }
+      auto kafka_config_ptr = plugin_config->find("kafka");
+      if (kafka_config_ptr == plugin_config->end()) {
+        return;
+      }
+      auto kafka_config = caf::get_if<record>(&kafka_config_ptr->second);
+      if (not kafka_config or kafka_config->empty()) {
+        return;
+      }
+      config_ = flatten(*kafka_config);
+    }();
     if (!config_.contains("bootstrap.servers")) {
       config_["bootstrap.servers"] = "localhost";
     }
@@ -105,9 +128,32 @@ private:
 
 class save_plugin final
   : public virtual operator_plugin2<saver_adapter<kafka_saver>> {
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
-    config_ = config;
+  auto initialize(const record& unused_plugin_config,
+                  const record& global_config) -> caf::error override {
+    if (not unused_plugin_config.empty()) {
+      return diagnostic::error("`{}.yaml` is unused; Use `kafka.yaml` instead",
+                               this->name())
+        .to_error();
+    }
+    [&] {
+      auto ptr = global_config.find("plugins");
+      if (ptr == global_config.end()) {
+        return;
+      }
+      const auto* plugin_config = caf::get_if<record>(&ptr->second);
+      if (not plugin_config) {
+        return;
+      }
+      auto kafka_config_ptr = plugin_config->find("kafka");
+      if (kafka_config_ptr == plugin_config->end()) {
+        return;
+      }
+      const auto kafka_config = caf::get_if<record>(&kafka_config_ptr->second);
+      if (not kafka_config or kafka_config->empty()) {
+        return;
+      }
+      config_ = flatten(*kafka_config);
+    }();
     if (!config_.contains("bootstrap.servers")) {
       config_["bootstrap.servers"] = "localhost";
     }
