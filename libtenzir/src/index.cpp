@@ -1253,14 +1253,12 @@ index(index_actor::stateful_pointer<index_state> self,
             }
             // Allows the client to query further results after initial taste.
             auto query_id = query_context.id;
-            auto client = caf::visit(
-              detail::overload{
+            auto client = match(query_context.cmd, detail::overload{
                 [&](extract_query_context& extract) {
                   return caf::actor_cast<receiver_actor<atom::done>>(
                     extract.sink);
                 },
-              },
-              query_context.cmd);
+              });
             if (lookup_result.empty()) {
               TENZIR_TRACE("{} returns without result: no partitions qualify",
                            *self);

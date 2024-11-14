@@ -145,7 +145,7 @@ struct zeek_parser<list_type> {
                 })
               % set_separator);
     };
-    return caf::visit(f, lt.value_type());
+    return match(lt.value_type(), f);
   }
 };
 
@@ -302,7 +302,7 @@ struct zeek_printer {
         return "record";
       },
     };
-    return caf::visit(f, t);
+    return match(t, f);
   }
 
   auto generate_timestamp() const -> std::string {
@@ -343,7 +343,7 @@ struct zeek_printer {
       } else {
         first = false;
       }
-      caf::visit(visitor{out, *this}, v);
+      match(v, visitor{out, *this});
     }
     return true;
   }
@@ -445,7 +445,7 @@ struct zeek_printer {
         } else {
           first = false;
         }
-        caf::visit(*this, v);
+        match(v, *this);
       }
       return true;
     }
@@ -698,7 +698,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                        return document.builder->add(value);
                      });
         };
-        document.parsers.push_back(caf::visit(make_field_parser, *parsed_type));
+        document.parsers.push_back(match(*parsed_type, make_field_parser));
         record_fields.push_back({field, std::move(*parsed_type)});
       }
       const auto schema_name = fmt::format("zeek.{}", document.path);

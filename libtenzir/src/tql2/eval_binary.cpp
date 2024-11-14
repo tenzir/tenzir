@@ -661,7 +661,7 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
         check(b.AppendNulls(l.length()));
       }
     };
-    caf::visit(f, rty);
+    match(rty, f);
     return finish(b);
   }
 };

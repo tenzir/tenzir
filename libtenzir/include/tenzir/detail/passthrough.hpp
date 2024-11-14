@@ -71,26 +71,6 @@ struct sum_type_access<tenzir::detail::passthrough_type<T, Forward>> final {
 
 namespace tenzir {
 template <class T, class Forward>
-  requires has_variant_traits<std::remove_cvref_t<Forward>>
-class variant_traits<detail::passthrough_type<T, Forward>> {
-  using V = detail::passthrough_type<T, Forward>;
-  using backing_traits = variant_traits<std::remove_cvref_t<Forward>>;
-
-public:
-  static constexpr auto count = backing_traits::count;
-
-  static auto index(const V& x) -> size_t {
-    return backing_traits::index(x.ref);
-  }
-
-  template <size_t I>
-  static auto get(const V& x) -> decltype(auto) {
-    return backing_traits::template get<I>(x.ref);
-  }
-};
-
-template <class T, class Forward>
-  requires(not has_variant_traits<std::remove_cvref_t<Forward>>)
 class variant_traits<detail::passthrough_type<T, Forward>> {
   using V = detail::passthrough_type<T, Forward>;
 
@@ -102,8 +82,8 @@ public:
   }
 
   template <size_t I>
-    requires(I == 0)
   static auto get(const V& x) -> decltype(auto) {
+    static_assert(I == 0, "passthrough should only ever be visited on index 0");
     return x.ref;
   }
 };

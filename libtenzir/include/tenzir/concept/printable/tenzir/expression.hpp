@@ -52,12 +52,11 @@ struct expression_printer : printer_base<expression_printer> {
 
     bool operator()(const predicate& p) const {
       auto op = ' ' << make_printer<relational_operator>{} << ' ';
-      return caf::visit(*this, p.lhs) && op(out_, p.op)
-             && caf::visit(*this, p.rhs);
+      return match(p.lhs, *this) && op(out_, p.op) && match(p.rhs, *this);
     }
 
     bool operator()(const operand& op) const {
-      return caf::visit(*this, op);
+      return match(op, *this);
     }
 
     bool operator()(const meta_extractor& e) const {
@@ -106,7 +105,7 @@ struct expression_printer : printer_base<expression_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const expression& e) const {
-    return caf::visit(visitor<Iterator>{out}, e);
+    return match(e, visitor<Iterator>{out});
   }
 };
 

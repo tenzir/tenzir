@@ -114,7 +114,7 @@ public:
             return series::null(ty, length);
           },
         };
-        return caf::visit(f, *value.inner.array);
+        return match(*value.inner.array, f);
       }
       // fn(<duration>, <duration>)
       // fn(x, 1h) -> to multiples of 1h
@@ -172,7 +172,7 @@ public:
             .emit(ctx);
           return series::null(ty, length);
         }};
-      return caf::visit(f, *value.inner.array);
+      return match(*value.inner.array, f);
     });
   }
 };

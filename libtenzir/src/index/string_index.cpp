@@ -144,7 +144,7 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
       return detail::container_lookup(*this, op, xs);
     },
   };
-  return caf::visit(f, x);
+  return match(x, f);
 }
 
 size_t string_index::memusage_impl() const {

@@ -292,7 +292,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                   return x;
                 }
               }};
-            return caf::visit(f, d);
+            return tenzir::match(d, f);
           };
           transforms.emplace_back(to_re);
         } else if (*i == "base64") {
@@ -357,7 +357,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                 return std::move(result.error());
               return std::move(*result);
             }};
-            return caf::visit(f, d);
+            return tenzir::match(d, f);
           };
           transforms.emplace_back(to_re);
         } else if (*i == "endswith") {
@@ -370,7 +370,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                 return std::move(result.error());
               return std::move(*result);
             }};
-            return caf::visit(f, d);
+            return tenzir::match(d, f);
           };
           transforms.emplace_back(to_re);
         } else if (*i == "re") {
@@ -397,7 +397,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                 return x;
               },
             };
-            return caf::visit(f, d);
+            return tenzir::match(d, f);
           };
           transforms.emplace_back(to_re);
         } else if (*i == "cidr") {

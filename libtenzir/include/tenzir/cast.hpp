@@ -80,11 +80,13 @@ struct cast_helper<FromType, ToType> {
             from_type, to_type);
         };
     if constexpr (concrete_type<FromType>) {
-      return caf::visit(f, detail::passthrough(from_type), to_type);
+      return match(
+        std::tuple{detail::passthrough(from_type), std::ref(to_type)}, f);
     } else if constexpr (concrete_type<ToType>) {
-      return caf::visit(f, from_type, detail::passthrough(to_type));
+      return match(
+        std::tuple{std::ref(from_type), detail::passthrough(to_type)}, f);
     } else {
-      return caf::visit(f, from_type, to_type);
+      return match(std::tie(from_type, to_type), f);
     }
   }
 
@@ -111,11 +113,13 @@ struct cast_helper<FromType, ToType> {
       }
     };
     if constexpr (concrete_type<FromType>) {
-      return caf::visit(f, detail::passthrough(from_type), to_type);
+      return match(
+        std::tuple{detail::passthrough(from_type), std::ref(to_type)}, f);
     } else if constexpr (concrete_type<ToType>) {
-      return caf::visit(f, from_type, detail::passthrough(to_type));
+      return match(
+        std::tuple{std::ref(from_type), detail::passthrough(to_type)}, f);
     } else {
-      return caf::visit(f, from_type, to_type);
+      return match(std::tie(from_type, to_type), f);
     }
   }
 
@@ -141,11 +145,13 @@ struct cast_helper<FromType, ToType> {
       }
     };
     if constexpr (concrete_type<FromType>) {
-      return caf::visit(f, detail::passthrough(from_type), to_type);
+      return match(
+        std::tuple{detail::passthrough(from_type), std::ref(to_type)}, f);
     } else if constexpr (concrete_type<ToType>) {
-      return caf::visit(f, from_type, detail::passthrough(to_type));
+      return match(
+        std::tuple{std::ref(from_type), detail::passthrough(to_type)}, f);
     } else {
-      return caf::visit(f, from_type, to_type);
+      return match(std::tie(from_type, to_type), f);
     }
   }
 

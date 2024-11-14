@@ -14,6 +14,7 @@
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/ewah_bitmap.hpp"
 #include "tenzir/null_bitmap.hpp"
+#include "tenzir/variant_traits.hpp"
 #include "tenzir/wah_bitmap.hpp"
 
 #include <caf/detail/type_list.hpp>
@@ -91,6 +92,23 @@ public:
 
 private:
   variant bitmap_;
+};
+
+template <>
+class variant_traits<bitmap> {
+  using backing_traits = variant_traits<bitmap::variant>;
+
+public:
+  constexpr static size_t count = backing_traits::count;
+
+  static auto index(const bitmap& x) -> size_t {
+    return backing_traits::index(x.get_data());
+  }
+
+  template <size_t I>
+  static auto get(const bitmap& x) -> decltype(auto) {
+    return backing_traits::template get<I>(x.get_data());
+  }
 };
 
 /// @relates bitmap

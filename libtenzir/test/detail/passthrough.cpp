@@ -23,7 +23,7 @@ TEST(passthrough) {
       CHECK_EQUAL(fi, i);
       CHECK_EQUAL(&fi, &i);
     };
-    caf::visit(f, pi);
+    tenzir::match(pi, f);
   }
   {
     MESSAGE("visitable types can be passed through");
@@ -36,7 +36,7 @@ TEST(passthrough) {
       CHECK_EQUAL(ft, t);
       CHECK_EQUAL(&ft, &t);
     };
-    caf::visit(f, pt, t);
+    tenzir::match(std::tie(pt, t), f);
   }
 }
 

@@ -300,14 +300,14 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
         return diagnostic::warning("base64 decode failure").done();
       }
     },
-    []<typename T>(const T& t) -> tenzir::diagnostic {
+    []<typename T>(const T& t) -> detail::data_builder::data_parsing_result {
       return diagnostic::warning("schema expected `{}`, but the input "
                                  "contained a string",
                                  tenzir::type{t}.kind())
         .done();
     },
   };
-  return caf::visit(visitor, seed);
+  return match(seed, visitor);
 }
 
 auto basic_parser(std::string_view s, const tenzir::type* seed)
@@ -600,7 +600,7 @@ auto node_object::data(tenzir::data d) -> void {
     },
   };
 
-  return caf::visit(visitor, d);
+  return match(d, visitor);
 }
 
 auto node_object::data_unparsed(std::string text) -> void {
@@ -1171,7 +1171,7 @@ auto node_list::data(tenzir::data d) -> void {
       TENZIR_UNREACHABLE();
     },
   };
-  return caf::visit(visitor, d);
+  return match(d, visitor);
 }
 
 auto node_list::data_unparsed(std::string text) -> void {

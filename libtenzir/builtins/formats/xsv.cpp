@@ -258,7 +258,7 @@ struct xsv_printer_impl {
       } else {
         first = false;
       }
-      caf::visit(visitor{out, *this}, v);
+      match(v, visitor{out, *this});
     }
     return true;
   }
@@ -336,7 +336,7 @@ struct xsv_printer_impl {
         if (!sequence_empty) {
           ++out = printer.list_sep;
         }
-        if (!caf::visit(*this, v)) {
+        if (!match(v, *this)) {
           return false;
         }
       }

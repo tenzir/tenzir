@@ -139,7 +139,7 @@ struct json_printer : printer_base<json_printer> {
           separator();
           newline();
         }
-        if (!caf::visit(*this, element))
+        if (!match(element, *this))
           return false;
       }
       if (printed_once) {
@@ -168,12 +168,12 @@ struct json_printer : printer_base<json_printer> {
         indent();
         newline();
         out_ = fmt::format_to(out_, options_.style.field, "\"key\": ");
-        if (!caf::visit(*this, element.first))
+        if (!match(element.first, *this))
           return false;
         separator();
         newline();
         out_ = fmt::format_to(out_, options_.style.field, "\"value\": ");
-        if (!caf::visit(*this, element.second))
+        if (!match(element.second, *this))
           return false;
         dedent();
         newline();
@@ -218,7 +218,7 @@ struct json_printer : printer_base<json_printer> {
             if (!(*this)(name))
               return false;
             out_ = fmt::format_to(out_, options_.style.object, ": ");
-            if (!caf::visit(*this, element.second)) {
+            if (!match(element.second, *this)) {
               return false;
             }
           }
@@ -226,7 +226,7 @@ struct json_printer : printer_base<json_printer> {
           out_ = fmt::format_to(out_, options_.style.field, "{}",
                                 detail::json_escape(element.first));
           out_ = fmt::format_to(out_, options_.style.object, ": ");
-          if (!caf::visit(*this, element.second))
+          if (!match(element.second, *this))
             return false;
         }
       }
@@ -299,7 +299,7 @@ struct json_printer : printer_base<json_printer> {
 
   template <class Iterator>
   auto print(Iterator& out, const view<data>& d) const noexcept -> bool {
-    return caf::visit(print_visitor{out, options_}, d);
+    return match(d, print_visitor{out, options_});
   }
 
   template <class Iterator, class T>

@@ -65,7 +65,7 @@ public:
         [](const auto&) -> std::optional<std::string> {
           return std::nullopt;
         }};
-      auto result = caf::visit(f, evaluated);
+      auto result = tenzir::match(evaluated, f);
       if (not result) {
         diagnostic::error("expected `string` or `int`")
           .primary(offset->get_location())
@@ -84,7 +84,7 @@ public:
     }
     if (options) {
       for (auto& [k, v] : options->inner) {
-        if (auto str = caf::visit(stringify, v)) {
+        if (auto str = tenzir::match(v, stringify)) {
           args.options.inner.emplace_back(k, std::move(str).value());
           continue;
         }
@@ -134,7 +134,7 @@ class save_plugin final
     }
     if (options) {
       for (auto& [k, v] : options->inner) {
-        if (auto str = caf::visit(stringify, v)) {
+        if (auto str = tenzir::match(v, stringify)) {
           args.options.inner.emplace_back(k, std::move(str).value());
           continue;
         }

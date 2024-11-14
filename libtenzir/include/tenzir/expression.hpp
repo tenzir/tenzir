@@ -306,7 +306,7 @@ struct predicate_transformer {
   }
 
   result_type operator()(const negation& n) const {
-    auto x = caf::visit(*this, n.expr());
+    auto x = match(n.expr(), *this);
     if constexpr (std::is_convertible_v<result_type, expression>) {
       return {negation{std::move(x)}};
     } else {
@@ -325,7 +325,7 @@ private:
   result_type make_result(const T& input) const {
     T result;
     for (const auto& op : input) {
-      auto x = caf::visit(*this, op);
+      auto x = match(op, *this);
       if constexpr (std::is_convertible_v<result_type, typename T::value_type>) {
         result.push_back(std::move(x));
       } else {
@@ -346,7 +346,7 @@ private:
 template <typename F>
 auto for_each_predicate(const expression& e, F&& f) {
   auto v = predicate_transformer<F>{std::forward<F>(f)};
-  return caf::visit(v, e);
+  return match(e, v);
 }
 
 /// Transforms an expression by pulling out nested connectives with a single

@@ -59,7 +59,7 @@ enumeration_index::lookup_impl(relational_operator op, data_view d) const {
       return detail::container_lookup(*this, op, xs);
     },
   };
-  return caf::visit(f, d);
+  return match(d, f);
 }
 
 size_t enumeration_index::memusage_impl() const {

@@ -140,7 +140,7 @@ evaluate(const PartitionState& state, const expression& expr) {
     };
     // Package the predicate, its position in the query and the required
     // INDEXER as a "job description". INDEXER can be nullptr
-    auto hdl = caf::visit(v, predicate.lhs, predicate.rhs);
+    auto hdl = match(std::tie(predicate.lhs, predicate.rhs), v);
     result.emplace_back(std::move(offset), curried(predicate), std::move(hdl));
   }
   // Return the list of jobs, to be used by the EVALUATOR.

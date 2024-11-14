@@ -141,7 +141,7 @@ struct formatter<tenzir::module> {
       auto f = [&]<tenzir::concrete_type T>(const T& x) {
         out = fmt::format_to(out, "type {} = {}\n", t.name(), x);
       };
-      caf::visit(f, t);
+      match(t, f);
     }
     return out;
   }

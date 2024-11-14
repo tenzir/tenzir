@@ -79,7 +79,7 @@ std::optional<double> get_field_fprate(const index_config& config,
     return detail::is_any_v<T, bool_type, int64_type, uint64_type, double_type,
                             duration_type, time_type>;
   };
-  if (caf::visit(use_default_fprate, field.type())) {
+  if (match(field.type(), use_default_fprate)) {
     return config.default_fp_rate;
   }
   return std::nullopt;
@@ -161,7 +161,7 @@ void partition_synopsis::add(const table_slice& slice,
     auto prune = [&]<concrete_type T>(const T& x) {
       return type{x};
     };
-    auto cleaned_type = caf::visit(prune, leaf.field.type);
+    auto cleaned_type = match(leaf.field.type, prune);
     // Create the type synopsis
     auto tt = type_synopses_.find(cleaned_type);
     if (tt == type_synopses_.end())

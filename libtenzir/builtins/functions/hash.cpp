@@ -234,7 +234,7 @@ class fun : public virtual function_plugin {
               hasher.add(as_bytes(str));
             },
           };
-          caf::visit(f, x);
+          match(x, f);
           return std::move(hasher).finish();
         };
         auto b = string_type::make_arrow_builder(arrow::default_memory_pool());

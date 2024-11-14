@@ -36,7 +36,7 @@ expression meta_pruner::operator()(caf::none_t) const {
 expression meta_pruner::operator()(const conjunction& c) const {
   conjunction pruned;
   for (const auto& op : c) {
-    auto x = caf::visit(*this, op);
+    auto x = match(op, *this);
     if (x != expression{})
       pruned.push_back(std::move(x));
   }
@@ -50,7 +50,7 @@ expression meta_pruner::operator()(const conjunction& c) const {
 expression meta_pruner::operator()(const disjunction& d) const {
   disjunction pruned;
   for (const auto& op : d) {
-    auto x = caf::visit(*this, op);
+    auto x = match(op, *this);
     if (x != expression{})
       pruned.push_back(std::move(x));
   }
@@ -62,7 +62,7 @@ expression meta_pruner::operator()(const disjunction& d) const {
 }
 
 expression meta_pruner::operator()(const negation& n) const {
-  auto x = caf::visit(*this, n.expr());
+  auto x = match(n.expr(), *this);
   if (x == expression{})
     return x;
   return negation{x};
@@ -84,9 +84,9 @@ expression hoister::operator()(const conjunction& c) const {
   for (auto& op : c)
     if (auto inner = try_as<conjunction>(&op)) {
       for (auto& inner_op : *inner)
-        hoisted.push_back(caf::visit(*this, inner_op));
+        hoisted.push_back(match(inner_op, *this));
     } else
-      hoisted.push_back(caf::visit(*this, op));
+      hoisted.push_back(match(op, *this));
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
 
@@ -95,14 +95,14 @@ expression hoister::operator()(const disjunction& d) const {
   for (auto& op : d)
     if (auto inner = try_as<disjunction>(&op)) {
       for (auto& inner_op : *inner)
-        hoisted.push_back(caf::visit(*this, inner_op));
+        hoisted.push_back(match(inner_op, *this));
     } else
-      hoisted.push_back(caf::visit(*this, op));
+      hoisted.push_back(match(op, *this));
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
 
 expression hoister::operator()(const negation& n) const {
-  return {negation{caf::visit(*this, n.expr())}};
+  return {negation{match(n.expr(), *this)}};
 }
 
 expression hoister::operator()(const predicate& p) const {
@@ -116,19 +116,19 @@ expression aligner::operator()(caf::none_t) const {
 expression aligner::operator()(const conjunction& c) const {
   conjunction result;
   for (auto& op : c)
-    result.push_back(caf::visit(*this, op));
+    result.push_back(match(op, *this));
   return result;
 }
 
 expression aligner::operator()(const disjunction& d) const {
   disjunction result;
   for (auto& op : d)
-    result.push_back(caf::visit(*this, op));
+    result.push_back(match(op, *this));
   return result;
 }
 
 expression aligner::operator()(const negation& n) const {
-  return {negation{caf::visit(*this, n.expr())}};
+  return {negation{match(n.expr(), *this)}};
 }
 
 expression aligner::operator()(const predicate& p) const {
@@ -151,7 +151,7 @@ expression denegator::operator()(caf::none_t) const {
 expression denegator::operator()(const conjunction& c) const {
   auto add = [&](auto x) -> expression {
     for (auto& op : c)
-      x.push_back(caf::visit(*this, op));
+      x.push_back(match(op, *this));
     return x;
   };
   return negate_ ? add(disjunction{}) : add(conjunction{});
@@ -160,7 +160,7 @@ expression denegator::operator()(const conjunction& c) const {
 expression denegator::operator()(const disjunction& d) const {
   auto add = [&](auto x) -> expression {
     for (auto& op : d)
-      x.push_back(caf::visit(*this, op));
+      x.push_back(match(op, *this));
     return x;
   };
   return negate_ ? add(conjunction{}) : add(disjunction{});
@@ -169,10 +169,10 @@ expression denegator::operator()(const disjunction& d) const {
 expression denegator::operator()(const negation& n) const {
   // Step through double negations.
   if (auto inner = try_as<negation>(&n.expr())) {
-    return caf::visit(*this, inner->expr());
+    return match(inner->expr(), *this);
   }
   // Apply De Morgan from here downward.
-  return caf::visit(denegator{!negate_}, n.expr());
+  return match(n.expr(), denegator{!negate_});
 }
 
 expression denegator::operator()(const predicate& p) const {
@@ -186,7 +186,7 @@ expression deduplicator::operator()(caf::none_t) const {
 expression deduplicator::operator()(const conjunction& c) const {
   conjunction result;
   for (auto& op : c) {
-    auto p = caf::visit(*this, op);
+    auto p = match(op, *this);
     if (std::count(result.begin(), result.end(), p) == 0)
       result.push_back(p);
   }
@@ -196,7 +196,7 @@ expression deduplicator::operator()(const conjunction& c) const {
 expression deduplicator::operator()(const disjunction& d) const {
   disjunction result;
   for (auto& op : d) {
-    auto p = caf::visit(*this, op);
+    auto p = match(op, *this);
     if (std::count(result.begin(), result.end(), p) == 0)
       result.push_back(p);
   }
@@ -204,7 +204,7 @@ expression deduplicator::operator()(const disjunction& d) const {
 }
 
 expression deduplicator::operator()(const negation& n) const {
-  return caf::visit(*this, n.expr());
+  return match(n.expr(), *this);
 }
 
 expression deduplicator::operator()(const predicate& p) const {
@@ -230,7 +230,7 @@ std::vector<predicate> predicatizer::operator()(caf::none_t) const {
 std::vector<predicate> predicatizer::operator()(const conjunction& con) const {
   std::vector<predicate> result;
   for (auto& op : con) {
-    auto ps = caf::visit(*this, op);
+    auto ps = match(op, *this);
     inplace_union(result, ps);
   }
   return result;
@@ -239,14 +239,14 @@ std::vector<predicate> predicatizer::operator()(const conjunction& con) const {
 std::vector<predicate> predicatizer::operator()(const disjunction& dis) const {
   std::vector<predicate> result;
   for (auto& op : dis) {
-    auto ps = caf::visit(*this, op);
+    auto ps = match(op, *this);
     inplace_union(result, ps);
   }
   return result;
 }
 
 std::vector<predicate> predicatizer::operator()(const negation& n) const {
-  return caf::visit(*this, n.expr());
+  return match(n.expr(), *this);
 }
 
 std::vector<predicate> predicatizer::operator()(const predicate& pred) const {
@@ -259,7 +259,7 @@ caf::expected<void> validator::operator()(caf::none_t) {
 
 caf::expected<void> validator::operator()(const conjunction& c) {
   for (auto& op : c) {
-    auto m = caf::visit(*this, op);
+    auto m = match(op, *this);
     if (!m)
       return m;
   }
@@ -268,7 +268,7 @@ caf::expected<void> validator::operator()(const conjunction& c) {
 
 caf::expected<void> validator::operator()(const disjunction& d) {
   for (auto& op : d) {
-    auto m = caf::visit(*this, op);
+    auto m = match(op, *this);
     if (!m)
       return m;
   }
@@ -276,12 +276,12 @@ caf::expected<void> validator::operator()(const disjunction& d) {
 }
 
 caf::expected<void> validator::operator()(const negation& n) {
-  return caf::visit(*this, n.expr());
+  return match(n.expr(), *this);
 }
 
 caf::expected<void> validator::operator()(const predicate& p) {
   op_ = p.op;
-  return caf::visit(*this, p.lhs, p.rhs);
+  return match(std::tie(p.lhs, p.rhs), *this);
 }
 
 caf::expected<void>
@@ -346,7 +346,7 @@ caf::expected<expression> type_resolver::operator()(caf::none_t) {
 caf::expected<expression> type_resolver::operator()(const conjunction& c) {
   conjunction result;
   for (auto& op : c) {
-    auto r = caf::visit(*this, op);
+    auto r = match(op, *this);
     if (!r)
       return r;
     else if (is<caf::none_t>(*r)) {
@@ -365,7 +365,7 @@ caf::expected<expression> type_resolver::operator()(const conjunction& c) {
 caf::expected<expression> type_resolver::operator()(const disjunction& d) {
   disjunction result;
   for (auto& op : d) {
-    auto r = caf::visit(*this, op);
+    auto r = match(op, *this);
     if (!r)
       return r;
     else if (!is<caf::none_t>(*r)) {
@@ -381,7 +381,7 @@ caf::expected<expression> type_resolver::operator()(const disjunction& d) {
 }
 
 caf::expected<expression> type_resolver::operator()(const negation& n) {
-  auto r = caf::visit(*this, n.expr());
+  auto r = match(n.expr(), *this);
   if (!r)
     return r;
   else if (!is<caf::none_t>(*r)) {
@@ -392,7 +392,7 @@ caf::expected<expression> type_resolver::operator()(const negation& n) {
 
 caf::expected<expression> type_resolver::operator()(const predicate& p) {
   op_ = p.op;
-  return caf::visit(*this, p.lhs, p.rhs);
+  return match(std::tie(p.lhs, p.rhs), *this);
 }
 
 caf::expected<expression>
@@ -463,25 +463,25 @@ bool matcher::operator()(caf::none_t) {
 
 bool matcher::operator()(const conjunction& c) {
   for (auto& op : c)
-    if (!caf::visit(*this, op))
+    if (!match(op, *this))
       return false;
   return true;
 }
 
 bool matcher::operator()(const disjunction& d) {
   for (auto& op : d)
-    if (caf::visit(*this, op))
+    if (match(op, *this))
       return true;
   return false;
 }
 
 bool matcher::operator()(const negation& n) {
-  return caf::visit(*this, n.expr());
+  return match(n.expr(), *this);
 }
 
 bool matcher::operator()(const predicate& p) {
   op_ = p.op;
-  return caf::visit(*this, p.lhs, p.rhs);
+  return match(std::tie(p.lhs, p.rhs), *this);
 }
 
 bool matcher::operator()(const meta_extractor& e, const data& d) {

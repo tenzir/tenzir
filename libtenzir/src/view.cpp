@@ -87,7 +87,7 @@ bool is_equal(const data& x, const data_view& y) {
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), f);
     },
   };
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 bool is_equal(const data_view& x, const data& y) {
@@ -142,11 +142,9 @@ default_record_view::size_type default_record_view::size() const noexcept {
 // -- make_view ---------------------------------------------------------------
 
 data_view make_view(const data& x) {
-  return caf::visit(
-    [](const auto& z) {
+  return match(x, [](const auto& z) {
       return make_data_view(z);
-    },
-    x);
+    });
 }
 
 // -- materialization ----------------------------------------------------------
@@ -200,11 +198,9 @@ record materialize(record_view_handle xs) {
 }
 
 data materialize(data_view x) {
-  return caf::visit(
-    [](auto y) {
+  return match(x, [](auto y) {
       return data{materialize(y)};
-    },
-    x);
+    });
 }
 
 // WARNING: making changes to the logic of this function requires adapting the
@@ -277,7 +273,7 @@ bool type_check(const type& x, const data_view& y) {
       return false;
     },
   };
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 data_view to_canonical(const type& t, const data_view& x) {
@@ -291,7 +287,7 @@ data_view to_canonical(const type& t, const data_view& x) {
       return x;
     },
   };
-  return caf::visit(v, x, t);
+  return match(std::tie(x, t), v);
 }
 
 data_view to_internal(const type& t, const data_view& x) {
@@ -305,7 +301,7 @@ data_view to_internal(const type& t, const data_view& x) {
       return x;
     },
   };
-  return caf::visit(v, x, t);
+  return match(std::tie(x, t), v);
 }
 
 auto descend(view<record> r, std::string_view path)

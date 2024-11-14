@@ -123,7 +123,7 @@ struct lines_printer_impl {
       } else {
         first = false;
       }
-      caf::visit(visitor{out}, v);
+      match(v, visitor{out});
     }
     return true;
   }
@@ -174,7 +174,7 @@ struct lines_printer_impl {
         if (!sequence_empty) {
           ++out = ',';
         }
-        if (!caf::visit(*this, v)) {
+        if (!match(v, *this)) {
           return false;
         }
       }

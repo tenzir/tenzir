@@ -253,7 +253,7 @@ public:
               },
             };
             relative_path += fmt::format("/{}={}", selector_to_name(sel),
-                                         caf::visit(f, data));
+                                         match(data, f));
           }
           relative_path += fmt::format("/{}.{}", next_id, args_.extension);
           next_id += 1;

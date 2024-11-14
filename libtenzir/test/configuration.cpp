@@ -31,8 +31,9 @@ struct fixture {
     std::vector<char*> cmd_line; // argv
     static std::string argv0 = "tenzir-ctl";
     cmd_line.emplace_back(argv0.data());
-    for (const auto& arg : args)
-      cmd_line.emplace_back(const_cast<char*>(arg.data()));
+    for (auto& arg : args) {
+      cmd_line.emplace_back(arg.data());
+    }
     auto argc = static_cast<int>(cmd_line.size());
     auto argv = cmd_line.data();
     REQUIRE_EQUAL(cfg.parse(argc, argv), caf::none);

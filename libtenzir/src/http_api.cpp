@@ -164,8 +164,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
       continue;
     auto const& param_data = maybe_param->second;
     auto is_string = is<std::string>(param_data);
-    auto typed_value = caf::visit(
-      detail::overload{
+    auto typed_value = match(field.type, detail::overload{
         [&](const string_type&) -> caf::expected<data> {
           if (!is_string)
             return caf::make_error(ec::invalid_argument, "expected string");
@@ -195,8 +194,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                                      "expected a string or record");
             }
             auto const& x_as_string = as<std::string>(x);
-            auto parsed = caf::visit(
-              detail::overload{
+            auto parsed = match(lt.value_type(), detail::overload{
                 [&](const string_type&) -> caf::expected<data> {
                   return x_as_string;
                 },
@@ -226,8 +224,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                                          "only lists of basic types are "
                                          "supported");
                 },
-              },
-              lt.value_type());
+              });
             if (!parsed)
               return parsed.error();
             result.emplace_back(*parsed);
@@ -273,8 +270,7 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                                  "REST API only accepts basic type "
                                  "parameters");
         },
-      },
-      field.type);
+      });
     if (!typed_value)
       return caf::make_error(ec::invalid_argument,
                              fmt::format("failed to parse parameter "

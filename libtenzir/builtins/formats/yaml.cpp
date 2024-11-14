@@ -149,11 +149,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
 template <class View>
 auto print_node(auto& out, const View& value) -> void {
   if constexpr (std::is_same_v<View, data_view>) {
-    return caf::visit(
-      [&](const auto& value) {
+    return match(value, [&](const auto& value) {
         return print_node(out, value);
-      },
-      value);
+      });
   } else if constexpr (std::is_same_v<View, caf::none_t>) {
     out << YAML::Null;
   } else if constexpr (std::is_same_v<View, view<bool>>) {

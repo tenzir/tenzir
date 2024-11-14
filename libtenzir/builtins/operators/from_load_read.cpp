@@ -412,7 +412,7 @@ public:
         return failure::promise();
       },
     };
-    return caf::visit(f, value);
+    return match(value, f);
   }
 };
 

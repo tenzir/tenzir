@@ -2167,11 +2167,9 @@ struct formatter<tenzir::type> {
     if (const auto& name = value.name(); !name.empty())
       out = fmt::format_to(out, "{}", name);
     else
-      caf::visit(
-        [&](const auto& x) {
-          out = fmt::format_to(out, "{}", x);
-        },
-        value);
+      match(value, [&](const auto& x) {
+        out = fmt::format_to(out, "{}", x);
+      });
     if (print_attributes) {
       for (bool first = false; const auto& attribute :
                                value.attributes(tenzir::type::recurse::no)) {

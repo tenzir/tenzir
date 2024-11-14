@@ -129,7 +129,7 @@ public:
           .emit(ctx);
         state_ = state::failed;
       }};
-    caf::visit(f, *arg.array);
+    match(*arg.array, f);
   }
 
   auto get() const -> data override {
@@ -231,7 +231,7 @@ class plugin : public virtual aggregation_function_plugin,
                                            type));
       },
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto make_aggregation(invocation inv, session ctx) const

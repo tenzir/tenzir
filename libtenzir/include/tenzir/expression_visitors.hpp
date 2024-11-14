@@ -203,10 +203,10 @@ public:
     visit(xs);
     if (!xs.empty()) {
       push();
-      caf::visit(*this, xs[0]);
+      match(xs[0], *this);
       for (size_t i = 1; i < xs.size(); ++i) {
         next();
-        caf::visit(*this, xs[i]);
+        match(xs[i], *this);
       }
       pop();
     }
@@ -215,7 +215,7 @@ public:
   void operator()(const negation& x) {
     visit(x);
     push();
-    caf::visit(*this, x.expr());
+    match(x.expr(), *this);
     pop();
   }
 

@@ -147,7 +147,7 @@ class plugin : public virtual aggregation_function_plugin,
                const Type&) -> std::unique_ptr<aggregation_function> {
       return std::make_unique<collect_function<Type>>(input_type);
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto make_aggregation(invocation inv, session ctx) const

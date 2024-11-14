@@ -23,9 +23,6 @@
 #include <typeindex>
 #include <utility>
 
-using caf::get_if;
-using caf::holds_alternative;
-using caf::visit;
 using namespace std::string_view_literals;
 
 namespace tenzir {

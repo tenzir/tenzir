@@ -1301,7 +1301,7 @@ public:
             return series::null(null_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };

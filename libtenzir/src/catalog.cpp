@@ -254,7 +254,7 @@ auto catalog_state::lookup_impl(const expression& expr,
               auto prune = [&]<concrete_type T>(const T& x) {
                 return type{x};
               };
-              auto cleaned_type = caf::visit(prune, field.type());
+              auto cleaned_type = tenzir::match(field.type(), prune);
               // We rely on having a field -> nullptr mapping here for the
               // fields that don't have their own synopsis.
               if (syn) {
@@ -428,7 +428,7 @@ auto catalog_state::lookup_impl(const expression& expr,
           return all_partitions();
         },
       };
-      return caf::visit(extract_expr, x.lhs, x.rhs);
+      return match(std::tie(x.lhs, x.rhs), extract_expr);
     },
     [&](caf::none_t) -> catalog_lookup_result::candidate_info {
       TENZIR_ERROR("{} received an empty expression",
@@ -437,7 +437,7 @@ auto catalog_state::lookup_impl(const expression& expr,
       return all_partitions();
     },
   };
-  auto result = caf::visit(f, expr);
+  auto result = match(expr, f);
   result.exp = expr;
   return result;
 }

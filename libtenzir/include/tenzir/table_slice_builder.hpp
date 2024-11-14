@@ -218,7 +218,7 @@ append_builder(const Type& hint,
             hint, as<type_to_arrow_builder_t<ResolvedType>>(builder),
             as<tenzir::view<type_to_data_t<ResolvedType>>>(view));
         };
-    return caf::visit(f, hint);
+    return match(hint, f);
   }
 }
 

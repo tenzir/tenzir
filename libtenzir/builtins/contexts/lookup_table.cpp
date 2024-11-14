@@ -128,7 +128,7 @@ public:
         return x;
       }
     };
-    return caf::visit(visitor, data_);
+    return match(data_, visitor);
   }
 
   /// Calls `out.emplace_back(x)` for every `x` that the value contained in
@@ -150,7 +150,7 @@ public:
         out.emplace_back(data{x});
       }
     };
-    caf::visit(visitor, data_);
+    match(data_, visitor);
   }
 
   auto original_type_index() const -> size_t {
@@ -174,7 +174,7 @@ private:
         return x;
       }
     };
-    return caf::visit(visitor, std::move(d));
+    return match(std::move(d), visitor);
   }
 
   template <typename StoredType>
@@ -252,7 +252,7 @@ public:
   }
 
   auto subnet_lookup(const auto& value) -> std::pair<subnet, value_data*> {
-    auto match = detail::overload{
+    auto f = detail::overload{
       [&](const auto&) -> std::pair<subnet, value_data*> {
         return {{}, nullptr};
       },
@@ -263,7 +263,7 @@ public:
         return subnet_entries.match(materialize(sn));
       },
     };
-    return caf::visit(match, value);
+    return match(value, f);
   };
 
   auto apply(series array, bool replace)

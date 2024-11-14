@@ -17,7 +17,7 @@ namespace tenzir {
 namespace {
 
 auto validate_opaque_(const tenzir::data& data) -> caf::error {
-  return caf::visit(tenzir::detail::overload{
+  return match(data, tenzir::detail::overload{
                       [](const record&) -> caf::error {
                         return caf::error{};
                       },
@@ -26,8 +26,7 @@ auto validate_opaque_(const tenzir::data& data) -> caf::error {
                                                "only records may have 'opaque' "
                                                "attribute");
                       },
-                    },
-                    data);
+                    });
 }
 
 auto validate_(const tenzir::data& data, const tenzir::type& type,
@@ -44,8 +43,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("expected type for non-null value at {}",
                                        prefix));
-  return caf::visit(
-    tenzir::detail::overload{
+  return match(type, tenzir::detail::overload{
       [&]<tenzir::basic_type T>(const T& type) -> caf::error {
         // TODO: Introduce special cases for accepting counts as integers and
         // vice versa if the number is in the valid range.
@@ -155,8 +153,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
         }
         return caf::error{};
       },
-    },
-    type);
+    });
 }
 
 } // namespace

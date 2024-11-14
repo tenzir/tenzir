@@ -325,21 +325,19 @@ auto try_get(const record& r, std::string_view path)
     return std::nullopt;
   }
   // Attempt conversion.
-  return caf::visit(
-    [&](auto& x) -> caf::expected<std::optional<T>> {
-      using U = std::remove_cvref_t<decltype(x)>;
-      if constexpr (std::is_same_v<U, T>) {
-        return x;
-      } else if constexpr (convertible<U, T>) {
-        return to<T>(x);
-      } else {
-        return caf::make_error(
-          ec::convert_error,
-          fmt::format("'{}' has type {}, which cannot be converted to {}", path,
-                      typeid(U).name(), typeid(T).name()));
-      }
-    },
-    **result);
+  return match(**result, [&](auto& x) -> caf::expected<std::optional<T>> {
+    using U = std::remove_cvref_t<decltype(x)>;
+    if constexpr (std::is_same_v<U, T>) {
+      return x;
+    } else if constexpr (convertible<U, T>) {
+      return to<T>(x);
+    } else {
+      return caf::make_error(
+        ec::convert_error,
+        fmt::format("'{}' has type {}, which cannot be converted to {}", path,
+                    typeid(U).name(), typeid(T).name()));
+    }
+  });
 }
 
 /// Tries to find the entry with the dot-sperated `path` with the given type.
@@ -355,18 +353,16 @@ auto try_get_only(const record& r, std::string_view path)
   if (!*result) {
     return nullptr;
   }
-  return caf::visit(
-    [&](auto& x) -> caf::expected<T const*> {
-      using U = std::remove_cvref_t<decltype(x)>;
-      if constexpr (std::is_same_v<U, T>) {
-        return &x;
-      } else {
-        return caf::make_error(
-          ec::type_clash, fmt::format("'{}' has type {} but expected {}", path,
-                                      typeid(U).name(), typeid(T).name()));
-      }
-    },
-    **result);
+  return match(**result, [&](auto& x) -> caf::expected<T const*> {
+    using U = std::remove_cvref_t<decltype(x)>;
+    if constexpr (std::is_same_v<U, T>) {
+      return &x;
+    } else {
+      return caf::make_error(
+        ec::type_clash, fmt::format("'{}' has type {} but expected {}", path,
+                                    typeid(U).name(), typeid(T).name()));
+    }
+  });
 }
 
 template <class T>

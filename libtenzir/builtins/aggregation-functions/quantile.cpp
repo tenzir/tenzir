@@ -112,7 +112,7 @@ public:
                                            name_, type));
       },
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto aggregation_default() const -> data override {

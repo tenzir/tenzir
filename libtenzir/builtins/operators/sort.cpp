@@ -480,10 +480,10 @@ public:
             return lhs_value.index() < rhs_value.index();
           },
         };
-        if (caf::visit(cmp, lhs_value, rhs_value)) {
+        if (match(std::tie(lhs_value, rhs_value), cmp)) {
           return not sort_key.reverse;
         }
-        if (caf::visit(cmp, rhs_value, lhs_value)) {
+        if (match(std::tie(rhs_value, lhs_value), cmp)) {
           return sort_key.reverse;
         }
       }
@@ -583,7 +583,7 @@ public:
             return series::null(null_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };

@@ -252,23 +252,20 @@ private:
     }
     if (op == relational_operator::in || op == relational_operator::not_in) {
       // Ensure that the RHS is a list of strings.
-      auto keys = caf::visit(
-        detail::overload{
-          [&](auto xs) -> caf::expected<std::vector<key>> {
-            using view_type = decltype(xs);
-            if constexpr (std::is_same_v<view_type, view<list>>) {
-              std::vector<key> result;
-              result.reserve(xs.size());
-              for (auto x : xs)
-                result.emplace_back(find_digest(x));
-              return result;
-            } else {
-              return caf::make_error(ec::type_clash, "expected list on RHS",
-                                     materialize(x));
-            }
-          },
-        },
-        x);
+      auto keys = match(x, [&](auto xs) -> caf::expected<std::vector<key>> {
+        using view_type = decltype(xs);
+        if constexpr (std::is_same_v<view_type, view<list>>) {
+          std::vector<key> result;
+          result.reserve(xs.size());
+          for (auto x : xs) {
+            result.emplace_back(find_digest(x));
+          }
+          return result;
+        } else {
+          return caf::make_error(ec::type_clash, "expected list on RHS",
+                                 materialize(x));
+        }
+      });
       if (!keys)
         return keys.error();
       // We're good to go with: create the set predicates an run the scan.

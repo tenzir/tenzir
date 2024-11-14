@@ -882,10 +882,9 @@ TEST(sum type) {
       return (std::is_same_v<T, U> && ...);
     };
   };
-  CHECK(caf::visit(is_type(ip_type{}), type{ip_type{}}));
-  CHECK(caf::visit(is_type(bool_type{}), type{bool_type{}}));
-  CHECK(caf::visit(is_type(bool_type{}, int64_type{}), type{bool_type{}},
-                   type{int64_type{}}));
+  CHECK(match(type{ip_type{}}, is_type(ip_type{})));
+  CHECK(match(type{bool_type{}}, is_type(bool_type{})));
+  CHECK(match(std::tuple{type{bool_type{}}, type{int64_type{}}}, is_type(bool_type{}, int64_type{})));
 }
 
 TEST(hashes) {

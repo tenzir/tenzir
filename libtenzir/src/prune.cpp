@@ -21,7 +21,7 @@ struct pruner {
     return disjunction{run(d)};
   }
   expression operator()(const negation& n) const {
-    return negation{caf::visit(*this, n.expr())};
+    return negation{match(n.expr(), *this)};
   }
   expression operator()(const predicate& p) const {
     return p;
@@ -65,7 +65,7 @@ struct pruner {
         }
       }
       if (!optimized)
-        result.push_back(caf::visit(*this, operand));
+        result.push_back(match(operand, *this));
     }
     return result;
   }
@@ -75,10 +75,10 @@ struct pruner {
 
 // Runs the `pruner` and `hoister` until the input is unchanged.
 expression prune(expression e, const detail::heterogeneous_string_hashset& hs) {
-  expression result = caf::visit(pruner{hs}, e);
+  expression result = match(e, pruner{hs});
   while (result != e) {
     std::swap(result, e);
-    result = hoist(caf::visit(pruner{hs}, e));
+    result = hoist(match(e, pruner{hs}));
   }
   return result;
 }

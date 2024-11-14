@@ -153,7 +153,7 @@ private:
         return append(x.time_since_epoch().count());
       },
     };
-    return caf::visit(f, d);
+    return match(d, f);
   }
 
   [[nodiscard]] caf::expected<ids>
@@ -184,7 +184,7 @@ private:
         return detail::container_lookup(*this, op, xs);
       },
     };
-    return caf::visit(f, d);
+    return match(d, f);
   };
 
   [[nodiscard]] size_t memusage_impl() const override {

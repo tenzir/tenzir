@@ -87,7 +87,7 @@ public:
           return finish(b);
         },
       };
-      return {double_type{}, caf::visit(f, *value.array)};
+      return {double_type{}, match(*value.array, f)};
     });
   }
 };
@@ -231,7 +231,7 @@ public:
         state_ = state::failed;
       },
     };
-    caf::visit(f, arg.type);
+    match(arg.type, f);
   }
 
   auto get() const -> data override {

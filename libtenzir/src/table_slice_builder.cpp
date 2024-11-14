@@ -129,7 +129,7 @@ verify_record_batch(const arrow::RecordBatch& record_batch) {
       },
       [](const arrow::Array&) noexcept {},
     };
-    caf::visit(f, column);
+    match(column, f);
   };
   for (const auto& column : record_batch.columns())
     check_col(check_col, *column);
@@ -253,7 +253,7 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
       return add(make_view(x));
     },
   };
-  return caf::visit(f, x, t);
+  return match(std::tie(x, t), f);
 }
 
 bool table_slice_builder::add(data_view x) {
@@ -403,7 +403,7 @@ append_builder(const list_type& hint,
         return status;
     return arrow::Status::OK();
   };
-  return caf::visit(append_values, hint.value_type());
+  return match(hint.value_type(), append_values);
 }
 
 arrow::Status
@@ -425,7 +425,7 @@ append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
     }
     return arrow::Status::OK();
   };
-  return caf::visit(append_values, hint.key_type(), hint.value_type());
+  return match(std::tuple{hint.key_type(), hint.value_type()}, append_values);
 }
 
 arrow::Status
@@ -454,7 +454,7 @@ arrow::Status append_builder(const type& hint,
     return append_builder(hint, as<type_to_arrow_builder_t<Type>>(builder),
                           as<view<type_to_data_t<Type>>>(value));
   };
-  return caf::visit(f, hint);
+  return match(hint, f);
 }
 
 template <concrete_type Ty>
@@ -511,13 +511,11 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
 auto append_array_slice(arrow::ArrayBuilder& builder, const type& ty,
                         const arrow::Array& array, int64_t begin, int64_t count)
   -> arrow::Status {
-  return caf::visit(
-    [&]<class Ty>(const Ty& ty) {
-      return append_array_slice(as<type_to_arrow_builder_t<Ty>>(builder), ty,
-                                as<type_to_arrow_array_t<Ty>>(array), begin,
-                                count);
-    },
-    ty);
+  return match(ty, [&]<class Ty>(const Ty& ty) {
+    return append_array_slice(as<type_to_arrow_builder_t<Ty>>(builder), ty,
+                              as<type_to_arrow_array_t<Ty>>(array), begin,
+                              count);
+  });
 }
 
 // Make sure that `append_array_slice<...>` is emitted for every type.

@@ -84,7 +84,7 @@ public:
           .emit(ctx);
         state_ = state::failed;
       }};
-    caf::visit(f, *arg.array);
+    match(*arg.array, f);
   }
 
   auto get() const -> data override {

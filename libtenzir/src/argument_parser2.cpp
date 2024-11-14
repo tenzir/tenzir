@@ -53,15 +53,13 @@ auto argument_parser2::parse(const ast::entity& self,
   };
   auto kind = [](const data& x) -> std::string_view {
     // TODO: Refactor this.
-    return caf::visit(
-      []<class Data>(const Data&) -> std::string_view {
+    return match(x, []<class Data>(const Data&) -> std::string_view {
         if constexpr (caf::detail::is_one_of<Data, pattern>::value) {
           TENZIR_UNREACHABLE();
         } else {
           return to_string(type_kind::of<data_to_type_t<Data>>);
         }
-      },
-      x);
+      });
   };
   auto arg = args.begin();
   auto positional_idx = size_t{0};

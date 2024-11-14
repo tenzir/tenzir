@@ -59,7 +59,7 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(legacy_alias_type x) {
-    auto y = caf::visit(*this, x.value_type);
+    auto y = match(x.value_type, *this);
     if (!y)
       return y.error();
     x.value_type = *y;
@@ -74,7 +74,7 @@ struct symbol_resolver {
       }
       return false;
     };
-    auto y = caf::visit(*this, x.value_type);
+    auto y = match(x.value_type, *this);
     if (!y)
       return y.error();
     x.value_type = *y;
@@ -85,11 +85,11 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(legacy_map_type x) {
-    auto y = caf::visit(*this, x.value_type);
+    auto y = match(x.value_type, *this);
     if (!y)
       return y.error();
     x.value_type = *y;
-    auto z = caf::visit(*this, x.key_type);
+    auto z = match(x.key_type, *this);
     if (!z)
       return z.error();
     x.key_type = *z;
@@ -105,7 +105,7 @@ struct symbol_resolver {
       return false;
     };
     for (auto& [field_name, field_type] : x.fields) {
-      auto y = caf::visit(*this, field_type);
+      auto y = match(field_type, *this);
       if (!y)
         return y.error();
       field_type = *y;
@@ -163,7 +163,7 @@ struct symbol_resolver {
       return caf::make_error(ec::parse_error, "duplicate definition of",
                              value.first);
     local.erase(next);
-    auto x = caf::visit(*this, value.second);
+    auto x = match(value.second, *this);
     if (!x)
       return x.error();
     auto [iter, inserted] = resolved.emplace(value.first, std::move(*x));

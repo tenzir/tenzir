@@ -116,7 +116,7 @@ public:
           return series::null(string_type{}, value.length());
         },
       };
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 
@@ -176,7 +176,7 @@ public:
           return series::null(string_type{}, value.length());
         },
       };
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 
@@ -226,7 +226,7 @@ public:
             return series::null(int64_type{}, value.length());
           },
         };
-        return caf::visit(f, *value.array);
+        return match(*value.array, f);
       });
   }
 };
@@ -275,7 +275,7 @@ public:
             .emit(ctx);
           return series::null(bool_type{}, value.length());
         }};
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 };
@@ -331,7 +331,7 @@ public:
             .emit(ctx);
           return series::null(null_type{}, value.length());
         }};
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 

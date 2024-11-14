@@ -598,7 +598,7 @@ TEST(parseable - with context) {
     auto rename = [&]<concrete_type T>(const T& x) -> type {
       return type{"derived2", x};
     };
-    CHECK_EQUAL(caf::visit(rename, expected), derived2);
+    CHECK_EQUAL(tenzir::match(expected, rename), derived2);
   }
 }
 

@@ -1407,7 +1407,7 @@ bool congruent(const type& x, const type& y) noexcept {
              || std::is_same_v<U, null_type>;
     },
   }; // namespace tenzir
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 bool congruent(const type& x, const data& y) noexcept {
@@ -1476,7 +1476,7 @@ bool congruent(const type& x, const data& y) noexcept {
       return true;
     },
   };
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 bool congruent(const data& x, const type& y) noexcept {
@@ -1628,7 +1628,7 @@ bool type_check(const type& x, const data& y) noexcept {
       return false;
     },
   };
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 caf::error
@@ -3500,8 +3500,7 @@ merge(const record_type& lhs, const record_type& rhs,
         ([&, rfield = std::move(rfield)](
            const record_type::field_view& lfield) mutable noexcept
          -> std::vector<struct record_type::field> {
-          if (auto result = caf::visit(do_merge(lfield, rfield), lfield.type,
-                                       rfield.type)) {
+          if (auto result = match(std::tie(lfield.type, rfield.type), do_merge(lfield, rfield))) {
             return {{
               std::string{rfield.name},
               *result,
@@ -3588,7 +3587,7 @@ auto unify(const type& a, const type& b) -> std::optional<type> {
       return std::nullopt;
     },
   };
-  return caf::visit(f, a, b);
+  return match(std::tie(a, b), f);
 }
 
 auto variant_traits<type>::index(const type& x) -> size_t {

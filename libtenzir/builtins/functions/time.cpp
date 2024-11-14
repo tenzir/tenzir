@@ -69,7 +69,7 @@ public:
             return series::null(time_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };
@@ -116,7 +116,7 @@ public:
           return series::null(duration_type{}, arg.length());
         },
       };
-      return caf::visit(f, *arg.array);
+      return match(*arg.array, f);
     });
   }
 };
@@ -190,7 +190,7 @@ public:
           return series::null(duration_type{}, arg.length());
         },
       };
-      return caf::visit(f, *arg.array);
+      return match(*arg.array, f);
     });
   }
 };
@@ -252,7 +252,7 @@ public:
             return series::null(int64_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 
@@ -305,7 +305,7 @@ public:
             return series::null(double_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };
