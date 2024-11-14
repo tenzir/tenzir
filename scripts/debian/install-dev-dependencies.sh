@@ -23,23 +23,28 @@ apt-get -y --no-install-recommends install \
     libboost1.81-dev \
     libboost-filesystem1.81-dev \
     libboost-url1.81-dev \
+    libcurl4-openssl-dev \
     libflatbuffers-dev \
     libfmt-dev \
     libgrpc-dev \
     libgrpc++-dev \
     libhttp-parser-dev \
+    liblz4-dev \
     libmaxminddb-dev \
     libpcap-dev tcpdump \
     libprotobuf-dev \
     librabbitmq-dev \
     libre2-dev \
+    libsasl2-dev \
     libspdlog-dev \
     libssl-dev \
     libsqlite3-dev \
     libunwind-dev \
+    libxml2-dev \
     libxxhash-dev \
     libyaml-cpp-dev \
     libyara-dev \
+    libzstd-dev \
     lsb-release \
     lsof \
     ncat \

@@ -287,21 +287,26 @@ RUN apt-get update && \
       libboost-url1.81 \
       libc++1 \
       libc++abi1 \
+      libcurl4 \
       libflatbuffers2 \
       libfmt9 \
       libgrpc++1.51 \
       libhttp-parser2.9 \
+      liblz4 \
       libmaxminddb0 \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \
       libre2-9 \
+      libsasl2 \
       libspdlog1.10 \
       libunwind8 \
-      libxxhash-dev \
+      libxml2 \
+      libxxhash0 \
       libyaml-cpp0.7 \
       libyara9 \
       libzmq5 \
+      libzstd1 \
       lsb-release \
       openssl \
       python3 \
