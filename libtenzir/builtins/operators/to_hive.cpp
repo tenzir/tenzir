@@ -341,6 +341,10 @@ public:
     return "to_hive";
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     TENZIR_UNUSED(filter, order);
