@@ -31,12 +31,13 @@ struct context_parameter_map
 
 struct context_update_args {
   ast::expression key = {};
+  std::optional<ast::expression> value = {};
   std::optional<located<duration>> create_timeout = {};
   std::optional<located<duration>> write_timeout = {};
   std::optional<located<duration>> read_timeout = {};
 
   friend auto inspect(auto& f, context_update_args& x) -> bool {
-    return f.object(x).fields(f.field("key", x.key),
+    return f.object(x).fields(f.field("key", x.key), f.field("value", x.value),
                               f.field("create_timeout", x.create_timeout),
                               f.field("update_timeout", x.write_timeout),
                               f.field("read_timeout", x.read_timeout));

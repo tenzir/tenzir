@@ -198,6 +198,11 @@ public:
           .emit(ctx);
       }
     }
+    if (args.value) {
+      diagnostic::warning("unsupported option for bloom-filter context")
+        .primary(*args.value)
+        .emit(ctx);
+    }
     auto keys = eval(args.key, events, ctx);
     auto key_values_list = list{};
     for (const auto& key : keys.values()) {

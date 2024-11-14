@@ -558,22 +558,23 @@ public:
               session ctx) -> failure_or<context_update_result> override {
     auto keys = eval(args.key, events, ctx);
     auto key_values_list = list{};
-    const auto update_entry
-      = [&, now = time::clock::now()](bool created, value_data& entry,
-                                      record context) {
-          entry.raw_data = std::move(context);
-          if (created and args.create_timeout) {
-            entry.create_timeout = now + args.create_timeout->inner;
-          }
-          if (args.write_timeout) {
-            entry.write_timeout = now + args.write_timeout->inner;
-          }
-          if (args.read_timeout) {
-            entry.read_timeout = now + args.read_timeout->inner;
-            entry.read_timeout_duration = args.read_timeout->inner;
-          }
-        };
-    auto context_gen = events.values();
+    const auto update_entry = [&, now = time::clock::now()](
+                                bool created, value_data& entry, data context) {
+      entry.raw_data = std::move(context);
+      if (created and args.create_timeout) {
+        entry.create_timeout = now + args.create_timeout->inner;
+      }
+      if (args.write_timeout) {
+        entry.write_timeout = now + args.write_timeout->inner;
+      }
+      if (args.read_timeout) {
+        entry.read_timeout = now + args.read_timeout->inner;
+        entry.read_timeout_duration = args.read_timeout->inner;
+      }
+    };
+    auto context
+      = eval(args.value.value_or(ast::this_{location::unknown}), events, ctx);
+    auto context_gen = context.values();
     for (const auto& key : keys.values()) {
       auto materialized_key = materialize(key);
       auto context = context_gen.next();
