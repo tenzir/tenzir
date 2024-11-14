@@ -20,7 +20,7 @@ option(TENZIR_ENABLE_BUNDLED_LIBRDKAFKA "Use the librdkafka submodule" ON)
 add_feature_info("TENZIR_ENABLE_BUNDLED_LIBRDKAFKA" TENZIR_ENABLE_BUNDLED_LIBRDKAFKA
                  "use the librdkafka submodule.")
 
-if (TENZIR_ENABLE_BUNDLED_CAF)
+if (TENZIR_ENABLE_BUNDLED_LIBRDKAFKA)
   set(RDKAFKA_BUILD_STATIC
       ON
       CACHE STRING "")
@@ -48,9 +48,10 @@ if (TENZIR_ENABLE_BUNDLED_CAF)
   target_compile_definitions(rdkafka++ PUBLIC WITH_SASL_AWS_MSK_IAM=1)
   target_link_libraries(rdkafka PRIVATE LibXml2::LibXml2 PkgConfig::PC_SASL2)
 
+  message(WARNING "add lib")
   add_library(RdKafka::rdkafka++ ALIAS rdkafka++)
 
-  target_compile_definitions(kafka PRIVATE TENZIR_ENABLE_BUNDLED_LIBRDKAFKA=1)
+  target_compile_definitions(kafka PUBLIC TENZIR_ENABLE_BUNDLED_LIBRDKAFKA=1)
 else ()
   find_package(RdKafka QUIET)
   if (NOT RdKafka_FOUND)
@@ -59,8 +60,8 @@ else ()
     list(POP_BACK CMAKE_MODULE_PATH)
   endif ()
 
-  target_compile_definitions(kafka PRIVATE TENZIR_ENABLE_BUNDLED_LIBRDKAFKA=0)
+  target_compile_definitions(kafka PUBLIC TENZIR_ENABLE_BUNDLED_LIBRDKAFKA=0)
+  dependency_summary("rdkafka" RdKafka::rdkafka++ "Dependencies")
 endif ()
 
-dependency_summary("rdkafka" RdKafka::rdkafka++ "Dependencies")
 target_link_libraries(kafka PUBLIC RdKafka::rdkafka++)

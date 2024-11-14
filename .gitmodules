@@ -42,3 +42,4 @@
 [submodule "plugins/kafka/aux/librdkafka"]
 	path = plugins/kafka/aux/librdkafka
 	url = https://github.com/UrbanCompass/librdkafka
+	shallow = true
