@@ -205,8 +205,7 @@ constexpr auto variant_index = std::invoke(
 // type `R`
 template <class F, class V, class R, size_t I>
 concept variant_invocable_for_r = requires(F f, V v) {
-  requires std::invocable<F, decltype(variant_get<I>(std::forward<V>(v)))>;
-  // requires std::is_invocable_r_v<R, F, decltype(variant_get<I>(v))>;
+  static_cast<R>(std::invoke(f, variant_get<I>(std::forward<V>(v))));
 };
 
 template <class F, class V, class R, size_t... Is>
@@ -281,19 +280,38 @@ constexpr auto match_tuple(std::tuple<Xs...> xs, F&& f) -> decltype(auto) {
                      });
   }
 }
+
+template <class T>
+using wrap_lvalue_ref
+  = std::conditional_t<std::is_lvalue_reference_v<T>,
+                       std::reference_wrapper<std::remove_reference_t<T>>,
+                       std::remove_cvref_t<T>>;
 } // namespace detail
 
 /// Calls one of the given functions with the current variant inhabitant.
 template <has_variant_traits V, class... Fs>
 constexpr auto match(V&& v, Fs&&... fs) -> decltype(auto) {
-  return match_one(std::forward<V>(v),
-                   detail::overload{std::forward<Fs>(fs)...});
+  return detail::match_one(
+    std::forward<V>(v),
+    detail::overload<detail::wrap_lvalue_ref<Fs>...>{std::forward<Fs>(fs)...});
+}
+
+template <has_variant_traits V, class F>
+constexpr auto match(V&& v, F&& f) -> decltype(auto) {
+  return detail::match_one(std::forward<V>(v), std::forward<F>(f));
 }
 
 /// Calls one of the given functions with the current variant inhabitants.
 template <has_variant_traits... Ts, class... Fs>
 constexpr auto match(std::tuple<Ts...> v, Fs&&... fs) -> decltype(auto) {
-  return match_tuple(std::move(v), detail::overload{std::forward<Fs>(fs)...});
+  return detail::match_tuple(
+    std::move(v),
+    detail::overload<detail::wrap_lvalue_ref<Fs>...>{std::forward<Fs>(fs)...});
+}
+
+template <has_variant_traits... Ts, class F>
+constexpr auto match(std::tuple<Ts...> v, F&& f) -> decltype(auto) {
+  return detail::match_tuple(std::move(v), std::forward<F>(f));
 }
 
 /// Checks whether the variant currently holds alternative `T`
