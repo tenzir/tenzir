@@ -249,6 +249,9 @@ struct index_state {
   /// Timeout after which an active partition is forcibly flushed.
   duration active_partition_timeout = {};
 
+  /// Wether to drop all data flagged as internal.
+  bool no_store_internal_events = {};
+
   /// The maximum size of the partition LRU cache (or the maximum number of
   /// read-only partition loaded to memory).
   size_t max_inmem_partitions = {};
@@ -327,18 +330,20 @@ struct index_state {
 
 /// Indexes events in horizontal partitions.
 /// @param filesystem The filesystem actor. Not used by the index itself but
-/// forwarded to partitions.
+///        forwarded to partitions.
 /// @param catalog The catalog actor.
 /// @param dir The directory of the index.
 /// @param store_backend The store backend to use for new partitions.
 /// @param partition_capacity The maximum number of events per partition.
 /// @param active_partition_timeout Timeout after which an active partition is
-/// forcibly flushed.
+///        forcibly flushed.
 /// @param max_inmem_partitions The maximum number of passive partitions loaded
-/// into memory.
+///        into memory.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param max_concurrent_partition_lookups The maximum amount of concurrent
-/// lookups.
+///        lookups.
+/// @param no_store_internal_events Whether to ignore internally generated events
+///        like metrics or diagnostics instead of persisting them.
 /// @param catalog_dir The directory used by the catalog.
 /// @param index_config The meta-index configuration of the false-positives
 /// rates for the types and fields.
@@ -350,7 +355,7 @@ index(index_actor::stateful_pointer<index_state> self,
       const std::filesystem::path& dir, std::string store_backend,
       size_t partition_capacity, duration active_partition_timeout,
       size_t max_inmem_partitions, size_t taste_partitions,
-      size_t max_concurrent_partition_lookups,
+      size_t max_concurrent_partition_lookups, bool no_store_internal_events,
       const std::filesystem::path& catalog_dir, index_config);
 
 } // namespace tenzir

@@ -195,8 +195,10 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
       get_or(settings, "tenzir.active-partition-timeout",
              defaults::active_partition_timeout),
       defaults::max_in_mem_partitions, defaults::taste_partitions,
-      defaults::num_query_supervisors, self->state().dir / "index",
-      std::move(index_config));
+      defaults::num_query_supervisors,
+      get_or(settings, "tenzir.no-store-internal-events",
+             defaults::no_store_internal_events),
+      self->state().dir / "index", std::move(index_config));
   }();
   TENZIR_ASSERT(index);
   if (auto err

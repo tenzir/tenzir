@@ -138,6 +138,10 @@ tenzir:
   # its size.
   active-partition-timeout: 30 seconds
 
+  # Prevent saving internally created events from being persisted in the
+  # internal storeage engine.
+  no-store-internal-events: false
+
   # Automatically rebuild undersized and outdated partitions in the background.
   # The given number controls how much resources to spend on it. Set to 0 to
   # disable.
