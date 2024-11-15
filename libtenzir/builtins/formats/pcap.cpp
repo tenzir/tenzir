@@ -246,8 +246,7 @@ public:
         } else {
           die("invalid magic number"); // validated earlier
         }
-        const auto* ptr = reinterpret_cast<const char*>(packet.data.data());
-        auto data = std::string_view{ptr, packet.data.size()};
+        auto data = view<blob>{packet.data.data(), packet.data.size()};
         if (!(builder.add(input_file_header.linktype & 0x0000FFFF)
               && builder.add(timestamp)
               && builder.add(packet.header.captured_packet_length)
