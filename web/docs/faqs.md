@@ -146,7 +146,7 @@ non-engineer user base. This inspired us to create a language with:
 - The *flexibility* of [jq](https://stedolan.github.io/jq/)
 - The *clarity* of [PRQL](https://prql-lang.org/)
 - The *expressiveness* of [dplyr](https://dplyr.tidyverse.org/)
-- The *ambition* of [SuperPipe](https://zed.brimdata.io/)
+- The *ambition* of [SuperSQL](https://zed.brimdata.io/)
 - The *composability* of [Nu](https://www.nushell.sh/)
 
 Even Elastic recognized the need for more intuitive languages by introducing

@@ -173,6 +173,10 @@ const sidebars = {
     },
     {
       type: 'doc',
+      id: 'enrichment/README',
+    },
+    {
+      type: 'doc',
       id: 'packages',
     },
     {
