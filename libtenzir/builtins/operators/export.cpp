@@ -239,7 +239,7 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
                  shared_diagnostic_handler diagnostics_handler)
   -> caf::behavior {
   self->state.self = self;
-  self->state.expr = std::move(expr);
+  self->state.expr = normalize(std::move(expr));
   self->state.mode = mode;
   self->state.metrics_handler = std::move(metrics_handler);
   self->state.diagnostics_handler = std::move(diagnostics_handler);
