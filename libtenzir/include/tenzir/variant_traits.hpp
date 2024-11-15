@@ -318,25 +318,31 @@ constexpr auto match(std::tuple<Ts...> v, F&& f) -> decltype(auto) {
 template <concepts::unqualified T, has_variant_traits V>
 auto is(const V& v) -> bool {
   using bare = std::remove_cvref_t<V>;
-  return variant_traits<bare>::index(v) == detail::variant_index<bare, T>;
+  constexpr auto alternative_index = detail::variant_index<bare, T>;
+  const auto current_index = variant_traits<bare>::index(v);
+  return current_index == alternative_index;
 }
 
 /// Extracts a `T` from the given variant, asserting success.
 template <concepts::unqualified T, has_variant_traits V>
 auto as(V&& v) -> forward_like_t<V, T> {
-  constexpr auto index = detail::variant_index<std::remove_cvref_t<V>, T>;
-  TENZIR_ASSERT(variant_traits<std::remove_cvref_t<V>>::index(v) == index);
-  return detail::variant_get<index>(std::forward<V>(v));
+  using bare = std::remove_cvref_t<V>;
+  constexpr auto alternative_index = detail::variant_index<bare, T>;
+  const auto current_index = variant_traits<bare>::index(v);
+  TENZIR_ASSERT(current_index == alternative_index);
+  return detail::variant_get<alternative_index>(std::forward<V>(v));
 };
 
 /// Tries to extract a `T` from the variant, returning `nullptr` otherwise.
 template <concepts::unqualified T, has_variant_traits V>
 auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
-  constexpr auto index = detail::variant_index<std::remove_const_t<V>, T>;
-  if (variant_traits<std::remove_const_t<V>>::index(v) != index) {
+  using bare = std::remove_cvref_t<V>;
+  constexpr auto alternative_index = detail::variant_index<bare, T>;
+  const auto current_index = variant_traits<bare>::index(v);
+  if (current_index != alternative_index) {
     return nullptr;
   }
-  return &detail::variant_get<index>(v);
+  return &detail::variant_get<alternative_index>(v);
 };
 /// Tries to extract a `T` from the variant, returning `nullptr` otherwise.
 template <concepts::unqualified T, has_variant_traits V>
