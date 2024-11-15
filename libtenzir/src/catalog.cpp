@@ -473,7 +473,7 @@ void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
   -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag))
-    caf::detail::set_thread_name("tenzir.catalog");
+    caf::detail::set_thread_name("tnz.catalog");
   self->state.self = self;
   self->state.taxonomies.concepts = modules::concepts();
   return {

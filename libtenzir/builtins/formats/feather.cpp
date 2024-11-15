@@ -20,6 +20,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/io/memory.h>
 #include <arrow/ipc/feather.h>
@@ -398,7 +399,7 @@ auto print_feather(
 
 class feather_options {
 public:
-  std::optional<located<int>> compression_level{};
+  std::optional<located<int64_t>> compression_level{};
   std::optional<located<std::string>> compression_type{};
   std::optional<located<double>> min_space_savings{};
 
@@ -564,8 +565,36 @@ class plugin final : public virtual parser_plugin<feather_parser>,
   }
 };
 
+class read_plugin final
+  : public virtual operator_plugin2<parser_adapter<feather_parser>> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
+    return std::make_unique<parser_adapter<feather_parser>>(feather_parser{});
+  }
+};
+
+class write_plugin final
+  : public virtual operator_plugin2<writer_adapter<feather_printer>> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto options = feather_options{};
+    TRY(argument_parser2::operator_(name())
+          .add("compression_level", options.compression_level)
+          .add("compression_type", options.compression_type)
+          .add("min_space_savings", options.min_space_savings)
+          .parse(inv, ctx));
+    return std::make_unique<writer_adapter<feather_printer>>(
+      feather_printer{std::move(options)});
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::feather
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::feather::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::feather::read_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::feather::write_plugin)

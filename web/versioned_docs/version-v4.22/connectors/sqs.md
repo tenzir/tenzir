@@ -39,7 +39,7 @@ The long polling timeout per request.
 
 The `<duration>` value must be between 1 and 20 seconds.
 
-Defaults to 10s.
+Defaults to `3s`.
 
 ## Examples
 

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>

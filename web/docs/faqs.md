@@ -49,7 +49,7 @@ access the platform. All computation and storage takes place at your nodes. The
 platform acts as rendezvous point that connects two TLS-encrypted channels, one
 from the node to the platform, and one from the browser to the platform:
 
-![Platform Connections](platform-connections.excalidraw.svg)
+![Platform Connections](platform-connections.svg)
 
 We connect these two channels at the platform. Therefore, whoever operates the
 platform *could* interpose on data that travels from the nodes to the app. In
@@ -69,18 +69,17 @@ with the [Sovereign Edition](https://tenzir.com/pricing).
 
 ## Does Tenzir run on-premise?
 
-Yes, Tenzir can run on premise and support fully air-gapped environments. The
+Yes, Tenzir can run on premise and supports fully air-gapped environments. The
 [Sovereign Edition](https://tenzir.com/pricing) allows you to [deploy the entire
-platform](installation/deploy-the-platform.md) in a Dockerized environment, such
-as Docker Compose.
+platform](installation/deploy-the-platform.md) in a Dockerized environment.
 
 The [Community Edition](https://tenzir.com/pricing), [Professional
 Edition](https://tenzir.com/pricing) and [Enterprise
 Edition](https://tenzir.com/pricing) are backed by a Tenzir-hosted instance of
 the platform in the public cloud (AWS in Europe):
 
-Read more on [how Tenzir works](how-tenzir-works/README.md) to understand the
-key differences.
+Read more on [how Tenzir works](how-tenzir-works/README.md) to understand what
+component of Tenzir runs where.
 
 ## Does Tenzir offer cloud-native nodes?
 
@@ -173,54 +172,59 @@ data analysis.
 
 Tenzir does not rely on a third-party database.
 
-Tenzir nodes include a light-weight storage engine on top of partitioned Feather
-or Parquet files, accessible via the [`import`](operators/import.md) and
-[`export`](operators/export.md) operators. The engine comes with a
-catalog that tracks meta data and a thin layer of sketches to accelerate
-queries.
+Tenzir nodes include a light-weight storage engine on top of Feather or Parquet
+files, accessible via the [`import`](operators/import.md) and
+[`export`](operators/export.md) operators.
+
+The storage engine comes with a catalog that tracks schema meta data and a thin
+layer of indexing to accelerate queries.
 
 Our [tuning guide](installation/tune-performance/README.md) has further details
 on the inner workings.
 
 ## Does a Tenzir node run on platform *X*?
 
-We currently support the platforms that we mention in our [deployment
+We support the platforms that we mention in our [deployment
 instructions](installation/deploy-a-node.md).
 
-For any other platform, the answer is most likely *no*. While we would love to
-support a wide variety of platforms, we are still a small team with limited
-engineering bandwidth. Please [talk to us](/discord) to let us know what is
-missing and consider contributing support for additional platforms to our [open
-source project](https://github.com/tenzir/tenzir).
+For any other platform, the answer is most likely *no*. Please [talk to
+us](/discord) to let us know what is missing, or dive right in by contributing
+to our [open source repository](https://github.com/tenzir/tenzir).
 
 ## Do you have an integration for *X*?
 
-Our [integrations page](integrations.md) includes descriptions of use cases
-with third-party products and tools. If *X* is not in that list, it does not
-mean that *X* is not supported. The steps below help you understand whether
-there exists an integration:
+Tenzir has several layers where integrations can occur. If *X* is not supported,
+then we need to find out at what level it should be.
 
-1. Check the available [formats](formats.md). Sometimes an integration is just a
-   lower-level building block, such as the [Syslog parser](formats/syslog.md).
-2. Check the available [connectors](connectors.md). An integration can also be
-   generic communication primitive, such as the [AMQP](connectors/amqp.md) that
-   acts as client to speak with a RabbitMQ server, or the
-   [HTTP](connectors/http.md) connector to perform an API call.
-3. Check Fluent Bit [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs].
-   Our [`fluent-bit`](operators/fluent-bit.md) operator makes it possible to use
-   the entire ecosystem of Fluent Bit integrations.
-4. Call a command-line tool. It is always possible to integrate a command line
-   tool using the [`shell`](operators/shell.md) operator, by hooking
-   standard input and output of a forked child as a byte stream into a
-   pipeline.
-5. Use Python. The [`python`](operators/python.md) operator allows you to
-   perform arbitrary event-to-event transformation using the full power of
-   Python.
+1. **Application**. If *X* is a specific tool and you'd like to get data in from
+   *X* or send data to *X*, then the best place to start is our [Community
+   Library](https://github.com/tenzir/library) where we package integrations for
+   applications and use cases. Application-level integrations are often just a
+   composition of existing pipeline operators. Our [integrations
+   page](integrations.md) includes a few such examples.
 
-Please do not hesitate to reach out to us if you think something is missing, by
-[opening a GitHub
-Discussion](https://github.com/orgs/tenzir/discussions/new/choose) or swinging
-by our [Discord server](/discord).
+2. **Format**. If you *X* is a wire encoding, either text-based like JSON or
+   binary like PCAP, then look for available [formats](formats.md).
+
+3. **Connector**. If you *X* is a way to send or receive data, like HTTP, Kafka,
+   or TCP, then look for available [connectors](connectors.md).
+
+4. **Fluent Bit**. Tenzir ships with all of Fluent Bit's
+   [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs], since the Fluent
+   Bit library is baked into every Tenzir binary. Use the
+   [`fluent-bit`](operators/fluent-bit.md) operator makes to access Fluent Bit
+   integrations.
+
+5. **Escape Hatches**. As last resort, you can bring in Shell and Python scripts
+   to compensate for native support for *X*. The [`shell`](operators/shell.md)
+   operator brings byte streams via standard input and output into a pipeline,
+   and the [`python`](operators/python.md) operator allows you to perform
+   arbitrary event-to-event transformation using the full power of Python.
 
 [fluentbit-inputs]: https://docs.fluentbit.io/manual/pipeline/inputs/
 [fluentbit-outputs]: https://docs.fluentbit.io/manual/pipeline/outputs/
+
+Please do not hesitate to reach out to us if you think something is missing, by
+[opening a GitHub
+Discussion](https://github.com/orgs/tenzir/discussions/new/choose) or asking us
+directly in our [Discord server](/discord).

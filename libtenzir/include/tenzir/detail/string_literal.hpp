@@ -32,11 +32,13 @@ struct string_literal {
     return {&value[0], &value[N - 1]};
   }
 
-  [[nodiscard]] explicit constexpr operator std::string_view() const noexcept {
+  [[nodiscard]] explicit(false) constexpr
+  operator std::string_view() const noexcept {
     return str();
   }
 
-  [[nodiscard]] explicit operator std::string() const noexcept {
+  [[nodiscard]] explicit(false) constexpr
+  operator std::string() const noexcept {
     return std::string{str()};
   }
 };

@@ -11,6 +11,7 @@
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/range_map.hpp>
@@ -20,11 +21,13 @@
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/operator.hpp>
-#include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/array.h>
@@ -150,7 +153,7 @@ public:
         out.emplace_back(data{x});
       }
     };
-    match(data_, visitor);
+    tenzir::match(data_, visitor);
   }
 
   auto original_type_index() const -> size_t {
@@ -181,11 +184,11 @@ private:
   auto to_original_data_impl() const -> data {
     switch (original_type_index_) {
       case i64_index:
-        return data{static_cast<int64_t>(as<StoredType>(data_))};
+        return data{static_cast<int64_t>(caf::get<StoredType>(data_))};
       case u64_index:
-        return data{static_cast<uint64_t>(as<StoredType>(data_))};
+        return data{static_cast<uint64_t>(caf::get<StoredType>(data_))};
       case double_index:
-        return data{static_cast<double>(as<StoredType>(data_))};
+        return data{static_cast<double>(caf::get<StoredType>(data_))};
       default:
         TENZIR_UNREACHABLE();
     }
@@ -216,20 +219,24 @@ namespace {
 
 struct value_data {
   data raw_data;
-  // TODO: update_timeout and update_duration can move into the same optional as
-  // they cannot be set independently
-  std::optional<time> update_timeout;
+
   std::optional<time> create_timeout;
-  std::optional<duration> update_duration;
+  std::optional<time> write_timeout;
+
+  // TODO: read_timeout and read_timeout_duration can move into the same
+  // optional as they cannot be set independently
+  std::optional<duration> read_timeout_duration;
+  std::optional<time> read_timeout;
 
   auto is_expired(time now) const -> bool {
-    return (update_timeout and *update_timeout < now)
+    return (read_timeout and *read_timeout < now)
+           or (write_timeout and *write_timeout < now)
            or (create_timeout and *create_timeout < now);
   }
 
-  auto update(time now) -> void {
-    if (update_duration) {
-      update_timeout = now + *update_duration;
+  auto refresh_read_timeout(time now) -> void {
+    if (read_timeout_duration) {
+      read_timeout = now + *read_timeout_duration;
     }
   }
 };
@@ -237,11 +244,11 @@ struct value_data {
 using map_type = tsl::robin_map<key_data, value_data>;
 using subnet_tree_type = detail::subnet_tree<value_data>;
 
-class ctx final : public virtual context {
+class lookup_table_context final : public virtual context {
 public:
-  ctx() noexcept = default;
-  explicit ctx(map_type context_entries,
-               subnet_tree_type subnet_entries) noexcept
+  lookup_table_context() noexcept = default;
+  explicit lookup_table_context(map_type context_entries,
+                                subnet_tree_type subnet_entries) noexcept
     : context_entries{std::move(context_entries)},
       subnet_entries{std::move(subnet_entries)} {
     // nop
@@ -252,7 +259,7 @@ public:
   }
 
   auto subnet_lookup(const auto& value) -> std::pair<subnet, value_data*> {
-    auto f = detail::overload{
+    auto match = detail::overload{
       [&](const auto&) -> std::pair<subnet, value_data*> {
         return {{}, nullptr};
       },
@@ -263,21 +270,65 @@ public:
         return subnet_entries.match(materialize(sn));
       },
     };
-    return match(value, f);
+    return tenzir::match(value, match);
   };
 
-  auto apply(series array, bool replace)
+  auto legacy_apply(series array, bool replace)
     -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
     const auto now = time::clock::now();
     for (auto value : array.values()) {
+      // TODO: This should really be making use of heterogeneous map lookups
+      // instead of materializing, but we're not using `data` and `data_view`
+      // directly here, but rather a custom wrapper around them to make mixed
+      // number types
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
         if (it->second.is_expired(now)) {
           context_entries.erase(it);
           goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
         }
-        it.value().update(now);
+        it.value().refresh_read_timeout(now);
+        builder.data(it->second.raw_data);
+        continue;
+      }
+      // We need to retry the lookup if we had an expired hit, as a matched IP
+      // address in an expired subnet may very well be part of another subnet.
+    retry:
+      if (auto [subnet, entry] = subnet_lookup(value); entry) {
+        if (entry->is_expired(now)) {
+          subnet_entries.erase(subnet);
+          goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
+        }
+        entry->refresh_read_timeout(now);
+        builder.data(entry->raw_data);
+        continue;
+      }
+      if (replace and not caf::holds_alternative<caf::none_t>(value)) {
+        builder.data(value);
+        continue;
+      }
+      builder.null();
+    }
+    return builder.finish();
+  }
+
+  auto apply(const series& array, session ctx) -> std::vector<series> override {
+    TENZIR_UNUSED(ctx);
+    auto builder = series_builder{};
+    const auto now = time::clock::now();
+    for (auto value : array.values()) {
+      // TODO: This should really be making use of heterogeneous map lookups
+      // instead of materializing, but we're not using `data` and `data_view`
+      // directly here, but rather a custom wrapper around them to make mixed
+      // number types
+      if (auto it = context_entries.find(materialize(value));
+          it != context_entries.end()) {
+        if (it->second.is_expired(now)) {
+          context_entries.erase(it);
+          goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
+        }
+        it.value().refresh_read_timeout(now);
         builder.data(it->second.raw_data);
         continue;
       }
@@ -289,12 +340,8 @@ public:
           subnet_entries.erase(subnet);
           goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
         }
-        entry->update(now);
+        entry->refresh_read_timeout(now);
         builder.data(entry->raw_data);
-        continue;
-      }
-      if (replace and not is<caf::none_t>(value)) {
-        builder.data(value);
         continue;
       }
       builder.null();
@@ -368,11 +415,11 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, context::parameter_map parameters)
-    -> caf::expected<update_result> override {
+  auto legacy_update(table_slice slice, context_parameter_map parameters)
+    -> caf::expected<context_update_result> override {
     // context does stuff on its own with slice & parameters
     TENZIR_ASSERT(slice.rows() != 0);
-    if (as<record_type>(slice.schema()).num_fields() == 0) {
+    if (as<tenzir::record_type>(slice.schema()).num_fields() == 0) {
       return caf::make_error(ec::invalid_argument,
                              "context update cannot handle empty input events");
     }
@@ -406,8 +453,8 @@ public:
                                            "valid duration: {}",
                                            update_timeout.error()));
       }
-      context_value.update_timeout = now + *update_timeout;
-      context_value.update_duration = *update_timeout;
+      context_value.read_timeout = now + *update_timeout;
+      context_value.read_timeout_duration = *update_timeout;
     }
     auto erase = parameters.contains("erase");
     if (erase and parameters["erase"].has_value()) {
@@ -444,10 +491,10 @@ public:
     auto key_values_list = list{};
     if (erase) {
       // Subnets never make it into the regular map of entries.
-      if (is<subnet_type>(key_type)) {
+      if (caf::holds_alternative<subnet_type>(key_type)) {
         for (const auto& key :
              values(subnet_type{},
-                    as<type_to_arrow_array_t<subnet_type>>(*key_array))) {
+                    as<tenzir::subnet_type::array_type>(*key_array))) {
           if (not key) {
             continue;
           }
@@ -458,8 +505,7 @@ public:
           context_entries.erase(materialize(key));
         }
       }
-      return update_result{
-        .update_info = show(),
+      return context_update_result{
         .make_query = {},
       };
     }
@@ -474,8 +520,8 @@ public:
       value_val.raw_data = materialize(*context_it);
       auto materialized_key = materialize(*key_it);
       // Subnets never make it into the regular map of entries.
-      if (is<subnet_type>(key_type)) {
-        const auto& key = as<subnet>(materialized_key);
+      if (caf::holds_alternative<subnet_type>(key_type)) {
+        const auto& key = as<tenzir::subnet>(materialized_key);
         subnet_entries.insert(key, std::move(value_val));
       } else {
         context_entries.insert_or_assign(materialized_key,
@@ -486,8 +532,9 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT(context_it == context_values.end());
-    auto query_f = [key_values_list = std::move(key_values_list)](
-                     parameter_map, const std::vector<std::string>& fields)
+    auto query_f
+      = [key_values_list = std::move(key_values_list)](
+          context_parameter_map, const std::vector<std::string>& fields)
       -> caf::expected<std::vector<expression>> {
       auto result = std::vector<expression>{};
       result.reserve(fields.size());
@@ -502,9 +549,68 @@ public:
       }
       return result;
     };
-    return update_result{
-      .update_info = show(),
+    return context_update_result{
       .make_query = std::move(query_f),
+    };
+  }
+
+  auto update(const table_slice& events, const context_update_args& args,
+              session ctx) -> failure_or<context_update_result> override {
+    auto keys = eval(args.key, events, ctx);
+    auto key_values_list = list{};
+    const auto update_entry = [&, now = time::clock::now()](
+                                bool created, value_data& entry, data context) {
+      entry.raw_data = std::move(context);
+      if (created and args.create_timeout) {
+        entry.create_timeout = now + args.create_timeout->inner;
+      }
+      if (args.write_timeout) {
+        entry.write_timeout = now + args.write_timeout->inner;
+      }
+      if (args.read_timeout) {
+        entry.read_timeout = now + args.read_timeout->inner;
+        entry.read_timeout_duration = args.read_timeout->inner;
+      }
+    };
+    auto context
+      = eval(args.value.value_or(ast::this_{location::unknown}), events, ctx);
+    auto context_gen = context.values();
+    for (const auto& key : keys.values()) {
+      auto materialized_key = materialize(key);
+      auto context = context_gen.next();
+      TENZIR_ASSERT(context);
+      if (const auto* sn = caf::get_if<subnet>(&materialized_key)) {
+        const auto created = subnet_entries.insert(*sn, value_data{});
+        auto* entry = subnet_entries.lookup(*sn);
+        TENZIR_ASSERT(entry);
+        update_entry(created, *entry, materialize(*context));
+      } else {
+        auto [entry, created]
+          = context_entries.emplace(materialized_key, value_data{});
+        TENZIR_ASSERT(entry != context_entries.end());
+        update_entry(created, entry.value(), materialize(*context));
+      }
+      key_values_list.emplace_back(std::move(materialized_key));
+    }
+    auto make_query
+      = [key_values_list = std::move(key_values_list)](
+          context_parameter_map, const std::vector<std::string>& fields)
+      -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
+      result.reserve(fields.size());
+      for (const auto& field : fields) {
+        auto lhs = to<operand>(field);
+        TENZIR_ASSERT(lhs);
+        result.emplace_back(predicate{
+          *lhs,
+          relational_operator::in,
+          data{key_values_list},
+        });
+      }
+      return result;
+    };
+    return context_update_result{
+      .make_query = std::move(make_query),
     };
   }
 
@@ -514,7 +620,7 @@ public:
     return {};
   }
 
-  auto save() const -> caf::expected<save_result> override {
+  auto save() const -> caf::expected<context_save_result> override {
     // We save the context by formatting into a record of this format:
     //   [{key: key, value: value}, ...]
     auto builder = flatbuffers::FlatBufferBuilder{};
@@ -538,13 +644,18 @@ public:
           builder, builder.CreateSharedString("create-timeout"),
           pack(builder, data{*value.create_timeout})));
       }
-      if (value.update_timeout) {
+      if (value.write_timeout) {
         field_offsets.emplace_back(fbs::data::CreateRecordField(
-          builder, builder.CreateSharedString("update-timeout"),
-          pack(builder, data{*value.update_timeout})));
+          builder, builder.CreateSharedString("write-timeout"),
+          pack(builder, data{*value.write_timeout})));
+      }
+      if (value.read_timeout) {
         field_offsets.emplace_back(fbs::data::CreateRecordField(
-          builder, builder.CreateSharedString("update-duration"),
-          pack(builder, data{*value.update_duration})));
+          builder, builder.CreateSharedString("read-timeout"),
+          pack(builder, data{*value.read_timeout})));
+        field_offsets.emplace_back(fbs::data::CreateRecordField(
+          builder, builder.CreateSharedString("read-timeout-duration"),
+          pack(builder, data{*value.read_timeout_duration})));
       }
       const auto record_offset
         = fbs::data::CreateRecordDirect(builder, &field_offsets);
@@ -563,7 +674,8 @@ public:
     const auto data_offset
       = fbs::CreateData(builder, fbs::data::Data::list, list_offset.Union());
     fbs::FinishDataBuffer(builder, data_offset);
-    return save_result{.data = chunk::make(builder.Release()), .version = 1};
+    return context_save_result{.data = chunk::make(builder.Release()),
+                               .version = 1};
   }
 
 private:
@@ -650,7 +762,7 @@ struct v1_loader : public context_loader {
                                                "create-timeout: {}",
                                                err));
           }
-          const auto* create_timeout_time = try_as<time>(&create_timeout);
+          const auto* create_timeout_time = caf::get_if<time>(&create_timeout);
           if (not create_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
@@ -660,43 +772,64 @@ struct v1_loader : public context_loader {
           value.create_timeout = *create_timeout_time;
           continue;
         }
-        if (field->name()->string_view() == "update-timeout") {
-          auto update_timeout = data{};
-          if (auto err = unpack(*field->data(), update_timeout)) {
+        if (field->name()->string_view() == "write-timeout") {
+          auto write_timeout = data{};
+          if (auto err = unpack(*field->data(), write_timeout)) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid "
-                                               "update-timeout: {}",
+                                               "write-timeout: {}",
                                                err));
           }
-          const auto* update_timeout_time = try_as<time>(&update_timeout);
-          if (not update_timeout_time) {
+          const auto* write_timeout_time = caf::get_if<time>(&write_timeout);
+          if (not write_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
-                                   "context: invalid update-timeout "
+                                   "context: invalid write-timeout "
                                    "must be a time");
           }
-          value.update_timeout = *update_timeout_time;
+          value.write_timeout = *write_timeout_time;
           continue;
         }
-        if (field->name()->string_view() == "update-duration") {
-          auto update_duration = data{};
-          if (auto err = unpack(*field->data(), update_duration)) {
+        if (field->name()->string_view() == "read-timeout"
+            or field->name()->string_view() == "update-timeout") {
+          auto read_timeout = data{};
+          if (auto err = unpack(*field->data(), read_timeout)) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid "
-                                               "update-duration: {}",
+                                               "read-timeout: {}",
                                                err));
           }
-          const auto* update_duration_duration
-            = try_as<duration>(&update_duration);
-          if (not update_duration_duration) {
+          const auto* read_timeout_time = caf::get_if<time>(&read_timeout);
+          if (not read_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
-                                   "context: invalid update-duration "
+                                   "context: invalid read-timeout "
                                    "must be a time");
           }
-          value.update_duration = *update_duration_duration;
+          value.read_timeout = *read_timeout_time;
+          continue;
+        }
+        if (field->name()->string_view() == "read-timeout-duration"
+            or field->name()->string_view() == "update-duration") {
+          auto read_timeout_duration = data{};
+          if (auto err = unpack(*field->data(), read_timeout_duration)) {
+            return caf::make_error(ec::serialization_error,
+                                   fmt::format("failed to deserialize lookup "
+                                               "table context: invalid "
+                                               "read-timeout-duration: {}",
+                                               err));
+          }
+          const auto* read_timeout_duration_duration
+            = caf::get_if<duration>(&read_timeout_duration);
+          if (not read_timeout_duration_duration) {
+            return caf::make_error(ec::serialization_error,
+                                   "failed to deserialize lookup table "
+                                   "context: invalid read-timeout-duration "
+                                   "must be a time");
+          }
+          value.read_timeout_duration = *read_timeout_duration_duration;
           continue;
         }
         return caf::make_error(ec::serialization_error,
@@ -704,40 +837,48 @@ struct v1_loader : public context_loader {
                                            "context: unexpected key {}",
                                            field->name()->string_view()));
       }
-      if (value.update_timeout.has_value()
-          != value.update_duration.has_value()) {
+      if (value.read_timeout.has_value()
+          != value.read_timeout_duration.has_value()) {
         return caf::make_error(ec::serialization_error,
                                "failed to deserialize lookup table context: "
-                               "update-timeout and update-duration must be "
+                               "read-timeout and read-timeout-duration must be "
                                "either both set or both unset");
       }
       if (value.is_expired(now)) {
         continue;
       }
-      if (const auto* x = try_as<subnet>(&key)) {
+      if (const auto* x = caf::get_if<subnet>(&key)) {
         subnet_entries.insert(*x, std::move(value));
       } else {
         context_entries.emplace(std::move(key), std::move(value));
       }
     }
-    return std::make_unique<ctx>(std::move(context_entries),
-                                 std::move(subnet_entries));
+    return std::make_unique<lookup_table_context>(std::move(context_entries),
+                                                  std::move(subnet_entries));
   }
 };
 
-class plugin : public virtual context_plugin {
+class plugin : public virtual context_factory_plugin<"lookup-table"> {
   auto initialize(const record&, const record&) -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
     return caf::none;
   }
 
-  auto name() const -> std::string override {
-    return "lookup-table";
+  auto make_context(context_parameter_map) const
+    -> caf::expected<std::unique_ptr<context>> override {
+    return std::make_unique<lookup_table_context>();
   }
 
-  auto make_context(context::parameter_map) const
-    -> caf::expected<std::unique_ptr<context>> override {
-    return std::make_unique<ctx>();
+  auto make_context(invocation inv, session ctx) const
+    -> failure_or<make_context_result> override {
+    auto name = located<std::string>{};
+    auto parser = argument_parser2::context("lookup-table");
+    parser.add(name, "<context>");
+    TRY(parser.parse(inv, ctx));
+    return make_context_result{
+      std::move(name),
+      std::make_unique<lookup_table_context>(),
+    };
   }
 };
 

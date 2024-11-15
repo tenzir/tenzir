@@ -77,7 +77,7 @@ filesystem_actor::behavior_type
 posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
                  std::filesystem::path root) {
   if (self->getf(caf::local_actor::is_detached_flag))
-    caf::detail::set_thread_name("tenzir.posix-filesystem");
+    caf::detail::set_thread_name("tnz.posix-fs");
   self->state.root = std::move(root);
   return {
     [self](atom::write, const std::filesystem::path& filename,

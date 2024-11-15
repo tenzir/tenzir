@@ -401,6 +401,8 @@ EOF
   # Concatenate PCAPs and process them. The test ensures that we have the
   # right sequencing of file header and packet header events.
   check tenzir "shell \"cat ${INPUTSDIR}/pcap/vlan-*.pcap\" | read pcap -e | put schema=#schema | write json -c"
+  # Decapsulate an SLL2 frame.
+  check tenzir "from ${INPUTSDIR}/pcap/sll2.pcap | decapsulate | write json -c"
 }
 
 # bats test_tags=pipelines, compression

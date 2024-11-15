@@ -59,6 +59,12 @@ public:
     return argument_parser2{kind::fn, std::move(name)};
   }
 
+  static auto context(std::string name) -> argument_parser2 {
+    return argument_parser2{
+      kind::op, fmt::format("context::create_{}",
+                            detail::replace_all(std::move(name), "-", "_"))};
+  }
+
   // ------------------------------------------------------------------------
 
   /// Adds a required positional argument.
@@ -89,11 +95,11 @@ public:
 
   // ------------------------------------------------------------------------
 
-  auto parse(const operator_factory_plugin::invocation& inv,
-             session ctx) -> failure_or<void>;
+  auto parse(const operator_factory_plugin::invocation& inv, session ctx)
+    -> failure_or<void>;
   auto parse(const ast::function_call& call, session ctx) -> failure_or<void>;
-  auto parse(const function_plugin::invocation& inv,
-             session ctx) -> failure_or<void>;
+  auto parse(const function_plugin::invocation& inv, session ctx)
+    -> failure_or<void>;
   auto parse(const ast::entity& self, std::span<ast::expression const> args,
              session ctx) -> failure_or<void>;
 

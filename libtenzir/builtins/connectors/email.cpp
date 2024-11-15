@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
@@ -240,8 +242,48 @@ public:
   }
 };
 
+class save_plugin final
+  : public virtual operator_plugin2<saver_adapter<saver>> {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = saver_args{};
+    auto parser = argument_parser2::operator_(name());
+    parser.add(args.to, "<email>");
+    parser.add("endpoint", args.endpoint);
+    parser.add("from", args.from);
+    parser.add("subject", args.subject);
+    parser.add("username", args.transfer_opts.username);
+    parser.add("password", args.transfer_opts.password);
+    parser.add("authzid", args.transfer_opts.authzid);
+    parser.add("authorization", args.transfer_opts.authorization);
+    parser.add("skip_peer_verification",
+               args.transfer_opts.skip_peer_verification);
+    parser.add("skip_hostname_verification",
+               args.transfer_opts.skip_hostname_verification);
+    parser.add("mime", args.mime);
+    parser.add("verbose", args.transfer_opts.verbose);
+    TRY(parser.parse(inv, ctx));
+    if (args.endpoint.empty()) {
+      args.endpoint = default_smtp_server;
+    } else if (args.endpoint.find("://") == std::string_view::npos) {
+      args.endpoint.insert(0, "smtps://");
+    } else if (args.endpoint.starts_with("email://")) {
+      args.endpoint.erase(0, 5);
+      args.endpoint.insert(0, "smtp");
+    }
+    if (args.to.empty()) {
+      diagnostic::error("no recipient specified")
+        .hint("add `to=<recipient>` to your invocation")
+        .emit(ctx);
+      return failure::promise();
+    }
+    return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::email
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::email::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::email::save_plugin)

@@ -73,7 +73,11 @@ auto tenzir_features() -> std::vector<std::string> {
   // that downstream API consumers can adjust their behavior depending on the
   // capabilities of the node. We remove entries once they're stabilized in the
   // Tenzir Platform.
-  return {};
+  return {
+    // The node supports modules in TQL2. Alongside this a few operators were
+    // renamed, e.g., `package_add` was renamed to `package::add`.
+    "modules",
+  };
 }
 
 } // namespace tenzir
