@@ -558,22 +558,23 @@ public:
               session ctx) -> failure_or<context_update_result> override {
     auto keys = eval(args.key, events, ctx);
     auto key_values_list = list{};
-    const auto update_entry
-      = [&, now = time::clock::now()](bool created, value_data& entry,
-                                      record context) {
-          entry.raw_data = std::move(context);
-          if (created and args.create_timeout) {
-            entry.create_timeout = now + args.create_timeout->inner;
-          }
-          if (args.write_timeout) {
-            entry.write_timeout = now + args.write_timeout->inner;
-          }
-          if (args.read_timeout) {
-            entry.read_timeout = now + args.read_timeout->inner;
-            entry.read_timeout_duration = args.read_timeout->inner;
-          }
-        };
-    auto context_gen = events.values();
+    const auto update_entry = [&, now = time::clock::now()](
+                                bool created, value_data& entry, data context) {
+      entry.raw_data = std::move(context);
+      if (created and args.create_timeout) {
+        entry.create_timeout = now + args.create_timeout->inner;
+      }
+      if (args.write_timeout) {
+        entry.write_timeout = now + args.write_timeout->inner;
+      }
+      if (args.read_timeout) {
+        entry.read_timeout = now + args.read_timeout->inner;
+        entry.read_timeout_duration = args.read_timeout->inner;
+      }
+    };
+    auto context
+      = eval(args.value.value_or(ast::this_{location::unknown}), events, ctx);
+    auto context_gen = context.values();
     for (const auto& key : keys.values()) {
       auto materialized_key = materialize(key);
       auto context = context_gen.next();
@@ -643,12 +644,17 @@ public:
           builder, builder.CreateSharedString("create-timeout"),
           pack(builder, data{*value.create_timeout})));
       }
+      if (value.write_timeout) {
+        field_offsets.emplace_back(fbs::data::CreateRecordField(
+          builder, builder.CreateSharedString("write-timeout"),
+          pack(builder, data{*value.write_timeout})));
+      }
       if (value.read_timeout) {
         field_offsets.emplace_back(fbs::data::CreateRecordField(
-          builder, builder.CreateSharedString("update-timeout"),
+          builder, builder.CreateSharedString("read-timeout"),
           pack(builder, data{*value.read_timeout})));
         field_offsets.emplace_back(fbs::data::CreateRecordField(
-          builder, builder.CreateSharedString("update-duration"),
+          builder, builder.CreateSharedString("read-timeout-duration"),
           pack(builder, data{*value.read_timeout_duration})));
       }
       const auto record_offset
@@ -766,43 +772,64 @@ struct v1_loader : public context_loader {
           value.create_timeout = *create_timeout_time;
           continue;
         }
-        if (field->name()->string_view() == "update-timeout") {
-          auto update_timeout = data{};
-          if (auto err = unpack(*field->data(), update_timeout)) {
+        if (field->name()->string_view() == "write-timeout") {
+          auto write_timeout = data{};
+          if (auto err = unpack(*field->data(), write_timeout)) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid "
-                                               "update-timeout: {}",
+                                               "write-timeout: {}",
                                                err));
           }
-          const auto* update_timeout_time = caf::get_if<time>(&update_timeout);
-          if (not update_timeout_time) {
+          const auto* write_timeout_time = caf::get_if<time>(&write_timeout);
+          if (not write_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
-                                   "context: invalid update-timeout "
+                                   "context: invalid write-timeout "
                                    "must be a time");
           }
-          value.read_timeout = *update_timeout_time;
+          value.write_timeout = *write_timeout_time;
           continue;
         }
-        if (field->name()->string_view() == "update-duration") {
-          auto update_duration = data{};
-          if (auto err = unpack(*field->data(), update_duration)) {
+        if (field->name()->string_view() == "read-timeout"
+            or field->name()->string_view() == "update-timeout") {
+          auto read_timeout = data{};
+          if (auto err = unpack(*field->data(), read_timeout)) {
             return caf::make_error(ec::serialization_error,
                                    fmt::format("failed to deserialize lookup "
                                                "table context: invalid "
-                                               "update-duration: {}",
+                                               "read-timeout: {}",
                                                err));
           }
-          const auto* update_duration_duration
-            = caf::get_if<duration>(&update_duration);
-          if (not update_duration_duration) {
+          const auto* read_timeout_time = caf::get_if<time>(&read_timeout);
+          if (not read_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
-                                   "context: invalid update-duration "
+                                   "context: invalid read-timeout "
                                    "must be a time");
           }
-          value.read_timeout_duration = *update_duration_duration;
+          value.read_timeout = *read_timeout_time;
+          continue;
+        }
+        if (field->name()->string_view() == "read-timeout-duration"
+            or field->name()->string_view() == "update-duration") {
+          auto read_timeout_duration = data{};
+          if (auto err = unpack(*field->data(), read_timeout_duration)) {
+            return caf::make_error(ec::serialization_error,
+                                   fmt::format("failed to deserialize lookup "
+                                               "table context: invalid "
+                                               "read-timeout-duration: {}",
+                                               err));
+          }
+          const auto* read_timeout_duration_duration
+            = caf::get_if<duration>(&read_timeout_duration);
+          if (not read_timeout_duration_duration) {
+            return caf::make_error(ec::serialization_error,
+                                   "failed to deserialize lookup table "
+                                   "context: invalid read-timeout-duration "
+                                   "must be a time");
+          }
+          value.read_timeout_duration = *read_timeout_duration_duration;
           continue;
         }
         return caf::make_error(ec::serialization_error,
@@ -814,7 +841,7 @@ struct v1_loader : public context_loader {
           != value.read_timeout_duration.has_value()) {
         return caf::make_error(ec::serialization_error,
                                "failed to deserialize lookup table context: "
-                               "update-timeout and update-duration must be "
+                               "read-timeout and read-timeout-duration must be "
                                "either both set or both unset");
       }
       if (value.is_expired(now)) {
