@@ -41,7 +41,7 @@ public:
       if (ptr == global_config.end()) {
         return;
       }
-      const auto* plugin_config = caf::get_if<record>(&ptr->second);
+      const auto* plugin_config = try_as<record>(&ptr->second);
       if (not plugin_config) {
         return;
       }
@@ -49,7 +49,7 @@ public:
       if (kafka_config_ptr == plugin_config->end()) {
         return;
       }
-      auto kafka_config = caf::get_if<record>(&kafka_config_ptr->second);
+      auto kafka_config = try_as<record>(&kafka_config_ptr->second);
       if (not kafka_config or kafka_config->empty()) {
         return;
       }
@@ -140,7 +140,7 @@ class save_plugin final
       if (ptr == global_config.end()) {
         return;
       }
-      const auto* plugin_config = caf::get_if<record>(&ptr->second);
+      const auto* plugin_config = try_as<record>(&ptr->second);
       if (not plugin_config) {
         return;
       }
@@ -148,7 +148,7 @@ class save_plugin final
       if (kafka_config_ptr == plugin_config->end()) {
         return;
       }
-      const auto kafka_config = caf::get_if<record>(&kafka_config_ptr->second);
+      const auto kafka_config = try_as<record>(&kafka_config_ptr->second);
       if (not kafka_config or kafka_config->empty()) {
         return;
       }

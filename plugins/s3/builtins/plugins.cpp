@@ -35,7 +35,7 @@ public:
     if (ptr == global_config.end()) {
       return {};
     }
-    auto* plugin_config = caf::get_if<record>(&ptr->second);
+    auto* plugin_config = try_as<record>(&ptr->second);
     if (not plugin_config) {
       return {};
     }
@@ -43,7 +43,7 @@ public:
     if (s3_config_ptr == plugin_config->end()) {
       return {};
     }
-    auto s3_config = caf::get_if<record>(&s3_config_ptr->second);
+    auto s3_config = try_as<record>(&s3_config_ptr->second);
     if (not s3_config or s3_config->empty()) {
       return {};
     }
@@ -54,7 +54,7 @@ public:
     if (value == data{}) {                                                     \
       continue;                                                                \
     }                                                                          \
-    if (const auto* str = caf::get_if<std::string>(&value)) {                  \
+    if (const auto* str = try_as<std::string>(&value)) {                       \
       config_->var = *str;                                                     \
       continue;                                                                \
     }                                                                          \
