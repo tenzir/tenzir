@@ -135,7 +135,8 @@ struct zeek_parser<subnet_type> {
 template <>
 struct zeek_parser<list_type> {
   auto operator()(const list_type& lt, char separator,
-                  const std::string& set_separator) const {
+                  const std::string& set_separator) const
+    -> rule<std::string_view::const_iterator, list> {
     auto f
       = [&]<concrete_type Type>(
           const Type& type) -> rule<std::string_view::const_iterator, list> {

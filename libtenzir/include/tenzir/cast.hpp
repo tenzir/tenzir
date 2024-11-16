@@ -127,7 +127,8 @@ struct cast_helper<FromType, ToType> {
     requires(std::same_as<type_to_data_t<FromType>, InputType>
              || std::same_as<view<type_to_data_t<FromType>>, InputType>)
   static auto cast_value(const FromType& from_type, const InputType& data,
-                         const ToType& to_type) noexcept {
+                         const ToType& to_type) noexcept
+    -> caf::expected<type_to_data_t<ToType>> {
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
           const ConcreteFromType& from_type,
