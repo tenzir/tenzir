@@ -416,6 +416,9 @@ struct connection_manager_state {
                      std::shared_ptr<connection_state>>
     connections = {};
 
+  std::unordered_map<boost::asio::ip::address, size_t> client_connection_count
+    = {};
+
   // Everything required for spawning the nested pipeline.
   static constexpr auto has_terminal = false;
   bool is_hidden = {};
@@ -533,11 +536,17 @@ struct connection_manager_state {
     // as the first operator of the nested pipeline. Given that there is an
     // implicitly injected operator at this position anyways, this is
     // acceptable.
+    const auto ep = connection->socket->remote_endpoint();
+    // Attempt to get the hostname of the client.
+    auto resolver = boost::asio::ip::tcp::resolver{*io_ctx};
+    auto iter = resolver.resolve(ep);
+    boost::asio::ip::tcp::resolver::iterator end;
+    auto parent_id = iter != end ? iter->host_name() : ep.address().to_string();
     nested_position.push_back({
-      // TODO: Attempt to get the hostname of the client.
-      .parent_id = connection->socket->remote_endpoint().address().to_string(),
-      // TODO: Keep a counter per souce address.
-      .run = 0,
+      .parent_id = parent_id,
+      // Keep a counter per source address.
+      .run = client_connection_count[connection->socket->remote_endpoint()
+                                       .address()]++,
       .position = 0,
     });
     connection->position = std::move(nested_position);
