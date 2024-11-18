@@ -6,8 +6,8 @@ sidebar_custom_props:
 
 # lookup
 
-Performs live filtering of the import feed using a [context](../contexts.md),
-and translates context updates into historical queries.
+Performs live filtering of the import feed using a context and translates
+context updates into historical queries.
 
 ## Synopsis
 

@@ -120,3 +120,24 @@ tenzir:
       # duration.
       unstoppable: true
 ```
+
+Similarly, instead of using the
+[`context::create_*`](../../tql2/operators.md#Context) you can deploy contexts
+as code:
+
+```yaml {0} title="<prefix>/etc/tenzir/tenzir.yaml"
+tenzir:
+  contexts:
+    # A unique name for the context that's used in the context, enrich, and
+    # lookup operators to refer to the context.
+    indicators:
+      # The type of the context.
+      type: bloom-filter
+      # Arguments for creating the context, depending on the type. Refer to the
+      # documentation of the individual context types to see the arguments they
+      # require. Note that changes to these arguments do not apply to any
+      # contexts that were previously created.
+      arguments:
+        capacity: 1B
+        fp-probability: 0.001
+```

@@ -35,12 +35,11 @@ increase CPU usage.
 
 #### Enrichment
 
-[Enriching](../usage/enrich-with-threat-intel/README.md) dataflows with
-[contexts](../contexts.md) requires holding in-memory state proportional to the
-context size. Therefore, enrichment affects your **RAM** requirements. [Bloom
-filters](../contexts/bloom-filter.md) are a fixed-size space-efficient structure
-for representing large sets, and [lookup tables](../contexts/lookup-table.md)
-grow linearly with the number of entries.
+[Enriching](../enrichment/README.md) dataflows with contexts requires holding
+in-memory state proportional to the context size. Therefore, enrichment affects
+your **RAM** requirements. Bloom filters are a fixed-size space-efficient
+structure for representing large sets, and lookup tables grow linearly with the
+number of entries.
 
 ### Data Diversity
 

@@ -70,7 +70,7 @@ as a lookup table, GeoIP database, or a custom plugin. The
 [`enrich`](./operators/enrich.md) places a context into a pipeline for
 enrichment.
 
-- Read more about [contexts](./contexts.md)
+- Read more about [enrichment](./enrichment/README.md)
 - [Manage](./operators/context.md) a context
 - [Enrich](./operators/enrich.md) with a context
 

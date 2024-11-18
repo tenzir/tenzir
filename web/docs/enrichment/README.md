@@ -6,8 +6,8 @@ out false positive, to leverage country information to classify logins as
 malicious, or to flag a sighting of an indicator of compromise.
 
 Tenzir comes a flexible enrichment framework where the central abstraction is a
-[context](../contexts.md): a stateful object that can be updated with pipelines
-and used for enrichment in other pipelines:
+**context**: a stateful object that can be updated with pipelines and used for
+enrichment in other pipelines:
 
 ![Context update & enrich](context-update-enrich.svg)
 
@@ -55,13 +55,13 @@ modes are already planned.
 
 Tenzir features several context types:
 
-- [Lookup table](../contexts/lookup-table.md): a hash table that associates
-  arbitrary information with a given enrichment key.
-- [GeoIP database](../contexts/geoip.md): a special-purpose table for attaching
-  geographic information to IP addresses.
-- [Bloom filter](../contexts/bloom-filter.md): a compact representation of a
-  sets that allows for membership tests only, with the space efficiency coming
-  at the cost a false positives during lookup.
+- **Lookup table**: a hash table that associates arbitrary information with a
+  given enrichment key.
+- **GeoIP database**: a special-purpose table for attaching geographic
+  information to IP addresses.
+- **Bloom filter**: a compact representation of a sets that allows for
+  membership tests only, with the space efficiency coming at the cost a false
+  positives during lookup.
 
 ![Context types](context-types.svg)
 

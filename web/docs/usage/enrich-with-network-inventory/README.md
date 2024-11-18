@@ -4,12 +4,11 @@ sidebar_position: 11
 
 # Enrich with Network Inventory
 
-Tenzir's contextualization framework features [lookup
-tables](../../contexts/lookup-table.md) that you can use to
-[`enrich`](../../operators/enrich.md) your pipelines. Lookup tables have one
-unique property that makes them attractive for tracking information associated
-with CIDR subnets: when you use `subnet` values as keys, you can probe the
-lookup table with `ip` values and will get a longest-prefix match.
+Tenzir's [enrichment framework](../../enrichment/README.md) features *lookup
+tables* that you can use to enrich data in your pipelines. Lookup tables have
+a unique property that makes them attractive for tracking information
+associated with CIDR subnets: when you use `subnet` values as keys, you can
+probe the lookup table with `ip` values and will get a longest-prefix match.
 
 To illustrate, consider this lookup table:
 
@@ -42,21 +41,22 @@ subnet,owner,function
 First, create the context:
 
 ```
-context create subnets lookup-table
+context::create_lookup_table "subnets"
 ```
 
 Then populate it:
 
 ```
-from inventory.csv
-| context update subnets --key subnet
+load_file "inventory.csv"
+read_csv
+context::update "subnets", key=subnet
 ```
 
 ## Enrich IP addresses with the subnet table
 
-Now that we have a lookup table with subnet keys, we can
-[`enrich`](../../operators/enrich.md) any data containing IP addresses with it.
-For example, let's consider this simplified Suricata flow record:
+Now that we have a lookup table with subnet keys, we can enrich any data
+containing IP addresses with it. For example, let's consider this simplified
+Suricata flow record:
 
 ```json title=sample.json
 {
@@ -75,8 +75,10 @@ Let's use the `enrich` operator to add the subnet context to all IP address
 fields:
 
 ```
-from /tmp/sample.json
-| enrich subnets --field :ip
+load_file "/tmp/sample.json"
+read_json
+context::enrich "subnets", key=src_ip
+context::enrich "subnets", key=dest_ip
 ```
 
 This yields the following output:
