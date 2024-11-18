@@ -22,59 +22,45 @@ bitmap::bitmap(size_type n, bool bit) : bitmap{} {
 }
 
 bool bitmap::empty() const {
-  return caf::visit(
-    [](auto& bm) {
+  return match(bitmap_, [](auto& bm) {
       return bm.empty();
-    },
-    bitmap_);
+    });
 }
 
 bitmap::size_type bitmap::size() const {
-  return caf::visit(
-    [](auto& bm) {
+  return match(bitmap_, [](auto& bm) {
       return bm.size();
-    },
-    bitmap_);
+    });
 }
 
 size_t bitmap::memusage() const {
-  return caf::visit(
-    [](auto& bm) {
+  return match(bitmap_, [](auto& bm) {
       return bm.memusage();
-    },
-    bitmap_);
+    });
 }
 
 void bitmap::append_bit(bool bit) {
-  caf::visit(
-    [=](auto& bm) {
+  match(bitmap_, [=](auto& bm) {
       bm.append_bit(bit);
-    },
-    bitmap_);
+    });
 }
 
 void bitmap::append_bits(bool bit, size_type n) {
-  caf::visit(
-    [=](auto& bm) {
+  match(bitmap_, [=](auto& bm) {
       bm.append_bits(bit, n);
-    },
-    bitmap_);
+    });
 }
 
 void bitmap::append_block(block_type value, size_type n) {
-  caf::visit(
-    [=](auto& bm) {
+  match(bitmap_, [=](auto& bm) {
       bm.append_block(value, n);
-    },
-    bitmap_);
+    });
 }
 
 void bitmap::flip() {
-  caf::visit(
-    [](auto& bm) {
+  match(bitmap_, [](auto& bm) {
       bm.flip();
-    },
-    bitmap_);
+    });
 }
 
 bitmap::variant& bitmap::get_data() {
@@ -108,7 +94,7 @@ auto pack(flatbuffers::FlatBufferBuilder& builder, const bitmap& from)
                                wah_offset.Union());
     },
   };
-  return caf::visit(f, from.bitmap_);
+  return match(from.bitmap_, f);
 }
 
 auto unpack(const fbs::Bitmap& from, bitmap& to) -> caf::error {
@@ -139,7 +125,7 @@ bitmap_bit_range::bitmap_bit_range(const bitmap& bm) {
       bits_ = r.get();
     range_ = std::move(r);
   };
-  caf::visit(visitor, bm);
+  match(bm, visitor);
 }
 
 void bitmap_bit_range::next() {
@@ -147,15 +133,13 @@ void bitmap_bit_range::next() {
     rng.next();
     bits_ = rng.get();
   };
-  caf::visit(visitor, range_);
+  match(range_, visitor);
 }
 
 bool bitmap_bit_range::done() const {
-  return caf::visit(
-    [](auto& rng) {
+  return match(range_, [](auto& rng) {
       return rng.done();
-    },
-    range_);
+    });
 }
 
 bitmap_bit_range bit_range(const bitmap& bm) {

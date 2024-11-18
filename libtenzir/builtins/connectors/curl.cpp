@@ -473,7 +473,7 @@ auto parse_http_args(std::string name,
   if (params) {
     for (auto& [name, value] : params->inner) {
       // TODO: What about other types?
-      auto str = caf::get_if<std::string>(&value);
+      auto str = try_as<std::string>(&value);
       if (not str) {
         diagnostic::error("expected `string` for parameter `{}`", name)
           .primary(*params)
@@ -487,7 +487,7 @@ auto parse_http_args(std::string name,
   if (headers) {
     for (auto& [name, value] : headers->inner) {
       // TODO: What about other types?
-      auto str = caf::get_if<std::string>(&value);
+      auto str = try_as<std::string>(&value);
       if (not str) {
         diagnostic::error("expected `string` for header `{}`", name)
           .primary(*headers)

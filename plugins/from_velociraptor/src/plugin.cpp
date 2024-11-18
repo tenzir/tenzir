@@ -138,13 +138,13 @@ auto parse(const proto::VQLResponse& response)
       return caf::make_error(ec::parse_error,
                              "Velociraptor response not in JSON format");
     }
-    const auto* objects = caf::get_if<list>(&*json);
+    const auto* objects = try_as<list>(&*json);
     if (objects == nullptr) {
       return caf::make_error(ec::parse_error,
                              "expected JSON array in Velociraptor response");
     }
     for (const auto& object : *objects) {
-      const auto* rec = caf::get_if<record>(&object);
+      const auto* rec = try_as<record>(&object);
       if (rec == nullptr) {
         return caf::make_error(ec::parse_error,
                                "expected objects in Velociraptor response");

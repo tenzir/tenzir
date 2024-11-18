@@ -36,20 +36,20 @@ public:
 
 private:
   auto output_type() const -> type override {
-    TENZIR_ASSERT(caf::holds_alternative<Type>(input_type()));
+    TENZIR_ASSERT(is<Type>(input_type()));
     return input_type();
   }
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
     const auto comp = [](const auto& lhs, const auto& rhs) {
       return Mode == mode::min ? lhs < rhs : lhs > rhs;
     };
-    if (not result_ or comp(caf::get<view_type>(view), *result_)) {
-      result_ = materialize(caf::get<view_type>(view));
+    if (not result_ or comp(as<view_type>(view), *result_)) {
+      result_ = materialize(as<view_type>(view));
     }
   }
 
@@ -155,7 +155,7 @@ public:
           .emit(ctx);
         result_ = caf::none;
       }};
-    caf::visit(f, *arg.array);
+    match(*arg.array, f);
   }
 
   auto get() const -> data override {
@@ -209,8 +209,7 @@ public:
         .emit(ctx);
       return;
     }
-    caf::visit(
-      [&]<class T>(const T& x) {
+    match(result, [&]<class T>(const T& x) {
         if constexpr (std::is_same_v<T, caf::none_t>) {
           result_.reset();
         } else if constexpr (result_t::can_have<T>) {
@@ -221,8 +220,7 @@ public:
                   Mode == mode::min ? "min" : "max")
             .emit(ctx);
         }
-      },
-      result);
+      });
     const auto* fb_type = (*fb)->type();
     if (not fb_type) {
       diagnostic::warning("missing field `type`")
@@ -266,7 +264,7 @@ public:
                                            type));
       },
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto make_aggregation(invocation inv, session ctx) const

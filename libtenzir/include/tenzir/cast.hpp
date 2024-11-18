@@ -80,11 +80,13 @@ struct cast_helper<FromType, ToType> {
             from_type, to_type);
         };
     if constexpr (concrete_type<FromType>) {
-      return caf::visit(f, detail::passthrough(from_type), to_type);
+      return match(
+        std::tuple{detail::passthrough(from_type), std::ref(to_type)}, f);
     } else if constexpr (concrete_type<ToType>) {
-      return caf::visit(f, from_type, detail::passthrough(to_type));
+      return match(
+        std::tuple{std::ref(from_type), detail::passthrough(to_type)}, f);
     } else {
-      return caf::visit(f, from_type, to_type);
+      return match(std::tie(from_type, to_type), f);
     }
   }
 
@@ -111,11 +113,13 @@ struct cast_helper<FromType, ToType> {
       }
     };
     if constexpr (concrete_type<FromType>) {
-      return caf::visit(f, detail::passthrough(from_type), to_type);
+      return match(
+        std::tuple{detail::passthrough(from_type), std::ref(to_type)}, f);
     } else if constexpr (concrete_type<ToType>) {
-      return caf::visit(f, from_type, detail::passthrough(to_type));
+      return match(
+        std::tuple{std::ref(from_type), detail::passthrough(to_type)}, f);
     } else {
-      return caf::visit(f, from_type, to_type);
+      return match(std::tie(from_type, to_type), f);
     }
   }
 
@@ -123,7 +127,8 @@ struct cast_helper<FromType, ToType> {
     requires(std::same_as<type_to_data_t<FromType>, InputType>
              || std::same_as<view<type_to_data_t<FromType>>, InputType>)
   static auto cast_value(const FromType& from_type, const InputType& data,
-                         const ToType& to_type) noexcept {
+                         const ToType& to_type) noexcept
+    -> caf::expected<type_to_data_t<ToType>> {
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
           const ConcreteFromType& from_type,
@@ -141,23 +146,25 @@ struct cast_helper<FromType, ToType> {
       }
     };
     if constexpr (concrete_type<FromType>) {
-      return caf::visit(f, detail::passthrough(from_type), to_type);
+      return match(
+        std::tuple{detail::passthrough(from_type), std::ref(to_type)}, f);
     } else if constexpr (concrete_type<ToType>) {
-      return caf::visit(f, from_type, detail::passthrough(to_type));
+      return match(
+        std::tuple{std::ref(from_type), detail::passthrough(to_type)}, f);
     } else {
-      return caf::visit(f, from_type, to_type);
+      return match(std::tie(from_type, to_type), f);
     }
   }
 
 private:
   template <concrete_type To>
   static auto get_underlying_data(const data& d) {
-    return caf::get<type_to_data_t<To>>(d);
+    return as<type_to_data_t<To>>(d);
   }
 
   template <concrete_type To>
   static auto get_underlying_data(const data_view& d) {
-    return caf::get<view<type_to_data_t<To>>>(d);
+    return as<view<type_to_data_t<To>>>(d);
   }
 
   template <concrete_type To>
@@ -379,7 +386,7 @@ struct cast_helper<record_type, record_type> {
                            ? std::string{to_field.name}
                            : fmt::format("{}.{}", key_prefix, to_field.name);
         fields.push_back(to_field.type.to_arrow_field(to_field.name));
-        if (const auto* r = caf::get_if<record_type>(&to_field.type)) {
+        if (const auto* r = try_as<record_type>(&to_field.type)) {
           children.push_back(impl(impl, *r, key));
           continue;
         }
@@ -423,7 +430,7 @@ struct cast_helper<record_type, record_type> {
         const auto key = key_prefix.empty()
                            ? std::string{to_field.name}
                            : fmt::format("{}.{}", key_prefix, to_field.name);
-        if (const auto* r = caf::get_if<record_type>(&to_field.type)) {
+        if (const auto* r = try_as<record_type>(&to_field.type)) {
           auto maybe_nested_record = impl(impl, *r, key);
           if (not maybe_nested_record) {
             return std::move(maybe_nested_record.error());
@@ -442,7 +449,7 @@ struct cast_helper<record_type, record_type> {
         if (not input_at_path) {
           return std::move(input_at_path.error());
         }
-        if (caf::holds_alternative<view<caf::none_t>>(*input_at_path)) {
+        if (is<view<caf::none_t>>(*input_at_path)) {
           ret[to_field.name] = caf::none;
           continue;
         }
@@ -1035,8 +1042,8 @@ struct cast_helper<string_type, ToType> {
   static auto from_str(std::string_view in, const record_type&)
     -> caf::expected<record> {
     if (auto ret = data{}; parsers::data(in, ret)) {
-      TENZIR_ASSERT(caf::holds_alternative<record>(ret));
-      return caf::get<record>(ret);
+      TENZIR_ASSERT(is<record>(ret));
+      return as<record>(ret);
     }
     return caf::make_error(
       ec::convert_error, fmt::format("unable to convert {} into a record", in));
@@ -1045,8 +1052,8 @@ struct cast_helper<string_type, ToType> {
   static auto from_str(std::string_view in, const list_type&)
     -> caf::expected<list> {
     if (auto ret = data{}; parsers::data(in, ret)) {
-      TENZIR_ASSERT(caf::holds_alternative<list>(ret));
-      return caf::get<list>(ret);
+      TENZIR_ASSERT(is<list>(ret));
+      return as<list>(ret);
     }
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert {} into a list", in));

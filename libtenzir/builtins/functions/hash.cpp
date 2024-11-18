@@ -177,7 +177,7 @@ public:
     config.field = parsed_extractors.front();
     config.out = parsed_extractors.front() + "_hashed";
     for (const auto& [key, value] : parsed_options) {
-      auto value_str = caf::get_if<std::string>(&value);
+      auto value_str = try_as<std::string>(&value);
       if (!value_str) {
         return {
           std::string_view{f, l},
@@ -234,7 +234,7 @@ class fun : public virtual function_plugin {
               hasher.add(as_bytes(str));
             },
           };
-          caf::visit(f, x);
+          match(x, f);
           return std::move(hasher).finish();
         };
         auto b = string_type::make_arrow_builder(arrow::default_memory_pool());

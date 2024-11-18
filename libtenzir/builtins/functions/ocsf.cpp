@@ -206,7 +206,7 @@ public:
             return series::null(OutTy{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 

@@ -38,10 +38,11 @@ table_slice_builder::table_slice_builder(type schema,
     arrow_builder_{
       this->schema().make_arrow_builder(arrow::default_memory_pool())},
     builder_{initial_buffer_size} {
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(schema_));
+  TENZIR_ASSERT(is<record_type>(schema_));
   TENZIR_ASSERT(!schema_.name().empty());
-  for (auto&& leaf : caf::get<record_type>(schema_).leaves())
+  for (auto&& leaf : as<record_type>(schema_).leaves()) {
     leaves_.push_back(std::move(leaf));
+  }
   current_leaf_ = leaves_.end();
 }
 
@@ -128,7 +129,7 @@ verify_record_batch(const arrow::RecordBatch& record_batch) {
       },
       [](const arrow::Array&) noexcept {},
     };
-    caf::visit(f, column);
+    match(column, f);
   };
   for (const auto& column : record_batch.columns())
     check_col(check_col, *column);
@@ -145,7 +146,7 @@ table_slice table_slice_builder::finish() {
   auto combined_array = arrow_builder_->Finish().ValueOrDie();
   auto record_batch = arrow::RecordBatch::Make(
     arrow_schema_, detail::narrow_cast<int64_t>(num_rows_),
-    caf::get<type_to_arrow_array_t<record_type>>(*combined_array).fields());
+    as<type_to_arrow_array_t<record_type>>(*combined_array).fields());
   // Reset the builder state.
   num_rows_ = {};
   return create_table_slice(record_batch, this->builder_, schema(),
@@ -214,8 +215,8 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
       auto unwrap_nested = [](auto&& self, data x, const type& t) -> data {
         // (1) Try to unwrap list into lists by applying unwrap_nested
         // recursively.
-        if (const auto* lt = caf::get_if<list_type>(&t)) {
-          auto* l = caf::get_if<list>(&x);
+        if (const auto* lt = try_as<list_type>(&t)) {
+          auto* l = try_as<list>(&x);
           TENZIR_ASSERT(l);
           auto result = list{};
           result.reserve(l->size());
@@ -224,13 +225,14 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
           return result;
         }
         // (2) Try to unwrap list into records.
-        if (const auto* rt = caf::get_if<record_type>(&t)) {
+        if (const auto* rt = try_as<record_type>(&t)) {
           // This special case handles the situation where we have a record
           // inside a list or a map, for which we do not add null values for
           // missing fields.
-          if (caf::holds_alternative<caf::none_t>(x))
+          if (is<caf::none_t>(x)) {
             return caf::none;
-          auto* l = caf::get_if<list>(&x);
+          }
+          auto* l = try_as<list>(&x);
           TENZIR_ASSERT(l);
           TENZIR_ASSERT(l->size() == rt->num_fields());
           auto result = record{};
@@ -251,12 +253,12 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
       return add(make_view(x));
     },
   };
-  return caf::visit(f, x, t);
+  return match(std::tie(x, t), f);
 }
 
 bool table_slice_builder::add(data_view x) {
   auto* nested_builder
-    = &caf::get<type_to_arrow_builder_t<record_type>>(*arrow_builder_);
+    = &as<type_to_arrow_builder_t<record_type>>(*arrow_builder_);
   if (num_rows_ == 0 || current_leaf_ == leaves_.end()) {
     current_leaf_ = leaves_.begin();
     if (auto status = nested_builder->Append(); !status.ok()) {
@@ -268,7 +270,7 @@ bool table_slice_builder::add(data_view x) {
   }
   auto&& [field, index] = std::move(*current_leaf_);
   for (size_t i = 0; i < index.size() - 1; ++i) {
-    nested_builder = &caf::get<type_to_arrow_builder_t<record_type>>(
+    nested_builder = &as<type_to_arrow_builder_t<record_type>>(
       *nested_builder->field_builder(detail::narrow_cast<int>(index[i])));
     const auto following_indices_are_zero
       = std::all_of(index.begin() + i + 1, index.end(), [](size_t j) {
@@ -401,7 +403,7 @@ append_builder(const list_type& hint,
         return status;
     return arrow::Status::OK();
   };
-  return caf::visit(append_values, hint.value_type());
+  return match(hint.value_type(), append_values);
 }
 
 arrow::Status
@@ -423,7 +425,7 @@ append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
     }
     return arrow::Status::OK();
   };
-  return caf::visit(append_values, hint.key_type(), hint.value_type());
+  return match(std::tuple{hint.key_type(), hint.value_type()}, append_values);
 }
 
 arrow::Status
@@ -445,14 +447,14 @@ append_builder(const record_type& hint,
 arrow::Status append_builder(const type& hint,
                              std::same_as<arrow::ArrayBuilder> auto& builder,
                              const view<type_to_data_t<type>>& value) noexcept {
-  if (caf::holds_alternative<caf::none_t>(value))
+  if (is<caf::none_t>(value)) {
     return builder.AppendNull();
+  }
   auto f = [&]<concrete_type Type>(const Type& hint) {
-    return append_builder(hint,
-                          caf::get<type_to_arrow_builder_t<Type>>(builder),
-                          caf::get<view<type_to_data_t<Type>>>(value));
+    return append_builder(hint, as<type_to_arrow_builder_t<Type>>(builder),
+                          as<view<type_to_data_t<Type>>>(value));
   };
-  return caf::visit(f, hint);
+  return match(hint, f);
 }
 
 template <concrete_type Ty>
@@ -509,13 +511,11 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
 auto append_array_slice(arrow::ArrayBuilder& builder, const type& ty,
                         const arrow::Array& array, int64_t begin, int64_t count)
   -> arrow::Status {
-  return caf::visit(
-    [&]<class Ty>(const Ty& ty) {
-      return append_array_slice(caf::get<type_to_arrow_builder_t<Ty>>(builder),
-                                ty, caf::get<type_to_arrow_array_t<Ty>>(array),
-                                begin, count);
-    },
-    ty);
+  return match(ty, [&]<class Ty>(const Ty& ty) {
+    return append_array_slice(as<type_to_arrow_builder_t<Ty>>(builder), ty,
+                              as<type_to_arrow_array_t<Ty>>(array), begin,
+                              count);
+  });
 }
 
 // Make sure that `append_array_slice<...>` is emitted for every type.

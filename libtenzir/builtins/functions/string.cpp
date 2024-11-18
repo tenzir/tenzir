@@ -65,7 +65,7 @@ public:
           return series::null(bool_type{}, subject.length());
         },
       };
-      return caf::visit(f, *subject.array, *arg.array);
+      return match(std::tie(*subject.array, *arg.array), f);
     });
   }
 
@@ -122,7 +122,7 @@ public:
             return series::null(string_type{}, subject.length());
           },
         };
-        return caf::visit(f, *subject.array);
+        return match(*subject.array, f);
       });
   }
 
@@ -193,7 +193,7 @@ public:
           return series::null(result_ty_, subject.length());
         },
       };
-      return caf::visit(f, *subject.array);
+      return match(*subject.array, f);
     });
   }
 
@@ -272,7 +272,7 @@ public:
             return series::null(result_type, subject.length());
           },
         };
-        return caf::visit(f, *subject.array);
+        return match(*subject.array, f);
       });
   }
 
@@ -340,7 +340,7 @@ public:
             return series::null(result_type, subject.length());
           },
         };
-        return caf::visit(f, *subject.array);
+        return match(*subject.array, f);
       });
   }
 };
@@ -370,8 +370,7 @@ public:
             return fmt::to_string(x);
           },
           [&](enumeration x) {
-            return std::string{
-              caf::get<enumeration_type>(subject.type).field(x)};
+            return std::string{as<enumeration_type>(subject.type).field(x)};
           },
           [&](const auto&) {
             // TODO: This should probably use the TQL printer, once it exists.
@@ -379,7 +378,7 @@ public:
             return fmt::to_string(value);
           },
         };
-        check(b.Append(caf::visit(f, value)));
+        check(b.Append(match(value, f)));
       }
       return {string_type{}, finish(b)};
     });

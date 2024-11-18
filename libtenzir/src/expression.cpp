@@ -88,8 +88,8 @@ bool operator<(const predicate& x, const predicate& y) {
 // -- curried_predicate --------------------------------------------------------
 
 curried_predicate curried(const predicate& pred) {
-  TENZIR_ASSERT(caf::holds_alternative<data>(pred.rhs));
-  return {pred.op, caf::get<data>(pred.rhs)};
+  TENZIR_ASSERT(is<data>(pred.rhs));
+  return {pred.op, as<data>(pred.rhs)};
 }
 
 // -- conjunction --------------------------------------------------------------
@@ -175,42 +175,44 @@ bool operator<(const expression& x, const expression& y) {
 // -- free functions -----------------------------------------------------------
 
 expression hoist(expression expr) {
-  return caf::visit(hoister{}, std::move(expr));
+  return match(std::move(expr), hoister{});
 }
 
 expression prune_meta_predicates(expression expr) {
-  return caf::visit(meta_pruner{}, std::move(expr));
+  return match(std::move(expr), meta_pruner{});
 }
 
 expression normalize(expression expr) {
-  expr = caf::visit(hoister{}, std::move(expr));
-  expr = caf::visit(aligner{}, std::move(expr));
-  expr = caf::visit(denegator{}, std::move(expr));
-  expr = caf::visit(deduplicator{}, std::move(expr));
-  expr = caf::visit(hoister{}, std::move(expr));
+  expr = match(std::move(expr), hoister{});
+  expr = match(std::move(expr), aligner{});
+  expr = match(std::move(expr), denegator{});
+  expr = match(std::move(expr), deduplicator{});
+  expr = match(std::move(expr), hoister{});
   return expr;
 }
 
 caf::expected<expression> normalize_and_validate(expression expr) {
   expr = normalize(std::move(expr));
-  if (auto result = caf::visit(validator{}, std::move(expr)); !result)
+  if (auto result = match(std::move(expr), validator{}); !result)
     return result.error();
   return expr;
 }
 
 caf::expected<expression> tailor(expression expr, const type& schema) {
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(schema));
-  if (caf::holds_alternative<caf::none_t>(expr))
+  TENZIR_ASSERT(is<record_type>(schema));
+  if (is<caf::none_t>(expr)) {
     return caf::make_error(ec::unspecified, fmt::format("unable to tailor "
                                                         "empty expression"));
-  auto result = caf::visit(type_resolver{schema}, std::move(expr));
+  }
+  auto result = match(std::move(expr), type_resolver{schema});
   if (!result)
     return result;
-  if (caf::holds_alternative<caf::none_t>(*result))
+  if (is<caf::none_t>(*result)) {
     return caf::make_error(ec::unspecified, fmt::format("failed to tailor "
                                                         "expression {} for "
                                                         "schema {}",
                                                         expr, schema));
+  }
   return result;
 }
 
@@ -233,7 +235,7 @@ const expression* at(const expression* expr, offset::value_type i) {
       return nullptr;
     },
   };
-  return caf::visit(f, *expr);
+  return match(*expr, f);
 }
 
 } // namespace
@@ -284,7 +286,7 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
       // default-constructed vector.
       if (!resolved)
         return false;
-      for (auto& pred : caf::visit(predicatizer{}, *resolved))
+      for (auto& pred : match(*resolved, predicatizer{}))
         result.emplace_back(o, std::move(pred));
       return true;
     },
@@ -292,7 +294,7 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
       return false;
     },
   };
-  return caf::visit(v, expr);
+  return match(expr, v);
 }
 
 } // namespace

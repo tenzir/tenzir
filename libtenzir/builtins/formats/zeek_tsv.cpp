@@ -135,7 +135,8 @@ struct zeek_parser<subnet_type> {
 template <>
 struct zeek_parser<list_type> {
   auto operator()(const list_type& lt, char separator,
-                  const std::string& set_separator) const {
+                  const std::string& set_separator) const
+    -> rule<std::string_view::const_iterator, list> {
     auto f
       = [&]<concrete_type Type>(
           const Type& type) -> rule<std::string_view::const_iterator, list> {
@@ -145,7 +146,7 @@ struct zeek_parser<list_type> {
                 })
               % set_separator);
     };
-    return caf::visit(f, lt.value_type());
+    return match(lt.value_type(), f);
   }
 };
 
@@ -302,7 +303,7 @@ struct zeek_printer {
         return "record";
       },
     };
-    return caf::visit(f, t);
+    return match(t, f);
   }
 
   auto generate_timestamp() const -> std::string {
@@ -322,7 +323,7 @@ struct zeek_printer {
       header.append(fmt::format("\n#open{}{}", sep, generate_timestamp()));
     }
     header.append("\n#fields");
-    auto r = caf::get<record_type>(t);
+    auto r = as<record_type>(t);
     for (const auto& [_, offset] : r.leaves()) {
       header.append(fmt::format("{}{}", sep, to_string(r.key(offset))));
     }
@@ -343,7 +344,7 @@ struct zeek_printer {
       } else {
         first = false;
       }
-      caf::visit(visitor{out, *this}, v);
+      match(v, visitor{out, *this});
     }
     return true;
   }
@@ -445,7 +446,7 @@ struct zeek_printer {
         } else {
           first = false;
         }
-        caf::visit(*this, v);
+        match(v, *this);
       }
       return true;
     }
@@ -698,7 +699,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                        return document.builder->add(value);
                      });
         };
-        document.parsers.push_back(caf::visit(make_field_parser, *parsed_type));
+        document.parsers.push_back(match(*parsed_type, make_field_parser));
         record_fields.push_back({field, std::move(*parsed_type)});
       }
       const auto schema_name = fmt::format("zeek.{}", document.path);
@@ -823,7 +824,7 @@ public:
       auto out_iter = std::back_inserter(buffer);
       auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
       auto input_schema = resolved_slice.schema();
-      auto input_type = caf::get<record_type>(input_schema);
+      auto input_type = as<record_type>(input_schema);
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto first = true;

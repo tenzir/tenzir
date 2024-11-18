@@ -87,7 +87,7 @@ public:
           return finish(b);
         },
       };
-      return {double_type{}, caf::visit(f, *value.array)};
+      return {double_type{}, match(*value.array, f)};
     });
   }
 };
@@ -196,7 +196,7 @@ public:
           return;
         }
         state_ = state::numeric;
-        auto& array = caf::get<type_to_arrow_array_t<Type>>(*arg.array);
+        auto& array = as<type_to_arrow_array_t<Type>>(*arg.array);
         for (auto value : values(ty, array)) {
           if (value) {
             digest_.NanAdd(*value);
@@ -213,8 +213,7 @@ public:
           return;
         }
         state_ = state::dur;
-        for (auto value :
-             values(ty, caf::get<arrow::DurationArray>(*arg.array))) {
+        for (auto value : values(ty, as<arrow::DurationArray>(*arg.array))) {
           if (value) {
             digest_.Add(value->count());
           }
@@ -232,7 +231,7 @@ public:
         state_ = state::failed;
       },
     };
-    caf::visit(f, arg.type);
+    match(arg.type, f);
   }
 
   auto get() const -> data override {

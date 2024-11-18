@@ -168,7 +168,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
                              value_offset.Union());
     },
   };
-  return caf::visit(f, value);
+  return match(value, f);
 }
 
 caf::error unpack(const fbs::Data& from, data& to) {
@@ -292,8 +292,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
 
 bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   auto eval_string_and_pattern = [](const auto& x, const auto& y) {
-    return caf::visit(
-      detail::overload{
+    return match(std::tie(x, y), detail::overload{
         [](const auto&, const auto&) -> std::optional<bool> {
           return {};
         },
@@ -303,11 +302,10 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
         [](const pattern& lhs, const std::string& rhs) -> std::optional<bool> {
           return lhs.match(rhs);
         },
-      },
-      x, y);
+      });
   };
   auto eval_in = [](const auto& x, const auto& y) {
-    return caf::visit(detail::overload{
+    return match(std::tie(x, y), detail::overload{
                         [](const auto&, const auto&) {
                           return false;
                         },
@@ -327,8 +325,7 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
                           return std::find(rhs.begin(), rhs.end(), lhs)
                                  != rhs.end();
                         },
-                      },
-                      x, y);
+                      });
   };
   switch (op) {
     default:
@@ -362,7 +359,7 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
 }
 
 bool is_basic(const data& x) {
-  return caf::visit(detail::overload{
+  return match(x, detail::overload{
                       [](const auto&) {
                         return true;
                       },
@@ -375,8 +372,7 @@ bool is_basic(const data& x) {
                       [](const record&) {
                         return false;
                       },
-                    },
-                    x);
+                    });
 }
 
 bool is_complex(const data& x) {
@@ -384,7 +380,7 @@ bool is_complex(const data& x) {
 }
 
 bool is_recursive(const data& x) {
-  return caf::visit(detail::overload{
+  return match(x, detail::overload{
                       [](const auto&) {
                         return false;
                       },
@@ -397,8 +393,7 @@ bool is_recursive(const data& x) {
                       [](const record&) {
                         return true;
                       },
-                    },
-                    x);
+                    });
 }
 
 bool is_container(const data& x) {
@@ -420,8 +415,9 @@ size_t depth(const record& r) {
     result = std::max(result, depth);
     while (begin != end) {
       const auto& x = (begin++)->second;
-      if (const auto* nested = caf::get_if<record>(&x))
+      if (const auto* nested = try_as<record>(&x)) {
         stack.emplace_back(nested->begin(), nested->end(), depth + 1);
+      }
     }
   }
   return result;
@@ -437,10 +433,10 @@ record flatten(const record& r, size_t max_recursion) {
     return result;
   }
   for (const auto& [k, v] : r) {
-    if (const auto* nested = caf::get_if<record>(&v))
+    if (const auto* nested = try_as<record>(&v)) {
       for (auto& [nk, nv] : flatten(*nested, --max_recursion))
         result.emplace(fmt::format("{}.{}", k, nk), std::move(nv));
-    else
+    } else
       result.emplace(k, v);
   }
   return result;
@@ -455,13 +451,13 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
     return result;
   }
   for (const auto& [k, v] : r) {
-    if (const auto* ir = caf::get_if<record>(&v)) {
+    if (const auto* ir = try_as<record>(&v)) {
       // Look for a matching field of type record.
       const auto offset = rt.resolve_key(k);
       if (!offset.has_value())
         return {};
       auto field = rt.field(*offset);
-      const auto* irt = caf::get_if<record_type>(&field.type);
+      const auto* irt = try_as<record_type>(&field.type);
       if (!irt)
         return {};
       // Recurse.
@@ -485,8 +481,8 @@ flatten(const data& x, const type& t, size_t max_recursion) {
                 defaults::max_recursion);
     return caf::none;
   }
-  const auto* xs = caf::get_if<record>(&x);
-  const auto* rt = caf::get_if<record_type>(&t);
+  const auto* xs = try_as<record>(&x);
+  const auto* rt = try_as<record_type>(&t);
   if (xs && rt)
     return flatten(*xs, *rt, --max_recursion);
   return caf::none;
@@ -516,22 +512,21 @@ void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
     return;
   }
   for (const auto& [k, v] : src) {
-    if (const auto* src_rec = caf::get_if<record>(&v)) {
-      auto* dst_rec = caf::get_if<record>(&dst[k]);
+    if (const auto* src_rec = try_as<record>(&v)) {
+      auto* dst_rec = try_as<record>(&dst[k]);
       if (!dst_rec) {
         // Overwrite key with empty record on type mismatch.
         dst[k] = record{};
-        dst_rec = caf::get_if<record>(&dst[k]);
+        dst_rec = try_as<record>(&dst[k]);
       }
       merge(*src_rec, *dst_rec, merge_lists, max_recursion - 1);
-    } else if (merge_lists == policy::merge_lists::yes
-               && caf::holds_alternative<list>(v)) {
-      const auto& src_list = caf::get<list>(v);
-      if (auto* dst_list = caf::get_if<list>(&dst[k])) {
+    } else if (merge_lists == policy::merge_lists::yes && is<list>(v)) {
+      const auto& src_list = as<list>(v);
+      if (auto* dst_list = try_as<list>(&dst[k])) {
         dst_list->insert(dst_list->end(), src_list.begin(), src_list.end());
       } else if (auto it = dst.find(k); it != dst.end()) {
         auto dst_list = list{};
-        if (!caf::holds_alternative<caf::none_t>(it->second)) {
+        if (!is<caf::none_t>(it->second)) {
           dst_list.reserve(src_list.size() + 1);
           dst_list.push_back(std::move(it->second));
         } else {
@@ -632,7 +627,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
       return caf::none;
     },
   };
-  return caf::visit(f, d);
+  return match(d, f);
 }
 
 bool convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
@@ -688,15 +683,16 @@ bool convert(const caf::config_value& x, data& y) {
       return true;
     },
   };
-  return caf::visit(f, x.get_data());
+  return match(x.get_data(), f);
 }
 
 record strip(const record& xs) {
   record result;
   for (const auto& [k, v] : xs) {
-    if (caf::holds_alternative<caf::none_t>(v))
+    if (is<caf::none_t>(v)) {
       continue;
-    if (const auto* vr = caf::get_if<record>(&v)) {
+    }
+    if (const auto* vr = try_as<record>(&v)) {
       auto nested = strip(*vr);
       if (!nested.empty())
         result.emplace(k, std::move(nested));
@@ -939,7 +935,7 @@ void print(YAML::Emitter& out, const data& x) {
       out << YAML::EndMap;
     },
   };
-  caf::visit(f, x);
+  match(x, f);
 }
 
 } // namespace

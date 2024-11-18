@@ -42,7 +42,7 @@ public:
     }
     // Add user-defined operators.
     for (const auto& [udo, definition] : udos_) {
-      auto def_str = caf::get_if<std::string>(&definition);
+      auto def_str = try_as<std::string>(&definition);
       if (not def_str) {
         // Invalid UDOs are just ignored for `show operators`, as we don't care
         // about them here.

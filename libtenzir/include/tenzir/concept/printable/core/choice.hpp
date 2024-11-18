@@ -10,6 +10,7 @@
 
 #include "tenzir/concept/printable/core/printer.hpp"
 #include "tenzir/concept/support/detail/variant.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <type_traits>
 
@@ -82,7 +83,7 @@ private:
   template <class Left, class Iterator, class Attribute>
     requires(!choice_printer<Left>)
   auto print_left(Iterator& out, const Attribute& a) const {
-    auto x = caf::get_if<lhs_attribute>(&a);
+    auto x = try_as<lhs_attribute>(&a);
     return x && lhs_.print(out, *x);
   }
 
@@ -93,7 +94,7 @@ private:
 
   template <class Iterator, class Attribute>
   auto print_right(Iterator& out, const Attribute& a) const {
-    auto x = caf::get_if<rhs_attribute>(&a);
+    auto x = try_as<rhs_attribute>(&a);
     return x && rhs_.print(out, *x);
   }
 

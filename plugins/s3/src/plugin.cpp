@@ -51,7 +51,7 @@ public:
     if (value == data{}) {                                                     \
       continue;                                                                \
     }                                                                          \
-    if (const auto* str = caf::get_if<std::string>(&value)) {                  \
+    if (const auto* str = try_as<std::string>(&value)) {                       \
       config_->var = *str;                                                     \
       continue;                                                                \
     }                                                                          \

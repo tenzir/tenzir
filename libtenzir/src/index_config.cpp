@@ -42,7 +42,7 @@ bool is_target_applicable(const qualified_record_field& index_qf,
   const auto basic_type_name = [](const concrete_type auto& x) noexcept {
     return fmt::to_string(x);
   };
-  return caf::visit(basic_type_name, type) == type_name;
+  return match(type, basic_type_name) == type_name;
 }
 
 bool should_use_rule(const std::vector<std::string>& targets,

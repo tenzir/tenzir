@@ -23,7 +23,7 @@ qualified_record_field::qualified_record_field(const class type& schema,
                                                const offset& index) noexcept {
   TENZIR_ASSERT(!schema.name().empty());
   TENZIR_ASSERT(!index.empty());
-  const auto* rt = caf::get_if<record_type>(&schema);
+  const auto* rt = try_as<record_type>(&schema);
   TENZIR_ASSERT(rt);
   schema_name_ = schema.name();
   // We cannot assign the field_view directly, but rather need to store a field

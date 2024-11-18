@@ -39,14 +39,14 @@ value_index_ptr make(type x, caf::settings opts) {
   using int_type = caf::config_value::integer;
   // The cardinality must be an integer.
   if (auto i = opts.find("cardinality"); i != opts.end()) {
-    if (!caf::holds_alternative<int_type>(i->second)) {
+    if (!is<int_type>(i->second)) {
       TENZIR_ERROR("{} invalid cardinality type", __func__);
       return nullptr;
     }
   }
   // The base specification has its own grammar.
   if (auto i = opts.find("base"); i != opts.end()) {
-    auto str = caf::get_if<caf::config_value::string>(&i->second);
+    auto str = try_as<caf::config_value::string>(&i->second);
     if (!str) {
       TENZIR_ERROR("{} invalid base type (string type needed)", __func__);
       return nullptr;
@@ -62,7 +62,7 @@ value_index_ptr make(type x, caf::settings opts) {
       if (i == opts.end())
         // Default to a 40-bit hash value -> good for 2^20 unique digests.
         return std::make_unique<hash_index<5>>(std::move(x));
-      const auto* cardinality_option = caf::get_if<int_type>(&i->second);
+      const auto* cardinality_option = try_as<int_type>(&i->second);
       TENZIR_ASSERT(cardinality_option); // checked in make(x, opts)
       // caf::settings doesn't support unsigned integers, but the
       // cardinality is a size_t, so we may get negative values if someone

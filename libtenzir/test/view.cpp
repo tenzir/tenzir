@@ -98,15 +98,15 @@ TEST(map view) {
 
 TEST(make_data_view) {
   auto x = make_data_view(true);
-  CHECK(caf::holds_alternative<bool>(x));
+  CHECK(is<bool>(x));
   auto str = "foo"s;
   x = make_data_view(str);
-  CHECK(caf::holds_alternative<view<std::string>>(x));
-  CHECK(caf::holds_alternative<std::string_view>(x));
+  CHECK(is<view<std::string>>(x));
+  CHECK(is<std::string_view>(x));
   auto xs = list{int64_t{42}, true, "foo"};
   x = make_data_view(xs);
-  REQUIRE(caf::holds_alternative<view<list>>(x));
-  auto v = caf::get<view<list>>(x);
+  REQUIRE(is<view<list>>(x));
+  auto v = as<view<list>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
   CHECK_VARIANT_EQUAL(materialize(v->at(0)), int64_t{42});
   CHECK_VARIANT_EQUAL(materialize(v->at(1)), true);
@@ -147,7 +147,7 @@ TEST(container comparison) {
   data ys = list{int64_t{42}};
   CHECK(make_view(xs) == make_view(ys));
   CHECK(!(make_view(xs) < make_view(ys)));
-  caf::get<list>(ys).push_back(int64_t{0});
+  as<list>(ys).push_back(int64_t{0});
   CHECK(make_view(xs) != make_view(ys));
   CHECK(make_view(xs) < make_view(ys));
   ys = map{{int64_t{42}, true}};

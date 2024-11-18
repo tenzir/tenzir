@@ -26,24 +26,24 @@ public:
 
 private:
   [[nodiscard]] type output_type() const override {
-    TENZIR_ASSERT(caf::holds_alternative<bool_type>(input_type()));
+    TENZIR_ASSERT(is<bool_type>(input_type()));
     return input_type();
   }
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<bool>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
     if (!any_) {
-      any_ = materialize(caf::get<view_type>(view));
+      any_ = materialize(as<view_type>(view));
     } else {
-      any_ = *any_ || caf::get<view_type>(view);
+      any_ = *any_ || as<view_type>(view);
     }
   }
 
   void add(const arrow::Array& array) override {
-    const auto& bool_array = caf::get<type_to_arrow_array_t<bool_type>>(array);
+    const auto& bool_array = as<type_to_arrow_array_t<bool_type>>(array);
     if (!any_) {
       any_ = bool_array.true_count() > 0;
     } else {
@@ -84,7 +84,7 @@ public:
           .emit(ctx);
         state_ = state::failed;
       }};
-    caf::visit(f, *arg.array);
+    match(*arg.array, f);
   }
 
   auto get() const -> data override {
@@ -162,7 +162,7 @@ class plugin : public virtual aggregation_function_plugin,
 
   [[nodiscard]] caf::expected<std::unique_ptr<aggregation_function>>
   make_aggregation_function(const type& input_type) const override {
-    if (caf::holds_alternative<bool_type>(input_type)) {
+    if (is<bool_type>(input_type)) {
       return std::make_unique<any_function>(input_type);
     }
     return caf::make_error(ec::invalid_configuration,

@@ -32,17 +32,17 @@ private:
 
   auto add(const data_view& view) -> void override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
-    result_.push_back(materialize(caf::get<view_type>(view)));
+    result_.push_back(materialize(as<view_type>(view)));
   }
 
   auto add(const arrow::Array& array) -> void override {
-    const auto& typed_array = caf::get<type_to_arrow_array_t<Type>>(array);
+    const auto& typed_array = as<type_to_arrow_array_t<Type>>(array);
     result_.reserve(result_.size()
                     + (typed_array.length() - typed_array.null_count()));
-    for (auto&& value : values(caf::get<Type>(input_type()), typed_array)) {
+    for (auto&& value : values(as<Type>(input_type()), typed_array)) {
       if (not value) {
         continue;
       }
@@ -64,7 +64,7 @@ public:
 
   auto update(const table_slice& input, session ctx) -> void override {
     auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
+    if (is<null_type>(arg.type)) {
       return;
     }
     // NOTE: Currently, different types end up coerced to strings.
@@ -147,7 +147,7 @@ class plugin : public virtual aggregation_function_plugin,
                const Type&) -> std::unique_ptr<aggregation_function> {
       return std::make_unique<collect_function<Type>>(input_type);
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto make_aggregation(invocation inv, session ctx) const

@@ -16,7 +16,7 @@ index 3e23f8c30..4ff35a80b 100644
 --- a/libvast/native-plugins/feather.cpp
 +++ b/libvast/native-plugins/feather.cpp
 @@ -8,6 +8,7 @@
- 
+
  #include <vast/arrow_table_slice.hpp>
  #include <vast/chunk.hpp>
 +#include <vast/concept/convertible/data.hpp>
@@ -24,9 +24,9 @@ index 3e23f8c30..4ff35a80b 100644
  #include <vast/detail/narrow.hpp>
  #include <vast/error.hpp>
 @@ -24,6 +25,25 @@
- 
+
  namespace vast::plugins::feather {
- 
+
 +/// Configuration for the Feather plugin.
 +struct configuration {
 +  int64_t zstd_compression_level{
@@ -47,11 +47,11 @@ index 3e23f8c30..4ff35a80b 100644
 +};
 +
  namespace {
- 
+
  auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
 @@ -129,6 +149,15 @@ private:
  };
- 
+
  class active_feather_store final : public active_store {
 +public:
 +  explicit active_feather_store(const configuration& config)
@@ -81,25 +81,25 @@ index 3e23f8c30..4ff35a80b 100644
        *table.ValueUnsafe(), output_stream.get(), write_properties);
      if (!write_status.ok())
 @@ -185,12 +215,15 @@ class active_feather_store final : public active_store {
- 
+
  private:
    std::vector<table_slice> slices_ = {};
 +  configuration feather_config_ = {};
    size_t num_events_ = {};
  };
- 
+
  class plugin final : public virtual store_plugin {
 -  [[nodiscard]] caf::error initialize([[maybe_unused]] data config) override {
 -    return {};
 +  [[nodiscard]] caf::error initialize(data options) override {
-+    if (caf::holds_alternative<caf::none_t>(options))
++    if (is<caf::none_t>(options))
 +      return caf::none;
 +    return convert(options, feather_config_);
    }
- 
+
    [[nodiscard]] const char* name() const override {
 @@ -204,8 +237,11 @@ class plugin final : public virtual store_plugin {
- 
+
    [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
    make_active_store() const override {
 -    return std::make_unique<active_feather_store>();
@@ -109,7 +109,7 @@ index 3e23f8c30..4ff35a80b 100644
 +private:
 +  configuration feather_config_ = {};
  };
- 
+
  } // namespace
 diff --git a/libvast/native-plugins/segment_store.cpp b/libvast/native-plugins/segment_store.cpp
 index 8a0ef87e8..d93ff7912 100644
@@ -118,7 +118,7 @@ index 8a0ef87e8..d93ff7912 100644
 @@ -22,6 +22,7 @@
  #include <vast/status.hpp>
  #include <vast/table_slice.hpp>
- 
+
 +#include <arrow/record_batch.h>
  #include <caf/attach_stream_sink.hpp>
  #include <caf/settings.hpp>
@@ -126,7 +126,7 @@ index 8a0ef87e8..d93ff7912 100644
 @@ -335,6 +336,17 @@ store_actor::behavior_type passive_local_store(
    };
  }
- 
+
 +size_t array_size(const std::shared_ptr<arrow::ArrayData>& array_data) {
 +  auto size = size_t{};
 +  for (const auto& buffer : array_data->buffers)
@@ -178,15 +178,15 @@ index 9ec239056..0b3df399c 100644
 @@ -16,6 +16,7 @@
  #include "vast/report.hpp"
  #include "vast/table_slice.hpp"
- 
+
 +#include <arrow/record_batch.h>
  #include <caf/attach_stream_sink.hpp>
  #include <caf/typed_event_based_actor.hpp>
- 
+
 @@ -340,6 +341,17 @@ default_passive_store(default_passive_store_actor::stateful_pointer<
    };
  }
- 
+
 +size_t array_size(const std::shared_ptr<arrow::ArrayData>& array_data) {
 +  auto size = size_t{};
 +  for (const auto& buffer : array_data->buffers)
@@ -249,7 +249,7 @@ index 8b35f2e21..b57481611 100644
 @@ -433,6 +435,10 @@ public:
      : parquet_config_{config} {
    }
- 
+
 +  void set_compression_level(int compression_level) override {
 +    parquet_config_.zstd_compression_level = compression_level;
 +  }

@@ -46,7 +46,7 @@ public:
         co_yield {};
         continue;
       }
-      const auto& layout = caf::get<record_type>(slice.schema());
+      const auto& layout = as<record_type>(slice.schema());
       auto resolved_field = resolved_fields.find(slice.schema());
       if (resolved_field == resolved_fields.end()) {
         const auto index
@@ -58,8 +58,7 @@ public:
             .emit(ctrl.diagnostics());
           resolved_field = resolved_fields.emplace_hint(
             resolved_field, slice.schema(), std::nullopt);
-        } else if (auto t = layout.field(*index).type;
-                   not caf::holds_alternative<time_type>(t)) {
+        } else if (auto t = layout.field(*index).type; not is<time_type>(t)) {
           diagnostic::warning("field `{}` for schema `{}` has type `{}`",
                               field_.inner, slice.schema(), t.kind())
             .note("expected `{}`", type{time_type{}}.kind())
@@ -166,7 +165,7 @@ public:
         continue;
       }
       auto ser = eval(expr_, slice, ctrl.diagnostics());
-      auto* ptr = caf::get_if<arrow::TimestampArray>(ser.array.get());
+      auto* ptr = try_as<arrow::TimestampArray>(ser.array.get());
       if (not ptr) {
         if (ser.type.kind().is_not<null_type>()) {
           diagnostic::warning("expected `time`, got `{}`", ser.type.kind())

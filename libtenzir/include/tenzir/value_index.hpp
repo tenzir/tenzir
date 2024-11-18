@@ -131,7 +131,7 @@ bool deserialize(auto& source, value_index_ptr& x) {
   legacy_type lt;
   if (!source.apply(lt))
     return false;
-  if (caf::holds_alternative<legacy_none_type>(lt)) {
+  if (is<legacy_none_type>(lt)) {
     x = nullptr;
     return true;
   }

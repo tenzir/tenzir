@@ -107,7 +107,7 @@ public:
                       "missing type dispatch");
       }
     };
-    caf::visit(f, x);
+    match(x, f);
   }
 
   template <class Ts>

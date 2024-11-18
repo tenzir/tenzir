@@ -200,6 +200,23 @@ private:
   variant data_;
 };
 
+template <>
+class variant_traits<data> {
+public:
+  using impl = variant_traits<data::variant>;
+
+  static constexpr auto count = impl::count;
+
+  static auto index(const data& x) -> size_t {
+    return impl::index(x.get_data());
+  }
+
+  template <size_t I>
+  static auto get(const data& x) -> decltype(auto) {
+    return impl::get<I>(x.get_data());
+  }
+};
+
 } // namespace tenzir
 
 namespace caf {
@@ -280,7 +297,7 @@ inline auto descend(const record* r, std::string_view path)
       // Path was completely processed.
       return &field;
     }
-    current = caf::get_if<record>(&field);
+    current = try_as<record>(&field);
     if (!current) {
       // This is not a record, but path continues.
       return caf::make_error(
@@ -308,21 +325,19 @@ auto try_get(const record& r, std::string_view path)
     return std::nullopt;
   }
   // Attempt conversion.
-  return caf::visit(
-    [&](auto& x) -> caf::expected<std::optional<T>> {
-      using U = std::remove_cvref_t<decltype(x)>;
-      if constexpr (std::is_same_v<U, T>) {
-        return x;
-      } else if constexpr (convertible<U, T>) {
-        return to<T>(x);
-      } else {
-        return caf::make_error(
-          ec::convert_error,
-          fmt::format("'{}' has type {}, which cannot be converted to {}", path,
-                      typeid(U).name(), typeid(T).name()));
-      }
-    },
-    **result);
+  return match(**result, [&](auto& x) -> caf::expected<std::optional<T>> {
+    using U = std::remove_cvref_t<decltype(x)>;
+    if constexpr (std::is_same_v<U, T>) {
+      return x;
+    } else if constexpr (convertible<U, T>) {
+      return to<T>(x);
+    } else {
+      return caf::make_error(
+        ec::convert_error,
+        fmt::format("'{}' has type {}, which cannot be converted to {}", path,
+                    typeid(U).name(), typeid(T).name()));
+    }
+  });
 }
 
 /// Tries to find the entry with the dot-sperated `path` with the given type.
@@ -338,18 +353,16 @@ auto try_get_only(const record& r, std::string_view path)
   if (!*result) {
     return nullptr;
   }
-  return caf::visit(
-    [&](auto& x) -> caf::expected<T const*> {
-      using U = std::remove_cvref_t<decltype(x)>;
-      if constexpr (std::is_same_v<U, T>) {
-        return &x;
-      } else {
-        return caf::make_error(
-          ec::type_clash, fmt::format("'{}' has type {} but expected {}", path,
-                                      typeid(U).name(), typeid(T).name()));
-      }
-    },
-    **result);
+  return match(**result, [&](auto& x) -> caf::expected<T const*> {
+    using U = std::remove_cvref_t<decltype(x)>;
+    if constexpr (std::is_same_v<U, T>) {
+      return &x;
+    } else {
+      return caf::make_error(
+        ec::type_clash, fmt::format("'{}' has type {} but expected {}", path,
+                                    typeid(U).name(), typeid(T).name()));
+    }
+  });
 }
 
 template <class T>
@@ -376,7 +389,7 @@ auto get_if(const record* r, std::string_view path) -> const T* {
   if (not result || not *result) {
     return nullptr;
   }
-  if (auto ptr = caf::get_if<T>(*result)) {
+  if (auto ptr = try_as<T>(*result)) {
     return ptr;
   }
   return nullptr;
@@ -497,23 +510,6 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion
 /// @param x The data instance.
 /// @returns The YAML representation of *x*, or an error.
 caf::expected<std::string> to_yaml(const data& x);
-
-template <>
-class variant_traits<data> {
-public:
-  using impl = variant_traits<data::variant>;
-
-  static constexpr auto count = impl::count;
-
-  static auto index(const data& x) -> size_t {
-    return impl::index(x.get_data());
-  }
-
-  template <size_t I>
-  static auto get(const data& x) -> decltype(auto) {
-    return impl::get<I>(x.get_data());
-  }
-};
 
 } // namespace tenzir
 

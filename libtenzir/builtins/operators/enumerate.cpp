@@ -83,7 +83,7 @@ public:
         co_yield {};
       } else if (skipped_schemas.contains(slice.schema())) {
         co_yield slice;
-      } else if (caf::get<record_type>(slice.schema())
+      } else if (as<record_type>(slice.schema())
                    .resolve_key(field_)
                    .has_value()) {
         diagnostic::warning("ignores schema {} with already existing "

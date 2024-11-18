@@ -71,7 +71,7 @@ void serialize(
   mutable_synopsis.events = self->state.data.events;
   const auto& schema = self->state.data.synopsis->schema;
   auto fields = std::vector<struct record_type::field>{};
-  for (const auto& [field, offset] : caf::get<record_type>(schema).leaves()) {
+  for (const auto& [field, offset] : as<record_type>(schema).leaves()) {
     const auto qf = qualified_record_field{schema, offset};
     // Backwards compat for to comply with the format that supports
     // value indexes.

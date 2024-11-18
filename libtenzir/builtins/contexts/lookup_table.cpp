@@ -131,7 +131,7 @@ public:
         return x;
       }
     };
-    return caf::visit(visitor, data_);
+    return match(data_, visitor);
   }
 
   /// Calls `out.emplace_back(x)` for every `x` that the value contained in
@@ -153,7 +153,7 @@ public:
         out.emplace_back(data{x});
       }
     };
-    caf::visit(visitor, data_);
+    tenzir::match(data_, visitor);
   }
 
   auto original_type_index() const -> size_t {
@@ -177,18 +177,18 @@ private:
         return x;
       }
     };
-    return caf::visit(visitor, std::move(d));
+    return match(std::move(d), visitor);
   }
 
   template <typename StoredType>
   auto to_original_data_impl() const -> data {
     switch (original_type_index_) {
       case i64_index:
-        return data{static_cast<int64_t>(caf::get<StoredType>(data_))};
+        return data{static_cast<int64_t>(as<StoredType>(data_))};
       case u64_index:
-        return data{static_cast<uint64_t>(caf::get<StoredType>(data_))};
+        return data{static_cast<uint64_t>(as<StoredType>(data_))};
       case double_index:
-        return data{static_cast<double>(caf::get<StoredType>(data_))};
+        return data{static_cast<double>(as<StoredType>(data_))};
       default:
         TENZIR_UNREACHABLE();
     }
@@ -270,7 +270,7 @@ public:
         return subnet_entries.match(materialize(sn));
       },
     };
-    return caf::visit(match, value);
+    return tenzir::match(value, match);
   };
 
   auto legacy_apply(series array, bool replace)
@@ -304,7 +304,7 @@ public:
         builder.data(entry->raw_data);
         continue;
       }
-      if (replace and not caf::holds_alternative<caf::none_t>(value)) {
+      if (replace and not is<caf::none_t>(value)) {
         builder.data(value);
         continue;
       }
@@ -419,7 +419,7 @@ public:
     -> caf::expected<context_update_result> override {
     // context does stuff on its own with slice & parameters
     TENZIR_ASSERT(slice.rows() != 0);
-    if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+    if (as<tenzir::record_type>(slice.schema()).num_fields() == 0) {
       return caf::make_error(ec::invalid_argument,
                              "context update cannot handle empty input events");
     }
@@ -491,10 +491,10 @@ public:
     auto key_values_list = list{};
     if (erase) {
       // Subnets never make it into the regular map of entries.
-      if (caf::holds_alternative<subnet_type>(key_type)) {
+      if (is<subnet_type>(key_type)) {
         for (const auto& key :
              values(subnet_type{},
-                    caf::get<type_to_arrow_array_t<subnet_type>>(*key_array))) {
+                    as<tenzir::subnet_type::array_type>(*key_array))) {
           if (not key) {
             continue;
           }
@@ -520,8 +520,8 @@ public:
       value_val.raw_data = materialize(*context_it);
       auto materialized_key = materialize(*key_it);
       // Subnets never make it into the regular map of entries.
-      if (caf::holds_alternative<subnet_type>(key_type)) {
-        const auto& key = caf::get<subnet>(materialized_key);
+      if (is<subnet_type>(key_type)) {
+        const auto& key = as<tenzir::subnet>(materialized_key);
         subnet_entries.insert(key, std::move(value_val));
       } else {
         context_entries.insert_or_assign(materialized_key,
@@ -579,7 +579,7 @@ public:
       auto materialized_key = materialize(key);
       auto context = context_gen.next();
       TENZIR_ASSERT(context);
-      if (const auto* sn = caf::get_if<subnet>(&materialized_key)) {
+      if (const auto* sn = try_as<tenzir::subnet>(&materialized_key)) {
         const auto created = subnet_entries.insert(*sn, value_data{});
         auto* entry = subnet_entries.lookup(*sn);
         TENZIR_ASSERT(entry);
@@ -762,7 +762,8 @@ struct v1_loader : public context_loader {
                                                "create-timeout: {}",
                                                err));
           }
-          const auto* create_timeout_time = caf::get_if<time>(&create_timeout);
+          const auto* create_timeout_time
+            = try_as<tenzir::time>(&create_timeout);
           if (not create_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
@@ -781,7 +782,7 @@ struct v1_loader : public context_loader {
                                                "write-timeout: {}",
                                                err));
           }
-          const auto* write_timeout_time = caf::get_if<time>(&write_timeout);
+          const auto* write_timeout_time = try_as<tenzir::time>(&write_timeout);
           if (not write_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
@@ -801,7 +802,7 @@ struct v1_loader : public context_loader {
                                                "read-timeout: {}",
                                                err));
           }
-          const auto* read_timeout_time = caf::get_if<time>(&read_timeout);
+          const auto* read_timeout_time = try_as<tenzir::time>(&read_timeout);
           if (not read_timeout_time) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
@@ -822,7 +823,7 @@ struct v1_loader : public context_loader {
                                                err));
           }
           const auto* read_timeout_duration_duration
-            = caf::get_if<duration>(&read_timeout_duration);
+            = try_as<tenzir::duration>(&read_timeout_duration);
           if (not read_timeout_duration_duration) {
             return caf::make_error(ec::serialization_error,
                                    "failed to deserialize lookup table "
@@ -847,7 +848,7 @@ struct v1_loader : public context_loader {
       if (value.is_expired(now)) {
         continue;
       }
-      if (const auto* x = caf::get_if<subnet>(&key)) {
+      if (const auto* x = try_as<tenzir::subnet>(&key)) {
         subnet_entries.insert(*x, std::move(value));
       } else {
         context_entries.emplace(std::move(key), std::move(value));

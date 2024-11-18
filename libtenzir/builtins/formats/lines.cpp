@@ -115,7 +115,7 @@ struct lines_printer_impl {
   auto print_values(It& out, const view<record>& x) const -> bool {
     auto first = true;
     for (const auto& [_, v] : x) {
-      if (caf::holds_alternative<caf::none_t>(v)) {
+      if (is<caf::none_t>(v)) {
         continue;
       }
       if (!first) {
@@ -123,7 +123,7 @@ struct lines_printer_impl {
       } else {
         first = false;
       }
-      caf::visit(visitor{out}, v);
+      match(v, visitor{out});
     }
     return true;
   }
@@ -168,13 +168,13 @@ struct lines_printer_impl {
     auto operator()(const view<list>& x) -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
-        if (caf::holds_alternative<caf::none_t>(v)) {
+        if (is<caf::none_t>(v)) {
           continue;
         }
         if (!sequence_empty) {
           ++out = ',';
         }
-        if (!caf::visit(*this, v)) {
+        if (!match(v, *this)) {
           return false;
         }
       }
@@ -205,7 +205,7 @@ public:
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        const auto& input_type = caf::get<record_type>(input_schema);
+        const auto& input_type = as<record_type>(input_schema);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values(input_type, *array)) {

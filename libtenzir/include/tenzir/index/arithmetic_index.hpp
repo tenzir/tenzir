@@ -16,6 +16,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/settings.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/value_index.hpp"
 #include "tenzir/ids.hpp"
@@ -105,7 +106,7 @@ public:
         // performance, presumably because it's a power of 2.
         bmi_ = bitmap_index_type{base::uniform<64>(8)};
       } else {
-        auto str = caf::get<caf::config_value::string>(i->second);
+        auto str = as<caf::config_value::string>(i->second);
         auto b = to<base>(str);
         TENZIR_ASSERT(b); // pre-condition is that this was validated
         bmi_ = bitmap_index_type{base{std::move(*b)}};
@@ -152,7 +153,7 @@ private:
         return append(x.time_since_epoch().count());
       },
     };
-    return caf::visit(f, d);
+    return match(d, f);
   }
 
   [[nodiscard]] caf::expected<ids>
@@ -183,7 +184,7 @@ private:
         return detail::container_lookup(*this, op, xs);
       },
     };
-    return caf::visit(f, d);
+    return match(d, f);
   };
 
   [[nodiscard]] size_t memusage_impl() const override {

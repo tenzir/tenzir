@@ -355,9 +355,8 @@ caf::error initialize(caf::actor_system_config& cfg) {
   }
   auto plugins_record = record{};
   if (global_config.contains("plugins")) {
-    if (auto* plugins_entry
-        = caf::get_if<record>(&global_config.at("plugins"))) {
-      plugins_record = *plugins_entry;
+    if (auto* plugins_entry = try_as<record>(&global_config.at("plugins"))) {
+      plugins_record = std::move(*plugins_entry);
     }
   }
   TENZIR_DEBUG("collected {} global options for plugin initialization",
@@ -367,7 +366,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
     // Try to read the configurations from the merged Tenzir configuration.
     if (plugins_record.contains(plugin->name())) {
       if (auto* plugins_entry
-          = caf::get_if<record>(&plugins_record.at(plugin->name()))) {
+          = try_as<record>(&plugins_record.at(plugin->name()))) {
         merged_config = std::move(*plugins_entry);
       } else {
         return caf::make_error(ec::invalid_configuration,
@@ -488,7 +487,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       return;
     }
     auto& last = output.back();
-    auto null_builder = caf::get<record_type>(last.schema())
+    auto null_builder = as<record_type>(last.schema())
                           .make_arrow_builder(arrow::default_memory_pool());
     TENZIR_ASSERT(null_builder->AppendNull().ok());
     auto null_array = std::shared_ptr<arrow::StructArray>{};

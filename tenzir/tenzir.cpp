@@ -215,7 +215,7 @@ auto main(int argc, char** argv) -> int {
       return EXIT_FAILURE;
     }
     for (auto&& [name, value] : *r) {
-      auto* definition = caf::get_if<std::string>(&value);
+      auto* definition = try_as<std::string>(&value);
       if (!definition) {
         TENZIR_ERROR("could not load `tenzir.operators`: alias `{}` does not "
                      "resolve to a string",

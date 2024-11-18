@@ -184,7 +184,7 @@ struct binding {
     auto result = binding{};
     result.group_by_columns.reserve(config.group_by_extractors.size());
     result.aggregation_columns.reserve(config.aggregations.size());
-    auto const& rt = caf::get<record_type>(schema);
+    auto const& rt = as<record_type>(schema);
     for (auto const& field : config.group_by_extractors) {
       if (auto offset = schema.resolve_key_or_concept_once(field)) {
         auto type = rt.field(*offset).type;
@@ -252,8 +252,7 @@ struct binding {
     for (const auto& column : group_by_columns) {
       if (column) {
         auto array = column->offset.get(batch);
-        if (config.time_resolution
-            && caf::holds_alternative<time_type>(column->type)) {
+        if (config.time_resolution && is<time_type>(column->type)) {
           array = arrow::compute::FloorTemporal(
                     array, make_round_temporal_options(*config.time_resolution))
                     .ValueOrDie()
@@ -574,7 +573,7 @@ public:
       output_schemas[std::move(output_schema)].push_back(it);
     }
     for (const auto& [output_schema, groups] : output_schemas) {
-      auto builder = caf::get<record_type>(output_schema)
+      auto builder = as<record_type>(output_schema)
                        .make_arrow_builder(arrow::default_memory_pool());
       TENZIR_ASSERT(builder);
       for (auto it : groups) {
@@ -590,7 +589,7 @@ public:
         // Assign data of group-by fields.
         for (auto i = size_t{0}; i < group.size(); ++i) {
           auto col = detail::narrow<int>(i);
-          auto ty = caf::get<record_type>(output_schema).field(i).type;
+          auto ty = as<record_type>(output_schema).field(i).type;
           status = append_builder(ty, *builder->field_builder(col),
                                   make_data_view(group[i]));
           if (!status.ok()) {
@@ -635,7 +634,7 @@ public:
       }
       auto batch = arrow::RecordBatch::Make(
         output_schema.to_arrow_schema(), detail::narrow<int64_t>(groups.size()),
-        caf::get<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
+        as<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
           .fields());
       co_yield table_slice{batch, output_schema};
     }
@@ -1010,7 +1009,7 @@ public:
       = [](record& root, const ast::simple_selector& sel, data value) {
           if (sel.path().empty()) {
             // TODO
-            if (auto rec = caf::get_if<record>(&value)) {
+            if (auto rec = try_as<record>(&value)) {
               root = std::move(*rec);
             }
             return;
@@ -1021,10 +1020,10 @@ public:
             if (&segment == &sel.path().back()) {
               val = std::move(value);
             } else {
-              current = caf::get_if<record>(&val);
+              current = try_as<record>(&val);
               if (not current) {
                 val = record{};
-                current = &caf::get<record>(val);
+                current = &as<record>(val);
               }
             }
           }

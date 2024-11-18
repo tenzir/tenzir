@@ -66,12 +66,12 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
     auto lrt = legacy_record_type{};
     if (auto error = fbs::deserialize_bytes(data, lrt))
       return error;
-    return caf::get<record_type>(type::from_legacy_type(lrt));
+    return as<record_type>(type::from_legacy_type(lrt));
   }
   if (auto const* data = partition.schema()) {
     auto chunk = chunk::copy(as_bytes(*data));
     auto t = type{std::move(chunk)};
-    auto* schema = caf::get_if<record_type>(&t);
+    auto* schema = try_as<record_type>(&t);
     if (!schema)
       return caf::make_error(ec::format_error, "schema field contained "
                                                "unexpected type");

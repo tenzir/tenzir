@@ -65,17 +65,17 @@ struct fixture {
 FIXTURE_SCOPE(expr_tests, fixture)
 
 TEST(construction) {
-  auto n = caf::get_if<negation>(&expr0);
+  auto n = try_as<negation>(&expr0);
   REQUIRE(n);
-  auto c = caf::get_if<conjunction>(&n->expr());
+  auto c = try_as<conjunction>(&n->expr());
   REQUIRE(c);
   REQUIRE(c->size() == 2);
-  auto p0 = caf::get_if<predicate>(&c->at(0));
+  auto p0 = try_as<predicate>(&c->at(0));
   REQUIRE(p0);
   CHECK_EQUAL(get<field_extractor>(p0->lhs).field, "x.y.z");
   CHECK_EQUAL(p0->op, relational_operator::less_equal);
   CHECK_EQUAL(get<data>(p0->rhs), int64_t{42});
-  auto p1 = caf::get_if<predicate>(&c->at(1));
+  auto p1 = try_as<predicate>(&c->at(1));
   REQUIRE(p1);
   CHECK_EQUAL(get<meta_extractor>(p1->lhs).kind, meta_extractor::schema);
   CHECK_EQUAL(p1->op, relational_operator::equal);
@@ -87,15 +87,15 @@ TEST(serialization) {
   caf::byte_buffer buf;
   CHECK(detail::serialize(buf, expr0, expr1));
   CHECK_EQUAL(detail::legacy_deserialize(buf, ex0, ex1), true);
-  auto d = caf::get_if<disjunction>(&ex1);
+  auto d = try_as<disjunction>(&ex1);
   REQUIRE(d);
   REQUIRE(!d->empty());
-  auto n = caf::get_if<negation>(&d->at(0));
+  auto n = try_as<negation>(&d->at(0));
   REQUIRE(n);
-  auto c = caf::get_if<conjunction>(&n->expr());
+  auto c = try_as<conjunction>(&n->expr());
   REQUIRE(c);
   REQUIRE_EQUAL(c->size(), 2u);
-  auto p = caf::get_if<predicate>(&c->at(1));
+  auto p = try_as<predicate>(&c->at(1));
   REQUIRE(p);
   CHECK_EQUAL(p->op, relational_operator::equal);
 }
@@ -194,11 +194,11 @@ TEST(extractors) {
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
     auto expr = unbox(to<expression>(":ip in 192.168.0.0/24"));
-    auto resolved = caf::visit(type_resolver(r), expr);
+    auto resolved = tenzir::match(expr, type_resolver(r));
     CHECK_EQUAL(resolved, normalized);
     MESSAGE("field extractor - distribution");
     expr = unbox(to<expression>("host in 192.168.0.0/24"));
-    resolved = unbox(caf::visit(type_resolver(r), expr));
+    resolved = unbox(tenzir::match(expr, type_resolver(r)));
     CHECK_EQUAL(resolved, normalized);
   }
   {
@@ -209,11 +209,11 @@ TEST(extractors) {
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
     auto expr = unbox(to<expression>(":ip !in 192.168.0.0/24"));
-    auto resolved = caf::visit(type_resolver(r), expr);
+    auto resolved = tenzir::match(expr, type_resolver(r));
     CHECK_EQUAL(resolved, normalized);
     MESSAGE("field extractor - distribution with negation");
     expr = unbox(to<expression>("host !in 192.168.0.0/24"));
-    resolved = unbox(caf::visit(type_resolver(r), expr));
+    resolved = unbox(tenzir::match(expr, type_resolver(r)));
     CHECK_EQUAL(resolved, normalized);
   }
   {
@@ -228,10 +228,10 @@ TEST(extractors) {
     auto normalized = disjunction{pred0, pred1, pred2, pred3};
     MESSAGE("type extractor - used defined types");
     auto expr = unbox(to<expression>(":port == 80"));
-    auto resolved = caf::visit(type_resolver(r), expr);
+    auto resolved = tenzir::match(expr, type_resolver(r));
     CHECK_EQUAL(resolved, normalized);
     expr = unbox(to<expression>(":uint64 == 80"));
-    resolved = caf::visit(type_resolver(r), expr);
+    resolved = tenzir::match(expr, type_resolver(r));
     CHECK_EQUAL(resolved, normalized);
   }
 }
@@ -241,40 +241,40 @@ TEST(validation - meta extractor) {
   // The "type" attribute extractor requires a string operand.
   auto expr = to<expression>("#schema == \"foo\"");
   REQUIRE(expr);
-  CHECK(caf::visit(validator{}, *expr));
+  CHECK(tenzir::match(*expr, validator{}));
   expr = to<expression>("#schema == 42");
   REQUIRE(expr);
-  CHECK(!caf::visit(validator{}, *expr));
+  CHECK(!tenzir::match(*expr, validator{}));
   expr = to<expression>("#schema == zeek.conn");
   REQUIRE(expr);
-  CHECK(!caf::visit(validator{}, *expr));
+  CHECK(!tenzir::match(*expr, validator{}));
 }
 
 TEST(validation - type extractor) {
   auto expr = to<expression>(":bool == true");
   REQUIRE(expr);
-  CHECK(caf::visit(validator{}, *expr));
+  CHECK(tenzir::match(*expr, validator{}));
   expr = to<expression>(":ip in 10.0.0.0/8");
   REQUIRE(expr);
-  CHECK(caf::visit(validator{}, *expr));
+  CHECK(tenzir::match(*expr, validator{}));
   expr = to<expression>(":bool > -42");
   REQUIRE(expr);
-  CHECK(!caf::visit(validator{}, *expr));
+  CHECK(!tenzir::match(*expr, validator{}));
   expr = to<expression>(":timestamp < now");
   REQUIRE(expr);
-  CHECK(caf::visit(validator{}, *expr));
+  CHECK(tenzir::match(*expr, validator{}));
   expr = to<expression>(":timestamp < 2017-06-16");
   REQUIRE(expr);
-  CHECK(caf::visit(validator{}, *expr));
+  CHECK(tenzir::match(*expr, validator{}));
 }
 
 TEST(matcher) {
   auto match = [](const std::string& str, auto&& t) {
     auto expr = to<expression>(str);
     REQUIRE(expr);
-    auto resolved = caf::visit(type_resolver(type{t}), *expr);
+    auto resolved = tenzir::match(*expr, type_resolver(type{t}));
     REQUIRE(resolved);
-    return caf::visit(matcher{type{t}}, *resolved);
+    return tenzir::match(*resolved, matcher{type{t}});
   };
   auto r = type{record_type{
     {"x", double_type{}},
@@ -303,7 +303,7 @@ TEST(labeler) {
   auto visitor = labeler{[&](const auto& x, const offset& o) {
     offset_map.emplace(x, o);
   }};
-  caf::visit(visitor, expr);
+  tenzir::match(expr, visitor);
   decltype(offset_map) expected_offset_map{
     {to_expr(str), {0}},
     {to_expr("x == 5 && :bool == true"), {0, 0}},
@@ -338,8 +338,9 @@ TEST(resolve) {
     result_type result;
     auto pred = to<predicate>(x);
     auto resolved = type_resolver{t}(unbox(pred));
-    for (auto& pred : caf::visit(predicatizer{}, *resolved))
+    for (auto& pred : tenzir::match(*resolved, predicatizer{})) {
       result.emplace_back(o, std::move(pred));
+    }
     return result;
   };
   auto expr

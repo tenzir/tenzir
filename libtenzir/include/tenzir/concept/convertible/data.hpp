@@ -412,7 +412,7 @@ template <concepts::insertable To>
 caf::error convert(const list& src, To& dst, const map_type& t) {
   const auto kt = t.key_type();
   const auto vt = t.value_type();
-  const auto* rvt = caf::get_if<record_type>(&vt);
+  const auto* rvt = try_as<record_type>(&vt);
   if (!rvt) {
     return caf::make_error(ec::convert_error,
                            fmt::format(": expected a record_type, but got {}",
@@ -427,7 +427,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
   // We now iterate over all elements in src, converting both key from the key
   // field and and value from the pruned record type.
   for (const auto& element : src) {
-    const auto* element_rec = caf::get_if<record>(&element);
+    const auto* element_rec = try_as<record>(&element);
     if (!element_rec) {
       return caf::make_error(ec::convert_error, ": expected record");
     }
@@ -447,7 +447,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
         if (*name_mismatch != '.') {
           continue;
         }
-        if (const auto* rv = caf::get_if<record>(&v)) {
+        if (const auto* rv = try_as<record>(&v)) {
           auto remainder = name.substr(1 + name_mismatch - name.begin());
           if (auto result = self(self, *rv, remainder)) {
             return result;
@@ -522,7 +522,7 @@ public:
     // Find the value from the record
     auto it = src.find(field.name);
     const auto& value = it != src.end() ? it->second : data{};
-    if (!field.type && caf::holds_alternative<caf::none_t>(value)) {
+    if (!field.type && is<caf::none_t>(value)) {
       return caf::make_error(ec::convert_error, fmt::format("failed to convert "
                                                             "field {} because "
                                                             "it has no type",
@@ -599,7 +599,7 @@ caf::error convert(const record& src, To& dst) {
 
 template <has_schema To>
 caf::error convert(const data& src, To& dst) {
-  if (const auto* r = caf::get_if<record>(&src)) {
+  if (const auto* r = try_as<record>(&src)) {
     return convert(*r, dst);
   }
   return caf::make_error(ec::convert_error,

@@ -28,19 +28,19 @@ public:
 
 private:
   [[nodiscard]] type output_type() const override {
-    TENZIR_ASSERT(caf::holds_alternative<Type>(input_type()));
+    TENZIR_ASSERT(is<Type>(input_type()));
     return input_type();
   }
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
     if (!sum_) {
-      sum_ = materialize(caf::get<view_type>(view));
+      sum_ = materialize(as<view_type>(view));
     } else {
-      sum_ = *sum_ + materialize(caf::get<view_type>(view));
+      sum_ = *sum_ + materialize(as<view_type>(view));
     }
   }
 
@@ -158,7 +158,7 @@ public:
           .emit(ctx);
         sum_ = caf::none;
       }};
-    caf::visit(f, *s.array);
+    match(*s.array, f);
   }
 
   auto get() const -> data override {
@@ -209,8 +209,7 @@ public:
         .emit(ctx);
       return;
     }
-    caf::visit(
-      [&]<class T>(const T& x) {
+    match(result, [&]<class T>(const T& x) {
         if constexpr (std::is_same_v<T, caf::none_t>) {
           sum_.reset();
         } else if constexpr (sum_t::can_have<T>) {
@@ -220,8 +219,7 @@ public:
             .note("failed to restore `sum` aggregation instance")
             .emit(ctx);
         }
-      },
-      result);
+      });
     const auto* fb_type = (*fb)->type();
     if (not fb_type) {
       diagnostic::warning("missing field `type`")
@@ -301,7 +299,7 @@ class plugin : public virtual aggregation_function_plugin,
                                            type));
       },
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto aggregation_default() const -> data override {

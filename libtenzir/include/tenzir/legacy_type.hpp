@@ -820,11 +820,9 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> bool {
     if constexpr (!Inspector::is_loading) {
       if (x.type_tag != invalid_type_id) {
-        return caf::visit(
-          [&f](auto& v) -> bool {
+        return match(x.x, [&f](auto& v) -> bool {
             return f.apply(v);
-          },
-          x.x);
+          });
       }
       return true;
     } else {

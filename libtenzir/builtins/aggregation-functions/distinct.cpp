@@ -71,10 +71,10 @@ private:
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
-    const auto& typed_view = caf::get<view_type>(view);
+    const auto& typed_view = as<view_type>(view);
     if (!distinct_.contains(typed_view)) {
       const auto [it, inserted] = distinct_.insert(materialize(typed_view));
       TENZIR_ASSERT(inserted);
@@ -103,7 +103,7 @@ public:
 
   auto update(const table_slice& input, session ctx) -> void override {
     auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
+    if (is<null_type>(arg.type)) {
       return;
     }
     for (auto i = int64_t{}; i < arg.array->length(); ++i) {
@@ -196,7 +196,7 @@ class plugin : public virtual aggregation_function_plugin,
                const Type&) -> std::unique_ptr<aggregation_function> {
       return std::make_unique<distinct_function<Type>>(input_type);
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto make_aggregation(invocation inv, session ctx) const

@@ -78,7 +78,57 @@ class variant_traits;
 
 template <class T>
 concept has_variant_traits
-  = caf::detail::is_complete<variant_traits<std::remove_cvref_t<T>>>;
+  = caf::detail::is_complete<variant_traits<std::remove_cvref_t<T>>>
+    and requires(const std::remove_cvref_t<T>& v) {
+          {
+            variant_traits<std::remove_cvref_t<T>>::count
+          } -> std::same_as<const std::size_t&>;
+          {
+            variant_traits<std::remove_cvref_t<T>>::index(v)
+          } -> std::same_as<std::size_t>;
+          variant_traits<std::remove_cvref_t<T>>::template get<0>(v);
+        };
+
+namespace detail {
+
+template <class T, auto accessor>
+class auto_variant_traits {
+  using underlying = std::remove_cvref_t<decltype(std::invoke(
+    accessor, std::declval<const T*>()))>;
+  using backing_traits = variant_traits<underlying>;
+
+public:
+  constexpr static size_t count = backing_traits::count;
+
+  constexpr static auto index(const T& t) -> size_t {
+    return backing_traits::index(std::invoke(accessor, &t));
+  }
+
+  template <size_t I>
+  constexpr static auto get(const T& t) -> decltype(auto) {
+    return backing_traits::template get<I>(std::invoke(accessor, &t));
+  }
+};
+
+template <class T, auto accessor>
+class auto_variant_traits_get_data {
+  using underlying
+    = std::remove_cvref_t<decltype(std::declval<const T&>().get_data())>;
+  using backing_traits = variant_traits<underlying>;
+
+public:
+  constexpr static size_t count = backing_traits::count;
+
+  constexpr static auto index(const T& t) -> size_t {
+    return backing_traits::index(t.get_data());
+  }
+
+  template <size_t I>
+  constexpr static auto get(const T& t) -> decltype(auto) {
+    return backing_traits::template get<I>(t.get_data());
+  }
+};
+} // namespace detail
 
 template <class... Ts>
 class variant_traits<std::variant<Ts...>> {
@@ -112,8 +162,15 @@ public:
   }
 };
 
-namespace detail {
+template <class T>
+  requires has_variant_traits<T>
+class variant_traits<std::reference_wrapper<T>>
+  : public detail::auto_variant_traits<std::reference_wrapper<T>,
+                                       &std::reference_wrapper<T>::get> {};
 
+static_assert(has_variant_traits<std::reference_wrapper<std::variant<int>>>);
+
+namespace detail {
 /// Dispatches to `variant_traits<V>::get` and also transfers qualifiers.
 template <size_t I, has_variant_traits V>
 constexpr auto variant_get(V&& v) -> decltype(auto) {
@@ -148,8 +205,7 @@ constexpr auto variant_index = std::invoke(
 // type `R`
 template <class F, class V, class R, size_t I>
 concept variant_invocable_for_r = requires(F f, V v) {
-  requires std::invocable<F, decltype(variant_get<I>(std::forward<V>(v)))>;
-  // requires std::is_invocable_r_v<R, F, decltype(variant_get<I>(v))>;
+  static_cast<R>(std::invoke(f, variant_get<I>(std::forward<V>(v))));
 };
 
 template <class F, class V, class R, size_t... Is>
@@ -172,7 +228,6 @@ constexpr auto match_one(V&& v, F&& f) -> decltype(auto) {
   using traits = variant_traits<std::remove_cvref_t<V>>;
   using return_type = std::invoke_result_t<F, decltype(variant_get<0>(v))>;
   auto index = traits::index(std::as_const(v));
-  static_assert(std::same_as<decltype(index), size_t>);
   // TODO: A switch/if-style dispatch might be more performant.
   constexpr auto table = std::invoke(
     []<size_t... Is>(std::index_sequence<Is...>) {
@@ -184,10 +239,13 @@ constexpr auto match_one(V&& v, F&& f) -> decltype(auto) {
           // where `void` is returned separately.
           using local_return_type = decltype(std::invoke(
             std::forward<F>(f), variant_get<Is>(std::forward<V>(v))));
-          static_assert(std::same_as<local_return_type, return_type>,
-                        "all cases must have the same return type");
-          return std::invoke(std::forward<F>(f),
-                             variant_get<Is>(std::forward<V>(v)));
+          // static_assert(std::same_as<local_return_type, return_type>,
+          //               "all cases must have the same return type");
+          static_assert(std::convertible_to<local_return_type, return_type>,
+                        "all cases must return a type convertible to the "
+                        "return type of the first alternative");
+          return static_cast<return_type>(std::invoke(
+            std::forward<F>(f), variant_get<Is>(std::forward<V>(v))));
         }...,
       };
     },
@@ -222,37 +280,69 @@ constexpr auto match_tuple(std::tuple<Xs...> xs, F&& f) -> decltype(auto) {
                      });
   }
 }
+
+template <class T>
+using wrap_lvalue_ref
+  = std::conditional_t<std::is_lvalue_reference_v<T>,
+                       std::reference_wrapper<std::remove_reference_t<T>>,
+                       std::remove_cvref_t<T>>;
 } // namespace detail
 
 /// Calls one of the given functions with the current variant inhabitant.
 template <has_variant_traits V, class... Fs>
 constexpr auto match(V&& v, Fs&&... fs) -> decltype(auto) {
-  return match_one(std::forward<V>(v),
-                   detail::overload{std::forward<Fs>(fs)...});
+  return detail::match_one(
+    std::forward<V>(v),
+    detail::overload<detail::wrap_lvalue_ref<Fs>...>{std::forward<Fs>(fs)...});
+}
+
+template <has_variant_traits V, class F>
+constexpr auto match(V&& v, F&& f) -> decltype(auto) {
+  return detail::match_one(std::forward<V>(v), std::forward<F>(f));
 }
 
 /// Calls one of the given functions with the current variant inhabitants.
 template <has_variant_traits... Ts, class... Fs>
 constexpr auto match(std::tuple<Ts...> v, Fs&&... fs) -> decltype(auto) {
-  return match_tuple(std::move(v), detail::overload{std::forward<Fs>(fs)...});
+  return detail::match_tuple(
+    std::move(v),
+    detail::overload<detail::wrap_lvalue_ref<Fs>...>{std::forward<Fs>(fs)...});
+}
+
+template <has_variant_traits... Ts, class F>
+constexpr auto match(std::tuple<Ts...> v, F&& f) -> decltype(auto) {
+  return detail::match_tuple(std::move(v), std::forward<F>(f));
+}
+
+/// Checks whether the variant currently holds alternative `T`
+template <concepts::unqualified T, has_variant_traits V>
+auto is(const V& v) -> bool {
+  using bare = std::remove_cvref_t<V>;
+  constexpr auto alternative_index = detail::variant_index<bare, T>;
+  const auto current_index = variant_traits<bare>::index(v);
+  return current_index == alternative_index;
 }
 
 /// Extracts a `T` from the given variant, asserting success.
 template <concepts::unqualified T, has_variant_traits V>
 auto as(V&& v) -> forward_like_t<V, T> {
-  constexpr auto index = detail::variant_index<std::remove_cvref_t<V>, T>;
-  TENZIR_ASSERT(variant_traits<std::remove_cvref_t<V>>::index(v) == index);
-  return detail::variant_get<index>(std::forward<V>(v));
+  using bare = std::remove_cvref_t<V>;
+  constexpr auto alternative_index = detail::variant_index<bare, T>;
+  const auto current_index = variant_traits<bare>::index(v);
+  TENZIR_ASSERT(current_index == alternative_index);
+  return detail::variant_get<alternative_index>(std::forward<V>(v));
 };
 
 /// Tries to extract a `T` from the variant, returning `nullptr` otherwise.
 template <concepts::unqualified T, has_variant_traits V>
 auto try_as(V& v) -> std::remove_reference_t<forward_like_t<V, T>>* {
-  constexpr auto index = detail::variant_index<std::remove_const_t<V>, T>;
-  if (variant_traits<std::remove_const_t<V>>::index(v) != index) {
+  using bare = std::remove_cvref_t<V>;
+  constexpr auto alternative_index = detail::variant_index<bare, T>;
+  const auto current_index = variant_traits<bare>::index(v);
+  if (current_index != alternative_index) {
     return nullptr;
   }
-  return &detail::variant_get<index>(v);
+  return &detail::variant_get<alternative_index>(v);
 };
 /// Tries to extract a `T` from the variant, returning `nullptr` otherwise.
 template <concepts::unqualified T, has_variant_traits V>

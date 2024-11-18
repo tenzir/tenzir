@@ -43,7 +43,7 @@ bool string_index::inspect_impl(supported_inspectors& inspector) {
 }
 
 bool string_index::append_impl(data_view x, id pos) {
-  auto str = caf::get_if<view<std::string>>(&x);
+  auto str = try_as<view<std::string>>(&x);
   if (!str)
     return false;
   auto length = str->size();
@@ -144,7 +144,7 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
       return detail::container_lookup(*this, op, xs);
     },
   };
-  return caf::visit(f, x);
+  return match(x, f);
 }
 
 size_t string_index::memusage_impl() const {

@@ -523,7 +523,7 @@ struct serve_manager_state {
     auto requests = list{};
     requests.reserve(ops.size());
     for (const auto& op : ops) {
-      auto& entry = caf::get<record>(requests.emplace_back(record{}));
+      auto& entry = as<record>(requests.emplace_back(record{}));
       entry.emplace("serve_id", op.serve_id);
       entry.emplace("continuation_token", op.continuation_token.empty()
                                             ? data{}
@@ -706,7 +706,7 @@ struct serve_handler_state {
       }
       seen_schemas.insert(slice.schema());
       auto resolved_slice = resolve_enumerations(slice);
-      auto type = caf::get<record_type>(resolved_slice.schema());
+      auto type = as<record_type>(resolved_slice.schema());
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       for (const auto& row : values(type, *array)) {
@@ -955,8 +955,8 @@ public:
         [&](record& response) {
           TENZIR_ASSERT(response.size() == 1);
           TENZIR_ASSERT(response.contains("requests"));
-          TENZIR_ASSERT(caf::holds_alternative<list>(response["requests"]));
-          serves = std::move(caf::get<list>(response["requests"]));
+          TENZIR_ASSERT(is<list>(response["requests"]));
+          serves = std::move(as<list>(response["requests"]));
         },
         [&](const caf::error& err) {
           diagnostic::error(err)
@@ -984,8 +984,8 @@ public:
     }
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
-    TENZIR_ASSERT(caf::holds_alternative<record>(*result));
-    return caf::get<record>(*result);
+    TENZIR_ASSERT(is<record>(*result));
+    return as<record>(*result);
   }
 
   auto rest_endpoints() const -> const std::vector<rest_endpoint>& override {

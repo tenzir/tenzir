@@ -28,11 +28,11 @@ public:
   }
 
   auto update(const table_slice& input, session ctx) -> void override {
-    if (not caf::holds_alternative<caf::none_t>(result_)) {
+    if (not is<caf::none_t>(result_)) {
       return;
     }
     auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
+    if (is<null_type>(arg.type)) {
       return;
     }
     if constexpr (Mode == mode::first) {

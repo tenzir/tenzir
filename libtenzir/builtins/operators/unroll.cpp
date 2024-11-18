@@ -23,11 +23,11 @@ namespace {
 auto unroll_type(const type& src, const offset& off, size_t index = 0) -> type {
   TENZIR_ASSERT(index <= off.size());
   if (index == off.size()) {
-    auto list = caf::get_if<list_type>(&src);
+    auto list = try_as<list_type>(&src);
     TENZIR_ASSERT(list);
     return list->value_type();
   }
-  auto record = caf::get_if<record_type>(&src);
+  auto record = try_as<record_type>(&src);
   TENZIR_ASSERT(record);
   auto fields = std::vector<struct record_type::field_view>{};
   auto current = size_t{0};
@@ -91,7 +91,7 @@ private:
     if (index == offset_.size()) {
       // We arrived at the offset where the list values shall be placed.
       auto result
-        = append_array_slice(builder, caf::get<list_type>(ty).value_type(),
+        = append_array_slice(builder, as<list_type>(ty).value_type(),
                              *list_array_.values(), list_begin_, list_length_);
       TENZIR_ASSERT(result.ok());
       return;
@@ -100,7 +100,7 @@ private:
     TENZIR_ASSERT(fb);
     auto fs = dynamic_cast<const arrow::StructArray*>(&source);
     TENZIR_ASSERT(fs);
-    auto ty2 = caf::get_if<record_type>(&ty);
+    auto ty2 = try_as<record_type>(&ty);
     TENZIR_ASSERT(ty2);
     process_struct(*fb, *fs, *ty2, index);
   }
@@ -139,8 +139,8 @@ auto unroll(const table_slice& slice, const offset& offset) -> table_slice {
     auto source = to_record_batch(slice)->ToStructArray();
     TENZIR_ASSERT(source.ok());
     TENZIR_ASSERT(*source);
-    unroller{offset, *list_array, row}.run(
-      *builder, **source, caf::get<record_type>(slice.schema()));
+    unroller{offset, *list_array, row}.run(*builder, **source,
+                                           as<record_type>(slice.schema()));
   }
   auto result = std::shared_ptr<arrow::StructArray>{};
   auto status = builder->Finish(&result);
@@ -185,11 +185,11 @@ public:
             return {};
           }
           const auto& field_type
-            = caf::get<record_type>(slice.schema()).field(offsets.front()).type;
-          if (caf::holds_alternative<null_type>(field_type)) {
+            = as<record_type>(slice.schema()).field(offsets.front()).type;
+          if (is<null_type>(field_type)) {
             return {};
           }
-          if (not caf::holds_alternative<list_type>(field_type)) {
+          if (not is<list_type>(field_type)) {
             diagnostic::warning("expected `list`, but got `{}`",
                                 field_type.kind())
               .primary(field)
@@ -205,11 +205,11 @@ public:
             .match(
               [&](offset result) -> std::optional<offset> {
                 const auto& field_type
-                  = caf::get<record_type>(slice.schema()).field(result).type;
-                if (caf::holds_alternative<null_type>(field_type)) {
+                  = as<record_type>(slice.schema()).field(result).type;
+                if (is<null_type>(field_type)) {
                   return {};
                 }
-                if (not caf::holds_alternative<list_type>(field_type)) {
+                if (not is<list_type>(field_type)) {
                   diagnostic::warning("expected `list`, but got `{}`",
                                       field_type.kind())
                     .primary(field)

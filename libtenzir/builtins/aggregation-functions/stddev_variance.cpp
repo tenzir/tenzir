@@ -37,10 +37,10 @@ private:
 
   auto add(const data_view& view) -> void override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
-    const auto x = static_cast<double>(caf::get<view_type>(view));
+    const auto x = static_cast<double>(as<view_type>(view));
     if constexpr (std::is_same_v<Type, double_type>) {
       if (std::isnan(x)) {
         return;
@@ -52,7 +52,7 @@ private:
   }
 
   void add(const arrow::Array& array) override {
-    const auto& typed_array = caf::get<type_to_arrow_array_t<Type>>(array);
+    const auto& typed_array = as<type_to_arrow_array_t<Type>>(array);
     for (auto&& value : values(Type{}, typed_array)) {
       if (not value) {
         continue;
@@ -159,7 +159,7 @@ public:
         }
         state_ = state::failed;
       }};
-    caf::visit(f, *arg.array);
+    match(*arg.array, f);
   }
 
   auto get() const -> data override {
@@ -272,7 +272,7 @@ class plugin : public virtual aggregation_function_plugin,
           fmt::format("aggregation function does not support type {}", type));
       },
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto make_aggregation(invocation inv, session ctx) const
