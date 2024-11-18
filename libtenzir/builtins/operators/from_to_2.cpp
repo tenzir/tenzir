@@ -303,7 +303,8 @@ public:
     }
     auto& expr = inv.args[0];
     TRY(auto value, const_eval(expr, ctx));
-    auto f = detail::overload{
+    return match(
+      value,
       [&](record& event) -> failure_or<operator_ptr> {
         auto events = std::vector<record>{};
         events.push_back(std::move(event));
@@ -312,7 +313,7 @@ public:
       [&](list& event_list) -> failure_or<operator_ptr> {
         auto events = std::vector<record>{};
         for (auto& event : event_list) {
-          auto event_record = caf::get_if<record>(&event);
+          auto event_record = try_as<record>(&event);
           if (not event_record) {
             diagnostic::error("expected list of records")
               .primary(expr)
@@ -333,9 +334,7 @@ public:
           .docs(docs)
           .emit(ctx);
         return failure::promise();
-      },
-    };
-    return caf::visit(f, value);
+      });
   }
 };
 
@@ -486,7 +485,8 @@ public:
     }
     auto& expr = inv.args[0];
     TRY(auto value, const_eval(expr, ctx));
-    auto f = detail::overload{
+    return match(
+      value,
       [&](std::string& path) -> failure_or<operator_ptr> {
         return create_pipeline_from_uri(path, std::move(inv), std::move(ctx));
       },
@@ -496,9 +496,7 @@ public:
           .docs(docs)
           .emit(ctx);
         return failure::promise();
-      },
-    };
-    return caf::visit(f, value);
+      });
   }
 };
 
