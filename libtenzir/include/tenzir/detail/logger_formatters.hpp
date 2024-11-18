@@ -197,23 +197,6 @@ struct formatter<caf::intrusive_cow_ptr<T>> {
 };
 
 template <class T>
-struct formatter<caf::optional<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::optional<T>& value, FormatContext& ctx) const {
-    if (!value)
-      return fmt::format_to(ctx.out(), "none");
-    return fmt::format_to(ctx.out(), "{}", *value);
-  }
-};
-
-#if FMT_VERSION / 10000 < 10
-
-template <class T>
 struct formatter<std::optional<T>> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) {
@@ -223,12 +206,10 @@ struct formatter<std::optional<T>> {
   template <class FormatContext>
   auto format(const std::optional<T>& value, FormatContext& ctx) const {
     if (!value)
-      return fmt::format_to(ctx.out(), "nullopt");
+      return fmt::format_to(ctx.out(), "none");
     return fmt::format_to(ctx.out(), "{}", *value);
   }
 };
-
-#endif
 
 template <class T>
 struct formatter<caf::expected<T>> {

@@ -234,7 +234,7 @@ TEST(list) {
 }
 
 TEST(optional) {
-  caf::optional<int> x;
+  std::optional<int> x;
   auto p = -printers::integral<int>;
   std::string str;
   CHECK(p(str, x));

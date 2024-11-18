@@ -359,9 +359,9 @@ struct custom {
 TEST(caf_optional) {
   caf::byte_buffer serialization_output;
   caf::binary_serializer s{nullptr, serialization_output};
-  auto in = caf::optional<custom>{custom{"test str", 221}};
+  auto in = std::optional<custom>{custom{"test str", 221}};
   REQUIRE(s.apply(in));
-  auto out = caf::optional<custom>{};
+  auto out = std::optional<custom>{};
   REQUIRE(ldes(serialization_output, out));
   REQUIRE_EQUAL(in->x, out->x);
   REQUIRE_EQUAL(in->y, out->y);

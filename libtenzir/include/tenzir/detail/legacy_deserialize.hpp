@@ -295,24 +295,6 @@ public:
   }
 
   template <class T>
-  result_type apply(caf::optional<T>& x) {
-    bool is_set = false;
-    if (!apply(is_set)) {
-      x = {};
-      return false;
-    }
-    if (!is_set) {
-      x = {};
-      return true;
-    }
-    T v;
-    if (!apply(v))
-      return false;
-    x = v;
-    return true;
-  }
-
-  template <class T>
   result_type apply(std::optional<T>& x) {
     bool is_set = false;
     if (!apply(is_set)) {

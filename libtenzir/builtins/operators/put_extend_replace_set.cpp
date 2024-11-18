@@ -49,7 +49,7 @@ constexpr auto operator_name(enum mode mode) -> std::string_view {
 
 /// The parsed configuration.
 struct configuration {
-  std::vector<std::tuple<std::string, caf::optional<operand>>>
+  std::vector<std::tuple<std::string, std::optional<operand>>>
     extractor_to_operand = {};
 
   friend auto inspect(auto& f, configuration& x) -> bool {

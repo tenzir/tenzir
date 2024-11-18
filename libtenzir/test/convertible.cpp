@@ -337,7 +337,7 @@ struct StdOpt {
 };
 
 struct CafOpt {
-  caf::optional<int64_t> value;
+  std::optional<int64_t> value;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, CafOpt& c) {
@@ -362,7 +362,7 @@ TEST(std::optional member variable) {
   CHECK_EQUAL(*x.value, 22);
 }
 
-TEST(caf::optional member variable) {
+TEST(std::optional member variable) {
   auto x = CafOpt{int64_t{42}};
   auto r = record{{"value", caf::none}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
@@ -586,8 +586,8 @@ TEST(list of record to map monoid) {
 struct OptVec {
   constexpr inline static bool use_deep_to_string_formatter = true;
 
-  caf::optional<std::vector<std::string>> ovs = {};
-  caf::optional<uint64_t> ou = 0;
+  std::optional<std::vector<std::string>> ovs = {};
+  std::optional<uint64_t> ou = 0;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, OptVec& x) {

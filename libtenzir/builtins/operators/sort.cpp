@@ -318,12 +318,12 @@ public:
           }) >> required_ws_or_comment)
         >> ((extractor
              >> (-(required_ws_or_comment >> (str{"asc"} | str{"desc"})))
-                  .then([&](caf::optional<std::string> sort_order) {
+                  .then([&](std::optional<std::string> sort_order) {
                     return sort_order.value_or("asc") == "desc";
                   })
              >> (-(required_ws_or_comment
                    >> (str{"nulls-first"} | str{"nulls-last"})))
-                  .then([&](caf::optional<std::string> null_placement) {
+                  .then([&](std::optional<std::string> null_placement) {
                     return null_placement.value_or("nulls-last")
                            == "nulls-first";
                   })

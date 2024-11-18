@@ -78,7 +78,7 @@ struct expander {
     // Builds an additional predicate for subnet type extractor predicates. The
     // additional :ip in S predicate gets appended as disjunction afterwards.
     auto build_addr_pred
-      = [](auto& lhs, auto op, auto& rhs) -> caf::optional<expression> {
+      = [](auto& lhs, auto op, auto& rhs) -> std::optional<expression> {
       if (auto t = try_as<type_extractor>(&lhs)) {
         if (auto d = try_as<data>(&rhs)) {
           if (op == relational_operator::equal) {

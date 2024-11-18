@@ -46,7 +46,7 @@ namespace tenzir {
 /// A qualifier in the form of a key and optional value.
 struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
   legacy_attribute(std::string key = {});
-  legacy_attribute(std::string key, caf::optional<std::string> value);
+  legacy_attribute(std::string key, std::optional<std::string> value);
 
   friend bool operator==(const legacy_attribute& x, const legacy_attribute& y);
 
@@ -58,7 +58,7 @@ struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
   }
 
   std::string key;
-  caf::optional<std::string> value;
+  std::optional<std::string> value;
 };
 
 // -- type hierarchy ----------------------------------------------------------

@@ -840,7 +840,7 @@ public:
                    >> -(required_ws_or_comment >> "update-timeout"
                         >> required_ws_or_comment >> duration)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
-    std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
+    std::tuple<std::vector<std::tuple<std::optional<std::string>, std::string,
                                       std::string>>,
                std::vector<std::string>, std::optional<tenzir::duration>,
                std::optional<tenzir::duration>, std::optional<tenzir::duration>>

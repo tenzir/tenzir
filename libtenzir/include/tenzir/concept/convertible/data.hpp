@@ -305,18 +305,6 @@ caf::error convert(const From& src, std::optional<To>& dst, const Type& t) {
   }
 }
 
-template <class From, class To, class Type>
-caf::error convert(const From& src, caf::optional<To>& dst, const Type& t) {
-  if (!dst) {
-    dst = To{};
-  }
-  if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t)) {
-    return convert(src, *dst, t);
-  } else {
-    return convert(src, *dst, type{t});
-  }
-}
-
 // Overload for lists.
 template <concepts::appendable To>
 caf::error convert(const list& src, To& dst, const list_type& t) {

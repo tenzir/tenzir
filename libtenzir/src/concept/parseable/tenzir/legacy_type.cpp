@@ -31,7 +31,7 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
   // clang-format off
   // Attributes: type meta data
   static auto to_attr =
-    [](std::tuple<std::string, caf::optional<std::string>> xs) {
+    [](std::tuple<std::string, std::optional<std::string>> xs) {
       auto& [key, value] = xs;
       return tenzir::legacy_attribute{std::move(key), std::move(value)};
     };
