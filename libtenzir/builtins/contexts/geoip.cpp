@@ -129,7 +129,6 @@ public:
           auto sub_record_key
             = std::string{entry_data_list->entry_data.utf8_string,
                           entry_data_list->entry_data.data_size};
-
           entry_data_list = entry_data_list->next;
           entry_data_list = entry_data_list_to_record(entry_data_list, status,
                                                       sub_r, sub_record_key);
@@ -217,7 +216,6 @@ public:
     switch (entry_data_list->entry_data.type) {
       case MMDB_DATA_TYPE_MAP: {
         auto size = entry_data_list->entry_data.data_size;
-
         for (entry_data_list = entry_data_list->next;
              size > 0 && entry_data_list; size--) {
           if (MMDB_DATA_TYPE_UTF8_STRING != entry_data_list->entry_data.type) {
@@ -542,7 +540,9 @@ public:
   }
 
   auto dump() -> generator<table_slice> override {
-    TENZIR_ASSERT(mmdb_);
+    if (not mmdb_) {
+      co_return;
+    }
     current_dump current_dump;
     for (auto&& slice : dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr,
                                      &current_dump)) {
@@ -578,12 +578,10 @@ public:
   }
 
   auto save() const -> caf::expected<context_save_result> override {
-    if (!mapped_mmdb_) {
-      return caf::make_error(ec::lookup_error,
-                             fmt::format("no GeoIP data currently exists for "
-                                         "this context"));
-    }
-    return context_save_result{.data = mapped_mmdb_, .version = latest_version};
+    return context_save_result{
+      .data = mapped_mmdb_,
+      .version = latest_version,
+    };
   }
 
 private:
@@ -630,6 +628,9 @@ struct v2_loader : public context_loader {
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
+    if (not serialized) {
+      return std::make_unique<geoip_context>();
+    }
     const auto* cache_dir
       = get_if<std::string>(&global_config_, "tenzir.cache-directory");
     TENZIR_ASSERT(cache_dir);
