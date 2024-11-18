@@ -34,7 +34,8 @@ The name of the new GeoIP context.
 
 ### `db_path : string (optional)`
 
-The path to the [MMDB](https://maxmind.github.io/MaxMind-DB/) database.
+The path to the [MMDB](https://maxmind.github.io/MaxMind-DB/) database, relative
+to the node's working directory.
 
 ## Examples
 
