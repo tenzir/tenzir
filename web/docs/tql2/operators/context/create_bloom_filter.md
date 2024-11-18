@@ -15,6 +15,21 @@ To find suitable values for the capacity and false-positive probability, Consult
 Thomas Hurst's [Bloom Filter Calculator](https://hur.st/bloomfilter/). The
 parameter `p` corresponds to `capacity` and `p` to `fp_probability`.
 
+You can also create a Bloom filter context as code by adding it to
+`tenzir.contexts` in your `tenzir.yaml`:
+
+```yaml {0} title="<prefix>/etc/tenzir/tenzir.yaml"
+tenzir:
+  contexts:
+    my-iocs:
+      type: bloom-filter
+      arguments:
+        capacity: 1B
+        fp-probability: 0.001
+```
+
+Making changes to `arguments` of an already created context has no effect.
+
 ### `name : string`
 
 The name of the new Bloom filter.

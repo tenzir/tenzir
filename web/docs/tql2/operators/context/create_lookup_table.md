@@ -11,6 +11,16 @@ context::create_lookup_table name:string
 The `context::create_lookup_table` operator constructs a new context of type
 [lookup table](../../../enrichment/README.md#lookup-table).
 
+You can also create a lookup table as code by adding it to `tenzir.contexts` in
+your `tenzir.yaml`:
+
+```yaml {0} title="<prefix>/etc/tenzir/tenzir.yaml"
+tenzir:
+  contexts:
+    my-table:
+      type: lookup-table
+```
+
 ### `name : string`
 
 The name of the new lookup table.
