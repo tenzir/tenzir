@@ -168,6 +168,21 @@ think of it as a [lookup table](#lookup-table) without values—just keys, but
 where looking up a key may say "yes" even though the key doesn't actually exist.
 The probability of this happening is fortunately configurable.
 
+A Bloom filter has two tuning knobs:
+
+1. **Capacity**: the maximum number of items in the filter.
+2. **False-positive probability**: the chance of reporting an item not in
+   the filter.
+
+These two parameters dictate the space usage of the Bloom filter. Consult Thomas
+Hurst's [Bloom Filter Calculator](https://hur.st/bloomfilter/) for finding the
+optimal configuration for your use case.
+
+Tenzir's Bloom filter implementation is a C++ rebuild of DCSO's
+[bloom](https://github.com/DCSO/bloom) library. It is binary-compatible and uses
+the exact same method for FNV1 hashing and parameter calculation, making it a
+drop-in replacement for `bloom` users.
+
 :::tip Large Observable Sets
 Let's say you have a 10 billion SHA256 hash digests of malware samples. Your
 endpoint telemetry provides a SHA256 along with every process creation event.
