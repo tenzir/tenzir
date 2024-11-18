@@ -15,6 +15,38 @@ The `context::inspect` operator shows details about a specified context.
 
 The name of the context to inspect.
 
+### `key = expression`
+
+The field to use for the context lookup.
+
+### `into = field (optional)`
+
+The field into which to write the enrichment.
+
+Defaults to the context name (`name`).
+
+### `mode = string (optional)`
+
+The mode of the enrichment operation:
+
+- `set`: overwrites the field specified by `into`.
+- `append`: appends into the list specified by `into`. If `into` is `null` or an
+  `empty` list, a new list is created. If `into` is not a list, the enrichment
+  will fail with a warning.
+
+Defaults to `set`.
+
+### `format = string (optional)`
+
+The style of the enriched value:
+
+- `plain`: formats the enrichment as retrieved from the context.
+- `ocsf`: formats the enrichment as an [OCSF
+  Enrichment](https://schema.ocsf.io/1.4.0-dev/objects/enrichment?extensions=)
+  object with fields `data`, `provider`, `type`, and `value`.
+
+Defaults to `plain`.
+
 ## Examples
 
 ### Enrich with a lookup table
