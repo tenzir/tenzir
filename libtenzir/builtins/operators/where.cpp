@@ -164,7 +164,11 @@ public:
         co_yield {};
         continue;
       }
-      if (array->false_count() == 0) {
+      if (array->null_count() != 0) {
+        diagnostic::warning("expected `bool`, got `null`")
+          .primary(expr_)
+          .emit(ctrl.diagnostics());
+      } else if (array->false_count() == 0) {
         co_yield std::move(slice);
         continue;
       }
@@ -179,7 +183,7 @@ public:
       // We add an artificial `false` at index `length` to flush.
       auto results = std::vector<table_slice>{};
       for (auto i = int64_t{1}; i < length + 1; ++i) {
-        auto next = i != length && array->Value(i);
+        const auto next = i != length && array->IsValid(i) && array->Value(i);
         if (current_value == next) {
           continue;
         }
