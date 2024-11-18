@@ -21,7 +21,7 @@ tenzir:
       type: lookup-table
 ```
 
-### `name : string`
+### `name: string`
 
 The name of the new lookup table.
 

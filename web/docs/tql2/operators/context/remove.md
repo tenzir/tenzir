@@ -10,7 +10,7 @@ context::remove name:string
 
 The `context::remove` operator deletes the specified context.
 
-### `name : string`
+### `name: string`
 
 The name of the context to delete.
 

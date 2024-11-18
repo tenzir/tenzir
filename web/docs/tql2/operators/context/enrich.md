@@ -3,7 +3,7 @@
 Resets data with a context.
 
 ```tql
-context::enrich name:string, key=expression,
+context::enrich name:string, key=any,
                [into=field, mode=string, format=string]
 ```
 
@@ -11,11 +11,11 @@ context::enrich name:string, key=expression,
 
 The `context::inspect` operator shows details about a specified context.
 
-### `name : string`
+### `name: string`
 
 The name of the context to inspect.
 
-### `key = expression`
+### `key = any`
 
 The field to use for the context lookup.
 
