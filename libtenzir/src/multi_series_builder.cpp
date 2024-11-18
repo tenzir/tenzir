@@ -475,7 +475,7 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
     return {};
   }
   last_yield_time_ = now;
-  if (settings_.merge and not get_policy<policy_selector>()) {
+  if (uses_merging_builder()) {
     return merging_builder_.finish();
   }
   make_events_available_where(

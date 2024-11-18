@@ -82,5 +82,7 @@ public:
   std::optional<location> schema_only_;
   std::optional<located<std::string>> unnest_;
   std::optional<location> raw_;
+  std::optional<duration> timeout_;
+  std::optional<uint64_t> batch_size_;
 };
 } // namespace tenzir
