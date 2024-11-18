@@ -8,7 +8,7 @@ sidebar_custom_props:
 
 # context
 
-Manages a [context](../contexts.md).
+Manages a context.
 
 ## Synopsis
 
@@ -24,7 +24,7 @@ context inspect <name>
 
 ## Description
 
-The `context` operator manages [context](../contexts.md) instances.
+The `context` operator manages context instances.
 
 - The `create` command creates a new context with a unique name.
 
@@ -54,15 +54,13 @@ The name of the context to create, update, or delete.
 
 The context type for the new context.
 
-See the [list of available context types](../contexts.md).
-
 ### `<args>`
 
 Context-specific options in the format `--key value` or `--flag`.
 
 ## Examples
 
-Create a [lookup table](../contexts/lookup-table.md) context called `feodo`:
+Create a lookup table context called `feodo`:
 
 ```
 context create feodo lookup-table

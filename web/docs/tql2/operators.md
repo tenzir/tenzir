@@ -14,11 +14,6 @@ Operator | Description | Example
 [`enumerate`](./operators/enumerate.md) | Adds a field with the number of the event | `enumerate num`
 [`unroll`](./operators/unroll.md) | Unrolls a field of type list, duplicating the surrounding event | `unroll names` |
 
-<!--
-TODO: Do we want to document set, and if so, how?
-[`yield`]() | … | `…`
--->
-
 ## Filter
 
 Operator | Description | Example
@@ -152,15 +147,6 @@ Operator | Description | Example
 [`write_zeek_tsv`](./operators/write_zeek_tsv.md) | Writes events as Zeek TSV | `write_zeek_tsv`
 
 <!--
-## Contexts
-
-Operator | Description | Example
-:--------|:------------|:-------
-[`context::create`]() | |
-[`context::delete`]() | |
-[`context::update`]() | |
-[`context::lookup`]() | |
-
 ## Charts
 
 Operator | Description | Example
@@ -216,6 +202,27 @@ Operator | Description | Example
 :--------|:------------|:-------
 [`compress`](./operators/compress.md) | Compresses a stream of bytes | `compress "zstd", level=18`
 [`decompress`](./operators/decompress.md) | Decompresses a stream of bytes | `decompress "brotli"`
+
+## Contexts
+
+Function | Description | Example
+:--------|:------------|:-------
+[`context::create_bloom_filter`](./operators/context/create_bloom_filter.md) | Creates a Bloom filter context | `context::create_bloom_filter "ctx", capacity=1Mi, fp_probability=0.01`
+[`context::create_lookup_table`](./operators/context/create_lookup_table.md) | Creates a lookup table context | `context::create_lookup_table "ctx"`
+[`context::create_geoip`](./operators/context/create_geoip.md) | Creates a GeoIP context for IP-based geolocation | `context::create_geoip "ctx", db_path="GeoLite2-City.mmdb"`
+[`context::enrich`](./operators/context/enrich.md) | Enriches with a context | `context::enrich "ctx", key=x`
+[`context::inspect`](./operators/context/inspect.md) | Inspects the details of a specified context | `context::inspect "ctx"`
+[`context::list`](./operators/context/list.md) | Lists all contexts | `context::list`
+[`context::remove`](./operators/context/remove.md) | Deletes a context | `context::remove "ctx"`
+[`context::reset`](./operators/context/reset.md) | Resets the state of a specified context | `context::reset "ctx"`
+[`context::save`](./operators/context/save.md) | Saves context state | `context::save "ctx"`
+[`context::load`](./operators/context/load.md) | Loads context state | `context::load "ctx"`
+[`context::update`](./operators/context/update.md) | Updates an existing context with new data | `context::update "ctx", key=x, value=y`
+
+<!--
+TBD: new name
+[`context::lookup`]() | |
+-->
 
 ## Packages
 

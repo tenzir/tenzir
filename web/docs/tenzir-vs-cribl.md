@@ -117,7 +117,8 @@ Cribl Stream has the following pipeline
 - Tenzir operators can leverage other abstractions
   - [Connectors](connectors.md): loads or saves bytes from a remote resource
   - [Formats](formats.md): parse or print data
-  - [Contexts](contexts.md): stateful objects for enrichment/contextualization
+  - **Contexts**: stateful objects for
+    [enrichment/contextualization](enrichment/README.md)
 - Tenzir [connectors](connectors.md) and [formats](formats.md) can be used from
   various operators, such as [`load`](operators/load.md),
   [`from`](operators/from.md), [`save`](operators/save.md),
@@ -375,8 +376,8 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 
 #### Tenzir
 
-- [Contexts](contexts.md) are stateful objects usable for enrichment with the
-  [`enrich`](operators/enrich.md) operator.
+- Contexts are stateful objects usable for [enrichment](enrichment/README.md)
+  with the [`enrich`](operators/enrich.md) operator.
 - There exist several context types, such as lookup tables, Bloom filters, GeoIP
   databases, or user-written C++ plugins.
 - Contexts are not static and limited to CSV or MMDB files; you can add data
@@ -408,7 +409,7 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 
 - A [library](https://app.tenzir.com/library) is a set of
   [packages](packages.md).
-- Packages can include [pipelines](pipelines.md) and [contexts](contexts.md).
+- Packages can include [pipelines](pipelines.md) and contexts.
 - Tenzir maintains an open source [Community
   Library](https://github.com/tenzir/library) on GitHub.
 - The Professional Edition and Enterprise Edition support managing custom
