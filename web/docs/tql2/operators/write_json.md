@@ -3,16 +3,12 @@
 Transforms the input event stream to JSON byte stream.
 
 ```tql
-write_json [ndjson=bool, color=bool]
+write_json [color=bool]
 ```
 
 ## Description
 
 Transforms the input event stream to JSON byte stream.
-
-### `ndjson = bool (optional)`
-
-Whether to write newline-delimited JSON output (NDJSON/JSONL).
 
 ### `color = bool (optional)`
 

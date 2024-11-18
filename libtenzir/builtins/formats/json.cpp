@@ -1314,7 +1314,6 @@ public:
     auto args = printer_args{};
     TRY(argument_parser2::operator_("write_json")
           // TODO: Perhaps "indent=0"?
-          .add("ndjson", args.compact_output)
           .add("color", args.color_output)
           .parse(inv, ctx));
     return std::make_unique<write_json>(args);
