@@ -505,26 +505,6 @@ public:
     ++latest.line_count;
   }
 
-  auto finish_all_but_last(multi_series_builder& builder) -> void {
-    for (auto& row : std::views::take(rows_, rows_.size() - 1)) {
-      if (not finish_single(row, builder)) {
-        return;
-      }
-    }
-    if (not rows_.empty()) {
-      rows_.erase(rows_.begin(), rows_.end() - 1);
-    }
-  }
-
-  auto finish_all(multi_series_builder& builder) -> void {
-    for (auto& row : rows_) {
-      if (not finish_single(row, builder)) {
-        return;
-      }
-    }
-    rows_.clear();
-  }
-
   static auto
   finish_single(row_type& row, multi_series_builder& builder) -> bool {
     auto& msg = row.parsed;
@@ -591,14 +571,12 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   const auto finish_all = [&]() {
     return std::visit(
       [&](auto& b) {
-        for (auto& row : std::views::take(b.rows_, b.rows_.size() - 1)) {
+        for (auto& row : b.rows_) {
           if (not b.finish_single(row, msb)) {
             return;
           }
         }
-        if (not b.rows_.empty()) {
-          b.rows_.erase(b.rows_.begin(), b.rows_.end() - 1);
-        }
+        b.rows_.clear();
       },
       builder);
   };
@@ -608,12 +586,14 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   const auto finish_all_but_last = [&]() {
     return std::visit(
       [&](auto& b) {
-        for (auto& row : b.rows_) {
+        for (auto& row : std::views::take(b.rows_, b.rows_.size() - 1)) {
           if (not b.finish_single(row, msb)) {
             return;
           }
         }
-        b.rows_.clear();
+        if (not b.rows_.empty()) {
+          b.rows_.erase(b.rows_.begin(), b.rows_.end() - 1);
+        }
       },
       builder);
   };
@@ -645,9 +625,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     for (auto&& slice : msb.yield_ready_as_table_slice()) {
       co_yield std::move(slice);
     }
-    // we need our own timeout logic here, because we dont directly write events
+    // We need our own timeout logic here, because we dont directly write events
     // into the MSB. Only on a `finish_all` or `finish_all_but_last` call events
-    // are actually written into the MSB
+    // are actually written into the MSB.
     auto now = time::clock::now();
     if (now - last_finish > timeout) {
       finish_all_but_last();
