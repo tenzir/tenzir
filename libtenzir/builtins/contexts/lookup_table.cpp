@@ -304,7 +304,7 @@ public:
         builder.data(entry->raw_data);
         continue;
       }
-      if (replace and not caf::holds_alternative<caf::none_t>(value)) {
+      if (replace and not is<caf::none_t>(value)) {
         builder.data(value);
         continue;
       }
@@ -491,7 +491,7 @@ public:
     auto key_values_list = list{};
     if (erase) {
       // Subnets never make it into the regular map of entries.
-      if (caf::holds_alternative<subnet_type>(key_type)) {
+      if (is<subnet_type>(key_type)) {
         for (const auto& key :
              values(subnet_type{},
                     as<tenzir::subnet_type::array_type>(*key_array))) {
@@ -520,7 +520,7 @@ public:
       value_val.raw_data = materialize(*context_it);
       auto materialized_key = materialize(*key_it);
       // Subnets never make it into the regular map of entries.
-      if (caf::holds_alternative<subnet_type>(key_type)) {
+      if (is<subnet_type>(key_type)) {
         const auto& key = as<tenzir::subnet>(materialized_key);
         subnet_entries.insert(key, std::move(value_val));
       } else {
