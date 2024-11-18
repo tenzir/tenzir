@@ -45,6 +45,7 @@ context::inspect "ctx"
 [`context::create_geoip`](create_geoip.md),
 [`context::create_lookup_table`](create_lookup_table.md),
 [`context::enrich`](enrich.md),
+[`context::list`](list.md),
 [`context::load`](load.md),
 [`context::remove`](remove.md),
 [`context::reset`](reset.md),

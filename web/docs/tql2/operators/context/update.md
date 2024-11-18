@@ -102,6 +102,7 @@ context::update "ctx", key=x, value=x*x
 [`context::create_lookup_table`](create_lookup_table.md),
 [`context::enrich`](enrich.md),
 [`context::inspect`](inspect.md),
+[`context::list`](list.md),
 [`context::load`](load.md),
 [`context::remove`](remove.md),
 [`context::reset`](reset.md),

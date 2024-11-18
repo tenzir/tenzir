@@ -207,16 +207,17 @@ Operator | Description | Example
 
 Function | Description | Example
 :--------|:------------|:-------
-[`context::create_lookup_table`](./operators/context/create_lookup_table.md) | Creates a lookup table context | `context::create_lookup_table "ctx"`
 [`context::create_bloom_filter`](./operators/context/create_bloom_filter.md) | Creates a Bloom filter context | `context::create_bloom_filter "ctx", capacity=1Mi, fp_probability=0.01`
+[`context::create_lookup_table`](./operators/context/create_lookup_table.md) | Creates a lookup table context | `context::create_lookup_table "ctx"`
 [`context::create_geoip`](./operators/context/create_geoip.md) | Creates a GeoIP context for IP-based geolocation | `context::create_geoip "ctx", db_path="GeoLite2-City.mmdb"`
-[`context::enrich`](./operators/context/enrich.md) | Enriches with a | `context::enrich "ctx", key=x`
+[`context::enrich`](./operators/context/enrich.md) | Enriches with a context | `context::enrich "ctx", key=x`
+[`context::inspect`](./operators/context/inspect.md) | Inspects the details of a specified context | `context::inspect "ctx"`
+[`context::list`](./operators/context/list.md) | Lists all contexts | `context::list`
 [`context::remove`](./operators/context/remove.md) | Deletes a context | `context::remove "ctx"`
-[`context::update`](./operators/context/update.md) | Updates an existing context with new data | `context::update "ctx", key=x, value=y`
 [`context::reset`](./operators/context/reset.md) | Resets the state of a specified context | `context::reset "ctx"`
 [`context::save`](./operators/context/save.md) | Saves context state | `context::save "ctx"`
 [`context::load`](./operators/context/load.md) | Loads context state | `context::load "ctx"`
-[`context::inspect`](./operators/context/inspect.md) | Inspects the details of a specified context | `context::inspect "ctx"`
+[`context::update`](./operators/context/update.md) | Updates an existing context with new data | `context::update "ctx", key=x, value=y`
 
 <!--
 TBD: new name

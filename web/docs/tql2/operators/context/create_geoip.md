@@ -62,6 +62,7 @@ context::load "ctx"
 [`context::create_bloom_filter`](create_bloom_filter.md),
 [`context::enrich`](enrich.md),
 [`context::inspect`](inspect.md),
+[`context::list`](list.md),
 [`context::load`](load.md),
 [`context::remove`](remove.md),
 [`context::reset`](update.md),

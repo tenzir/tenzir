@@ -25,11 +25,12 @@ context::reset "ctx"
 
 ## See Also
 
-[`context::create_lookup_table`](create_lookup_table.md),
 [`context::create_bloom_filter`](create_bloom_filter.md),
 [`context::create_geoip`](create_geoip.md),
-[`context::remove`](remove.md),
-[`context::update`](update.md),
+[`context::create_lookup_table`](create_lookup_table.md),
 [`context::inspect`](inspect.md),
+[`context::list`](list.md),
+[`context::load`](load.md),
+[`context::remove`](remove.md),
 [`context::save`](save.md),
-[`context::load`](load.md)
+[`context::update`](update.md)

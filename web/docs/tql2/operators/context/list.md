@@ -1,28 +1,23 @@
-# save
+# list
 
-Saves context state.
+Lists all contexts
 
 ```tql
-context::save name:string
+context::list
 ```
 
 ## Description
 
-The `context::save` operator dumps the state of the specified context into its
-(binary) output.
-
-### `name : string`
-
-The name of the context whose state to save.
+The `context::list` operator retrieves all contexts.
 
 ## Examples
 
-### Store the database of a GeoIP context
+### Show all contexts
 
 ```tql
-context::save "ctx"
-save_file "snapshot.mmdb"
+context::list
 ```
+
 ## See Also
 
 [`context::create_bloom_filter`](create_bloom_filter.md),
@@ -34,4 +29,5 @@ save_file "snapshot.mmdb"
 [`context::load`](load.md),
 [`context::remove`](remove.md),
 [`context::reset`](reset.md),
+[`context::save`](save.md),
 [`context::update`](update.md)

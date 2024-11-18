@@ -30,6 +30,7 @@ context::load "ctx"
 [`context::create_lookup_table`](create_lookup_table.md),
 [`context::enrich`](enrich.md),
 [`context::inspect`](inspect.md),
+[`context::list`](list.md),
 [`context::remove`](remove.md),
 [`context::reset`](reset.md),
 [`context::save`](save.md),

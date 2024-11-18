@@ -39,6 +39,7 @@ context::create_lookup_table "ctx"
 [`context::create_geoip`](create_geoip.md),
 [`context::enrich`](enrich.md),
 [`context::inspect`](inspect.md),
+[`context::list`](list.md),
 [`context::load`](load.md),
 [`context::remove`](remove.md),
 [`context::reset`](update.md),
