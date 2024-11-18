@@ -15,6 +15,8 @@ find_package(Tenzir REQUIRED)
 TenzirRegisterPlugin(
   TARGET nic
   ENTRYPOINT src/plugin.cpp
+  INCLUDE_DIRECTORIES include
+  BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
   DEPENDENCIES pcap)
 
 # Link nic plugin against libpcap.
