@@ -80,6 +80,8 @@ auto multi_series_builder_argument_parser::add_settings_to_parser(
   if (add_unflatten_option) {
     parser.add("unflatten", unnest_);
   }
+  parser.add("_timeout", timeout_);
+  parser.add("_batch_size", batch_size_);
 }
 
 auto multi_series_builder_argument_parser::add_policy_to_parser(
@@ -154,6 +156,12 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
     settings_.unnest_separator = unnest_->inner;
   }
   settings_.raw = raw_.has_value();
+  if (timeout_.has_value()) {
+    settings_.timeout = *timeout_;
+  }
+  if (batch_size_.has_value()) {
+    settings_.desired_batch_size = *batch_size_;
+  }
   return true;
 }
 

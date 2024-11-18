@@ -467,27 +467,6 @@ public:
     ++latest.line_count;
   }
 
-  auto finish_all_but_last(multi_series_builder& builder) -> void {
-    for (auto& row : std::views::take(rows_, rows_.size() - 1)) {
-      if (not finish_single(row, builder)) {
-        return;
-      }
-    }
-    if (not rows_.empty()) {
-      rows_.erase(rows_.begin(), rows_.end() - 1);
-    }
-  }
-
-  auto finish_all(multi_series_builder& builder) -> void {
-    for (auto& row : rows_) {
-      if (not finish_single(row, builder)) {
-        return;
-      }
-    }
-    rows_.clear();
-  }
-
-private:
   static auto
   finish_single(row_type& row, multi_series_builder& builder) -> bool {
     auto r = builder.record();
@@ -546,7 +525,6 @@ public:
     rows_.clear();
   }
 
-private:
   static auto
   finish_single(row_type& row, multi_series_builder& builder) -> bool {
     auto& msg = row.parsed;
@@ -588,17 +566,11 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  auto finish_all(multi_series_builder& builder) -> void {
-    for (auto& row : rows_) {
-      auto r = builder.record();
-      // Adding a `syslog.unknown` can never fail,
-      // it's just a field containing a string.
-      r.exact_field("syslog_message").data(std::move(row));
-    }
-    rows_.clear();
+  static auto finish_single(message_type& row, multi_series_builder& msb) {
+    msb.record().exact_field("syslog_message").data(std::move(row));
+    return true;
   }
 
-private:
   std::vector<std::string> rows_;
 };
 
@@ -612,14 +584,40 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       diag.message = fmt::format("syslog parser: {}", diag.message);
       return diag;
     }};
+  const auto timeout = opts.settings.timeout;
   auto msb = multi_series_builder{std::move(opts), dh};
+  // This will be called when switching the builder and at the very end of
+  // execution
   const auto finish_all = [&]() {
     return std::visit(
       [&](auto& b) {
-        return b.finish_all(msb);
+        for (auto& row : std::views::take(b.rows_, b.rows_.size() - 1)) {
+          if (not b.finish_single(row, msb)) {
+            return;
+          }
+        }
+        if (not b.rows_.empty()) {
+          b.rows_.erase(b.rows_.begin(), b.rows_.end() - 1);
+        }
       },
       builder);
   };
+  // This will be called periodically to move events from the syslog aggregator
+  // into the multi_series_builder. It doesnt finish the last event, because the
+  // next line *may* be a continuation of the previous message
+  const auto finish_all_but_last = [&]() {
+    return std::visit(
+      [&](auto& b) {
+        for (auto& row : b.rows_) {
+          if (not b.finish_single(row, msb)) {
+            return;
+          }
+        }
+        b.rows_.clear();
+      },
+      builder);
+  };
+  // adds a new event to the currently active syslog builder
   const auto add_new = [&]<typename Message>(Message&& msg, size_t line_no) {
     std::visit(
       [&]<typename Builder>(Builder& b) {
@@ -633,6 +631,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       },
       builder);
   };
+  // changes the currently active syslog builder
   const auto change_builder = [&]<typename Builder>(tag<Builder>) {
     if (std::holds_alternative<Builder>(builder)) {
       return;
@@ -641,9 +640,18 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     builder.template emplace<Builder>();
   };
   auto line_nr = size_t{0};
+  auto last_finish = time::clock::now();
   for (auto&& line : lines) {
     for (auto&& slice : msb.yield_ready_as_table_slice()) {
       co_yield std::move(slice);
+    }
+    // we need our own timeout logic here, because we dont directly write events
+    // into the MSB. Only on a `finish_all` or `finish_all_but_last` call events
+    // are actually written into the MSB
+    auto now = time::clock::now();
+    if (now - last_finish > timeout) {
+      finish_all_but_last();
+      last_finish = now;
     }
     if (not line) {
       co_yield {};
