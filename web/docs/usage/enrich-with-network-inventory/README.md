@@ -67,18 +67,18 @@ Suricata flow record:
   "dest_port": 53,
   "proto": "UDP",
   "event_type": "flow",
-  "app_proto": "dns",
+  "app_proto": "dns"
 }
 ```
 
-Let's use the `enrich` operator to add the subnet context to all IP address
+Let's use the `enrich` operator to add the subnet context to the two IP address
 fields:
 
 ```
 load_file "/tmp/sample.json"
 read_json
-context::enrich "subnets", key=src_ip
-context::enrich "subnets", key=dest_ip
+context::enrich "subnets", key=src_ip, into=src_ip_context
+context::enrich "subnets", key=dest_ip, into=dest_ip_context
 ```
 
 This yields the following output:
