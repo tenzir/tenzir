@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 
 # The AWS SDK Git version tag.
-TAG=1.11.261
+TAG=1.11.449
 
 # Where to install the SDK.
 INSTALL_PREFIX="/opt/aws-sdk-cpp"
