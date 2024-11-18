@@ -62,7 +62,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
     // the catalog, but for the active partition we create an ad-hoc time
     // synopsis here to do the lookup.
     if constexpr (std::is_same_v<PartitionState, active_partition_state>) {
-      if (const auto* t = caf::get_if<time>(&x)) {
+      if (const auto* t = try_as<time>(&x)) {
         auto ts = time_synopsis{
           state.data.synopsis->min_import_time,
           state.data.synopsis->max_import_time,
@@ -140,7 +140,7 @@ evaluate(const PartitionState& state, const expression& expr) {
     };
     // Package the predicate, its position in the query and the required
     // INDEXER as a "job description". INDEXER can be nullptr
-    auto hdl = caf::visit(v, predicate.lhs, predicate.rhs);
+    auto hdl = match(std::tie(predicate.lhs, predicate.rhs), v);
     result.emplace_back(std::move(offset), curried(predicate), std::move(hdl));
   }
   // Return the list of jobs, to be used by the EVALUATOR.

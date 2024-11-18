@@ -14,9 +14,11 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/type.hpp>
 
 #include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
@@ -26,6 +28,56 @@
 namespace tenzir::plugins::sort {
 
 namespace {
+
+auto sort_list(const series& input) -> series {
+  auto builder = series_builder{input.type};
+  for (const auto& value :
+       values(as<list_type>(input.type), as<arrow::ListArray>(*input.array))) {
+    if (not value) {
+      builder.null();
+      continue;
+    }
+    auto materialized = materialize(*value);
+    std::ranges::sort(materialized);
+    builder.data(materialized);
+  }
+  return builder.finish_assert_one_array();
+}
+
+auto sort_record(const arrow::StructArray& array)
+  -> std::shared_ptr<arrow::StructArray> {
+  auto fields = array.struct_type()->fields();
+  auto arrays = array.fields();
+  struct kv_pair {
+    std::shared_ptr<arrow::Field> key;
+    std::shared_ptr<arrow::Array> value;
+
+    auto name() const -> std::string_view {
+      return key->name();
+    }
+  };
+  auto data = std::vector<kv_pair>(fields.size());
+  for (size_t i = 0; i < data.size(); ++i) {
+    data[i] = {std::move(fields[i]), std::move(arrays[i])};
+  }
+  std::ranges::sort(data, std::less<>{}, &kv_pair::name);
+  for (size_t i = 0; i < data.size(); ++i) {
+    fields[i] = std::move(data[i].key);
+    arrays[i] = std::move(data[i].value);
+  }
+  return std::make_shared<arrow::StructArray>(
+    arrow::struct_(fields), array.length(), std::move(arrays),
+    array.null_bitmap(), array.null_count(), array.offset());
+}
+
+auto sort_record(const series& input) -> series {
+  auto array = sort_record(as<arrow::StructArray>(*input.array));
+  auto type = type::from_arrow(*array->struct_type());
+  return series{
+    std::move(type),
+    std::move(array),
+  };
+}
 
 class sort_state {
 public:
@@ -115,8 +167,8 @@ private:
       return key_path->second;
     }
     auto current_key_type
-      = caf::get<record_type>(schema).field(*key_path->second).type.prune();
-    if (caf::holds_alternative<subnet_type>(current_key_type)) {
+      = as<record_type>(schema).field(*key_path->second).type.prune();
+    if (is<subnet_type>(current_key_type)) {
       // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
       // supported for extension types. We can fall back to the storage array
       // for all types but subnet, which has a nested extension type.
@@ -181,8 +233,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto options = arrow::compute::ArraySortOptions::Defaults();
     options.order = descending_ ? arrow::compute::SortOrder::Descending
                                 : arrow::compute::SortOrder::Ascending;
@@ -227,8 +279,8 @@ public:
     return "sort";
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     return optimize_result{filter, stable_ ? order : event_order::unordered,
                            copy()};
   }
@@ -347,8 +399,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto events = std::vector<table_slice>{};
     auto indices = std::vector<sort_index>{};
     auto sort_keys = std::vector<sort_key>{};
@@ -428,10 +480,10 @@ public:
             return lhs_value.index() < rhs_value.index();
           },
         };
-        if (caf::visit(cmp, lhs_value, rhs_value)) {
+        if (match(std::tie(lhs_value, rhs_value), cmp)) {
           return not sort_key.reverse;
         }
-        if (caf::visit(cmp, rhs_value, lhs_value)) {
+        if (match(std::tie(rhs_value, lhs_value), cmp)) {
           return sort_key.reverse;
         }
       }
@@ -456,8 +508,8 @@ public:
     }
   }
 
-  auto optimize(const expression& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
     // Our upstream can always be unordered. If our downstream did already not
     // care about ordering, we can skip sorting entirely.
     return optimize_result{
@@ -475,10 +527,11 @@ private:
   std::vector<sort_expression> sort_exprs_ = {};
 };
 
-class plugin2 final : public virtual operator_plugin2<sort_operator2> {
+class plugin2 final : public virtual operator_plugin2<sort_operator2>,
+                      public virtual function_plugin {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(operator_factory_plugin::invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(ctx);
     if (inv.args.empty()) {
       return std::make_unique<sort_operator2>(std::vector<sort_expression>{{
@@ -503,6 +556,35 @@ public:
     std::ranges::transform(inv.args, std::back_inserter(sort_exprs),
                            make_sort_key);
     return std::make_unique<sort_operator2>(std::move(sort_exprs));
+  }
+
+  auto make_function(function_plugin::invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
+    return function_use::make(
+      [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
+        auto arg = eval(expr);
+        auto f = detail::overload{
+          [&](const arrow::NullArray&) {
+            return arg;
+          },
+          [&](const arrow::ListArray&) {
+            return sort_list(arg);
+          },
+          [&](const arrow::StructArray&) {
+            return sort_record(arg);
+          },
+          [&](const auto&) {
+            diagnostic::warning("`sort` expected `record` or `list`, got `{}`",
+                                arg.type.kind())
+              .primary(call)
+              .emit(ctx);
+            return series::null(null_type{}, arg.length());
+          },
+        };
+        return match(*arg.array, f);
+      });
   }
 };
 

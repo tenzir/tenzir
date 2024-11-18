@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/detail/posix.hpp>
@@ -298,8 +300,41 @@ public:
   }
 };
 
+class load_plugin final
+  : public virtual operator_plugin2<loader_adapter<loader>> {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = loader_args{};
+    auto parser = argument_parser2::operator_(name());
+    parser.add(args.url, "<endpoint>");
+    parser.add("connect", args.connect);
+    parser.add("insert_newlines", args.insert_newlines);
+    TRY(parser.parse(inv, ctx));
+    if (not args.url.starts_with("udp://")) {
+      args.url.insert(0, "udp://");
+    }
+    return std::make_unique<loader_adapter<loader>>(loader{std::move(args)});
+  }
+};
+
+class save_plugin final
+  : public virtual operator_plugin2<saver_adapter<saver>> {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = saver_args{};
+    auto parser = argument_parser2::operator_(name());
+    parser.add(args.url, "<endpoint>");
+    TRY(parser.parse(inv, ctx));
+    if (not args.url.starts_with("udp://")) {
+      args.url.insert(0, "udp://");
+    }
+    return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
+  }
+};
 } // namespace
 
 } // namespace tenzir::plugins::udp
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::udp::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::udp::load_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::udp::save_plugin)

@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/aggregation_function.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -30,17 +32,17 @@ private:
 
   auto add(const data_view& view) -> void override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
-    result_.push_back(materialize(caf::get<view_type>(view)));
+    result_.push_back(materialize(as<view_type>(view)));
   }
 
   auto add(const arrow::Array& array) -> void override {
-    const auto& typed_array = caf::get<type_to_arrow_array_t<Type>>(array);
+    const auto& typed_array = as<type_to_arrow_array_t<Type>>(array);
     result_.reserve(result_.size()
                     + (typed_array.length() - typed_array.null_count()));
-    for (auto&& value : values(caf::get<Type>(input_type()), typed_array)) {
+    for (auto&& value : values(as<Type>(input_type()), typed_array)) {
       if (not value) {
         continue;
       }
@@ -62,7 +64,7 @@ public:
 
   auto update(const table_slice& input, session ctx) -> void override {
     auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
+    if (is<null_type>(arg.type)) {
       return;
     }
     // NOTE: Currently, different types end up coerced to strings.
@@ -74,8 +76,58 @@ public:
     }
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     return result_;
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    auto offsets = std::vector<flatbuffers::Offset<fbs::Data>>{};
+    offsets.reserve(result_.size());
+    for (const auto& element : result_) {
+      offsets.push_back(pack(fbb, element));
+    }
+    const auto fb_result = fbb.CreateVector(offsets);
+    const auto fb_min_max
+      = fbs::aggregation::CreateCollectDistinct(fbb, fb_result);
+    fbb.Finish(fb_min_max);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::CollectDistinct>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `collect` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_result = (*fb)->result();
+    if (not fb_result) {
+      diagnostic::warning("missing field `result`")
+        .note("failed to restore `collect` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    result_.clear();
+    result_.reserve(fb_result->size());
+    for (const auto* fb_element : *fb_result) {
+      if (not fb_element) {
+        diagnostic::warning("missing element in field `result`")
+          .note("failed to restore `collect` aggregation instance")
+          .emit(ctx);
+        return;
+      }
+      auto element = data{};
+      if (auto err = unpack(*fb_element, element)) {
+        diagnostic::warning("{}", err)
+          .note("failed to restore `collect` aggregation instance")
+          .emit(ctx);
+        return;
+      }
+      result_.push_back(std::move(element));
+    }
   }
 
 private:
@@ -95,7 +147,7 @@ class plugin : public virtual aggregation_function_plugin,
                const Type&) -> std::unique_ptr<aggregation_function> {
       return std::make_unique<collect_function<Type>>(input_type);
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto make_aggregation(invocation inv, session ctx) const

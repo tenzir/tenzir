@@ -153,7 +153,7 @@ public:
     -> table_slice {
     if (slice.rows() == 0)
       return {};
-    const auto& layout = caf::get<record_type>(slice.schema());
+    const auto& layout = as<record_type>(slice.schema());
     auto transformations1 = std::vector<indexed_transformation>{};
     auto transformations2 = std::vector<indexed_transformation>{};
     auto replace_schema_name = std::optional<std::string>{};
@@ -169,8 +169,7 @@ public:
         std::erase_if(modified_config.extractor_to_operand, [&](const auto& x) {
           const auto& [extractor, operand] = x;
           if (extractor == "#schema") {
-            replace_schema_name
-              = caf::get<std::string>(caf::get<data>(*operand));
+            replace_schema_name = as<std::string>(as<data>(*operand));
             return true;
           }
           return false;
@@ -220,8 +219,7 @@ public:
         for (const auto& [extractor, operand] : config_.extractor_to_operand) {
           if (extractor == "#schema") {
             TENZIR_ASSERT(operand);
-            replace_schema_name
-              = caf::get<std::string>(caf::get<data>(*operand));
+            replace_schema_name = as<std::string>(as<data>(*operand));
             continue;
           }
           if (not operand) {
@@ -273,7 +271,7 @@ public:
       result = cast(result, type{*replace_schema_name, result.schema()});
     } else if (Mode == mode::put) {
       auto renamed_schema
-        = type{"tenzir.put", caf::get<record_type>(result.schema())};
+        = type{"tenzir.put", as<record_type>(result.schema())};
       result = cast(std::move(result), renamed_schema);
     }
     return result;
@@ -331,9 +329,8 @@ public:
         if constexpr (Mode != mode::extend) {
           auto* op_ptr = op ? &*op : nullptr;
           // FIXME: Chaining `caf::get_if` leads to a segfault.
-          auto* data_ptr = op_ptr ? caf::get_if<data>(op_ptr) : nullptr;
-          auto* str_ptr
-            = data_ptr ? caf::get_if<std::string>(data_ptr) : nullptr;
+          auto* data_ptr = op_ptr ? try_as<data>(op_ptr) : nullptr;
+          auto* str_ptr = data_ptr ? try_as<std::string>(data_ptr) : nullptr;
           if (not str_ptr) {
             return {
               std::string_view{f, l},

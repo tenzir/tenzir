@@ -23,9 +23,6 @@
 #include <typeindex>
 #include <utility>
 
-using caf::get_if;
-using caf::holds_alternative;
-using caf::visit;
 using namespace std::string_view_literals;
 
 namespace tenzir {
@@ -221,8 +218,8 @@ merge(const legacy_record_type& lhs, const legacy_record_type& rhs) {
         it != result.fields.begin() + lhs.fields.size()) {
       if (it->type == rfield.type)
         continue;
-      const auto* lrec = caf::get_if<legacy_record_type>(&it->type);
-      const auto* rrec = caf::get_if<legacy_record_type>(&rfield.type);
+      const auto* lrec = try_as<legacy_record_type>(&it->type);
+      const auto* rrec = try_as<legacy_record_type>(&rfield.type);
       if (!(rrec && lrec))
         return caf::make_error(ec::convert_error, //
                                fmt::format("failed to merge {} and {} because "
@@ -257,8 +254,8 @@ priority_merge(const legacy_record_type& lhs, const legacy_record_type& rhs,
         it != result.fields.begin() + lhs.fields.size()) {
       if (it->type == rfield.type)
         continue;
-      const auto* lrec = caf::get_if<legacy_record_type>(&it->type);
-      const auto* rrec = caf::get_if<legacy_record_type>(&rfield.type);
+      const auto* lrec = try_as<legacy_record_type>(&it->type);
+      const auto* rrec = try_as<legacy_record_type>(&rfield.type);
       if (rrec && lrec)
         it->type = priority_merge(*lrec, *rrec, p);
       else if (p == merge_policy::prefer_right)
@@ -285,7 +282,7 @@ remove_field(const legacy_record_type& r, std::vector<std::string_view> path) {
     if (f.name == path.front()) {
       if (path.size() > 1) {
         path.erase(path.begin());
-        const auto* field_rec = caf::get_if<legacy_record_type>(&f.type);
+        const auto* field_rec = try_as<legacy_record_type>(&f.type);
         if (!field_rec)
           return std::nullopt;
         auto new_rec = remove_field(*field_rec, path);
@@ -314,7 +311,7 @@ remove_field(const legacy_record_type& r, offset o) {
     if (&f == &field) {
       if (o.size() > 1) {
         o.erase(o.begin());
-        const auto* field_rec = caf::get_if<legacy_record_type>(&field.type);
+        const auto* field_rec = try_as<legacy_record_type>(&field.type);
         if (!field_rec)
           return {};
         auto new_rec = remove_field(*field_rec, std::move(o));

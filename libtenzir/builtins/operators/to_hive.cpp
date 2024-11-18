@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/url.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -17,12 +18,6 @@
 #include <ranges>
 
 // TODO: This implementation is a rough sketch and needs some cleanup eventually.
-
-template <>
-struct fmt::formatter<boost::urls::url> : fmt::ostream_formatter {};
-
-template <>
-struct fmt::formatter<boost::urls::url_view> : fmt::ostream_formatter {};
 
 namespace tenzir::plugins::to_hive {
 
@@ -244,7 +239,7 @@ public:
           TENZIR_TRACE("creating group for: {}", key_data);
           auto relative_path = std::string{};
           for (auto [sel, data] :
-               detail::zip_equal(args_.by, caf::get<list>(key_data))) {
+               detail::zip_equal(args_.by, as<list>(key_data))) {
             auto f = detail::overload{
               [](int64_t x) {
                 return fmt::to_string(x);
@@ -258,7 +253,7 @@ public:
               },
             };
             relative_path += fmt::format("/{}={}", selector_to_name(sel),
-                                         caf::visit(f, data));
+                                         match(data, f));
           }
           relative_path += fmt::format("/{}.{}", next_id, args_.extension);
           next_id += 1;
@@ -346,6 +341,10 @@ public:
     return "to_hive";
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     TENZIR_UNUSED(filter, order);
@@ -387,7 +386,14 @@ public:
     auto by = std::vector<ast::simple_selector>{};
     by.reserve(by_list->items.size());
     for (auto& item : by_list->items) {
-      auto sel = ast::simple_selector::try_from(item);
+      auto expr = std::get_if<ast::expression>(&item);
+      if (not expr) {
+        diagnostic::error("expected a selector")
+          .primary(into_location(item))
+          .emit(ctx);
+        return failure::promise();
+      }
+      auto sel = ast::simple_selector::try_from(*expr);
       if (not sel) {
         diagnostic::error("expected a selector").primary(item).emit(ctx);
         return failure::promise();

@@ -31,8 +31,7 @@ Use with caution.
 
 ### `schema = str (optional)`
 
-Provide the name of a [schema](../../data-model/schemas.md) to be used by the
-parser.
+Provide the name of a schema to be used by the parser.
 
 If a schema with a matching name is installed, the result will always have
 all fields from that schema.
@@ -46,10 +45,9 @@ The `schema` option is incompatible with the `selector` option.
 
 ### `selector = str (optional)`
 
-Designates a field value as [schema](../../data-model/schemas.md) name with an
-optional dot-separated prefix.
+Designates a field value as schema name with an optional dot-separated prefix.
 
-The string is parsed as `<filename>[:<prefix>]`. The `prefix` is optional and
+The string is parsed as `<fieldname>[:<prefix>]`. The `prefix` is optional and
 will be prepended to the field value to generate the schema name.
 
 For example, the Suricata EVE JSON format includes a field
@@ -106,28 +104,28 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 ### Read a newline-delimited JSON file
 
 ```json title="versions.json"
-{ "product": "Tenzir", "version.major": 4, "version.minor": 22 }
-{ "product": "Tenzir", "version.major": 4, "version.minor": 21 }
+{"product": "Tenzir", "version.major": 4, "version.minor": 22}
+{"product": "Tenzir", "version.major": 4, "version.minor": 21}
 ```
 
-```tql title="Pipeline"
+```tql
 load_file "versions.json"
 read_ndjson unflatten="."
 ```
 
-```json title="Output"
+```tql
 {
-  "product": "Tenzir",
-  "version": {
-    "major": 4,
-    "minor": 22
+  product: "Tenzir",
+  version: {
+    major: 4,
+    minor: 22,
   }
 }
 {
-  "product": "Tenzir",
-  "version": {
-    "major": 4,
-    "minor": 21
+  product: "Tenzir",
+  version: {
+    major: 4,
+    minor: 21,
   }
 }
 ```

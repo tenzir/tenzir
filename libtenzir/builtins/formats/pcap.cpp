@@ -17,6 +17,7 @@
 #include <tenzir/pcapng.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/view.hpp>
 
@@ -245,8 +246,7 @@ public:
         } else {
           die("invalid magic number"); // validated earlier
         }
-        const auto* ptr = reinterpret_cast<const char*>(packet.data.data());
-        auto data = std::string_view{ptr, packet.data.size()};
+        auto data = view<blob>{packet.data.data(), packet.data.size()};
         if (!(builder.add(input_file_header.linktype & 0x0000FFFF)
               && builder.add(timestamp)
               && builder.add(packet.header.captured_packet_length)
@@ -284,7 +284,7 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
     return std::nullopt;
   }
   auto result = file_header{};
-  const auto& input_record = caf::get<record_type>(slice.schema());
+  const auto& input_record = as<record_type>(slice.schema());
   auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
   auto xs = values(input_record, *array);
   auto begin = xs.begin();
@@ -295,43 +295,43 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
     // TODO: Make this more robust, and give a helpful error message if the
     // types are not as expected. This also applies to `to_packet_record`.
     if (key == "magic_number") {
-      auto magic_number = caf::get_if<uint64_t>(&value);
+      auto magic_number = try_as<uint64_t>(&value);
       TENZIR_ASSERT(magic_number);
       result.magic_number = detail::narrow_cast<uint32_t>(*magic_number);
       continue;
     }
     if (key == "major_version") {
-      auto major_version = caf::get_if<uint64_t>(&value);
+      auto major_version = try_as<uint64_t>(&value);
       TENZIR_ASSERT(major_version);
       result.major_version = detail::narrow_cast<uint16_t>(*major_version);
       continue;
     }
     if (key == "minor_version") {
-      auto minor_version = caf::get_if<uint64_t>(&value);
+      auto minor_version = try_as<uint64_t>(&value);
       TENZIR_ASSERT(minor_version);
       result.minor_version = detail::narrow_cast<uint16_t>(*minor_version);
       continue;
     }
     if (key == "reserved1") {
-      auto reserved1 = caf::get_if<uint64_t>(&value);
+      auto reserved1 = try_as<uint64_t>(&value);
       TENZIR_ASSERT(reserved1);
       result.reserved1 = detail::narrow_cast<uint32_t>(*reserved1);
       continue;
     }
     if (key == "reserved2") {
-      auto reserved2 = caf::get_if<uint64_t>(&value);
+      auto reserved2 = try_as<uint64_t>(&value);
       TENZIR_ASSERT(reserved2);
       result.reserved2 = detail::narrow_cast<uint32_t>(*reserved2);
       continue;
     }
     if (key == "snaplen") {
-      auto snaplen = caf::get_if<uint64_t>(&value);
+      auto snaplen = try_as<uint64_t>(&value);
       TENZIR_ASSERT(snaplen);
       result.snaplen = detail::narrow_cast<uint32_t>(*snaplen);
       continue;
     }
     if (key == "linktype") {
-      auto linktype = caf::get_if<uint64_t>(&value);
+      auto linktype = try_as<uint64_t>(&value);
       TENZIR_ASSERT(linktype);
       result.linktype = detail::narrow_cast<uint32_t>(*linktype);
       continue;
@@ -365,29 +365,29 @@ auto to_packet_record(auto row) -> std::pair<packet_record, uint32_t> {
   // access method, as opposed to just key-value pairs.
   for (const auto& [key, value] : row) {
     if (key == "linktype") {
-      auto linktype_ptr = caf::get_if<uint64_t>(&value);
+      auto linktype_ptr = try_as<uint64_t>(&value);
       TENZIR_ASSERT(linktype_ptr);
       linktype = detail::narrow_cast<uint32_t>(*linktype_ptr);
     } else if (key == "timestamp") {
-      auto timestamp_ptr = caf::get_if<time>(&value);
+      auto timestamp_ptr = try_as<time>(&value);
       TENZIR_ASSERT(timestamp_ptr);
       timestamp = *timestamp_ptr;
     } else if (key == "captured_packet_length") {
-      auto captured_packet_length = caf::get_if<uint64_t>(&value);
+      auto captured_packet_length = try_as<uint64_t>(&value);
       TENZIR_ASSERT(captured_packet_length);
       pkt.header.captured_packet_length = *captured_packet_length;
     } else if (key == "original_packet_length") {
-      auto original_packet_length = caf::get_if<uint64_t>(&value);
+      auto original_packet_length = try_as<uint64_t>(&value);
       TENZIR_ASSERT(original_packet_length);
       pkt.header.original_packet_length = *original_packet_length;
     } else if (key == "data") {
-      if (auto str_data = caf::get_if<view<std::string>>(&value)) {
+      if (auto str_data = try_as<view<std::string>>(&value)) {
         // TODO: Remove this fallback eventually.
         pkt.data = std::span<const std::byte>{
           reinterpret_cast<const std::byte*>(str_data->data()),
           str_data->size()};
       } else {
-        auto data = caf::get_if<view<blob>>(&value);
+        auto data = try_as<view<blob>>(&value);
         TENZIR_ASSERT(data);
         pkt.data = *data;
       }
@@ -469,7 +469,7 @@ public:
           return {};
         };
         // Extract PCAP data from input.
-        const auto& input_record = caf::get<record_type>(slice.schema());
+        const auto& input_record = as<record_type>(slice.schema());
         if (slice.schema().name() == "pcap.packet") {
           auto resolved_slice = resolve_enumerations(slice);
           auto array
@@ -489,9 +489,8 @@ public:
             co_return;
           }
           auto [pcap_type, pcap_array] = pcap_index->get(slice);
-          const auto* pcap_record_type = caf::get_if<record_type>(&pcap_type);
-          const auto* pcap_values
-            = caf::get_if<arrow::StructArray>(&*pcap_array);
+          const auto* pcap_record_type = try_as<record_type>(&pcap_type);
+          const auto* pcap_values = try_as<arrow::StructArray>(&*pcap_array);
           if (not(pcap_record_type or pcap_values)) {
             diagnostic::warning("got a malformed 'tenzir.packet' event")
               .note("field 'pcap' not a record")
@@ -578,8 +577,19 @@ private:
   record config_;
 };
 
+class write_plugin final
+  : public virtual operator_plugin2<writer_adapter<pcap_printer>> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
+    return std::make_unique<writer_adapter<pcap_printer>>(pcap_printer{});
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::pcap
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::pcap::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::pcap::write_plugin)

@@ -13,6 +13,7 @@
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/detail/ieee_754.hpp>
@@ -256,7 +257,7 @@ public:
       typename caf::detail::tl_at<caf::detail::type_list<Ts...>,               \
                                   ((n) < sizeof...(Ts) ? (n) : 0)>::type;      \
     x = tmp_t{};                                                               \
-    return f(caf::get<tmp_t>(x));                                              \
+    return f(as<tmp_t>(x));                                                    \
   }
         CAF_VARIANT_ASSIGN_CASE_IMPL(0);
         CAF_VARIANT_ASSIGN_CASE_IMPL(1);

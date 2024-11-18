@@ -43,10 +43,10 @@ struct cache_state {
   caf::actor_addr writer = {};
   bool done = {};
 
-  duration ttl = {};
-  duration max_ttl = {};
-  caf::disposable on_ttl = {};
-  caf::disposable on_max_ttl = {};
+  duration read_timeout = {};
+  duration write_timeout = {};
+  caf::disposable on_read_timeout = {};
+  caf::disposable on_write_timeout = {};
 
   struct reader {
     size_t offset = {};
@@ -54,21 +54,21 @@ struct cache_state {
   };
   detail::flat_map<caf::actor_addr, reader> readers = {};
 
-  auto reset_ttl() -> void {
-    TENZIR_ASSERT(ttl > duration::zero());
-    on_ttl.dispose();
-    on_ttl = detail::weak_run_delayed(self, ttl, [this] {
+  auto reset_read_timeout() -> void {
+    TENZIR_ASSERT(read_timeout > duration::zero());
+    on_read_timeout.dispose();
+    on_read_timeout = detail::weak_run_delayed(self, read_timeout, [this] {
       self->quit(diagnostic::error("cache expired").to_error());
     });
   }
 
-  auto set_max_ttl() -> void {
-    if (max_ttl == duration::zero()) {
+  auto set_write_timeout() -> void {
+    if (write_timeout == duration::zero()) {
       return;
     }
-    TENZIR_ASSERT(max_ttl > duration::zero());
-    on_max_ttl.dispose();
-    on_max_ttl = detail::weak_run_delayed(self, max_ttl, [this] {
+    TENZIR_ASSERT(write_timeout > duration::zero());
+    on_write_timeout.dispose();
+    on_write_timeout = detail::weak_run_delayed(self, write_timeout, [this] {
       self->quit(diagnostic::error("cache expired").to_error());
     });
   }
@@ -84,7 +84,7 @@ struct cache_state {
     if (not writer) {
       writer = sender->address();
       self->monitor(writer);
-      set_max_ttl();
+      set_write_timeout();
     } else if (writer != sender->address()) {
       return false;
     }
@@ -114,7 +114,7 @@ struct cache_state {
 
   auto read() -> caf::result<table_slice> {
     if (done) {
-      reset_ttl();
+      reset_read_timeout();
     }
     const auto sender = self->current_sender();
     TENZIR_ASSERT(sender);
@@ -138,7 +138,7 @@ struct cache_state {
     if (msg.source == writer) {
       TENZIR_ASSERT(not done);
       done = true;
-      reset_ttl();
+      reset_read_timeout();
       // We ignore error messages because they do not matter to the readers.
       for (auto& [_, reader] : readers) {
         if (reader.offset == cache.size() and reader.rp.pending()) {
@@ -154,13 +154,13 @@ struct cache_state {
 
 auto make_cache(cache_actor::stateful_pointer<cache_state> self,
                 shared_diagnostic_handler diagnostics,
-                located<uint64_t> capacity, duration ttl, duration max_ttl)
-  -> cache_actor::behavior_type {
+                located<uint64_t> capacity, duration read_timeout,
+                duration write_timeout) -> cache_actor::behavior_type {
   self->state.self = self;
   self->state.diagnostics = std::move(diagnostics);
   self->state.capacity = capacity;
-  self->state.ttl = ttl;
-  self->state.max_ttl = max_ttl;
+  self->state.read_timeout = read_timeout;
+  self->state.write_timeout = write_timeout;
   self->set_down_handler([self](const caf::down_msg& msg) {
     self->state.handle_down(msg);
   });
@@ -183,7 +183,7 @@ using cache_manager_actor = caf::typed_actor<
   // Create the cache if it does not already exist.
   auto(atom::create, std::string id, bool exclusive,
        shared_diagnostic_handler diagnostics, uint64_t capacity,
-       location capacity_loc, duration ttl, duration max_ttl)
+       location capacity_loc, duration read_timeout, duration write_timeout)
     ->caf::result<caf::actor>
   // Plugin interface.
   >::extend_with<component_plugin_actor>;
@@ -225,11 +225,13 @@ struct cache_manager_state {
 
   auto create(std::string id, bool exclusive,
               shared_diagnostic_handler diagnostics, located<uint64_t> capacity,
-              duration ttl, duration max_ttl) -> caf::result<caf::actor> {
+              duration read_timeout, duration write_timeout)
+    -> caf::result<caf::actor> {
     auto cache = caches.find(id);
     if (cache == caches.end()) {
-      auto handle = self->spawn<caf::monitored>(
-        make_cache, std::move(diagnostics), capacity, ttl, max_ttl);
+      auto handle
+        = self->spawn<caf::monitored>(make_cache, std::move(diagnostics),
+                                      capacity, read_timeout, write_timeout);
       return caf::actor_cast<caf::actor>(
         caches.emplace_hint(cache, std::move(id), std::move(handle))->second);
     }
@@ -261,11 +263,12 @@ auto make_cache_manager(
     },
     [self](atom::create, std::string& id, bool exclusive,
            shared_diagnostic_handler& diagnostics, uint64_t capacity,
-           location capacity_loc, duration ttl,
-           duration max_ttl) -> caf::result<caf::actor> {
+           location capacity_loc, duration read_timeout,
+           duration write_timeout) -> caf::result<caf::actor> {
       return self->state.create(std::move(id), exclusive,
                                 std::move(diagnostics),
-                                {capacity, capacity_loc}, ttl, max_ttl);
+                                {capacity, capacity_loc}, read_timeout,
+                                write_timeout);
     },
     [](atom::status, status_verbosity, duration) -> caf::result<record> {
       return {};
@@ -278,13 +281,13 @@ public:
   write_cache_operator() = default;
 
   explicit write_cache_operator(located<std::string> id,
-                                located<uint64_t> capacity, duration ttl,
-                                duration max_ttl)
+                                located<uint64_t> capacity,
+                                duration read_timeout, duration write_timeout)
     : id_{std::move(id)},
       sink_{true},
       capacity_{capacity},
-      ttl_{ttl},
-      max_ttl_{max_ttl} {
+      read_timeout_{read_timeout},
+      write_timeout_{write_timeout} {
   }
 
   explicit write_cache_operator(located<std::string> id) : id_{std::move(id)} {
@@ -303,7 +306,8 @@ public:
       ctrl.self()
         .request(cache_manager, caf::infinite, atom::create_v, id_.inner,
                  /* exclusive */ true, ctrl.shared_diagnostics(),
-                 capacity_.inner, capacity_.source, ttl_, max_ttl_)
+                 capacity_.inner, capacity_.source, read_timeout_,
+                 write_timeout_)
         .then(
           [&](caf::actor& handle) {
             if (not handle) {
@@ -418,16 +422,16 @@ public:
   friend auto inspect(auto& f, write_cache_operator& x) -> bool {
     return f.object(x).fields(f.field("id", x.id_), f.field("sink", x.sink_),
                               f.field("capacity", x.capacity_),
-                              f.field("ttl", x.ttl_),
-                              f.field("max_ttl", x.max_ttl_));
+                              f.field("read_timeout", x.read_timeout_),
+                              f.field("write_timeout", x.write_timeout_));
   }
 
 private:
   located<std::string> id_ = {};
   bool sink_ = {};
   located<uint64_t> capacity_ = {};
-  duration ttl_ = {};
-  duration max_ttl_ = {};
+  duration read_timeout_ = {};
+  duration write_timeout_ = {};
 };
 
 class read_cache_operator final : public crtp_operator<read_cache_operator> {
@@ -439,9 +443,12 @@ public:
   }
 
   explicit read_cache_operator(located<std::string> id,
-                               located<uint64_t> capacity, duration ttl,
-                               duration max_ttl)
-    : id_{std::move(id)}, capacity_{capacity}, ttl_{ttl}, max_ttl_{max_ttl} {
+                               located<uint64_t> capacity,
+                               duration read_timeout, duration write_timeout)
+    : id_{std::move(id)},
+      capacity_{capacity},
+      read_timeout_{read_timeout},
+      write_timeout_{write_timeout} {
   }
 
   auto run(std::optional<generator<table_slice>> input,
@@ -453,12 +460,13 @@ public:
     TENZIR_ASSERT(cache_manager);
     auto cache = cache_actor{};
     ctrl.set_waiting(true);
-    (source_ ? ctrl.self().request(cache_manager, caf::infinite, atom::get_v,
-                                   id_.inner, /* exclusive */ false)
-             : ctrl.self().request(cache_manager, caf::infinite, atom::create_v,
-                                   id_.inner, /* exclusive */ false,
-                                   ctrl.shared_diagnostics(), capacity_.inner,
-                                   capacity_.source, ttl_, max_ttl_))
+    (source_
+       ? ctrl.self().request(cache_manager, caf::infinite, atom::get_v,
+                             id_.inner, /* exclusive */ false)
+       : ctrl.self().request(cache_manager, caf::infinite, atom::create_v,
+                             id_.inner, /* exclusive */ false,
+                             ctrl.shared_diagnostics(), capacity_.inner,
+                             capacity_.source, read_timeout_, write_timeout_))
       .then(
         [&](caf::actor& handle) {
           cache = caf::actor_cast<cache_actor>(std::move(handle));
@@ -557,16 +565,16 @@ public:
     return f.object(x).fields(f.field("id", x.id_),
                               f.field("source", x.source_),
                               f.field("capacity", x.capacity_),
-                              f.field("ttl", x.ttl_),
-                              f.field("max_ttl", x.max_ttl_));
+                              f.field("read_timeout", x.read_timeout_),
+                              f.field("write_timeout", x.write_timeout_));
   }
 
 private:
   located<std::string> id_ = {};
   bool source_ = {};
   located<uint64_t> capacity_ = {};
-  duration ttl_ = {};
-  duration max_ttl_ = {};
+  duration read_timeout_ = {};
+  duration write_timeout_ = {};
 };
 
 class cache_plugin final : public virtual operator_factory_plugin,
@@ -600,13 +608,13 @@ public:
     auto id = located<std::string>{};
     auto mode = std::optional<located<std::string>>{};
     auto capacity = std::optional<located<uint64_t>>{};
-    auto ttl = std::optional<located<duration>>{};
-    auto max_ttl = std::optional<located<duration>>{};
+    auto read_timeout = std::optional<located<duration>>{};
+    auto write_timeout = std::optional<located<duration>>{};
     parser.add(id, "<id>");
     parser.add("--mode", mode, "<read|write|readwrite>");
     parser.add("--capacity", capacity, "<capacity>");
-    parser.add("--ttl", ttl, "<duration>");
-    parser.add("--max-ttl", max_ttl, "<duration>");
+    parser.add("--read-timeout", read_timeout, "<duration>");
+    parser.add("--write-timeout", write_timeout, "<duration>");
     parser.parse(p);
     if (mode
         and (mode->inner != "read" and mode->inner != "write"
@@ -619,30 +627,30 @@ public:
     if (not capacity) {
       capacity.emplace(defaults::max_partition_size, location::unknown);
     }
-    if (not ttl) {
-      ttl.emplace(std::chrono::minutes{1}, location::unknown);
-    } else if (ttl->inner <= duration::zero()) {
-      diagnostic::error("ttl must be a positive duration")
-        .primary(ttl->source)
+    if (not read_timeout) {
+      read_timeout.emplace(std::chrono::minutes{1}, location::unknown);
+    } else if (read_timeout->inner <= duration::zero()) {
+      diagnostic::error("read timeout must be a positive duration")
+        .primary(read_timeout->source)
         .throw_();
     }
-    if (not max_ttl) {
-      max_ttl.emplace(duration::zero(), location::unknown);
-    } else if (max_ttl->inner <= duration::zero()) {
-      diagnostic::error("max_ttl must be a positive duration")
-        .primary(max_ttl->source)
+    if (not write_timeout) {
+      write_timeout.emplace(duration::zero(), location::unknown);
+    } else if (write_timeout->inner <= duration::zero()) {
+      diagnostic::error("write timeout must be a positive duration")
+        .primary(write_timeout->source)
         .throw_();
     }
     if (not mode or mode->inner == "readwrite") {
       auto result = std::make_unique<pipeline>();
       result->append(std::make_unique<write_cache_operator>(id));
       result->append(std::make_unique<read_cache_operator>(
-        std::move(id), *capacity, ttl->inner, max_ttl->inner));
+        std::move(id), *capacity, read_timeout->inner, write_timeout->inner));
       return result;
     }
     if (mode->inner == "write") {
-      return std::make_unique<write_cache_operator>(std::move(id), *capacity,
-                                                    ttl->inner, max_ttl->inner);
+      return std::make_unique<write_cache_operator>(
+        std::move(id), *capacity, read_timeout->inner, write_timeout->inner);
     }
     TENZIR_ASSERT(mode->inner == "read");
     return std::make_unique<read_cache_operator>(std::move(id));
@@ -653,14 +661,14 @@ public:
     auto id = located<std::string>{};
     auto mode = std::optional<located<std::string>>{};
     auto capacity = std::optional<located<uint64_t>>{};
-    auto ttl = std::optional<located<duration>>{};
-    auto max_ttl = std::optional<located<duration>>{};
+    auto read_timeout = std::optional<located<duration>>{};
+    auto write_timeout = std::optional<located<duration>>{};
     argument_parser2::operator_("cache")
       .add(id, "<id>")
       .add("mode", mode)
       .add("capacity", capacity)
-      .add("ttl", ttl)
-      .add("max_ttl", max_ttl)
+      .add("read_timeout", read_timeout)
+      .add("write_timeout", write_timeout)
       .parse(inv, ctx)
       .ignore();
     auto failed = false;
@@ -680,27 +688,27 @@ public:
         .primary(capacity->source)
         .emit(ctx);
     }
-    if (not ttl) {
-      ttl.emplace(std::chrono::minutes{1}, inv.self.get_location());
+    if (not read_timeout) {
+      read_timeout.emplace(std::chrono::minutes{1}, inv.self.get_location());
     } else if (mode and mode->inner == "read") {
-      diagnostic::warning("ignoring argument `ttl` in `read` mode")
-        .primary(ttl->source)
+      diagnostic::warning("ignoring argument `read_timeout` in `read` mode")
+        .primary(read_timeout->source)
         .emit(ctx);
-    } else if (ttl->inner <= duration::zero()) {
-      diagnostic::error("ttl must be a positive duration")
-        .primary(ttl->source)
+    } else if (read_timeout->inner <= duration::zero()) {
+      diagnostic::error("read timeout must be a positive duration")
+        .primary(read_timeout->source)
         .emit(ctx);
       failed = true;
     }
-    if (not max_ttl) {
-      max_ttl.emplace(duration::zero(), inv.self.get_location());
+    if (not write_timeout) {
+      write_timeout.emplace(duration::zero(), inv.self.get_location());
     } else if (mode and mode->inner == "read") {
-      diagnostic::warning("ignoring argument `max_ttl` in `read` mode")
-        .primary(max_ttl->source)
+      diagnostic::warning("ignoring argument `create_timeout` in `read` mode")
+        .primary(write_timeout->source)
         .emit(ctx);
-    } else if (max_ttl->inner <= duration::zero()) {
-      diagnostic::error("max_ttl must be a positive duration")
-        .primary(max_ttl->source)
+    } else if (write_timeout->inner <= duration::zero()) {
+      diagnostic::error("create timeout must be a positive duration")
+        .primary(write_timeout->source)
         .emit(ctx);
       failed = true;
     }
@@ -711,12 +719,12 @@ public:
       auto result = std::make_unique<pipeline>();
       result->append(std::make_unique<write_cache_operator>(id));
       result->append(std::make_unique<read_cache_operator>(
-        std::move(id), *capacity, ttl->inner, max_ttl->inner));
+        std::move(id), *capacity, read_timeout->inner, write_timeout->inner));
       return result;
     }
     if (mode->inner == "write") {
-      return std::make_unique<write_cache_operator>(std::move(id), *capacity,
-                                                    ttl->inner, max_ttl->inner);
+      return std::make_unique<write_cache_operator>(
+        std::move(id), *capacity, read_timeout->inner, write_timeout->inner);
     }
     TENZIR_ASSERT(mode->inner == "read");
     return std::make_unique<read_cache_operator>(std::move(id));

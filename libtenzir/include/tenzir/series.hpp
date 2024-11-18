@@ -38,7 +38,7 @@ struct basic_series {
 
   explicit basic_series(const table_slice& slice)
     requires(std::same_as<Type, record_type>)
-    : type{caf::get<record_type>(slice.schema())},
+    : type{as<record_type>(slice.schema())},
       array{to_record_batch(slice)->ToStructArray().ValueOrDie()} {
   }
 
@@ -61,7 +61,7 @@ struct basic_series {
     if constexpr (std::same_as<Other, tenzir::type>) {
       return *this;
     } else {
-      auto other_type = caf::get_if<Other>(&type);
+      auto other_type = try_as<Other>(&type);
       if (not other_type) {
         return std::nullopt;
       }
@@ -94,7 +94,7 @@ struct basic_series {
     if constexpr (Inspector::is_loading) {
       table_slice slice;
       auto callback = [&]() noexcept {
-        x.type = caf::get<record_type>(slice.schema()).field(0).type;
+        x.type = ::tenzir::as<record_type>(slice.schema()).field(0).type;
         x.array = to_record_batch(slice)->column(0);
         return true;
       };
@@ -120,7 +120,7 @@ struct basic_series {
     requires(std::same_as<Type, type>)
   auto values() const {
     if constexpr (concrete_type<Cast>) {
-      const auto* ct = caf::get_if<Cast>(&type);
+      const auto* ct = try_as<Cast>(&type);
       TENZIR_ASSERT(ct);
       TENZIR_ASSERT(array);
       return tenzir::values(

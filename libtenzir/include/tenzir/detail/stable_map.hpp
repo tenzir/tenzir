@@ -35,7 +35,7 @@ struct stable_map_policy {
   template <class Ts, class Key_Like, class... Args>
   static auto try_emplace(Ts& xs, Key_Like&& k, Args&&... args) {
     const auto it = lookup(xs, k);
-    if (it == xs.end() || k == it->first) {
+    if (it == xs.end()) {
       return std::make_pair(
         xs.emplace(it, std::piecewise_construct,
                    std::forward_as_tuple(std::forward<Key_Like>(k)),

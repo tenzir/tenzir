@@ -56,11 +56,13 @@ public:
   }
 
   static auto function(std::string name) -> argument_parser2 {
-    return argument_parser2{kind::function, std::move(name)};
+    return argument_parser2{kind::fn, std::move(name)};
   }
 
-  static auto method(std::string name) -> argument_parser2 {
-    return argument_parser2{kind::method, std::move(name)};
+  static auto context(std::string name) -> argument_parser2 {
+    return argument_parser2{
+      kind::op, fmt::format("context::create_{}",
+                            detail::replace_all(std::move(name), "-", "_"))};
   }
 
   // ------------------------------------------------------------------------
@@ -93,11 +95,11 @@ public:
 
   // ------------------------------------------------------------------------
 
-  auto parse(const operator_factory_plugin::invocation& inv,
-             session ctx) -> failure_or<void>;
+  auto parse(const operator_factory_plugin::invocation& inv, session ctx)
+    -> failure_or<void>;
   auto parse(const ast::function_call& call, session ctx) -> failure_or<void>;
-  auto parse(const function_plugin::invocation& inv,
-             session ctx) -> failure_or<void>;
+  auto parse(const function_plugin::invocation& inv, session ctx)
+    -> failure_or<void>;
   auto parse(const ast::entity& self, std::span<ast::expression const> args,
              session ctx) -> failure_or<void>;
 
@@ -105,7 +107,7 @@ public:
   auto docs() const -> std::string;
 
 private:
-  enum class kind { op, function, method };
+  enum class kind { op, fn };
 
   argument_parser2(kind kind, std::string name)
     : kind_{kind}, name_{std::move(name)} {

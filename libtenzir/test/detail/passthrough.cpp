@@ -18,25 +18,25 @@ TEST(passthrough) {
     MESSAGE("non-visitable types can be passed through");
     int i = 42;
     auto pi = detail::passthrough(i);
-    CHECK_EQUAL(caf::get<int>(pi), i);
+    CHECK_EQUAL(as<int>(pi), i);
     auto f = [&](int& fi) {
       CHECK_EQUAL(fi, i);
       CHECK_EQUAL(&fi, &i);
     };
-    caf::visit(f, pi);
+    tenzir::match(pi, f);
   }
   {
     MESSAGE("visitable types can be passed through");
     auto t = type{bool_type{}};
     auto pt = detail::passthrough(t);
-    CHECK_EQUAL(caf::get<bool_type>(t), bool_type{});
-    CHECK_EQUAL(caf::get<type>(pt), t);
+    CHECK_EQUAL(as<bool_type>(t), bool_type{});
+    CHECK_EQUAL(as<type>(pt), t);
     auto f = [&](const type& ft, const concrete_type auto& fct) {
       CHECK_EQUAL(ft, fct);
       CHECK_EQUAL(ft, t);
       CHECK_EQUAL(&ft, &t);
     };
-    caf::visit(f, pt, t);
+    tenzir::match(std::tie(pt, t), f);
   }
 }
 

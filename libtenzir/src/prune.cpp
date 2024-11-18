@@ -21,7 +21,7 @@ struct pruner {
     return disjunction{run(d)};
   }
   expression operator()(const negation& n) const {
-    return negation{caf::visit(*this, n.expr())};
+    return negation{match(n.expr(), *this)};
   }
   expression operator()(const predicate& p) const {
     return p;
@@ -34,13 +34,13 @@ struct pruner {
     std::vector<tenzir::predicate*> memo;
     for (const auto& operand : connective) {
       bool optimized = false;
-      if (const auto* pred = caf::get_if<predicate>(&operand)) {
-        if (caf::holds_alternative<field_extractor>(pred->lhs)
-            || (caf::holds_alternative<type_extractor>(pred->lhs)
-                && caf::get<type_extractor>(pred->lhs).type == string_type{})) {
-          if (const auto* d = caf::get_if<data>(&pred->rhs)) {
-            if (caf::holds_alternative<std::string>(*d)) {
-              auto const* fe = caf::get_if<field_extractor>(&pred->lhs);
+      if (const auto* pred = try_as<predicate>(&operand)) {
+        if (is<field_extractor>(pred->lhs)
+            || (is<type_extractor>(pred->lhs)
+                && as<type_extractor>(pred->lhs).type == string_type{})) {
+          if (const auto* d = try_as<data>(&pred->rhs)) {
+            if (is<std::string>(*d)) {
+              auto const* fe = try_as<field_extractor>(&pred->lhs);
               if (!fe || !unprunable_fields_.contains(fe->field)) {
                 optimized = true;
                 // Replace the concrete field name by `:string` if this is
@@ -57,7 +57,7 @@ struct pruner {
                   continue;
                 } else {
                   result.push_back(operand);
-                  memo.push_back(caf::get_if<predicate>(&result.back()));
+                  memo.push_back(try_as<predicate>(&result.back()));
                 }
               }
             }
@@ -65,7 +65,7 @@ struct pruner {
         }
       }
       if (!optimized)
-        result.push_back(caf::visit(*this, operand));
+        result.push_back(match(operand, *this));
     }
     return result;
   }
@@ -75,10 +75,10 @@ struct pruner {
 
 // Runs the `pruner` and `hoister` until the input is unchanged.
 expression prune(expression e, const detail::heterogeneous_string_hashset& hs) {
-  expression result = caf::visit(pruner{hs}, e);
+  expression result = match(e, pruner{hs});
   while (result != e) {
     std::swap(result, e);
-    result = hoist(caf::visit(pruner{hs}, e));
+    result = hoist(match(e, pruner{hs}));
   }
   return result;
 }

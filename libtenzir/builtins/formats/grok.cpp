@@ -683,7 +683,7 @@ public:
   }
 };
 
-class parse_grok_plugin final : public virtual method_plugin {
+class parse_grok_plugin final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parse_grok";
@@ -695,7 +695,7 @@ public:
     auto pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
-    TRY(argument_parser2::method("grok")
+    TRY(argument_parser2::function("grok")
           .add(input, "<input>")
           .add(pattern, "<pattern>")
           .add("indexed_captures", indexed_captures)
@@ -715,7 +715,7 @@ public:
         if (values.type.kind().is<null_type>()) {
           return values;
         }
-        auto strings = caf::get_if<arrow::StringArray>(&*values.array);
+        auto strings = try_as<arrow::StringArray>(&*values.array);
         if (not strings) {
           diagnostic::warning("expected string, got `{}`", values.type.kind())
             .primary(input)

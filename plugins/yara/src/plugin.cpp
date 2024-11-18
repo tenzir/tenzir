@@ -639,13 +639,13 @@ public:
       .parse(inv, ctx)
       .ignore();
     for (const auto& rule : rules.inner) {
-      if (not caf::holds_alternative<std::string>(rule)) {
+      if (not is<std::string>(rule)) {
         diagnostic::error("expected type string for rule")
           .primary(rules)
           .emit(ctx);
         return failure::promise();
       }
-      args.rules.push_back(std::move(caf::get<std::string>(rule)));
+      args.rules.push_back(std::move(as<std::string>(rule)));
     }
     if (args.rules.empty()) {
       diagnostic::error("no rules provided").emit(ctx);

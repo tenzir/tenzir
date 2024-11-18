@@ -106,9 +106,11 @@ public:
           {"build", "version | set build.features = features | unflatten | "
                     "yield build | set #schema = \"tenzir.build\""},
           {"config", "config"},
+          {"contexts", "contexts"},
           {"dependencies", "version | yield dependencies[] | set #schema = "
                            "\"tenzir.dependency\""},
           {"partitions", "partitions"},
+          {"pipelines", "pipelines"},
           {"plugins", "plugins"},
           {"schemas", "schemas"},
           {"version",
@@ -121,12 +123,14 @@ public:
         }
       }
       auto available = std::map<std::string, std::string>{};
-      for (const auto& aspect : collect(plugins::get<aspect_plugin>()))
+      for (const auto& aspect : collect(plugins::get<aspect_plugin>())) {
         available.emplace(aspect->aspect_name(), aspect->name());
+      }
       if (not available.contains(aspect->inner)) {
         auto aspects = std::vector<std::string>{};
-        for (const auto& [aspect_name, plugin_name] : available)
+        for (const auto& [aspect_name, plugin_name] : available) {
           aspects.push_back(aspect_name);
+        }
         diagnostic::error("aspect `{}` could not be found", aspect->inner)
           .primary(aspect->source)
           .hint("must be one of {}", fmt::join(aspects, ", "))

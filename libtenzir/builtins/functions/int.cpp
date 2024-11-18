@@ -148,7 +148,7 @@ public:
           return finish(b);
         },
         };
-      return series{Type{}, caf::visit(f, *value.array)};
+      return series{Type{}, match(*value.array, f)};
     });
   }
 };

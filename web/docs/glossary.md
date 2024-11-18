@@ -103,6 +103,13 @@ either end.
 
 - [List of all integrations](integrations.md)
 
+## Library
+
+A collection of [packages](#package).
+
+Our community library is [freely available at
+GitHub](https://github.com/tenzir/library).
+
 ## Loader
 
 A [connector](#connector) that acquires bytes.
@@ -132,6 +139,14 @@ Runtime statistics about pipeline execution.
 
 - [Collect metrics](./usage/collect-metrics.md)
 
+## OCSF
+
+The [Open Cybersecurity Schema Framework (OCSF)](https://schema.ocsf.io) is a
+cross-vendor schema for security event data. Our [community library](#library)
+contains packages that map data sources to OCSF.
+
+- [Map data to COSF](tutorials/map-data-to-ocsf/README.md)
+
 ## Operator
 
 The building block of a [pipeline](#pipeline).
@@ -150,6 +165,13 @@ represent the (data) infrastructure that is provisioning as code.
 
 - Learn how to provision [piplines as
   code](./usage/run-pipelines/README.md#as-code).
+
+## Package
+
+A collection of [pipelines](#pipeline) and [contexts](#context).
+
+- Read more about [packages](packages.md)
+- [Write a package](tutorials/write-a-package.md)
 
 ## Parser
 
@@ -214,9 +236,7 @@ a side effect that emits bytes. Use a saver in the [`to`](./operators/to.md) or
 
 ## Schema
 
-A named record type describing the top-level structure of a data frame.
-
-[Schemas](./data-model/schemas.md)
+A top-level record type of an event.
 
 - [Show available schemas](./usage/show-available-schemas.md)
 

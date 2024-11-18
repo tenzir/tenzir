@@ -59,7 +59,7 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(legacy_alias_type x) {
-    auto y = caf::visit(*this, x.value_type);
+    auto y = match(x.value_type, *this);
     if (!y)
       return y.error();
     x.value_type = *y;
@@ -74,22 +74,22 @@ struct symbol_resolver {
       }
       return false;
     };
-    auto y = caf::visit(*this, x.value_type);
+    auto y = match(x.value_type, *this);
     if (!y)
       return y.error();
     x.value_type = *y;
-    if (caf::holds_alternative<legacy_record_type>(x.value_type)
-        && !has_skip_attribute(x))
+    if (is<legacy_record_type>(x.value_type) && !has_skip_attribute(x)) {
       x.update_attributes({{"skip", caf::none}});
+    }
     return x;
   }
 
   caf::expected<legacy_type> operator()(legacy_map_type x) {
-    auto y = caf::visit(*this, x.value_type);
+    auto y = match(x.value_type, *this);
     if (!y)
       return y.error();
     x.value_type = *y;
-    auto z = caf::visit(*this, x.key_type);
+    auto z = match(x.key_type, *this);
     if (!z)
       return z.error();
     x.key_type = *z;
@@ -105,19 +105,19 @@ struct symbol_resolver {
       return false;
     };
     for (auto& [field_name, field_type] : x.fields) {
-      auto y = caf::visit(*this, field_type);
+      auto y = match(field_type, *this);
       if (!y)
         return y.error();
       field_type = *y;
     }
     if (has_algebra_attribute(x)) {
       TENZIR_ASSERT(x.fields.size() >= 2);
-      const auto* base = caf::get_if<legacy_record_type>(&x.fields[0].type);
+      const auto* base = try_as<legacy_record_type>(&x.fields[0].type);
       TENZIR_ASSERT(base);
       auto acc = *base;
       auto it = ++x.fields.begin();
       for (; it < x.fields.end(); ++it) {
-        const auto* rhs = caf::get_if<legacy_record_type>(&it->type);
+        const auto* rhs = try_as<legacy_record_type>(&it->type);
         TENZIR_ASSERT(rhs);
         if (it->name == "+") {
           auto result = merge(acc, *rhs);
@@ -163,7 +163,7 @@ struct symbol_resolver {
       return caf::make_error(ec::parse_error, "duplicate definition of",
                              value.first);
     local.erase(next);
-    auto x = caf::visit(*this, value.second);
+    auto x = match(value.second, *this);
     if (!x)
       return x.error();
     auto [iter, inserted] = resolved.emplace(value.first, std::move(*x));

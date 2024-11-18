@@ -65,12 +65,12 @@ public:
             return series::null(ip_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };
 
-class is_v4_or_v6 final : public method_plugin {
+class is_v4_or_v6 final : public function_plugin {
 public:
   is_v4_or_v6(bool v4) : v4_{v4} {
   }
@@ -110,7 +110,7 @@ public:
             return series::null(bool_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 

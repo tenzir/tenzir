@@ -90,16 +90,16 @@ private:
 /// Compute position for each array by traversing the schema tree breadth-first.
 void index_column_arrays(const std::shared_ptr<arrow::Array>& arr,
                          arrow::ArrayVector& out) {
-  auto f = detail::overload{
+  return match(
+    *arr,
     [&](const auto&) {
       out.push_back(arr);
     },
     [&](const arrow::StructArray& s) {
-      for (const auto& child : s.fields())
+      for (const auto& child : s.fields()) {
         index_column_arrays(child, out);
-    },
-  };
-  return caf::visit(f, *arr);
+      }
+    });
 }
 
 arrow::ArrayVector
@@ -149,11 +149,10 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     } else {
       state_.schema = type::from_arrow(*state_.record_batch->schema());
     }
-    TENZIR_ASSERT(caf::holds_alternative<record_type>(state_.schema));
+    TENZIR_ASSERT(is<record_type>(state_.schema));
     state_.flat_columns = index_column_arrays(state_.record_batch);
-    TENZIR_ASSERT_EXPENSIVE(
-      state_.flat_columns.size()
-      == caf::get<record_type>(state_.schema).num_leaves());
+    TENZIR_ASSERT_EXPENSIVE(state_.flat_columns.size()
+                            == as<record_type>(state_.schema).num_leaves());
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
@@ -214,11 +213,12 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     if (auto&& batch = record_batch()) {
       auto&& array = state_.flat_columns[column];
-      const auto& schema = caf::get<record_type>(this->schema());
+      const auto& schema = as<record_type>(this->schema());
       auto type = schema.field(schema.resolve_flat_index(column)).type;
       for (size_t row = 0; auto&& value : values(type, *array)) {
-        if (!caf::holds_alternative<view<caf::none_t>>(value))
+        if (!is<view<caf::none_t>>(value)) {
           index.append(value, offset + row);
+        }
         ++row;
       }
     }
@@ -234,7 +234,7 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                   table_slice::size_type column) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     auto&& array = state_.flat_columns[column];
-    const auto& schema = caf::get<record_type>(this->schema());
+    const auto& schema = as<record_type>(this->schema());
     auto offset = schema.resolve_flat_index(column);
     return value_at(schema.field(offset).type, *array, row);
   } else {
@@ -249,8 +249,8 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                             const type& t) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     TENZIR_ASSERT_EXPENSIVE(congruent(
-      caf::get<record_type>(this->schema())
-        .field(caf::get<record_type>(this->schema()).resolve_flat_index(column))
+      as<record_type>(this->schema())
+        .field(as<record_type>(this->schema()).resolve_flat_index(column))
         .type,
       t));
     auto&& array = state_.flat_columns[column];
@@ -357,15 +357,16 @@ transform_columns(type schema,
         ++current;
       } else if (is_prefix_match) {
         auto& nested_array
-          = caf::get<arrow::StructArray>(*layer.arrays[index.back()]);
+          = as<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
           .arrays = nested_array.Flatten().ValueOrDie(),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :
-             caf::get<record_type>(layer.fields[index.back()].type).fields())
+             as<record_type>(layer.fields[index.back()].type).fields()) {
           nested_layer.fields.push_back({std::string{name}, type});
+        }
         auto nested_index = index;
         nested_index.push_back(0);
         nested_layer = impl(impl, std::move(nested_layer),
@@ -402,8 +403,9 @@ transform_columns(type schema,
   const auto num_columns
     = detail::narrow_cast<size_t>(struct_array->num_fields());
   layer.fields.reserve(num_columns);
-  for (auto&& [name, type] : caf::get<record_type>(schema).fields())
+  for (auto&& [name, type] : as<record_type>(schema).fields()) {
     layer.fields.push_back({std::string{name}, type});
+  }
   // Run the possibly recursive implementation.
   layer = impl(impl, std::move(layer), {0}, current, sentinel);
   TENZIR_ASSERT(current == sentinel, "index out of bounds");
@@ -450,7 +452,7 @@ transform_columns(const table_slice& slice,
   if (slice.rows() == 0) {
     return {};
   }
-  if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+  if (as<record_type>(slice.schema()).num_fields() == 0) {
     return slice;
   }
   auto input_batch = to_record_batch(slice);
@@ -521,15 +523,16 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
         ++current;
       } else if (is_prefix_match) {
         auto& nested_array
-          = caf::get<arrow::StructArray>(*layer.arrays[index.back()]);
+          = as<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
           .arrays = nested_array.Flatten().ValueOrDie(),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :
-             caf::get<record_type>(layer.fields[index.back()].type).fields())
+             as<record_type>(layer.fields[index.back()].type).fields()) {
           nested_layer.fields.push_back({std::string{name}, type});
+        }
         auto nested_index = index;
         nested_index.push_back(0);
         nested_layer = impl(impl, std::move(nested_layer),
@@ -560,8 +563,9 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   };
   const auto num_columns = detail::narrow_cast<size_t>(batch->num_columns());
   layer.fields.reserve(num_columns);
-  for (auto&& [name, type] : caf::get<record_type>(schema).fields())
+  for (auto&& [name, type] : as<record_type>(schema).fields()) {
     layer.fields.push_back({std::string{name}, type});
+  }
   // Run the possibly recursive implementation, starting at the last field.
   layer = impl(impl, std::move(layer), {0}, current, sentinel);
   TENZIR_ASSERT(current == sentinel, "index out of bounds");

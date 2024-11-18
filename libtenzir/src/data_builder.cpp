@@ -300,14 +300,14 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
         return diagnostic::warning("base64 decode failure").done();
       }
     },
-    []<typename T>(const T& t) -> tenzir::diagnostic {
+    []<typename T>(const T& t) -> detail::data_builder::data_parsing_result {
       return diagnostic::warning("schema expected `{}`, but the input "
                                  "contained a string",
                                  tenzir::type{t}.kind())
         .done();
     },
   };
-  return caf::visit(visitor, seed);
+  return match(seed, visitor);
 }
 
 auto basic_parser(std::string_view s, const tenzir::type* seed)
@@ -600,7 +600,7 @@ auto node_object::data(tenzir::data d) -> void {
     },
   };
 
-  return caf::visit(visitor, d);
+  return match(d, visitor);
 }
 
 auto node_object::data_unparsed(std::string text) -> void {
@@ -815,7 +815,7 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
                 null();
                 return;
               }
-              auto enum_t = caf::get_if<enumeration_type>(seed);
+              auto enum_t = try_as<enumeration_type>(seed);
               TENZIR_ASSERT(enum_t);
               if (enum_t->field(static_cast<uint32_t>(v)).empty()) {
                 null();
@@ -899,7 +899,7 @@ auto node_object::append_to_signature(signature_type& sig,
   // re-creates the nodes contents according to the seed.
   const auto visitor = detail::overload{
     [&sig, &rb, seed, this](node_list& v) {
-      const auto* ls = caf::get_if<list_type>(seed);
+      const auto* ls = try_as<list_type>(seed);
       if (seed and not ls) {
         rb.emit_mismatch_warning("list", *seed);
         null();
@@ -911,7 +911,7 @@ auto node_object::append_to_signature(signature_type& sig,
       return true;
     },
     [&sig, &rb, seed, this](node_record& v) {
-      const auto* rs = caf::get_if<record_type>(seed);
+      const auto* rs = try_as<record_type>(seed);
       if (seed and not rs) {
         rb.emit_mismatch_warning(type{record_type{}}, *seed);
         null();
@@ -927,14 +927,14 @@ auto node_object::append_to_signature(signature_type& sig,
       // null via the API for the first case we need to ensure we continue
       // doing seeding if we have a seed
       if (seed) {
-        if (auto sr = caf::get_if<tenzir::record_type>(seed)) {
+        if (auto sr = try_as<tenzir::record_type>(seed)) {
           auto r = record();
           r->append_to_signature(sig, rb, sr);
           r->state_ = state::sentinel;
           this->value_state_ = value_state_type::null;
           return true;
         }
-        if (auto sl = caf::get_if<tenzir::list_type>(seed)) {
+        if (auto sl = try_as<tenzir::list_type>(seed)) {
           auto* l = list();
           l->append_to_signature(sig, rb, sl);
           l->state_ = state::sentinel;
@@ -999,7 +999,7 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
       if (v.is_dead()) {
         return;
       }
-      const auto ls = caf::get_if<tenzir::list_type>(seed);
+      const auto ls = try_as<tenzir::list_type>(seed);
       if (not ls and seed) {
         rb.emit_mismatch_warning("list", *seed);
         builder.null();
@@ -1015,7 +1015,7 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
       if (v.is_dead()) {
         return;
       }
-      const auto rs = caf::get_if<tenzir::record_type>(seed);
+      const auto rs = try_as<tenzir::record_type>(seed);
       if (not rs and seed) {
         rb.emit_mismatch_warning(type{record_type{}}, *seed);
         builder.null();
@@ -1073,7 +1073,7 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
       if (v.is_dead()) {
         return;
       }
-      const auto ls = caf::get_if<tenzir::list_type>(seed);
+      const auto ls = try_as<tenzir::list_type>(seed);
       if (not ls and seed) {
         rb.emit_mismatch_warning("list", *seed);
         r = caf::none;
@@ -1081,13 +1081,13 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
         return;
       }
       r = tenzir::list{};
-      v.commit_to(caf::get<tenzir::list>(r), rb, ls, mark_dead);
+      v.commit_to(as<tenzir::list>(r), rb, ls, mark_dead);
     },
     [&r, &rb, seed, mark_dead](node_record& v) {
       if (v.is_dead()) {
         return;
       }
-      const auto rs = caf::get_if<tenzir::record_type>(seed);
+      const auto rs = try_as<tenzir::record_type>(seed);
       if (not rs and seed) {
         rb.emit_mismatch_warning(type{record_type{}}, *seed);
         r = caf::none;
@@ -1095,7 +1095,7 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
         return;
       }
       r = tenzir::record{};
-      v.commit_to(caf::get<tenzir::record>(r), rb, rs, mark_dead);
+      v.commit_to(as<tenzir::record>(r), rb, rs, mark_dead);
     },
     [&r, mark_dead]<non_structured_data_type T>(T& v) {
       if (mark_dead) {
@@ -1171,7 +1171,7 @@ auto node_list::data(tenzir::data d) -> void {
       TENZIR_UNREACHABLE();
     },
   };
-  return caf::visit(visitor, d);
+  return match(d, visitor);
 }
 
 auto node_list::data_unparsed(std::string text) -> void {

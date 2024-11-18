@@ -300,7 +300,7 @@ void hash_append(HashAlgorithm& h, const caf::variant<Args...>& x) {
   auto f = [&](const auto& val) {
     hash_append(h, val);
   };
-  caf::visit(f, x);
+  match(x, f);
 }
 
 // -- variadic ----------------------------------------------------------------

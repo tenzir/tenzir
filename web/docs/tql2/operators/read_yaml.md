@@ -29,8 +29,7 @@ but every string remains a string, unless the field is in the `schema`.
 
 ### `schema = str (optional)`
 
-Provide the name of a [schema](../../data-model/schemas.md) to be used by the
-parser.
+Provide the name of a schema to be used by the parser.
 
 If a schema with a matching name is installed, the result will always have
 all fields from that schema.
@@ -44,10 +43,9 @@ The `schema` option is incompatible with the `selector` option.
 
 ### `selector = str (optional)`
 
-Designates a field value as [schema](../../data-model/schemas.md) name with an
-optional dot-separated prefix.
+Designates a field value as schema name with an optional dot-separated prefix.
 
-The string is parsed as `<filename>[:<prefix>]`. The `prefix` is optional and
+The string is parsed as `<fieldname>[:<prefix>]`. The `prefix` is optional and
 will be prepended to the field value to generate the schema name.
 
 For example, the Suricata EVE JSON format includes a field
@@ -70,31 +68,31 @@ This option requires either `schema` or `selector` to be set.
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.
 
-A popular example of this is the [Zeek JSON](read_zeek_json.md) format. It includes
-the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
-top-level. The data is best modeled as an `id` record with four nested fields
-`orig_h`, `orig_p`, `resp_h`, and `resp_p`.
+A popular example of this is the [Zeek JSON](read_zeek_json.md) format. It
+includes the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at
+the top-level. The data is best modeled as an `id` record with four nested
+fields `orig_h`, `orig_p`, `resp_h`, and `resp_p`.
 
 Without an unflatten separator, the data looks like this:
 
-```json title="Without unflattening"
+```tql title="Without unflattening"
 {
-  "id.orig_h": "1.1.1.1",
-  "id.orig_p": 10,
-  "id.resp_h": "1.1.1.2",
-  "id.resp_p": 5
+  id.orig_h: 1.1.1.1,
+  id.orig_p: 10,
+  id.resp_h: 1.1.1.2,
+  id.resp_p: 5
 }
 ```
 
 With the unflatten separator set to `.`, Tenzir reads the events like this:
 
-```json title="With 'unflatten'"
+```tql title="With 'unflatten'"
 {
-  "id": {
-    "orig_h": "1.1.1.1",
-    "orig_p": 10,
-    "resp_h": "1.1.1.2",
-    "resp_p": 5
+  id: {
+    orig_h: 1.1.1.1,
+    orig_p: 10,
+    resp_h: 1.1.1.2,
+    resp_p: 5
   }
 }
 ```
@@ -119,15 +117,17 @@ dependencies:
 ```tql
 load_file "input.yaml"
 read_yaml
-――――――――――――――――――――――
+```
+
+```tql
 {
   name: "yaml",
   version: "bundled",
   kind: "builtin",
   types: [
     "parser",
-    "printer"
+    "printer",
   ],
-  dependencies: []
+  dependencies: [],
 }
 ```

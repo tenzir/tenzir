@@ -41,8 +41,7 @@ auto init(module mod, concepts_map concepts) -> bool {
   get_impl().concepts = std::move(concepts);
   std::copy_if(get_impl().mod.begin(), get_impl().mod.end(),
                std::back_inserter(get_impl().schemas), [](const auto& type) {
-                 return not type.name().empty()
-                        && caf::holds_alternative<record_type>(type);
+                 return not type.name().empty() && is<record_type>(type);
                });
   initialized = true;
   return true;

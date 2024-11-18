@@ -226,13 +226,17 @@ public:
 
   auto parse_invocation_or_assignment() -> statement {
     // TODO: Proper entity parsing.
+    if (silent_peek(tk::identifier) and silent_peek_n(tk::colon_colon, 1)) {
+      auto entity = parse_entity();
+      return parse_invocation(std::move(entity));
+    }
     auto unary_expr = parse_unary_expression();
     if (auto call = std::get_if<ast::function_call>(&*unary_expr.kind)) {
       // TODO: We patch a top-level function call to be an operator invocation
       // instead. This could be done differently by slightly rewriting the
       // parser. Because this is not (yet) reflected in the AST, the optional
       // parenthesis are not reflected.
-      if (call->subject) {
+      if (call->method) {
         // TODO: We could consider rewriting method calls to mutate their
         // subject, e.g., `foo.bar.baz(qux) => foo.bar = foo.bar.baz(qux)`.
         diagnostic::error("expected operator invocation, found method call")
@@ -261,7 +265,8 @@ public:
                   ? std::get_if<ast::root_field>(&*simple_sel->inner().kind)
                   : nullptr;
     if (root) {
-      return parse_invocation(entity{{std::move(root->ident)}});
+      auto entity = parse_entity(std::move(root->ident));
+      return parse_invocation(std::move(entity));
     }
     diagnostic::error("{}", "expected `=` after selector")
       .primary(next_location())
@@ -363,6 +368,19 @@ public:
     return expr;
   }
 
+  auto parse_entity() -> ast::entity {
+    return parse_entity(expect(tk::identifier).as_identifier());
+  }
+
+  auto parse_entity(ast::identifier root) -> ast::entity {
+    auto path = std::vector<identifier>{};
+    path.push_back(std::move(root));
+    while (accept(tk::colon_colon)) {
+      path.push_back(expect(tk::identifier).as_identifier());
+    }
+    return ast::entity{std::move(path)};
+  }
+
   auto parse_unary_expression() -> ast::expression {
     if (auto op = peek_unary_op()) {
       auto location = advance();
@@ -376,9 +394,9 @@ public:
     while (true) {
       if (auto dot = accept(tk::dot)) {
         auto name = expect(tk::identifier);
-        if (peek(tk::lpar)) {
-          expr = parse_function_call(std::move(expr),
-                                     entity{{name.as_identifier()}});
+        if (peek(tk::lpar) or peek(tk::colon_colon)) {
+          auto entity = parse_entity(name.as_identifier());
+          expr = parse_function_call(std::move(expr), std::move(entity));
         } else {
           expr = field_access{
             std::move(expr),
@@ -487,20 +505,16 @@ public:
         .primary(next_location(), "got {}", next_description())
         .throw_();
     }
-    auto path = std::vector<ast::identifier>{};
-    path.push_back(ident.as_identifier());
-    while (accept(tk::single_quote)) {
-      path.push_back(expect(tk::identifier).as_identifier());
-    }
+    auto entity = parse_entity(ident.as_identifier());
     if (peek(tk::lpar)) {
-      return parse_function_call({}, ast::entity{std::move(path)});
+      return parse_function_call({}, std::move(entity));
     }
-    if (path.size() != 1) {
+    if (entity.path.size() != 1) {
       diagnostic::error("expected function call")
         .primary(next_location())
         .throw_();
     }
-    return ast::root_field{std::move(path[0])};
+    return ast::root_field{std::move(entity.path[0])};
   }
 
   auto parse_record_or_pipeline_expr() -> ast::expression {
@@ -589,8 +603,8 @@ public:
   }
 
   auto parse_record_item() -> ast::record::item {
-    if (accept(tk::dot_dot_dot)) {
-      return ast::record::spread{parse_expression()};
+    if (auto dots = accept(tk::dot_dot_dot)) {
+      return ast::spread{dots.location, parse_expression()};
     }
     // TODO: Decide how to represent string fields in the AST.
     auto ident = [this]() {
@@ -729,7 +743,7 @@ public:
   auto parse_list() -> ast::list {
     auto begin = expect(tk::lbracket);
     auto scope = ignore_newlines(true);
-    auto items = std::vector<ast::expression>{};
+    auto items = std::vector<ast::list::item>{};
     while (true) {
       if (auto end = accept(tk::rbracket)) {
         return ast::list{
@@ -738,7 +752,11 @@ public:
           end.location,
         };
       }
-      items.push_back(parse_expression());
+      if (auto dots = accept(tk::dot_dot_dot)) {
+        items.emplace_back(ast::spread{dots.location, parse_expression()});
+      } else {
+        items.emplace_back(parse_expression());
+      }
       if (not peek(tk::rbracket)) {
         expect(tk::comma);
       }
@@ -750,13 +768,18 @@ public:
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
     auto args = std::vector<ast::expression>{};
+    auto method = false;
+    if (subject) {
+      method = true;
+      args.push_back(std::move(*subject));
+    }
     while (true) {
       if (auto rpar = accept(tk::rpar)) {
         return ast::function_call{
-          std::move(subject),
           std::move(fn),
           std::move(args),
           rpar.location,
+          method,
         };
       }
       if (auto comma = accept(tk::comma)) {

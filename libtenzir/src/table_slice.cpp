@@ -431,8 +431,8 @@ table_slice concatenate(std::vector<table_slice> slices) {
                                         return slice.schema() == schema;
                                       }),
                           "concatenate requires slices to be homogeneous");
-  auto builder = caf::get<record_type>(schema).make_arrow_builder(
-    arrow::default_memory_pool());
+  auto builder
+    = as<record_type>(schema).make_arrow_builder(arrow::default_memory_pool());
   auto arrow_schema = schema.to_arrow_schema();
   const auto resize_result
     = builder->Resize(detail::narrow_cast<int64_t>(rows(slices)));
@@ -440,7 +440,7 @@ table_slice concatenate(std::vector<table_slice> slices) {
 
   for (const auto& slice : slices) {
     auto batch = to_record_batch(slice);
-    auto status = append_array(*builder, caf::get<record_type>(schema),
+    auto status = append_array(*builder, as<record_type>(schema),
                                *batch->ToStructArray().ValueOrDie());
     TENZIR_ASSERT(status.ok());
   }
@@ -451,7 +451,7 @@ table_slice concatenate(std::vector<table_slice> slices) {
   const auto array = builder->Finish().ValueOrDie();
   auto batch = arrow::RecordBatch::Make(
     std::move(arrow_schema), rows,
-    caf::get<type_to_arrow_array_t<record_type>>(*array).fields());
+    as<type_to_arrow_array_t<record_type>>(*array).fields());
   auto result = table_slice{batch, schema};
   result.offset(slices[0].offset());
   result.import_time(slices[0].import_time());
@@ -474,7 +474,7 @@ select(const table_slice& slice, expression expr, const ids& hints) {
     co_return;
   }
   // Evaluate the filter expression.
-  if (!caf::holds_alternative<caf::none_t>(expr)) {
+  if (!is<caf::none_t>(expr)) {
     // Tailor the expression to the type; this is required for using the
     // evaluate function, which expects field and type extractors to be resolved
     // already.
@@ -652,11 +652,11 @@ table_slice resolve_enumerations(table_slice slice) {
   if (slice.rows() == 0) {
     return slice;
   }
-  auto type = caf::get<record_type>(slice.schema());
+  auto type = as<record_type>(slice.schema());
   // Resolve enumeration types, if there are any.
   auto transformations = std::vector<indexed_transformation>{};
   for (const auto& [field, index] : type.leaves()) {
-    if (!caf::holds_alternative<enumeration_type>(field.type)) {
+    if (!is<enumeration_type>(field.type)) {
       continue;
     }
     static auto transformation =
@@ -664,13 +664,13 @@ table_slice resolve_enumerations(table_slice slice) {
          std::shared_ptr<arrow::Array> array) noexcept
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-      const auto& et = caf::get<enumeration_type>(field.type);
+      const auto& et = as<enumeration_type>(field.type);
       auto new_type = tenzir::type{string_type{}};
       new_type.assign_metadata(field.type);
       auto builder
         = string_type::make_arrow_builder(arrow::default_memory_pool());
-      for (const auto& value : values(
-             et, caf::get<type_to_arrow_array_t<enumeration_type>>(*array))) {
+      for (const auto& value :
+           values(et, as<type_to_arrow_array_t<enumeration_type>>(*array))) {
         if (!value) {
           const auto append_result = builder->AppendNull();
           TENZIR_ASSERT_EXPENSIVE(append_result.ok(),
@@ -726,7 +726,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     return {};
   }
   const auto batch = to_record_batch(slice);
-  const auto& layout = caf::get<record_type>(slice.schema());
+  const auto& layout = as<record_type>(slice.schema());
   auto inferred_type = type{};
   auto array = std::shared_ptr<arrow::Array>{};
   // Helper function that binds a fixed value.
@@ -745,25 +745,24 @@ auto resolve_operand(const table_slice& slice, const operand& op)
       array = builder->Finish().ValueOrDie();
       return;
     }
-    auto g = [&]<concrete_type Type>(const Type& inferred_type) {
+    match(inferred_type, [&]<concrete_type Type>(const Type& inferred_type) {
       auto builder
         = inferred_type.make_arrow_builder(arrow::default_memory_pool());
       for (int i = 0; i < batch->num_rows(); ++i) {
-        const auto append_result
-          = append_builder(inferred_type, *builder,
-                           make_view(caf::get<type_to_data_t<Type>>(value)));
+        const auto append_result = append_builder(
+          inferred_type, *builder, make_view(as<type_to_data_t<Type>>(value)));
         TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
       }
       array = builder->Finish().ValueOrDie();
-    };
-    caf::visit(g, inferred_type);
+    });
   };
   // Helper function that binds an existing array.
   auto bind_array = [&](const offset& index) {
     inferred_type = layout.field(index).type;
     array = index.get(*batch);
   };
-  auto f = detail::overload{
+  match(
+    op,
     [&](const data& value) {
       bind_value(value);
     },
@@ -797,9 +796,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     },
     [&](const data_extractor& ex) {
       bind_array(layout.resolve_flat_index(ex.column));
-    },
-  };
-  caf::visit(f, op);
+    });
   return {
     std::move(inferred_type),
     std::move(array),
@@ -847,11 +844,12 @@ auto flatten_list(std::string_view separator, std::string_view name_prefix,
                   struct record_type::field field,
                   const std::shared_ptr<arrow::Array>& array)
   -> indexed_transformation::result_type {
-  const auto& lt = caf::get<list_type>(field.type);
+  const auto& lt = as<list_type>(field.type);
   auto list_array
     = std::static_pointer_cast<type_to_arrow_array_t<list_type>>(array);
   list_offsets.push_back(list_array->offsets());
-  auto f = detail::overload{
+  return match(
+    lt.value_type(),
     [&]<concrete_type Type>(
       const Type&) -> indexed_transformation::result_type {
       auto result = indexed_transformation::result_type{};
@@ -883,9 +881,7 @@ auto flatten_list(std::string_view separator, std::string_view name_prefix,
     [&](const record_type& rt) -> indexed_transformation::result_type {
       return flatten_record(separator, name_prefix, list_offsets,
                             {field.name, rt}, list_array->values());
-    },
-  };
-  return caf::visit(f, lt.value_type());
+    });
 }
 
 auto flatten_record(
@@ -893,7 +889,7 @@ auto flatten_record(
   const std::vector<std::shared_ptr<arrow::Array>>& list_offsets,
   struct record_type::field field, const std::shared_ptr<arrow::Array>& array)
   -> indexed_transformation::result_type {
-  const auto& rt = caf::get<record_type>(field.type);
+  const auto& rt = as<record_type>(field.type);
   if (rt.num_fields() == 0) {
     return {};
   }
@@ -913,7 +909,7 @@ auto flatten_record(
   TENZIR_ASSERT(output_struct_array);
   auto result = indexed_transformation::result_type{};
   result.reserve(output_struct_array->num_fields());
-  const auto& output_rt = caf::get<record_type>(output_type);
+  const auto& output_rt = as<record_type>(output_type);
   for (int i = 0; i < output_struct_array->num_fields(); ++i) {
     const auto field_view = output_rt.field(i);
     result.push_back({
@@ -931,7 +927,8 @@ auto make_flatten_transformation(
   return [=](struct record_type::field field,
              std::shared_ptr<arrow::Array> array)
            -> indexed_transformation::result_type {
-    auto f = detail::overload{
+    return match(
+      field.type,
       [&]<concrete_type Type>(
         const Type&) -> indexed_transformation::result_type {
         // Return unchanged, but use prefix, and wrap in a list if we need to.
@@ -965,10 +962,7 @@ auto make_flatten_transformation(
       [&](const record_type&) -> indexed_transformation::result_type {
         return flatten_record(separator, name_prefix, list_offsets,
                               std::move(field), array);
-      },
-    };
-    auto result = caf::visit(f, field.type);
-    return result;
+      });
   };
 }
 
@@ -999,7 +993,7 @@ auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
   // here.
   auto renamed_fields = std::vector<std::string>{};
   auto transformations = std::vector<indexed_transformation>{};
-  auto num_fields = caf::get<record_type>(schema).num_fields();
+  auto num_fields = as<record_type>(schema).num_fields();
   transformations.reserve(num_fields);
   for (size_t i = 0; i < num_fields; ++i) {
     transformations.push_back(
@@ -1010,7 +1004,7 @@ auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
   // The slice may contain duplicate field name here, so we perform an
   // additional transformation to rename them in case we detect any.
   transformations.clear();
-  const auto& layout = caf::get<record_type>(new_schema);
+  const auto& layout = as<record_type>(new_schema);
   TENZIR_ASSERT_EXPENSIVE(layout.num_fields() == layout.num_leaves());
   for (const auto& leaf : layout.leaves()) {
     size_t num_occurences = 0;
@@ -1060,7 +1054,7 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   if (slice.rows() == 0) {
     return {std::move(slice), {}};
   }
-  if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+  if (as<record_type>(slice.schema()).num_fields() == 0) {
     return {std::move(slice), {}};
   }
   const auto& array = to_record_batch(slice)->ToStructArray().ValueOrDie();
@@ -1189,9 +1183,9 @@ void unflatten_into(unflatten_entry& root, const arrow::StructArray& array,
 
 void unflatten_into(unflatten_entry& entry, std::shared_ptr<arrow::Array> array,
                     std::string_view sep) {
-  if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
+  if (auto record = try_as<arrow::StructArray>(*array)) {
     unflatten_into(entry, *record, sep);
-  } else if (auto list = caf::get_if<arrow::ListArray>(&*array)) {
+  } else if (auto list = try_as<arrow::ListArray>(*array)) {
     entry = unflatten(*list, sep);
   } else {
     entry = std::move(array);
@@ -1223,10 +1217,10 @@ auto unflatten(const arrow::ListArray& array,
 auto unflatten(std::shared_ptr<arrow::Array> array,
                std::string_view sep) -> std::shared_ptr<arrow::Array> {
   // We only unflatten records, but records can be contained in lists.
-  if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
+  if (auto record = try_as<arrow::StructArray>(*array)) {
     return unflatten(*record, sep);
   }
-  if (auto list = caf::get_if<arrow::ListArray>(&*array)) {
+  if (auto list = try_as<arrow::ListArray>(*array)) {
     return unflatten(*list, sep);
   }
   return array;

@@ -9,6 +9,7 @@
 #include "tenzir/command.hpp"
 
 #include "tenzir/test/test.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/make_message.hpp>
@@ -63,7 +64,7 @@ struct fixture {
 
 template <class T>
 bool is_error(const T& x) {
-  return caf::holds_alternative<caf::error>(x);
+  return is<caf::error>(x);
 }
 
 } // namespace

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tenzir"
-version = "4.22.1"
+version = "4.23.0"
 description = "A security telemetry engine for detection and response"
 authors = ["Tenzir <engineering@tenzir.com>"]
 maintainers = ["Tenzir <engineering@tenzir.com>"]
@@ -24,7 +24,7 @@ repository = "https://github.com/tenzir/tenzir"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-pyarrow = ">=11,<18"
+pyarrow = ">=11,<19"
 dynaconf = "^3.2"
 
 aiohttp = { version = "^3.8", optional = true }

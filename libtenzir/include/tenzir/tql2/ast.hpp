@@ -412,29 +412,27 @@ struct entity {
 struct function_call {
   function_call() = default;
 
-  function_call(std::optional<expression> subject, entity fn,
-                std::vector<expression> args, location rpar)
-    : subject{std::move(subject)},
-      fn{std::move(fn)},
-      args(std::move(args)),
-      rpar{rpar} {
+  function_call(entity fn, std::vector<expression> args, location rpar,
+                bool method)
+    : fn{std::move(fn)}, args(std::move(args)), rpar{rpar}, method{method} {
   }
 
-  std::optional<expression> subject;
   entity fn;
   std::vector<expression> args;
   location rpar;
+  bool method{};
 
   friend auto inspect(auto& f, function_call& x) -> bool {
-    return f.object(x).fields(f.field("subject", x.subject),
-                              f.field("fn", x.fn), f.field("args", x.args),
-                              f.field("rpar", x.rpar));
+    return f.object(x).fields(f.field("fn", x.fn), f.field("args", x.args),
+                              f.field("rpar", x.rpar),
+                              f.field("method", x.method));
   }
 
   auto get_location() const -> location {
     auto left = location{};
-    if (subject) {
-      left = subject->get_location();
+    if (method) {
+      TENZIR_ASSERT(not args.empty());
+      left = args[0].get_location();
     } else {
       left = fn.get_location();
     }
@@ -491,15 +489,35 @@ struct index_expr {
   }
 };
 
+struct spread {
+  spread() = default;
+
+  spread(location dots, expression expr) : dots{dots}, expr{std::move(expr)} {
+  }
+
+  location dots;
+  expression expr;
+
+  friend auto inspect(auto& f, spread& x) -> bool {
+    return f.object(x).fields(f.field("dots", x.dots), f.field("expr", x.expr));
+  }
+
+  auto get_location() const -> location {
+    return dots.combine(expr);
+  }
+};
+
 struct list {
+  using item = variant<expression, spread>;
+
   list() = default;
 
-  list(location begin, std::vector<expression> items, location end)
-    : begin{begin}, items(std::move(items)), end{end} {
+  list(location begin, std::vector<item> items, location end)
+    : begin{begin}, items{std::move(items)}, end{end} {
   }
 
   location begin;
-  std::vector<expression> items;
+  std::vector<item> items;
   location end;
 
   friend auto inspect(auto& f, list& x) -> bool {
@@ -513,14 +531,6 @@ struct list {
 };
 
 struct record {
-  struct spread {
-    expression expr;
-
-    friend auto inspect(auto& f, spread& x) -> bool {
-      return f.object(x).fields(f.field("expr", x.expr));
-    }
-  };
-
   struct field {
     field() = default;
 
@@ -790,7 +800,6 @@ protected:
   }
 
   void enter(function_call& x) {
-    go(x.subject);
     go(x.fn);
     go(x.args);
   }
@@ -812,12 +821,16 @@ protected:
     go(x.expr);
   }
 
-  void enter(record::spread& x) {
+  void enter(spread& x) {
     go(x.expr);
   }
 
   void enter(list& x) {
     go(x.items);
+  }
+
+  void enter(list::item& x) {
+    match(x);
   }
 
   void enter(field_access& x) {
@@ -915,6 +928,23 @@ private:
 } // namespace tenzir::ast
 
 namespace tenzir {
+
+template <>
+class variant_traits<ast::expression> {
+public:
+  static constexpr auto count
+    = caf::detail::tl_size<ast::expression_kinds>::value;
+
+  static auto index(const ast::expression& x) -> size_t {
+    TENZIR_ASSERT(x.kind);
+    return x.kind->index();
+  }
+
+  template <size_t I>
+  static auto get(const ast::expression& x) -> decltype(auto) {
+    return *std::get_if<I>(&*x.kind);
+  }
+};
 
 auto is_true_literal(const ast::expression& y) -> bool;
 

@@ -8,6 +8,8 @@
 
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/checked_math.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -26,19 +28,19 @@ public:
 
 private:
   [[nodiscard]] type output_type() const override {
-    TENZIR_ASSERT(caf::holds_alternative<Type>(input_type()));
+    TENZIR_ASSERT(is<Type>(input_type()));
     return input_type();
   }
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
     if (!sum_) {
-      sum_ = materialize(caf::get<view_type>(view));
+      sum_ = materialize(as<view_type>(view));
     } else {
-      sum_ = *sum_ + materialize(caf::get<view_type>(view));
+      sum_ = *sum_ + materialize(as<view_type>(view));
     }
   }
 
@@ -156,16 +158,78 @@ public:
           .emit(ctx);
         sum_ = caf::none;
       }};
-    caf::visit(f, *s.array);
+    match(*s.array, f);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     if (sum_) {
       return sum_->match([](auto sum) {
         return data{sum};
       });
     }
     return data{};
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto result
+      = not sum_ ? data{} : sum_->match<data>([](const auto& x) {
+          return data{x};
+        });
+    const auto fb_result = pack(fbb, result);
+    const auto type_bytes = as_bytes(type_);
+    auto fb_type = fbb.CreateVector(
+      reinterpret_cast<const uint8_t*>(type_bytes.data()), type_bytes.size());
+    const auto fb_min_max
+      = fbs::aggregation::CreateMinMaxSum(fbb, fb_result, fb_type);
+    fbb.Finish(fb_min_max);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::MinMaxSum>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `sum` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_result = (*fb)->result();
+    if (not fb_result) {
+      diagnostic::warning("missing field `result`")
+        .note("failed to restore `sum` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    auto result = data{};
+    if (auto err = unpack(*fb_result, result)) {
+      diagnostic::warning("{}", err)
+        .note("failed to restore `sum` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    match(result, [&]<class T>(const T& x) {
+        if constexpr (std::is_same_v<T, caf::none_t>) {
+          sum_.reset();
+        } else if constexpr (sum_t::can_have<T>) {
+          sum_.emplace(x);
+        } else {
+          diagnostic::warning("invalid value for field `result`: `{}`", result)
+            .note("failed to restore `sum` aggregation instance")
+            .emit(ctx);
+        }
+      });
+    const auto* fb_type = (*fb)->type();
+    if (not fb_type) {
+      diagnostic::warning("missing field `type`")
+        .note("failed to restore `sum` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_type_nested_root = (*fb)->type_nested_root();
+    TENZIR_ASSERT(fb_type_nested_root);
+    type_ = type{fb->slice(*fb_type_nested_root, *fb_type)};
   }
 
 private:
@@ -235,7 +299,7 @@ class plugin : public virtual aggregation_function_plugin,
                                            type));
       },
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto aggregation_default() const -> data override {

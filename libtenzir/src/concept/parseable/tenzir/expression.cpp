@@ -59,19 +59,19 @@ struct expander {
   expression operator()(const conjunction& c) const {
     conjunction result;
     for (auto& op : c)
-      result.push_back(caf::visit(*this, op));
+      result.push_back(match(op, *this));
     return result;
   }
 
   expression operator()(const disjunction& d) const {
     disjunction result;
     for (auto& op : d)
-      result.push_back(caf::visit(*this, op));
+      result.push_back(match(op, *this));
     return result;
   }
 
   expression operator()(const negation& n) const {
-    return {negation{caf::visit(*this, n.expr())}};
+    return {negation{match(n.expr(), *this)}};
   }
 
   expression operator()(const predicate& p) const {
@@ -79,13 +79,18 @@ struct expander {
     // additional :ip in S predicate gets appended as disjunction afterwards.
     auto build_addr_pred
       = [](auto& lhs, auto op, auto& rhs) -> caf::optional<expression> {
-      if (auto t = caf::get_if<type_extractor>(&lhs))
-        if (auto d = caf::get_if<data>(&rhs))
-          if (op == relational_operator::equal)
-            if (caf::holds_alternative<subnet_type>(t->type))
-              if (auto sn = caf::get_if<subnet>(d))
+      if (auto t = try_as<type_extractor>(&lhs)) {
+        if (auto d = try_as<data>(&rhs)) {
+          if (op == relational_operator::equal) {
+            if (is<subnet_type>(t->type)) {
+              if (auto sn = try_as<subnet>(d)) {
                 return predicate{type_extractor{type{ip_type{}}},
                                  relational_operator::in, *d};
+              }
+            }
+          }
+        }
+      }
       return caf::none;
     };
     auto make_disjunction = [](auto x, auto y) {
@@ -146,18 +151,18 @@ static expression expand(data x) {
     }
     return result.empty() ? expression{} : expression{std::move(result)};
   };
-  if (auto expr = caf::visit(try_expand_numeric_literal, x);
+  if (auto expr = match(x, try_expand_numeric_literal);
       expr != expression{}) {
     return expr;
   }
   auto infer_type = [](const auto& d) -> type {
     return type::infer(d).value_or(type{});
   };
-  auto lhs = type_extractor{caf::visit(infer_type, x)};
+  auto lhs = type_extractor{match(x, infer_type)};
   auto rhs = operand{std::move(x)};
   auto pred
     = predicate{std::move(lhs), relational_operator::equal, std::move(rhs)};
-  return caf::visit(expander{}, expression{std::move(pred)});
+  return match(expression{std::move(pred)}, expander{});
 }
 
 expression expand_extractor(operand lhs) {
@@ -222,7 +227,7 @@ auto make_predicate_parser() {
     | "!in"_p ->* [] { return relational_operator::not_in; }
     | "ni"_p  ->* [] { return relational_operator::ni; }
     | "!ni"_p ->* [] { return relational_operator::not_ni; }
-    | ("not"_p >> !&identifier) >> required_ws_or_comment >> "in"_p 
+    | ("not"_p >> !&identifier) >> required_ws_or_comment >> "in"_p
       ->* [] { return relational_operator::not_in; }
     ;
   auto pred

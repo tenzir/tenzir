@@ -22,11 +22,11 @@ data rather than slow down their publishers.
 ### `topic: str (optional)`
 
 An optional channel name to subscribe to. If unspecified, the operator
-subscribes to the global unnamed feed.
+subscribes to the topic `main`.
 
 ## Examples
 
-Subscribe to the events under the topic `zeek-conn` and filter events
+### Subscribe to the events under a topic
 
 ```tql
 subscribe "zeek-conn"

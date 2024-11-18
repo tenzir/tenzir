@@ -79,7 +79,7 @@ std::optional<double> get_field_fprate(const index_config& config,
     return detail::is_any_v<T, bool_type, int64_type, uint64_type, double_type,
                             duration_type, time_type>;
   };
-  if (caf::visit(use_default_fprate, field.type())) {
+  if (match(field.type(), use_default_fprate)) {
     return config.default_fp_rate;
   }
   return std::nullopt;
@@ -110,7 +110,7 @@ void partition_synopsis::add(const table_slice& slice,
   if (!schema)
     schema = slice.schema();
   TENZIR_ASSERT_EXPENSIVE(schema == slice.schema());
-  auto each = caf::get<record_type>(schema).leaves();
+  auto each = as<record_type>(schema).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
   // These options must be kept in sync with tenzir/ip_synopsis.hpp and
@@ -129,8 +129,9 @@ void partition_synopsis::add(const table_slice& slice,
         // TODO: It would probably make sense to allow `null` in the
         // synopsis API, so we can treat queries like `x == null` just
         // like normal queries.
-        if (!caf::holds_alternative<caf::none_t>(view))
+        if (!is<caf::none_t>(view)) {
           syn->add(std::move(view));
+        }
       }
     };
     // Make a field synopsis if it was configured.
@@ -160,7 +161,7 @@ void partition_synopsis::add(const table_slice& slice,
     auto prune = [&]<concrete_type T>(const T& x) {
       return type{x};
     };
-    auto cleaned_type = caf::visit(prune, leaf.field.type);
+    auto cleaned_type = match(leaf.field.type, prune);
     // Create the type synopsis
     auto tt = type_synopses_.find(cleaned_type);
     if (tt == type_synopses_.end())

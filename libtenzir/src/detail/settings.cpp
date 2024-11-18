@@ -26,14 +26,14 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
     return;
   }
   for (auto& [key, value] : src) {
-    if (caf::holds_alternative<caf::settings>(value)) {
-      merge_settings_impl(caf::get<caf::settings>(value),
-                          dst[key].as_dictionary(), merge_lists, depth + 1);
+    if (is<caf::settings>(value)) {
+      merge_settings_impl(as<caf::settings>(value), dst[key].as_dictionary(),
+                          merge_lists, depth + 1);
     } else {
       if (merge_lists == policy::merge_lists::yes) {
-        if (caf::holds_alternative<caf::config_value::list>(value)
-            && caf::holds_alternative<caf::config_value::list>(dst[key])) {
-          const auto& src_list = caf::get<caf::config_value::list>(value);
+        if (is<caf::config_value::list>(value)
+            && is<caf::config_value::list>(dst[key])) {
+          const auto& src_list = as<caf::config_value::list>(value);
           auto& dst_list = dst[key].as_list();
           dst_list.insert(dst_list.end(), src_list.begin(), src_list.end());
         } else {

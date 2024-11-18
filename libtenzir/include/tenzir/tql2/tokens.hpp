@@ -29,7 +29,7 @@ TENZIR_ENUM(
   // punctuation
   dot, plus, minus, slash, star, equal_equal, bang_equal, less, less_equal,
   greater, greater_equal, at, equal, comma, colon, single_quote, fat_arrow,
-  pipe, dot_dot_dot,
+  pipe, dot_dot_dot, colon_colon,
   // parenthesis
   lpar, rpar, lbrace, rbrace, lbracket, rbracket,
   // whitespace

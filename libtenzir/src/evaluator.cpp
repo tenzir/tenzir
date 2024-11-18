@@ -39,14 +39,14 @@ public:
   ids operator()(const Connective& xs) {
     TENZIR_ASSERT(xs.size() > 0);
     push();
-    auto result = caf::visit(*this, xs[0]);
+    auto result = match(xs[0], *this);
     for (size_t index = 1; index < xs.size(); ++index) {
       next();
       if constexpr (std::is_same_v<Connective, conjunction>) {
-        result &= caf::visit(*this, xs[index]);
+        result &= match(xs[index], *this);
       } else {
         static_assert(std::is_same_v<Connective, disjunction>);
-        result |= caf::visit(*this, xs[index]);
+        result |= match(xs[index], *this);
       }
     }
     pop();
@@ -55,7 +55,7 @@ public:
 
   ids operator()(const negation& n) {
     push();
-    auto result = caf::visit(*this, n.expr());
+    auto result = match(n.expr(), *this);
     pop();
     result.flip();
     return result;
@@ -100,7 +100,7 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
   auto& [missing, accumulated_hits] = *ptr;
   accumulated_hits |= result;
   if (--missing == 0) {
-    TENZIR_DEBUG("{} collected all results at position {}", *self, position);
+    TENZIR_TRACE("{} collected all results at position {}", *self, position);
     evaluate();
   }
   decrement_pending();
@@ -114,7 +114,7 @@ void evaluator_state::handle_missing_result(
   auto ptr = hits_for(position);
   TENZIR_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
-    TENZIR_DEBUG("{} collected all results at position {}", *self, position);
+    TENZIR_TRACE("{} collected all results at position {}", *self, position);
     evaluate();
   }
   decrement_pending();
@@ -125,7 +125,7 @@ void evaluator_state::handle_no_indexer(const offset& position) {
 }
 
 void evaluator_state::evaluate() {
-  auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
+  auto expr_hits = match(expr, ids_evaluator{predicate_hits});
   TENZIR_TRACE("{} got predicate_hits: {} expr_hits: {}", *self, predicate_hits,
                expr_hits);
   hits |= expr_hits;

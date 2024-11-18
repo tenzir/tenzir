@@ -206,7 +206,7 @@ public:
             return series::null(OutTy{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 
@@ -231,12 +231,11 @@ using id_to_name_plugin
 using tenzir::plugins::ocsf::category_map;
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
-  "ocsf_category_uid", "string", category_map, "OCSF category name"})
+  "ocsf::category_uid", "string", category_map, "OCSF category name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
-  "ocsf_category_name", "int", category_map, "OCSF category ID"})
+  "ocsf::category_name", "int", category_map, "OCSF category ID"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
-  "ocsf_class_uid", "string", tenzir::plugins::ocsf::class_map,
+  "ocsf::class_uid", "string", tenzir::plugins::ocsf::class_map,
   "OCSF class name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
-  "ocsf_class_name", "int", tenzir::plugins::ocsf::class_map,
-  "OCSF class ID"})
+  "ocsf::class_name", "int", tenzir::plugins::ocsf::class_map, "OCSF class ID"})

@@ -70,7 +70,7 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
 }
 
 void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
-  TENZIR_DEBUG("{} spawns execution nodes", *self);
+  TENZIR_TRACE("{} spawns execution nodes", *self);
   auto input_type = operator_type::make<void>();
   auto previous = exec_node_actor{};
   bool spawn_remote = false;
@@ -86,7 +86,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     }
     auto description = fmt::format("{:?}", op);
     if (spawn_remote) {
-      TENZIR_DEBUG("{} spawns {} remotely", *self, description);
+      TENZIR_TRACE("{} spawns {} remotely", *self, description);
       if (not node) {
         abort_start(caf::make_error(
           ec::invalid_argument, "encountered remote operator, but remote node "
@@ -110,7 +110,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       self
         ->request(node, caf::infinite, atom::spawn_v,
                   operator_box{std::move(op)}, input_type, diagnostics, metrics,
-                  op_index, is_hidden)
+                  op_index, is_hidden, run_id)
         .then(
           [this, description, index](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
@@ -125,17 +125,17 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
           });
       input_type = *output_type;
     } else {
-      TENZIR_DEBUG("{} spawns {} locally", *self, description);
+      TENZIR_TRACE("{} spawns {} locally", *self, description);
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type, node, diagnostics,
-                          metrics, op_index, has_terminal, is_hidden);
+                          metrics, op_index, has_terminal, is_hidden, run_id);
       if (not spawn_result) {
         abort_start(diagnostic::error(spawn_result.error())
                       .note("failed to spawn {} locally", description)
                       .to_error());
         return;
       }
-      TENZIR_DEBUG("{} spawned {} locally", *self, description);
+      TENZIR_TRACE("{} spawned {} locally", *self, description);
       std::tie(previous, input_type) = std::move(*spawn_result);
       self->monitor(previous);
       exec_nodes.push_back(previous);
@@ -170,12 +170,12 @@ void pipeline_executor_state::abort_start(caf::error reason) {
 }
 
 void pipeline_executor_state::finish_start() {
-  TENZIR_DEBUG("{} signals successful start", *self);
+  TENZIR_TRACE("{} signals successful start", *self);
   start_rp.deliver();
 }
 
 auto pipeline_executor_state::start() -> caf::result<void> {
-  TENZIR_DEBUG("{} got start request", *self);
+  TENZIR_TRACE("{} got start request", *self);
   if (not this->pipe) {
     return caf::make_error(ec::logic_error,
                            "pipeline exeuctor can only start once");
@@ -207,7 +207,7 @@ auto pipeline_executor_state::start() -> caf::result<void> {
   if (not node) {
     for (const auto& op : pipe.operators()) {
       if (op->location() == operator_location::remote) {
-        TENZIR_DEBUG("{} connects to node because of remote operators", *self);
+        TENZIR_TRACE("{} connects to node because of remote operators", *self);
         connect_to_node(self, [this, pipe = std::move(pipe)](
                                 caf::expected<node_actor> result) mutable {
           if (not result) {
@@ -268,7 +268,7 @@ auto pipeline_executor(
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
   metrics_receiver_actor metrics, node_actor node, bool has_terminal,
   bool is_hidden) -> pipeline_executor_actor::behavior_type {
-  TENZIR_DEBUG("{} was created", *self);
+  TENZIR_TRACE("{} was created", *self);
   self->state.self = self;
   self->state.node = std::move(node);
   self->state.pipe = std::move(pipe);

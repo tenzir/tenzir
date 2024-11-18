@@ -274,7 +274,7 @@ public:
 
   static auto parse(parser_interface& p) -> every_scheduler {
     auto interval_data = p.parse_data();
-    const auto* interval = caf::get_if<duration>(&interval_data.inner);
+    const auto* interval = try_as<duration>(&interval_data.inner);
     if (not interval) {
       diagnostic::error("interval must be a duration")
         .primary(interval_data.source)

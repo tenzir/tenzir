@@ -9,8 +9,9 @@ summarize (group|aggregation)...
 ## Description
 
 The `summarize` operator groups events according to certain fields and applies
-aggregation functions to each group. The operator consumes the entire input
-before producing any output.
+[aggregation functions](../functions.md#aggregation) to each group. The operator
+consumes the entire input before producing any output, and may reorder the event
+stream.
 
 The order of the output fields follows the sequence of the provided arguments.
 Unspecified fields are dropped.
@@ -27,51 +28,25 @@ returned.
 
 ### `aggregation`
 
-The aggregation functions applied to each group are specified with `f(…)` or
-`<field>=f(…)`, where `f` is the name of an aggregation function (see below) and
-`<field>` is an optional name for the result. The aggregation function will
-produce a single result for each group.
+The [aggregation functions](../functions.md#aggregation) applied to each group
+are specified with `f(…)` or `<field>=f(…)`, where `f` is the name of an
+aggregation function (see below) and `<field>` is an optional name for the
+result. The aggregation function will produce a single result for each group.
 
-If no name is specified, it will be automatically generated from the aggregation
-function call. If processing continues after `summarize`, it is strongly
-recommended to specify a custom name.
-
-The following aggregation functions are available and, unless specified
-differently, take exactly one argument:
-
-- `sum`: Computes the sum of all grouped values.
-- `min`: Computes the minimum of all grouped values.
-- `max`: Computes the maximum of all grouped values.
-- `any`: Computes the disjunction (OR) of all grouped values. Requires the
-  values to be booleans.
-- `all`: Computes the conjunction (AND) of all grouped values. Requires the
-  values to be booleans.
-- `first`: Takes the first of all grouped values that is not null.
-- `last`: Takes the last of all grouped values that is not null.
-- `mean`: Computes the mean of all grouped values.
-- `median`: Computes the approximate median of all grouped values with a
-  t-digest algorithm.
-- `mode`: Takes the most common of all grouped values that is not null.
-- `quantile`: Computes the quantile specified by the named argument `q`, for
-  example: `quantile(x, q=0.2)`.
-- `stddev`: Computes the standard deviation of all grouped values.
-- `variance`: Computes the variance of all grouped values.
-- `distinct`: Creates a sorted list without duplicates of all grouped values
-  that are not null.
-- `collect`: Creates a list of all grouped values that are not null, preserving
-  duplicates.
-- `count`: When used as `count()`, simply counts the events in the group. When
-  used as `count(x)`, counts all grouped values that are not null.
-- `count_distinct`: Counts all distinct grouped values that are not null.
+If no name is specified, the aggregation function call will automatically
+generate one. If processing continues after `summarize`, we strongly recommend
+to specify a custom name.
 
 ## Examples
 
-Compute the sum of `x` over all events:
+### Compute the sum of a field over all events
 
 ```tql
 from [{x: 1}, {x: 2}]
 summarize x=sum(x)
-―――――――――――――――――――――
+```
+
+```tql
 {x: 3}
 ```
 
@@ -84,10 +59,14 @@ from [
   {x: 1, y: 1, z: 3},
 ]
 summarize y, x=sum(x)
-―――――――――――――――――――――
+```
+
+```tql
 {y: 0, x: 0}
 {y: 1, x: 2}
 ```
+
+### Gather unique values in a list
 
 Group the input by `src_ip` and aggregate all unique `dest_port` values into a
 list:
@@ -103,6 +82,8 @@ list:
 summarize src_ip, count_distinct(dest_port)
 ```
 
+### Compute min and max of a group
+
 Compute minimum and maximum of the `timestamp` field per `src_ip` group:
 
 ```tql
@@ -115,12 +96,16 @@ Compute minimum and maximum of the `timestamp` field over all events:
 summarize min(timestamp), max(timestamp)
 ```
 
+### Check if any value of a group is true
+
 Create a boolean flag `originator` that is `true` if any value in the `src_ip`
 group is `true`:
 
 ```tql
 summarize src_ip, originator=any(is_orig)
 ```
+
+### Create 1-hour time buckets
 
 Create 1-hour groups and produce a summary of network traffic between host
 pairs:

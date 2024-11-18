@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/aggregation_function.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -30,10 +32,10 @@ private:
 
   auto add(const data_view& view) -> void override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
-    const auto x = static_cast<double>(caf::get<view_type>(view));
+    const auto x = static_cast<double>(as<view_type>(view));
     if constexpr (std::is_same_v<Type, double_type>) {
       if (std::isnan(x)) {
         return;
@@ -44,7 +46,7 @@ private:
   }
 
   auto add(const arrow::Array& array) -> void override {
-    const auto& typed_array = caf::get<type_to_arrow_array_t<Type>>(array);
+    const auto& typed_array = as<type_to_arrow_array_t<Type>>(array);
     for (auto&& value : values(Type{}, typed_array)) {
       if (not value) {
         continue;
@@ -127,10 +129,10 @@ public:
           .emit(ctx);
         state_ = state::failed;
       }};
-    caf::visit(f, *arg.array);
+    match(*arg.array, f);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     switch (state_) {
       case state::none:
       case state::failed:
@@ -141,6 +143,56 @@ public:
         return count_ ? data{mean_} : data{};
     }
     TENZIR_UNREACHABLE();
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto fb_state = [&] {
+      switch (state_) {
+        case state::none:
+          return fbs::aggregation::MeanState::None;
+        case state::failed:
+          return fbs::aggregation::MeanState::Failed;
+        case state::dur:
+          return fbs::aggregation::MeanState::Duration;
+        case state::numeric:
+          return fbs::aggregation::MeanState::Numeric;
+      }
+      TENZIR_UNREACHABLE();
+    }();
+    const auto fb_mean
+      = fbs::aggregation::CreateMean(fbb, mean_, count_, fb_state);
+    fbb.Finish(fb_mean);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb = flatbuffer<fbs::aggregation::Mean>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `mean` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    mean_ = (*fb)->result();
+    count_ = (*fb)->count();
+    switch ((*fb)->state()) {
+      case fbs::aggregation::MeanState::None:
+        state_ = state::none;
+        return;
+      case fbs::aggregation::MeanState::Failed:
+        state_ = state::failed;
+        return;
+      case fbs::aggregation::MeanState::Duration:
+        state_ = state::dur;
+        return;
+      case fbs::aggregation::MeanState::Numeric:
+        state_ = state::numeric;
+        return;
+    }
+    diagnostic::warning("unknown `state` value")
+      .note("failed to restore `mean` aggregation instance")
+      .emit(ctx);
   }
 
 private:
@@ -179,7 +231,7 @@ class plugin : public virtual aggregation_function_plugin,
                                            type));
       },
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto make_aggregation(invocation inv, session ctx) const

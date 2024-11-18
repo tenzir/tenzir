@@ -30,20 +30,13 @@ auto argument_parser2::parse(const operator_factory_plugin::invocation& inv,
 
 auto argument_parser2::parse(const function_plugin::invocation& inv,
                              session ctx) -> failure_or<void> {
-  TENZIR_ASSERT(kind_ != kind::op);
-  if (inv.call.subject) {
-    auto args = std::vector<ast::expression>{};
-    args.reserve(1 + inv.call.args.size());
-    args.push_back(*inv.call.subject);
-    args.insert(args.end(), inv.call.args.begin(), inv.call.args.end());
-    return parse(inv.call.fn, args, ctx);
-  }
+  TENZIR_ASSERT(kind_ == kind::fn);
   return parse(inv.call.fn, inv.call.args, ctx);
 }
 
 auto argument_parser2::parse(const ast::function_call& call, session ctx)
   -> failure_or<void> {
-  TENZIR_ASSERT(kind_ != kind::op);
+  TENZIR_ASSERT(kind_ == kind::fn);
   return parse(call.fn, call.args, ctx);
 }
 
@@ -60,15 +53,13 @@ auto argument_parser2::parse(const ast::entity& self,
   };
   auto kind = [](const data& x) -> std::string_view {
     // TODO: Refactor this.
-    return caf::visit(
-      []<class Data>(const Data&) -> std::string_view {
+    return match(x, []<class Data>(const Data&) -> std::string_view {
         if constexpr (caf::detail::is_one_of<Data, pattern>::value) {
           TENZIR_UNREACHABLE();
         } else {
           return to_string(type_kind::of<data_to_type_t<Data>>);
         }
-      },
-      x);
+      });
   };
   auto arg = args.begin();
   auto positional_idx = size_t{0};
@@ -97,10 +88,10 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         // TODO: Make this more beautiful.
         auto storage = T{};
-        auto cast = caf::get_if<T>(&*value);
+        auto cast = try_as<T>(&*value);
         if constexpr (std::same_as<T, uint64_t>) {
           if (not cast) {
-            auto other = caf::get_if<int64_t>(&*value);
+            auto other = try_as<int64_t>(&*value);
             if (other) {
               if (*other < 0) {
                 emit(diagnostic::error("expected positive integer, got `{}`",
@@ -178,10 +169,10 @@ auto argument_parser2::parse(const ast::entity& self,
               result = value.error();
               return;
             }
-            auto cast = caf::get_if<T>(&*value);
+            auto cast = try_as<T>(&*value);
             if constexpr (std::same_as<T, uint64_t>) {
               if (not cast) {
-                auto other = caf::get_if<int64_t>(&*value);
+                auto other = try_as<int64_t>(&*value);
                 if (other) {
                   if (*other < 0) {
                     emit(diagnostic::error(
@@ -190,7 +181,7 @@ auto argument_parser2::parse(const ast::entity& self,
                     return;
                   }
                   value = static_cast<uint64_t>(*other);
-                  cast = caf::get_if<T>(&*value);
+                  cast = try_as<T>(&*value);
                 }
               }
             }
@@ -234,6 +225,7 @@ auto argument_parser2::parse(const ast::entity& self,
         if (positional_idx == positional_.size()) {
           emit(diagnostic::error("did not expect more positional arguments")
                  .primary(*arg));
+          return;
         }
         positional_[positional_idx].set.match(
           [&](setter<located<pipeline>>& set) {
@@ -267,23 +259,14 @@ auto argument_parser2::parse(const ast::entity& self,
 
 auto argument_parser2::usage() const -> std::string {
   if (usage_cache_.empty()) {
-    if (kind_ == kind::method) {
-      TENZIR_ASSERT(not positional_.empty());
-      usage_cache_ += positional_[0].meta;
-      usage_cache_ += '.';
-    }
     usage_cache_ += name_;
     usage_cache_ += kind_ == kind::op ? ' ' : '(';
     auto has_previous = false;
     for (auto [idx, positional] : detail::enumerate(positional_)) {
-      auto first = idx == 0;
       auto last = idx == positional_.size() - 1;
-      if (first && kind_ == kind::method) {
-        continue;
-      }
       auto is_pipeline
         = std::holds_alternative<setter<located<pipeline>>>(positional.set);
-      if (last && is_pipeline) {
+      if (last && is_pipeline && kind_ == kind::op) {
         usage_cache_ += ' ';
       } else if (std::exchange(has_previous, true)) {
         usage_cache_ += ", ";
@@ -344,10 +327,8 @@ auto argument_parser2::docs() const -> std::string {
     switch (kind_) {
       case kind::op:
         return "tql2/operators";
-      case kind::function:
+      case kind::fn:
         return "functions";
-      case kind::method:
-        return "methods";
     }
     TENZIR_UNREACHABLE();
   });

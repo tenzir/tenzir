@@ -110,8 +110,9 @@ struct group_by_key_view : std::vector<data_view> {
   friend group_by_key materialize(const group_by_key_view& views) {
     auto result = group_by_key{};
     result.reserve(views.size());
-    for (const auto& view : views)
+    for (const auto& view : views) {
       result.push_back(materialize(view));
+    }
     return result;
   }
 };
@@ -121,15 +122,17 @@ struct group_by_key_view : std::vector<data_view> {
 struct group_by_key_hash {
   size_t operator()(const group_by_key& x) const noexcept {
     auto hasher = xxh64{};
-    for (const auto& value : x)
+    for (const auto& value : x) {
       hash_append(hasher, make_view(value));
+    }
     return hasher.finish();
   }
 
   size_t operator()(const group_by_key_view& x) const noexcept {
     auto hasher = xxh64{};
-    for (const auto& value : x)
+    for (const auto& value : x) {
       hash_append(hasher, value);
+    }
     return hasher.finish();
   }
 };
@@ -181,7 +184,7 @@ struct binding {
     auto result = binding{};
     result.group_by_columns.reserve(config.group_by_extractors.size());
     result.aggregation_columns.reserve(config.aggregations.size());
-    auto const& rt = caf::get<record_type>(schema);
+    auto const& rt = as<record_type>(schema);
     for (auto const& field : config.group_by_extractors) {
       if (auto offset = schema.resolve_key_or_concept_once(field)) {
         auto type = rt.field(*offset).type;
@@ -249,8 +252,7 @@ struct binding {
     for (const auto& column : group_by_columns) {
       if (column) {
         auto array = column->offset.get(batch);
-        if (config.time_resolution
-            && caf::holds_alternative<time_type>(column->type)) {
+        if (config.time_resolution && is<time_type>(column->type)) {
           array = arrow::compute::FloorTemporal(
                     array, make_round_temporal_options(*config.time_resolution))
                     .ValueOrDie()
@@ -479,8 +481,9 @@ public:
     for (auto row = int64_t{1}; row < detail::narrow<int64_t>(slice.rows());
          ++row) {
       auto* bucket = find_or_create_bucket(row);
-      if (bucket == first_bucket)
+      if (bucket == first_bucket) {
         continue;
+      }
       update_bucket(*first_bucket, first_row, row - first_row);
       first_row = row;
       first_bucket = bucket;
@@ -570,7 +573,7 @@ public:
       output_schemas[std::move(output_schema)].push_back(it);
     }
     for (const auto& [output_schema, groups] : output_schemas) {
-      auto builder = caf::get<record_type>(output_schema)
+      auto builder = as<record_type>(output_schema)
                        .make_arrow_builder(arrow::default_memory_pool());
       TENZIR_ASSERT(builder);
       for (auto it : groups) {
@@ -586,7 +589,7 @@ public:
         // Assign data of group-by fields.
         for (auto i = size_t{0}; i < group.size(); ++i) {
           auto col = detail::narrow<int>(i);
-          auto ty = caf::get<record_type>(output_schema).field(i).type;
+          auto ty = as<record_type>(output_schema).field(i).type;
           status = append_builder(ty, *builder->field_builder(col),
                                   make_data_view(group[i]));
           if (!status.ok()) {
@@ -631,7 +634,7 @@ public:
       }
       auto batch = arrow::RecordBatch::Make(
         output_schema.to_arrow_schema(), detail::narrow<int64_t>(groups.size()),
-        caf::get<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
+        as<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
           .fields());
       co_yield table_slice{batch, output_schema};
     }
@@ -800,7 +803,6 @@ public:
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
-    // Note: The `unordered` relies on commutativity of the aggregation functions.
     (void)filter, (void)order;
     return optimize_result{std::nullopt, event_order::unordered, copy()};
   }
@@ -952,6 +954,20 @@ public:
     : cfg_{cfg}, ctx_{ctx} {
   }
 
+  auto make_bucket() -> std::unique_ptr<bucket2> {
+    auto bucket = std::make_unique<bucket2>();
+    for (const auto& aggr : cfg_.aggregates) {
+      // We already checked the cast and instantiation before.
+      const auto* fn
+        = dynamic_cast<const aggregation_plugin*>(&ctx_.reg().get(aggr.call));
+      TENZIR_ASSERT(fn);
+      bucket->aggregations.push_back(
+        fn->make_aggregation(aggregation_plugin::invocation{aggr.call}, ctx_)
+          .unwrap());
+    }
+    return bucket;
+  }
+
   void add(const table_slice& slice) {
     auto group_values = std::vector<series>{};
     for (auto& group : cfg_.groups) {
@@ -970,18 +986,7 @@ public:
       }
       auto it = groups_.find(key);
       if (it == groups_.end()) {
-        auto bucket = std::make_unique<bucket2>();
-        for (auto& aggr : cfg_.aggregates) {
-          // We already checked the cast and instantiation before.
-          auto fn = dynamic_cast<const aggregation_plugin*>(
-            &ctx_.reg().get(aggr.call));
-          TENZIR_ASSERT(fn);
-          bucket->aggregations.push_back(
-            fn->make_aggregation(aggregation_plugin::invocation{aggr.call},
-                                 ctx_)
-              .unwrap());
-        }
-        it = groups_.emplace_hint(it, materialize(key), std::move(bucket));
+        it = groups_.emplace_hint(it, materialize(key), make_bucket());
       }
       return &*it->second;
     };
@@ -1004,7 +1009,7 @@ public:
       = [](record& root, const ast::simple_selector& sel, data value) {
           if (sel.path().empty()) {
             // TODO
-            if (auto rec = caf::get_if<record>(&value)) {
+            if (auto rec = try_as<record>(&value)) {
               root = std::move(*rec);
             }
             return;
@@ -1015,22 +1020,20 @@ public:
             if (&segment == &sel.path().back()) {
               val = std::move(value);
             } else {
-              current = caf::get_if<record>(&val);
+              current = try_as<record>(&val);
               if (not current) {
                 val = record{};
-                current = &caf::get<record>(val);
+                current = &as<record>(val);
               }
             }
           }
         };
-    // TODO: Group by schema again to make this more efficient.
-    auto b = series_builder{};
-    for (auto& [key, group] : groups_) {
+    const auto finish_group = [&](const auto& key, const auto& group) {
       auto result = record{};
       for (auto index : cfg_.indices) {
         if (index >= 0) {
           auto& dest = cfg_.aggregates[index].dest;
-          auto value = group->aggregations[index]->finish();
+          auto value = group->aggregations[index]->get();
           if (dest) {
             emplace(result, *dest, value);
           } else {
@@ -1071,7 +1074,21 @@ public:
           emplace(result, dest, value);
         }
       }
-      b.data(result);
+      return result;
+    };
+    // Special case: if there are no configured groups, and no groups were
+    // created because we didn't get any input events, then we create a new
+    // bucket and just finish it. That way, `from [] | summarize count()` will
+    // return a single event showing a count of zero.
+    if (cfg_.groups.empty() and groups_.empty()) {
+      auto b = series_builder{};
+      b.data(finish_group(group_by_key{}, make_bucket()));
+      return b.finish_as_table_slice();
+    }
+    // TODO: Group by schema again to make this more efficient.
+    auto b = series_builder{};
+    for (const auto& [key, group] : groups_) {
+      b.data(finish_group(key, group));
     }
     return b.finish_as_table_slice();
   }
@@ -1113,8 +1130,8 @@ public:
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
-    TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::unordered, copy()};
   }
 
   friend auto inspect(auto& f, summarize_operator2& x) -> bool {

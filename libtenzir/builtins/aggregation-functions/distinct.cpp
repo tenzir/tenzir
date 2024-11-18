@@ -8,6 +8,8 @@
 
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/detail/passthrough.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/hash/hash.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -69,10 +71,10 @@ private:
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
-    const auto& typed_view = caf::get<view_type>(view);
+    const auto& typed_view = as<view_type>(view);
     if (!distinct_.contains(typed_view)) {
       const auto [it, inserted] = distinct_.insert(materialize(typed_view));
       TENZIR_ASSERT(inserted);
@@ -101,7 +103,7 @@ public:
 
   auto update(const table_slice& input, session ctx) -> void override {
     auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
+    if (is<null_type>(arg.type)) {
       return;
     }
     for (auto i = int64_t{}; i < arg.array->length(); ++i) {
@@ -117,8 +119,58 @@ public:
     }
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     return list{distinct_.begin(), distinct_.end()};
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    auto offsets = std::vector<flatbuffers::Offset<fbs::Data>>{};
+    offsets.reserve(distinct_.size());
+    for (const auto& element : distinct_) {
+      offsets.push_back(pack(fbb, element));
+    }
+    const auto fb_result = fbb.CreateVector(offsets);
+    const auto fb_min_max
+      = fbs::aggregation::CreateCollectDistinct(fbb, fb_result);
+    fbb.Finish(fb_min_max);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::CollectDistinct>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `distinct` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_result = (*fb)->result();
+    if (not fb_result) {
+      diagnostic::warning("missing field `result`")
+        .note("failed to restore `distinct` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    distinct_.clear();
+    distinct_.reserve(fb_result->size());
+    for (const auto* fb_element : *fb_result) {
+      if (not fb_element) {
+        diagnostic::warning("missing element in field `result`")
+          .note("failed to restore `distinct` aggregation instance")
+          .emit(ctx);
+        return;
+      }
+      auto element = data{};
+      if (auto err = unpack(*fb_element, element)) {
+        diagnostic::warning("{}", err)
+          .note("failed to restore `distinct` aggregation instance")
+          .emit(ctx);
+        return;
+      }
+      distinct_.insert(std::move(element));
+    }
   }
 
 private:
@@ -144,7 +196,7 @@ class plugin : public virtual aggregation_function_plugin,
                const Type&) -> std::unique_ptr<aggregation_function> {
       return std::make_unique<distinct_function<Type>>(input_type);
     };
-    return caf::visit(f, input_type);
+    return match(input_type, f);
   }
 
   auto make_aggregation(invocation inv, session ctx) const

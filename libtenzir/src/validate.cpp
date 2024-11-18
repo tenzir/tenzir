@@ -17,7 +17,7 @@ namespace tenzir {
 namespace {
 
 auto validate_opaque_(const tenzir::data& data) -> caf::error {
-  return caf::visit(tenzir::detail::overload{
+  return match(data, tenzir::detail::overload{
                       [](const record&) -> caf::error {
                         return caf::error{};
                       },
@@ -26,8 +26,7 @@ auto validate_opaque_(const tenzir::data& data) -> caf::error {
                                                "only records may have 'opaque' "
                                                "attribute");
                       },
-                    },
-                    data);
+                    });
 }
 
 auto validate_(const tenzir::data& data, const tenzir::type& type,
@@ -37,14 +36,14 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
     return caf::make_error(
       ec::invalid_configuration,
       fmt::format("too many layers of nesting at prefix {}", prefix));
-  if (caf::holds_alternative<caf::none_t>(data))
+  if (is<caf::none_t>(data)) {
     return caf::none;
+  }
   if (!type)
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("expected type for non-null value at {}",
                                        prefix));
-  return caf::visit(
-    tenzir::detail::overload{
+  return match(type, tenzir::detail::overload{
       [&]<tenzir::basic_type T>(const T& type) -> caf::error {
         // TODO: Introduce special cases for accepting counts as integers and
         // vice versa if the number is in the valid range.
@@ -58,7 +57,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
       [&](const enumeration_type& u) {
         // The data is assumed to come from a configuration file, so any
         // enumeration value would be entered as a string.
-        const auto* str = caf::get_if<std::string>(&data);
+        const auto* str = try_as<std::string>(&data);
         if (!str)
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected enum value at {}",
@@ -70,7 +69,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
         return caf::error{};
       },
       [&](const tenzir::list_type& list_type) {
-        const auto* list = caf::get_if<tenzir::list>(&data);
+        const auto* list = try_as<tenzir::list>(&data);
         if (!list)
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected list at {}", prefix));
@@ -84,7 +83,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
         return caf::error{};
       },
       [&](const tenzir::map_type& map_type) {
-        const auto* map = caf::get_if<tenzir::map>(&data);
+        const auto* map = try_as<tenzir::map>(&data);
         if (!map)
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected map at {}", prefix));
@@ -101,7 +100,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
         return caf::error{};
       },
       [&](const tenzir::record_type& record_type) {
-        const auto* record = caf::get_if<tenzir::record>(&data);
+        const auto* record = try_as<tenzir::record>(&data);
         if (!record)
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected record at {}", prefix));
@@ -154,8 +153,7 @@ auto validate_(const tenzir::data& data, const tenzir::type& type,
         }
         return caf::error{};
       },
-    },
-    type);
+    });
 }
 
 } // namespace

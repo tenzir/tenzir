@@ -64,7 +64,7 @@ public:
         .to_error();
     }
     for (const auto& [key, value] : *secrets) {
-      const auto* str = caf::get_if<std::string>(&value);
+      const auto* str = try_as<std::string>(&value);
       if (not str) {
         return diagnostic::error("secrets must be strings")
           .note("configuration key `tenzir.secrets.{}` is of type `{}`", key,
@@ -116,7 +116,7 @@ public:
           return series::null(string_type{}, value.length());
         },
       };
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 
@@ -176,7 +176,7 @@ public:
           return series::null(string_type{}, value.length());
         },
       };
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 
@@ -184,7 +184,7 @@ private:
   detail::heterogeneous_string_hashmap<std::string> env_ = {};
 };
 
-class length final : public method_plugin {
+class length final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "length";
@@ -193,7 +193,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::method(name()).add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         TENZIR_UNUSED(ctx);
@@ -226,12 +226,12 @@ public:
             return series::null(int64_type{}, value.length());
           },
         };
-        return caf::visit(f, *value.array);
+        return match(*value.array, f);
       });
   }
 };
 
-class has final : public method_plugin {
+class has final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "has";
@@ -241,7 +241,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto needle = located<std::string>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(expr, "<expr>")
           .add(needle, "<string>")
           .parse(inv, ctx));
@@ -275,12 +275,12 @@ public:
             .emit(ctx);
           return series::null(bool_type{}, value.length());
         }};
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 };
 
-class select_drop_matching final : public method_plugin {
+class select_drop_matching final : public function_plugin {
 public:
   explicit select_drop_matching(bool select) : select_{select} {
   }
@@ -293,7 +293,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto str = located<std::string>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(expr, "<expr>")
           .add(str, "<pattern>")
           .parse(inv, ctx));
@@ -331,7 +331,7 @@ public:
             .emit(ctx);
           return series::null(null_type{}, value.length());
         }};
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 

@@ -18,6 +18,7 @@
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/offset.hpp"
 #include "tenzir/tag.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <arrow/builder.h>
 #include <arrow/extension_type.h>
@@ -317,7 +318,7 @@ public:
 
   /// Converts the type into an Arrow Schema.
   /// @pre `!name().empty()`
-  /// @pre `caf::holds_alternative<record_type>(*this)`
+  /// @pre `is<record_type>(*this)`
   [[nodiscard]] std::shared_ptr<arrow::Schema> to_arrow_schema() const noexcept;
 
   /// Creates an Arrow ArrayBuilder from the type.
@@ -1617,6 +1618,80 @@ struct type_from_arrow<arrow::ArrayBuilder> : std::type_identity<type> {};
 template <class T>
 using type_from_arrow_t = typename type_from_arrow<T>::type;
 
+template <>
+class variant_traits<type> {
+public:
+  static constexpr auto count = caf::detail::tl_size<concrete_types>::value;
+
+  // TODO: Can we maybe align the indices here?
+  static auto index(const type& x) -> size_t;
+
+  template <size_t I>
+  static auto get(const type& x) -> decltype(auto) {
+    using Type = caf::detail::tl_at_t<concrete_types, I>;
+    if constexpr (basic_type<Type>) {
+      // TODO: We potentially hand out a `&` to a const... Probably okay because
+      // we can't do any mutations, but still fishy.
+      static constexpr auto instance = Type{};
+      // The ref-deref is needed to deduce it as a reference.
+      return *&instance;
+    } else {
+      // TODO: This might be a violation of the aliasing rules.
+      return static_cast<const Type&>(
+        static_cast<const stateful_type_base&>(x));
+    }
+  }
+};
+
+template <>
+class variant_traits<arrow::DataType> {
+public:
+  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_type>;
+
+  static constexpr auto count = caf::detail::tl_size<types>::value;
+
+  static auto index(const arrow::DataType& x) -> size_t;
+
+  template <size_t I>
+  static auto get(const arrow::DataType& x) -> decltype(auto) {
+    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+  }
+};
+
+template <>
+class variant_traits<arrow::Array> {
+public:
+  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_array>;
+
+  static constexpr auto count = caf::detail::tl_size<types>::value;
+
+  static auto index(const arrow::Array& x) -> size_t {
+    return variant_traits<arrow::DataType>::index(*x.type());
+  }
+
+  template <size_t I>
+  static auto get(const arrow::Array& x) -> decltype(auto) {
+    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+  }
+};
+
+template <>
+class variant_traits<arrow::ArrayBuilder> {
+public:
+  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_builder>;
+
+  static constexpr auto count = caf::detail::tl_size<types>::value;
+
+  static auto index(const arrow::ArrayBuilder& x) -> size_t {
+    return variant_traits<arrow::DataType>::index(*x.type());
+  }
+
+  template <size_t I>
+  static auto get(const arrow::ArrayBuilder& x) -> decltype(auto) {
+    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+  }
+};
+
 } // namespace tenzir
 
 // -- sum_type_access ---------------------------------------------------------
@@ -2092,11 +2167,9 @@ struct formatter<tenzir::type> {
     if (const auto& name = value.name(); !name.empty())
       out = fmt::format_to(out, "{}", name);
     else
-      caf::visit(
-        [&](const auto& x) {
-          out = fmt::format_to(out, "{}", x);
-        },
-        value);
+      match(value, [&](const auto& x) {
+        out = fmt::format_to(out, "{}", x);
+      });
     if (print_attributes) {
       for (bool first = false; const auto& attribute :
                                value.attributes(tenzir::type::recurse::no)) {

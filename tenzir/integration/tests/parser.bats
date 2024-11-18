@@ -103,8 +103,8 @@ activity_id = 1
 actor.process = {
   file: {
     path: path,
-    parent_folder: std'path'parent(src.event_data.ParentImage),
-    name: std'path'file_name(src.event_data.ParentImage),
+    parent_folder: std::path::parent(src.event_data.ParentImage),
+    name: std::path::file_name(src.event_data.ParentImage),
     "type": "Unknown",
     type_id: 0,
   },
@@ -120,9 +120,9 @@ actor.user = {
 }
 drop src.user.domain, src.user.name, src.user.identifier
 category_name = "System Activity"
-category_uid = ocsf'category_uid(category_name)
+category_uid = ocsf::category_uid(category_name)
 class_name = "Process Activity"
-class_uid = ocsf'class_uid(class_name)
+class_uid = ocsf::class_uid(class_name)
 device = {
   hostname: src.computer_name,
   os: {
@@ -153,8 +153,8 @@ process = {
   cmd_line: src.event_data.CommandLine,
   file: {
     path: src.event_data.Image,
-    parent_folder: std'path'parent(src.event_data.Image),
-    name: std'path'file_name(src.event_data.Image),
+    parent_folder: std::path::parent(src.event_data.Image),
+    name: std::path::file_name(src.event_data.Image),
     "type": "Unknown",
     type_id: 0,
   },

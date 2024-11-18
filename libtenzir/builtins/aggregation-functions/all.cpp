@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/aggregation_function.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -24,24 +26,24 @@ public:
 
 private:
   [[nodiscard]] type output_type() const override {
-    TENZIR_ASSERT(caf::holds_alternative<bool_type>(input_type()));
+    TENZIR_ASSERT(is<bool_type>(input_type()));
     return input_type();
   }
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<bool>;
-    if (caf::holds_alternative<caf::none_t>(view)) {
+    if (is<caf::none_t>(view)) {
       return;
     }
     if (!all_) {
-      all_ = materialize(caf::get<view_type>(view));
+      all_ = materialize(as<view_type>(view));
     } else {
-      all_ = *all_ && caf::get<view_type>(view);
+      all_ = *all_ && as<view_type>(view);
     }
   }
 
   void add(const arrow::Array& array) override {
-    const auto& bool_array = caf::get<type_to_arrow_array_t<bool_type>>(array);
+    const auto& bool_array = as<type_to_arrow_array_t<bool_type>>(array);
     if (!all_) {
       all_ = bool_array.false_count() == 0;
     } else {
@@ -82,10 +84,10 @@ public:
           .emit(ctx);
         state_ = state::failed;
       }};
-    caf::visit(f, *arg.array);
+    match(*arg.array, f);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     switch (state_) {
       case state::none:
         return all_;
@@ -95,6 +97,50 @@ public:
         return data{};
     }
     TENZIR_UNREACHABLE();
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto fb_state = [&] {
+      switch (state_) {
+        case state::none:
+          return fbs::aggregation::AnyAllState::None;
+        case state::failed:
+          return fbs::aggregation::AnyAllState::Failed;
+        case state::nulled:
+          return fbs::aggregation::AnyAllState::Nulled;
+      }
+      TENZIR_UNREACHABLE();
+    }();
+    const auto fb_any_all = fbs::aggregation::CreateAnyAll(fbb, all_, fb_state);
+    fbb.Finish(fb_any_all);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::AnyAll>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `all` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    all_ = (*fb)->result();
+    switch ((*fb)->state()) {
+      case fbs::aggregation::AnyAllState::None:
+        state_ = state::none;
+        return;
+      case fbs::aggregation::AnyAllState::Failed:
+        state_ = state::failed;
+        return;
+      case fbs::aggregation::AnyAllState::Nulled:
+        state_ = state::nulled;
+        return;
+    }
+    diagnostic::warning("unknown `state` value")
+      .note("failed to restore `all` aggregation instance")
+      .emit(ctx);
   }
 
 private:
@@ -116,7 +162,7 @@ class plugin final : public virtual aggregation_function_plugin,
 
   [[nodiscard]] caf::expected<std::unique_ptr<aggregation_function>>
   make_aggregation_function(const type& input_type) const override {
-    if (caf::holds_alternative<bool_type>(input_type)) {
+    if (is<bool_type>(input_type)) {
       return std::make_unique<all_function>(input_type);
     }
     return caf::make_error(ec::invalid_configuration,

@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -26,11 +28,11 @@ public:
   }
 
   auto update(const table_slice& input, session ctx) -> void override {
-    if (not caf::holds_alternative<caf::none_t>(result_)) {
+    if (not is<caf::none_t>(result_)) {
       return;
     }
     auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
+    if (is<null_type>(arg.type)) {
       return;
     }
     if constexpr (Mode == mode::first) {
@@ -50,8 +52,43 @@ public:
     }
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     return result_;
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto fb_result = pack(fbb, result_);
+    const auto fb_min_max = fbs::aggregation::CreateFirstLast(fbb, fb_result);
+    fbb.Finish(fb_min_max);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb
+      = flatbuffer<fbs::aggregation::FirstLast>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `{}` aggregation instance",
+              Mode == mode::first ? "first" : "last")
+        .emit(ctx);
+      return;
+    }
+    const auto* fb_result = (*fb)->result();
+    if (not fb_result) {
+      diagnostic::warning("missing field `result`")
+        .note("failed to restore `{}` aggregation instance",
+              Mode == mode::first ? "first" : "last")
+        .emit(ctx);
+      return;
+    }
+    if (auto err = unpack(*fb_result, result_)) {
+      diagnostic::warning("{}", err)
+        .note("failed to restore `{}` aggregation instance",
+              Mode == mode::first ? "first" : "last")
+        .emit(ctx);
+      return;
+    }
   }
 
 private:

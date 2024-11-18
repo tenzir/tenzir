@@ -209,7 +209,7 @@ private:
   auto
   verify_values(const table_slice& slice, previous_values_type& previous_values,
                 operator_control_plane& ctrl) const -> bool {
-    const auto* record_schema_ptr = caf::get_if<record_type>(&slice.schema());
+    const auto* record_schema_ptr = try_as<record_type>(&slice.schema());
     if (not record_schema_ptr) {
       diagnostic::error("chart operator expects input to be a record")
         .emit(ctrl.diagnostics());
@@ -242,7 +242,7 @@ private:
                        previous_values_type& previous_values,
                        operator_control_plane& ctrl) const
     -> std::optional<std::vector<type::attribute_view>> {
-    const auto* record_schema_ptr = caf::get_if<record_type>(&slice.schema());
+    const auto* record_schema_ptr = try_as<record_type>(&slice.schema());
     if (not record_schema_ptr) {
       diagnostic::error("chart operator expects input to be a record")
         .emit(ctrl.diagnostics());

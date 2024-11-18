@@ -43,6 +43,18 @@ write_json
 EOF
 }
 
+@test "list spread" {
+  check tenzir -f '/dev/stdin' <<EOF
+from [
+  {x: []},
+  {x: [1]},
+  {x: [1, 2]},
+]
+y = [...x]
+z = [...x, 3, ...y, ...42]
+EOF
+}
+
 @test "list indexing" {
   check tenzir -f '/dev/stdin' <<EOF
 from [
@@ -119,5 +131,31 @@ ya = y.length()
 yb = y.length_bytes()
 yc = y.length_chars()
 write_json
+EOF
+}
+
+@test "in list" {
+  check tenzir --tql2 -f /dev/stdin <<EOF
+  from "${INPUTSDIR}/json/lists.json"
+  exists = x in y
+EOF
+}
+
+@test "universal function call syntax" {
+  check tenzir -f '/dev/stdin' <<EOF
+from {
+  x: "abc".starts_with("ab"),
+  y: starts_with("abc", "ab"),
+}
+EOF
+  check tenzir -f '/dev/stdin' <<EOF
+from [{x: 1}, {x: 2}]
+summarize x.sum()
+EOF
+  check ! tenzir -f '/dev/stdin' <<EOF
+from { x: "abc".starts_with() }
+EOF
+  check ! tenzir -f '/dev/stdin' <<EOF
+from { x: starts_with("abc") }
 EOF
 }

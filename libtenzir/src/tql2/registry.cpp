@@ -10,7 +10,36 @@
 
 #include "tenzir/plugin.hpp"
 
+#include <ranges>
+
 namespace tenzir {
+
+namespace {
+
+void gather_names(const module_def& mod, entity_ns ns, std::string prefix,
+                  std::vector<std::string>& out) {
+  auto result = std::vector<std::string>{};
+  for (auto& [name, def] : mod.defs) {
+    if (ns == entity_ns::fn and def.fn) {
+      out.push_back(prefix + name);
+    } else if (ns == entity_ns::op and def.op) {
+      out.push_back(prefix + name);
+    }
+    if (def.mod) {
+      gather_names(*def.mod, ns, prefix + name + "::", out);
+    }
+  }
+}
+
+auto gather_names(const module_def& mod, entity_ns ns)
+  -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  gather_names(mod, ns, "", result);
+  std::ranges::sort(result);
+  return result;
+}
+
+} // namespace
 
 thread_local const registry* g_thread_local_registry = nullptr;
 
@@ -49,92 +78,90 @@ auto global_registry() -> const registry& {
 
 auto registry::get(const ast::function_call& call) const
   -> const function_plugin& {
-  auto def = try_get(call.fn.ref);
-  TENZIR_ASSERT(def);
-  auto fn = std::get_if<std::reference_wrapper<const function_plugin>>(&*def);
+  auto def = get(call.fn.ref);
+  auto fn = std::get_if<std::reference_wrapper<const function_plugin>>(&def);
   TENZIR_ASSERT(fn);
   return *fn;
 }
 
 auto registry::get(const ast::invocation& call) const
   -> const operator_factory_plugin& {
-  auto def = try_get(call.op.ref);
-  TENZIR_ASSERT(def);
+  auto def = get(call.op.ref);
   auto op
-    = std::get_if<std::reference_wrapper<const operator_factory_plugin>>(&*def);
+    = std::get_if<std::reference_wrapper<const operator_factory_plugin>>(&def);
   TENZIR_ASSERT(op);
   return *op;
 }
 
 auto registry::try_get(const entity_path& path) const
-  -> std::optional<entity_def> {
+  -> variant<entity_def, error> {
   TENZIR_ASSERT(path.resolved());
-  if (path.segments().size() != 1) {
-    // TODO: We pretend here that only single-name paths exist.
-    return std::nullopt;
-  }
-  auto it = defs_.find(path.segments()[0]);
-  if (it == defs_.end()) {
-    return std::nullopt;
-  }
-  auto& set = it->second;
-  switch (path.ns()) {
-    case entity_ns::fn:
-      if (set.fn) {
-        return *set.fn;
+  auto current = &root_;
+  auto&& segments = path.segments();
+  for (auto i = size_t{0}; i < segments.size(); ++i) {
+    auto it = current->defs.find(segments[i]);
+    if (it == current->defs.end()) {
+      // No such entity.
+      return error{i, false};
+    }
+    auto& set = it->second;
+    if (i == segments.size() - 1) {
+      // Failure here indicates that it has the wrong type.
+      switch (path.ns()) {
+        case entity_ns::fn:
+          if (set.fn) {
+            return *set.fn;
+          }
+          return error{i, true};
+        case entity_ns::op:
+          if (set.op) {
+            return *set.op;
+          }
+          return error{i, true};
       }
-      return std::nullopt;
-    case entity_ns::op:
-      if (set.op) {
-        return *set.op;
-      }
-      return std::nullopt;
+      TENZIR_UNREACHABLE();
+    }
+    if (not set.mod) {
+      // Entity found but it is not a module.
+      return error{i, true};
+    }
+    current = set.mod.get();
   }
   TENZIR_UNREACHABLE();
 }
 
 auto registry::get(const entity_path& path) const -> entity_def {
   auto result = try_get(path);
-  TENZIR_ASSERT(result);
-  return *result;
+  TENZIR_ASSERT(std::holds_alternative<entity_def>(result));
+  return std::get<entity_def>(result);
 }
 
-auto registry::operator_names() const -> std::vector<std::string_view> {
-  // TODO: This cannot stay this way, but for now we use it in error messages.
-  auto result = std::vector<std::string_view>{};
-  for (auto& [name, def] : defs_) {
-    if (def.op) {
-      result.push_back(name);
-    }
-  }
-  std::ranges::sort(result);
-  return result;
+auto registry::operator_names() const -> std::vector<std::string> {
+  return gather_names(root_, entity_ns::op);
 }
 
-auto registry::function_names() const -> std::vector<std::string_view> {
-  auto result = std::vector<std::string_view>{};
-  for (auto& [name, def] : defs_) {
-    if (def.fn and not dynamic_cast<const method_plugin*>(def.fn)) {
-      result.push_back(name);
-    }
-  }
-  std::ranges::sort(result);
-  return result;
-}
-
-auto registry::method_names() const -> std::vector<std::string_view> {
-  auto result = std::vector<std::string_view>{};
-  for (auto& [name, def] : defs_) {
-    if (def.fn and dynamic_cast<const method_plugin*>(def.fn)) {
-      result.push_back(name);
-    }
-  }
-  std::ranges::sort(result);
-  return result;
+auto registry::function_names() const -> std::vector<std::string> {
+  return gather_names(root_, entity_ns::fn);
 }
 
 void registry::add(std::string name, entity_def def) {
-  auto& set = defs_[std::move(name)];
+  TENZIR_ASSERT(not name.empty());
+  auto path = detail::split(name, "::");
+  TENZIR_ASSERT(not path.empty());
+  // Find the correct module first.
+  auto mod = &root_;
+  for (auto& segment : path) {
+    if (&segment == &path.back()) {
+      break;
+    }
+    auto& set = mod->defs[std::string{segment}];
+    if (not set.mod) {
+      set.mod = std::make_unique<module_def>();
+    }
+    mod = set.mod.get();
+  }
+  // Insert the entity definition into the module.
+  auto& set = mod->defs[std::string{path.back()}];
   def.match(
     [&](std::reference_wrapper<const function_plugin> plugin) {
       TENZIR_ASSERT(not set.fn);
@@ -143,6 +170,10 @@ void registry::add(std::string name, entity_def def) {
     [&](std::reference_wrapper<const operator_factory_plugin> plugin) {
       TENZIR_ASSERT(not set.op);
       set.op = &plugin.get();
+    },
+    [&](std::reference_wrapper<const module_def>) {
+      // Does this make sense?
+      TENZIR_TODO();
     });
 }
 

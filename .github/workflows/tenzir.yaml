@@ -88,7 +88,7 @@ jobs:
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
-        uses: rlespinasse/github-slug-action@v4
+        uses: rlespinasse/github-slug-action@v5
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -220,7 +220,7 @@ jobs:
           run_if_changed python "python/"
           run_if_changed docs "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
-          TENZIR_SOURCES=(cmake/ CMakeLists.txt libtenzir/ libtenzir_test/ schema/ scripts/ tenzir/ tenzir.yaml.example version.json)
+          TENZIR_SOURCES=(cmake/ CMakeLists.txt libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json)
           run_if_changed tenzir "${TENZIR_SOURCES[@]}"
           run_if_changed_default tenzir-plugins $run_tenzir "plugins/" "contrib/tenzir-plugins/"
           # The tenzir-plugins job downloads the Tenzir artifact from GCS, so we
@@ -749,7 +749,7 @@ jobs:
         run: |
           VERBOSE=1 cmake --build "$BUILD_DIR" --target diff-integration -j 1
       - name: Publish Integration Test Report
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v5
         if: always()
         with:
           report_paths: report.xml
@@ -804,6 +804,9 @@ jobs:
           - name: AMQP
             target: amqp
             path: plugins/amqp
+          - name: Azure Blob Storage
+            target: azure-blob-storage
+            path: plugins/azure-blob-storage
           - name: Azure Log Analytics
             target: azure-log-analytics
             path: contrib/tenzir-plugins/azure-log-analytics
@@ -813,6 +816,13 @@ jobs:
           - name: Context
             target: context
             path: contrib/tenzir-plugins/context
+          # We would need to build the google-cloud-cpp library from source
+          # here, which takes too much time for everyday CI runs, so until that
+          # is available in a prebuilt form we do not build it in CI outside of
+          # Nix and the Docker image.
+          # - name: Google Cloud Pub/Sub
+          #   target: google-cloud-pubsub
+          #   path: plugins/google-cloud-pubsub
           - name: Kafka
             target: kafka
             path: plugins/kafka
@@ -841,12 +851,15 @@ jobs:
           - name: Sigma
             target: sigma
             path: plugins/sigma
+          - name: Splunk
+            target: to_splunk
+            path: contrib/tenzir-plugins/to_splunk
           - name: VAST
             target: vast
             path: contrib/tenzir-plugins/vast
           - name: Velociraptor
-            target: velociraptor
-            path: plugins/velociraptor
+            target: from_velociraptor
+            path: plugins/from_velociraptor
           - name: Web
             target: web
             path: plugins/web
@@ -985,7 +998,7 @@ jobs:
           nix --accept-flake-config develop .#integration-test-shell \
             --command bash -c "cmake --build \"$BUILD_DIR\" --target integration -j 1"
       - name: Publish Integration Test Report
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v5
         if: always()
         with:
           report_paths: report.xml
@@ -1015,7 +1028,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v3.0.0
+        uses: abatilo/actions-poetry@v3.0.1
         with:
           poetry-version: 1.8.2
       - name: Run poetry install
@@ -1054,7 +1067,7 @@ jobs:
         with:
           python-version: "3.9"
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v3.0.0
+        uses: abatilo/actions-poetry@v3.0.1
         with:
           poetry-version: 1.8.2
       - name: Configure PyPI

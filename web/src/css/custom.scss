@@ -182,3 +182,15 @@ figure[data-rehype-pretty-code-figure]
 .menu a[href$="tql2/functions"]+button {
   display: none;
 }
+
+figure[data-rehype-pretty-code-figure]:has(+figure[data-rehype-pretty-code-figure]):not(:has(+figure[data-rehype-pretty-code-figure]>figcaption))>pre {
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: 2px solid #6a7195;
+}
+
+figure[data-rehype-pretty-code-figure]+figure[data-rehype-pretty-code-figure]:not(:has(>figcaption))>pre {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}

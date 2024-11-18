@@ -69,12 +69,12 @@ public:
             return series::null(time_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };
 
-class since_epoch final : public method_plugin {
+class since_epoch final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "since_epoch";
@@ -92,7 +92,7 @@ public:
           return series::null(duration_type{}, arg.length());
         },
         [&](const arrow::TimestampArray& arg) {
-          auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+          auto& ty = as<arrow::TimestampType>(*arg.type());
           TENZIR_ASSERT(ty.timezone().empty());
           auto b
             = duration_type::make_arrow_builder(arrow::default_memory_pool());
@@ -116,7 +116,7 @@ public:
           return series::null(duration_type{}, arg.length());
         },
       };
-      return caf::visit(f, *arg.array);
+      return match(*arg.array, f);
     });
   }
 };
@@ -190,12 +190,12 @@ public:
           return series::null(duration_type{}, arg.length());
         },
       };
-      return caf::visit(f, *arg.array);
+      return match(*arg.array, f);
     });
   }
 };
 
-class year_month_day final : public method_plugin {
+class year_month_day final : public function_plugin {
 public:
   explicit year_month_day(ymd_subtype field) : ymd_subtype_(field) {
   }
@@ -216,7 +216,7 @@ public:
             return series::null(int64_type{}, arg.length());
           },
           [&](const arrow::TimestampArray& arg) {
-            auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+            auto& ty = as<arrow::TimestampType>(*arg.type());
             TENZIR_ASSERT(ty.timezone().empty());
             auto b = arrow::Int64Builder{};
             check(b.Reserve(arg.length()));
@@ -252,7 +252,7 @@ public:
             return series::null(int64_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 
@@ -260,7 +260,7 @@ private:
   ymd_subtype ymd_subtype_;
 };
 
-class as_secs final : public method_plugin {
+class as_secs final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "as_secs";
@@ -280,7 +280,7 @@ public:
             return series::null(double_type{}, arg.length());
           },
           [&](const arrow::DurationArray& arg) {
-            auto& ty = caf::get<arrow::DurationType>(*arg.type());
+            auto& ty = as<arrow::DurationType>(*arg.type());
             TENZIR_ASSERT(ty.unit() == arrow::TimeUnit::NANO);
             auto factor = 1000 * 1000 * 1000;
             auto b = arrow::DoubleBuilder{};
@@ -305,7 +305,7 @@ public:
             return series::null(double_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };

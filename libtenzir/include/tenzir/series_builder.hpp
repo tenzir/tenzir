@@ -180,11 +180,9 @@ struct data_view2
   }
 
   explicit(false) data_view2(data_view x) {
-    caf::visit(
-      [&](auto x) {
-        emplace<decltype(x)>(x);
-      },
-      x);
+    tenzir::match(std::move(x), [&](auto x) {
+      emplace<decltype(x)>(std::move(x));
+    });
   }
 
   explicit(false) operator data_view() const {

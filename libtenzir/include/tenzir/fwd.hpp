@@ -185,13 +185,16 @@ class wah_bitmap;
 struct active_partition_state;
 struct attribute;
 struct catalog_lookup_result;
-struct component_map_entry;
 struct component_map;
-struct component_state_map;
+struct component_map_entry;
 struct component_state;
+struct component_state_map;
 struct concept_;
 struct conjunction;
 struct connect_request;
+struct context_parameter_map;
+struct context_save_result;
+struct context_update_args;
 struct curried_predicate;
 struct data_extractor;
 struct data_point;
@@ -441,6 +444,9 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::blob))
   TENZIR_ADD_TYPE_ID((tenzir::chunk_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::conjunction))
+  TENZIR_ADD_TYPE_ID((tenzir::context_parameter_map))
+  TENZIR_ADD_TYPE_ID((tenzir::context_save_result))
+  TENZIR_ADD_TYPE_ID((tenzir::context_update_args))
   TENZIR_ADD_TYPE_ID((tenzir::curried_predicate))
   TENZIR_ADD_TYPE_ID((tenzir::data))
   TENZIR_ADD_TYPE_ID((tenzir::data_extractor))
