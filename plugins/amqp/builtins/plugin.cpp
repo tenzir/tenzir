@@ -51,9 +51,21 @@ constexpr auto stringify = detail::overload{
 template <template <class, detail::string_literal = ""> class Adapter,
           class Plugin, class Args>
 class plugin : public virtual operator_plugin2<Adapter<Plugin>> {
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
-    config_ = config;
+  auto initialize(const record& unused_plugin_config,
+                  const record& global_config) -> caf::error override {
+    if (not unused_plugin_config.empty()) {
+      return diagnostic::error("`{}.yaml` is unused; Use `amqp.yaml` "
+                               "instead",
+                               this->name())
+        .to_error();
+    }
+    auto c = try_get_only<tenzir::record>(global_config, "plugins.amqp");
+    if (not c) {
+      return c.error();
+    }
+    if (*c) {
+      config_ = **c;
+    }
     return caf::none;
   }
 
