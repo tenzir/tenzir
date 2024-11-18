@@ -93,24 +93,12 @@ This yields the following output:
   "proto": "UDP",
   "event_type": "flow",
   "app_proto": "dns",
-  "subnets": {
-    "src_ip": {
-      "value": "10.0.0.1",
-      "timestamp": "2024-05-29T13:02:56.368882",
-      "mode": "enrich",
-      "context": {
-        "subnet": "10.0.0.0/24",
-        "owner": "Derek",
-        "function": "servers"
-      }
-    },
-    "dest_ip": {
-      "value": "10.1.1.254",
-      "timestamp": "2024-05-29T13:02:56.368882",
-      "mode": "enrich",
-      "context": null
-    }
-  }
+  "src_ip_context": {
+    "subnet": "10.0.0.0/24",
+    "owner": "Derek",
+    "function": "servers"
+  },
+  "dest_ip_context": null
 }
 ```
 
