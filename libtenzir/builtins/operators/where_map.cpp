@@ -245,15 +245,6 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
         .add(args.capture, "<capture>")
         .add(args.expr, "<expr>")
         .parse(inv, ctx));
-  // We internally use the empty string for our top-level dummy field, so it
-  // must not be used in the capture name.
-  if (args.capture.has_this() and not args.capture.path().empty()
-      and args.capture.path().front().name.empty()) {
-    diagnostic::error("capture name must not start with an empty string")
-      .primary(args.capture.path().front().location)
-      .emit(ctx);
-    return failure::promise();
-  }
   return function_use::make(
     [mode, args = std::move(args)](function_plugin::evaluator eval,
                                    session ctx) -> series {
@@ -282,18 +273,11 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
       auto slice = table_slice{
         check(arrow::RecordBatch::FromStructArray(
           std::make_shared<arrow::StructArray>(
-            arrow::struct_({{"", arrow::null()}}), values.length(),
-            std::vector{
-              check(arrow::MakeArrayOfNull(arrow::null(), values.length()))}))),
-        type{name->array->GetView(0), record_type{{"", null_type{}}}},
+            arrow::struct_(arrow::FieldVector{}), values.length(),
+            arrow::ArrayVector{}))),
+        type{name->array->GetView(0), record_type{}},
       };
       slice = assign(args.capture, values, slice, ctx);
-      TENZIR_ASSERT(as<record_type>(slice.schema()).num_fields() == 2);
-      slice = transform_columns(
-        slice, {{offset{0},
-                 [](struct record_type::field, std::shared_ptr<arrow::Array>) {
-                   return indexed_transformation::result_type{};
-                 }}});
       values = tenzir::eval(args.expr, slice, ctx);
       switch (mode) {
         case mode::map: {
