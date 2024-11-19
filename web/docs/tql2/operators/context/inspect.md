@@ -10,7 +10,7 @@ context::inspect name:string
 
 The `context::inspect` operator shows details about a specified context.
 
-### `name : string`
+### `name: string`
 
 The name of the context to inspect.
 

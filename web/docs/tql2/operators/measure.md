@@ -48,7 +48,7 @@ load_file "input.json"
 measure
 ```
 
-```
+```tql
 {timestamp: 2023-04-28T10:22:10.192322, bytes: 16384}
 {timestamp: 2023-04-28T10:22:10.223612, bytes: 16384}
 {timestamp: 2023-04-28T10:22:10.297169, bytes: 16384}

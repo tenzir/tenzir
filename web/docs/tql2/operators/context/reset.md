@@ -11,7 +11,7 @@ context::reset name:string
 The `context::reset` operator erases all data that has been added with
 `context::update`.
 
-### `name : string`
+### `name: string`
 
 The name of the context to reset.
 

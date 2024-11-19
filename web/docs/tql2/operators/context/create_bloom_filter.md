@@ -3,7 +3,7 @@
 Creates a Bloom filter context.
 
 ```tql
-context::create_bloom_filter name:string capacity:uint fp_probability:float
+context::create_bloom_filter name:string, capacity=int, fp_probability=float
 ```
 
 ## Description
@@ -30,17 +30,17 @@ tenzir:
 
 Making changes to `arguments` of an already created context has no effect.
 
-### `name : string`
+### `name: string`
 
 The name of the new Bloom filter.
 
-### `capacity : uint`
+### `capacity = uint`
 
 The maximum number of items in the filter that maintain the false positive
-probility. Adding more elements does not yield an error, but lookups will
+probability. Adding more elements does not yield an error, but lookups will
 more likely return false positives.
 
-### `fp_probability : float`
+### `fp_probability = float`
 
 The false-positive probability of the Bloom filter.
 
@@ -49,7 +49,7 @@ The false-positive probability of the Bloom filter.
 ### Create a new Bloom filter context
 
 ```tql
-context::create_bloom_filter "ctx"
+context::create_bloom_filter "ctx", capacity=1B, fp_probability=0.001
 ```
 
 ## See Also
