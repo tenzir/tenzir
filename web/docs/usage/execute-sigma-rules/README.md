@@ -5,16 +5,14 @@ sidebar_position: 9
 # Execute Sigma rules
 
 Tenzir supports executing [Sigma rules](https://github.com/SigmaHQ/sigma) using
-the [`sigma`](../../operators/sigma.md) operator. This allows
-you to run your Sigma rules in dataflow pipeline. The operator transpiles the
-the provided rules into an [expression](../../language/expressions.md), and
-wraps matching events into a sighting record along with the matched rule.
+the [`sigma`](../../tql2/operators/sigma.md) operator. This allows you to run
+your Sigma rules in the pipeline. The operator transpiles the provided rules
+into an expression, and wraps matching events into a sighting record along with
+the matched rule.
 
 Semantically, you can think of executing Sigma rules as applying the
-[`where`](../../operators/where.md) operator to the input,
-followed by [`put`](../../operators/put.md) to encapsulate the
-input into a new record. At a high level, the translation process looks as
-follows:
+[`where`](../../tql2/operators/where.md) operator to the input. At a high level,
+the translation process looks as follows:
 
 ![Sigma Execution](sigma-execution.excalidraw.svg)
 
@@ -35,5 +33,5 @@ rule to an EVTX file, we can use the utility
 format into JSON and then pipe it to `sigma` on the command line:
 
 ```bash
-evtx_dump -o jsonl file.evtx | tenzir 'read json | sigma.yaml'
+evtx_dump -o jsonl file.evtx | tenzir 'read_json | sigma "rule.yaml"'
 ```

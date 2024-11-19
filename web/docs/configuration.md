@@ -195,10 +195,10 @@ customization points.
 ### List plugins
 
 You can get the list of available plugins using the
-[`show`](./operators/show.md) operator:
+[`plugins`](tql2/operators/plugins.md) operator:
 
 ```bash
-tenzir 'show plugins'
+tenzir 'plugins'
 ```
 
 ### Block plugins

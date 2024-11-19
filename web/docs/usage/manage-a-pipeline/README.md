@@ -36,8 +36,8 @@ The screenshot below highlights the controls:
 
 For the [API](/api), use the following endpoints based on the desired actions:
 - Start, pause, and stop:
-  [`/pipeline/update`](/api#/paths/~1pipeline~1update/)
-- Delete: [`/pipeline/delete`](/api#/paths/~1pipeline~1delete/)
+  [`/pipeline/update`](/api#/paths/~1pipeline~1update/post)
+- Delete: [`/pipeline/delete`](/api#/paths/~1pipeline~1delete/post)
 
 ## Understand pipeline state transitions
 
