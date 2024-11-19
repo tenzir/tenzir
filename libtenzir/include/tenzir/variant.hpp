@@ -77,7 +77,7 @@ public:
       result = f.apply(u16);
       idx = u16;
     } else if constexpr (size < (1ull << 32)) {
-      auto u32 = static_cast<uint16_t>(idx);
+      auto u32 = static_cast<uint32_t>(idx);
       result = f.apply(u32);
       idx = u32;
     } else {

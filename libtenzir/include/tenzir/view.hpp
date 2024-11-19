@@ -22,7 +22,6 @@
 #include <caf/make_counted.hpp>
 #include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
-#include <caf/variant.hpp>
 
 #include <array>
 #include <cstdint>

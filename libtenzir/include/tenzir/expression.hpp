@@ -22,7 +22,6 @@
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
 #include <caf/none.hpp>
-#include <caf/variant.hpp>
 
 #include <memory>
 #include <string>

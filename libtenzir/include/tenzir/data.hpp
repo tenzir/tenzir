@@ -32,7 +32,6 @@
 #include <caf/fwd.hpp>
 #include <caf/none.hpp>
 #include <caf/sum_type.hpp>
-#include <caf/variant.hpp>
 
 #include <chrono>
 #include <filesystem>

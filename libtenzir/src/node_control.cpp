@@ -14,7 +14,6 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
-#include <caf/variant.hpp>
 
 namespace tenzir {
 
