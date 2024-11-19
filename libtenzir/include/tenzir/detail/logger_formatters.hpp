@@ -23,6 +23,7 @@
 #include "tenzir/detail/logger.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/optional.hpp"
 
 #include <boost/core/detail/string_view.hpp>
 #include <caf/deep_to_string.hpp>
@@ -193,21 +194,6 @@ struct formatter<caf::intrusive_cow_ptr<T>> {
     if (!value)
       return fmt::format_to(ctx.out(), "*{}", "nullptr");
     return fmt::format_to(ctx.out(), "*{}", ptr(value.get()));
-  }
-};
-
-template <class T>
-struct formatter<std::optional<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const std::optional<T>& value, FormatContext& ctx) const {
-    if (!value)
-      return fmt::format_to(ctx.out(), "none");
-    return fmt::format_to(ctx.out(), "{}", *value);
   }
 };
 
