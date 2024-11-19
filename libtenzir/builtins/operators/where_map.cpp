@@ -254,7 +254,7 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
       }
       auto field_list = field.as<list_type>();
       if (not field_list) {
-        diagnostic::error("expected `list`, but got `{}`", field.type.kind())
+        diagnostic::warning("expected `list`, but got `{}`", field.type.kind())
           .primary(args.field)
           .emit(ctx);
         return series::null(null_type{}, eval.length());
@@ -294,6 +294,13 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
           };
         }
         case mode::where: {
+          if (values.as<null_type>()) {
+            auto builder = series_builder{field.type};
+            for (auto i = int64_t{0}; i < field.length(); ++i) {
+              builder.list();
+            }
+            return builder.finish_assert_one_array();
+          }
           const auto predicate = values.as<bool_type>();
           if (not predicate) {
             diagnostic::warning("expected `bool`, but got `{}`",
@@ -302,11 +309,7 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
               .emit(ctx);
             return series::null(field.type, field.length());
           }
-          if (predicate->array->null_count() != 0) {
-            diagnostic::warning("expected `bool`, got `null`")
-              .primary(args.expr)
-              .emit(ctx);
-          } else if (predicate->array->false_count() == 0) {
+          if (predicate->array->true_count() == predicate->length()) {
             return field;
           }
           auto predicate_gen = predicate->values();
