@@ -67,10 +67,13 @@ Operator | Description | Example
 [`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
 [`export`](./operators/export.md) | Retrieves events from the node | `export`
 [`from_velociraptor`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
+[`load_amqp`](./operators/load_amqp.md) | Loads bytes from an AMQP server | `load_amqp`
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
+[`load_ftp`](./operators/load_ftp.md) | Loads bytes via FTP | `load_ftp "ftp.example.org"`
 [`load_google…`](./operators/load_google_cloud_pubsub.md) | Listen to a Google Cloud Pub/Sub subscription | `load_google_cloud_pubsub "…", "…"`
 [`load_http`](./operators/load_http.md) | Receives bytes from a HTTP request | `load_http "example.org", params={n: 5}`
 [`load_kafka`](./operators/load_kafka.md) | Receives bytes from an Apache Kafka topic | `load_kafka topic="example"`
+[`load_nic`](./operators/load_nic.md) | Receives bytes from a Network Interface Card | `load_nic "eth0"`
 [`load_s3`](./operators/load_s3.md) | Receives bytes from an Amazon S3 object | `load_s3 "s3://examplebucket/obj.csv`
 [`load_sqs`](./operators/load_sqs.md) | Receives bytes from an Amazon SQS queue | `load_sqs "sqs://tenzir"`
 [`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
@@ -91,8 +94,10 @@ Operator | Description | Example
 [`publish`](./operators/publish.md) | Publishes events to a certain topic | `publish "topic"`
 [`import`](./operators/import.md) | Stores events at the node | `import`
 [`discard`](./operators/discard.md) | Discards incoming bytes or events | `discard`
+[`save_amqp`](./operators/save_amqp.md) | Saves incoming bytes to an AMQP server | `save_amqp`
 [`save_email`](./operators/save_email.md) | Saves incoming bytes through an SMTP server | `save_email "user@example.org"`
 [`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`
+[`save_ftp`](./operators/save_ftp.md) | Saves incoming bytes via FTP | `save_ftp "ftp.example.org"`
 [`save_google_cloud…`](./operators/save_google_cloud_pubsub.md) | Publishes to a Google Cloud Pub/Sub topic | `save_google_cloud_pubsub "…", "…"`
 [`save_http`](./operators/save_http.md) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
 [`save_kafka`](./operators/save_kafka.md) | Saves incoming bytes to an Apache Kafka topic | `save_kafka topic="example"`
@@ -124,6 +129,7 @@ Operator | Description | Example
 [`read_leef`](./operators/read_leef.md) | Parses the Log Event Extended Format | `read_leef`
 [`read_lines`](./operators/read_lines.md) | Parses each line into a separate event | `read_lines`
 [`read_ndjson`](./operators/read_ndjson.md) | Parses newline-delimited JSON | `read_ndjson`
+[`read_pcap`](./operators/read_pcap.md) | Parses raw network packets in PCAP format | `read_pcap`
 [`read_parquet`](./operators/read_parquet.md) | Parses Parquet format | `read_parquet`
 [`read_ssv`](./operators/read_ssv.md) | Parses space-separated values | `read_ssv header="name count"`
 [`read_suricata`](./operators/read_suricata.md) | Parses Suricata's Eve format | `read_suricata`
@@ -141,7 +147,8 @@ Operator | Description | Example
 [`write_bitz`](./operators/write_bitz.md) | Writes events as Tenzir's internal wire format | `write_bitz`
 [`write_csv`](./operators/write_csv.md) | Writes events as CSV | `write_csv`
 [`write_feather`](./operators/write_feather.md) | Writes events as Feather | `write_feather`
-[`write_json`](./operators/write_json.md) | Writes events as JSON | `write_json ndjson=true`
+[`write_json`](./operators/write_json.md) | Writes events as JSON | `write_json`
+[`write_ndjson`](./operators/write_ndjson.md) | Writes events as Newline-Delimited JSON | `write_ndjson`
 [`write_lines`](./operators/write_lines.md) | Writes events as lines | `write_lines`
 [`write_parquet`](./operators/write_parquet.md) | Writes events as Parquet | `write_parquet`
 [`write_pcap`](./operators/write_pcap.md) | Writes events as PCAP | `write_pcap`
