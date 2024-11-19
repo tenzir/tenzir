@@ -164,11 +164,7 @@ public:
         co_yield {};
         continue;
       }
-      if (array->null_count() != 0) {
-        diagnostic::warning("expected `bool`, got `null`")
-          .primary(expr_)
-          .emit(ctrl.diagnostics());
-      } else if (array->false_count() == 0) {
+      if (array->true_count() == array->length()) {
         co_yield std::move(slice);
         continue;
       }
