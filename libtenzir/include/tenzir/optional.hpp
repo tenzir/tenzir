@@ -23,6 +23,8 @@ std::optional<T> to_optional(const T* ptr) {
 
 } // namespace tenzir
 
+#if FMT_VERSION / 10000 < 10
+
 namespace fmt {
 template <class T>
 struct formatter<std::optional<T>> {
@@ -34,9 +36,11 @@ struct formatter<std::optional<T>> {
   template <class FormatContext>
   auto format(const std::optional<T>& value, FormatContext& ctx) const {
     if (!value) {
-      return fmt::format_to(ctx.out(), "none");
+      return fmt::format_to(ctx.out(), "nullopt");
     }
     return fmt::format_to(ctx.out(), "{}", *value);
   }
 };
 } // namespace fmt
+
+#endif

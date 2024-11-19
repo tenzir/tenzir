@@ -91,7 +91,7 @@ struct expander {
           }
         }
       }
-      return caf::none;
+      return std::nullopt;
     };
     auto make_disjunction = [](auto x, auto y) {
       disjunction result;
