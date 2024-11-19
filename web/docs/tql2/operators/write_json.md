@@ -9,7 +9,9 @@ write_json [color=bool]
 ## Description
 
 Transforms the input event stream to JSON byte stream.
-
+:::tip Newline-Delimited JSON
+You can use the [`write_ndjson` operator](write_ndjson.md) to write Newline-Delimited JSON.
+:::
 ### `color = bool (optional)`
 
 Colorize the output.
