@@ -128,14 +128,14 @@ $ tenzir-platform node list
 ```
 
 We want to receive a Slack notification whenever Node-3 is offline for more than 3 minutes.
-First we create a webhook as described [in the Slack docs](https://api.slack.com/messaging/webhooks).
+First we create a webhook as described in the [Slack docs](https://api.slack.com/messaging/webhooks).
 Next, we configure the alert in the Tenzir Platform:
 
 ```
 $ tenzir-platform alert add Node-3 3m "https://hooks.slack.com/services/XXXXX/YYYYY/ZZZZZ" '{"text": "Alert! Look after node $NODE_NAME"}'
 ```
 
-Unless Node-3 reconnects, we should see a message appear after three minutes in the configured slack channel.
+Unless Node-3 reconnects, we should see a message appear after 3 minutes in the configured Slack channel.
 
 ## Manage Workspaces
 
