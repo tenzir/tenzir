@@ -9,7 +9,7 @@ comments: true
 [Tenzir Platform v1.3][github-release] brings a redesigned explorer page,
 better behavior of the event inspector, and many other fixes.
 
-![Tenzir Platform v1.3](./tenzir-platform-v1.3.excalidraw.svg)
+![Tenzir Platform v1.3](tenzir-platform-v1.3.excalidraw.svg)
 
 [github-release]: https://github.com/tenzir/platform/releases/tag/v1.3.0
 
@@ -33,9 +33,9 @@ at the same time.
 
 We’ve implemented several other noteworthy fixes and enhancements:
 
- * The explorer event inspector now automatically selects the first event if it is open.
- * We fixed an issue in the detailed activity charts in the pipelines page where the ingress and egress activities were mistakenly swapped.
- * Charts in the dashboard show up to 10,000 events now.
+- The explorer event inspector now automatically selects the first event if it is open.
+- We fixed an issue in the detailed activity charts in the pipelines page where the ingress and egress activities were mistakenly swapped.
+- Charts in the dashboard show up to 10,000 events now.
 
 ## Join Us for Office Hours
 
