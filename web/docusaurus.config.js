@@ -8,6 +8,8 @@ const tqlGrammar = require("@tenzir/vscode-tql/syntaxes/tql.tmLanguage.json");
 async function createConfig() {
   const rehypePrettyCode = (await import('rehype-pretty-code')).default;
   const shikiHighlighter = (await import('shiki')).createHighlighter;
+  const transformerCopyButton = (await import("@rehype-pretty/transformers"))
+    .transformerCopyButton;
 
   const rehypePrettyCodeOptions = {
     keepBackground: false,
@@ -17,6 +19,12 @@ async function createConfig() {
         ...options,
         langs: [() => tqlGrammar],
       }),
+    transformers: [
+      transformerCopyButton({
+        jsx: true, // required for React, disables the onclick handler, which we add using clientModules
+        feedbackDuration: 3_000,
+      }),
+    ],
   };
 
   /// BEGIN CUSTOM CODE ///
@@ -99,6 +107,7 @@ async function createConfig() {
     },
     themes: ['@docusaurus/theme-mermaid'],
 
+    clientModules: [require.resolve("./registerCopyButton.js")],
     plugins: [
       'docusaurus-plugin-sass',
       [
