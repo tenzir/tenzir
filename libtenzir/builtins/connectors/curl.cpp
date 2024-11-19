@@ -78,8 +78,9 @@ auto make_request(const connector_args& args) -> caf::expected<http::request> {
   if (args.http_opts.chunked) {
     result.headers.emplace_back("Transfer-Encoding", "chunked");
   }
-  if (auto err = apply(args.http_opts.items, result))
+  if (auto err = apply(args.http_opts.items, result)) {
     return err;
+  }
   return result;
 }
 
@@ -204,8 +205,9 @@ public:
       return err;
     }
     return [&ctrl, args = args_, tx](chunk_ptr chunk) mutable {
-      if (!chunk || chunk->size() == 0)
+      if (!chunk || chunk->size() == 0) {
         return;
+      }
       if (auto err = tx->prepare(chunk)) {
         diagnostic::error("failed to prepare transfer")
           .note("chunk size: {}", chunk->size())
@@ -269,8 +271,9 @@ public:
 private:
   /// Auto-completes a scheme-less URL with the scheme from this plugin.
   static auto auto_complete(std::string_view url) -> std::string {
-    if (url.find("://") != std::string_view::npos)
+    if (url.find("://") != std::string_view::npos) {
       return std::string{url};
+    }
     return fmt::format("{}://{}", Protocol.str(), url);
   }
 
@@ -300,9 +303,11 @@ private:
           result.http_opts.multipart = true;
           // TODO: factor these TLS options in the future, as they apply to many
           // connectors, such as email.
-        } else if (arg->inner == "-P" || arg->inner == "--skip-peer-verification") {
+        } else if (arg->inner == "-P"
+                   || arg->inner == "--skip-peer-verification") {
           result.transfer_opts.skip_peer_verification = true;
-        } else if (arg->inner == "-H" || arg->inner == "--skip-hostname-verification") {
+        } else if (arg->inner == "-H"
+                   || arg->inner == "--skip-hostname-verification") {
           result.transfer_opts.skip_hostname_verification = true;
         } else {
           args.push_back(std::move(*arg));
@@ -312,8 +317,9 @@ private:
       for (auto i = 0u; i < args.size(); ++i) {
         TENZIR_DEBUG("- args[{}] = {}", i, args[i].inner);
       }
-      if (args.empty())
+      if (args.empty()) {
         diagnostic::error("no URL provided").throw_();
+      }
       // No ambiguity, just go with <url>.
       if (args.size() == 1) {
         result.url = auto_complete(args[0].inner);
@@ -331,13 +337,14 @@ private:
         args.erase(args.begin());
         args.erase(args.begin());
         for (auto& arg : args) {
-          if (auto item = http::request_item::parse(arg.inner))
+          if (auto item = http::request_item::parse(arg.inner)) {
             result.http_opts.items.push_back(std::move(*item));
-          else
+          } else {
             diagnostic::error("invalid HTTP request item")
               .primary(arg.source)
               .note("{}", arg.inner)
               .throw_();
+          }
         }
         return result;
       }
@@ -345,13 +352,14 @@ private:
       result.url = auto_complete(args[0].inner);
       args.erase(args.begin());
       for (auto& arg : args) {
-        if (auto item = http::request_item::parse(arg.inner))
+        if (auto item = http::request_item::parse(arg.inner)) {
           result.http_opts.items.push_back(std::move(*item));
-        else
+        } else {
           diagnostic::error("invalid HTTP request item")
             .primary(arg.source)
             .note("{}", arg.inner)
             .throw_();
+        }
       }
       return result;
     } else {
@@ -397,8 +405,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -423,8 +431,8 @@ public:
   }
 
   auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> generator<std::monostate> {
+  operator()(generator<chunk_ptr> input,
+             operator_control_plane& ctrl) const -> generator<std::monostate> {
     // TODO: Clean this up.
     auto saver = curl_saver<"TODO: not using this">{args_};
     auto func = saver.instantiate(ctrl, std::nullopt);
@@ -437,8 +445,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -504,28 +512,76 @@ auto parse_http_args(std::string name,
 class load_http_plugin final
   : public virtual operator_plugin2<load_http_operator> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     TRY(auto args, parse_http_args("load_http", inv, ctx));
     return std::make_unique<load_http_operator>(std::move(args));
   }
 
   auto load_schemes() const -> std::vector<std::string> override {
-    return {"http", "https", "ftp", "ftps"};
+    return {"http", "https"};
   }
 };
 
 class save_http_plugin final
   : public virtual operator_plugin2<save_http_operator> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     TRY(auto args, parse_http_args("save_http", inv, ctx));
     return std::make_unique<save_http_operator>(std::move(args));
   }
 
   auto save_schemes() const -> std::vector<std::string> override {
-    return {"http", "https", "ftp", "ftps"};
+    return {"http", "https"};
+  }
+};
+
+class load_ftp_plugin final
+  : public virtual operator_plugin2<load_http_operator> {
+public:
+  auto name() const -> std::string override {
+    return "load_ftp";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = connector_args{};
+    TRY(argument_parser2::operator_(name())
+          .add(args.url, "<url>")
+          .parse(inv, ctx));
+    if (not args.url.starts_with("ftp://")) {
+      args.url.insert(0, "ftp://");
+    }
+    return std::make_unique<load_http_operator>(std::move(args));
+  }
+
+  auto load_schemes() const -> std::vector<std::string> override {
+    return {"ftp", "ftps"};
+  }
+};
+
+class save_ftp_plugin final
+  : public virtual operator_plugin2<save_http_operator> {
+public:
+  auto name() const -> std::string override {
+    return "save_ftp";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = connector_args{};
+    TRY(argument_parser2::operator_(name())
+          .add(args.url, "<url>")
+          .parse(inv, ctx));
+    if (not args.url.starts_with("ftp://")) {
+      args.url.insert(0, "ftp://");
+    }
+    return std::make_unique<save_http_operator>(std::move(args));
+  }
+
+  auto save_schemes() const -> std::vector<std::string> override {
+    return {"ftp", "ftps"};
   }
 };
 
@@ -539,3 +595,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::http)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::https)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_http_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::save_http_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_ftp_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::save_ftp_plugin)

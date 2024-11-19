@@ -39,7 +39,7 @@ omitted, the default level for the codec is used.
 
 ```tql
 export
-write_json ndjson=true
+write_ndjson
 compress "gzip"
 save_file "/tmp/backup.json.gz"
 ```

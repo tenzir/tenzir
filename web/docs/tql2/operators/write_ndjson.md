@@ -1,14 +1,14 @@
-# write_json
+# write_ndjson
 
-Transforms the input event stream to JSON byte stream.
+Transforms the input event stream to Newline-Delimited JSON byte stream.
 
 ```tql
-write_json [color=bool]
+write_ndjson [color=bool]
 ```
 
 ## Description
 
-Transforms the input event stream to JSON byte stream.
+Transforms the input event stream to Newline-Delimited JSON byte stream.
 :::tip Newline-Delimited JSON
 You can use the [`write_ndjson` operator](write_ndjson.md) to write Newline-Delimited JSON.
 :::
@@ -23,6 +23,6 @@ Colorize the output.
 ```tql
 load_file "input.yaml"
 read_yaml
-write_json
+write_ndjson
 save_file "output.json"
 ```
