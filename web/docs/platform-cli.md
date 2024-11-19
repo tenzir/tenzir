@@ -117,25 +117,25 @@ node that triggered the alert.
 Defaults to `{"text": "Node $NODE_NAME disconnected for more than {duration}s"}`,
 where `node_id` and `duration` are set dynamically from the CLI parameters.
 
-### Example
+### Tutorial
 
 Given nodes like this:
 ```
 $ tenzir-platform node list
-🟢 Sensor-1 (n-w2tjezz3)
-🟢 Sensor-2 (n-kzw21299)
-🔴 Sensor-3 (n-ie2tdgca)
+🟢 Node-1 (n-w2tjezz3)
+🟢 Node-2 (n-kzw21299)
+🔴 Node-3 (n-ie2tdgca)
 ```
 
-We want to receive a Slack notification whenever Sensor-3 is offline for more than 3 minutes.
+We want to receive a Slack notification whenever Node-3 is offline for more than 3 minutes.
 First we create a webhook as described [in the Slack docs](https://api.slack.com/messaging/webhooks).
 Next, we configure the alert in the Tenzir Platform:
 
 ```
-$ tenzir-platform alert add Sensor-3 3m "https://hooks.slack.com/services/XXXXX/YYYYY/ZZZZZ" '{"text": "Alert! Look after node $NODE_NAME"}'
+$ tenzir-platform alert add Node-3 3m "https://hooks.slack.com/services/XXXXX/YYYYY/ZZZZZ" '{"text": "Alert! Look after node $NODE_NAME"}'
 ```
 
-Unless Sensor-3 reconnects, we should see a message appear after three minutes in the configured slack channel.
+Unless Node-3 reconnects, we should see a message appear after three minutes in the configured slack channel.
 
 ## Manage Workspaces
 
