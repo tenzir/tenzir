@@ -8,7 +8,7 @@ map(list:list, capture:field, expression:any) -> list
 
 ## Description
 
-The `map` function applies an expresison to each element within a list,
+The `map` function applies an expression to each element within a list,
 returning a list of the same length.
 
 ### `list : list`

@@ -3,7 +3,7 @@
 Removes list elements based on a predicate.
 
 ```tql
-map(list:list, capture:field, predicate:bool) -> list
+where(list:list, capture:field, predicate:bool) -> list
 ```
 
 ## Description
