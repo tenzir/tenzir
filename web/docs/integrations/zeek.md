@@ -136,14 +136,14 @@ tenzir:
 This allows you run Zeek on a packet trace as follows:
 
 ```bash
-tenzir 'load_pcap "/path/to/trace.pcap" | zeek'
+tenzir 'load_file "/path/to/trace.pcap" | zeek'
 ```
 
 You can also perform more elaborate packet filtering after light-weight
 [decapsulation](../tql2/functions/decapsulate.md):
 
 ```bash
-tenzir 'load_pcap "/path/to/trace.pcap"
+tenzir 'load_file "/path/to/trace.pcap"
        read_pcap
        this = decapsulate(this)
        where ip.src in 10.0.0.0/8 || community == "1:YXWfTYEyYLKVv5Ge4WqijUnKTrM="

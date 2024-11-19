@@ -71,7 +71,7 @@ Now consume the data via a Tenzir pipeline using the
 ElasticSearch bulk ingest endpoint:
 
 ```tql
-fluentbit "elasticsearch", options = {
+fluentbit "elasticsearch", options={
   port: 9200,
   tls: "on",
   tls.key_file: "/opt/tenzir/elk.key",
@@ -118,7 +118,7 @@ Use the [`fluentbit`](../../tql2/operators/fluentbit.md) source operator with
 the [Forward input](https://docs.fluentbit.io/manual/pipeline/inputs/forward):
 
 ```tql
-fluentbit "forward", options = {
+fluentbit "forward", options={
   listen: 10.0.0.1,
 }
 import
@@ -187,8 +187,9 @@ configuration:
 Import the logs via TCP:
 
 ```tql
-load_tcp "10.0.0.1:1514"
-read_json
+load_tcp "10.0.0.1:1514" {
+  read_json
+}
 import
 ```
 
@@ -222,8 +223,9 @@ Import the logs via TCP:
 load_tcp "127.0.0.1:4000",
   tls=true,
   certfile="key_and_cert.pem",
-  keyfile="key_and_cert.pem"
-read_json
+  keyfile="key_and_cert.pem" {
+    read_json
+  }
 import
 ```
 
@@ -586,8 +588,9 @@ spinning up a server that listens at `tcp://10.0.0.1:1514`.
 Import the logs sent with the configuration above into Tenzir via TCP:
 
 ```tql
-load_tcp "10.0.0.1:1514"
-read_json
+load_tcp "10.0.0.1:1514" {
+  read_json
+}
 import
 ```
 
