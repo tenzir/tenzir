@@ -347,9 +347,22 @@ private:
 class plugin final : public operator_plugin<velociraptor_operator>,
                      public virtual operator_factory_plugin {
 public:
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
-    config_ = config;
+  auto initialize(const record& unused_plugin_config,
+                  const record& global_config) -> caf::error override {
+    if (not unused_plugin_config.empty()) {
+      return diagnostic::error("`{}.yaml` is unused; Use `velociraptor.yaml` "
+                               "instead",
+                               this->name())
+        .to_error();
+    }
+    auto c
+      = try_get_only<tenzir::record>(global_config, "plugins.velociraptor");
+    if (not c) {
+      return c.error();
+    }
+    if (*c) {
+      config_ = **c;
+    }
     return caf::none;
   }
 

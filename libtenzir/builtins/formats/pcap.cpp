@@ -544,8 +544,8 @@ private:
 class plugin final : public virtual parser_plugin<pcap_parser>,
                      public virtual printer_plugin<pcap_printer> {
 public:
-  auto initialize(const record& config, const record& /* global_config */)
-    -> caf::error override {
+  auto initialize(const record& config,
+                  const record& /* global_config */) -> caf::error override {
     config_ = config;
     return caf::none;
   }
@@ -577,11 +577,24 @@ private:
   record config_;
 };
 
+class read_plugin final
+  : public virtual operator_plugin2<parser_adapter<pcap_parser>> {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = parser_args{};
+    TRY(argument_parser2::operator_(name())
+          .add("emit_file_headers", args.emit_file_headers)
+          .parse(inv, ctx));
+    return std::make_unique<parser_adapter<pcap_parser>>(
+      pcap_parser{std::move(args)});
+  }
+};
+
 class write_plugin final
   : public virtual operator_plugin2<writer_adapter<pcap_printer>> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<pcap_printer>>(pcap_printer{});
   }
@@ -592,4 +605,5 @@ public:
 } // namespace tenzir::plugins::pcap
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::pcap::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::pcap::read_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::pcap::write_plugin)

@@ -33,7 +33,7 @@ send your events to Azure Log Analytics using Tenzir. Come check it out!
 ## Lookup Table Timeouts
 
 The `context update` operator gained two new options when used together with
-[lookup table contexts][lookup-table-docs]: `--create-timeout <duration>` and
+lookup table contexts: `--create-timeout <duration>` and
 `--update-timeout <duration>`.
 
 Both new options cause individual events to expire in the lookup table. Create
@@ -48,8 +48,6 @@ latest, or when they were not accessed for a day, whichever comes first:
 …
 | context update my-lookup-table --create-timeout 1w --update-timeout 1d
 ```
-
-[lookup-table-docs]: /next/contexts/lookup-table
 
 ## Print Individual Fields in Events
 

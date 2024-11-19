@@ -29,7 +29,7 @@ x12 = int("-9223372036854775808") + -1
 x13 = null + 1
 x14 = int(null) + 1
 
-write_json ndjson=false
+write_json
 EOF
 }
 
