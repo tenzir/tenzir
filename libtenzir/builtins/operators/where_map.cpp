@@ -38,6 +38,8 @@
 
 namespace tenzir::plugins::where {
 
+TENZIR_ENUM(mode, map, where);
+
 namespace {
 
 // Selects matching rows from the input.
@@ -228,8 +230,6 @@ private:
   ast::expression expr_;
   bool warn_;
 };
-
-TENZIR_ENUM(mode, map, where);
 
 struct arguments {
   ast::expression field;
