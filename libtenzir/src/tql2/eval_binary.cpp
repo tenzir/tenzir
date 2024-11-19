@@ -607,7 +607,7 @@ struct EvalBinOp<Op, string_type, string_type> {
       } else if (ln && rn) {
         equal = true;
       } else {
-        equal = l.Value(i) == r.Value(i);
+        equal = l.GetView(i) == r.GetView(i);
       }
       b.UnsafeAppend(equal != invert);
     }
