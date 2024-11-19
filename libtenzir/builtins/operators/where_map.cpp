@@ -260,7 +260,11 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
         return series::null(null_type{}, eval.length());
       }
       // We get the field's inner values array and create a dummy table slice
-      // with a single field to evaluate the mapped expression on.
+      // with a single field to evaluate the mapped expression on. TODO: We
+      // should consider unrolling the surrounding event to make more than just
+      // the capture evailable. This may be rather expensive, though, so we
+      // should consider doing some static analysis to only unroll the fields
+      // actually used.
       auto values
         = series{field_list->type.value_type(), field_list->array->values()};
       if (values.length() == 0) {
