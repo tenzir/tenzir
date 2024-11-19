@@ -117,7 +117,7 @@ node that triggered the alert.
 Defaults to `{"text": "Node $NODE_NAME disconnected for more than {duration}s"}`,
 where `node_id` and `duration` are set dynamically from the CLI parameters.
 
-### Tutorial
+### Example
 
 Given nodes like this:
 ```
