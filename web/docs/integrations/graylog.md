@@ -64,21 +64,23 @@ output. Adapt your filters for more fine-grained forwarding.
 Now that Graylog is configured, you can test that data is flowing using the
 following Tenzir pipeline:
 
-```
-from tcp://1.2.3.4:5678 read gelf
+```tql
+load_tcp "1.2.3.4:5678"
+read_gelf
 ```
 
 This pipelines opens a listening socket at IP address 1.2.3.4 at port 5678 via
-the [tcp](../connectors/tcp.md) loader, and then reads a stream of GELF messages
-using the [gelf](../formats/gelf.md) parser. Graylog will connect to this
-socket, based on the reconnect interval that you configured in the output (by
-default 500ms).
+[`load_tcp`](../tql2/operators/load_tcp.md), and then reads a stream of GELF
+messages using [`read_gelf`](../tql2/operators/read_gelf.md). Graylog will
+connect to this socket, based on the reconnect interval that you configured in
+the output (by default 500ms).
 
 Now that data is flowing, you can decide what to do with the Graylog data, e.g.,
 ingest data into a running Tenzir node by appending
-[import](../operators/import.md):
+[`import`](../tql2/operators/import.md):
 
-```
-from tcp://1.2.3.4:5678 read gelf
-| import
+```tql
+load_tcp "1.2.3.4:5678"
+read_gelf
+import
 ```
