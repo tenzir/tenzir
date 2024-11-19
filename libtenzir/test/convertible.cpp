@@ -336,34 +336,8 @@ struct StdOpt {
   }
 };
 
-struct CafOpt {
-  std::optional<int64_t> value;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, CafOpt& c) {
-    return f.apply(c.value);
-  }
-
-  inline static const record_type& schema() noexcept {
-    static const auto result = record_type{
-      {"value", int64_type{}},
-    };
-    return result;
-  }
-};
-
 TEST(std::optional member variable) {
   auto x = StdOpt{int64_t{42}};
-  auto r = record{{"value", caf::none}};
-  REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value, int64_t{42});
-  r = record{{"value", int64_t{22}}};
-  REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(*x.value, 22);
-}
-
-TEST(std::optional member variable) {
-  auto x = CafOpt{int64_t{42}};
   auto r = record{{"value", caf::none}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   CHECK_EQUAL(x.value, int64_t{42});
