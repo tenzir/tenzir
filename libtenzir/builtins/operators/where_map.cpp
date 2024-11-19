@@ -275,12 +275,11 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
       TENZIR_ASSERT(name);
       TENZIR_ASSERT(name->length() > 0);
       TENZIR_ASSERT(name->array->IsValid(0));
+      const auto empty_type = type{name->array->GetView(0), record_type{}};
       auto slice = table_slice{
-        check(arrow::RecordBatch::FromStructArray(
-          std::make_shared<arrow::StructArray>(
-            arrow::struct_(arrow::FieldVector{}), values.length(),
-            arrow::ArrayVector{}))),
-        type{name->array->GetView(0), record_type{}},
+        arrow::RecordBatch::Make(empty_type.to_arrow_schema(), values.length(),
+                                 arrow::ArrayVector{}),
+        empty_type,
       };
       slice = assign(args.capture, values, slice, ctx);
       values = tenzir::eval(args.expr, slice, ctx);
@@ -291,10 +290,10 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
           return series{
             list_type{values.type},
             std::make_shared<arrow::ListArray>(
-              arrow::list(values.array->type()), field_list->array->length(),
-              field_list->array->value_offsets(), values.array,
-              field_list->array->null_bitmap(), field_list->array->null_count(),
-              field_list->array->offset()),
+              list_type{values.type}.to_arrow_type(),
+              field_list->array->length(), field_list->array->value_offsets(),
+              values.array, field_list->array->null_bitmap(),
+              field_list->array->null_count(), field_list->array->offset()),
           };
         }
         case mode::where: {
