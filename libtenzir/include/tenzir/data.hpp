@@ -23,6 +23,7 @@
 #include "tenzir/policy/merge_lists.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/time.hpp"
+#include "tenzir/variant.hpp"
 #include "tenzir/variant_traits.hpp"
 
 #include <caf/default_sum_type_access.hpp>
@@ -114,7 +115,7 @@ public:
   // clang-format on
 
   /// The sum type of all possible builtin types.
-  using variant = caf::detail::tl_apply_t<types, caf::variant>;
+  using variant = caf::detail::tl_apply_t<types, tenzir::variant>;
 
   /// Default-constructs empty data.
   data() = default;
@@ -152,25 +153,25 @@ public:
 
   // These operators need to be templates so they're instantiated at a later
   // point in time, because there'd be a cyclic dependency otherwise.
-  // caf::variant<Ts...> is just a placeholder for tenzir::data_view here.
+  // tenzir::variant<Ts...> is just a placeholder for tenzir::data_view here.
 
   template <class... Ts>
-  friend bool operator==(const data& lhs, const caf::variant<Ts...>& rhs) {
+  friend bool operator==(const data& lhs, const tenzir::variant<Ts...>& rhs) {
     return is_equal(lhs, rhs);
   }
 
   template <class... Ts>
-  friend bool operator==(const caf::variant<Ts...>& lhs, const data& rhs) {
+  friend bool operator==(const tenzir::variant<Ts...>& lhs, const data& rhs) {
     return is_equal(lhs, rhs);
   }
 
   template <class... Ts>
-  friend bool operator!=(const data& lhs, const caf::variant<Ts...>& rhs) {
+  friend bool operator!=(const data& lhs, const tenzir::variant<Ts...>& rhs) {
     return !is_equal(lhs, rhs);
   }
 
   template <class... Ts>
-  friend bool operator!=(const caf::variant<Ts...>& lhs, const data& rhs) {
+  friend bool operator!=(const tenzir::variant<Ts...>& lhs, const data& rhs) {
     return !is_equal(lhs, rhs);
   }
 

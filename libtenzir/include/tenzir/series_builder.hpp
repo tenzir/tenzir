@@ -185,12 +185,6 @@ struct data_view2
     });
   }
 
-  explicit(false) operator data_view() const {
-    return match([](auto x) {
-      return data_view{x};
-    });
-  }
-
   explicit(false) data_view2(const record& x) : variant{make_view(x)} {
   }
 

@@ -30,7 +30,7 @@
 #include <optional>
 #include <span>
 #include <type_traits>
-#include <vector>
+
 namespace tenzir::detail {
 
 /// An inspector for CAF inspect
@@ -235,6 +235,9 @@ public:
     return true;
   }
 
+  // TODO: Remove the `caf::variant` overloads when upgrading to
+  // CAF 1.0, until then they're still required for the variants
+  // inside `caf::uri` and `caf::config_option`.
   template <class... Ts>
   result_type apply(caf::variant<Ts...>& x) {
     uint8_t type_tag = 0;
@@ -245,6 +248,66 @@ public:
 
   template <class... Ts>
   result_type apply(uint8_t type_tag, caf::variant<Ts...>& x) {
+    using namespace caf;
+    using caf::detail::tl_at;
+    auto& f = *this;
+    switch (type_tag) {
+      default:
+        CAF_RAISE_ERROR("invalid type found");
+#define CAF_VARIANT_ASSIGN_CASE_IMPL(n)                                        \
+  case n: {                                                                    \
+    using tmp_t =                                                              \
+      typename caf::detail::tl_at<caf::detail::type_list<Ts...>,               \
+                                  ((n) < sizeof...(Ts) ? (n) : 0)>::type;      \
+    x = tmp_t{};                                                               \
+    return f(as<tmp_t>(x));                                                    \
+  }
+        CAF_VARIANT_ASSIGN_CASE_IMPL(0);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(1);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(2);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(3);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(4);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(5);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(6);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(7);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(8);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(9);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(10);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(11);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(12);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(13);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(14);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(15);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(16);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(17);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(18);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(19);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(20);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(21);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(22);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(23);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(24);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(25);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(26);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(27);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(28);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(29);
+#undef CAF_VARIANT_ASSIGN_CASE_IMPL
+    }
+    return false;
+  }
+
+  template <class... Ts>
+  result_type apply(tenzir::variant<Ts...>& x) {
+    uint8_t type_tag = 0;
+    if (!apply(type_tag)) {
+      return false;
+    }
+    return apply(type_tag, x);
+  }
+
+  template <class... Ts>
+  result_type apply(uint8_t type_tag, tenzir::variant<Ts...>& x) {
     using namespace caf;
     using caf::detail::tl_at;
     auto& f = *this;
