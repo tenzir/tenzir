@@ -51,15 +51,17 @@ Charlie,44
 Assuming you have already [created a custom
 table](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table#create-a-custom-table)
 called `Custom-Users`, you can send this file to the table using the
-[`azure-log-analytics`](../operators/azure-log-analytics.md) operator:
+[`to_azure_log_analytics`](../tql2/operators/to_azure_log_analytics.md)
+operator:
 
-```
-from users.csv
-| azure-log-analytics
-  --tenant-id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-  --client-id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-  --client-secret "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  --dce "https://my-dce.westeurope-1.ingest.monitor.azure.com"
-  --dcr "dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  --table "Custom-Users"
+```tql
+load_file "users.csv"
+read_csv
+to_azure_log_analytics
+  tenant_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  client_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  client_secret="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  dce="https://my-dce.westeurope-1.ingest.monitor.azure.com",
+  dcr="dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  table="Custom-Users"
 ```
