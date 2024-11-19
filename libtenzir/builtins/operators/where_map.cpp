@@ -259,17 +259,18 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
           .emit(ctx);
         return series::null(null_type{}, eval.length());
       }
-      // We get the schema name from the parent evsaluator so that we can make
-      // @name available in the mapped expression.
+      // We get the field's inner values array and create a dummy table slice
+      // with a single field to evaluate the mapped expression on.
+      auto values
+        = series{field_list->type.value_type(), field_list->array->values()};
+      if (values.length() == 0) {
+        return field;
+      }
       const auto name
         = eval(ast::meta{ast::meta::name, location::unknown}).as<string_type>();
       TENZIR_ASSERT(name);
       TENZIR_ASSERT(name->length() > 0);
       TENZIR_ASSERT(name->array->IsValid(0));
-      // We get the field's inner values array and create a dummy table slice
-      // with a single field to evaluate the mapped expression on.
-      auto values
-        = series{field_list->type.value_type(), field_list->array->values()};
       auto slice = table_slice{
         check(arrow::RecordBatch::FromStructArray(
           std::make_shared<arrow::StructArray>(
