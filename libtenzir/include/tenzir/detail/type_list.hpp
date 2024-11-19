@@ -274,4 +274,29 @@ struct tl_make<T<Ts...>> {
 template <class T>
 using tl_make_t = typename tl_make<T>::type;
 
+template <class...>
+struct common_types_helper;
+
+template <class L1>
+struct common_types_helper<L1, type_list<>> {
+  using type = type_list<>;
+};
+
+template <class L1, class L2>
+struct common_types_helper<L1, L2> {
+  using type = std::conditional_t<
+    tl_contains_v<L1, caf::detail::tl_head_t<L2>>,
+    tl_prepend_t<
+      typename common_types_helper<L1, caf::detail::tl_tail_t<L2>>::type,
+      caf::detail::tl_head_t<L2>>,
+    typename common_types_helper<L1, caf::detail::tl_tail_t<L2>>::type>;
+};
+
+// Creates a new type list that contains all the types that are present in both
+// L1 and L2
+template <class L1, class L2>
+  requires(is_type_list<L1>::value and is_type_list<L2>::value)
+using tl_common_types_t
+  = tl_distinct_t<typename common_types_helper<L1, L2>::type>;
+
 } // namespace tenzir::detail
