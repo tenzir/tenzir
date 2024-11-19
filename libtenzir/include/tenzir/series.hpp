@@ -131,6 +131,13 @@ struct basic_series {
     }
   }
 
+  auto values() const
+    requires(concrete_type<Type>)
+  {
+    TENZIR_ASSERT(array);
+    return tenzir::values(type, *array);
+  }
+
   [[nodiscard]] auto slice(int64_t begin, int64_t end) const
     -> basic_series<Type> {
     auto sliced = array->SliceSafe(begin, end - begin);
