@@ -51,7 +51,7 @@ Charlie,44
 Assuming you have already [created a custom
 table](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table#create-a-custom-table)
 called `Custom-Users`, you can send this file to the table using the
-[`to_azure_log_analytics`](../tql2/operators/to_azure_log_analytics.md)
+[`to_azure_log_analytics`](../../tql2/operators/to_azure_log_analytics.md)
 operator:
 
 ```tql
