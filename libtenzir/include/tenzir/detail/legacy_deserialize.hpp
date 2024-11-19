@@ -30,7 +30,7 @@
 #include <optional>
 #include <span>
 #include <type_traits>
-#include <vector>
+
 namespace tenzir::detail {
 
 /// An inspector for CAF inspect
@@ -235,6 +235,9 @@ public:
     return true;
   }
 
+  // TODO: Remove the `caf::variant` overloads when upgrading to
+  // CAF 1.0, until then they're still required for the variants
+  // inside `caf::uri` and `caf::config_option`.
   template <class... Ts>
   result_type apply(caf::variant<Ts...>& x) {
     uint8_t type_tag = 0;
@@ -290,6 +293,64 @@ public:
         CAF_VARIANT_ASSIGN_CASE_IMPL(28);
         CAF_VARIANT_ASSIGN_CASE_IMPL(29);
 #undef CAF_VARIANT_ASSIGN_CASE_IMPL
+    }
+    return false;
+  }
+
+  template <class... Ts>
+  result_type apply(tenzir::variant<Ts...>& x) {
+    uint8_t type_tag = 0;
+    if (!apply(type_tag)) {
+      return false;
+    }
+    return apply(type_tag, x);
+  }
+
+  template <class... Ts>
+  result_type apply(uint8_t type_tag, tenzir::variant<Ts...>& x) {
+    auto& f = *this;
+    switch (type_tag) {
+      default:
+        CAF_RAISE_ERROR("invalid type found");
+#define TENZIR_VARIANT_ASSIGN_CASE_IMPL(n)                                     \
+  case n: {                                                                    \
+    using tmp_t =                                                              \
+      typename caf::detail::tl_at<caf::detail::type_list<Ts...>,               \
+                                  ((n) < sizeof...(Ts) ? (n) : 0)>::type;      \
+    x = tmp_t{};                                                               \
+    return f(as<tmp_t>(x));                                                    \
+  }
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(0);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(1);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(2);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(3);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(4);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(5);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(6);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(7);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(8);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(9);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(10);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(11);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(12);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(13);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(14);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(15);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(16);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(17);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(18);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(19);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(20);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(21);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(22);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(23);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(24);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(25);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(26);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(27);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(28);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(29);
+#undef TENZIR_VARIANT_ASSIGN_CASE_IMPL
     }
     return false;
   }

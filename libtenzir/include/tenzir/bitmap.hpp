@@ -9,16 +9,15 @@
 #pragma once
 
 #include "tenzir/bitmap_base.hpp"
-#include "tenzir/concept/printable/print.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/ewah_bitmap.hpp"
 #include "tenzir/null_bitmap.hpp"
+#include "tenzir/variant.hpp"
 #include "tenzir/variant_traits.hpp"
 #include "tenzir/wah_bitmap.hpp"
 
 #include <caf/detail/type_list.hpp>
-#include <caf/variant.hpp>
 #include <fmt/core.h>
 
 namespace tenzir {
@@ -33,7 +32,7 @@ class bitmap : public bitmap_base<bitmap>, detail::equality_comparable<bitmap> {
 public:
   using types = caf::detail::type_list<ewah_bitmap, null_bitmap, wah_bitmap>;
 
-  using variant = caf::detail::tl_apply_t<types, caf::variant>;
+  using variant = caf::detail::tl_apply_t<types, tenzir::variant>;
 
   /// The concrete bitmap type to be used for default construction.
   using default_bitmap = ewah_bitmap;
@@ -122,7 +121,7 @@ public:
 
 private:
   using range_variant
-    = caf::variant<ewah_bitmap_range, null_bitmap_range, wah_bitmap_range>;
+    = tenzir::variant<ewah_bitmap_range, null_bitmap_range, wah_bitmap_range>;
 
   range_variant range_;
 };

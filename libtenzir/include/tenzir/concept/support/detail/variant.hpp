@@ -9,9 +9,9 @@
 #pragma once
 
 #include "tenzir/detail/type_list.hpp"
+#include "tenzir/variant.hpp"
 
 #include <caf/detail/type_list.hpp>
-#include <caf/variant.hpp>
 
 namespace tenzir::detail {
 
@@ -54,11 +54,8 @@ using variant_type_concat =
     >::type
   >;
 
-
 template <class T, class U>
-using flattened_variant = caf::detail::tl_apply_t<
-  variant_type_concat<T, U>,
-  caf::variant
->;
+using flattened_variant
+  = caf::detail::tl_apply_t<variant_type_concat<T, U>, tenzir::variant>;
 
 } // namespace tenzir::detail

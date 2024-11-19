@@ -22,7 +22,6 @@
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
 #include <caf/none.hpp>
-#include <caf/variant.hpp>
 
 #include <memory>
 #include <string>
@@ -134,8 +133,8 @@ auto inspect(Inspector& f, data_extractor& x) {
 }
 
 /// The operand of a predicate, which can be either LHS or RHS.
-using operand = caf::variant<meta_extractor, field_extractor, type_extractor,
-                             data_extractor, data>;
+using operand = tenzir::variant<meta_extractor, field_extractor, type_extractor,
+                                data_extractor, data>;
 
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
@@ -249,7 +248,7 @@ public:
   using types = caf::detail::type_list<caf::none_t, conjunction, disjunction,
                                        negation, predicate>;
 
-  using node = caf::detail::tl_apply_t<types, caf::variant>;
+  using node = caf::detail::tl_apply_t<types, tenzir::variant>;
 
   /// Default-constructs empty an expression.
   expression() = default;

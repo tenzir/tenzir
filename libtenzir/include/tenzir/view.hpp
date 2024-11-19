@@ -22,7 +22,6 @@
 #include <caf/make_counted.hpp>
 #include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
-#include <caf/variant.hpp>
 
 #include <array>
 #include <cstdint>
@@ -140,7 +139,7 @@ struct view_trait<blob> {
 // clang-format off
 /// A type-erased view over various types of data.
 /// @relates view_trait
-using data_view = caf::variant<
+using data_view = tenzir::variant<
   view<caf::none_t>,
   view<bool>,
   view<int64_t>,

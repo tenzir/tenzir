@@ -56,8 +56,35 @@ class variant : public std::variant<Ts...> {
 public:
   using std::variant<Ts...>::variant;
 
+  using types = caf::detail::type_list<Ts...>;
+
   template <class T>
   static constexpr auto can_have = (std::same_as<T, Ts> || ...);
+
+  template <typename Inspector>
+  static auto apply_compressed_index(Inspector& f, size_t& idx) -> bool {
+    // This can save about ~10% size since the type index is repeated once
+    // per `data`, but the main purpose of this compression is to achieve
+    // binary compatibility with the previously used `caf::variant`.
+    constexpr auto size = caf::detail::tl_size<types>::value;
+    auto result = bool{false};
+    if constexpr (size < (1u << 8)) {
+      auto u8 = static_cast<uint8_t>(idx);
+      result = f.apply(u8);
+      idx = u8;
+    } else if constexpr (size < (1u << 16)) {
+      auto u16 = static_cast<uint16_t>(idx);
+      result = f.apply(u16);
+      idx = u16;
+    } else if constexpr (size < (1ull << 32)) {
+      auto u32 = static_cast<uint32_t>(idx);
+      result = f.apply(u32);
+      idx = u32;
+    } else {
+      result = f.apply(idx);
+    }
+    return result;
+  }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, variant& x) -> bool {
@@ -87,7 +114,7 @@ public:
     if constexpr (Inspector::is_loading) {
       if (!f.has_human_readable_format()) {
         auto index = size_t{};
-        if (!f.apply(index)) {
+        if (!apply_compressed_index(f, index)) {
           return false;
         }
         if (index >= sizeof...(Ts)) {
@@ -148,7 +175,8 @@ public:
       return std::visit(
         [&](auto& y) {
           if (!f.has_human_readable_format()) {
-            return f.apply(x.index()) && f.apply(y);
+            auto idx = x.index();
+            return apply_compressed_index(f, idx) && f.apply(y);
           }
           return f.begin_associative_array(1) && f.begin_key_value_pair()
                  && f.value(caf::detail::pretty_type_name(typeid(y)))
