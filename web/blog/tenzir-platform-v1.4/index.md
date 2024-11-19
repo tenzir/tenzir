@@ -2,7 +2,7 @@
 title: "Tenzir Platform v1.4: Platform Alerts"
 slug: tenzir-platform-v1.4
 authors: [lava]
-date: 2024-11-07
+date: 2024-11-19
 tags: [release, platform]
 comments: true
 ---
