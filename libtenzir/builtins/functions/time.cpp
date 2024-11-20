@@ -350,7 +350,8 @@ public:
           .add("locale", locale)
           .parse(inv, ctx));
     return function_use::make(
-      [this, subject_expr = std::move(subject_expr), format = std::move(format),
+      [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
+       format = std::move(format),
        locale = std::move(locale)](evaluator eval, session ctx) -> series {
         auto result_type = string_type{};
         auto result_arrow_type
@@ -365,7 +366,7 @@ public:
                                                        {array}, &options);
             if (not result.ok()) {
               diagnostic::warning("{}", result.status().ToString())
-                .primary(subject_expr)
+                .primary(fn)
                 .emit(ctx);
               return series::null(result_type, subject.length());
             }
@@ -375,7 +376,7 @@ public:
             return series::null(result_type, array.length());
           },
           [&](const auto&) {
-            diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+            diagnostic::warning("`strftime` expected `time`, but got `{}`",
                                 subject.type.kind())
               .primary(subject_expr)
               .emit(ctx);
@@ -403,7 +404,8 @@ public:
           .add(format, "<format>")
           .parse(inv, ctx));
     return function_use::make(
-      [this, subject_expr = std::move(subject_expr), format = std::move(format),
+      [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
+       format = std::move(format),
        locale = std::move(locale)](evaluator eval, session ctx) -> series {
         auto result_type = time_type{};
         auto result_arrow_type
@@ -418,9 +420,17 @@ public:
                                                        {array}, &options);
             if (not result.ok()) {
               diagnostic::warning("{}", result.status().ToString())
-                .primary(subject_expr)
+                .primary(fn)
                 .emit(ctx);
               return series::null(result_type, subject.length());
+            }
+            auto pre_nulls = array.null_count();
+            auto post_nulls = result->null_count();
+            if (pre_nulls != post_nulls) {
+              TENZIR_ASSERT(pre_nulls < post_nulls);
+              diagnostic::warning("failed to apply `strptime`")
+                .primary(fn)
+                .emit(ctx);
             }
             return series{result_type, result.MoveValueUnsafe().make_array()};
           },
@@ -428,7 +438,7 @@ public:
             return series::null(result_type, array.length());
           },
           [&](const auto&) {
-            diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+            diagnostic::warning("`strptime` expected `time`, but got `{}`",
                                 subject.type.kind())
               .primary(subject_expr)
               .emit(ctx);
