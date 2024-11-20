@@ -10,6 +10,8 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/fbs/aggregation.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -21,148 +23,14 @@
 namespace tenzir::plugins::numeric {
 
 namespace {
-
-class round_use final : public function_use {
-public:
-  round_use(ast::expression value, std::optional<located<duration>> spec)
-    : value_{std::move(value)}, spec_{std::move(spec)} {
-  }
-
-  auto run(evaluator eval, session ctx) const -> series override {
-    auto value = located{eval(value_), value_.get_location()};
-    if (not spec_) {
-      // round(<number>)
-      return round_without_spec(std::move(value), ctx);
-    }
-    // round(<duration>, <duration>)
-    // round(x, 1h) -> round to multiples of 1h
-    // round(<time>, <duration>)
-    // round(x, 1h) -> round so that time is multiples of 1h (for UTC timezone?)
-    return round_with_spec(std::move(value), std::move(spec_.value()), ctx);
-  }
-
-private:
-  static auto round_with_spec(located<series> value, located<duration> spec,
-                              session ctx) -> series {
-    auto f = detail::overload{
-      [&](const arrow::DurationArray& array) -> series {
-        auto b
-          = duration_type::make_arrow_builder(arrow::default_memory_pool());
-        check(b->Reserve(array.length()));
-        for (auto i = int64_t{0}; i < array.length(); i++) {
-          if (array.IsNull(i)) {
-            check(b->AppendNull());
-            continue;
-          }
-          const auto val = array.Value(i);
-          const auto count = spec.inner.count();
-          const auto rem = val % std::abs(count);
-          const auto delta = rem * 2 < count ? -rem : count - rem;
-          check(b->Append(val + delta));
-        }
-        return {duration_type{}, finish(*b)};
-      },
-      [&](const arrow::TimestampArray& array) -> series {
-        auto rounded_array
-          = check(arrow::compute::RoundTemporal(
-                    array, make_round_temporal_options(spec.inner)))
-              .array_as<arrow::TimestampArray>();
-        return {time_type{}, rounded_array};
-      },
-      [&](const auto&) {
-        diagnostic::warning("round(_, _) is not implemented for {}",
-                            value.inner.type)
-          .primary(value)
-          .emit(ctx);
-        return series::null(value.inner.type, value.inner.length());
-      }};
-    return caf::visit(f, *value.inner.array);
-  }
-
-  static auto round_without_spec(located<series> value, session ctx) -> series {
-    auto length = value.inner.length();
-    auto null = [&] {
-      auto b = arrow::Int64Builder{};
-      check(b.AppendNulls(length));
-      return finish(b);
-    };
-    auto f = detail::overload{
-      [&](const arrow::NullArray&) {
-        return null();
-      },
-      [](const arrow::Int64Array& arg) {
-        return std::make_shared<arrow::Int64Array>(arg.data());
-      },
-      [&](const arrow::DoubleArray& arg) {
-        auto b = arrow::Int64Builder{};
-        check(b.Reserve(length));
-        for (auto row = int64_t{0}; row < length; ++row) {
-          if (arg.IsNull(row)) {
-            check(b.AppendNull());
-          } else {
-            // TODO: NaN, inf, ...
-            auto result = std::llround(arg.Value(row));
-            check(b.Append(result));
-          }
-        }
-        return finish(b);
-      },
-      [&]<concepts::one_of<arrow::DurationArray, arrow::TimestampArray> T>(
-        const T&) {
-        diagnostic::warning("`round` with duration requires second argument")
-          .primary(value)
-          .hint("for example `round(x, 1h)`")
-          .emit(ctx);
-        return null();
-      },
-      [&](const auto&) {
-        diagnostic::warning("`round` expected `int64` or `double`, got `{}`",
-                            value.inner.type.kind())
-          // TODO: Wrong location.
-          .primary(value)
-          .emit(ctx);
-        return null();
-      },
-    };
-    return series{int64_type{}, caf::visit(f, *value.inner.array)};
-  }
-
-  ast::expression value_;
-  std::optional<located<duration>> spec_;
-};
-
-class round final : public function_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.round";
-  }
-
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
-    auto value = ast::expression{};
-    auto spec = std::optional<located<duration>>{};
-    TRY(argument_parser2::function("round")
-          .add(value, "<value>")
-          .add(spec, "<spec>")
-          .parse(inv, ctx));
-    if (spec && spec->inner.count() == 0) {
-      diagnostic::error("resolution must not be 0")
-        .primary(spec.value())
-        .emit(ctx);
-      return failure::promise();
-    }
-    return std::make_unique<round_use>(std::move(value), std::move(spec));
-  }
-};
-
 class sqrt final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.sqrt";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(
       argument_parser2::function("sqrt").add(expr, "<number>").parse(inv, ctx));
@@ -219,7 +87,7 @@ public:
           return finish(b);
         },
       };
-      return {double_type{}, caf::visit(f, *value.array)};
+      return {double_type{}, match(*value.array, f)};
     });
   }
 };
@@ -230,8 +98,8 @@ public:
     return "tql2.random";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     argument_parser2::function("random").parse(inv, ctx).ignore();
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -244,107 +112,6 @@ public:
       }
       return {double_type{}, finish(b)};
     });
-  }
-};
-
-// TODO: This also needs to work with durations, so the default return value
-// should be `null` instead.
-class sum_instance final : public aggregation_instance {
-public:
-  explicit sum_instance(ast::expression expr) : expr_{std::move(expr)} {
-  }
-
-  using sum_t = variant<int64_t, uint64_t, double>;
-
-  void update(const table_slice& input, session ctx) override {
-    auto arg = eval(expr_, input, ctx);
-    auto f = detail::overload{
-      [&](const arrow::Int64Array& array) {
-        // Double => Double
-        // UInt64 => Int64
-        // Int64 => Int64
-        sum_ = sum_.match(
-          [&](double sum) -> sum_t {
-            for (auto row = int64_t{0}; row < array.length(); ++row) {
-              if (array.IsNull(row)) {
-                // TODO: What do we do here?
-              } else {
-                sum += static_cast<double>(array.Value(row));
-              }
-            }
-            return sum;
-          },
-          [&](auto previous) -> sum_t {
-            static_assert(
-              concepts::one_of<decltype(previous), int64_t, uint64_t>);
-            // TODO: Check narrowing.
-            auto sum = static_cast<int64_t>(previous);
-            for (auto row = int64_t{0}; row < array.length(); ++row) {
-              if (array.IsNull(row)) {
-                // TODO: What do we do here?
-              } else {
-                sum += array.Value(row);
-              }
-            }
-            return sum;
-          });
-      },
-      [&](const arrow::UInt64Array& array) {
-        // Double => Double
-        // UInt64 => UInt64Array
-        // Int64 => Int64
-        TENZIR_UNUSED(array);
-        TENZIR_TODO();
-      },
-      [&](const arrow::DoubleArray& array) {
-        // * => Double
-        auto sum = sum_.match([](auto sum) {
-          return static_cast<double>(sum);
-        });
-        for (auto row = int64_t{0}; row < array.length(); ++row) {
-          if (array.IsNull(row)) {
-            // TODO: What do we do here?
-          } else {
-            sum += array.Value(row);
-          }
-        }
-        sum_ = sum;
-      },
-      [&](const arrow::NullArray&) {
-        // do nothing
-      },
-      [&](auto&) {
-        diagnostic::warning("expected integer or double, but got {}",
-                            arg.type.kind())
-          .primary(expr_)
-          .emit(ctx);
-      },
-    };
-    caf::visit(f, *arg.array);
-  }
-
-  auto finish() -> data override {
-    return sum_.match([](auto sum) {
-      return data{sum};
-    });
-  }
-
-private:
-  ast::expression expr_;
-  sum_t sum_ = uint64_t{0};
-};
-
-class sum final : public aggregation_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.sum";
-  }
-
-  auto make_aggregation(invocation inv, session ctx) const
-    -> failure_or<std::unique_ptr<aggregation_instance>> override {
-    auto expr = ast::expression{};
-    TRY(argument_parser2::function("sum").add(expr, "<expr>").parse(inv, ctx));
-    return std::make_unique<sum_instance>(std::move(expr));
   }
 };
 
@@ -363,8 +130,26 @@ public:
     count_ += arg.array->length() - arg.array->null_count();
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     return count_;
+  }
+
+  auto save() const -> chunk_ptr override {
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto fb_count = fbs::aggregation::CreateCount(fbb, count_);
+    fbb.Finish(fb_count);
+    return chunk::make(fbb.Release());
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    const auto fb = flatbuffer<fbs::aggregation::Count>::make(std::move(chunk));
+    if (not fb) {
+      diagnostic::warning("invalid FlatBuffer")
+        .note("failed to restore `count` aggregation instance")
+        .emit(ctx);
+      return;
+    }
+    count_ = (*fb)->result();
   }
 
 private:
@@ -395,14 +180,42 @@ public:
   }
 
   void update(const table_slice& input, session ctx) override {
+    if (state_ == state::failed) {
+      return;
+    }
     auto arg = eval(expr_, input, ctx);
     auto f = detail::overload{
       [&]<concepts::one_of<double_type, int64_type, uint64_type> Type>(
         const Type& ty) {
-        auto& array = caf::get<type_to_arrow_array_t<Type>>(*arg.array);
+        if (state_ != state::numeric and state_ != state::none) {
+          diagnostic::warning("got incompatible types `number` and `{}`",
+                              arg.type.kind())
+            .primary(expr_)
+            .emit(ctx);
+          state_ = state::failed;
+          return;
+        }
+        state_ = state::numeric;
+        auto& array = as<type_to_arrow_array_t<Type>>(*arg.array);
         for (auto value : values(ty, array)) {
           if (value) {
             digest_.NanAdd(*value);
+          }
+        }
+      },
+      [&](const duration_type& ty) {
+        if (state_ != state::dur and state_ != state::none) {
+          diagnostic::warning("got incompatible types `duration` and `{}`",
+                              arg.type.kind())
+            .primary(expr_)
+            .emit(ctx);
+          state_ = state::failed;
+          return;
+        }
+        state_ = state::dur;
+        for (auto value : values(ty, as<arrow::DurationArray>(*arg.array))) {
+          if (value) {
+            digest_.Add(value->count());
           }
         }
       },
@@ -410,21 +223,46 @@ public:
         // Silently ignore nulls, like we do above.
       },
       [&](const auto&) {
-        diagnostic::warning("expected number, got `{}`", arg.type.kind())
+        diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
+                            "got `{}`",
+                            arg.type.kind())
           .primary(expr_)
           .emit(ctx);
+        state_ = state::failed;
       },
     };
-    caf::visit(f, arg.type);
+    match(arg.type, f);
   }
 
-  auto finish() -> data override {
-    return digest_.Quantile(quantile_);
+  auto get() const -> data override {
+    switch (state_) {
+      case state::none:
+      case state::failed:
+        return data{};
+      case state::dur:
+        return duration{
+          static_cast<duration::rep>(digest_.Quantile(quantile_))};
+      case state::numeric:
+        return digest_.Quantile(quantile_);
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  auto save() const -> chunk_ptr override {
+    return {};
+  }
+
+  auto restore(chunk_ptr chunk, session ctx) -> void override {
+    TENZIR_UNUSED(chunk);
+    diagnostic::warning(
+      "restoring `quantile` aggregation instances is not implemented")
+      .emit(ctx);
   }
 
 private:
   ast::expression expr_;
   double quantile_;
+  enum class state { none, failed, dur, numeric } state_{};
   arrow::internal::TDigest digest_;
 };
 
@@ -491,13 +329,61 @@ public:
   }
 };
 
+class median final : public aggregation_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.median";
+  }
+
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    // TODO: Reconsider whether we want a default here. Maybe positional?
+    auto delta_opt = std::optional<located<int64_t>>{};
+    auto buffer_size_opt = std::optional<located<int64_t>>{};
+    TRY(argument_parser2::function("median")
+          .add(expr, "expr")
+          // TODO: This is a test for hidden parameters.
+          .add("_delta", delta_opt)
+          .add("_buffer_size", buffer_size_opt)
+          .parse(inv, ctx));
+    // TODO: This function probably already exists. If not, it should.
+    auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {
+      if (0 <= x && x <= std::numeric_limits<uint32_t>::max()) {
+        return static_cast<uint32_t>(x);
+      }
+      return std::nullopt;
+    };
+    auto delta = uint32_t{100};
+    if (delta_opt) {
+      if (auto narrowed = try_narrow(delta_opt->inner)) {
+        delta = *narrowed;
+      } else {
+        diagnostic::error("expected delta to fit in a uint32")
+          .primary(*delta_opt)
+          .emit(ctx);
+      }
+    }
+    auto buffer_size = uint32_t{500};
+    if (buffer_size_opt) {
+      if (auto narrowed = try_narrow(buffer_size_opt->inner)) {
+        buffer_size = *narrowed;
+      } else {
+        diagnostic::error("expected buffer size to fit in a uint32")
+          .primary(*buffer_size_opt)
+          .emit(ctx);
+      }
+    }
+    return std::make_unique<quantile_instance>(expr, 0.5, delta, buffer_size);
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::numeric
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::round)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sqrt)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::random)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sum)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::count)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::quantile)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::median)

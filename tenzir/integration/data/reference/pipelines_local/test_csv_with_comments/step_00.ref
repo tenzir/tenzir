@@ -1,83 +1,83 @@
-{"first_seen_utc": "2021-05-16 19:49:33", "dst_ip": "178.128.23.9", "dst_port": "4125", "c2_status": "online", "last_online": "2023-11-27", "malware": "Dridex"}
-{"first_seen_utc": "2021-08-27 04:48:12", "dst_ip": "192.99.150.39", "dst_port": "7443", "c2_status": "online", "last_online": "2023-11-27", "malware": "Dridex"}
-{"first_seen_utc": "2021-10-11 07:48:40", "dst_ip": "212.112.86.37", "dst_port": "9676", "c2_status": "online", "last_online": "2023-11-27", "malware": "Dridex"}
-{"first_seen_utc": "2021-11-03 16:34:11", "dst_ip": "51.79.166.3", "dst_port": "443", "c2_status": "offline", "last_online": "2023-11-06", "malware": "Dridex"}
-{"first_seen_utc": "2021-11-17 15:26:43", "dst_ip": "198.199.70.22", "dst_port": "6602", "c2_status": "online", "last_online": "2023-11-27", "malware": "Dridex"}
-{"first_seen_utc": "2021-11-29 14:18:52", "dst_ip": "103.109.247.10", "dst_port": "10443", "c2_status": "online", "last_online": "2023-11-27", "malware": "Dridex"}
-{"first_seen_utc": "2021-12-06 03:22:22", "dst_ip": "129.232.146.250", "dst_port": "443", "c2_status": "online", "last_online": "2023-11-27", "malware": "Dridex"}
-{"first_seen_utc": "2021-12-17 20:48:58", "dst_ip": "144.91.122.94", "dst_port": "443", "c2_status": "online", "last_online": "2023-11-27", "malware": "Dridex"}
-{"first_seen_utc": "2022-10-28 02:00:15", "dst_ip": "103.233.103.85", "dst_port": "443", "c2_status": "offline", "last_online": "2023-11-17", "malware": "Dridex"}
-{"first_seen_utc": "2023-05-23 17:51:44", "dst_ip": "192.9.135.73", "dst_port": "1194", "c2_status": "online", "last_online": "2023-11-27", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-23 10:23:03", "dst_ip": "15.235.143.190", "dst_port": "2224", "c2_status": "offline", "last_online": "2023-10-30", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-23 10:23:06", "dst_ip": "51.68.146.19", "dst_port": "5242", "c2_status": "offline", "last_online": "2023-10-30", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-23 10:23:09", "dst_ip": "154.221.30.136", "dst_port": "13724", "c2_status": "online", "last_online": "2023-11-27", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-23 10:23:11", "dst_ip": "154.92.19.139", "dst_port": "2222", "c2_status": "online", "last_online": "2023-11-27", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-23 17:04:11", "dst_ip": "139.99.216.90", "dst_port": "13720", "c2_status": "offline", "last_online": "2023-10-30", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-23 17:04:15", "dst_ip": "154.12.252.84", "dst_port": "23399", "c2_status": "offline", "last_online": "2023-11-12", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-23 17:04:20", "dst_ip": "196.218.123.202", "dst_port": "13783", "c2_status": "offline", "last_online": "2023-11-25", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-24 09:45:59", "dst_ip": "198.244.141.4", "dst_port": "9785", "c2_status": "offline", "last_online": "2023-10-27", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-25 20:15:32", "dst_ip": "154.61.75.156", "dst_port": "2078", "c2_status": "online", "last_online": "2023-11-27", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-27 19:44:10", "dst_ip": "216.128.176.211", "dst_port": "2222", "c2_status": "offline", "last_online": "2023-10-28", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-28 07:42:09", "dst_ip": "139.144.31.103", "dst_port": "1194", "c2_status": "offline", "last_online": "2023-10-29", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-28 19:44:30", "dst_ip": "45.79.174.92", "dst_port": "1194", "c2_status": "offline", "last_online": "2023-10-29", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-28 19:44:31", "dst_ip": "185.106.94.167", "dst_port": "5631", "c2_status": "offline", "last_online": "2023-10-29", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-28 23:24:47", "dst_ip": "85.209.11.185", "dst_port": "2222", "c2_status": "offline", "last_online": "2023-10-31", "malware": "QakBot"}
-{"first_seen_utc": "2023-10-30 07:40:28", "dst_ip": "65.20.82.17", "dst_port": "5938", "c2_status": "offline", "last_online": "2023-10-30", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-30 07:40:30", "dst_ip": "172.234.16.175", "dst_port": "2083", "c2_status": "offline", "last_online": "2023-10-30", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-30 19:43:31", "dst_ip": "104.200.28.75", "dst_port": "2222", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-31 08:11:55", "dst_ip": "51.68.147.114", "dst_port": "2083", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-31 14:23:09", "dst_ip": "50.116.54.138", "dst_port": "13724", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-31 14:23:10", "dst_ip": "15.235.47.80", "dst_port": "23399", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-31 14:23:11", "dst_ip": "51.195.232.97", "dst_port": "13782", "c2_status": "offline", "last_online": "2023-11-10", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-31 14:23:13", "dst_ip": "15.235.45.155", "dst_port": "2221", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-31 14:23:16", "dst_ip": "51.79.143.215", "dst_port": "13783", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-31 19:44:17", "dst_ip": "51.68.144.135", "dst_port": "2083", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-10-31 21:25:33", "dst_ip": "85.209.11.185", "dst_port": "2078", "c2_status": "offline", "last_online": "2023-11-01", "malware": "QakBot"}
-{"first_seen_utc": "2023-11-01 17:46:34", "dst_ip": "172.233.154.98", "dst_port": "13785", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-01 17:46:35", "dst_ip": "15.235.47.206", "dst_port": "13783", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-01 17:46:38", "dst_ip": "15.235.202.109", "dst_port": "2226", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-01 17:46:40", "dst_ip": "45.33.85.73", "dst_port": "13721", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-01 17:46:42", "dst_ip": "172.233.185.220", "dst_port": "5242", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-01 19:45:24", "dst_ip": "104.237.145.83", "dst_port": "2083", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-02 09:23:54", "dst_ip": "15.235.44.231", "dst_port": "5938", "c2_status": "offline", "last_online": "2023-11-02", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-02 11:09:23", "dst_ip": "188.26.127.4", "dst_port": "13785", "c2_status": "offline", "last_online": "2023-11-03", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-02 19:45:14", "dst_ip": "210.243.8.247", "dst_port": "23399", "c2_status": "online", "last_online": "2023-11-27", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-03 07:55:21", "dst_ip": "45.32.140.39", "dst_port": "2078", "c2_status": "offline", "last_online": "2023-11-03", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-03 07:55:23", "dst_ip": "167.179.103.206", "dst_port": "2083", "c2_status": "offline", "last_online": "2023-11-03", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-04 08:05:57", "dst_ip": "95.179.141.41", "dst_port": "1194", "c2_status": "offline", "last_online": "2023-11-04", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-06 15:25:32", "dst_ip": "136.244.98.80", "dst_port": "13783", "c2_status": "offline", "last_online": "2023-11-08", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-06 15:25:36", "dst_ip": "45.76.103.152", "dst_port": "13720", "c2_status": "offline", "last_online": "2023-11-13", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-06 15:25:38", "dst_ip": "207.246.111.127", "dst_port": "13786", "c2_status": "offline", "last_online": "2023-11-08", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-06 15:25:39", "dst_ip": "149.248.53.65", "dst_port": "2221", "c2_status": "offline", "last_online": "2023-11-08", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-07 18:54:25", "dst_ip": "158.247.246.182", "dst_port": "2226", "c2_status": "offline", "last_online": "2023-11-08", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-09 17:04:54", "dst_ip": "149.28.49.170", "dst_port": "23399", "c2_status": "offline", "last_online": "2023-11-10", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-09 17:04:56", "dst_ip": "65.20.77.19", "dst_port": "5242", "c2_status": "offline", "last_online": "2023-11-10", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-09 17:04:58", "dst_ip": "154.12.255.254", "dst_port": "23399", "c2_status": "offline", "last_online": "2023-11-11", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-09 17:05:01", "dst_ip": "158.247.215.68", "dst_port": "2225", "c2_status": "offline", "last_online": "2023-11-10", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-09 17:05:02", "dst_ip": "95.179.206.77", "dst_port": "13782", "c2_status": "offline", "last_online": "2023-11-10", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-09 17:05:03", "dst_ip": "217.69.14.55", "dst_port": "13724", "c2_status": "offline", "last_online": "2023-11-10", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-09 18:46:07", "dst_ip": "95.179.182.147", "dst_port": "2078", "c2_status": "offline", "last_online": "2023-11-10", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-09 18:46:11", "dst_ip": "141.164.56.189", "dst_port": "1194", "c2_status": "offline", "last_online": "2023-11-10", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-13 07:53:38", "dst_ip": "91.215.85.154", "dst_port": "60859", "c2_status": "online", "last_online": "2023-11-27", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-13 18:43:39", "dst_ip": "70.34.223.131", "dst_port": "5938", "c2_status": "offline", "last_online": "2023-11-13", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-13 18:43:42", "dst_ip": "139.180.168.216", "dst_port": "13786", "c2_status": "offline", "last_online": "2023-11-14", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-13 18:43:43", "dst_ip": "70.34.242.159", "dst_port": "5243", "c2_status": "offline", "last_online": "2023-11-14", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-13 18:43:44", "dst_ip": "95.179.214.49", "dst_port": "5242", "c2_status": "offline", "last_online": "2023-11-14", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-13 18:43:47", "dst_ip": "167.179.100.211", "dst_port": "2221", "c2_status": "offline", "last_online": "2023-11-15", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-15 10:24:00", "dst_ip": "45.32.232.31", "dst_port": "13782", "c2_status": "offline", "last_online": "2023-11-15", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-15 10:24:03", "dst_ip": "158.247.196.155", "dst_port": "9785", "c2_status": "offline", "last_online": "2023-11-15", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-15 17:15:21", "dst_ip": "45.33.69.35", "dst_port": "5242", "c2_status": "offline", "last_online": "2023-11-16", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-15 17:15:23", "dst_ip": "155.138.132.163", "dst_port": "13786", "c2_status": "offline", "last_online": "2023-11-15", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-15 17:15:25", "dst_ip": "172.232.189.83", "dst_port": "5243", "c2_status": "offline", "last_online": "2023-11-19", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-15 17:15:27", "dst_ip": "172.104.12.76", "dst_port": "5242", "c2_status": "offline", "last_online": "2023-11-16", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-15 17:15:28", "dst_ip": "97.107.131.224", "dst_port": "13782", "c2_status": "offline", "last_online": "2023-11-19", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-15 17:15:30", "dst_ip": "172.232.189.84", "dst_port": "23399", "c2_status": "offline", "last_online": "2023-11-16", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-17 16:49:48", "dst_ip": "172.233.156.100", "dst_port": "13721", "c2_status": "offline", "last_online": "2023-11-22", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-17 16:49:51", "dst_ip": "207.148.93.23", "dst_port": "2221", "c2_status": "offline", "last_online": "2023-11-18", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-17 16:49:52", "dst_ip": "64.176.190.166", "dst_port": "2222", "c2_status": "offline", "last_online": "2023-11-18", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-17 16:49:55", "dst_ip": "45.32.244.94", "dst_port": "9785", "c2_status": "offline", "last_online": "2023-11-18", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-18 07:57:25", "dst_ip": "46.250.241.188", "dst_port": "1194", "c2_status": "offline", "last_online": "2023-11-19", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-21 11:34:55", "dst_ip": "158.247.253.155", "dst_port": "2225", "c2_status": "offline", "last_online": "2023-11-21", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-21 11:34:57", "dst_ip": "139.180.216.25", "dst_port": "2967", "c2_status": "offline", "last_online": "2023-11-22", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-21 11:34:58", "dst_ip": "70.34.209.101", "dst_port": "13720", "c2_status": "offline", "last_online": "2023-11-22", "malware": "Pikabot"}
-{"first_seen_utc": "2023-11-21 11:34:59", "dst_ip": "137.220.55.190", "dst_port": "2223", "c2_status": "offline", "last_online": "2023-11-22", "malware": "Pikabot"}
+{"first_seen_utc": "2021-05-16T19:49:33.000000", "dst_ip": "178.128.23.9", "dst_port": 4125, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Dridex"}
+{"first_seen_utc": "2021-08-27T04:48:12.000000", "dst_ip": "192.99.150.39", "dst_port": 7443, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Dridex"}
+{"first_seen_utc": "2021-10-11T07:48:40.000000", "dst_ip": "212.112.86.37", "dst_port": 9676, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Dridex"}
+{"first_seen_utc": "2021-11-03T16:34:11.000000", "dst_ip": "51.79.166.3", "dst_port": 443, "c2_status": "offline", "last_online": "2023-11-06T00:00:00.000000", "malware": "Dridex"}
+{"first_seen_utc": "2021-11-17T15:26:43.000000", "dst_ip": "198.199.70.22", "dst_port": 6602, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Dridex"}
+{"first_seen_utc": "2021-11-29T14:18:52.000000", "dst_ip": "103.109.247.10", "dst_port": 10443, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Dridex"}
+{"first_seen_utc": "2021-12-06T03:22:22.000000", "dst_ip": "129.232.146.250", "dst_port": 443, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Dridex"}
+{"first_seen_utc": "2021-12-17T20:48:58.000000", "dst_ip": "144.91.122.94", "dst_port": 443, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Dridex"}
+{"first_seen_utc": "2022-10-28T02:00:15.000000", "dst_ip": "103.233.103.85", "dst_port": 443, "c2_status": "offline", "last_online": "2023-11-17T00:00:00.000000", "malware": "Dridex"}
+{"first_seen_utc": "2023-05-23T17:51:44.000000", "dst_ip": "192.9.135.73", "dst_port": 1194, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-23T10:23:03.000000", "dst_ip": "15.235.143.190", "dst_port": 2224, "c2_status": "offline", "last_online": "2023-10-30T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-23T10:23:06.000000", "dst_ip": "51.68.146.19", "dst_port": 5242, "c2_status": "offline", "last_online": "2023-10-30T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-23T10:23:09.000000", "dst_ip": "154.221.30.136", "dst_port": 13724, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-23T10:23:11.000000", "dst_ip": "154.92.19.139", "dst_port": 2222, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-23T17:04:11.000000", "dst_ip": "139.99.216.90", "dst_port": 13720, "c2_status": "offline", "last_online": "2023-10-30T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-23T17:04:15.000000", "dst_ip": "154.12.252.84", "dst_port": 23399, "c2_status": "offline", "last_online": "2023-11-12T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-23T17:04:20.000000", "dst_ip": "196.218.123.202", "dst_port": 13783, "c2_status": "offline", "last_online": "2023-11-25T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-24T09:45:59.000000", "dst_ip": "198.244.141.4", "dst_port": 9785, "c2_status": "offline", "last_online": "2023-10-27T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-25T20:15:32.000000", "dst_ip": "154.61.75.156", "dst_port": 2078, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-27T19:44:10.000000", "dst_ip": "216.128.176.211", "dst_port": 2222, "c2_status": "offline", "last_online": "2023-10-28T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-28T07:42:09.000000", "dst_ip": "139.144.31.103", "dst_port": 1194, "c2_status": "offline", "last_online": "2023-10-29T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-28T19:44:30.000000", "dst_ip": "45.79.174.92", "dst_port": 1194, "c2_status": "offline", "last_online": "2023-10-29T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-28T19:44:31.000000", "dst_ip": "185.106.94.167", "dst_port": 5631, "c2_status": "offline", "last_online": "2023-10-29T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-28T23:24:47.000000", "dst_ip": "85.209.11.185", "dst_port": 2222, "c2_status": "offline", "last_online": "2023-10-31T00:00:00.000000", "malware": "QakBot"}
+{"first_seen_utc": "2023-10-30T07:40:28.000000", "dst_ip": "65.20.82.17", "dst_port": 5938, "c2_status": "offline", "last_online": "2023-10-30T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-30T07:40:30.000000", "dst_ip": "172.234.16.175", "dst_port": 2083, "c2_status": "offline", "last_online": "2023-10-30T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-30T19:43:31.000000", "dst_ip": "104.200.28.75", "dst_port": 2222, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-31T08:11:55.000000", "dst_ip": "51.68.147.114", "dst_port": 2083, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-31T14:23:09.000000", "dst_ip": "50.116.54.138", "dst_port": 13724, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-31T14:23:10.000000", "dst_ip": "15.235.47.80", "dst_port": 23399, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-31T14:23:11.000000", "dst_ip": "51.195.232.97", "dst_port": 13782, "c2_status": "offline", "last_online": "2023-11-10T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-31T14:23:13.000000", "dst_ip": "15.235.45.155", "dst_port": 2221, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-31T14:23:16.000000", "dst_ip": "51.79.143.215", "dst_port": 13783, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-31T19:44:17.000000", "dst_ip": "51.68.144.135", "dst_port": 2083, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-10-31T21:25:33.000000", "dst_ip": "85.209.11.185", "dst_port": 2078, "c2_status": "offline", "last_online": "2023-11-01T00:00:00.000000", "malware": "QakBot"}
+{"first_seen_utc": "2023-11-01T17:46:34.000000", "dst_ip": "172.233.154.98", "dst_port": 13785, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-01T17:46:35.000000", "dst_ip": "15.235.47.206", "dst_port": 13783, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-01T17:46:38.000000", "dst_ip": "15.235.202.109", "dst_port": 2226, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-01T17:46:40.000000", "dst_ip": "45.33.85.73", "dst_port": 13721, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-01T17:46:42.000000", "dst_ip": "172.233.185.220", "dst_port": 5242, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-01T19:45:24.000000", "dst_ip": "104.237.145.83", "dst_port": 2083, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-02T09:23:54.000000", "dst_ip": "15.235.44.231", "dst_port": 5938, "c2_status": "offline", "last_online": "2023-11-02T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-02T11:09:23.000000", "dst_ip": "188.26.127.4", "dst_port": 13785, "c2_status": "offline", "last_online": "2023-11-03T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-02T19:45:14.000000", "dst_ip": "210.243.8.247", "dst_port": 23399, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-03T07:55:21.000000", "dst_ip": "45.32.140.39", "dst_port": 2078, "c2_status": "offline", "last_online": "2023-11-03T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-03T07:55:23.000000", "dst_ip": "167.179.103.206", "dst_port": 2083, "c2_status": "offline", "last_online": "2023-11-03T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-04T08:05:57.000000", "dst_ip": "95.179.141.41", "dst_port": 1194, "c2_status": "offline", "last_online": "2023-11-04T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-06T15:25:32.000000", "dst_ip": "136.244.98.80", "dst_port": 13783, "c2_status": "offline", "last_online": "2023-11-08T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-06T15:25:36.000000", "dst_ip": "45.76.103.152", "dst_port": 13720, "c2_status": "offline", "last_online": "2023-11-13T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-06T15:25:38.000000", "dst_ip": "207.246.111.127", "dst_port": 13786, "c2_status": "offline", "last_online": "2023-11-08T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-06T15:25:39.000000", "dst_ip": "149.248.53.65", "dst_port": 2221, "c2_status": "offline", "last_online": "2023-11-08T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-07T18:54:25.000000", "dst_ip": "158.247.246.182", "dst_port": 2226, "c2_status": "offline", "last_online": "2023-11-08T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-09T17:04:54.000000", "dst_ip": "149.28.49.170", "dst_port": 23399, "c2_status": "offline", "last_online": "2023-11-10T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-09T17:04:56.000000", "dst_ip": "65.20.77.19", "dst_port": 5242, "c2_status": "offline", "last_online": "2023-11-10T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-09T17:04:58.000000", "dst_ip": "154.12.255.254", "dst_port": 23399, "c2_status": "offline", "last_online": "2023-11-11T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-09T17:05:01.000000", "dst_ip": "158.247.215.68", "dst_port": 2225, "c2_status": "offline", "last_online": "2023-11-10T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-09T17:05:02.000000", "dst_ip": "95.179.206.77", "dst_port": 13782, "c2_status": "offline", "last_online": "2023-11-10T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-09T17:05:03.000000", "dst_ip": "217.69.14.55", "dst_port": 13724, "c2_status": "offline", "last_online": "2023-11-10T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-09T18:46:07.000000", "dst_ip": "95.179.182.147", "dst_port": 2078, "c2_status": "offline", "last_online": "2023-11-10T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-09T18:46:11.000000", "dst_ip": "141.164.56.189", "dst_port": 1194, "c2_status": "offline", "last_online": "2023-11-10T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-13T07:53:38.000000", "dst_ip": "91.215.85.154", "dst_port": 60859, "c2_status": "online", "last_online": "2023-11-27T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-13T18:43:39.000000", "dst_ip": "70.34.223.131", "dst_port": 5938, "c2_status": "offline", "last_online": "2023-11-13T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-13T18:43:42.000000", "dst_ip": "139.180.168.216", "dst_port": 13786, "c2_status": "offline", "last_online": "2023-11-14T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-13T18:43:43.000000", "dst_ip": "70.34.242.159", "dst_port": 5243, "c2_status": "offline", "last_online": "2023-11-14T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-13T18:43:44.000000", "dst_ip": "95.179.214.49", "dst_port": 5242, "c2_status": "offline", "last_online": "2023-11-14T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-13T18:43:47.000000", "dst_ip": "167.179.100.211", "dst_port": 2221, "c2_status": "offline", "last_online": "2023-11-15T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-15T10:24:00.000000", "dst_ip": "45.32.232.31", "dst_port": 13782, "c2_status": "offline", "last_online": "2023-11-15T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-15T10:24:03.000000", "dst_ip": "158.247.196.155", "dst_port": 9785, "c2_status": "offline", "last_online": "2023-11-15T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-15T17:15:21.000000", "dst_ip": "45.33.69.35", "dst_port": 5242, "c2_status": "offline", "last_online": "2023-11-16T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-15T17:15:23.000000", "dst_ip": "155.138.132.163", "dst_port": 13786, "c2_status": "offline", "last_online": "2023-11-15T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-15T17:15:25.000000", "dst_ip": "172.232.189.83", "dst_port": 5243, "c2_status": "offline", "last_online": "2023-11-19T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-15T17:15:27.000000", "dst_ip": "172.104.12.76", "dst_port": 5242, "c2_status": "offline", "last_online": "2023-11-16T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-15T17:15:28.000000", "dst_ip": "97.107.131.224", "dst_port": 13782, "c2_status": "offline", "last_online": "2023-11-19T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-15T17:15:30.000000", "dst_ip": "172.232.189.84", "dst_port": 23399, "c2_status": "offline", "last_online": "2023-11-16T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-17T16:49:48.000000", "dst_ip": "172.233.156.100", "dst_port": 13721, "c2_status": "offline", "last_online": "2023-11-22T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-17T16:49:51.000000", "dst_ip": "207.148.93.23", "dst_port": 2221, "c2_status": "offline", "last_online": "2023-11-18T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-17T16:49:52.000000", "dst_ip": "64.176.190.166", "dst_port": 2222, "c2_status": "offline", "last_online": "2023-11-18T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-17T16:49:55.000000", "dst_ip": "45.32.244.94", "dst_port": 9785, "c2_status": "offline", "last_online": "2023-11-18T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-18T07:57:25.000000", "dst_ip": "46.250.241.188", "dst_port": 1194, "c2_status": "offline", "last_online": "2023-11-19T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-21T11:34:55.000000", "dst_ip": "158.247.253.155", "dst_port": 2225, "c2_status": "offline", "last_online": "2023-11-21T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-21T11:34:57.000000", "dst_ip": "139.180.216.25", "dst_port": 2967, "c2_status": "offline", "last_online": "2023-11-22T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-21T11:34:58.000000", "dst_ip": "70.34.209.101", "dst_port": 13720, "c2_status": "offline", "last_online": "2023-11-22T00:00:00.000000", "malware": "Pikabot"}
+{"first_seen_utc": "2023-11-21T11:34:59.000000", "dst_ip": "137.220.55.190", "dst_port": 2223, "c2_status": "offline", "last_online": "2023-11-22T00:00:00.000000", "malware": "Pikabot"}

@@ -19,6 +19,7 @@
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
@@ -65,11 +66,14 @@ auto find_endpoint_plugin(const http_request_description& desc)
   -> const rest_endpoint_plugin* {
   for (auto const& plugin : plugins::get()) {
     auto const* rest_plugin = plugin.as<rest_endpoint_plugin>();
-    if (!rest_plugin)
+    if (!rest_plugin) {
       continue;
-    for (const auto& endpoint : rest_plugin->rest_endpoints())
-      if (endpoint.canonical_path() == desc.canonical_path)
+    }
+    for (const auto& endpoint : rest_plugin->rest_endpoints()) {
+      if (endpoint.canonical_path() == desc.canonical_path) {
         return rest_plugin;
+      }
+    }
   }
   return nullptr;
 }
@@ -117,17 +121,20 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   -> const handler_and_endpoint& {
   static const auto empty_response = handler_and_endpoint{};
   auto it = rest_handlers.find(desc.canonical_path);
-  if (it != rest_handlers.end())
+  if (it != rest_handlers.end()) {
     return it->second;
+  }
   // Spawn handler on first usage
   auto const* plugin = find_endpoint_plugin(desc);
-  if (!plugin)
+  if (!plugin) {
     return empty_response;
+  }
   // TODO: Monitor the spawned handler and restart if it goes down.
   auto handler = plugin->handler(self->system(), self);
-  for (auto const& endpoint : plugin->rest_endpoints())
+  for (auto const& endpoint : plugin->rest_endpoints()) {
     rest_handlers[endpoint.canonical_path()]
       = std::make_pair(handler, endpoint);
+  }
   auto result = rest_handlers.find(desc.canonical_path);
   // If no canonical path matches, `find_endpoint_plugin()` should
   // have already returned `nullptr`.
@@ -427,17 +434,19 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     caf::actor filesystem_handle;
     for (const char* name : ordered_core_components) {
       if (auto comp = registry.remove(name)) {
-        if (comp->type == "filesystem")
+        if (comp->type == "filesystem") {
           filesystem_handle = comp->actor;
-        else
+        } else {
           core_shutdown_handles.push_back(comp->actor);
+        }
       }
     }
     std::vector<caf::actor> aux_components;
     for (const auto& [_, comp] : registry.components()) {
       // Ignore remote actors.
-      if (comp.actor->node() != self->node())
+      if (comp.actor->node() != self->node()) {
         continue;
+      }
       aux_components.push_back(comp.actor);
     }
     // Drop everything.
@@ -469,23 +478,28 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         });
   });
   spawn_components(self);
-  // Emit metrics about called APIs once per second.
-  detail::weak_run_delayed_loop(self, defaults::metrics_interval, [self] {
-    const auto importer
-      = self->system().registry().get<importer_actor>("tenzir.importer");
-    TENZIR_ASSERT(importer);
-    for (auto& [_, builder] : self->state.api_metrics_builders) {
-      if (builder.length() == 0) {
-        continue;
+  // Emit metrics once per second.
+  detail::weak_run_delayed_loop(
+    self, defaults::metrics_interval,
+    [self, actor_metrics_builder
+           = detail::make_actor_metrics_builder()]() mutable {
+      const auto importer
+        = self->system().registry().get<importer_actor>("tenzir.importer");
+      self->send(importer,
+                 detail::generate_actor_metrics(actor_metrics_builder, self));
+      TENZIR_ASSERT(importer);
+      for (auto& [_, builder] : self->state.api_metrics_builders) {
+        if (builder.length() == 0) {
+          continue;
+        }
+        self->send(importer, builder.finish_assert_one_slice());
       }
-      self->send(importer, builder.finish_assert_one_slice());
-    }
-  });
+    });
   return {
     [self](atom::proxy, http_request_description& desc,
            std::string& request_id) -> caf::result<rest_response> {
-      TENZIR_VERBOSE("{} proxying request with id {} to {} with {}", *self,
-                     request_id, desc.canonical_path, desc.json_body);
+      TENZIR_DEBUG("{} proxying request with id {} to {} with {}", *self,
+                   request_id, desc.canonical_path, desc.json_body);
       auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
       if (!handler) {
         auto canonical_paths = std::unordered_set<std::string>{};
@@ -506,13 +520,15 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           caf::make_error(ec::logic_error, "failed to spawn endpoint handler"));
       }
       auto unparsed_params = http_parameter_map::from_json(desc.json_body);
-      if (!unparsed_params)
+      if (!unparsed_params) {
         return rest_response::make_error(400, "invalid json",
                                          unparsed_params.error());
+      }
       auto params = parse_endpoint_parameters(endpoint, *unparsed_params);
-      if (!params)
+      if (!params) {
         return rest_response::make_error(400, "invalid parameters",
                                          params.error());
+      }
       auto rp = self->make_response_promise<rest_response>();
       auto deliver = [rp, self, desc, params, endpoint,
                       request_id = std::move(request_id),
@@ -597,7 +613,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     [self](atom::spawn, operator_box& box, operator_type input_type,
            const receiver_actor<diagnostic>& diagnostic_handler,
            const metrics_receiver_actor& metrics_receiver, int index,
-           bool is_hidden) -> caf::result<exec_node_actor> {
+           bool is_hidden, uuid run_id) -> caf::result<exec_node_actor> {
       auto op = std::move(box).unwrap();
       if (op->location() == operator_location::local) {
         return caf::make_error(ec::logic_error,
@@ -609,7 +625,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type,
                           static_cast<node_actor>(self), diagnostic_handler,
-                          metrics_receiver, index, false, is_hidden);
+                          metrics_receiver, index, false, is_hidden, run_id);
       if (not spawn_result) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} failed to spawn execution node "

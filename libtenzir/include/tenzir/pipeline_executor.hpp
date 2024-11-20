@@ -5,6 +5,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -16,7 +17,10 @@ struct pipeline_executor_state {
   /// A pointer to the parent actor.
   pipeline_executor_actor::pointer self = {};
 
-  // A handle to the node actor.
+  /// A unique id for the current run.
+  uuid run_id = uuid::random();
+
+  /// A handle to the node actor.
   node_actor node = {};
 
   /// The currently running pipeline.
@@ -24,12 +28,11 @@ struct pipeline_executor_state {
   std::vector<exec_node_actor> exec_nodes = {};
   caf::typed_response_promise<void> start_rp = {};
 
-  // The diagnostic handler that receives diagnostics from all the execution
-  // nodes.
+  /// The diagnostic handler that receives diagnostics from all the execution
+  /// nodes.
   receiver_actor<diagnostic> diagnostics = {};
 
-  // The metric handler that receives metrics from all the execution
-  // nodes.
+  /// The metric handler that receives metrics from all the execution nodes.
   metrics_receiver_actor metrics = {};
 
   /// Flag for disallowing location overrides.

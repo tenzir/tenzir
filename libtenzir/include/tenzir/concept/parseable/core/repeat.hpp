@@ -21,17 +21,20 @@ namespace detail {
 template <class Parser, class Iterator, class Attribute, class T, class U>
 bool parse_repeat(Parser& p, Iterator& f, const Iterator& l, Attribute& a,
                   T min, U max) {
-  if (max == 0)
+  if (max == 0) {
     return true; // If we have nothing todo, we're succeeding.
+  }
   auto save = f;
   auto i = 0;
   while (i < max) {
-    if (!container_t<typename Parser::attribute>::parse(p, f, l, a))
+    if (!container_t<typename Parser::attribute>::parse(p, f, l, a)) {
       break;
+    }
     ++i;
   }
-  if (i >= min)
+  if (i >= min) {
     return true;
+  }
   f = save;
   return false;
 }
@@ -59,7 +62,7 @@ private:
   Parser parser_;
 };
 
-template <class Parser, concepts::integral T, concepts::integral U = T>
+template <class Parser, std::integral T, std::integral U = T>
 class dynamic_repeat_parser
   : public parser_base<dynamic_repeat_parser<Parser, T, U>> {
 public:

@@ -21,24 +21,27 @@ concept has_contains = requires(T& t, typename T::value_type& x) {
   { t.contains(x) } -> std::convertible_to<bool>;
 };
 
-template <concepts::range T, class U>
+template <std::ranges::range T, class U>
 bool contains(const T& t, const U& x) {
-  if constexpr (has_contains<T>)
+  if constexpr (has_contains<T>) {
     return t.contains(x);
-  else
+  } else {
     return std::find(t.begin(), t.end(), x) != t.end();
+  }
 }
 
 template <class Collection>
 auto unique_values(const Collection& xs) {
   std::vector<typename Collection::mapped_type> result;
   result.reserve(xs.size());
-  for (auto& x : xs)
+  for (auto& x : xs) {
     result.emplace_back(x.second);
+  }
   std::sort(result.begin(), result.end());
   auto e = std::unique(result.begin(), result.end());
-  if (e != result.end())
+  if (e != result.end()) {
     result.erase(e, result.end());
+  }
   return result;
 }
 

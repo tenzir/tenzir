@@ -181,7 +181,119 @@ public:
     curl_last = CURL_LAST
   };
 
+  /// The `CURLINFO` enum.
+  enum class info {
+    none = CURLINFO_NONE,
+    effective_url = CURLINFO_EFFECTIVE_URL,
+    response_code = CURLINFO_RESPONSE_CODE,
+    total_time = CURLINFO_TOTAL_TIME,
+    namelookup_time = CURLINFO_NAMELOOKUP_TIME,
+    connect_time = CURLINFO_CONNECT_TIME,
+    pretransfer_time = CURLINFO_PRETRANSFER_TIME,
+#if LIBCURL_VERSION_NUM < 0x075500
+    size_upload = CURLINFO_SIZE_UPLOAD,
+#endif
+    size_upload_t = CURLINFO_SIZE_UPLOAD_T,
+#if LIBCURL_VERSION_NUM < 0x075500
+    size_download = CURLINFO_SIZE_DOWNLOAD,
+#endif
+    size_download_t = CURLINFO_SIZE_DOWNLOAD_T,
+#if LIBCURL_VERSION_NUM < 0x075500
+    speed_download = CURLINFO_SPEED_DOWNLOAD,
+#endif
+    speed_download_t = CURLINFO_SPEED_DOWNLOAD_T,
+#if LIBCURL_VERSION_NUM < 0x075500
+    speed_upload = CURLINFO_SPEED_UPLOAD,
+#endif
+    speed_upload_t = CURLINFO_SPEED_UPLOAD_T,
+    header_size = CURLINFO_HEADER_SIZE,
+    request_size = CURLINFO_REQUEST_SIZE,
+    ssl_verifyresult = CURLINFO_SSL_VERIFYRESULT,
+    filetime = CURLINFO_FILETIME,
+    filetime_t = CURLINFO_FILETIME_T,
+#if LIBCURL_VERSION_NUM < 0x075500
+    content_length_download = CURLINFO_CONTENT_LENGTH_DOWNLOAD,
+#endif
+    content_length_download_t = CURLINFO_CONTENT_LENGTH_DOWNLOAD_T,
+#if LIBCURL_VERSION_NUM < 0x075500
+    content_length_upload = CURLINFO_CONTENT_LENGTH_UPLOAD,
+#endif
+    content_length_upload_t = CURLINFO_CONTENT_LENGTH_UPLOAD_T,
+    starttransfer_time = CURLINFO_STARTTRANSFER_TIME,
+    content_type = CURLINFO_CONTENT_TYPE,
+    redirect_time = CURLINFO_REDIRECT_TIME,
+    redirect_count = CURLINFO_REDIRECT_COUNT,
+    private_ = CURLINFO_PRIVATE,
+    http_connectcode = CURLINFO_HTTP_CONNECTCODE,
+    httpauth_avail = CURLINFO_HTTPAUTH_AVAIL,
+    proxyauth_avail = CURLINFO_PROXYAUTH_AVAIL,
+    os_errno = CURLINFO_OS_ERRNO,
+    num_connects = CURLINFO_NUM_CONNECTS,
+    ssl_engines = CURLINFO_SSL_ENGINES,
+    cookielist = CURLINFO_COOKIELIST,
+#if LIBCURL_VERSION_NUM < 0x074500
+    lastsocket = CURLINFO_LASTSOCKET,
+#endif
+    ftp_entry_path = CURLINFO_FTP_ENTRY_PATH,
+    redirect_url = CURLINFO_REDIRECT_URL,
+    primary_ip = CURLINFO_PRIMARY_IP,
+    appconnect_time = CURLINFO_APPCONNECT_TIME,
+    certinfo = CURLINFO_CERTINFO,
+    condition_unmet = CURLINFO_CONDITION_UNMET,
+    rtsp_session_id = CURLINFO_RTSP_SESSION_ID,
+    rtsp_client_cseq = CURLINFO_RTSP_CLIENT_CSEQ,
+    rtsp_server_cseq = CURLINFO_RTSP_SERVER_CSEQ,
+    rtsp_cseq_recv = CURLINFO_RTSP_CSEQ_RECV,
+    primary_port = CURLINFO_PRIMARY_PORT,
+    local_ip = CURLINFO_LOCAL_IP,
+    local_port = CURLINFO_LOCAL_PORT,
+#if LIBCURL_VERSION_NUM < 0x074800
+    tls_session = CURLINFO_TLS_SESSION,
+#endif
+    activesocket = CURLINFO_ACTIVESOCKET,
+    tls_ssl_ptr = CURLINFO_TLS_SSL_PTR,
+    http_version = CURLINFO_HTTP_VERSION,
+    proxy_ssl_verifyresult = CURLINFO_PROXY_SSL_VERIFYRESULT,
+#if LIBCURL_VERSION_NUM < 0x078500 && LIBCURL_VERSION_NUM >= 0x075200
+    protocol = CURLINFO_PROTOCOL,
+#endif
+    scheme = CURLINFO_SCHEME,
+    total_time_t = CURLINFO_TOTAL_TIME_T,
+    namelookup_time_t = CURLINFO_NAMELOOKUP_TIME_T,
+    connect_time_t = CURLINFO_CONNECT_TIME_T,
+    pretransfer_time_t = CURLINFO_PRETRANSFER_TIME_T,
+    starttransfer_time_t = CURLINFO_STARTTRANSFER_TIME_T,
+    redirect_time_t = CURLINFO_REDIRECT_TIME_T,
+    appconnect_time_t = CURLINFO_APPCONNECT_TIME_T,
+    retry_after = CURLINFO_RETRY_AFTER,
+    effective_method = CURLINFO_EFFECTIVE_METHOD,
+    proxy_error = CURLINFO_PROXY_ERROR,
+    referer = CURLINFO_REFERER,
+    cainfo = CURLINFO_CAINFO,
+    capath = CURLINFO_CAPATH,
+#if LIBCURL_VERSION_NUM >= 0x082000
+    xfer_id = CURLINFO_XFER_ID,
+    conn_id = CURLINFO_CONN_ID,
+#endif
+#if LIBCURL_VERSION_NUM >= 0x086000
+    queue_time_t = CURLINFO_QUEUE_TIME_T,
+#endif
+#if LIBCURL_VERSION_NUM >= 0x087000
+    used_proxy = CURLINFO_USED_PROXY,
+#endif
+    lastone = CURLINFO_LASTONE
+  };
+
+  /// Helper type that maps from the enum `easy::info` to a type. Used in
+  /// `get<info>()`
+  template <easy::info what>
+  struct info_type;
+
   easy();
+
+  /// Get info kept inside the handle. This function wraps `curl_easy_getinfo`.
+  template <info what>
+  auto get() -> std::pair<code, typename info_type<what>::type>;
 
   /// Sets an option to NULL / nullptr.
   auto unset(CURLoption option) -> code;
@@ -248,6 +360,81 @@ private:
   slist http_headers_;
   slist mail_recipients_;
 };
+
+template <easy::info what>
+struct easy::info_type {
+  static_assert(what == easy::info::lastone and false,
+                "The trait is not specialized for the requested enum "
+                "value. To make `easy::get` work for this property, you can "
+                "specialize the type trait right below this assertion.");
+};
+
+#define X(ENUM_MEMBER, TYPE)                                                   \
+  template <>                                                                  \
+  struct easy::info_type<ENUM_MEMBER> : std::type_identity<TYPE> {}
+X(easy::info::activesocket, curl_socket_t);
+X(easy::info::appconnect_time_t, curl_off_t);
+X(easy::info::cainfo, const char*);
+X(easy::info::capath, const char*);
+X(easy::info::certinfo, struct curl_certinfo*);
+X(easy::info::condition_unmet, long);
+X(easy::info::connect_time, double);
+X(easy::info::connect_time_t, curl_off_t);
+X(easy::info::content_length_download_t, curl_off_t);
+X(easy::info::content_length_upload_t, curl_off_t);
+X(easy::info::content_type, const char*);
+X(easy::info::cookielist, curl_slist*);
+X(easy::info::effective_method, const char*);
+X(easy::info::effective_url, const char*);
+X(easy::info::filetime_t, curl_off_t);
+X(easy::info::ftp_entry_path, const char*);
+X(easy::info::header_size, long);
+X(easy::info::httpauth_avail, long);
+X(easy::info::http_connectcode, long);
+X(easy::info::http_version, long);
+X(easy::info::local_ip, const char*);
+X(easy::info::local_port, long);
+X(easy::info::namelookup_time_t, curl_off_t);
+X(easy::info::num_connects, long);
+X(easy::info::os_errno, long);
+X(easy::info::pretransfer_time_t, curl_off_t);
+X(easy::info::primary_ip, const char*);
+X(easy::info::primary_port, long);
+X(easy::info::private_, void*);
+X(easy::info::proxyauth_avail, long);
+X(easy::info::proxy_error, long);
+X(easy::info::proxy_ssl_verifyresult, long);
+X(easy::info::redirect_count, long);
+X(easy::info::redirect_time, double);
+X(easy::info::redirect_time_t, curl_off_t);
+X(easy::info::redirect_url, const char*);
+X(easy::info::referer, const char*);
+X(easy::info::request_size, long);
+X(easy::info::response_code, long);
+X(easy::info::retry_after, curl_off_t);
+X(easy::info::scheme, const char*);
+X(easy::info::size_download_t, curl_off_t);
+X(easy::info::size_upload_t, curl_off_t);
+X(easy::info::speed_download_t, curl_off_t);
+X(easy::info::speed_upload_t, curl_off_t);
+X(easy::info::ssl_engines, curl_slist*);
+X(easy::info::ssl_verifyresult, long);
+X(easy::info::starttransfer_time_t, curl_off_t);
+X(easy::info::tls_ssl_ptr, curl_tlssessioninfo*);
+X(easy::info::total_time, double);
+X(easy::info::total_time_t, curl_off_t);
+#undef X
+
+template <easy::info what>
+using info_type_t = easy::info_type<what>::type;
+
+template <easy::info what>
+auto easy::get() -> std::pair<code, info_type_t<what>> {
+  constexpr static auto curl_info = static_cast<CURLINFO>(what);
+  auto res = info_type_t<what>{};
+  auto c = curl_easy_getinfo(easy_.get(), curl_info, &res);
+  return {static_cast<code>(c), res};
+}
 
 /// @relates easy
 auto to_string(easy::code code) -> std::string_view;

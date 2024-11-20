@@ -225,6 +225,13 @@ chunk_ptr chunk::make_empty() noexcept {
                    false};
 }
 
+auto chunk::copy(const void* data, size_t size, chunk_metadata metadata)
+  -> chunk_ptr {
+  const auto* typed_data = static_cast<const value_type*>(data);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  return copy(view_type{typed_data, typed_data + size}, std::move(metadata));
+}
+
 caf::expected<chunk_ptr>
 chunk::mmap(const std::filesystem::path& filename, size_type size,
             size_type offset, chunk_metadata metadata) {
@@ -376,21 +383,22 @@ chunk_ptr chunk::slice(view_type view) const {
 
 // -- free functions ----------------------------------------------------------
 
-std::shared_ptr<arrow::Buffer> as_arrow_buffer(chunk_ptr chunk) noexcept {
-  if (!chunk)
+auto as_arrow_buffer(chunk_ptr chunk) noexcept
+  -> std::shared_ptr<arrow::Buffer> {
+  if (!chunk) {
     return nullptr;
-  auto buffer = arrow::Buffer::Wrap(chunk->data(), chunk->size());
-  TENZIR_ASSERT(reinterpret_cast<const std::byte*>(buffer->data())
-                == chunk->data());
-  auto* const buffer_data = buffer.get();
-  return {buffer_data, [chunk = std::move(chunk), buffer = std::move(buffer)](
-                         arrow::Buffer*) mutable noexcept {
-            // We manually call the destructors in proper order here, as the
-            // chunk must be destroyed last and the destruction order for lambda
-            // captures is undefined.
-            buffer = {};
-            chunk = {};
-          }};
+  }
+  const auto* data = reinterpret_cast<const uint8_t*>(chunk->data());
+  const auto size_in_bytes = detail::narrow<int64_t>(chunk->size());
+  // NOLINTBEGIN
+  return std::shared_ptr<arrow::Buffer>{
+    new arrow::Buffer{data, size_in_bytes},
+    // Keep the chunk inside the shared_ptr's destructor until after we have
+    // deleted the Buffer.
+    [chunk = std::move(chunk)](arrow::Buffer* buffer) {
+      delete buffer;
+    }};
+  // NOLINTEND
 }
 
 std::shared_ptr<arrow::io::RandomAccessFile>
@@ -491,6 +499,10 @@ auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
     std::move(chunks),
     {},
   };
+}
+
+auto size(const chunk_ptr& chunk) -> uint64_t {
+  return chunk ? chunk->size() : 0;
 }
 
 } // namespace tenzir

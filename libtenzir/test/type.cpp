@@ -57,10 +57,10 @@ TEST(bool_type) {
   CHECK(t <= bt);
   CHECK_EQUAL(fmt::format("{}", bt), "bool");
   CHECK_EQUAL(fmt::format("{}", bool_type{}), "bool");
-  CHECK(!caf::holds_alternative<bool_type>(t));
-  CHECK(caf::holds_alternative<bool_type>(bt));
+  CHECK(!is<bool_type>(t));
+  CHECK(is<bool_type>(bt));
   const auto lbt = type::from_legacy_type(legacy_bool_type{});
-  CHECK(caf::holds_alternative<bool_type>(lbt));
+  CHECK(is<bool_type>(lbt));
 }
 
 TEST(int64_type) {
@@ -76,10 +76,10 @@ TEST(int64_type) {
   CHECK(t <= it);
   CHECK_EQUAL(fmt::format("{}", it), "int64");
   CHECK_EQUAL(fmt::format("{}", int64_type{}), "int64");
-  CHECK(!caf::holds_alternative<int64_type>(t));
-  CHECK(caf::holds_alternative<int64_type>(it));
+  CHECK(!is<int64_type>(t));
+  CHECK(is<int64_type>(it));
   const auto lit = type::from_legacy_type(legacy_integer_type{});
-  CHECK(caf::holds_alternative<int64_type>(lit));
+  CHECK(is<int64_type>(lit));
 }
 
 TEST(uint64_type) {
@@ -95,10 +95,10 @@ TEST(uint64_type) {
   CHECK(t <= ct);
   CHECK_EQUAL(fmt::format("{}", ct), "uint64");
   CHECK_EQUAL(fmt::format("{}", uint64_type{}), "uint64");
-  CHECK(!caf::holds_alternative<uint64_type>(t));
-  CHECK(caf::holds_alternative<uint64_type>(ct));
+  CHECK(!is<uint64_type>(t));
+  CHECK(is<uint64_type>(ct));
   const auto lct = type::from_legacy_type(legacy_count_type{});
-  CHECK(caf::holds_alternative<uint64_type>(lct));
+  CHECK(is<uint64_type>(lct));
 }
 
 TEST(double_type) {
@@ -114,10 +114,10 @@ TEST(double_type) {
   CHECK(t <= rt);
   CHECK_EQUAL(fmt::format("{}", rt), "double");
   CHECK_EQUAL(fmt::format("{}", double_type{}), "double");
-  CHECK(!caf::holds_alternative<double_type>(t));
-  CHECK(caf::holds_alternative<double_type>(rt));
+  CHECK(!is<double_type>(t));
+  CHECK(is<double_type>(rt));
   const auto lrt = type::from_legacy_type(legacy_real_type{});
-  CHECK(caf::holds_alternative<double_type>(lrt));
+  CHECK(is<double_type>(lrt));
 }
 
 TEST(duration_type) {
@@ -133,10 +133,10 @@ TEST(duration_type) {
   CHECK(t <= dt);
   CHECK_EQUAL(fmt::format("{}", dt), "duration");
   CHECK_EQUAL(fmt::format("{}", duration_type{}), "duration");
-  CHECK(!caf::holds_alternative<duration_type>(t));
-  CHECK(caf::holds_alternative<duration_type>(dt));
+  CHECK(!is<duration_type>(t));
+  CHECK(is<duration_type>(dt));
   const auto ldt = type::from_legacy_type(legacy_duration_type{});
-  CHECK(caf::holds_alternative<duration_type>(ldt));
+  CHECK(is<duration_type>(ldt));
 }
 
 TEST(time_type) {
@@ -152,10 +152,10 @@ TEST(time_type) {
   CHECK(t <= tt);
   CHECK_EQUAL(fmt::format("{}", tt), "time");
   CHECK_EQUAL(fmt::format("{}", time_type{}), "time");
-  CHECK(!caf::holds_alternative<time_type>(t));
-  CHECK(caf::holds_alternative<time_type>(tt));
+  CHECK(!is<time_type>(t));
+  CHECK(is<time_type>(tt));
   const auto ltt = type::from_legacy_type(legacy_time_type{});
-  CHECK(caf::holds_alternative<time_type>(ltt));
+  CHECK(is<time_type>(ltt));
 }
 
 TEST(string_type) {
@@ -171,10 +171,10 @@ TEST(string_type) {
   CHECK(t <= st);
   CHECK_EQUAL(fmt::format("{}", st), "string");
   CHECK_EQUAL(fmt::format("{}", string_type{}), "string");
-  CHECK(!caf::holds_alternative<string_type>(t));
-  CHECK(caf::holds_alternative<string_type>(st));
+  CHECK(!is<string_type>(t));
+  CHECK(is<string_type>(st));
   const auto lst = type::from_legacy_type(legacy_string_type{});
-  CHECK(caf::holds_alternative<string_type>(lst));
+  CHECK(is<string_type>(lst));
 }
 
 TEST(ip_type) {
@@ -190,10 +190,10 @@ TEST(ip_type) {
   CHECK(t <= at);
   CHECK_EQUAL(fmt::format("{}", at), "ip");
   CHECK_EQUAL(fmt::format("{}", ip_type{}), "ip");
-  CHECK(!caf::holds_alternative<ip_type>(t));
-  CHECK(caf::holds_alternative<ip_type>(at));
+  CHECK(!is<ip_type>(t));
+  CHECK(is<ip_type>(at));
   const auto lat = type::from_legacy_type(legacy_address_type{});
-  CHECK(caf::holds_alternative<ip_type>(lat));
+  CHECK(is<ip_type>(lat));
 }
 
 TEST(subnet_type) {
@@ -209,10 +209,10 @@ TEST(subnet_type) {
   CHECK(t <= st);
   CHECK_EQUAL(fmt::format("{}", st), "subnet");
   CHECK_EQUAL(fmt::format("{}", subnet_type{}), "subnet");
-  CHECK(!caf::holds_alternative<subnet_type>(t));
-  CHECK(caf::holds_alternative<subnet_type>(st));
+  CHECK(!is<subnet_type>(t));
+  CHECK(is<subnet_type>(st));
   const auto lst = type::from_legacy_type(legacy_subnet_type{});
-  CHECK(caf::holds_alternative<subnet_type>(lst));
+  CHECK(is<subnet_type>(lst));
 }
 
 TEST(enumeration_type) {
@@ -226,23 +226,23 @@ TEST(enumeration_type) {
   CHECK(t < et);
   CHECK(t <= et);
   CHECK_EQUAL(fmt::format("{}", et), "enum {first: 0, third: 2, fourth: 3}");
-  CHECK(!caf::holds_alternative<enumeration_type>(t));
-  CHECK(caf::holds_alternative<enumeration_type>(et));
-  CHECK_EQUAL(caf::get<enumeration_type>(et).field(0), "first");
-  CHECK_EQUAL(caf::get<enumeration_type>(et).field(1), "");
-  CHECK_EQUAL(caf::get<enumeration_type>(et).field(2), "third");
-  CHECK_EQUAL(caf::get<enumeration_type>(et).field(3), "fourth");
-  CHECK_EQUAL(caf::get<enumeration_type>(et).resolve("first"), 0u);
-  CHECK_EQUAL(caf::get<enumeration_type>(et).resolve("second"), std::nullopt);
-  CHECK_EQUAL(caf::get<enumeration_type>(et).resolve("third"), 2u);
-  CHECK_EQUAL(caf::get<enumeration_type>(et).resolve("fourth"), 3u);
+  CHECK(!is<enumeration_type>(t));
+  CHECK(is<enumeration_type>(et));
+  CHECK_EQUAL(as<enumeration_type>(et).field(0), "first");
+  CHECK_EQUAL(as<enumeration_type>(et).field(1), "");
+  CHECK_EQUAL(as<enumeration_type>(et).field(2), "third");
+  CHECK_EQUAL(as<enumeration_type>(et).field(3), "fourth");
+  CHECK_EQUAL(as<enumeration_type>(et).resolve("first"), 0u);
+  CHECK_EQUAL(as<enumeration_type>(et).resolve("second"), std::nullopt);
+  CHECK_EQUAL(as<enumeration_type>(et).resolve("third"), 2u);
+  CHECK_EQUAL(as<enumeration_type>(et).resolve("fourth"), 3u);
   const auto let = type::from_legacy_type(
     legacy_enumeration_type{{"first", "second", "third"}});
-  CHECK(caf::holds_alternative<enumeration_type>(let));
-  CHECK_EQUAL(caf::get<enumeration_type>(let).field(0), "first");
-  CHECK_EQUAL(caf::get<enumeration_type>(let).field(1), "second");
-  CHECK_EQUAL(caf::get<enumeration_type>(let).field(2), "third");
-  CHECK_EQUAL(caf::get<enumeration_type>(let).field(3), "");
+  CHECK(is<enumeration_type>(let));
+  CHECK_EQUAL(as<enumeration_type>(let).field(0), "first");
+  CHECK_EQUAL(as<enumeration_type>(let).field(1), "second");
+  CHECK_EQUAL(as<enumeration_type>(let).field(2), "third");
+  CHECK_EQUAL(as<enumeration_type>(let).field(3), "");
 }
 
 TEST(list_type) {
@@ -259,13 +259,13 @@ TEST(list_type) {
   CHECK(t <= tlit);
   CHECK_EQUAL(fmt::format("{}", tlit), "list<int64>");
   CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<null>");
-  CHECK(!caf::holds_alternative<list_type>(t));
-  CHECK(caf::holds_alternative<list_type>(tlit));
-  CHECK_EQUAL(caf::get<list_type>(tlit).value_type(), type{int64_type{}});
+  CHECK(!is<list_type>(t));
+  CHECK(is<list_type>(tlit));
+  CHECK_EQUAL(as<list_type>(tlit).value_type(), type{int64_type{}});
   const auto llbt
     = type::from_legacy_type(legacy_list_type{legacy_bool_type{}});
-  CHECK(caf::holds_alternative<list_type>(llbt));
-  CHECK_EQUAL(caf::get<list_type>(llbt).value_type(), type{bool_type{}});
+  CHECK(is<list_type>(llbt));
+  CHECK_EQUAL(as<list_type>(llbt).value_type(), type{bool_type{}});
 }
 
 TEST(map_type) {
@@ -282,15 +282,15 @@ TEST(map_type) {
   CHECK(t <= tmsit);
   CHECK_EQUAL(fmt::format("{}", tmsit), "map<string, int64>");
   CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<null, null>");
-  CHECK(!caf::holds_alternative<map_type>(t));
-  CHECK(caf::holds_alternative<map_type>(tmsit));
-  CHECK_EQUAL(caf::get<map_type>(tmsit).key_type(), type{string_type{}});
-  CHECK_EQUAL(caf::get<map_type>(tmsit).value_type(), type{int64_type{}});
+  CHECK(!is<map_type>(t));
+  CHECK(is<map_type>(tmsit));
+  CHECK_EQUAL(as<map_type>(tmsit).key_type(), type{string_type{}});
+  CHECK_EQUAL(as<map_type>(tmsit).value_type(), type{int64_type{}});
   const auto lmabt = type::from_legacy_type(
     legacy_map_type{legacy_address_type{}, legacy_bool_type{}});
-  CHECK(caf::holds_alternative<map_type>(lmabt));
-  CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{ip_type{}});
-  CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
+  CHECK(is<map_type>(lmabt));
+  CHECK_EQUAL(as<map_type>(lmabt).key_type(), type{ip_type{}});
+  CHECK_EQUAL(as<map_type>(lmabt).value_type(), type{bool_type{}});
 }
 
 TEST(record_type) {
@@ -314,7 +314,7 @@ TEST(record_type) {
   CHECK_EQUAL(fmt::format("{}", rt), "record {i: int64, r1: record {p: port, "
                                      "a: ip}, b: bool, r2: record {s: "
                                      "subnet}}");
-  const auto& r = caf::get<record_type>(rt);
+  const auto& r = as<record_type>(rt);
   CHECK_EQUAL(r.field(2).type, bool_type{});
   CHECK_EQUAL(r.field({1, 1}).type, ip_type{});
   CHECK_EQUAL(r.field({3, 0}).name, "s");
@@ -387,19 +387,18 @@ TEST(record_type name resolving) {
       {"proto", string_type{}},
     },
   };
-  CHECK_EQUAL(to_vector(caf::get<record_type>(zeek_conn).resolve_key_suffix(
+  CHECK_EQUAL(to_vector(as<record_type>(zeek_conn).resolve_key_suffix(
                 "resp_p", zeek_conn.name())),
               (std::vector<offset>{{2, 3}}));
-  CHECK_EQUAL(
-    to_vector(caf::get<record_type>(zeek_conn).resolve_key_suffix("resp_p")),
-    (std::vector<offset>{{2, 3}}));
+  CHECK_EQUAL(to_vector(as<record_type>(zeek_conn).resolve_key_suffix("resp_"
+                                                                      "p")),
+              (std::vector<offset>{{2, 3}}));
   const auto zeek_conn_flat = flatten(zeek_conn);
-  CHECK_EQUAL(to_vector(caf::get<record_type>(zeek_conn_flat)
+  CHECK_EQUAL(to_vector(as<record_type>(zeek_conn_flat)
                           .resolve_key_suffix("resp_p", zeek_conn.name())),
               (std::vector<offset>{{5}}));
   CHECK_EQUAL(
-    to_vector(
-      caf::get<record_type>(zeek_conn_flat).resolve_key_suffix("resp_p")),
+    to_vector(as<record_type>(zeek_conn_flat).resolve_key_suffix("resp_p")),
     (std::vector<offset>{{5}}));
 }
 
@@ -467,10 +466,10 @@ TEST(record_type flat index computation) {
   };
   CHECK_EQUAL(x.num_fields(), 2u);
   CHECK_EQUAL(x.num_leaves(), 6u);
-  CHECK_EQUAL(caf::get<record_type>(x.field(0).type).num_fields(), 3u);
-  CHECK_EQUAL(caf::get<record_type>(x.field(0).type).num_leaves(), 5u);
-  CHECK_EQUAL(caf::get<record_type>(x.field(1).type).num_fields(), 1u);
-  CHECK_EQUAL(caf::get<record_type>(x.field(1).type).num_leaves(), 1u);
+  CHECK_EQUAL(as<record_type>(x.field(0).type).num_fields(), 3u);
+  CHECK_EQUAL(as<record_type>(x.field(0).type).num_leaves(), 5u);
+  CHECK_EQUAL(as<record_type>(x.field(1).type).num_fields(), 1u);
+  CHECK_EQUAL(as<record_type>(x.field(1).type).num_leaves(), 1u);
   CHECK_EQUAL(x.flat_index(offset({0, 0, 0})), 0u);
   CHECK_EQUAL(x.flat_index(offset({0, 0, 1})), 1u);
   CHECK_EQUAL(x.flat_index(offset({0, 1, 0, 0})), 2u);
@@ -726,11 +725,11 @@ TEST(legacy_type conversion) {
 
 TEST(named types) {
   const auto at = type{"l1", bool_type{}};
-  CHECK(caf::holds_alternative<bool_type>(at));
+  CHECK(is<bool_type>(at));
   CHECK_EQUAL(at.name(), "l1");
   CHECK_EQUAL(fmt::format("{}", at), "l1");
   const auto aat = type{"l2", at};
-  CHECK(caf::holds_alternative<bool_type>(aat));
+  CHECK(is<bool_type>(aat));
   CHECK_EQUAL(aat.name(), "l2");
   CHECK_EQUAL(fmt::format("{}", aat), "l2");
   auto aat_names = std::string{};
@@ -738,14 +737,14 @@ TEST(named types) {
     fmt::format_to(std::back_inserter(aat_names), "{}", name);
   CHECK_EQUAL(aat_names, "l2l1");
   const auto lat = type::from_legacy_type(legacy_bool_type{}.name("l3"));
-  CHECK(caf::holds_alternative<bool_type>(lat));
+  CHECK(is<bool_type>(lat));
   CHECK_EQUAL(lat.name(), "l3");
   CHECK_EQUAL(fmt::format("{}", lat), "l3");
 }
 
 TEST(enriched types) {
   const auto at = type{"l1", bool_type{}, {{"first", "value"}, {"second"}}};
-  CHECK(caf::holds_alternative<bool_type>(at));
+  CHECK(is<bool_type>(at));
   CHECK_EQUAL(at.name(), "l1");
   CHECK_EQUAL(at.attribute("first"), "value");
   CHECK_EQUAL(at.attribute("second"), "");
@@ -753,7 +752,7 @@ TEST(enriched types) {
   CHECK_EQUAL(at.attribute("fourth"), std::nullopt);
   CHECK_EQUAL(fmt::format("{}", at), "l1 #first=value #second");
   const auto aat = type{"l2", at, {{"third", "nestingworks"}}};
-  CHECK(caf::holds_alternative<bool_type>(aat));
+  CHECK(is<bool_type>(aat));
   CHECK_EQUAL(aat.name(), "l2");
   CHECK_EQUAL(aat.attribute("first"), "value");
   CHECK_EQUAL(aat.attribute("second"), "");
@@ -883,10 +882,9 @@ TEST(sum type) {
       return (std::is_same_v<T, U> && ...);
     };
   };
-  CHECK(caf::visit(is_type(ip_type{}), type{ip_type{}}));
-  CHECK(caf::visit(is_type(bool_type{}), type{bool_type{}}));
-  CHECK(caf::visit(is_type(bool_type{}, int64_type{}), type{bool_type{}},
-                   type{int64_type{}}));
+  CHECK(match(type{ip_type{}}, is_type(ip_type{})));
+  CHECK(match(type{bool_type{}}, is_type(bool_type{})));
+  CHECK(match(std::tuple{type{bool_type{}}, type{int64_type{}}}, is_type(bool_type{}, int64_type{})));
 }
 
 TEST(hashes) {

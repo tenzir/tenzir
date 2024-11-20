@@ -25,7 +25,7 @@ LogsDirectory=tenzir
 RestrictNamespaces=yes
 RestrictAddressFamilies=
 CapabilityBoundingSet=
-AmbientCapabilities=
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 RestrictSUIDSGID=yes
 
 # limits

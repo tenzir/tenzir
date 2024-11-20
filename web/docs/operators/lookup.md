@@ -6,19 +6,19 @@ sidebar_custom_props:
 
 # lookup
 
-Performs live filtering of the import feed using a [context](../contexts.md),
-and translates context updates into historical queries.
+Performs live filtering of the import feed using a context and translates
+context updates into historical queries.
 
 ## Synopsis
 
 ```
 lookup <context>          [--field <field...>] [--separate]
-                          [--live] [--retro] [--snapshot]
-                          [--yield <field>] [--parallel <level>]
+                          [--live] [--retro] [--yield <field>]
+                          [--parallel <level>]
                           [<context-options>]
 lookup <output>=<context> [--field <field...>] [--separate]
-                          [--live] [--retro] [--snapshot]
-                          [--yield <field>] [--parallel <level>]
+                          [--live] [--retro] [--yield <field>]
+                          [--parallel <level>]
                           [<context-options>]
 ```
 
@@ -76,14 +76,6 @@ operator will then apply a context [after a context update](context.md).
 By default, both retro and live lookups are enabled.
 Specifying either `--retro` or `--live` explicitly disables
 the other.
-
-### `--snapshot`
-
-Creates a snapshot of the context at the time of execution. In combination with
-`--retro`, this will commence a retrospective lookup with that current context
-state.
-
-By default, snapshotting is disabled. Not all contexts support this operation.
 
 ### `--yield <path>`
 

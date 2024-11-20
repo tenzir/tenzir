@@ -120,7 +120,7 @@ teardown() {
 @test "Import syslog" {
   import_data "from ${INPUTSDIR}/syslog/syslog.log read syslog"
 
-  check --sort -c "tenzir 'export | where #schema == /syslog.*/' | jq --sort-keys -ec ."
+  check --sort -c "tenzir 'export | where #schema == /tenzir.syslog/' | jq --sort-keys -ec ."
 }
 
 # TODO: Figure out why this one is flaky in CI

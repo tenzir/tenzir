@@ -25,10 +25,10 @@ namespace {
 tenzir::record extract_config(const std::string& config) {
   auto data = tenzir::from_yaml(config);
   REQUIRE_NOERROR(data);
-  REQUIRE(caf::holds_alternative<tenzir::record>(*data));
-  auto inner = caf::get<tenzir::record>(*data).at("web");
-  REQUIRE(caf::holds_alternative<tenzir::record>(inner));
-  return caf::get<tenzir::record>(inner);
+  REQUIRE(is<tenzir::record>(*data));
+  auto inner = as<tenzir::record>(*data).at("web");
+  REQUIRE(is<tenzir::record>(inner));
+  return as<tenzir::record>(inner);
 }
 
 } // namespace

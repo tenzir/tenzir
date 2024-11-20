@@ -38,7 +38,7 @@ public:
   /// filter.
   string_synopsis(type x, typename super::bloom_filter_type bf)
     : super{std::move(x), std::move(bf)} {
-    TENZIR_ASSERT(caf::holds_alternative<string_type>(this->type()));
+    TENZIR_ASSERT(is<string_type>(this->type()));
   }
 
   [[nodiscard]] synopsis_ptr clone() const override {
@@ -82,13 +82,13 @@ using buffered_string_synopsis = buffered_synopsis<std::string, Hash>;
 /// @param params The Bloom filter parameters.
 /// @param seeds The seeds for the Bloom filter hasher.
 /// @returns A type-erased pointer to a synopsis.
-/// @pre `caf::holds_alternative<string_type>(type)`.
+/// @pre `is<string_type>(type)`.
 /// @relates string_synopsis
 template <class HashFunction>
 synopsis_ptr
 make_string_synopsis(tenzir::type type, bloom_filter_parameters params,
                      std::vector<size_t> seeds) {
-  TENZIR_ASSERT(caf::holds_alternative<string_type>(type));
+  TENZIR_ASSERT(is<string_type>(type));
   auto x = make_bloom_filter<HashFunction>(std::move(params), std::move(seeds));
   if (!x) {
     TENZIR_WARN("{} failed to construct Bloom filter", __func__);
@@ -104,12 +104,12 @@ make_string_synopsis(tenzir::type type, bloom_filter_parameters params,
 /// @param params The Bloom filter parameters.
 /// @param seeds The seeds for the Bloom filter hasher.
 /// @returns A type-erased pointer to a synopsis.
-/// @pre `caf::holds_alternative<string_type>(type)`.
+/// @pre `is<string_type>(type)`.
 /// @relates string_synopsis
 template <class HashFunction>
 synopsis_ptr make_buffered_string_synopsis(tenzir::type type,
                                            bloom_filter_parameters params) {
-  TENZIR_ASSERT(caf::holds_alternative<string_type>(type));
+  TENZIR_ASSERT(is<string_type>(type));
   if (!params.p) {
     return nullptr;
   }
@@ -126,7 +126,7 @@ synopsis_ptr make_buffered_string_synopsis(tenzir::type type,
 template <class HashFunction>
 synopsis_ptr
 make_string_synopsis(tenzir::type type, const caf::settings& opts) {
-  TENZIR_ASSERT(caf::holds_alternative<string_type>(type));
+  TENZIR_ASSERT(is<string_type>(type));
   if (auto xs = parse_parameters(type))
     return make_string_synopsis<HashFunction>(std::move(type), std::move(*xs));
   // If no explicit Bloom filter parameters were attached to the type, we try

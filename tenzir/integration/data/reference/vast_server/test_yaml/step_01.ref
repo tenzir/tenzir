@@ -3,7 +3,6 @@ tenzir:
   abort-on-panic: 1
   automatic-rebuild: 0
   bare-mode: true
-  enable-metrics: false
   exec:
     dump-diagnostics: true
     implicit-events-sink: write json --compact-output | save -

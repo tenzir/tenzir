@@ -37,7 +37,6 @@
   "source": "HTTP",
   "depth": 0,
   "analyzers": [],
-  "mime_type": null,
   "duration": 0.0,
   "is_orig": false,
   "seen_bytes": 558,

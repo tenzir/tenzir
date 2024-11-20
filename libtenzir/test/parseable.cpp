@@ -8,7 +8,6 @@
 
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/numeric.hpp"
-#include "tenzir/concept/parseable/stream.hpp"
 #include "tenzir/concept/parseable/string.hpp"
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/tenzir/offset.hpp"
@@ -53,11 +52,11 @@ TEST(choice - LHS and RHS) {
   auto p = chr{'x'} | i32;
   caf::variant<char, int32_t> x;
   CHECK(p("123", x));
-  auto i = caf::get_if<int32_t>(&x);
+  auto i = try_as<int32_t>(&x);
   REQUIRE(i);
   CHECK_EQUAL(*i, 123);
   CHECK(p("x", x));
-  auto c = caf::get_if<char>(&x);
+  auto c = try_as<char>(&x);
   REQUIRE(c);
   CHECK_EQUAL(*c, 'x');
 }
@@ -492,6 +491,19 @@ TEST(unsigned integral) {
   CHECK(!p("-1024"));
   CHECK(p("1024", x));
   CHECK_EQUAL(x, 1024u);
+  CHECK(skip_to_eoi(p)("12.34", x));
+  CHECK_EQUAL(x, 12u);
+}
+
+TEST(unsigned int16) {
+  using namespace parsers;
+  auto p = integral_parser<uint16_t>{};
+  unsigned x;
+  CHECK(!p("-1024"));
+  CHECK(p("1024", x));
+  CHECK_EQUAL(x, 1024u);
+  CHECK(p("10000", x));
+  CHECK_EQUAL(x, 10000u);
   CHECK(skip_to_eoi(p)("12.34", x));
   CHECK_EQUAL(x, 12u);
 }
@@ -952,9 +964,8 @@ TEST(option set - long form options) {
   REQUIRE(success);
   REQUIRE_EQUAL(parsed_options.size(), size_t{2});
   REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
-  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
-                "value");
-  REQUIRE_EQUAL((*caf::get_if<uint64_t>(&parsed_options.at("valid"))), 12345u);
+  REQUIRE_EQUAL((*try_as<std::string>(&parsed_options.at("option"))), "value");
+  REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("valid"))), 12345u);
 }
 
 TEST(option set - short form options) {
@@ -968,9 +979,8 @@ TEST(option set - short form options) {
   REQUIRE(success);
   REQUIRE_EQUAL(parsed_options.size(), size_t{2});
   REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
-  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
-                "value");
-  REQUIRE_EQUAL((*caf::get_if<uint64_t>(&parsed_options.at("valid"))), 12345u);
+  REQUIRE_EQUAL((*try_as<std::string>(&parsed_options.at("option"))), "value");
+  REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("valid"))), 12345u);
 }
 
 TEST(option set - long form options mixed with short form options) {
@@ -985,10 +995,9 @@ TEST(option set - long form options mixed with short form options) {
   REQUIRE(success);
   REQUIRE_EQUAL(parsed_options.size(), size_t{3});
   REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
-  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
-                "value");
-  REQUIRE_EQUAL((*caf::get_if<uint64_t>(&parsed_options.at("valid"))), 12345u);
-  REQUIRE_EQUAL((*caf::get_if<uint64_t>(&parsed_options.at("short"))), 2u);
+  REQUIRE_EQUAL((*try_as<std::string>(&parsed_options.at("option"))), "value");
+  REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("valid"))), 12345u);
+  REQUIRE_EQUAL((*try_as<uint64_t>(&parsed_options.at("short"))), 2u);
 }
 
 TEST(option set - invalid long form option syntax) {
@@ -1028,8 +1037,7 @@ TEST(option set - option value defined twice gets overwritten) {
   REQUIRE(success);
   REQUIRE_EQUAL(parsed_options.size(), size_t{1});
   REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
-  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
-                "value2");
+  REQUIRE_EQUAL((*try_as<std::string>(&parsed_options.at("option"))), "value2");
 }
 
 TEST(option set - missing option value) {
@@ -1047,11 +1055,13 @@ TEST(option set - missing option value) {
 
 // -- API ---------------------------------------------------------------------
 
-TEST(stream) {
-  std::istringstream ss{"1,2,3"};
+TEST(range) {
+  const auto s = "1,2,3"sv;
   offset xs;
-  ss >> xs;
-  CHECK(ss.good());
+  auto begin = s.begin();
+  auto end = s.end();
+  CHECK(parse(begin, end, xs));
+  CHECK(begin == end);
   CHECK_EQUAL(xs, (offset{1, 2, 3}));
 }
 

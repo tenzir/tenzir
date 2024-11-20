@@ -9,6 +9,8 @@
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::sample {
 
@@ -22,28 +24,30 @@ public:
   }
 
 private:
-  [[nodiscard]] type output_type() const override {
+  auto output_type() const -> type override {
     return input_type();
   }
 
   void add(const data_view& view) override {
-    if (!caf::holds_alternative<caf::none_t>(sample_))
+    if (!is<caf::none_t>(sample_)) {
       return;
+    }
     sample_ = materialize(view);
   }
 
   void add(const arrow::Array& array) override {
-    if (!caf::holds_alternative<caf::none_t>(sample_))
+    if (!is<caf::none_t>(sample_)) {
       return;
+    }
     for (const auto& value : values(input_type(), array)) {
-      if (!caf::holds_alternative<caf::none_t>(value)) {
+      if (!is<caf::none_t>(value)) {
         sample_ = materialize(value);
         return;
       }
     }
   }
 
-  [[nodiscard]] caf::expected<data> finish() && override {
+  auto finish() && -> caf::expected<data> override {
     return std::move(sample_);
   }
 
@@ -51,17 +55,12 @@ private:
 };
 
 class plugin : public virtual aggregation_function_plugin {
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    return {};
-  }
-
-  [[nodiscard]] std::string name() const override {
+  auto name() const -> std::string override {
     return "sample";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<aggregation_function>>
-  make_aggregation_function(const type& input_type) const override {
+  auto make_aggregation_function(const type& input_type) const
+    -> caf::expected<std::unique_ptr<aggregation_function>> override {
     return std::make_unique<sample_function>(input_type);
   }
 

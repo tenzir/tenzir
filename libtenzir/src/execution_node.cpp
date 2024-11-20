@@ -86,8 +86,9 @@ auto make_timer_guard(Duration&... elapsed) {
 // of table slices, excluding the schema and disregarding any overlap or custom
 // information from extension types.
 auto approx_bytes(const table_slice& events) -> uint64_t {
-  if (events.rows() == 0)
+  if (events.rows() == 0) {
     return 0;
+  }
   auto record_batch = to_record_batch(events);
   TENZIR_ASSERT(record_batch);
   // Note that this function can sometimes fail. Because we ultimately want to
@@ -151,8 +152,8 @@ struct exec_node_control_plane final : public operator_control_plane {
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
           self, std::move(diagnostic_handler))},
-      metrics_receiver{std::move(metric_receiver)},
-      operator_index{op_index},
+      metrics_receiver_{std::move(metric_receiver)},
+      operator_index_{op_index},
       has_terminal_{has_terminal},
       is_hidden_{is_hidden} {
   }
@@ -161,8 +162,16 @@ struct exec_node_control_plane final : public operator_control_plane {
     return *state.self;
   }
 
+  auto run_id() const noexcept -> uuid override {
+    return state.run_id;
+  }
+
   auto node() noexcept -> node_actor override {
     return state.weak_node.lock();
+  }
+
+  auto operator_index() const noexcept -> uint64_t override {
+    return operator_index_;
   }
 
   auto diagnostics() noexcept -> diagnostic_handler& override {
@@ -171,11 +180,15 @@ struct exec_node_control_plane final : public operator_control_plane {
 
   auto metrics(type t) noexcept -> metric_handler override {
     return metric_handler{
-      metrics_receiver,
-      operator_index,
+      metrics_receiver_,
+      operator_index_,
       metric_index++,
       t,
     };
+  }
+
+  auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
+    return metrics_receiver_;
   }
 
   auto no_location_overrides() const noexcept -> bool override {
@@ -201,20 +214,12 @@ struct exec_node_control_plane final : public operator_control_plane {
   exec_node_state<Input, Output>& state;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler
     = {};
-  metrics_receiver_actor metrics_receiver = {};
-  uint64_t operator_index = {};
+  metrics_receiver_actor metrics_receiver_ = {};
+  uint64_t operator_index_ = {};
   uint64_t metric_index = {};
   bool has_terminal_ = {};
   bool is_hidden_ = {};
 };
-
-auto size(const table_slice& slice) -> uint64_t {
-  return slice.rows();
-}
-
-auto size(const chunk_ptr& chunk) -> uint64_t {
-  return chunk ? chunk->size() : 0;
-}
 
 template <class Input, class Output>
 struct exec_node_state {
@@ -228,6 +233,9 @@ struct exec_node_state {
 
   /// A pointer to the parent actor.
   exec_node_actor::pointer self = {};
+
+  /// A unique identifier for the current run.
+  uuid run_id = {};
 
   /// Buffer limits derived from the configuration.
   uint64_t min_elements = exec_node_defaults<Input>::min_elements;
@@ -275,11 +283,12 @@ struct exec_node_state {
   caf::typed_response_promise<void> start_rp = {};
 
   /// Exponential backoff for scheduling.
-  static constexpr duration min_backoff = std::chrono::milliseconds{250};
+  static constexpr duration min_backoff = std::chrono::milliseconds{30};
   static constexpr duration max_backoff = std::chrono::minutes{1};
   static constexpr double backoff_rate = 2.0;
   duration backoff = duration::zero();
   caf::disposable backoff_disposable = {};
+  std::optional<std::chrono::steady_clock::time_point> idle_since = {};
 
   /// A pointer to te operator control plane passed to this operator during
   /// execution, which acts as an escape hatch to this actor.
@@ -517,8 +526,12 @@ struct exec_node_state {
         if (should_quit) {
           self->quit();
         }
+        if (not idle_since) {
+          idle_since = std::chrono::steady_clock::now();
+        }
         return;
       }
+      idle_since.reset();
       produced_output = true;
       metrics.outbound_measurement.num_elements += output_size;
       metrics.outbound_measurement.num_batches += 1;
@@ -611,7 +624,12 @@ struct exec_node_state {
     if (run_scheduled) {
       return;
     }
-    if (not use_backoff) {
+    const auto remaining_until_idle
+      = idle_since
+          ? op->idle_after() - (std::chrono::steady_clock::now() - *idle_since)
+          : duration::zero();
+    const auto is_idle = remaining_until_idle <= duration::zero();
+    if (not use_backoff or not is_idle) {
       backoff = duration::zero();
     } else if (backoff == duration::zero()) {
       backoff = min_backoff;
@@ -698,11 +716,10 @@ struct exec_node_state {
     //   c. The operator is a command, i.e., has both a source and a sink.
     const auto has_demand
       = demand.has_value() or std::is_same_v<Output, std::monostate>;
-    const auto input_independent = not previous or op->input_independent();
     const auto should_continue
       = instance->it != instance->gen.end()                         // (1)
         and not waiting                                             // (2)
-        and ((has_demand and input_independent)                     // (3a)
+        and ((has_demand and not previous)                          // (3a)
              or not inbound_buffer.empty()                          // (3b)
              or detail::are_same_v<std::monostate, Input, Output>); // (3c)
     if (should_continue) {
@@ -777,12 +794,13 @@ auto exec_node(
   operator_ptr op, const node_actor& node,
   const receiver_actor<diagnostic>& diagnostic_handler,
   const metrics_receiver_actor& metrics_receiver, int index, bool has_terminal,
-  bool is_hidden) -> exec_node_actor::behavior_type {
+  bool is_hidden, uuid run_id) -> exec_node_actor::behavior_type {
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
-    const auto name = fmt::format("tenzir.exec-node.{}", op->name());
+    const auto name = fmt::format("tnz.{}", op->name());
     caf::detail::set_thread_name(name.c_str());
   }
   self->state.self = self;
+  self->state.run_id = run_id;
   auto read_config = [&](auto& key, std::string_view config, uint64_t min) {
     key = caf::get_or(content(self->system().config()),
                       fmt::format("tenzir.demand.{}", config), key);
@@ -915,7 +933,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
-                     bool has_terminal, bool is_hidden)
+                     bool has_terminal, bool is_hidden, uuid run_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
@@ -939,7 +957,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       auto result = self->spawn<SpawnOptions>(
         exec_node<input_type, output_type>, std::move(op), std::move(node),
         std::move(diagnostics_handler), std::move(metrics_receiver), index,
-        has_terminal, is_hidden);
+        has_terminal, is_hidden, run_id);
       return result;
     };
   };

@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "tenzir/config.hpp" // IWYU pragma: export
-#include "tenzir/tql/fwd.hpp"
+#include "tenzir/config.hpp"  // IWYU pragma: export
+#include "tenzir/tql/fwd.hpp" // IWYU pragma: export
 
 #include <arrow/util/config.h>
 #include <caf/config.hpp>
@@ -104,27 +104,15 @@ struct Offset;
 
 namespace caf {
 
-// TODO CAF 0.19. Check if this already implemented by CAF itself.
-template <class Slot>
-struct inspector_access<inbound_stream_slot<Slot>> {
-  template <class Inspector, class T>
-  static auto apply(Inspector& f, inbound_stream_slot<T>& x) {
-    auto val = x.value();
-    auto result = f.apply(val);
-    if constexpr (Inspector::is_loading)
-      x = inbound_stream_slot<T>{val};
-    return result;
-  }
-};
-
 template <>
 struct inspector_access<std::filesystem::path> {
   template <class Inspector>
-  static auto apply(Inspector& f, std::filesystem::path& x) {
+  static auto apply(Inspector& f, std::filesystem::path& x) -> bool {
     auto str = x.string();
     auto result = f.apply(str);
-    if constexpr (Inspector::is_loading)
+    if constexpr (Inspector::is_loading) {
       x = {str};
+    }
     return result;
   }
 };
@@ -175,7 +163,6 @@ class parser_interface;
 class passive_store;
 class pattern;
 class pipeline;
-class pipeline;
 class plugin_ptr;
 class plugin;
 class port;
@@ -198,13 +185,16 @@ class wah_bitmap;
 struct active_partition_state;
 struct attribute;
 struct catalog_lookup_result;
-struct component_map_entry;
 struct component_map;
-struct component_state_map;
+struct component_map_entry;
 struct component_state;
+struct component_state_map;
 struct concept_;
 struct conjunction;
 struct connect_request;
+struct context_parameter_map;
+struct context_save_result;
+struct context_update_args;
 struct curried_predicate;
 struct data_extractor;
 struct data_point;
@@ -213,7 +203,6 @@ struct disjunction;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
-struct identifier;
 struct index_state;
 struct invocation;
 struct legacy_address_type;
@@ -455,6 +444,9 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::blob))
   TENZIR_ADD_TYPE_ID((tenzir::chunk_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::conjunction))
+  TENZIR_ADD_TYPE_ID((tenzir::context_parameter_map))
+  TENZIR_ADD_TYPE_ID((tenzir::context_save_result))
+  TENZIR_ADD_TYPE_ID((tenzir::context_update_args))
   TENZIR_ADD_TYPE_ID((tenzir::curried_predicate))
   TENZIR_ADD_TYPE_ID((tenzir::data))
   TENZIR_ADD_TYPE_ID((tenzir::data_extractor))
@@ -547,12 +539,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
     (std::unordered_map<std::string, std::optional<std::string>>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_synopsis_pair>))
   TENZIR_ADD_TYPE_ID((std::vector<std::filesystem::path>))
-
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::chunk_ptr>))
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::chunk_ptr>))
-  TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID((caf::outbound_stream_slot<tenzir::table_slice>))
+  TENZIR_ADD_TYPE_ID((std::vector<tenzir::expression>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_types)
 

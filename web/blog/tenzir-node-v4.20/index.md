@@ -75,10 +75,6 @@ hashes](/blog/unifying-network-and-endpoint-data-with-community-ids), indexing
 into lists, and accessing secrets and environment variables (`secret(<string>)`,
 `env(<string>)`), among others.
 
-We're currently in the process of porting all remaining functionality from TQL1
-to TQL2 and will soon introduce a comprehensive reference for TQL2's operators
-and functions.
-
 ## Other Changes
 
 This release also includes numerous small bug fixes and additional

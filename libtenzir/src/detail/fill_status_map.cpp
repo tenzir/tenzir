@@ -10,15 +10,9 @@
 
 #include "tenzir/config.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/detail/algorithms.hpp"
-#include "tenzir/status.hpp"
 
 #include <caf/config_value.hpp>
-#include <caf/downstream_manager.hpp>
-#include <caf/inbound_path.hpp>
-#include <caf/outbound_path.hpp>
 #include <caf/scheduled_actor.hpp>
-#include <caf/stream_manager.hpp>
 
 #include <sstream>
 #include <thread>
@@ -59,47 +53,6 @@ pid_t pthread_id() {
 
 namespace tenzir::detail {
 
-record fill_status_map(caf::stream_manager& mgr) {
-  auto xs = record{};
-  // Manager status.
-  xs["idle"] = mgr.idle();
-  // Downstream status.
-  auto& out = mgr.out();
-  auto downstream = record{};
-  downstream["buffered"] = uint64_t{out.buffered()};
-  downstream["paths"] = uint64_t{out.num_paths()};
-  downstream["stalled"] = out.stalled();
-  downstream["clean"] = out.clean();
-  out.for_each_path([&](auto& opath) {
-    auto name = "slot-" + std::to_string(opath.slots.sender);
-    auto slot = record{};
-    slot["pending"] = opath.pending();
-    slot["clean"] = opath.clean();
-    slot["closing"] = opath.closing;
-    slot["next-batch-id"] = int64_t{opath.next_batch_id};
-    slot["open-credit"] = int64_t{opath.open_credit};
-    slot["desired-batch-size"] = int64_t{opath.desired_batch_size};
-    downstream[name] = std::move(slot);
-  });
-  xs["downstream"] = std::move(downstream);
-  // Upstream status.
-  auto upstream = record{};
-  auto& ipaths = mgr.inbound_paths();
-  if (!ipaths.empty())
-    xs["inbound-paths-idle"] = mgr.inbound_paths_idle();
-  for (auto ipath : ipaths) {
-    auto name = "slot-" + std::to_string(ipath->slots.receiver);
-    auto slot = record{};
-    slot["priority"] = to_string(ipath->prio);
-    slot["assigned-credit"] = int64_t{ipath->assigned_credit};
-    slot["last-acked-batch-id"] = int64_t{ipath->last_acked_batch_id};
-    slot["congested"] = mgr.congested(*ipath);
-    upstream[name] = std::move(slot);
-  }
-  xs["upstream"] = std::move(upstream);
-  return xs;
-}
-
 void fill_status_map(record& xs, caf::scheduled_actor* self) {
   xs["actor-id"] = uint64_t{self->id()};
   xs["thread-id"] = thread_id();
@@ -108,13 +61,6 @@ void fill_status_map(record& xs, caf::scheduled_actor* self) {
 #endif // TENZIR_LINUX
   xs["name"] = self->name();
   xs["mailbox-size"] = uint64_t{self->mailbox().size()};
-  size_t counter = 0;
-  std::string name;
-  for (auto& mgr : unique_values(self->stream_managers())) {
-    name = "stream-";
-    name += std::to_string(counter++);
-    xs[name] = fill_status_map(*mgr);
-  }
 }
 
 } // namespace tenzir::detail

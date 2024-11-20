@@ -14,12 +14,14 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/range.hpp"
 #include "tenzir/detail/stack_vector.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/operator.hpp"
 #include "tenzir/time.hpp"
+#include "tenzir/variant.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/detail/apply_args.hpp>
@@ -44,7 +46,7 @@ namespace tenzir {
 /// A qualifier in the form of a key and optional value.
 struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
   legacy_attribute(std::string key = {});
-  legacy_attribute(std::string key, caf::optional<std::string> value);
+  legacy_attribute(std::string key, std::optional<std::string> value);
 
   friend bool operator==(const legacy_attribute& x, const legacy_attribute& y);
 
@@ -56,7 +58,7 @@ struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
   }
 
   std::string key;
-  caf::optional<std::string> value;
+  std::optional<std::string> value;
 };
 
 // -- type hierarchy ----------------------------------------------------------
@@ -707,9 +709,26 @@ remove_field(const legacy_record_type& r, std::vector<std::string_view> path);
 std::optional<legacy_record_type>
 remove_field(const legacy_record_type& r, offset o);
 
-// -- helpers ----------------------------------------------------------------
+template <>
+class variant_traits<legacy_type> {
+public:
+  static constexpr auto count
+    = caf::detail::tl_size<legacy_concrete_types>::value;
+
+  static auto index(const legacy_type& x) -> size_t {
+    return detail::narrow<size_t>(x->index());
+  }
+
+  template <size_t I>
+  static auto get(const legacy_type& x) -> decltype(auto) {
+    return static_cast<const caf::detail::tl_at_t<legacy_concrete_types, I>&>(
+      *x);
+  }
+};
 
 } // namespace tenzir
+
+// -- helpers ----------------------------------------------------------------
 
 namespace caf {
 
@@ -801,11 +820,9 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> bool {
     if constexpr (!Inspector::is_loading) {
       if (x.type_tag != invalid_type_id) {
-        return caf::visit(
-          [&f](auto& v) -> bool {
+        return match(x.x, [&f](auto& v) -> bool {
             return f.apply(v);
-          },
-          x.x);
+          });
       }
       return true;
     } else {

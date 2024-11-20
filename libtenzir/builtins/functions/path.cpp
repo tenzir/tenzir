@@ -61,7 +61,7 @@ public:
             return series::null(string_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };
@@ -116,7 +116,7 @@ public:
             return series::null(string_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };

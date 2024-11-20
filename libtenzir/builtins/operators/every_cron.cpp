@@ -190,10 +190,9 @@ public:
     return pipe_.operators().empty() ? false : pipe_.operators()[0]->internal();
   }
 
-  auto input_independent() const -> bool override {
-    return pipe_.operators().empty()
-             ? false
-             : pipe_.operators()[0]->input_independent();
+  auto idle_after() const -> duration override {
+    return pipe_.operators().empty() ? duration::zero()
+                                     : pipe_.operators()[0]->idle_after();
   }
 
   auto infer_type_impl(operator_type input) const
@@ -275,7 +274,7 @@ public:
 
   static auto parse(parser_interface& p) -> every_scheduler {
     auto interval_data = p.parse_data();
-    const auto* interval = caf::get_if<duration>(&interval_data.inner);
+    const auto* interval = try_as<duration>(&interval_data.inner);
     if (not interval) {
       diagnostic::error("interval must be a duration")
         .primary(interval_data.source)

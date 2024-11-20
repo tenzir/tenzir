@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/inspect_enum_str.hpp"
+#include "tenzir/error.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/try.hpp"
 
@@ -370,6 +371,25 @@ private:
   std::vector<diagnostic> result;
 };
 
+/// @brief a diagnostic handler that enriches a diagnostic message
+// before emitting it to another handler
+class transforming_diagnostic_handler : public diagnostic_handler {
+public:
+  using transform_function = std::function<diagnostic(diagnostic)>;
+  transforming_diagnostic_handler(diagnostic_handler& dh,
+                                  transform_function transform)
+    : dh_{dh}, transform_{std::move(transform)} {
+  }
+
+  void emit(diagnostic d) override {
+    dh_.emit(transform_(std::move(d)));
+  }
+
+private:
+  diagnostic_handler& dh_;
+  transform_function transform_;
+};
+
 class diagnostic_handler_ref final : public diagnostic_handler {
 public:
   explicit diagnostic_handler_ref(diagnostic_handler& inner) : inner_{inner} {
@@ -403,6 +423,10 @@ public:
     return {};
   }
 
+  friend auto inspect(auto& f, failure& x) -> bool {
+    return f.object(x).fields();
+  }
+
 private:
   failure() = default;
 };
@@ -413,10 +437,13 @@ class [[nodiscard]] failure_or
   : public variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
                    failure> {
 public:
+  using super
+    = variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
+              failure>;
+
   using reference_type = std::add_lvalue_reference_t<T>;
 
-  using variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
-                failure>::variant;
+  using super::super;
 
   void ignore() const {
     // no-op
@@ -453,8 +480,19 @@ public:
     }
   }
 
+  auto to_expected() && -> caf::expected<T> {
+    if (is_success()) {
+      return std::move(*this).unwrap();
+    }
+    return ec::diagnostic;
+  }
+
   auto operator->()
     -> T* requires(not std::same_as<T, void>) { return &**this; }
+
+  friend auto inspect(auto& f, failure_or& x) -> bool {
+    return f.apply(static_cast<super&>(x));
+  }
 };
 
 template <class T>

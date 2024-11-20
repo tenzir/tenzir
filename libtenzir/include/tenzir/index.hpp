@@ -140,12 +140,6 @@ struct index_counters {
 
 /// The state of the index actor.
 struct index_state {
-  // -- type aliases -----------------------------------------------------------
-
-  using index_stream_stage_ptr = caf::stream_stage_ptr<
-    table_slice, caf::broadcast_downstream_manager<table_slice, tenzir::type,
-                                                   i_partition_selector>>;
-
   // -- constructor ------------------------------------------------------------
 
   explicit index_state(index_actor::pointer self);
@@ -189,13 +183,9 @@ struct index_state {
 
   void flush_to_disk();
 
-  // -- flush handling ---------------------------------------------------------
+  // -- inbound path -----------------------------------------------------------
 
-  /// Adds a new flush listener.
-  void add_flush_listener(flush_listener_actor listener);
-
-  /// Sends a notification to all listeners and clears the listeners list.
-  void notify_flush_listeners();
+  void handle_slice(table_slice slice);
 
   // -- partition handling -----------------------------------------------------
 
@@ -218,6 +208,8 @@ struct index_state {
   void decommission_active_partition(
     const type& schema, std::function<void(const caf::error&)> completion);
 
+  auto flush() -> caf::typed_response_promise<void>;
+
   /// Adds a new partition creation listener.
   void
   add_partition_creation_listener(partition_creation_listener_actor listener);
@@ -236,9 +228,6 @@ struct index_state {
 
   /// Pointer to the parent actor.
   index_actor::pointer self;
-
-  /// The streaming stage.
-  index_stream_stage_ptr stage;
 
   /// One active (read/write) partition per schema.
   std::unordered_map<type, active_partition_info> active_partitions = {};
@@ -317,6 +306,8 @@ struct index_state {
   /// List of actors that want to be notified about new partitions.
   std::vector<partition_creation_listener_actor> partition_creation_listeners
     = {};
+
+  bool shutting_down = false;
 
   /// Plugin responsible for spawning new partition-local stores.
   const tenzir::store_actor_plugin* store_actor_plugin = {};

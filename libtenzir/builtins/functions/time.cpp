@@ -16,6 +16,10 @@
 
 namespace tenzir::plugins::time_ {
 
+// TODO: gcc emits a bogus -Wunused-function warning for this macro when used
+// inside an anonymous namespace.
+TENZIR_ENUM(ymd_subtype, year, month, day);
+
 namespace {
 
 class time_ final : public function_plugin {
@@ -67,12 +71,12 @@ public:
             return series::null(time_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };
 
-class since_epoch final : public method_plugin {
+class since_epoch final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "since_epoch";
@@ -90,7 +94,7 @@ public:
           return series::null(duration_type{}, arg.length());
         },
         [&](const arrow::TimestampArray& arg) {
-          auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+          auto& ty = as<arrow::TimestampType>(*arg.type());
           TENZIR_ASSERT(ty.timezone().empty());
           auto b
             = duration_type::make_arrow_builder(arrow::default_memory_pool());
@@ -114,12 +118,151 @@ public:
           return series::null(duration_type{}, arg.length());
         },
       };
-      return caf::visit(f, *arg.array);
+      return match(*arg.array, f);
     });
   }
 };
 
-class as_secs final : public method_plugin {
+class from_epoch_ms final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "from_epoch_ms";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(
+      argument_parser2::function(name()).add(expr, "<number>").parse(inv, ctx));
+    return function_use::make([expr = std::move(expr),
+                               this](evaluator eval, session ctx) -> series {
+      auto arg = eval(expr);
+      auto f = detail::overload{
+        [](const arrow::NullArray& arg) {
+          return series::null(time_type{}, arg.length());
+        },
+        [&](const arrow::Int64Array& arg) {
+          auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
+          check(b->Reserve(arg.length()));
+          for (auto i = 0; i < arg.length(); ++i) {
+            if (arg.IsNull(i)) {
+              check(b->AppendNull());
+              continue;
+            }
+            check(append_builder(
+              time_type{}, *b,
+              time{duration{value_at(int64_type{}, arg, i) * 1'000'000}}));
+          }
+          return series{time_type{}, finish(*b)};
+        },
+        [&](const arrow::UInt64Array& arg) {
+          auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
+          check(b->Reserve(arg.length()));
+          for (auto i = 0; i < arg.length(); ++i) {
+            if (arg.IsNull(i)) {
+              check(b->AppendNull());
+              continue;
+            }
+            check(append_builder(
+              time_type{}, *b,
+              time{duration{value_at(uint64_type{}, arg, i) * 1'000'000}}));
+          }
+          return series{time_type{}, finish(*b)};
+        },
+        [&](const arrow::DoubleArray& arg) {
+          auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
+          check(b->Reserve(arg.length()));
+          for (auto i = 0; i < arg.length(); ++i) {
+            if (arg.IsNull(i)) {
+              check(b->AppendNull());
+              continue;
+            }
+            check(
+              append_builder(time_type{}, *b,
+                             time{duration{int64_t(
+                               value_at(double_type{}, arg, i) * 1'000'000)}}));
+          }
+          return series{time_type{}, finish(*b)};
+        },
+        [&](const auto&) {
+          diagnostic::warning("`{}` expected number, but got `{}`", name(),
+                              arg.type.kind())
+            .primary(expr)
+            .emit(ctx);
+          return series::null(duration_type{}, arg.length());
+        },
+      };
+      return match(*arg.array, f);
+    });
+  }
+};
+
+class year_month_day final : public function_plugin {
+public:
+  explicit year_month_day(ymd_subtype field) : ymd_subtype_(field) {
+  }
+
+  auto name() const -> std::string override {
+    return std::string{to_string(ymd_subtype_)};
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name()).add(expr, "<time>").parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
+        auto arg = eval(expr);
+        auto f = detail::overload{
+          [](const arrow::NullArray& arg) {
+            return series::null(int64_type{}, arg.length());
+          },
+          [&](const arrow::TimestampArray& arg) {
+            auto& ty = as<arrow::TimestampType>(*arg.type());
+            TENZIR_ASSERT(ty.timezone().empty());
+            auto b = arrow::Int64Builder{};
+            check(b.Reserve(arg.length()));
+            for (auto i = int64_t{0}; i < arg.length(); ++i) {
+              if (arg.IsNull(i)) {
+                check(b.AppendNull());
+                continue;
+              }
+              auto&& value = value_at(time_type{}, arg, i);
+              const std::chrono::year_month_day ymd{
+                std::chrono::floor<std::chrono::days>(value)};
+              auto result = int64_t{0};
+              switch (ymd_subtype_) {
+                case ymd_subtype::year:
+                  result = static_cast<int>(ymd.year());
+                  break;
+                case ymd_subtype::month:
+                  result = static_cast<unsigned>(ymd.month());
+                  break;
+                case ymd_subtype::day:
+                  result = static_cast<unsigned>(ymd.day());
+                  break;
+              }
+              check(append_builder(int64_type{}, b, result));
+            }
+            return series{int64_type{}, finish(b)};
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+                                arg.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            return series::null(int64_type{}, arg.length());
+          },
+        };
+        return match(*arg.array, f);
+      });
+  }
+
+private:
+  ymd_subtype ymd_subtype_;
+};
+
+class as_secs final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "as_secs";
@@ -139,7 +282,7 @@ public:
             return series::null(double_type{}, arg.length());
           },
           [&](const arrow::DurationArray& arg) {
-            auto& ty = caf::get<arrow::DurationType>(*arg.type());
+            auto& ty = as<arrow::DurationType>(*arg.type());
             TENZIR_ASSERT(ty.unit() == arrow::TimeUnit::NANO);
             auto factor = 1000 * 1000 * 1000;
             auto b = arrow::DoubleBuilder{};
@@ -164,7 +307,7 @@ public:
             return series::null(double_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };
@@ -300,9 +443,15 @@ public:
 
 } // namespace tenzir::plugins::time_
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::time_)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::since_epoch)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::as_secs)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::now)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::strftime)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::strptime)
+using namespace tenzir::plugins::time_;
+
+TENZIR_REGISTER_PLUGIN(time_)
+TENZIR_REGISTER_PLUGIN(since_epoch)
+TENZIR_REGISTER_PLUGIN(from_epoch_ms)
+TENZIR_REGISTER_PLUGIN(as_secs)
+TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::year});
+TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::month});
+TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::day});
+TENZIR_REGISTER_PLUGIN(now)
+TENZIR_REGISTER_PLUGIN(strftime)
+TENZIR_REGISTER_PLUGIN(strptime)

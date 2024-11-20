@@ -14,21 +14,21 @@ namespace tenzir::detail {
 
 // TODO: Generalize this to accept different input types and
 // derive the appropriate result type.
-template <concepts::integral T, concepts::integral Result = T>
+template <std::integral T, std::integral Result = T>
 Result saturating_add(T lhs, T rhs) {
   Result result;
   __builtin_add_overflow(lhs, rhs, &result);
   return result;
 }
 
-template <concepts::integral T, concepts::integral Result = T>
+template <std::integral T, std::integral Result = T>
 Result saturating_sub(T lhs, T rhs) {
   Result result;
   __builtin_sub_overflow(lhs, rhs, &result);
   return result;
 }
 
-template <concepts::integral T, concepts::integral Result = T>
+template <std::integral T, std::integral Result = T>
 Result saturating_mul(T lhs, T rhs) {
   Result result;
   __builtin_mul_overflow(lhs, rhs, &result);

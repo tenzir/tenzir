@@ -5,4 +5,4 @@ error: expected additional positional argument `<string>`
   | ^^^^^^ 
   |
   = usage: legacy <string>
-  = docs: https://docs.tenzir.com/operators/legacy
+  = docs: https://docs.tenzir.com/tql2/operators/legacy

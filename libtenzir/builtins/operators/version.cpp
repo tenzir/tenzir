@@ -35,7 +35,39 @@ public:
   version_operator() = default;
 
   auto operator()(operator_control_plane&) const -> generator<table_slice> {
-    auto builder = series_builder{};
+    auto builder = series_builder{type{
+      "tenzir.version",
+      record_type{
+        {"version", string_type{}},
+        {"tag", string_type{}},
+        {"major", uint64_type{}},
+        {"minor", uint64_type{}},
+        {"patch", uint64_type{}},
+        {"features", list_type{string_type{}}},
+        {
+          "build",
+          record_type{
+            {"type", string_type{}},
+            {"tree_hash", string_type{}},
+            {"assertions", bool_type{}},
+            {
+              "sanitizers",
+              record_type{
+                {"address", bool_type{}},
+                {"undefined_behavior", bool_type{}},
+              },
+            },
+          },
+        },
+        {
+          "dependencies",
+          list_type{record_type{
+            {"name", string_type{}},
+            {"version", string_type{}},
+          }},
+        },
+      },
+    }};
     auto event = builder.record();
     event.field("version", tenzir::version::version);
     event.field("tag", tenzir::version::build_metadata);

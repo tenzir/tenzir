@@ -170,7 +170,7 @@ auto catalog_state::lookup(expression expr) const
 auto catalog_state::lookup_impl(const expression& expr,
                                 const type& schema) const
   -> catalog_lookup_result::candidate_info {
-  TENZIR_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
+  TENZIR_ASSERT(!is<caf::none_t>(expr));
   auto synopsis_map_per_type_it = synopses_per_type.find(schema);
   TENZIR_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
   const auto& partition_synopses = synopsis_map_per_type_it->second;
@@ -239,8 +239,8 @@ auto catalog_state::lookup_impl(const expression& expr,
       // uses a qualified_record_field to determine whether the synopsis
       // should be queried.
       auto search = [&](auto match) {
-        TENZIR_ASSERT(caf::holds_alternative<data>(x.rhs));
-        const auto& rhs = caf::get<data>(x.rhs);
+        TENZIR_ASSERT(is<data>(x.rhs));
+        const auto& rhs = as<data>(x.rhs);
         catalog_lookup_result::candidate_info result;
         // dont iterate through all synopses, rewrite lookup_impl to use a
         // singular type all synopses loops -> relevant anymore? Use type as
@@ -254,7 +254,7 @@ auto catalog_state::lookup_impl(const expression& expr,
               auto prune = [&]<concrete_type T>(const T& x) {
                 return type{x};
               };
-              auto cleaned_type = caf::visit(prune, field.type());
+              auto cleaned_type = tenzir::match(field.type(), prune);
               // We rely on having a field -> nullptr mapping here for the
               // fields that don't have their own synopsis.
               if (syn) {
@@ -342,7 +342,7 @@ auto catalog_state::lookup_impl(const expression& expr,
                   part_syn->min_import_time,
                   part_syn->max_import_time,
                 };
-                auto add = ts.lookup(x.op, caf::get<tenzir::time>(d));
+                auto add = ts.lookup(x.op, as<tenzir::time>(d));
                 if (!add || *add) {
                   result.partition_infos.emplace_back(part_id, *part_syn);
                 }
@@ -428,7 +428,7 @@ auto catalog_state::lookup_impl(const expression& expr,
           return all_partitions();
         },
       };
-      return caf::visit(extract_expr, x.lhs, x.rhs);
+      return match(std::tie(x.lhs, x.rhs), extract_expr);
     },
     [&](caf::none_t) -> catalog_lookup_result::candidate_info {
       TENZIR_ERROR("{} received an empty expression",
@@ -437,7 +437,7 @@ auto catalog_state::lookup_impl(const expression& expr,
       return all_partitions();
     },
   };
-  auto result = caf::visit(f, expr);
+  auto result = match(expr, f);
   result.exp = expr;
   return result;
 }
@@ -454,9 +454,9 @@ auto catalog_state::memusage() const -> size_t {
 
 void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
   for (auto const& [field, synopsis] : ps.field_synopses_)
-    if (synopsis != nullptr
-        && caf::holds_alternative<string_type>(field.type()))
+    if (synopsis != nullptr && is<string_type>(field.type())) {
       unprunable_fields.insert(std::string{field.name()});
+    }
   // TODO/BUG: We also need to prevent pruning for enum types,
   // which also use string literals for lookup. We must be even
   // more strict here than with string fields, because incorrectly
@@ -473,7 +473,7 @@ void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
   -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag))
-    caf::detail::set_thread_name("tenzir.catalog");
+    caf::detail::set_thread_name("tnz.catalog");
   self->state.self = self;
   self->state.taxonomies.concepts = modules::concepts();
   return {

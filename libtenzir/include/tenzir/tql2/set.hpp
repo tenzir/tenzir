@@ -14,10 +14,26 @@
 
 namespace tenzir {
 
+enum class assign_position {
+  front,
+  back,
+};
+
+auto assign(const ast::selector& left, series right, const table_slice& input,
+            diagnostic_handler& dh,
+            assign_position position = assign_position::back) -> table_slice;
+
+auto assign(const ast::simple_selector& left, series right,
+            const table_slice& input, diagnostic_handler& dh,
+            assign_position position = assign_position::back) -> table_slice;
+
+auto assign(const ast::meta& left, series right, const table_slice& input,
+            diagnostic_handler& diag) -> table_slice;
+
 class set_operator final : public crtp_operator<set_operator> {
 public:
   set_operator() = default;
-  ~set_operator() = default;
+  ~set_operator() override = default;
   set_operator(const set_operator&) = delete;
   set_operator(set_operator&&) = delete;
   auto operator=(const set_operator&) -> set_operator& = delete;

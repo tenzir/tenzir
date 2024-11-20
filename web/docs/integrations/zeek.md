@@ -19,11 +19,9 @@ Zeek integration in much more detail.
 Zeek logs come in [three forms](/blog/mobilizing-zeek-logs) in practice, all of
 which Tenzir can parse natively:
 
-1. [`zeek-tsv`](../formats/zeek-tsv.md): Tab-Separated Values (TSV) with a
-   custom header.
-2. [`zeek-json`](../formats/zeek-tsv.md): One NDJSON file for all log types
-   (aka. *JSON Streaming*) including an extra `_path` and `_write_ts` field.
-3. [`json`](../formats/json.md): One NDJSON file per log type.
+1. Tab-Separated Values (TSV) with a custom header.
+2. One NDJSON file for all log types combined (aka. *JSON Streaming*)
+3. One NDJSON file per log type.
 
 ## Ingest logs into a node
 
@@ -99,15 +97,15 @@ terminating="$5"
 writer="$6"
 
 if [ "$writer" = "ascii" ]; then
-  format="zeek-tsv"
+  read="read_zeek_tsv"
 elif [ "$writer" = "json" ]; then
-  format="json --schema zeek.$base_name"
+  read="read_zeek_json"
 else
   echo "unsupported Zeek writer: $writer"
   exit 1
 fi
 
-pipeline="from file \"$file_name\" read $format | import"
+pipeline="load_file \"$file_name\" | $read | import"
 
 tenzir "$pipeline"
 ```
@@ -132,29 +130,30 @@ tenzir:
              JSONStreaming::disable_default_logs=T
              JSONStreaming::enable_log_rotation=F
              json-streaming-logs"
-      | read zeek-json
+      | read_zeek_json
 ```
 
 This allows you run Zeek on a packet trace as follows:
 
 ```bash
-tenzir 'load /path/to/trace.pcap | zeek'
+tenzir 'load_file "/path/to/trace.pcap" | zeek'
 ```
 
-You can also perform more elaborate packet filtering by going through the
-[`pcap`](../formats/pcap.md) parser:
+You can also perform more elaborate packet filtering after light-weight
+[decapsulation](../tql2/functions/decapsulate.md):
 
 ```bash
-tenzir 'from /path/to/trace.pcap
-       | decapsulate
-       | where 10.0.0.0/8 || community == "1:YXWfTYEyYLKVv5Ge4WqijUnKTrM="
-       | write pcap
-       | zeek'
+tenzir 'load_file "/path/to/trace.pcap"
+       read_pcap
+       this = decapsulate(this)
+       where ip.src in 10.0.0.0/8 || community == "1:YXWfTYEyYLKVv5Ge4WqijUnKTrM="
+       write_pcap
+       zeek'
 ```
 
 Read the [in-depth blog
 post](/blog/shell-yeah-supercharging-zeek-and-suricata-with-tenzir) for more
-details about the inner workings of the [`shell`](../operators/shell.md)
+details about the inner workings of the [`shell`](../tql2/operators/shell.md)
 operator.
 
 ## Process logs with a pipeline on the command line
@@ -167,42 +166,31 @@ zeek-cut id.orig_h id.resp_h < conn.log
 ```
 
 The list of arguments to `zeek-cut` are the column names of the log. The
-[`select`](../operators/select.md) operator performs the equivalent in Tenzir
-after we parse the logs as [`zeek-tsv`](../formats/zeek-tsv.md):
+[`select`](../tql2/operators/select.md) operator performs the equivalent in
+Tenzir after we parse the logs as Zeek TSV:
 
 ```bash
-tenzir 'read zeek-tsv | select zeek-cut id.orig_h id.resp_h' < conn.log
+tenzir 'read_zeek_tsv | select id.orig_h id.resp_h' < conn.log
 ```
 
 Since pipelines are *multi-schema* and the Zeek TSV parser is aware of log
 boundaries, you can also concatenate logs of various types:
 
 ```bash
-cat *.log | tenzir 'read zeek-tsv | select zeek-cut id.orig_h id.resp_h'
+cat *.log | tenzir 'read_zeek_tsv | select id.orig_h id.resp_h'
 ```
 
 ## Generate Zeek TSV from arbitrary data
 
-The [`zeek-tsv`](../formats/zeek-tsv.md) is not only a parser, but also a
-printer. This means you can render any data as Zeek TSV log.
+You can render any data as Zeek TSV log using
+[`write_zeek_tsv`](../tql2/operators/write_zeek_tsv.md):
 
-For example, print the Tenzir version as Zeek TSV log:
+For example, this is how you create a filtered version of a Zeek conn.log:
 
-```bash
-tenzir 'show version | write zeek-tsv'
-```
-
-This yields the following output:
-
-```
-#separator \x09
-#set_separator	,
-#empty_field	(empty)
-#unset_field	-
-#path	tenzir.version
-#open	2023-12-16-08-47-12.372511
-#fields	version	major	minor	patch	tweak
-#types	string	count	count	count	count
-v4.6.4-155-g0b75e93026	4	6	4	155
-#close	2023-12-16-08-47-12.372736
+```tql
+subscribe "zeek"
+where @name == "zeek.conn"
+where duration > 2s and id.orig_p != 80
+write_zeek_tsv
+save_file "filtered_conn.log"
 ```

@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -158,8 +159,8 @@ public:
     co_yield builder.finish_assert_one_slice();
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto
+  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
     try {
       const auto path = args_.path ? std::filesystem::path{*args_.path}
                                    : std::filesystem::current_path();
@@ -201,10 +202,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)order;
-    (void)filter;
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -216,10 +215,23 @@ private:
   files_args args_ = {};
 };
 
-class plugin final : public virtual operator_plugin<files_operator> {
+class plugin final : public virtual operator_plugin<files_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = files_args{};
+    TRY(argument_parser2::operator_("files")
+          .add(args.path, "<path>")
+          .add("recurse", args.recurse_directories)
+          .add("follow_symlinks", args.follow_directory_symlink)
+          .add("skip_permission_denied", args.skip_permission_denied)
+          .parse(inv, ctx));
+    return std::make_unique<files_operator>(std::move(args));
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

@@ -96,18 +96,16 @@ TEST(subnet type serde roundtrip) {
 }
 
 TEST(arrow::DataType sum type) {
-  CHECK(caf::visit(is_type<arrow::Int64Type>(), *arrow::int64()));
-  CHECK(caf::visit(is_type<ip_type::arrow_type>(),
-                   static_cast<const arrow::DataType&>(ip_type::arrow_type())));
-  CHECK(caf::visit(is_type<arrow::Int64Type, arrow::UInt64Type>(),
-                   *arrow::int64(), *arrow::uint64()));
-  CHECK_EQUAL(caf::get_if<arrow::StringType>(arrow::utf8().get()),
+  CHECK(match(*arrow::int64(), is_type<arrow::Int64Type>()));
+  CHECK(match(static_cast<const arrow::DataType&>(ip_type::arrow_type()), is_type<ip_type::arrow_type>()));
+  CHECK(match(std::tie(*arrow::int64(), *arrow::uint64()), is_type<arrow::Int64Type, arrow::UInt64Type>()));
+  CHECK_EQUAL(try_as<arrow::StringType>(arrow::utf8().get()),
               arrow::utf8().get());
   auto et = static_pointer_cast<arrow::DataType>(
     std::make_shared<enumeration_type::arrow_type>(
       enumeration_type{{"A"}, {"B"}, {"C"}}));
-  CHECK(caf::get_if<enumeration_type::arrow_type>(et.get()));
-  CHECK(!caf::get_if<subnet_type::arrow_type>(et.get()));
+  CHECK(try_as<enumeration_type::arrow_type>(et.get()));
+  CHECK(!try_as<subnet_type::arrow_type>(et.get()));
 }
 
 TEST(arrow::Array sum type) {
@@ -116,13 +114,13 @@ TEST(arrow::Array sum type) {
   auto uint_arr = make_arrow_array<arrow::UInt64Builder>({7, 8});
   auto int_arr = make_arrow_array<arrow::Int64Builder>({3, 2, 1});
   auto addr_arr = make_ip_array();
-  CHECK(caf::get_if<arrow::StringArray>(&*str_arr));
-  CHECK(!caf::get_if<arrow::UInt64Array>(&*str_arr));
-  CHECK(!caf::get_if<arrow::StringArray>(&*uint_arr));
-  CHECK(caf::get_if<arrow::UInt64Array>(&*uint_arr));
-  CHECK(!caf::get_if<ip_type::array_type>(&*uint_arr));
-  CHECK(caf::get_if<ip_type::array_type>(&*addr_arr));
-  caf::visit(is_type<arrow::StringArray>(), *str_arr);
+  CHECK(try_as<arrow::StringArray>(&*str_arr));
+  CHECK(!try_as<arrow::UInt64Array>(&*str_arr));
+  CHECK(!try_as<arrow::StringArray>(&*uint_arr));
+  CHECK(try_as<arrow::UInt64Array>(&*uint_arr));
+  CHECK(!try_as<ip_type::array_type>(&*uint_arr));
+  CHECK(try_as<ip_type::array_type>(&*addr_arr));
+  match(*str_arr, is_type<arrow::StringArray>());
   auto f = detail::overload{
     [](const ip_type::array_type&) {
       return 99;
@@ -134,9 +132,9 @@ TEST(arrow::Array sum type) {
       return -1;
     },
   };
-  CHECK_EQUAL(caf::visit(f, *str_arr), 101);
-  CHECK_EQUAL(caf::visit(f, *addr_arr), 99);
-  CHECK_EQUAL(caf::visit(f, *int_arr), -1);
+  CHECK_EQUAL(match(*str_arr, f), 101);
+  CHECK_EQUAL(match(*addr_arr, f), 99);
+  CHECK_EQUAL(match(*int_arr, f), -1);
 }
 
 } // namespace tenzir

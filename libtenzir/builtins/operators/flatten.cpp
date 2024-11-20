@@ -14,6 +14,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -31,15 +32,15 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
     auto seen = std::unordered_set<type>{};
     for (auto&& slice : input) {
       auto result = tenzir::flatten(slice, separator_);
       // We only warn once per schema that we had to rename a set of fields.
       if (seen.insert(slice.schema()).second
           && not result.renamed_fields.empty()) {
-        diagnostic::warning("renaemd fields with conflicting names after "
+        diagnostic::warning("renamed fields with conflicting names after "
                             "flattening: {}",
                             fmt::join(result.renamed_fields, ", "))
           .note("from `{}`", name())
@@ -53,9 +54,8 @@ public:
     return "flatten";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)filter;
+  auto optimize(expression const&,
+                event_order order) const -> optimize_result override {
     return optimize_result::order_invariant(*this, order);
   }
 
@@ -67,10 +67,42 @@ private:
   std::string separator_ = default_flatten_separator;
 };
 
-class plugin final : public virtual operator_plugin<flatten_operator> {
+class plugin final : public virtual operator_plugin<flatten_operator>,
+                     public virtual function_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto sep = std::optional<std::string>{default_flatten_separator};
+    TRY(argument_parser2::function("flatten")
+          .add(expr, "<expr>")
+          .add("sep", sep)
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr),
+       sep = std::move(sep.value())](evaluator eval, session ctx) -> series {
+        auto s = eval(expr);
+        auto ptr = std::dynamic_pointer_cast<arrow::StructArray>(s.array);
+        if (not ptr) {
+          diagnostic::warning("expected `record`, got `{}`", s.type.kind())
+            .primary(expr)
+            .emit(ctx);
+          return series::null(null_type{}, s.length());
+        }
+        auto flattened = tenzir::flatten(s.type, ptr, sep);
+        if (not flattened.renamed_fields.empty()) {
+          diagnostic::warning("renamed fields with conflicting names after "
+                              "flattening: {}",
+                              fmt::join(flattened.renamed_fields, ", "))
+            .primary(expr)
+            .emit(ctx);
+        }
+        return {flattened.schema, flattened.array};
+      });
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

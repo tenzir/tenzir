@@ -23,6 +23,7 @@
 #include "tenzir/detail/logger.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/optional.hpp"
 
 #include <boost/core/detail/string_view.hpp>
 #include <caf/deep_to_string.hpp>
@@ -197,40 +198,6 @@ struct formatter<caf::intrusive_cow_ptr<T>> {
 };
 
 template <class T>
-struct formatter<caf::optional<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::optional<T>& value, FormatContext& ctx) const {
-    if (!value)
-      return fmt::format_to(ctx.out(), "none");
-    return fmt::format_to(ctx.out(), "{}", *value);
-  }
-};
-
-#if FMT_VERSION / 10000 < 10
-
-template <class T>
-struct formatter<std::optional<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const std::optional<T>& value, FormatContext& ctx) const {
-    if (!value)
-      return fmt::format_to(ctx.out(), "nullopt");
-    return fmt::format_to(ctx.out(), "{}", *value);
-  }
-};
-
-#endif
-
-template <class T>
 struct formatter<caf::expected<T>> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) {
@@ -242,34 +209,6 @@ struct formatter<caf::expected<T>> {
     if (!value)
       return fmt::format_to(ctx.out(), "{}", value.error());
     return fmt::format_to(ctx.out(), "{}", *value);
-  }
-};
-
-template <class T>
-struct formatter<caf::inbound_stream_slot<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto
-  format(const caf::inbound_stream_slot<T>& value, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "in:{}", value.value());
-  }
-};
-
-template <class T>
-struct formatter<caf::outbound_stream_slot<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto
-  format(const caf::outbound_stream_slot<T>& value, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "out:{}", value.value());
   }
 };
 

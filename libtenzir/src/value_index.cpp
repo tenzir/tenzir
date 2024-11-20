@@ -34,7 +34,7 @@ caf::expected<void> value_index::append(data_view x, id pos) {
   if (pos < off)
     // Can only append at the end
     return caf::make_error(ec::unspecified, pos, '<', off);
-  if (caf::holds_alternative<caf::none_t>(x)) {
+  if (is<caf::none_t>(x)) {
     none_.append_bits(false, pos - none_.size());
     none_.append_bit(true);
     return {};
@@ -50,7 +50,7 @@ caf::expected<void> value_index::append(data_view x, id pos) {
 caf::expected<ids>
 value_index::lookup(relational_operator op, data_view x) const {
   // When x is null, we can answer the query right here.
-  if (caf::holds_alternative<caf::none_t>(x)) {
+  if (is<caf::none_t>(x)) {
     if (!(op == relational_operator::equal
           || op == relational_operator::not_equal))
       return caf::make_error(ec::unsupported_operator, op);
@@ -132,9 +132,10 @@ caf::error unpack(const fbs::ValueIndex& from, value_index_ptr& to) {
     if (auto err = unpack(*base.options(), options_data))
       return err;
     auto options = caf::settings{};
-    if (const auto* options_record = caf::get_if<record>(&options_data))
+    if (const auto* options_record = try_as<record>(&options_data)) {
       if (auto err = convert(*options_record, options))
         return err;
+    }
     to = factory<value_index>::make(type, options);
     if (!to)
       return caf::make_error(ec::format_error,

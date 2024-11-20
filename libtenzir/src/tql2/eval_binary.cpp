@@ -415,6 +415,86 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
   }
 };
 
+template <>
+struct EvalBinOp<ast::binary_op::and_, bool_type, null_type> {
+  static auto eval(const arrow::BooleanArray& l, const arrow::NullArray&,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    for (const auto& v : l) {
+      if (v and v == false) {
+        check(b.Append(false));
+      } else {
+        check(b.AppendNull());
+      }
+    }
+    return finish(b);
+  }
+};
+
+template <>
+struct EvalBinOp<ast::binary_op::and_, null_type, bool_type> {
+  static auto eval(const arrow::NullArray& l, const arrow::BooleanArray& r,
+                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
+    return EvalBinOp<ast::binary_op::and_, bool_type, null_type>::eval(r, l,
+                                                                       warn);
+  }
+};
+
+template <>
+struct EvalBinOp<ast::binary_op::or_, bool_type, null_type> {
+  static auto eval(const arrow::BooleanArray& l, const arrow::NullArray&,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    for (const auto& v : l) {
+      if (v and v == true) {
+        check(b.Append(true));
+      } else {
+        check(b.AppendNull());
+      }
+    }
+    return finish(b);
+  }
+};
+
+template <>
+struct EvalBinOp<ast::binary_op::or_, null_type, bool_type> {
+  static auto eval(const arrow::NullArray& l, const arrow::BooleanArray& r,
+                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
+    return EvalBinOp<ast::binary_op::or_, bool_type, null_type>::eval(r, l,
+                                                                      warn);
+  }
+};
+
+template <ast::binary_op Op>
+  requires(Op == ast::binary_op::and_ || Op == ast::binary_op::or_)
+struct EvalBinOp<Op, null_type, null_type> {
+  static auto eval(const arrow::NullArray& l, const arrow::NullArray&, auto&&)
+    -> std::shared_ptr<arrow::NullArray> {
+    return std::make_shared<arrow::NullArray>(l.length());
+  }
+};
+
+template <>
+struct EvalBinOp<ast::binary_op::in, string_type, string_type> {
+  static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (l.IsNull(i) || r.IsNull(i)) {
+        b.UnsafeAppendNull();
+        continue;
+      }
+      auto lv = l.GetView(i);
+      auto rv = r.GetView(i);
+      check(b.Append(rv.find(lv) != rv.npos));
+    }
+    return finish(b);
+  }
+};
+
 // TODO: We probably don't want this.
 template <ast::binary_op Op>
   requires(Op == ast::binary_op::and_ || Op == ast::binary_op::or_)
@@ -482,26 +562,13 @@ template <ast::binary_op Op, concrete_type L>
 struct EvalBinOp<Op, L, null_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::NullArray& r,
                    auto&&) -> std::shared_ptr<arrow::BooleanArray> {
-    constexpr auto invert = Op == ast::binary_op::neq;
-    // TODO: This is bad.
     TENZIR_UNUSED(r);
-    auto buffer = check(arrow::AllocateBitmap(l.length()));
-    auto& null_bitmap = l.null_bitmap();
-    if (not null_bitmap) {
-      // All non-null, except if `null_type`.
-      auto value = (std::same_as<L, null_type> != invert) ? 0xFF : 0x00;
-      std::memset(buffer->mutable_data(), value, buffer->size());
-    } else {
-      TENZIR_ASSERT(buffer->size() <= null_bitmap->size());
-      auto buffer_ptr = buffer->mutable_data();
-      auto null_ptr = null_bitmap->data();
-      auto length = detail::narrow<size_t>(buffer->size());
-      for (auto i = size_t{0}; i < length; ++i) {
-        // TODO
-        buffer_ptr[i] = invert ? null_ptr[i] : ~null_ptr[i];
-      }
+    constexpr auto invert = Op == ast::binary_op::neq;
+    auto b = arrow::BooleanBuilder{};
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      check(b.Append(l.IsNull(i) != invert));
     }
-    return std::make_shared<arrow::BooleanArray>(l.length(), std::move(buffer));
+    return finish(b);
   }
 };
 
@@ -512,6 +579,32 @@ struct EvalBinOp<Op, null_type, R> {
   static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r,
                    auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
     return EvalBinOp<Op, R, null_type>::eval(r, l, warn);
+  }
+};
+
+template <ast::binary_op Op>
+  requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
+struct EvalBinOp<Op, ip_type, ip_type> {
+  static auto eval(const ip_type::array_type& l, const ip_type::array_type& r,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+    // TODO: This is bad.
+    constexpr auto invert = Op == ast::binary_op::neq;
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      auto ln = l.IsNull(i);
+      auto rn = r.IsNull(i);
+      auto equal = bool{};
+      if (ln != rn) {
+        equal = false;
+      } else if (ln && rn) {
+        equal = true;
+      } else {
+        equal = value_at(ip_type{}, l, i) == value_at(ip_type{}, r, i);
+      }
+      b.UnsafeAppend(equal != invert);
+    }
+    return finish(b);
   }
 };
 
@@ -533,10 +626,61 @@ struct EvalBinOp<Op, string_type, string_type> {
       } else if (ln && rn) {
         equal = true;
       } else {
-        equal = l.Value(i) == r.Value(i);
+        equal = l.GetView(i) == r.GetView(i);
       }
       b.UnsafeAppend(equal != invert);
     }
+    return finish(b);
+  }
+};
+
+template <concrete_type L>
+struct EvalBinOp<ast::binary_op::in, L, list_type> {
+  static auto eval(const type_to_arrow_array_t<L>& l, const arrow::ListArray& r,
+                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    const auto lty = type::from_arrow(*l.type());
+    const auto rty = type::from_arrow(*r.value_type());
+    const auto f = [&]<concrete_type R>(const R&) {
+      if constexpr (caf::detail::is_complete<
+                      EvalBinOp<ast::binary_op::eq, L, R>>) {
+        for (auto i = int64_t{}; i < l.length(); ++i) {
+          if (r.IsNull(i)) {
+            b.UnsafeAppendNull();
+            continue;
+          }
+          auto lslice
+            = std::static_pointer_cast<type_to_arrow_array_t<L>>(l.Slice(i, 1));
+          auto rslice = r.value_slice(i);
+          TENZIR_ASSERT(lslice);
+          TENZIR_ASSERT(rslice);
+          auto result = false;
+          for (auto j = int64_t{}; j < rslice->length(); ++j) {
+            auto vals = std::dynamic_pointer_cast<type_to_arrow_array_t<R>>(
+              rslice->Slice(j, 1));
+            TENZIR_ASSERT(vals);
+            auto out = std::dynamic_pointer_cast<arrow::BooleanArray>(
+              EvalBinOp<ast::binary_op::eq, L, R>::eval(*lslice, *vals, warn));
+            TENZIR_ASSERT(out);
+            TENZIR_ASSERT(out->length() == 1);
+            // Equality never returns `null` (if it's defined for the types).
+            TENZIR_ASSERT(out->IsValid(0));
+            if (out->Value(0)) {
+              result = true;
+              break;
+            }
+          }
+          check(b.Append(result));
+        }
+      } else {
+        warn(fmt::format("got incompatible types for `in`: `{} in list<{}>`",
+                         lty.kind(), rty.kind())
+               .c_str());
+        check(b.AppendNulls(l.length()));
+      }
+    };
+    match(rty, f);
     return finish(b);
   }
 };
@@ -548,13 +692,14 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
     = [&]<ast::binary_op Op>(const series& l, const series& r) -> series {
     TENZIR_ASSERT(x.op.inner == Op);
     TENZIR_ASSERT(l.length() == r.length());
-    return caf::visit(
+    return match(
+      std::tie(l.type, r.type),
       [&]<concrete_type L, concrete_type R>(const L&, const R&) -> series {
         if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
           using LA = type_to_arrow_array_t<L>;
           using RA = type_to_arrow_array_t<R>;
-          auto& la = caf::get<LA>(*l.array);
-          auto& ra = caf::get<RA>(*r.array);
+          auto& la = as<LA>(*l.array);
+          auto& ra = as<RA>(*r.array);
           auto oa = EvalBinOp<Op, L, R>::eval(la, ra, [&](const char* w) {
             diagnostic::warning("{}", w).primary(x).emit(ctx_);
           });
@@ -570,8 +715,7 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
             .emit(ctx_);
           return null();
         }
-      },
-      l.type, r.type);
+      });
   };
   using enum ast::binary_op;
   switch (x.op.inner) {

@@ -117,7 +117,8 @@ Cribl Stream has the following pipeline
 - Tenzir operators can leverage other abstractions
   - [Connectors](connectors.md): loads or saves bytes from a remote resource
   - [Formats](formats.md): parse or print data
-  - [Contexts](contexts.md): stateful objects for enrichment/contextualization
+  - **Contexts**: stateful objects for
+    [enrichment/contextualization](enrichment/README.md)
 - Tenzir [connectors](connectors.md) and [formats](formats.md) can be used from
   various operators, such as [`load`](operators/load.md),
   [`from`](operators/from.md), [`save`](operators/save.md),
@@ -125,7 +126,7 @@ Cribl Stream has the following pipeline
 
 ### Routing
 
-![Cribl vs. Tenzir — Routing](cribl-vs-tenzir-routing.excalidraw.svg)
+![Cribl vs. Tenzir — Routing](cribl-vs-tenzir-routing.svg)
 
 #### Cribl
 
@@ -204,6 +205,8 @@ Cribl Stream has the following pipeline
 
 #### Tenzir
 
+Events:
+
 - An **event** is a semi-structured record, similar to a JSON object but with
   additional data types.
 - Tenzir's [type system](data-model/type-system.md) is a superset of JSON,
@@ -212,6 +215,15 @@ Cribl Stream has the following pipeline
 - Events have a **schema** that includes the field names and types
 - Internally, Tenzir represents events as Apache Arrow *record batches*, which
   you can think of as data frames.
+
+Bytes:
+
+- In addition to events, Tenzir pipelines can also transport raw **bytes**.
+- The operator decides whether it support bytes, events, or both.
+- All Tenzir [connectors](connectors.md) produce or consume byte streams;
+  [formats](formats.md) parse or print byte streams.
+
+See also the section on [dataflow](#dataflow) below.
 
 ## Dataflow
 
@@ -364,8 +376,8 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 
 #### Tenzir
 
-- [Contexts](contexts.md) are stateful objects usable for enrichment with the
-  [`enrich`](operators/enrich.md) operator.
+- Contexts are stateful objects usable for [enrichment](enrichment/README.md)
+  with the [`enrich`](operators/enrich.md) operator.
 - There exist several context types, such as lookup tables, Bloom filters, GeoIP
   databases, or user-written C++ plugins.
 - Contexts are not static and limited to CSV or MMDB files; you can add data
@@ -391,18 +403,14 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
   workflows for easy deployment.
 - Packs can include routes, pipelines, functions, sample data, and knowledge
   objects (e.g., lookups, parsers, schemas).
+- Cribl hosts various packs at the [Packs Dispensary](https://packs.cribl.io/).
 
 #### Tenzir
 
-- The **library** is a set of **packages**.
-- A library corresponds to a GitHub repository.
-- A package can include pipelines and contexts.
-- The Community Edition has read-only access to the community library.
+- A [library](https://app.tenzir.com/library) is a set of
+  [packages](packages.md).
+- Packages can include [pipelines](pipelines.md) and contexts.
+- Tenzir maintains an open source [Community
+  Library](https://github.com/tenzir/library) on GitHub.
 - The Professional Edition and Enterprise Edition support managing custom
   libraries.
-
-:::warning coming soon
-The Tenzir library is still under development and coming soon with one of the
-next releases. We're still including a comparison here to explain terminology
-already.
-:::

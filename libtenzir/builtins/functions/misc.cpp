@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
+#include <tenzir/detail/zip_iterator.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/process/environment.hpp>
@@ -63,7 +64,7 @@ public:
         .to_error();
     }
     for (const auto& [key, value] : *secrets) {
-      const auto* str = caf::get_if<std::string>(&value);
+      const auto* str = try_as<std::string>(&value);
       if (not str) {
         return diagnostic::error("secrets must be strings")
           .note("configuration key `tenzir.secrets.{}` is of type `{}`", key,
@@ -115,7 +116,7 @@ public:
           return series::null(string_type{}, value.length());
         },
       };
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 
@@ -175,7 +176,7 @@ public:
           return series::null(string_type{}, value.length());
         },
       };
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 
@@ -183,7 +184,7 @@ private:
   detail::heterogeneous_string_hashmap<std::string> env_ = {};
 };
 
-class length final : public method_plugin {
+class length final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "length";
@@ -192,7 +193,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::method(name()).add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         TENZIR_UNUSED(ctx);
@@ -225,12 +226,12 @@ public:
             return series::null(int64_type{}, value.length());
           },
         };
-        return caf::visit(f, *value.array);
+        return match(*value.array, f);
       });
   }
 };
 
-class has final : public method_plugin {
+class has final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "has";
@@ -240,7 +241,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto needle = located<std::string>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(expr, "<expr>")
           .add(needle, "<string>")
           .parse(inv, ctx));
@@ -274,9 +275,68 @@ public:
             .emit(ctx);
           return series::null(bool_type{}, value.length());
         }};
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
+};
+
+class select_drop_matching final : public function_plugin {
+public:
+  explicit select_drop_matching(bool select) : select_{select} {
+  }
+
+  auto name() const -> std::string override {
+    return select_ ? "select_matching" : "drop_matching";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto str = located<std::string>{};
+    TRY(argument_parser2::function(name())
+          .add(expr, "<expr>")
+          .add(str, "<pattern>")
+          .parse(inv, ctx));
+    auto pattern = pattern::make(str.inner);
+    if (not pattern) {
+      diagnostic::error(pattern.error()).primary(str.source).emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make([pattern = std::move(*pattern),
+                               expr = std::move(expr), select = select_](
+                                evaluator eval, session ctx) -> series {
+      auto value = eval(expr);
+      auto f = detail::overload{
+        [&](const arrow::NullArray& array) -> series {
+          return series::null(null_type{}, array.length());
+        },
+        [&](const arrow::StructArray& array) -> series {
+          auto arrays = arrow::ArrayVector{};
+          auto fields = arrow::FieldVector{};
+          for (const auto& [field, array] :
+               detail::zip(array.struct_type()->fields(), array.fields())) {
+            if (pattern.search(field->name()) == select) {
+              fields.push_back(field);
+              arrays.push_back(array);
+            }
+          }
+          auto result = std::make_shared<arrow::StructArray>(
+            arrow::struct_(fields), array.length(), std::move(arrays),
+            array.null_bitmap(), array.null_count(), array.offset());
+          return {type::from_arrow(*result->type()), std::move(result)};
+        },
+        [&](const auto&) -> series {
+          diagnostic::warning("expected `record`, got `{}`", value.type.kind())
+            .primary(expr)
+            .emit(ctx);
+          return series::null(null_type{}, value.length());
+        }};
+      return match(*value.array, f);
+    });
+  }
+
+private:
+  bool select_ = {};
 };
 
 } // namespace
@@ -288,3 +348,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::secret)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{false})

@@ -6,3 +6,8 @@
 {"x": "tenzir.json"}
 {"x": "tenzir.json"}
 {"x": "tenzir.json"}
+warning: json parser: selected schema not found
+ = note: `2011-08-12T14:47:24.357711+0200` does not refer to a known schema
+
+warning: json parser: event did not contain selector field
+ = note: selector field `flow.start` was not found

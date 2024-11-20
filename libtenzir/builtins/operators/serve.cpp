@@ -263,15 +263,16 @@ struct managed_serve_operator {
   caf::disposable delayed_attempt = {};
   caf::typed_response_promise<void> put_rp = {};
   caf::typed_response_promise<void> stop_rp = {};
-  caf::typed_response_promise<std::tuple<std::string, std::vector<table_slice>>>
-    get_rp = {};
+  std::vector<caf::typed_response_promise<
+    std::tuple<std::string, std::vector<table_slice>>>>
+    get_rps = {};
 
   /// Attempt to deliver up to the number of requested results.
   /// @param force_underful Return underful result sets instead of failing when
   /// not enough results are buffered.
   /// @returns Whether the results were delivered.
   auto try_deliver_results(bool force_underful) -> bool {
-    TENZIR_ASSERT(get_rp.pending());
+    TENZIR_ASSERT(not get_rps.empty());
     // If we throttled the serve operator, then we can continue its operation
     // again if we have less events buffered than desired.
     if (put_rp.pending() and rows(buffer) < std::max(buffer_size, requested)) {
@@ -297,7 +298,10 @@ struct managed_serve_operator {
       TENZIR_ASSERT(not put_rp.pending());
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
       continuation_token.clear();
-      get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
+      for (auto&& get_rp : std::exchange(get_rps, {})) {
+        TENZIR_ASSERT(get_rp.pending());
+        get_rp.deliver(std::make_tuple(std::string{}, results));
+      }
       stop_rp.deliver();
       return true;
     }
@@ -309,7 +313,10 @@ struct managed_serve_operator {
     continuation_token = fmt::to_string(uuid::random());
     TENZIR_DEBUG("serve for id {} is now available with continuation token {}",
                  escape_operator_arg(serve_id), continuation_token);
-    get_rp.deliver(std::make_tuple(continuation_token, std::move(results)));
+    for (auto&& get_rp : std::exchange(get_rps, {})) {
+      TENZIR_ASSERT(get_rp.pending());
+      get_rp.deliver(std::make_tuple(continuation_token, results));
+    }
     return true;
   }
 };
@@ -328,10 +335,9 @@ struct serve_manager_state {
   std::unordered_map<std::string, caf::error> expired_ids = {};
 
   auto handle_down_msg(const caf::down_msg& msg) -> void {
-    const auto found
-      = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-          return op.source == msg.source;
-        });
+    const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+      return op.source == msg.source;
+    });
     if (found == ops.end()) {
       TENZIR_WARN("{} received unepexted DOWN from {}: {}", *self, msg.source,
                   msg.reason);
@@ -347,32 +353,28 @@ struct serve_manager_state {
     // last set of events again by reusing the last continuation token.
     found->done = true;
     auto delete_serve = [this, source = msg.source, reason = msg.reason]() {
-      const auto found
-        = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-            return op.source == source;
-          });
+      const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+        return op.source == source;
+      });
       if (found != ops.end()) {
         expired_ids.emplace(found->serve_id, reason);
-        if (found->get_rp.pending()) {
+        if (not found->get_rps.empty()) {
           found->delayed_attempt.dispose();
-          found->get_rp.deliver(reason);
+          for (auto&& get_rp : std::exchange(found->get_rps, {})) {
+            get_rp.deliver(reason);
+          }
         }
         ops.erase(found);
       }
     };
-    if (msg.reason) {
-      delete_serve();
-    } else {
-      detail::weak_run_delayed(self, defaults::api::serve::retention_time,
-                               delete_serve);
-    }
+    detail::weak_run_delayed(self, defaults::api::serve::retention_time,
+                             delete_serve);
   }
 
   auto start(std::string serve_id, uint64_t buffer_size) -> caf::result<void> {
-    const auto found
-      = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-          return op.serve_id == serve_id;
-        });
+    const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+      return op.serve_id == serve_id;
+    });
     if (found != ops.end()) {
       if (not found->done) {
         return caf::make_error(
@@ -431,7 +433,7 @@ struct serve_manager_state {
                                      *self, escape_operator_arg(serve_id)));
     }
     found->buffer.push_back(std::move(slice));
-    if (found->get_rp.pending()) {
+    if (not found->get_rps.empty()) {
       const auto delivered = found->try_deliver_results(false);
       if (delivered) {
         TENZIR_DEBUG("{} delivered results eagerly for serve id {}", *self,
@@ -481,20 +483,17 @@ struct serve_manager_state {
                     "{} for serve id {}",
                     *self, request.continuation_token, request.serve_id));
     }
-    if (found->get_rp.pending()) {
-      return caf::make_error(
-        ec::invalid_argument,
-        fmt::format("{} got duplicate request for events "
-                    "with continuation token {} for serve id {}",
-                    *self, request.continuation_token, request.serve_id));
+    if (found->done) {
+      return std::make_tuple(std::string{}, std::vector<table_slice>{});
     }
-    found->get_rp = self->make_response_promise<
+    auto rp = self->make_response_promise<
       std::tuple<std::string, std::vector<table_slice>>>();
+    found->get_rps.push_back(rp);
     found->requested = request.limits.max_events;
     found->min_events = request.limits.min_events;
     const auto delivered = found->try_deliver_results(false);
     if (delivered) {
-      return found->get_rp;
+      return rp;
     }
     found->delayed_attempt.dispose();
     found->delayed_attempt = detail::weak_run_delayed(
@@ -509,20 +508,22 @@ struct serve_manager_state {
           TENZIR_DEBUG("unable to find serve request after timeout expired");
           return;
         }
-        TENZIR_ASSERT(not found->done);
-        TENZIR_ASSERT(found->continuation_token == continuation_token);
-        TENZIR_ASSERT(found->get_rp.pending());
+        // In case the client re-sent the request in the meantime we are done.
+        if (found->done or found->continuation_token != continuation_token) {
+          return;
+        }
+        TENZIR_ASSERT(not found->get_rps.empty());
         const auto delivered = found->try_deliver_results(true);
         TENZIR_ASSERT(delivered);
       });
-    return found->get_rp;
+    return rp;
   }
 
   auto status(status_verbosity verbosity) const -> caf::result<record> {
     auto requests = list{};
     requests.reserve(ops.size());
     for (const auto& op : ops) {
-      auto& entry = caf::get<record>(requests.emplace_back(record{}));
+      auto& entry = as<record>(requests.emplace_back(record{}));
       entry.emplace("serve_id", op.serve_id);
       entry.emplace("continuation_token", op.continuation_token.empty()
                                             ? data{}
@@ -535,7 +536,7 @@ struct serve_manager_state {
       entry.emplace("done", op.done);
       if (verbosity >= status_verbosity::detailed) {
         entry.emplace("put_pending", op.put_rp.pending());
-        entry.emplace("get_pending", op.get_rp.pending());
+        entry.emplace("get_pending", not op.get_rps.empty());
         entry.emplace("stop_pending", op.stop_rp.pending());
       }
       if (verbosity >= status_verbosity::debug) {
@@ -700,18 +701,20 @@ struct serve_handler_state {
     auto seen_schemas = std::unordered_set<type>{};
     bool first = true;
     for (const auto& slice : results) {
-      if (slice.rows() == 0)
+      if (slice.rows() == 0) {
         continue;
+      }
       seen_schemas.insert(slice.schema());
       auto resolved_slice = resolve_enumerations(slice);
-      auto type = caf::get<record_type>(resolved_slice.schema());
+      auto type = as<record_type>(resolved_slice.schema());
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       for (const auto& row : values(type, *array)) {
-        if (first)
+        if (first) {
           out_iter = fmt::format_to(out_iter, "{{");
-        else
+        } else {
           out_iter = fmt::format_to(out_iter, "}},{{");
+        }
         first = false;
         out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","data":)",
                                   slice.schema().make_fingerprint());
@@ -727,10 +730,11 @@ struct serve_handler_state {
     }
     out_iter = fmt::format_to(out_iter, R"(}}],"schemas":[)");
     for (bool first = true; const auto& schema : seen_schemas) {
-      if (first)
+      if (first) {
         out_iter = fmt::format_to(out_iter, "{{");
-      else
+      } else {
         out_iter = fmt::format_to(out_iter, "}},{{");
+      }
       first = false;
       out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
                                 schema.make_fingerprint());
@@ -767,19 +771,19 @@ struct serve_handler_state {
           rp.deliver(rest_response::from_json_string(
             create_response(std::get<0>(result), std::get<1>(result))));
         },
-        [rp](caf::error& err) mutable {
-          // TODO: Use a struct with distinct fields for user-facing
-          // error message and detail here.
-          // TODO: We don't have the source here to print snippets of the
-          // diagnostic! Either `serve` needs to be aware of that (which seems
-          // like a very bad idea), or the diagnostics need to be rendered
-          // somewhere else.
-          auto stream = std::stringstream{};
-          auto printer = make_diagnostic_printer(
-            std::nullopt, color_diagnostics::yes, stream);
-          printer->emit(diagnostic::error(err).done());
-          auto rsp = rest_response::make_error(400, stream.str(), {});
-          rp.deliver(std::move(rsp));
+        [rp](const caf::error& err) mutable {
+          if (err == caf::exit_reason::user_shutdown
+              or err.context().match_elements<diagnostic>()) {
+            // The pipeline has either shut down naturally or we got an error
+            // that's a diagnostic. In either case, do not report the error as
+            // an internal error from the /serve endpoint, but rather report
+            // that we're done. The user must get the diagnostic from the
+            // `diagnostics` operator.
+            rp.deliver(
+              rest_response::from_json_string(create_response({}, {})));
+            return;
+          }
+          rp.deliver(rest_response::make_error(400, fmt::to_string(err), {}));
         });
     return rp;
   }
@@ -951,8 +955,8 @@ public:
         [&](record& response) {
           TENZIR_ASSERT(response.size() == 1);
           TENZIR_ASSERT(response.contains("requests"));
-          TENZIR_ASSERT(caf::holds_alternative<list>(response["requests"]));
-          serves = std::move(caf::get<list>(response["requests"]));
+          TENZIR_ASSERT(is<list>(response["requests"]));
+          serves = std::move(as<list>(response["requests"]));
         },
         [&](const caf::error& err) {
           diagnostic::error(err)
@@ -975,12 +979,13 @@ public:
   }
 
   auto openapi_endpoints(api_version version) const -> record override {
-    if (version != api_version::v0)
+    if (version != api_version::v0) {
       return tenzir::record{};
+    }
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
-    TENZIR_ASSERT(caf::holds_alternative<record>(*result));
-    return caf::get<record>(*result);
+    TENZIR_ASSERT(is<record>(*result));
+    return as<record>(*result);
   }
 
   auto rest_endpoints() const -> const std::vector<rest_endpoint>& override {

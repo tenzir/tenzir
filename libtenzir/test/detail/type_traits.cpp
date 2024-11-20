@@ -10,8 +10,6 @@
 
 #include "tenzir/test/test.hpp"
 
-#include <caf/variant.hpp>
-
 #include <variant>
 
 namespace {

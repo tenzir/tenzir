@@ -6,3 +6,5 @@
 {"x": "tenzir.json"}
 {"x": "tenzir.json"}
 {"x": "78030141"}
+warning: json parser: event did not contain selector field
+ = note: selector field `pcap_cnt` was not found

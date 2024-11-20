@@ -27,8 +27,6 @@
 #include "tenzir/type.hpp"
 #include "tenzir/value_index.hpp"
 
-#include <caf/attach_continuous_stream_stage.hpp>
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/sec.hpp>
@@ -68,12 +66,12 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
     auto lrt = legacy_record_type{};
     if (auto error = fbs::deserialize_bytes(data, lrt))
       return error;
-    return caf::get<record_type>(type::from_legacy_type(lrt));
+    return as<record_type>(type::from_legacy_type(lrt));
   }
   if (auto const* data = partition.schema()) {
     auto chunk = chunk::copy(as_bytes(*data));
     auto t = type{std::move(chunk)};
-    auto* schema = caf::get_if<record_type>(&t);
+    auto* schema = try_as<record_type>(&t);
     if (!schema)
       return caf::make_error(ec::format_error, "schema field contained "
                                                "unexpected type");
@@ -152,7 +150,7 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
     indexer = self->spawn(passive_indexer, id, std::move(value_index));
     return indexer;
   }
-  TENZIR_DEBUG("passive-partition {} has no index or failed to index for field "
+  TENZIR_TRACE("passive-partition {} has no index or failed to index for field "
                "{}",
                id, qualified_index->field_name()->string_view());
   return {};
@@ -220,8 +218,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   // vector must be the same as in `combined_schema`. The actual indexers are
   // deserialized and spawned lazily on demand.
   state.indexers.resize(indexes->size());
-  TENZIR_DEBUG("{} found {} indexers for partition {}", state.name,
-               indexes->size(), state.id);
   auto const* type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
     auto const* type_ids_tuple = type_ids->Get(i);
@@ -231,8 +227,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
     if (auto error = fbs::deserialize_bytes(ids_data, ids))
       return error;
   }
-  TENZIR_DEBUG("{} restored {} type-to-ids mapping for partition {}",
-               state.name, state.type_ids_.size(), state.id);
   return caf::none;
 }
 
@@ -329,8 +323,8 @@ partition_actor::behavior_type passive_partition(
   TENZIR_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_down_handler([=](const caf::down_msg& msg) {
     if (msg.source != self->state.store.address()) {
-      TENZIR_WARN("{} ignores DOWN from unexpected sender: {}", *self,
-                  msg.reason);
+      TENZIR_TRACE("{} ignores DOWN from unexpected sender: {}", *self,
+                   msg.reason);
       return;
     }
     TENZIR_ERROR("{} shuts down after DOWN from {} store: {}", *self,
@@ -338,7 +332,7 @@ partition_actor::behavior_type passive_partition(
     self->quit(msg.reason);
   });
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
+    TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self, msg.source,
                  msg.reason);
     self->demonitor(self->state.store->address());
     // Receiving an EXIT message does not need to coincide with the state
@@ -360,7 +354,7 @@ partition_actor::behavior_type passive_partition(
     terminate<policy::parallel>(self, std::move(indexers))
       .then(
         [=](atom::done) {
-          TENZIR_DEBUG("{} shut down all indexers successfully", *self);
+          TENZIR_TRACE("{} shut down all indexers successfully", *self);
           self->quit();
         },
         [=](const caf::error& err) {
@@ -418,12 +412,12 @@ partition_actor::behavior_type passive_partition(
         self->state.store = *store;
         self->monitor(self->state.store);
         // Delegate all deferred evaluations now that we have the partition chunk.
-        TENZIR_DEBUG("{} delegates {} deferred evaluations", *self,
-                     self->state.deferred_evaluations.size());
         delegate_deferred_requests(self->state);
       },
       [=](caf::error err) {
-        TENZIR_ERROR("{} failed to load partition: {}", *self, err);
+        // This error is nicely printed at the export operator as a warning. No
+        // need to print it as an error here already.
+        TENZIR_WARN("{} failed to load partition: {}", *self, err);
         deliver_error_to_deferred_requests(self->state, err);
         // Quit the partition.
         self->quit(std::move(err));
@@ -431,9 +425,8 @@ partition_actor::behavior_type passive_partition(
   return {
     [self](atom::query,
            tenzir::query_context query_context) -> caf::result<uint64_t> {
-      TENZIR_DEBUG("{} received query {}", *self, query_context);
+      TENZIR_TRACE("{} received query {}", *self, query_context);
       if (!self->state.partition_chunk) {
-        TENZIR_DEBUG("{} waits for its state", *self);
         return std::get<1>(self->state.deferred_evaluations.emplace_back(
           std::move(query_context), self->make_response_promise<uint64_t>()));
       }
@@ -478,11 +471,11 @@ partition_actor::behavior_type passive_partition(
               // issues downstream because you need to very carefully handle
               // this scenario, which is easy to overlook as a developer. We
               // should fix this issue.
-              TENZIR_DEBUG("{} received evaluator results with wrong length: "
+              TENZIR_TRACE("{} received evaluator results with wrong length: "
                            "expected {}, got {}",
                            *self, self->state.events, hits.size());
             }
-            TENZIR_DEBUG("{} received results from the evaluator", *self);
+            TENZIR_TRACE("{} received results from the evaluator", *self);
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
             query_context.ids = hits;
@@ -497,10 +490,10 @@ partition_actor::behavior_type passive_partition(
     [self](atom::erase) -> caf::result<atom::done> {
       auto rp = self->make_response_promise<atom::done>();
       if (!self->state.partition_chunk) {
-        TENZIR_DEBUG("{} skips an erase request", *self);
+        TENZIR_TRACE("{} skips an erase request", *self);
         return self->state.deferred_erasures.emplace_back(std::move(rp));
       }
-      TENZIR_DEBUG("{} received an erase message and deletes {}", *self,
+      TENZIR_TRACE("{} received an erase message and deletes {}", *self,
                    self->state.path);
       self
         ->request(self->state.filesystem, caf::infinite, atom::erase_v,

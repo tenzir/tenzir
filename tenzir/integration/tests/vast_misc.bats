@@ -38,7 +38,6 @@ setup() {
   # Verify that the node doesn't deadlock on
   # shutdown when metrics are enabled.
 
-  export TENZIR_ENABLE_METRICS=true
   setup_node
 
   # Random command to ensure the node is up.
@@ -64,7 +63,7 @@ setup() {
 
   import_zeek_conn
   sleep 4
-  check tenzir 'export | where #schema == /zeek.*/ | summarize count=count(.)'
+  check tenzir 'partitions | where schema == /zeek.*/ | summarize count=count(.)'
 
   teardown_node
 }

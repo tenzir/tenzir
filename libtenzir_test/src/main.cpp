@@ -48,7 +48,10 @@ std::vector<std::string> get_test_args(int argc, const char* const* argv) {
 } // namespace
 
 int main(int argc, char** argv) {
-  (void)tenzir::detail::setenv("TENZIR_ABORT_ON_PANIC", "1");
+  TENZIR_ASSERT(tenzir::detail::setenv("TENZIR_ABORT_ON_PANIC", "1")
+                == caf::none);
+  TENZIR_ASSERT(tenzir::detail::setenv("TENZIR_BARE_MODE", "true")
+                == caf::none);
   std::string tenzir_loglevel = "quiet";
   auto test_args = get_test_args(argc, argv);
   if (!test_args.empty()) {

@@ -32,12 +32,6 @@ struct indexer_state {
 
   /// The flat index of the column that the indexer is attached to.
   size_t column;
-
-  /// Tracks whether we received at least one table slice column.
-  bool stream_initiated;
-
-  /// The response promise for a snapshot atom.
-  caf::typed_response_promise<chunk_ptr> promise;
 };
 
 /// Indexes a table slice column with a single value index.

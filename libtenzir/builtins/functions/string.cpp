@@ -16,7 +16,7 @@ namespace tenzir::plugins::string {
 
 namespace {
 
-class starts_or_ends_with : public virtual method_plugin {
+class starts_or_ends_with : public virtual function_plugin {
 public:
   explicit starts_or_ends_with(bool starts_with) : starts_with_{starts_with} {
   }
@@ -25,11 +25,11 @@ public:
     return starts_with_ ? "starts_with" : "ends_with";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .add(arg_expr, "<string>")
           .parse(inv, ctx));
@@ -65,7 +65,7 @@ public:
           return series::null(bool_type{}, subject.length());
         },
       };
-      return caf::visit(f, *subject.array, *arg.array);
+      return match(std::tie(*subject.array, *arg.array), f);
     });
   }
 
@@ -73,7 +73,7 @@ private:
   bool starts_with_;
 };
 
-class trim : public virtual method_plugin {
+class trim : public virtual function_plugin {
 public:
   explicit trim(std::string name, std::string fn_name)
     : name_{std::move(name)}, fn_name_{std::move(fn_name)} {
@@ -83,11 +83,11 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .add(characters, "<characters>")
           .parse(inv, ctx));
@@ -122,7 +122,7 @@ public:
             return series::null(string_type{}, subject.length());
           },
         };
-        return caf::visit(f, *subject.array);
+        return match(*subject.array, f);
       });
   }
 
@@ -131,7 +131,7 @@ private:
   std::string fn_name_;
 };
 
-class nullary_method : public virtual method_plugin {
+class nullary_method : public virtual function_plugin {
 public:
   nullary_method(std::string name, std::string fn_name, type result_ty)
     : name_{std::move(name)},
@@ -150,10 +150,17 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto function_name() const -> std::string override {
+    if (name_.ends_with("()")) {
+      return name_.substr(0, name_.size() - 2);
+    }
+    return name_;
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr)](
@@ -186,7 +193,7 @@ public:
           return series::null(result_ty_, subject.length());
         },
       };
-      return caf::visit(f, *subject.array);
+      return match(*subject.array, f);
     });
   }
 
@@ -197,19 +204,23 @@ private:
   std::shared_ptr<arrow::DataType> result_arrow_ty_;
 };
 
-class replace : public virtual method_plugin {
+class replace : public virtual function_plugin {
 public:
-  auto name() const -> std::string override {
-    return "tql2.replace";
+  replace() = default;
+  explicit replace(bool regex) : regex_{regex} {
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto name() const -> std::string override {
+    return regex_ ? "tql2.replace_regex" : "tql2.replace";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    auto pattern = std::string{};
+    auto pattern = located<std::string>{};
     auto replacement = std::string{};
     auto max_replacements = std::optional<located<int64_t>>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .add(pattern, "<pattern>")
           .add(replacement, "<replacement>")
@@ -235,12 +246,16 @@ public:
           [&](const arrow::StringArray& array) {
             auto max = max_replacements ? max_replacements->inner : -1;
             auto options = arrow::compute::ReplaceSubstringOptions(
-              pattern, replacement, max);
-            auto result = arrow::compute::CallFunction("replace_substring",
-                                                       {array}, &options);
+              pattern.inner, replacement, max);
+            auto result = arrow::compute::CallFunction(
+              regex_ ? "replace_substring_regex" : "replace_substring", {array},
+              &options);
             if (not result.ok()) {
-              diagnostic::warning("{}", result.status().ToString())
-                .primary(subject_expr)
+              diagnostic::warning("{}",
+                                  result.status().ToStringWithoutContextLines())
+                .severity(result.status().IsInvalid() ? severity::error
+                                                      : severity::warning)
+                .primary(pattern.source)
                 .emit(ctx);
               return series::null(result_type, subject.length());
             }
@@ -257,24 +272,27 @@ public:
             return series::null(result_type, subject.length());
           },
         };
-        return caf::visit(f, *subject.array);
+        return match(*subject.array, f);
       });
   }
+
+private:
+  bool regex_ = {};
 };
 
-class slice : public virtual method_plugin {
+class slice : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.slice";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto begin = std::optional<located<int64_t>>{};
     auto end = std::optional<located<int64_t>>{};
     auto stride = std::optional<located<int64_t>>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .add("begin", begin)
           .add("end", end)
@@ -282,7 +300,8 @@ public:
           .parse(inv, ctx));
     if (stride) {
       if (stride->inner <= 0) {
-        diagnostic::error("`stride` must be greater 0, but got {}", stride->inner)
+        diagnostic::error("`stride` must be greater 0, but got {}",
+                          stride->inner)
           .primary(*stride)
           .emit(ctx);
       }
@@ -321,8 +340,48 @@ public:
             return series::null(result_type, subject.length());
           },
         };
-        return caf::visit(f, *subject.array);
+        return match(*subject.array, f);
       });
+  }
+};
+
+class str : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.str";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    TRY(argument_parser2::function("string")
+          .add(subject_expr, "<expr>")
+          .parse(inv, ctx));
+    return function_use::make([subject_expr = std::move(subject_expr)](
+                                evaluator eval, session) -> series {
+      auto subject = eval(subject_expr);
+      auto b = arrow::StringBuilder{};
+      for (auto&& value : subject.values()) {
+        auto f = detail::overload{
+          [](const std::string& x) {
+            return x;
+          },
+          [](int64_t x) {
+            return fmt::to_string(x);
+          },
+          [&](enumeration x) {
+            return std::string{as<enumeration_type>(subject.type).field(x)};
+          },
+          [&](const auto&) {
+            // TODO: This should probably use the TQL printer, once it exists.
+            // Then we can also remove the special cases above.
+            return fmt::to_string(value);
+          },
+        };
+        check(b.Append(match(value, f)));
+      }
+      return {string_type{}, finish(b)};
+    });
   }
 };
 
@@ -343,7 +402,8 @@ TENZIR_REGISTER_PLUGIN(trim{"trim_end", "utf8_rtrim"})
 TENZIR_REGISTER_PLUGIN(nullary_method{"capitalize", "utf8_capitalize",
                                       string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_lower", "utf8_lower", string_type{}})
-TENZIR_REGISTER_PLUGIN(nullary_method{"reverse", "utf8_reverse", string_type{}})
+TENZIR_REGISTER_PLUGIN(nullary_method{"reverse()", "utf8_reverse",
+                                      string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_title", "utf8_title", string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_upper", "utf8_upper", string_type{}})
 
@@ -362,5 +422,7 @@ TENZIR_REGISTER_PLUGIN(nullary_method{"length_bytes", "binary_length",
 TENZIR_REGISTER_PLUGIN(nullary_method{"length_chars", "utf8_length",
                                       int64_type{}});
 
-TENZIR_REGISTER_PLUGIN(replace);
+TENZIR_REGISTER_PLUGIN(replace{true});
+TENZIR_REGISTER_PLUGIN(replace{false});
 TENZIR_REGISTER_PLUGIN(slice);
+TENZIR_REGISTER_PLUGIN(str);

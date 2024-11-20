@@ -9,6 +9,7 @@
 #include "tenzir/application.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/default_configuration.hpp"
+#include "tenzir/detail/posix.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/logger.hpp"
@@ -22,6 +23,7 @@
 #include <arrow/util/compression.h>
 #include <caf/actor_system.hpp>
 #include <caf/fwd.hpp>
+#include <sys/resource.h>
 
 #include <csignal>
 #include <cstdlib>
@@ -65,8 +67,9 @@ auto main(int argc, char** argv) -> int {
   });
   // Application setup.
   auto [root, root_factory] = make_application(argv[0]);
-  if (!root)
+  if (!root) {
     return EXIT_FAILURE;
+  }
   // Parse the CLI.
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
@@ -92,16 +95,53 @@ auto main(int argc, char** argv) -> int {
   bool is_server = (app_name == "tenzir-node");
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
-  if (!log_context)
+  if (!log_context) {
     return EXIT_FAILURE;
+  }
+  if (!is_server) {
+    // Force the use of $TMPDIR as cache directory when running as a client.
+    auto ec = std::error_code{};
+    auto previous_value
+      = get_if<std::string>(&cfg.content, "tenzir.cache-directory");
+    auto tmp = std::filesystem::temp_directory_path(ec);
+    if (ec) {
+      TENZIR_ERROR("failed to determine location of temporary directory");
+      return EXIT_FAILURE;
+    }
+    auto path = tmp / fmt::format("tenzir-client-cache-{:}", getuid());
+    put(cfg.content, "tenzir.cache-directory", path.string());
+    if (previous_value) {
+      TENZIR_VERBOSE("using {} as cache directory instead of configured value "
+                     "{}",
+                     path, *previous_value);
+    }
+  }
+#if TENZIR_POSIX
+  struct rlimit rlimit {};
+  if (::getrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
+    TENZIR_ERROR("failed to get RLIMIT_NOFILE: {}", detail::describe_errno());
+    return -errno;
+  }
+  TENZIR_DEBUG("raising soft limit of open file descriptors from {} to {}",
+               rlimit.rlim_cur, rlimit.rlim_max);
+  rlimit.rlim_cur = rlimit.rlim_max;
+  if (::setrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
+    TENZIR_ERROR("failed to raise soft limit of open file descriptors: {}",
+                 detail::describe_errno());
+    return -errno;
+  }
+#endif
   // Print the configuration file(s) that were loaded.
-  if (!cfg.config_file_path.empty())
+  if (!cfg.config_file_path.empty()) {
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
-  for (const auto& file : loaded_config_files())
-    TENZIR_VERBOSE("loaded configuration file: {}", file);
+  }
+  for (const auto& file : loaded_config_files()) {
+    TENZIR_VERBOSE("loaded configuration file: {}", file.path);
+  }
   // Print the plugins that were loaded, and errors that occured during loading.
-  for (const auto& file : *loaded_plugin_paths)
+  for (const auto& file : *loaded_plugin_paths) {
     TENZIR_DEBUG("loaded plugin: {}", file);
+  }
   // Initialize successfully loaded plugins.
   if (auto err = plugins::initialize(cfg)) {
     render_error(
@@ -175,7 +215,7 @@ auto main(int argc, char** argv) -> int {
       return EXIT_FAILURE;
     }
     for (auto&& [name, value] : *r) {
-      auto* definition = caf::get_if<std::string>(&value);
+      auto* definition = try_as<std::string>(&value);
       if (!definition) {
         TENZIR_ERROR("could not load `tenzir.operators`: alias `{}` does not "
                      "resolve to a string",
@@ -213,16 +253,18 @@ auto main(int argc, char** argv) -> int {
   // Put it into the actor registry so any actor can communicate with it.
   sys.registry().put("signal-reflector", reflector.get());
   auto run_error = caf::error{};
-  if (auto result = run(*invocation, sys, root_factory); !result)
+  if (auto result = run(*invocation, sys, root_factory); !result) {
     run_error = std::move(result.error());
-  else
+  } else {
     caf::message_handler{[&](caf::error& err) {
       run_error = std::move(err);
     }}(*result);
+  }
   sys.registry().erase("signal-reflector");
   stop = true;
-  if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0)
+  if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0) {
     TENZIR_ERROR("failed to cancel signal monitoring thread");
+  }
   signal_monitoring_thread.join();
   pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
   if (run_error) {

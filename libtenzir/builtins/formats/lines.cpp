@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/split_nulls.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
@@ -22,12 +23,13 @@ namespace {
 
 struct parser_args {
   std::optional<location> skip_empty;
+  std::optional<location> null;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
     return f.object(x)
       .pretty_name("parser_args")
-      .fields(f.field("skip_empty", x.skip_empty));
+      .fields(f.field("skip_empty", x.skip_empty), f.field("null", x.null));
   }
 };
 
@@ -54,13 +56,14 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    auto make = [](auto& ctrl, generator<chunk_ptr> input,
-                   bool skip_empty) -> generator<table_slice> {
+    auto make = [](auto& ctrl, generator<chunk_ptr> input, bool skip_empty,
+                   bool nulls) -> generator<table_slice> {
       auto num_non_empty_lines = size_t{0};
       auto num_empty_lines = size_t{0};
       auto builder = table_slice_builder{line_type()};
       auto last_finish = std::chrono::steady_clock::now();
-      for (auto line : to_lines(std::move(input))) {
+      auto cutter = nulls ? split_nulls : to_lines;
+      for (auto line : cutter(std::move(input))) {
         if (not line) {
           co_yield {};
           continue;
@@ -94,7 +97,7 @@ public:
         co_yield builder.finish();
       }
     };
-    return make(ctrl, std::move(input), !!args_.skip_empty);
+    return make(ctrl, std::move(input), !!args_.skip_empty, !!args_.null);
   }
 
   friend auto inspect(auto& f, lines_parser& x) -> bool {
@@ -112,7 +115,7 @@ struct lines_printer_impl {
   auto print_values(It& out, const view<record>& x) const -> bool {
     auto first = true;
     for (const auto& [_, v] : x) {
-      if (caf::holds_alternative<caf::none_t>(v)) {
+      if (is<caf::none_t>(v)) {
         continue;
       }
       if (!first) {
@@ -120,7 +123,7 @@ struct lines_printer_impl {
       } else {
         first = false;
       }
-      caf::visit(visitor{out}, v);
+      match(v, visitor{out});
     }
     return true;
   }
@@ -165,13 +168,13 @@ struct lines_printer_impl {
     auto operator()(const view<list>& x) -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
-        if (caf::holds_alternative<caf::none_t>(v)) {
+        if (is<caf::none_t>(v)) {
           continue;
         }
         if (!sequence_empty) {
           ++out = ',';
         }
-        if (!caf::visit(*this, v)) {
+        if (!match(v, *this)) {
           return false;
         }
       }
@@ -202,7 +205,7 @@ public:
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        const auto& input_type = caf::get<record_type>(input_schema);
+        const auto& input_type = as<record_type>(input_schema);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values(input_type, *array)) {
@@ -243,6 +246,7 @@ public:
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto args = parser_args{};
     parser.add("-s,--skip-empty", args.skip_empty);
+    parser.add("--null", args.null);
     parser.parse(p);
     return std::make_unique<lines_parser>(std::move(args));
   }
@@ -272,6 +276,7 @@ class read_lines final
     auto args = parser_args{};
     argument_parser2::operator_(name())
       .add("skip_empty", args.skip_empty)
+      .add("split_at_null", args.null)
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<parser_adapter<lines_parser>>(
@@ -279,7 +284,16 @@ class read_lines final
   }
 };
 
+class write_lines final
+  : public virtual operator_plugin2<writer_adapter<lines_printer>> {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_("write_lines").parse(inv, ctx));
+    return std::make_unique<writer_adapter<lines_printer>>(lines_printer{});
+  }
+};
 } // namespace tenzir::plugins::lines
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_lines)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::write_lines)

@@ -314,9 +314,9 @@ public:
     return true;
   }
 
-  auto input_independent() const -> bool override {
+  auto idle_after() const -> duration override {
     // We may produce results without receiving any further input.
-    return true;
+    return duration::max();
   }
 
   auto name() const -> std::string override {

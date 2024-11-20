@@ -1,3 +1,5 @@
 {"foo": 42}
-warning: encountered more than one JSON object in a single NDJSON line
- = note: skips remaining objects in line `{"foo": 42}{"foo": 43}`
+{"foo": 43}
+warning: json parser: more than one JSON object in line
+ = note: line 1
+ = note: encountered a total of 2 objects

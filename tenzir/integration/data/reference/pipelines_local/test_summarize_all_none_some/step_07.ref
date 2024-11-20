@@ -2,7 +2,6 @@
 {"_path": "software", "x": null}
 {"_path": "dhcp", "x": null}
 {"_path": "corelight_metrics_cpu", "x": null}
-{"_path": "conn", "x": null}
 {"_path": "corelight_metrics_memory", "x": null}
 {"_path": "files", "x": null}
 {"_path": "pe", "x": null}
@@ -16,6 +15,7 @@
 {"_path": "tunnel", "x": ["192.88.99.1"]}
 {"_path": "notice", "x": ["106.75.3.35"]}
 {"_path": "smtp", "x": ["150.164.15.49"]}
+{"_path": "conn", "x": ["45.58.146.42", "45.231.152.1"]}
 {"_path": "rdp", "x": ["101.89.191.10"]}
 {"_path": "_0_0_2", "x": ["185.100.59.59"]}
 {"_path": "syslog", "x": ["159.83.123.38"]}
@@ -32,9 +32,15 @@
 {"_path": "snmp", "x": ["104.206.128.30"]}
 {"_path": "http", "x": ["113.107.111.117"]}
 {"_path": null, "x": ["193.10.255.99"]}
-warning: group-by column `_path` does not exist for schema `tenzir.json`
+warning: zeek-json parser: event did not contain selector field
+ = note: selector field `_path` was not found
 
-warning: aggregation column `id.orig_h` does not exist for schema `zeek.conn`
+warning: zeek-json parser: selected schema not found
+ = note: `zeek._0_0_2` does not refer to a known schema
+
+warning: zeek-json parser: parsed field contains `int64`, but the schema expects `record`
+
+warning: group-by column `_path` does not exist for schema `zeek`
 
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
 

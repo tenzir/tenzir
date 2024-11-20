@@ -7,9 +7,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/collect.hpp>
+#include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/ast.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::unroll {
 
@@ -18,11 +23,11 @@ namespace {
 auto unroll_type(const type& src, const offset& off, size_t index = 0) -> type {
   TENZIR_ASSERT(index <= off.size());
   if (index == off.size()) {
-    auto list = caf::get_if<list_type>(&src);
+    auto list = try_as<list_type>(&src);
     TENZIR_ASSERT(list);
     return list->value_type();
   }
-  auto record = caf::get_if<record_type>(&src);
+  auto record = try_as<record_type>(&src);
   TENZIR_ASSERT(record);
   auto fields = std::vector<struct record_type::field_view>{};
   auto current = size_t{0};
@@ -86,7 +91,7 @@ private:
     if (index == offset_.size()) {
       // We arrived at the offset where the list values shall be placed.
       auto result
-        = append_array_slice(builder, caf::get<list_type>(ty).value_type(),
+        = append_array_slice(builder, as<list_type>(ty).value_type(),
                              *list_array_.values(), list_begin_, list_length_);
       TENZIR_ASSERT(result.ok());
       return;
@@ -95,7 +100,7 @@ private:
     TENZIR_ASSERT(fb);
     auto fs = dynamic_cast<const arrow::StructArray*>(&source);
     TENZIR_ASSERT(fs);
-    auto ty2 = caf::get_if<record_type>(&ty);
+    auto ty2 = try_as<record_type>(&ty);
     TENZIR_ASSERT(ty2);
     process_struct(*fb, *fs, *ty2, index);
   }
@@ -134,8 +139,8 @@ auto unroll(const table_slice& slice, const offset& offset) -> table_slice {
     auto source = to_record_batch(slice)->ToStructArray();
     TENZIR_ASSERT(source.ok());
     TENZIR_ASSERT(*source);
-    unroller{offset, *list_array, row}.run(
-      *builder, **source, caf::get<record_type>(slice.schema()));
+    unroller{offset, *list_array, row}.run(*builder, **source,
+                                           as<record_type>(slice.schema()));
   }
   auto result = std::shared_ptr<arrow::StructArray>{};
   auto status = builder->Finish(&result);
@@ -149,40 +154,98 @@ class unroll_operator final : public crtp_operator<unroll_operator> {
 public:
   unroll_operator() = default;
 
-  explicit unroll_operator(std::string field) : field_{std::move(field)} {
+  explicit unroll_operator(ast::simple_selector field)
+    : field_{std::move(field)} {
+  }
+
+  explicit unroll_operator(located<std::string> field)
+    : field_{std::move(field)} {
   }
 
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    TENZIR_UNUSED(ctrl);
+    const auto get_offset = field_.match<
+      std::function<auto(const table_slice&)->std::optional<offset>>>(
+      [&](const located<std::string>& field) {
+        return [&](const table_slice& slice) -> std::optional<offset> {
+          auto offsets = collect(slice.schema().resolve(field.inner));
+          if (offsets.empty()) {
+            diagnostic::warning("field `{}` not found", field.inner)
+              .primary(field)
+              .emit(ctrl.diagnostics());
+            return {};
+          }
+          if (offsets.size() > 1) {
+            diagnostic::warning("field `{}` resolved multiple times for `{}` "
+                                "and will be ignored",
+                                field.inner, slice.schema().name())
+              .primary(field)
+              .emit(ctrl.diagnostics());
+            return {};
+          }
+          const auto& field_type
+            = as<record_type>(slice.schema()).field(offsets.front()).type;
+          if (is<null_type>(field_type)) {
+            return {};
+          }
+          if (not is<list_type>(field_type)) {
+            diagnostic::warning("expected `list`, but got `{}`",
+                                field_type.kind())
+              .primary(field)
+              .emit(ctrl.diagnostics());
+            return {};
+          }
+          return offsets.front();
+        };
+      },
+      [&](const ast::simple_selector& field) {
+        return [&](const table_slice& slice) {
+          return resolve(field, slice.schema())
+            .match(
+              [&](offset result) -> std::optional<offset> {
+                const auto& field_type
+                  = as<record_type>(slice.schema()).field(result).type;
+                if (is<null_type>(field_type)) {
+                  return {};
+                }
+                if (not is<list_type>(field_type)) {
+                  diagnostic::warning("expected `list`, but got `{}`",
+                                      field_type.kind())
+                    .primary(field)
+                    .emit(ctrl.diagnostics());
+                  return {};
+                }
+                return result;
+              },
+              [&](const resolve_error& err) -> std::optional<offset> {
+                err.reason.match(
+                  [&](resolve_error::field_not_found) {
+                    diagnostic::warning("field `{}` not found", err.ident.name)
+                      .primary(err.ident)
+                      .emit(ctrl.diagnostics());
+                  },
+                  [&](const resolve_error::field_of_non_record& reason) {
+                    diagnostic::warning("type `{}` has no field `{}`",
+                                        reason.type.kind(), err.ident.name)
+                      .primary(err.ident)
+                      .emit(ctrl.diagnostics());
+                  });
+                return {};
+              });
+        };
+      });
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      auto& schema = slice.schema();
-      auto offsets = schema.resolve(field_);
-      auto it = offsets.begin();
-      if (it == offsets.end()) {
-        // Field does not exist.
-        co_yield {};
+      const auto offset = get_offset(slice);
+      if (not offset) {
+        // Zero or multiple offsets; cannot proceed.
         continue;
       }
-      auto offset = *it;
-      ++it;
-      if (it != offsets.end()) {
-        // Field name resolved to multiple fields.
-        co_yield {};
-        continue;
-      }
-      auto field_type = caf::get<record_type>(schema).field(offset).type;
-      if (not caf::holds_alternative<list_type>(field_type)) {
-        // Field name resolved to something that is not a list.
-        co_yield {};
-        continue;
-      }
-      co_yield unroll(slice, offset);
+      co_yield unroll(slice, *offset);
     }
   }
 
@@ -201,10 +264,11 @@ public:
   }
 
 private:
-  std::string field_;
+  variant<ast::simple_selector, located<std::string>> field_;
 };
 
-class plugin final : public virtual operator_plugin<unroll_operator> {
+class plugin final : public virtual operator_plugin<unroll_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -213,9 +277,18 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"unroll", "https://docs.tenzir.com/"
                                             "operators/unroll"};
-    auto field = std::string{};
+    auto field = located<std::string>{};
     parser.add(field, "<field>");
     parser.parse(p);
+    return std::make_unique<unroll_operator>(std::move(field));
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto field = ast::simple_selector{};
+    auto parser = argument_parser2::operator_(name());
+    parser.add(field, "<field>");
+    TRY(parser.parse(inv, ctx));
     return std::make_unique<unroll_operator>(std::move(field));
   }
 };

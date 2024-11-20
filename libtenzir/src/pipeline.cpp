@@ -13,6 +13,7 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
+#include "tenzir/uuid.hpp"
 
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
@@ -25,7 +26,15 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
+  auto run_id() const noexcept -> uuid override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
   auto node() noexcept -> node_actor override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
+  auto operator_index() const noexcept -> uint64_t override {
     TENZIR_UNIMPLEMENTED();
   }
 
@@ -48,6 +57,10 @@ public:
   }
 
   auto metrics(type) noexcept -> metric_handler override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
+  auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
     TENZIR_UNIMPLEMENTED();
   }
 

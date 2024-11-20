@@ -79,6 +79,64 @@ following images:
 - `tenzir/tenzir:latest` to use the last release.
 - `tenzir/tenzir:main` to use the currnet development version.
 
+## Manage Alerts
+
+### Synopsis
+
+```
+tenzir-platform alert add <node> <duration> <webhook_url> [<webhook_body>]
+tenzir-platform alert delete <alert_id>
+tenzir-platform alert list
+```
+
+### Description
+
+The following commands allow for setting up alerts for specific nodes. After a
+node has been disconnected for the configured amount of time, an alert fires by
+performing a POST request against the configured webhook URL.
+
+#### `<node>`
+
+The node to be monitored. Can be given provided as a node ID or a node name,
+as long as the name is unambiguous.
+
+#### `<duration>`
+
+The amount of time to wait between the node disconnect and triggering the alert.
+
+#### `<webhook_url>`
+
+The platform performs a POST request against this URL when the alert triggers.
+
+#### `<webhook_body>`
+
+The body to send along with the webhook. Must be valid JSON. The body may
+contain the string `$NODE_NAME`, which will be replaced by the name of the
+node that triggered the alert.
+
+Defaults to `{"text": "Node $NODE_NAME disconnected for more than {duration}s"}`,
+where `node_id` and `duration` are set dynamically from the CLI parameters.
+
+### Example
+
+Given nodes like this:
+```
+$ tenzir-platform node list
+🟢 Node-1 (n-w2tjezz3)
+🟢 Node-2 (n-kzw21299)
+🔴 Node-3 (n-ie2tdgca)
+```
+
+We want to receive a Slack notification whenever Node-3 is offline for more than 3 minutes.
+First we create a webhook as described in the [Slack docs](https://api.slack.com/messaging/webhooks).
+Next, we configure the alert in the Tenzir Platform:
+
+```
+$ tenzir-platform alert add Node-3 3m "https://hooks.slack.com/services/XXXXX/YYYYY/ZZZZZ" '{"text": "Alert! Look after node $NODE_NAME"}'
+```
+
+Unless Node-3 reconnects, we should see a message appear after 3 minutes in the configured Slack channel.
+
 ## Manage Workspaces
 
 :::warning On-Premise Setup Required

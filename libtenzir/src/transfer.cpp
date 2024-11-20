@@ -190,20 +190,6 @@ auto transfer::perform() -> caf::error {
   return {};
 }
 
-auto transfer::download() -> caf::expected<chunk_ptr> {
-  std::vector<std::byte> body;
-  auto on_write = [&body](std::span<const std::byte> buffer) {
-    body.insert(body.end(), buffer.begin(), buffer.end());
-  };
-  auto code = easy_.set(on_write);
-  TENZIR_ASSERT(code == curl::easy::code::ok);
-  code = easy_.perform();
-  if (code != curl::easy::code::ok) {
-    return to_error(code);
-  }
-  return chunk::make(std::move(body));
-}
-
 auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
   std::vector<chunk_ptr> chunks;
   auto on_write = [&chunks](std::span<const std::byte> buffer) {
@@ -222,6 +208,25 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
     if (auto still_running = multi.run(options.poll_timeout)) {
       if (chunks.empty()) {
         co_yield chunk_ptr{};
+        if (*still_running == 0) {
+          break;
+        }
+        continue;
+      }
+      // Check if the data is valid or whether it represents an error.
+      // This may only be done after there is at least one chunk.
+      auto [code, response_code] = easy_.get<curl::easy::info::response_code>();
+      // The code should only be checked if we actually got one. Curl will
+      // return `unknown_option` if the scheme doesn't have a return code.
+      if (code == curl::easy::code::ok) {
+        // FTP, HTTP and SMTP, error codes in [200,299] are okay.
+        // Technically LDAP will also yield a response code, but we currently
+        // dont support LDAP.
+        if (response_code < 200 or response_code > 299) {
+          co_yield diagnostic::error("HTTP response code: {}", response_code)
+            .to_error();
+          co_return;
+        }
       }
       for (auto&& chunk : chunks) {
         co_yield chunk;
@@ -307,15 +312,6 @@ auto transfer::reset() -> caf::error {
 
 auto transfer::handle() -> curl::easy& {
   return easy_;
-}
-
-auto download(http::request req, transfer_options opts)
-  -> caf::expected<chunk_ptr> {
-  auto tx = transfer{std::move(opts)};
-  if (auto err = tx.prepare(std::move(req))) {
-    return err;
-  }
-  return tx.download();
 }
 
 } // namespace tenzir

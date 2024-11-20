@@ -28,24 +28,6 @@
 namespace tenzir {
 namespace {
 
-/// A diagnostic handler that deduplicate diagnostics.
-class deduplicating_diagnostic_handler final : public diagnostic_handler {
-public:
-  explicit deduplicating_diagnostic_handler(diagnostic_handler& inner)
-    : inner_{inner} {
-  }
-
-  void emit(diagnostic d) override {
-    if (deduplicator_.insert(d)) {
-      inner_.emit(std::move(d));
-    }
-  }
-
-private:
-  diagnostic_deduplicator deduplicator_;
-  diagnostic_handler& inner_;
-};
-
 // TODO: This is a naive implementation and does not do scoping properly.
 class let_resolver : public ast::visitor<let_resolver> {
 public:
@@ -64,21 +46,27 @@ public:
       visit(let->expr);
       auto value = const_eval(let->expr, ctx_);
       if (value) {
-        auto f = detail::overload{
+        map_[let->name.name] = tenzir::match(
+          std::move(*value),
           [](auto x) -> ast::constant::kind {
             return x;
           },
-          [](pattern&) -> ast::constant::kind {
+          [](const pattern&) -> ast::constant::kind {
             // TODO
             TENZIR_UNREACHABLE();
-          },
-        };
-        map_[let->name.name] = caf::visit(f, std::move(*value));
+          });
       } else {
         map_[let->name.name] = std::nullopt;
       }
       it = x.body.erase(it);
     }
+  }
+
+  void emit_not_found(const ast::dollar_var& var) {
+    diagnostic::error("variable `{}` was not declared", var.name)
+      .primary(var)
+      .emit(ctx_);
+    failure_ = failure::promise();
   }
 
   void visit(ast::expression& x) {
@@ -89,7 +77,7 @@ public:
     }
     auto it = map_.find(dollar_var->name);
     if (it == map_.end()) {
-      diagnostic::error("unresolved variable").primary(x).emit(ctx_);
+      emit_not_found(*dollar_var);
       return;
     }
     if (not it->second) {
@@ -97,6 +85,104 @@ public:
       return;
     }
     x = ast::constant{*it->second, x.get_location()};
+  }
+
+  void load_balance(ast::invocation& x) {
+    // We currently have some special casing here for the `load_balance`
+    // operator. The `let_resolver` must somehow interact with operators that
+    // modify the constant environment. There are probably better ways to do
+    // this, but putting everything here was easy to do. We should reconsider
+    // this strategy when introducing a second operator that can modify the
+    // constant environment.
+    auto docs = "https://docs.tenzir.com/tql2/operators/load_balance";
+    auto usage = "load_balance over:list { … }";
+    auto emit = [&](diagnostic_builder d) {
+      if (d.inner().severity == severity::error) {
+        failure_ = failure::promise();
+      }
+      std::move(d).docs(docs).usage(usage).emit(ctx_);
+    };
+    // Remove all the arguments, as we will be replacing them anyway.
+    auto args = std::move(x.args);
+    x.args.clear();
+    if (args.empty()) {
+      emit(
+        diagnostic::error("expected two positional arguments").primary(x.op));
+      return;
+    }
+    auto var = std::get_if<ast::dollar_var>(&*args[0].kind);
+    if (not var) {
+      emit(diagnostic::error("expected a `$`-variable").primary(args[0]));
+      return;
+    }
+    if (args.size() < 2) {
+      emit(diagnostic::error("expected a pipeline afterwards").primary(*var));
+      return;
+    }
+    auto it = map_.find(var->name);
+    if (it == map_.end()) {
+      emit_not_found(*var);
+      return;
+    }
+    if (not it->second) {
+      // Variable exists, but there was an error during evaluation.
+      return;
+    }
+    auto pipe = std::get_if<ast::pipeline_expr>(&*args[1].kind);
+    if (not pipe) {
+      emit(
+        diagnostic::error("expected a pipeline expression").primary(args[1]));
+      return;
+    }
+    // We now expand the pipeline once for each entry in the list, replacing the
+    // original variable with the list items.
+    auto original = std::move(*it->second);
+    auto entries = std::get_if<list>(&original);
+    if (not entries) {
+      auto got = original.match([]<class T>(const T&) {
+        return type_kind::of<data_to_type_t<T>>;
+      });
+      emit(diagnostic::error("expected a list, got `{}`", got).primary(*var));
+      *it->second = std::move(original);
+      return;
+    }
+    if (entries->empty()) {
+      emit(diagnostic::error("expected list to not be empty").primary(*var));
+      *it->second = std::move(original);
+      return;
+    }
+    for (auto& entry : *entries) {
+      auto f = detail::overload{
+        [](const auto& x) -> ast::constant::kind {
+          return x;
+        },
+        [](const pattern&) -> ast::constant::kind {
+          TENZIR_UNREACHABLE();
+        },
+      };
+      auto constant = tenzir::match(entry, f);
+      map_.insert_or_assign(var->name, constant);
+      auto pipe_copy = *pipe;
+      visit(pipe_copy);
+      x.args.emplace_back(std::move(pipe_copy));
+    }
+    if (args.size() > 2) {
+      emit(
+        diagnostic::error("expected exactly two arguments, got {}", args.size())
+          .primary(args[2]));
+    }
+    // Restore the original value in case it's used elsewhere.
+    map_.insert_or_assign(var->name, std::move(original));
+  }
+
+  void visit(ast::invocation& x) {
+    if (x.op.ref.resolved() and x.op.ref.segments().size() == 1
+        and x.op.ref.segments()[0] == "load_balance") {
+      // We special case this as a temporary solution.
+      load_balance(x);
+      return;
+    }
+    enter(x);
   }
 
   template <class T>
@@ -129,11 +215,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
     stmt.match(
       [&](ast::invocation& x) {
         // TODO: Where do we check that this succeeds?
-        auto def = std::get_if<const operator_factory_plugin*>(
-          &ctx.reg().get(x.op.ref));
-        TENZIR_ASSERT(def);
-        TENZIR_ASSERT(*def);
-        auto op = (*def)->make(
+        auto op = ctx.reg().get(x).make(
           operator_factory_plugin::invocation{
             std::move(x.op),
             std::move(x.args),
@@ -206,24 +288,11 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
   return tenzir::pipeline{std::move(ops)};
 }
 
-auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
-  // TODO: Refactor this.
-  arrow::util::InitializeUTF8();
-  if (arrow::util::ValidateUTF8(content)) {
-    return {};
-  }
-  // TODO: Consider reporting offset.
-  diagnostic::error("found invalid UTF8").emit(ctx);
-  return failure::promise();
-}
-
 } // namespace
 
 auto parse_and_compile(std::string_view source, session ctx)
   -> failure_or<pipeline> {
-  TRY(validate_utf8(source, ctx));
-  TRY(auto tokens, tokenize(source, ctx));
-  TRY(auto ast, parse(tokens, source, ctx));
+  TRY(auto ast, parse(source, ctx));
   return compile(std::move(ast), ctx);
 }
 
@@ -250,8 +319,7 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
   TENZIR_UNUSED(sys);
   auto result = std::invoke([&]() -> failure_or<bool> {
-    auto dedup = std::make_unique<deduplicating_diagnostic_handler>(dh);
-    auto provider = session_provider::make(*dedup);
+    auto provider = session_provider::make(dh);
     auto ctx = provider.as_session();
     TRY(validate_utf8(source, ctx));
     auto tokens = tokenize_permissive(source);

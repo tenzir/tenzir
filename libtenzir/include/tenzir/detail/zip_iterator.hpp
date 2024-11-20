@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include "tenzir/detail/assert.hpp"
+
 #include <cstddef>
 #include <iterator>
 #include <tuple>

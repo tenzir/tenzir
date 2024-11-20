@@ -386,7 +386,7 @@ auto escape(const record& xs) -> std::string {
         return str; // no more double quotes
       },
     };
-    return caf::visit(f, value);
+    return match(value, f);
   };
   std::vector<std::string> kvps;
   kvps.reserve(xs.size());

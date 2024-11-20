@@ -34,6 +34,31 @@
 #include <dlfcn.h>
 #include <memory>
 
+#ifndef __has_feature
+#  define __has_feature(x) 0
+#endif
+
+#if __has_feature(address_sanitizer) or defined(__SANITIZE_ADDRESS__)
+#  if __has_include(<sanitizer/lsan_interface.h>)
+#    define TENZIR_HAS_LEAK_SANITIZER
+#  endif
+#endif
+
+#ifdef TENZIR_HAS_LEAK_SANITIZER
+#  include <sanitizer/lsan_interface.h>
+#  define TENZIR_DISABLE_LEAK_SANITIZER()                                      \
+    do {                                                                       \
+      __lsan_disable();                                                        \
+    } while (false)
+#  define TENZIR_ENABLE_LEAK_SANITIZER()                                       \
+    do {                                                                       \
+      __lsan_enable();                                                         \
+    } while (false)
+#else
+#  define TENZIR_DISABLE_LEAK_SANITIZER()
+#  define TENZIR_ENABLE_LEAK_SANITIZER()
+#endif
+
 namespace tenzir {
 
 // -- plugin singleton ---------------------------------------------------------
@@ -305,6 +330,21 @@ load(const std::vector<std::string>& bundled_plugins,
 
 /// Initialize loaded plugins.
 caf::error initialize(caf::actor_system_config& cfg) {
+  // If everything went well, we should have a strictly-ordered list of plugins.
+  if (auto it = std::ranges::adjacent_find(get(), std::greater_equal{});
+      it != get().end()) {
+    auto name_a = (*it)->name();
+    ++it;
+    auto name_b = (*it)->name();
+    if (name_a == name_b) {
+      TENZIR_ASSERT(false,
+                    fmt::format("found multiple plugins named `{}`", name_a));
+    } else {
+      TENZIR_ASSERT(false, fmt::format("unexpected plugin ordering: found `{}` "
+                                       "before `{}`",
+                                       name_a, name_b));
+    }
+  }
   auto global_config = record{};
   auto global_opts = caf::content(cfg);
   if (auto global_opts_data = to<record>(global_opts)) {
@@ -315,8 +355,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
   }
   auto plugins_record = record{};
   if (global_config.contains("plugins")) {
-    if (auto plugins_entry
-        = caf::get_if<record>(&global_config.at("plugins"))) {
+    if (auto* plugins_entry = try_as<record>(&global_config.at("plugins"))) {
       plugins_record = std::move(*plugins_entry);
     }
   }
@@ -324,10 +363,10 @@ caf::error initialize(caf::actor_system_config& cfg) {
                global_config.size());
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
-    // First, try to read the configurations from the merged Tenzir configuration.
+    // Try to read the configurations from the merged Tenzir configuration.
     if (plugins_record.contains(plugin->name())) {
       if (auto* plugins_entry
-          = caf::get_if<record>(&plugins_record.at(plugin->name()))) {
+          = try_as<record>(&plugins_record.at(plugin->name()))) {
         merged_config = std::move(*plugins_entry);
       } else {
         return caf::make_error(ec::invalid_configuration,
@@ -336,50 +375,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
                                            plugin->name()));
       }
     }
-    // Second, try to read the configuration from the plugin-specific
-    // configuration files at <config-dir>/plugin/<plugin-name>.yaml.
-    for (auto&& config_dir : config_dirs(cfg)) {
-      const auto yaml_path
-        = config_dir / "plugin" / fmt::format("{}.yaml", plugin->name());
-      const auto yml_path
-        = config_dir / "plugin" / fmt::format("{}.yml", plugin->name());
-      auto err = std::error_code{};
-      const auto yaml_path_exists = std::filesystem::exists(yaml_path, err);
-      err.clear();
-      const auto yml_path_exists = std::filesystem::exists(yml_path, err);
-      if (!yaml_path_exists && !yml_path_exists) {
-        continue;
-      }
-      if (yaml_path_exists && yml_path_exists) {
-        return caf::make_error(
-          ec::invalid_configuration,
-          fmt::format("detected configuration files for the "
-                      "{} plugin at "
-                      "conflicting paths {} and {}",
-                      plugin->name(), yaml_path, yml_path));
-      }
-      const auto& path = yaml_path_exists ? yaml_path : yml_path;
-      if (auto opts = load_yaml(path)) {
-        // Skip empty config files.
-        if (caf::holds_alternative<caf::none_t>(*opts)) {
-          continue;
-        }
-        if (const auto& opts_data = caf::get_if<record>(&*opts)) {
-          merge(*opts_data, merged_config, policy::merge_lists::yes);
-          TENZIR_VERBOSE("loaded plugin configuration file: {}", path);
-          loaded_config_files_singleton.push_back(path);
-        } else {
-          return caf::make_error(ec::invalid_configuration,
-                                 fmt::format("detected invalid plugin "
-                                             "configuration file for the {} "
-                                             "plugin at {}",
-                                             plugin->name(), path));
-        }
-      } else {
-        return std::move(opts.error());
-      }
-    }
-    // Third, initialize the plugin with the merged configuration.
+    // Initialize the plugin with the merged configuration.
     if (plugin.type() != plugin_ptr::type::builtin) {
       TENZIR_VERBOSE("initializing the {} plugin with options: {}",
                      plugin->name(), merged_config);
@@ -462,34 +458,8 @@ store_plugin::make_store(filesystem_actor fs,
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());
-  return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
-                                                 std::move(*store), fs,
-                                                 std::move(path), name());
-}
-
-// -- context plugin -----------------------------------------------------------
-
-auto context_plugin::get_latest_loader() const -> const context_loader& {
-  TENZIR_ASSERT(not loaders_.empty());
-  return **std::ranges::max_element(loaders_, std::ranges::less{},
-                                    [](const auto& loader) {
-                                      return loader->version();
-                                    });
-}
-
-auto context_plugin::get_versioned_loader(int version) const
-  -> const context_loader* {
-  auto it = std::ranges::find(loaders_, version, [](const auto& loader) {
-    return loader->version();
-  });
-  if (it == loaders_.end()) {
-    return nullptr;
-  }
-  return it->get();
-}
-
-void context_plugin::register_loader(std::unique_ptr<context_loader> loader) {
-  loaders_.emplace_back(std::move(loader));
+  return fs->home_system().spawn<caf::lazy_init>(
+    default_passive_store, std::move(*store), fs, std::move(path), name());
 }
 
 // -- aspect plugin ------------------------------------------------------------
@@ -517,7 +487,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       return;
     }
     auto& last = output.back();
-    auto null_builder = caf::get<record_type>(last.schema())
+    auto null_builder = as<record_type>(last.schema())
                           .make_arrow_builder(arrow::default_memory_pool());
     TENZIR_ASSERT(null_builder->AppendNull().ok());
     auto null_array = std::shared_ptr<arrow::StructArray>{};
@@ -577,7 +547,9 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
 caf::expected<plugin_ptr>
 plugin_ptr::make_dynamic(const char* filename,
                          caf::actor_system_config& cfg) noexcept {
+  TENZIR_DISABLE_LEAK_SANITIZER();
   auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+  TENZIR_ENABLE_LEAK_SANITIZER();
   if (!library) {
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
                            dlerror());

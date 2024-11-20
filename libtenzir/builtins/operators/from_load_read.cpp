@@ -111,6 +111,10 @@ public:
     };
   }
 
+  auto idle_after() const -> duration override {
+    return defaults::import::batch_timeout;
+  }
+
   friend auto inspect(auto& f, read_operator& x) -> bool {
     return plugin_inspect(f, x.parser_);
   }
@@ -370,7 +374,7 @@ public:
       [&](list& event_list) -> failure_or<operator_ptr> {
         auto events = std::vector<record>{};
         for (auto& event : event_list) {
-          auto event_record = caf::get_if<record>(&event);
+          auto event_record = try_as<record>(&event);
           if (not event_record) {
             diagnostic::error("expected list of records")
               .primary(expr)
@@ -408,7 +412,7 @@ public:
         return failure::promise();
       },
     };
-    return caf::visit(f, value);
+    return match(value, f);
   }
 };
 
@@ -431,7 +435,7 @@ public:
       return failure::promise();
     }
     TRY(auto string_data, const_eval(inv.args[0], ctx));
-    auto string = caf::get_if<std::string>(&string_data);
+    auto string = try_as<std::string>(&string_data);
     if (not string) {
       diagnostic::error("expected string")
         .primary(inv.args[0])
@@ -484,7 +488,7 @@ public:
       return failure::promise();
     }
     TRY(auto string_data, const_eval(inv.args[0], ctx));
-    auto string = caf::get_if<std::string>(&string_data);
+    auto string = try_as<std::string>(&string_data);
     if (not string) {
       diagnostic::error("expected string")
         .primary(inv.args[0])

@@ -22,7 +22,6 @@
 #include <caf/make_counted.hpp>
 #include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
-#include <caf/variant.hpp>
 
 #include <array>
 #include <cstdint>
@@ -140,7 +139,7 @@ struct view_trait<blob> {
 // clang-format off
 /// A type-erased view over various types of data.
 /// @relates view_trait
-using data_view = caf::variant<
+using data_view = tenzir::variant<
   view<caf::none_t>,
   view<bool>,
   view<int64_t>,
@@ -233,10 +232,12 @@ public:
   friend void hash_append(Hasher& h, container_view_handle xs) {
     // TODO: include the concrete view type in the hash digest so that it
     // guarantees the absense of collisions between view types.
-    if (!xs)
+    if (!xs) {
       return hash_append(h, caf::none);
-    for (auto x : *xs)
+    }
+    for (auto x : *xs) {
       hash_append(h, x);
+    }
     hash_append(h, xs->size());
   }
 
@@ -247,10 +248,12 @@ public:
 
   friend bool
   operator<(const container_view_handle& x, const container_view_handle& y) {
-    if (!x)
+    if (!x) {
       return static_cast<bool>(y);
-    if (!y)
+    }
+    if (!y) {
       return false;
+    }
     return *x < *y;
   }
 
@@ -343,21 +346,27 @@ struct container_view : caf::ref_counted,
 
 template <class T>
 bool operator==(const container_view<T>& xs, const container_view<T>& ys) {
-  if (xs.size() != ys.size())
+  if (xs.size() != ys.size()) {
     return false;
-  for (auto i = 0u; i < xs.size(); ++i)
-    if (xs.at(i) != ys.at(i))
+  }
+  for (auto i = 0u; i < xs.size(); ++i) {
+    if (xs.at(i) != ys.at(i)) {
       return false;
+    }
+  }
   return true;
 }
 
 template <class T>
 bool operator<(const container_view<T>& xs, const container_view<T>& ys) {
-  if (xs.size() != ys.size())
+  if (xs.size() != ys.size()) {
     return xs.size() < ys.size();
-  for (auto i = 0u; i < xs.size(); ++i)
-    if (xs.at(i) < ys.at(i))
+  }
+  for (auto i = 0u; i < xs.size(); ++i) {
+    if (xs.at(i) < ys.at(i)) {
       return true;
+    }
+  }
   return false;
 }
 
@@ -475,9 +484,10 @@ data_view make_data_view(const T& x) {
 
 /// @relates view_trait
 template <class T>
-data_view make_data_view(const caf::optional<T>& x) {
-  if (!x)
+data_view make_data_view(const std::optional<T>& x) {
+  if (!x) {
     return make_view(caf::none);
+  }
   return make_view(*x);
 }
 
