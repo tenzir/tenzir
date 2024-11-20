@@ -836,3 +836,18 @@ EOF
   check tenzir --tql2 'from [] | summarize count(), sum(foo)'
   check tenzir --tql2 'from [] | summarize count(), sum(foo), bar'
 }
+
+@test "map and where an empty list" {
+  check tenzir --tql2 'from {foo: []} | foo = foo.map(x, x + 1)'
+  check tenzir --tql2 'from {foo: []} | foo = foo.where(x, x > 3)'
+}
+
+@test "map and where a list of numbers" {
+  check tenzir --tql2 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.map(x, x + 1)'
+  check tenzir --tql2 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.where(x, x > 3)'
+}
+
+@test "map and where with records" {
+  check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.map(x, x.en)'
+  check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.where(x, x.de == "eins")'
+}
