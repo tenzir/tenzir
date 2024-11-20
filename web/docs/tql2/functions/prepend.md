@@ -3,13 +3,13 @@
 Inserts an element at the start of a list.
 
 ```tql
-prepend(list:list, element:any) -> list
+prepend(xs:list, x:any) -> list
 ```
 
 ## Description
 
-The `prepend` function returns the `list` with `element` inserted at the front.
-`xs.prepend(y)` is equivalent to `[y, ...xs]`.
+The `prepend` function returns the list `xs` with `x` inserted at the front.
+The expression `xs.prepend(y)` is equivalent to `[x, ...xs]`.
 
 ## Examples
 
@@ -27,4 +27,3 @@ xs = xs.prepend(3)
 ## See Also
 
 [`append`](append.md), [`concatenate`](concatenate.md)
-

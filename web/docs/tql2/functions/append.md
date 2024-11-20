@@ -3,13 +3,13 @@
 Inserts an element at the back of a list.
 
 ```tql
-append(list:list, element:any) -> list
+append(xs:list, x:any) -> list
 ```
 
 ## Description
 
-The `append` function returns the `list` with `element` inserted at the end.
-`xs.append(y)` is equivalent to `[...xs, y]`.
+The `append` function returns the list `xs` with `x` inserted at the end. The
+expression `xs.append(x)` is equivalent to `[...xs, x]`.
 
 ## Examples
 
@@ -26,5 +26,4 @@ xs = xs.append(3)
 
 ## See Also
 
-[`prepend`](prepend.md), [`concatenate`](concatenate.md)
-
+[`concatenate`](concatenate.md), [`prepend`](prepend.md)
