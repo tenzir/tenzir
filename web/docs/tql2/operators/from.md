@@ -8,6 +8,8 @@ Loads from an URI, inferring the source, compression and format.
 
 ```tql
 from uri:str, [loader_args... { … }]
+from event:record
+from [ event... ]
 ```
 
 :::tip Use `from` if you can
@@ -19,6 +21,8 @@ without having to manually write the separate steps of data ingestion manually.
 
 The `from` operator is an easy way to get data into Tenzir.
 It will try to infer the connector, compression and format based on the given URI.
+
+Alternatively, it can be used to create ad-hoc events from records.
 
 ### `uri: str`
 
@@ -49,6 +53,13 @@ inference should be sufficient and the pipeline should not be required.
 If you want to perform other operations on the data afterwards, continue the
 pipeline after this operator instead of providing a sub-pipeline.
 :::
+
+### `event`/`events... :record`
+
+Instead of a URI, you can also provide a *record' or a *list of records* as a
+first argument to `from`. This will be treated as input events and simply passed
+on as-is to the pipeline. This is mainly useful to test pipelines during
+development.
 
 ## Explanation
 
@@ -149,7 +160,16 @@ from "https:://example.org/file.json", header={Token: 0}
 ### Create a single event ad-hoc
 
 ```tql
-from {Field: "Value", Other_Field: 42 }
+from {Field: "Value", Nested_field: {ip: 127.0.0.1, port: 42}}
+```
+```tql
+{
+  Field: "Value",
+  Nested_field: {
+    ip: 127.0.0.1,
+    port: 42
+  }
+}
 ```
 
 ### Create multiple events ad-hoc
@@ -160,4 +180,18 @@ from [
   {Field: "Value", Other_Field: 1 },
   {Field: "Value", Other_Field: 2 }
 ]
+```
+```tql
+{
+  Field: "Value",
+  Other_Field: 0
+}
+{
+  Field: "Value",
+  Other_Field: 1
+}
+{
+  Field: "Value",
+  Other_Field: 2
+}
 ```

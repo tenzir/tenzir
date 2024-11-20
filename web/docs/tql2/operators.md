@@ -60,7 +60,7 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`from`](./operators/from.md) | Loads from an URI | `from "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
+[`from`](./operators/from.md) | Loads from an URI or creates events ad-hoc | `from "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
 [`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
 [`export`](./operators/export.md) | Retrieves events from the node | `export`
 [`from_fluent_bit`](./operators/from_fluent_bit.md) | Returns results from a fluent-bit | `from_fluent_bit "opentelemetry"`
