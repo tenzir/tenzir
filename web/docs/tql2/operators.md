@@ -63,6 +63,7 @@ Operator | Description | Example
 [`from`](./operators/from.md) | Loads from an URI | `from "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
 [`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
 [`export`](./operators/export.md) | Retrieves events from the node | `export`
+[`from_fluent_bit`](./operators/from_fluent_bit.md) | Returns results from a fluent-bit | `from_fluent_bit "opentelemetry"`
 [`from_velociraptor`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
 [`load_amqp`](./operators/load_amqp.md) | Loads bytes from an AMQP server | `load_amqp`
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
@@ -105,6 +106,7 @@ Operator | Description | Example
 [`save_zmq`](./operators/save_zmq.md) | Saves incoming bytes to ZeroMQ messages | `save_zmq`
 [`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
 [`to_azure_log_analytics`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
+[`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent-Bit| `to_fluent_bit fluent-bit "es" options= {host=…`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
 [`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "https://localhost:8088", …`
 
