@@ -215,3 +215,21 @@ EOF
     x = x.strptime("%Y-%m-%d+%H:%M:%S")
   '
 }
+
+@test "strptime with bad format string" {
+  check tenzir '
+    from {
+      x: "2024-12-31",
+    }
+    x = x.strptime("%d-%d-%d")
+  '
+}
+
+@test "strptime with bad input string" {
+  check tenzir '
+    from {
+      x: "hello",
+    }
+    x = x.strptime("%Y-%m-%d")
+  '
+}

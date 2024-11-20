@@ -1,0 +1,7 @@
+{"x": null}
+warning: failed to apply `strptime`
+ --> <input>:5:11
+  |
+5 |     x = x.strptime("%Y-%m-%d")
+  |           ~~~~~~~~ 
+  |
