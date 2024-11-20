@@ -28,7 +28,7 @@ stdenvNoCC.mkDerivation {
           bats -T -j $(nproc) --filter-tags !python_operator "${path}/integration/tests"
         fi
       '';
-      tzdata = pkgsBuildBuild.tzdata
+      tzdata = pkgsBuildBuild.tzdata;
     in
     ''
       patchShebangs tenzir/integration/data/misc/scripts
