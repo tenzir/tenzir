@@ -333,10 +333,10 @@ public:
   }
 };
 
-class strftime : public virtual function_plugin {
+class format_time : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.strftime";
+    return "tql2.format_time";
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -376,7 +376,7 @@ public:
             return series::null(result_type, array.length());
           },
           [&](const auto&) {
-            diagnostic::warning("`strftime` expected `time`, but got `{}`",
+            diagnostic::warning("`format_time` expected `time`, but got `{}`",
                                 subject.type.kind())
               .primary(subject_expr)
               .emit(ctx);
@@ -388,10 +388,10 @@ public:
   }
 };
 
-class strptime : public virtual function_plugin {
+class parse_time : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.strptime";
+    return "tql2.parse_time";
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -428,7 +428,7 @@ public:
             auto post_nulls = result->null_count();
             if (pre_nulls != post_nulls) {
               TENZIR_ASSERT(pre_nulls < post_nulls);
-              diagnostic::warning("failed to apply `strptime`")
+              diagnostic::warning("failed to apply `parse_time`")
                 .primary(fn)
                 .emit(ctx);
             }
@@ -438,7 +438,7 @@ public:
             return series::null(result_type, array.length());
           },
           [&](const auto&) {
-            diagnostic::warning("`strptime` expected `time`, but got `{}`",
+            diagnostic::warning("`parse_time` expected `time`, but got `{}`",
                                 subject.type.kind())
               .primary(subject_expr)
               .emit(ctx);
@@ -463,5 +463,5 @@ TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::year});
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::month});
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::day});
 TENZIR_REGISTER_PLUGIN(now)
-TENZIR_REGISTER_PLUGIN(class strftime)
-TENZIR_REGISTER_PLUGIN(class strptime)
+TENZIR_REGISTER_PLUGIN(format_time)
+TENZIR_REGISTER_PLUGIN(parse_time)

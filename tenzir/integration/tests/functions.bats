@@ -198,38 +198,38 @@ EOF
   '
 }
 
-@test "strftime" {
+@test "format_time" {
   check tenzir '
     from {
       x: 2024-12-31+12:59:42,
     }
-    x = x.strftime("%Y/%m/%d - %T")
+    x = x.format_time("%Y/%m/%d - %T")
   '
 }
 
-@test "strptime" {
+@test "parse_time" {
   check tenzir '
     from {
       x: "2024-12-31+12:59:42",
     }
-    x = x.strptime("%Y-%m-%d+%H:%M:%S")
+    x = x.parse_time("%Y-%m-%d+%H:%M:%S")
   '
 }
 
-@test "strptime with bad format string" {
+@test "parse_time with bad format string" {
   check tenzir '
     from {
       x: "2024-12-31",
     }
-    x = x.strptime("%d-%d-%d")
+    x = x.parse_time("%d-%d-%d")
   '
 }
 
-@test "strptime with bad input string" {
+@test "parse_time with bad input string" {
   check tenzir '
     from {
       x: "hello",
     }
-    x = x.strptime("%Y-%m-%d")
+    x = x.parse_time("%Y-%m-%d")
   '
 }
