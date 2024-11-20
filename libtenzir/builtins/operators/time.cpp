@@ -444,7 +444,6 @@ auto strptime_partial(diagnostic_handler& diag, const char* input,
       return val == std::numeric_limits<T>::max();
     }
   };
-  errno = 0;
   // Using strptime, which is a POSIX function, available both on Linux and
   // macOS.
   //
@@ -460,7 +459,6 @@ auto strptime_partial(diagnostic_handler& diag, const char* input,
   const auto* result = ::strptime(input, format, &time);
   if (not result) {
     diagnostic::error("failed to parse time")
-      .note("strptime error: `{}`", detail::describe_errno(errno))
       .hint("input: `{}`, format: `{}`", input, format)
       .emit(diag);
     return std::nullopt;
