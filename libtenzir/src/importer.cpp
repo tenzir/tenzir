@@ -58,7 +58,7 @@ void importer_state::handle_slice(table_slice&& slice) {
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, index_actor index) {
-  TENZIR_TRACE_SCOPE("importer {} {}", TENZIR_ARG(self->id()), TENZIR_ARG(dir));
+  TENZIR_TRACE("importer {} {}", TENZIR_ARG(self->id()), TENZIR_ARG(dir));
   if (auto ec = std::error_code{};
       std::filesystem::exists(dir / "current_id_block", ec)) {
     std::filesystem::remove(dir / "current_id_block", ec);

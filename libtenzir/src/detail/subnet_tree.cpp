@@ -10,6 +10,8 @@
 
 #include "tenzir/detail/narrow.hpp"
 
+#include <caf/detail/scope_guard.hpp>
+
 #include <span>
 
 namespace {
@@ -887,7 +889,7 @@ auto type_erased_subnet_tree::search(subnet key) const
   auto num_elements = 0;
   patricia_node_t** xs = nullptr;
   patricia_search_all(impl_->tree.get(), prefix, &xs, &num_elements);
-  auto guard = caf::detail::make_scope_guard([prefix, xs] {
+  auto guard = caf::detail::scope_guard([prefix, xs]() noexcept {
     Deref_Prefix(prefix);
     free(xs);
   });
@@ -902,7 +904,7 @@ auto type_erased_subnet_tree::search(subnet key)
   auto num_elements = 0;
   patricia_node_t** xs = nullptr;
   patricia_search_all(impl_->tree.get(), prefix, &xs, &num_elements);
-  auto guard = caf::detail::make_scope_guard([prefix, xs] {
+  auto guard = caf::detail::scope_guard([prefix, xs]() noexcept {
     Deref_Prefix(prefix);
     free(xs);
   });

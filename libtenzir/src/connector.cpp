@@ -16,6 +16,7 @@
 #include <caf/io/middleman.hpp>
 #include <caf/io/network/interfaces.hpp>
 #include <caf/openssl/all.hpp>
+#include <caf/sec.hpp>
 #include <fmt/format.h>
 
 #include <optional>
@@ -67,16 +68,9 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::no_proxy_registry:
     case caf::sec::runtime_error:
     case caf::sec::remote_linking_failed:
-    case caf::sec::cannot_add_upstream:
-    case caf::sec::upstream_already_exists:
-    case caf::sec::invalid_upstream:
-    case caf::sec::cannot_add_downstream:
-    case caf::sec::downstream_already_exists:
-    case caf::sec::invalid_downstream:
-    case caf::sec::no_downstream_stages_defined:
-    case caf::sec::stream_init_failed:
-    case caf::sec::invalid_stream_state:
-    case caf::sec::unhandled_stream_error:
+    case caf::sec::invalid_stream:
+    case caf::sec::cannot_resubscribe_stream:
+    case caf::sec::stream_aborted:
     case caf::sec::bad_function_call:
     case caf::sec::feature_disabled:
     case caf::sec::cannot_open_file:
@@ -84,7 +78,7 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::socket_disconnected:
     case caf::sec::socket_operation_failed:
     case caf::sec::unavailable_or_would_block:
-    case caf::sec::malformed_basp_message:
+    case caf::sec::malformed_message:
     case caf::sec::serializing_basp_payload_failed:
     case caf::sec::redundant_connection:
     case caf::sec::remote_lookup_failed:
@@ -104,6 +98,18 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::broken_promise:
     case caf::sec::connection_timeout:
     case caf::sec::action_reschedule_failed:
+    case caf::sec::invalid_observable:
+    case caf::sec::too_many_observers:
+    case caf::sec::disposed:
+    case caf::sec::cannot_open_resource:
+    case caf::sec::protocol_error:
+    case caf::sec::logic_error:
+    case caf::sec::invalid_delegate:
+    case caf::sec::invalid_request:
+    case caf::sec::future_timeout:
+    case caf::sec::invalid_utf8:
+    case caf::sec::backpressure_overflow:
+    case caf::sec::too_many_worker_failures:
       return true;
     case caf::sec::incompatible_versions:
     case caf::sec::incompatible_application_ids:

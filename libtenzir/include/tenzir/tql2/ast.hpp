@@ -94,8 +94,8 @@ struct null {};
 struct constant {
   // TODO: Consider moving the location into the variant inhabitants.
   // TODO: Consider representing integers differently.
-  using kind = caf::detail::tl_apply_t<
-    caf::detail::tl_filter_not_type_t<data::types, pattern>, variant>;
+  using kind = detail::tl_apply_t<
+    detail::tl_filter_not_type_t<data::types, pattern>, variant>;
 
   constant() = default;
 
@@ -147,19 +147,19 @@ struct root_field {
 };
 
 using expression_kinds
-  = caf::detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
+  = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
                            constant, field_access, index_expr, binary_expr,
                            unary_expr, function_call, underscore, unpack,
                            assignment, dollar_var>;
 
-using expression_kind = caf::detail::tl_apply_t<expression_kinds, variant>;
+using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
 struct expression {
   expression() = default;
 
   template <class T>
     requires(
-      caf::detail::tl_contains<expression_kinds, std::remove_cvref_t<T>>::value)
+      detail::tl_contains<expression_kinds, std::remove_cvref_t<T>>::value)
   explicit(false) expression(T&& x)
     : kind{std::make_unique<expression_kind>(std::forward<T>(x))} {
   }
@@ -896,7 +896,7 @@ template <>
 class variant_traits<ast::expression> {
 public:
   static constexpr auto count
-    = caf::detail::tl_size<ast::expression_kinds>::value;
+    = detail::tl_size<ast::expression_kinds>::value;
 
   static auto index(const ast::expression& x) -> size_t {
     TENZIR_ASSERT(x.kind);

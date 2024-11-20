@@ -38,7 +38,7 @@ struct extract_query_context {
 /// A wrapper for an expression related command.
 struct query_context {
   /// The query command type.
-  using command = caf::variant<extract_query_context>;
+  using command = variant<extract_query_context>;
 
   // -- constructor & destructor -----------------------------------------------
 

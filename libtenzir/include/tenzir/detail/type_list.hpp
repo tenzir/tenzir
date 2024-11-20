@@ -14,7 +14,7 @@
 
 namespace tenzir::detail {
 
-#if CAF_VERSION >= 10000
+#if CAF_MAJOR_VERSION >= 1
 using caf::type_list;
 #else
 using caf::detail::type_list;
@@ -287,9 +287,9 @@ struct common_types_helper<L1, L2> {
   using type = std::conditional_t<
     tl_contains_v<L1, caf::detail::tl_head_t<L2>>,
     tl_prepend_t<
-      typename common_types_helper<L1, caf::detail::tl_tail_t<L2>>::type,
+      typename common_types_helper<L1, detail::tl_tail_t<L2>>::type,
       caf::detail::tl_head_t<L2>>,
-    typename common_types_helper<L1, caf::detail::tl_tail_t<L2>>::type>;
+    typename common_types_helper<L1, detail::tl_tail_t<L2>>::type>;
 };
 
 // Creates a new type list that contains all the types that are present in both

@@ -15,7 +15,6 @@
 #include <caf/deep_to_string.hpp>
 #include <caf/detail/pretty_type_name.hpp>
 #include <caf/detail/scope_guard.hpp>
-#include <caf/string_view.hpp>
 #include <spdlog/spdlog.h>
 
 #include <string>

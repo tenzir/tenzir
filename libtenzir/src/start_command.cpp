@@ -64,7 +64,7 @@ using namespace std::chrono_literals;
 
 auto start_command(const invocation& inv, caf::actor_system& sys)
   -> caf::message {
-  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(inv.options),
+  TENZIR_TRACE("{} {}", TENZIR_ARG(inv.options),
                      TENZIR_ARG("args", inv.arguments.begin(),
                                 inv.arguments.end()));
   auto node_endpoint = std::optional<endpoint>{};

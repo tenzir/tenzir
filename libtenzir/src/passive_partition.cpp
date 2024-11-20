@@ -369,7 +369,7 @@ partition_actor::behavior_type passive_partition(
   self->request(self->state().filesystem, caf::infinite, atom::mmap_v, path)
     .then(
       [=](chunk_ptr chunk) {
-        TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(chunk));
+        TENZIR_TRACE("{} {}", *self, TENZIR_ARG(chunk));
         TENZIR_TRACEPOINT(passive_partition_loaded, id_string.c_str());
         TENZIR_ASSERT(!self->state().partition_chunk);
         if (!chunk) {

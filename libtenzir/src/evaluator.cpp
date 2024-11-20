@@ -151,7 +151,7 @@ evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           expression expr, std::vector<evaluation_triple> eval,
           ids ids_to_use_for_no_indexer) {
-  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(expr), caf::deep_to_string(eval));
+  TENZIR_TRACE("{} {}", TENZIR_ARG(expr), caf::deep_to_string(eval));
   TENZIR_ASSERT(!eval.empty());
   self->state().expr = std::move(expr);
   self->state().eval = std::move(eval);

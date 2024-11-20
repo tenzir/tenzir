@@ -23,9 +23,9 @@ namespace tenzir {
 
 class debug_writer : public caf::serializer {
 private:
-  using string_view = caf::string_view;
+  using string_view = std::string_view;
   using type_id_t = caf::type_id_t;
-  using byte = caf::byte;
+  using byte = std::byte;
   template <class T>
   using span = caf::span<T>;
 

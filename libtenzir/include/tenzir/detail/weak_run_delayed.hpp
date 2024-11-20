@@ -26,9 +26,8 @@ auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
                       Function&& function) {
   return self->clock().schedule(
     self->clock().now() + delay,
-    caf::make_action(std::forward<Function>(function),
-                     caf::action::state::waiting),
-    caf::weak_actor_ptr{self->ctrl()});
+    // FIXME: double check if this is correct.
+    caf::make_action(std::forward<Function>(function)));
 }
 
 /// Runs an action in a loop with a given delay without keeping the actor alive.

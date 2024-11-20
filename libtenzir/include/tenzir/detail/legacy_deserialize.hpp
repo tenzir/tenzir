@@ -11,14 +11,13 @@
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/detail/byteswap.hpp"
 #include "tenzir/detail/inspection_common.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/error.hpp"
-#include "tenzir/logger.hpp"
 #include "tenzir/variant_traits.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/detail/ieee_754.hpp>
 #include <caf/detail/network_order.hpp>
-#include <caf/detail/select_integer_type.hpp>
 #include <caf/detail/type_traits.hpp>
 #include <caf/expected.hpp>
 
@@ -32,6 +31,53 @@
 #include <type_traits>
 
 namespace tenzir::detail {
+
+template <int, bool>
+struct select_integer_type;
+
+template <>
+struct select_integer_type<1, true> {
+  using type = int8_t;
+};
+
+template <>
+struct select_integer_type<1, false> {
+  using type = uint8_t;
+};
+
+template <>
+struct select_integer_type<2, true> {
+  using type = int16_t;
+};
+
+template <>
+struct select_integer_type<2, false> {
+  using type = uint16_t;
+};
+
+template <>
+struct select_integer_type<4, true> {
+  using type = int32_t;
+};
+
+template <>
+struct select_integer_type<4, false> {
+  using type = uint32_t;
+};
+
+template <>
+struct select_integer_type<8, true> {
+  using type = int64_t;
+};
+
+template <>
+struct select_integer_type<8, false> {
+  using type = uint64_t;
+};
+
+template <int Size, bool IsSigned>
+using select_integer_type_t =
+  typename select_integer_type<Size, IsSigned>::type;
 
 /// An inspector for CAF inspect
 class legacy_deserializer {
@@ -148,7 +194,7 @@ public:
     requires(std::is_integral_v<T>)
   result_type apply(T& x) {
     using type
-      = caf::detail::select_integer_type_t<sizeof(T), std::is_signed_v<T>>;
+      = select_integer_type_t<sizeof(T), std::is_signed_v<T>>;
     return apply(reinterpret_cast<type&>(x));
   }
 
@@ -239,7 +285,7 @@ public:
   // CAF 1.0, until then they're still required for the variants
   // inside `caf::uri` and `caf::config_option`.
   template <class... Ts>
-  result_type apply(caf::variant<Ts...>& x) {
+  result_type apply(std::variant<Ts...>& x) {
     uint8_t type_tag = 0;
     if (!apply(type_tag))
       return false;
@@ -247,9 +293,7 @@ public:
   }
 
   template <class... Ts>
-  result_type apply(uint8_t type_tag, caf::variant<Ts...>& x) {
-    using namespace caf;
-    using caf::detail::tl_at;
+  result_type apply(uint8_t type_tag, std::variant<Ts...>& x) {
     auto& f = *this;
     switch (type_tag) {
       default:
@@ -257,8 +301,8 @@ public:
 #define CAF_VARIANT_ASSIGN_CASE_IMPL(n)                                        \
   case n: {                                                                    \
     using tmp_t =                                                              \
-      typename caf::detail::tl_at<caf::detail::type_list<Ts...>,               \
-                                  ((n) < sizeof...(Ts) ? (n) : 0)>::type;      \
+      typename detail::tl_at<detail::type_list<Ts...>,                         \
+                             ((n) < sizeof...(Ts) ? (n) : 0)>::type;           \
     x = tmp_t{};                                                               \
     return f(as<tmp_t>(x));                                                    \
   }
@@ -315,8 +359,8 @@ public:
 #define TENZIR_VARIANT_ASSIGN_CASE_IMPL(n)                                     \
   case n: {                                                                    \
     using tmp_t =                                                              \
-      typename caf::detail::tl_at<caf::detail::type_list<Ts...>,               \
-                                  ((n) < sizeof...(Ts) ? (n) : 0)>::type;      \
+      typename detail::tl_at<detail::type_list<Ts...>,                         \
+                             ((n) < sizeof...(Ts) ? (n) : 0)>::type;           \
     x = tmp_t{};                                                               \
     return f(as<tmp_t>(x));                                                    \
   }

@@ -49,6 +49,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/uuid.hpp"
 
+#include <caf/actor_registry.hpp>
 #include <caf/error.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <caf/response_promise.hpp>
@@ -1031,7 +1032,7 @@ index(index_actor::stateful_pointer<index_state> self,
       size_t max_inmem_partitions, size_t taste_partitions,
       size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
-  TENZIR_TRACE_SCOPE(
+  TENZIR_TRACE(
     "index {} {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
     TENZIR_ARG(filesystem), TENZIR_ARG(dir), TENZIR_ARG(partition_capacity),
     TENZIR_ARG(active_partition_timeout), TENZIR_ARG(max_inmem_partitions),

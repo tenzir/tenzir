@@ -74,7 +74,7 @@ std::string make_all_query() {
 caf::expected<std::string>
 read_query(const invocation& inv, std::string_view file_option,
            enum must_provide_query must_provide_query, size_t argument_offset) {
-  TENZIR_TRACE_SCOPE("{} {}", inv, file_option);
+  TENZIR_TRACE("{} {}", inv, file_option);
   // The below logic matches the following behavior:
   // tenzir export <format> <query>
   //   takes the query from the command line

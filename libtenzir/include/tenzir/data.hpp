@@ -16,8 +16,8 @@
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/pattern.hpp"
 #include "tenzir/policy/merge_lists.hpp"
@@ -26,18 +26,14 @@
 #include "tenzir/variant.hpp"
 #include "tenzir/variant_traits.hpp"
 
-#include <caf/default_sum_type_access.hpp>
-#include <caf/detail/type_list.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/none.hpp>
-#include <caf/sum_type.hpp>
 
 #include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
-#include <tuple>
 #include <type_traits>
 
 namespace tenzir {
@@ -93,7 +89,7 @@ using to_data_type = decltype(detail::to_data_type<std::decay_t<T>>());
 class data : detail::totally_ordered<data>, detail::addable<data> {
 public:
   // clang-format off
-  using types = caf::detail::type_list<
+  using types = detail::type_list<
     caf::none_t,
     bool,
     int64_t,
@@ -114,7 +110,7 @@ public:
   // clang-format on
 
   /// The sum type of all possible builtin types.
-  using variant = caf::detail::tl_apply_t<types, tenzir::variant>;
+  using variant = detail::tl_apply_t<types, tenzir::variant>;
 
   /// Default-constructs empty data.
   data() = default;
@@ -216,17 +212,6 @@ public:
     return impl::get<I>(x.get_data());
   }
 };
-
-} // namespace tenzir
-
-namespace caf {
-
-template <>
-struct sum_type_access<tenzir::data> : default_sum_type_access<tenzir::data> {};
-
-} // namespace caf
-
-namespace tenzir {
 
 // -- helpers -----------------------------------------------------------------
 
@@ -383,7 +368,7 @@ auto try_get_or(const record& r, std::string_view path, const T& fallback)
 /// does not exist.
 /// @pre `!path.empty()`
 template <typename T>
-  requires caf::detail::tl_contains<data::types, T>::value
+  requires detail::tl_contains<data::types, T>::value
 auto get_if(const record* r, std::string_view path) -> const T* {
   auto result = descend(r, path);
   if (not result || not *result) {

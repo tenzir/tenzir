@@ -15,8 +15,8 @@
 
 #include <caf/actor_addr.hpp>
 #include <caf/expected.hpp>
-#include <caf/optional.hpp>
 
+#include <optional>
 #include <string>
 
 namespace tenzir {

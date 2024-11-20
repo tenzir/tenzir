@@ -10,8 +10,8 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/aliases.hpp"
-#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/flat_map.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tsl/robin_map.h"
@@ -82,7 +82,7 @@ struct enriched_dummy {};
 // The indices in this MUST line up with the tenzir type indices, hence the
 // dummies
 // clang-format off
-using field_type_list = caf::detail::type_list<
+using field_type_list = detail::type_list<
   caf::none_t,
   bool,
   int64_t,

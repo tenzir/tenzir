@@ -262,34 +262,6 @@ struct formatter<std::span<std::byte>> {
   }
 };
 
-template <class T>
-struct formatter<caf::stream<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::stream<T>&, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "caf.stream<{}>",
-                          caf::detail::pretty_type_name(typeid(T)));
-  }
-};
-
-template <class T>
-struct formatter<caf::downstream<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::downstream<T>&, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "caf.downstream<{}>",
-                          caf::detail::pretty_type_name(typeid(T)));
-  }
-};
-
 #if !__has_include(<fmt/std.h>)
 
 template <>

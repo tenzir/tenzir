@@ -11,9 +11,9 @@
 #include "tenzir/detail/string.hpp"
 
 #include <caf/config_option_set.hpp>
-#include <caf/string_view.hpp>
 #include <fmt/format.h>
 
+#include <string_view>
 #include <unordered_set>
 
 namespace tenzir {
@@ -36,31 +36,31 @@ public:
   using parse_result = caf::config_option_set::parse_result;
 
   template <class OptionType>
-  config_options& add(caf::string_view category, caf::string_view name,
-                      caf::string_view description) {
+  config_options& add(std::string_view category, std::string_view name,
+                      std::string_view description) {
     data_.add<OptionType>(category, name, description);
     return *this;
   }
 
   template <class OptionType>
     requires(is_std_vec<OptionType>::value)
-  config_options& add(caf::string_view category, caf::string_view name,
-                      caf::string_view description) {
-    list_options_.insert(to_string(name));
+  config_options& add(std::string_view category, std::string_view name,
+                      std::string_view description) {
+    list_options_.insert(std::string{name});
     data_.add<OptionType>(category, name, description);
     return *this;
   }
 
   template <class T>
-  config_options& add(caf::string_view name, caf::string_view description) {
+  config_options& add(std::string_view name, std::string_view description) {
     data_.add<T>(name, description);
     return *this;
   }
 
   template <class OptionType>
     requires(is_std_vec<OptionType>::value)
-  config_options& add(caf::string_view name, caf::string_view description) {
-    list_options_.insert(to_string(name));
+  config_options& add(std::string_view name, std::string_view description) {
+    list_options_.insert(std::string{name});
     data_.add<OptionType>(name, description);
     return *this;
   }
@@ -90,7 +90,7 @@ public:
   }
 
   /// Returns the first caf::config_option that matches the CLI name.
-  auto cli_long_name_lookup(caf::string_view name) const {
+  auto cli_long_name_lookup(std::string_view name) const {
     return data_.cli_long_name_lookup(name);
   }
 

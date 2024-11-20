@@ -75,6 +75,13 @@ using is_same_or_derived_t = typename is_same_or_derived<A, B>::type;
 template <class A, class B>
 inline constexpr bool is_same_or_derived_v = is_same_or_derived<A, B>::value;
 
+/// Checks whether `Tpl` is a specialization of `T` or not.
+template <template <class...> class Tpl, class T>
+struct is_specialization_of : std::false_type { };
+
+template <template <class...> class T, class... Ts>
+struct is_specialization_of<T, T<Ts...>> : std::true_type { };
+
 // -- traits -----------------------------------------------------------------
 
 template <class T, class... Ts>
@@ -130,16 +137,5 @@ using contains_type_t = decltype(contains_type_impl<T>(std::declval<TList>()));
 
 template <class TList, class T>
 inline constexpr bool contains_type_v = contains_type_t<TList, T>::value;
-
-// -- type list --------------------------------------------------------------
-
-/// Map elements of a caf type_list by wrapping them into `std::shared_ptr`.
-template <class Types>
-struct tl_map_shared_ptr;
-
-template <class... Ts>
-struct tl_map_shared_ptr<caf::detail::type_list<Ts...>> {
-  using type = caf::detail::type_list<std::shared_ptr<Ts>...>;
-};
 
 } // namespace tenzir::detail

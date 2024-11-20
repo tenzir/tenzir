@@ -66,7 +66,7 @@ bool debug_writer::number(T x) {
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-debug_writer::debug_writer() : super(nullptr) {
+debug_writer::debug_writer() {
   init();
 }
 

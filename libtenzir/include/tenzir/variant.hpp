@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/variant_traits.hpp"
 
@@ -56,7 +57,7 @@ class variant : public std::variant<Ts...> {
 public:
   using std::variant<Ts...>::variant;
 
-  using types = caf::detail::type_list<Ts...>;
+  using types = detail::type_list<Ts...>;
 
   template <class T>
   static constexpr auto can_have = (std::same_as<T, Ts> || ...);
