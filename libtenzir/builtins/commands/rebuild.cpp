@@ -480,33 +480,35 @@ struct rebuilder_state {
 rebuilder_actor::behavior_type
 rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
           catalog_actor catalog, index_actor index) {
-  self->state.self = self;
-  self->state.catalog = std::move(catalog);
-  self->state.index = std::move(index);
-  self->state.max_partition_size
+  self->state().self = self;
+  self->state().catalog = std::move(catalog);
+  self->state().index = std::move(index);
+  self->state().max_partition_size
     = caf::get_or(self->system().config(), "tenzir.max-partition-size",
                   defaults::max_partition_size);
-  self->state.desired_batch_size
+  self->state().desired_batch_size
     = caf::get_or(self->system().config(), "tenzir.import.batch-size",
                   defaults::import::table_slice_size);
-  self->state.automatic_rebuild = caf::get_or(
+  self->state().automatic_rebuild = caf::get_or(
     self->system().config(), "tenzir.automatic-rebuild", size_t{1});
-  if (self->state.automatic_rebuild > 0) {
-    self->state.rebuild_interval
+  if (self->state().automatic_rebuild > 0) {
+    self->state().rebuild_interval
       = caf::get_or(self->system().config(), "tenzir.rebuild-interval",
                     defaults::rebuild_interval);
-    self->state.schedule();
+    self->state().schedule();
   }
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     TENZIR_DEBUG("{} received EXIT from {}: {}", *self, msg.source, msg.reason);
-    if (!self->state.run) {
+    if (!self->state().run) {
       self->quit(msg.reason);
       return;
     }
-    for (auto&& rp : std::exchange(self->state.run->stop_requests, {}))
+    for (auto&& rp : std::exchange(self->state().run->stop_requests, {})) {
       rp.deliver(msg.reason);
-    for (auto&& rp : std::exchange(self->state.run->delayed_rebuilds, {}))
+    }
+    for (auto&& rp : std::exchange(self->state().run->delayed_rebuilds, {})) {
       rp.deliver(msg.reason);
+    }
     self->quit(msg.reason);
   });
   if (auto importer
@@ -524,13 +526,14 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
       self, defaults::metrics_interval,
       [self, importer = std::move(importer),
        builder = std::move(builder)]() mutable {
-        const auto partitions
-          = self->state.run ? self->state.run->statistics.num_rebuilding : 0;
+        const auto partitions = self->state().run
+                                  ? self->state().run->statistics.num_rebuilding
+                                  : 0;
         const auto queued_partitions
-          = self->state.run ? self->state.run->statistics.num_total
-                                - self->state.run->statistics.num_completed
-                                - self->state.run->statistics.num_rebuilding
-                            : 0;
+          = self->state().run ? self->state().run->statistics.num_total
+                                  - self->state().run->statistics.num_completed
+                                  - self->state().run->statistics.num_rebuilding
+                              : 0;
         auto metric = builder.record();
         metric.field("timestamp", time::clock::now());
         metric.field("partitions", partitions);
@@ -540,19 +543,19 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   }
   return {
     [self](atom::status, status_verbosity verbosity, duration) {
-      return self->state.status(verbosity);
+      return self->state().status(verbosity);
     },
     [self](atom::start, start_options& options) {
-      return self->state.start(std::move(options));
+      return self->state().start(std::move(options));
     },
     [self](atom::stop, const stop_options& options) {
-      return self->state.stop(options);
+      return self->state().stop(options);
     },
     [self](atom::internal, atom::rebuild) {
-      return self->state.rebuild();
+      return self->state().rebuild();
     },
     [self](atom::internal, atom::schedule) {
-      return self->state.schedule();
+      return self->state().schedule();
     },
   };
 }

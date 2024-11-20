@@ -173,7 +173,7 @@ connector_actor::behavior_type make_no_retry_behavior(
                                            *self));
       auto rp = self->make_response_promise<node_actor>();
       self
-        ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
+        ->request(self->state().middleman, *remaining_time, caf::connect_atom_v,
                   request.host, request.port)
         .then(
           [rp, request](const caf::node_id&, caf::strong_actor_ptr& node,
@@ -199,9 +199,9 @@ connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
           std::optional<std::chrono::steady_clock::time_point> deadline) {
-  self->state.middleman = self->system().has_openssl_manager()
-                            ? self->system().openssl_manager().actor_handle()
-                            : self->system().middleman().actor_handle();
+  self->state().middleman = self->system().has_openssl_manager()
+                              ? self->system().openssl_manager().actor_handle()
+                              : self->system().middleman().actor_handle();
   if (!retry_delay)
     return make_no_retry_behavior(std::move(self), deadline);
   return {
@@ -234,7 +234,7 @@ connector(connector_actor::stateful_pointer<connector_state> self,
           };
 
       self
-        ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
+        ->request(self->state().middleman, *remaining_time, caf::connect_atom_v,
                   request.host, request.port)
         .then(
           [rp, request, handle_error](const caf::node_id&,

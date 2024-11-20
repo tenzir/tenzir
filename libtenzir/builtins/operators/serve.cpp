@@ -557,26 +557,26 @@ struct serve_manager_state {
 auto serve_manager(
   serve_manager_actor::stateful_pointer<serve_manager_state> self)
   -> serve_manager_actor::behavior_type {
-  self->state.self = self;
+  self->state().self = self;
   self->set_down_handler([self](const caf::down_msg& msg) {
-    self->state.handle_down_msg(msg);
+    self->state().handle_down_msg(msg);
   });
   return {
     [self](atom::start, std::string& serve_id,
            uint64_t buffer_size) -> caf::result<void> {
-      return self->state.start(std::move(serve_id), buffer_size);
+      return self->state().start(std::move(serve_id), buffer_size);
     },
     [self](atom::stop, std::string& serve_id) -> caf::result<void> {
-      return self->state.stop(std::move(serve_id));
+      return self->state().stop(std::move(serve_id));
     },
     [self](atom::put, std::string& serve_id,
            table_slice& slice) -> caf::result<void> {
-      return self->state.put(std::move(serve_id), std::move(slice));
+      return self->state().put(std::move(serve_id), std::move(slice));
     },
     [self](atom::get, std::string& serve_id, std::string& continuation_token,
            uint64_t min_events, duration timeout, uint64_t max_events)
       -> caf::result<std::tuple<std::string, std::vector<table_slice>>> {
-      return self->state.get(
+      return self->state().get(
         {.serve_id = std::move(serve_id),
          .continuation_token = std::move(continuation_token),
          .limits = {
@@ -587,7 +587,7 @@ auto serve_manager(
     },
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
-      return self->state.status(verbosity);
+      return self->state().status(verbosity);
     },
   };
 }
@@ -792,14 +792,14 @@ struct serve_handler_state {
 auto serve_handler(
   serve_handler_actor::stateful_pointer<serve_handler_state> self,
   const node_actor& node) -> serve_handler_actor::behavior_type {
-  self->state.self = self;
+  self->state().self = self;
   self
     ->request(node, caf::infinite, atom::get_v, atom::label_v,
               std::vector<std::string>{"serve-manager"})
     .await(
       [self](std::vector<caf::actor>& actors) {
         TENZIR_ASSERT(actors.size() == 1);
-        self->state.serve_manager
+        self->state().serve_manager
           = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
       },
       [self](const caf::error& err) { //
@@ -810,7 +810,7 @@ auto serve_handler(
   return {
     [self](atom::http_request, uint64_t endpoint_id,
            tenzir::record& params) -> caf::result<rest_response> {
-      return self->state.http_request(endpoint_id, std::move(params));
+      return self->state().http_request(endpoint_id, std::move(params));
     },
   };
 }

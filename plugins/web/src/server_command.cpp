@@ -96,13 +96,13 @@ struct request_dispatcher_state {
 request_dispatcher_actor::behavior_type request_dispatcher(
   request_dispatcher_actor::stateful_pointer<request_dispatcher_state> self,
   server_config config, authenticator_actor authenticator) {
-  self->state.server_config = config;
-  self->state.authenticator = authenticator;
+  self->state().server_config = config;
+  self->state().authenticator = authenticator;
   return {
     [self](atom::request, restinio_response_ptr& response,
            rest_endpoint& endpoint, rest_handler_actor handler) {
       // Skip authentication if its not required.
-      if (!self->state.server_config.require_authentication) {
+      if (!self->state().server_config.require_authentication) {
         self->send(self, atom::internal_v, atom::request_v, std::move(response),
                    std::move(endpoint), std::move(handler));
         return;
@@ -115,7 +115,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         return;
       }
       self
-        ->request(self->state.authenticator, caf::infinite, atom::validate_v,
+        ->request(self->state().authenticator, caf::infinite, atom::validate_v,
                   *token)
         .then(
           [self, response, endpoint = std::move(endpoint),

@@ -118,9 +118,9 @@ struct metrics_collector_state {
 auto metrics_collector(
   metrics_collector_actor::stateful_pointer<metrics_collector_state> self,
   importer_actor importer) -> metrics_collector_actor::behavior_type {
-  self->state.self = self;
-  self->state.importer = std::move(importer);
-  if (const auto ok = self->state.setup(); not ok) {
+  self->state().self = self;
+  self->state().importer = std::move(importer);
+  if (const auto ok = self->state().setup(); not ok) {
     self->quit(add_context(ok.error(), "failed to create {}", *self));
     return metrics_collector_actor::behavior_type::make_empty_behavior();
   }

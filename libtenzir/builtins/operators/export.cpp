@@ -238,37 +238,37 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
                  metric_handler metrics_handler,
                  shared_diagnostic_handler diagnostics_handler)
   -> caf::behavior {
-  self->state.self = self;
-  self->state.expr = normalize(std::move(expr));
-  self->state.mode = mode;
-  self->state.metrics_handler = std::move(metrics_handler);
-  self->state.diagnostics_handler = std::move(diagnostics_handler);
-  self->state.filesystem = std::move(filesystem);
-  TENZIR_ASSERT(self->state.filesystem);
+  self->state().self = self;
+  self->state().expr = normalize(std::move(expr));
+  self->state().mode = mode;
+  self->state().metrics_handler = std::move(metrics_handler);
+  self->state().diagnostics_handler = std::move(diagnostics_handler);
+  self->state().filesystem = std::move(filesystem);
+  TENZIR_ASSERT(self->state().filesystem);
   self->set_exit_handler([self](caf::exit_msg& msg) {
     self->quit(std::move(msg.reason));
   });
-  if (not self->state.mode.internal) {
+  if (not self->state().mode.internal) {
     detail::weak_run_delayed_loop(self, defaults::metrics_interval, [self] {
-      self->state.emit_metrics();
+      self->state().emit_metrics();
     });
   }
   const auto importer
     = self->system().registry().get<importer_actor>("tenzir.importer");
   TENZIR_ASSERT(importer);
-  self->state.importer_address = importer->address();
-  self->state.unpersisted_events.emplace();
+  self->state().importer_address = importer->address();
+  self->state().unpersisted_events.emplace();
   self
     ->request(importer, caf::infinite, atom::subscribe_v,
               caf::actor_cast<receiver_actor<table_slice>>(self),
-              self->state.mode.internal)
+              self->state().mode.internal)
     .await(
       [self, mode](std::vector<table_slice>& unpersisted_events) {
         TENZIR_DEBUG("{} subscribed to importer", *self);
         if (mode.retro) {
-          TENZIR_ASSERT(self->state.unpersisted_events);
-          TENZIR_ASSERT(self->state.unpersisted_events->empty());
-          *self->state.unpersisted_events = std::move(unpersisted_events);
+          TENZIR_ASSERT(self->state().unpersisted_events);
+          TENZIR_ASSERT(self->state().unpersisted_events->empty());
+          *self->state().unpersisted_events = std::move(unpersisted_events);
         }
       },
       [self](const caf::error& err) {
@@ -282,21 +282,21 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
       = self->system().registry().get<catalog_actor>("tenzir.catalog");
     TENZIR_ASSERT(catalog);
     auto query_context
-      = tenzir::query_context::make_extract("export", self, self->state.expr);
+      = tenzir::query_context::make_extract("export", self, self->state().expr);
     query_context.id = uuid::random();
     TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
                  "expression {}",
-                 query_context.id, self->state.expr);
+                 query_context.id, self->state().expr);
     self->request(catalog, caf::infinite, atom::candidates_v, query_context)
       .then(
         [self, query_context](catalog_lookup_result& result) {
-          self->state.checked_candidates = true;
+          self->state().checked_candidates = true;
           auto max_import_time = time::min();
           for (auto& [type, info] : result.candidate_infos) {
             if (info.partition_infos.empty()) {
               continue;
             }
-            const auto* bound_expr = self->state.bind_expr(type, info.exp);
+            const auto* bound_expr = self->state().bind_expr(type, info.exp);
             if (not bound_expr) {
               // failing to bind is not an error.
               continue;
@@ -306,28 +306,29 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
             for (auto& partition_info : info.partition_infos) {
               max_import_time
                 = std::max(max_import_time, partition_info.max_import_time);
-              self->state.queued_partitions.emplace(std::move(partition_info),
-                                                    ctx);
+              self->state().queued_partitions.emplace(std::move(partition_info),
+                                                      ctx);
             }
-            while (self->state.open_partitions < self->state.mode.parallel) {
-              ++self->state.open_partitions;
+            while (self->state().open_partitions
+                   < self->state().mode.parallel) {
+              ++self->state().open_partitions;
               detail::weak_run_delayed(self, duration::zero(), [self] {
-                self->state.pop_partition();
+                self->state().pop_partition();
               });
             }
           }
-          TENZIR_ASSERT(self->state.unpersisted_events);
-          for (auto& slice : *self->state.unpersisted_events) {
+          TENZIR_ASSERT(self->state().unpersisted_events);
+          for (auto& slice : *self->state().unpersisted_events) {
             if (slice.import_time() > max_import_time) {
-              self->state.add_events(std::move(slice),
-                                     event_source::unpersisted);
+              self->state().add_events(std::move(slice),
+                                       event_source::unpersisted);
             }
           }
-          self->state.unpersisted_events.reset();
+          self->state().unpersisted_events.reset();
           // In case we get zero partitions back from the catalog we need to
           // already signal that we're done here.
-          if (self->state.buffer_rp.pending() and self->state.is_done()) {
-            self->state.buffer_rp.deliver(table_slice{});
+          if (self->state().buffer_rp.pending() and self->state().is_done()) {
+            self->state().buffer_rp.deliver(table_slice{});
           }
         },
         [self](const caf::error& err) {
@@ -339,32 +340,33 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
   }
   return {
     [self](table_slice& slice) -> caf::result<void> {
-      self->state.add_events(
-        std::move(slice), self->current_sender() == self->state.importer_address
-                            ? event_source::live
-                            : event_source::retro);
+      self->state().add_events(std::move(slice),
+                               self->current_sender()
+                                   == self->state().importer_address
+                                 ? event_source::live
+                                 : event_source::retro);
       return {};
     },
     [self](atom::get) -> caf::result<table_slice> {
       // Forbid concurrent requests.
-      TENZIR_ASSERT(not self->state.buffer_rp.pending());
-      if (self->state.is_done()) {
+      TENZIR_ASSERT(not self->state().buffer_rp.pending());
+      if (self->state().is_done()) {
         return table_slice{};
       }
-      if (not self->state.buffer.empty()) {
-        auto slice = std::move(self->state.buffer.front());
-        self->state.buffer.pop();
+      if (not self->state().buffer.empty()) {
+        auto slice = std::move(self->state().buffer.front());
+        self->state().buffer.pop();
         TENZIR_ASSERT(slice.rows() > 0);
-        auto& metric = self->state.metrics[slice.schema()];
+        auto& metric = self->state().metrics[slice.schema()];
         TENZIR_ASSERT(metric.queued >= slice.rows());
         metric.emitted += slice.rows();
         metric.queued -= slice.rows();
-        self->state.num_queued_total -= slice.rows();
-        self->state.try_pop_partition();
+        self->state().num_queued_total -= slice.rows();
+        self->state().try_pop_partition();
         return slice;
       }
-      self->state.buffer_rp = self->make_response_promise<table_slice>();
-      return self->state.buffer_rp;
+      self->state().buffer_rp = self->make_response_promise<table_slice>();
+      return self->state().buffer_rp;
     },
   };
 }

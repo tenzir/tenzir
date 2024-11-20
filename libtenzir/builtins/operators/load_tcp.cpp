@@ -723,46 +723,46 @@ auto make_connection_manager(
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
   bool is_hidden, const node_actor& node)
   -> connection_manager_actor<Elements>::behavior_type {
-  self->state.self = self;
-  self->state.args = args;
-  self->state.diagnostics = diagnostics;
-  self->state.metrics_receiver = metrics_receiver;
-  self->state.operator_id = operator_id;
-  self->state.is_hidden = is_hidden;
-  self->state.node = node;
-  if (auto ok = self->state.start(); not ok) {
+  self->state().self = self;
+  self->state().args = args;
+  self->state().diagnostics = diagnostics;
+  self->state().metrics_receiver = metrics_receiver;
+  self->state().operator_id = operator_id;
+  self->state().is_hidden = is_hidden;
+  self->state().node = node;
+  if (auto ok = self->state().start(); not ok) {
     self->quit(std::move(ok.error()));
     return connection_manager_actor<
       Elements>::behavior_type::make_empty_behavior();
   }
   self->set_down_handler([self](const caf::down_msg& msg) {
-    self->state.handle_down_msg(msg);
+    self->state().handle_down_msg(msg);
   });
   return {
     [self](atom::read, boost::asio::ip::tcp::socket::native_handle_type handle)
       -> caf::result<chunk_ptr> {
-      return self->state.read_from_connection(handle);
+      return self->state().read_from_connection(handle);
     },
     [self](atom::write, Elements& elements) -> caf::result<void> {
-      return self->state.write_elements(std::move(elements));
+      return self->state().write_elements(std::move(elements));
     },
     [self](atom::read) -> caf::result<Elements> {
-      return self->state.read_elements();
+      return self->state().read_elements();
     },
     [self](uint64_t op_index, uint64_t metric_index,
            type& schema) -> caf::result<void> {
-      auto& id = self->state.metrics_id_map[op_index][metric_index];
+      auto& id = self->state().metrics_id_map[op_index][metric_index];
       if (id == 0) {
-        id = self->state.next_metrics_id++;
+        id = self->state().next_metrics_id++;
       }
-      return self->delegate(self->state.metrics_receiver,
-                            self->state.operator_id, id, std::move(schema));
+      return self->delegate(self->state().metrics_receiver,
+                            self->state().operator_id, id, std::move(schema));
     },
     [self](uint64_t op_index, uint64_t metric_index,
            record& metric) -> caf::result<void> {
-      const auto& id = self->state.metrics_id_map[op_index][metric_index];
-      return self->delegate(self->state.metrics_receiver,
-                            self->state.operator_id, id, std::move(metric));
+      const auto& id = self->state().metrics_id_map[op_index][metric_index];
+      return self->delegate(self->state().metrics_receiver,
+                            self->state().operator_id, id, std::move(metric));
     },
     [](const operator_metric& op_metric) -> caf::result<void> {
       // We have no mechanism for forwarding operator metrics. That's a bit
@@ -774,7 +774,7 @@ auto make_connection_manager(
       TENZIR_ASSERT(diagnostic.severity != severity::error);
       // TODO: The diagnostics and metrics come from the execution nodes
       // directly, so there's no way to enrich them with a native handle here.
-      self->state.diagnostics.emit(std::move(diagnostic));
+      self->state().diagnostics.emit(std::move(diagnostic));
       return {};
     },
   };
