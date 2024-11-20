@@ -28,13 +28,14 @@ stdenvNoCC.mkDerivation {
           bats -T -j $(nproc) --filter-tags !python_operator "${path}/integration/tests"
         fi
       '';
+      tzdata = pkgsBuildBuild.tzdata
     in
     ''
       patchShebangs tenzir/integration/data/misc/scripts
       export PATH=''${PATH:+$PATH:}${lib.getBin unchecked}/bin:${lib.getBin pkgsBuildBuild.toybox}/bin
       export BATS_LIB_PATH=''${BATS_LIB_PATH:+''${BATS_LIB_PATH}:}$PWD/tenzir/integration
       export PYTHONPATH=''${PYTHONPATH:+''${PYTHONPATH}:}${py3}/${py3.sitePackages}
-      export TZDIR=''${pkgsBuildBuild.tzdata}/share/zoneinfo
+      export TZDIR=''${tzdata}/share/zoneinfo
       mkdir -p cache
       export XDG_CACHE_HOME=$PWD/cache
       ${template "tenzir"}
