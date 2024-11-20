@@ -333,7 +333,7 @@ public:
   }
 };
 
-class strftime : public virtual method_plugin {
+class strftime : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.strftime";
@@ -344,7 +344,7 @@ public:
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<time>")
           .add(format, "<format>")
           .add("locale", locale)
@@ -387,7 +387,7 @@ public:
   }
 };
 
-class strptime : public virtual method_plugin {
+class strptime : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.strptime";
@@ -398,7 +398,7 @@ public:
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};
-    TRY(argument_parser2::method(name())
+    TRY(argument_parser2::function(name())
           .add(subject_expr, "<string>")
           .add(format, "<format>")
           .parse(inv, ctx));
@@ -453,5 +453,5 @@ TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::year});
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::month});
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::day});
 TENZIR_REGISTER_PLUGIN(now)
-TENZIR_REGISTER_PLUGIN(strftime)
-TENZIR_REGISTER_PLUGIN(strptime)
+TENZIR_REGISTER_PLUGIN(class strftime)
+TENZIR_REGISTER_PLUGIN(class strptime)
