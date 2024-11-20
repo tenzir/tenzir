@@ -121,7 +121,9 @@ Function | Description | Example
 [`as_secs`](functions/as_secs.md) | Converts a duration into seconds | `as_secs(42ms)`
 [`from_epoch_ms`](functions/from_epoch_ms.md) | Interprets a number as Unix time | `from_epoch_ms(1730234246123.456)`
 [`now`](functions/now.md) | Gets the current wallclock time | `now()`
-[`since_epoch`](functions/since_epoch.md) | Turns a time value into a duration since the Unix epoch | `since_epoch(2021-02-24)`
+[`since_epoch`](functions/since_epoch.md) | Turns a time into a duration since the Unix epoch | `since_epoch(2021-02-24)`
+[`parse_time`](functions/parse_time.md) | Parses a timestamp following a given format | `"10/11/2012".parse_time("%d/%m/%Y")`
+[`format_time`](functions/format_time.md) | Format a timestamp following a given format | `2012-11-10.format_time("%d/%m/%Y")`
 
 <!--
 
