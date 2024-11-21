@@ -79,9 +79,8 @@ This option can not be combined with `merge=true, schema=<schema>`.
 
 ### `schema = str (optional)`
 
-Provide the name of a [schema](../../data-model/schemas.md) to be used by the
-parser. If the schema uses the `blob` type, then the JSON parser expects
-base64-encoded strings.
+Provide the name of a schema to be used by the parser. If the schema uses the
+`blob` type, then the JSON parser expects base64-encoded strings.
 
 The `schema` option is incompatible with the `selector` option.
 

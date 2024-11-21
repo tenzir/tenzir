@@ -42,7 +42,7 @@ from [
 top x
 ```
 
-```
+```tql
 {x: "A", count: 3}
 {x: "B", count: 2}
 {x: "C", count: 2}

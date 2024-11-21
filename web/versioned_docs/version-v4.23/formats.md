@@ -35,8 +35,9 @@ print <field> <format>
 
 ## Parser Schema Inference
 
-Parsers will attempt to infer an event [schema](data-model/schemas.md) from the
-input and potentially data format.
+Parsers will attempt to infer an event schema from the input and potentially
+data format.
+
 The following builtin parsers provide options for more specific control over schema inference:
 
 - [CEF](formats/cef.md)

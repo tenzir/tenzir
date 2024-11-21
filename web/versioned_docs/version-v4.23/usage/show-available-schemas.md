@@ -5,8 +5,8 @@ sidebar_position: 5
 # Show available schemas
 
 When you write a pipeline, you often reference field names. If you do not know
-the shape of your data, you can look up available
-[schemas](../data-model/schemas.md), i.e., the record types describing a table.
+the shape of your data, you can look up available schemas, i.e., the record
+types describing top-level events.
 
 Many SQL databases have a `SHOW TABLES` command to show all available table
 names, and `SHOW COLUMNS` to display the individual fiels of a given table.

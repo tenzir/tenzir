@@ -70,7 +70,7 @@ as a lookup table, GeoIP database, or a custom plugin. The
 [`enrich`](./operators/enrich.md) places a context into a pipeline for
 enrichment.
 
-- Read more about [contexts](./contexts.md)
+- Read more about [enrichment](./enrichment/README.md)
 - [Manage](./operators/context.md) a context
 - [Enrich](./operators/enrich.md) with a context
 
@@ -236,9 +236,7 @@ a side effect that emits bytes. Use a saver in the [`to`](./operators/to.md) or
 
 ## Schema
 
-A named record type describing the top-level structure of a data frame.
-
-[Schemas](./data-model/schemas.md)
+A top-level record type of an event.
 
 - [Show available schemas](./usage/show-available-schemas.md)
 

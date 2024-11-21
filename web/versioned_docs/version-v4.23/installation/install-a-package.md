@@ -15,19 +15,17 @@ Library](https://app.tenzir.com/library):
 
 ## Install with the Package Operator
 
-To install a package interactively, use the [`package_add`
-operator](../operators/package.md):
+To install a package interactively, use the
+[`package::add`](../tql2/operators/package/add.md) operator:
 
 ```tql
-// tql2
-package_add "package.yaml"
+package::add "package.yaml"
 ```
 
 To set package inputs, set the values in the pipeline:
 
 ```tql
-// tql2
-package_add "package.yaml", inputs={
+package::add "package.yaml", inputs={
   endpoint: "localhost:42000",
   policy: "block",
 }
@@ -39,19 +37,19 @@ Your package should now show when listing all installed packages:
 packages
 ```
 
-```json5
+```tql
 {
-  "id": "your-package",
-  "install_status": "installed",
+  id: "your-package",
+  install_status: "installed",
   // …
 }
 ```
 
 To uninstall a package interactively, use
-[`package_remove`](../operators/package.md).
+[`package::remove`](../tql2/operators/package/remove.md).
 
 ```tql
-package_remove "your-package"
+package::remove "your-package"
 ```
 
 ## Install with Infrastructure as Code
@@ -79,7 +77,7 @@ The node search path for packages consists of the following locations:
 2. All directories specified in the `tenzir.package-dirs` configuration option.
 
 As an alternative way to specify inputs visually in the app, or setting them
-explicitly as part of calling `package_add`, you can add a `config.yaml` file
+explicitly as part of calling `package::add`, you can add a `config.yaml` file
 next to the `package.yaml` file. Here is an example that sets the inputs
 `endpoint` and `policy`:
 

@@ -27,7 +27,7 @@ original order.
 
 An optional topic for publishing events under.
 
-Defaults to the empty string.
+Defaults to `main`.
 
 ## Examples
 

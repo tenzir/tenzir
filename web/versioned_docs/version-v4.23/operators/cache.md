@@ -15,7 +15,7 @@ An in-memory cache shared between pipelines.
 
 ```
 cache <id> [--mode <read|write|readwrite>] [--capacity <capacity>]
-           [--ttl <duration>] [--max-ttl <duration>]
+           [--read-timeout <duration>] [--write-timeout <duration>]
 ```
 
 ## Description
@@ -59,7 +59,7 @@ capacity is reached and emit a warning.
 
 Defaults to 4 Mi.
 
-### `--ttl <duration>`
+### `--read-timeout <duration>`
 
 Defines the maximum inactivity time until the cache is evicted from memory. The
 timer starts when writing the cache completes (or runs into the capacity limit),
@@ -67,10 +67,10 @@ and resets whenever the cache is read from.
 
 Defaults to 1 minute.
 
-### `--max-ttl <duration>`
+### `--write-timeout <duration>`
 
-If set, defines an upper bound for the lifetime of the cache. Unlike the `--ttl`
-option, this does not refresh when the cache is accessed.
+If set, defines an upper bound for the lifetime of the cache. Unlike the
+`--read-timeout` option, this does not refresh when the cache is accessed.
 
 Disabled by default.
 

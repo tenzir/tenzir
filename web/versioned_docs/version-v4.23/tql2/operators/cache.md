@@ -10,7 +10,7 @@ automatically manage caches for you.
 An in-memory cache shared between pipelines.
 
 ```tql
-cache id:str, [mode=str, capacity=int, ttl=duration, max_ttl=duration]
+cache id:str, [mode=str, capacity=int, read_timeout=duration, write_timeout=duration]
 ```
 
 ## Description
@@ -48,7 +48,7 @@ capacity is reached and emit a warning.
 
 Defaults to `4Mi`.
 
-### `ttl = duration (optional)`
+### `read_timeout = duration (optional)`
 
 Defines the maximum inactivity time until the cache is evicted from memory. The
 timer starts when writing the cache completes (or runs into the capacity limit),
@@ -56,10 +56,10 @@ and resets whenever the cache is read from.
 
 Defaults to `1min`.
 
-### `max_ttl = duration (optional)`
+### `write_timeout = duration (optional)`
 
-If set, defines an upper bound for the lifetime of the cache. Unlike the `ttl`
-option, this does not refresh when the cache is accessed.
+If set, defines an upper bound for the lifetime of the cache. Unlike the
+`read_timeout` option, this does not refresh when the cache is accessed.
 
 ## Examples
 
@@ -81,7 +81,7 @@ delete the cache if it's unused for more than a minute.
 export
 where @name == "suricata.flow"
 summarize src_ip, total=sum(bytes_toserver), dest_ip
-cache "some-unique-identifier", ttl=1min
+cache "some-unique-identifier", read_timeout=1min
 summarize src_ip, total=sum(total), destinations=count(dest_ip)
 ```
 

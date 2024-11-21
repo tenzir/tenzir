@@ -4,48 +4,46 @@ sidebar_position: 10
 
 # Enrich with Threat Intel
 
-Tenzir has a powerful contextualization framework for real-time enrichment of a
-dataflow with a [lookup table](../../contexts/lookup-table.md), a GeoIP
-database, or a custom [plugin](../../architecture/plugins.md). The heart of the
-framework is a [context](../../contexts.md)—a stateful object that can be
-managed with the [`context`](../../operators/context.md) operator and used with
-the [`enrich`](../../operators/enrich.md) operator.
+Tenzir has a powerful [enrichment framework](../../enrichment/README.md) for
+real-time contextualization. The heart of the framework is a *context—a stateful
+object that can be managed and used with pipelines.
 
 ## Setup a context
 
 Prior to enriching, you need to populate a context with data. First, let's a
-create a context called `threatfox` that uses a [lookup
-table](../../contexts/lookup-table.md), i.e., a key-value mapping where a key is
-used to perform the context lookup and the value can be any structured
-additional data.
+create a context called `threatfox` that uses a lookup table, i.e., a key-value
+mapping where a key is used to perform the lookup and the value can be any
+structured additional data.
 
+```tql
+context::create_lookup_table "threatfox"
 ```
-context create threatfox lookup-table
-```
 
-This yields the following pipeline output:
-
-```json
-{
-  "num_entries": 0,
-  "name": "threatfox"
-}
+```tql
+{num_entries: 0, name: "threatfox"}
 ```
 
 After creating a context, we load data into the context. In our example, we load
 data from the [ThreatFox](https://threatfox.abuse.ch/) API:
 
+```tql
+load_http "https://threatfox-api.abuse.ch/api/v1/",
+  body={query: "get_iocs", days: 1}
+unroll data
+where data.ioc_type == "domain"
+context::update "threatfox", key="ioc", value=data
 ```
-from https://threatfox-api.abuse.ch/api/v1/ query=get_iocs days:=1
-| yield data[]
-| where ioc_type == "domain"
-| context update threatfox --key ioc
+
+```tql
+{num_entries: 57, name: "threatfox"}
 ```
+
+That is, 57 entries have been added successfully to the `threatfox` context.
 
 <details>
 <summary>Example data for context updating</summary>
 
-If we replace the `context` operator in the above pipeline with `head 5`, we get
+If we replace `context::update` in the above pipeline with `head 5`, we get
 output similar to the following, depending on the current state of the API:
 
 ```json
@@ -153,17 +151,6 @@ output similar to the following, depending on the current state of the API:
 
 </details>
 
-The pipeline `context update` may yield:
-
-```json
-{
-  "num_entries": 57,
-  "name": "threatfox"
-}
-```
-
-That is, 57 entries have been added successfully to the `threatfox` context.
-
 ## Enrich with a context
 
 Now that we loaded IoCs into the context, we can enrich with it in other
@@ -171,13 +158,14 @@ pipelines. Since we previously imported only domains, we would look for fields
 in the data of that type.
 
 The following pipeline subscribes to the import feed of all data arriving at the
-node via `export --live` and applies the `threatfox` context to Suricata DNS
-requests in field `dns.rrname` via [`enrich`](../../operators/enrich.md).
+node via `export live=true` and applies the `threatfox` context to Suricata DNS
+requests in field `dns.rrname` via
+[`context::enrich`](../../tql2/operators/context/enrich.md).
 
-```
-export --live
-| where #schema == "suricata.dns"
-| enrich threatfox --field dns.rrname
+```tql
+export live=true
+where @name == "suricata.dns"
+context::enrich "threatfox", key="dns.rrname"
 ```
 
 Here is a sample of an event that the above pipeline yields:
@@ -246,5 +234,8 @@ contains the matching key. The field `context` is the row from the lookup table
 at key `bza.fartit.com`. The field `timestamp` is the time when the enrichment
 occurred.
 
-For a more comprehensive discussion of contextualization, check out our blog
-post [Contextualization Made Simple](/blog/contextualization-made-simple).
+:::tip In-Depth Enrichment
+Make sure to read our detailed [explanation of
+enrichemnt](../../enrichment/README.md) to unlock the full potential of Tenzir's
+contextualization framework.
+:::

@@ -14,6 +14,17 @@ The `read_xsv` operator transforms a byte stream into a event stream by parsing
 the bytes as [XSV](https://en.wikipedia.org/wiki/Delimiter-separated_values), a
 generalization of CSV with a more flexible separator specification.
 
+The following table lists existing XSV configurations:
+
+|Format               |Field Separator|List Separator|Null Value|
+|---------------------|:-------------:|:------------:|:--------:|
+|[`csv`](read_csv.md)|`,`            |`;`           | empty    |
+|[`ssv`](read_ssv.md)|`<space>`      |`,`           |`-`       |
+|[`tsv`](read_tsv.md)|`\t`           |`,`           |`-`       |
+
+[csv]: https://en.wikipedia.org/wiki/Comma-separated_values
+[xsv]: https://en.wikipedia.org/wiki/Delimiter-separated_values
+
 ### `field_sep: str`
 
 The string separating different fields.
@@ -50,8 +61,7 @@ and every value remains a string.
 
 ### `schema = str (optional)`
 
-Provide the name of a [schema](../../data-model/schemas.md) to be used by the
-parser.
+Provide the name of a schema to be used by the parser.
 
 If a schema with a matching name is installed, the result will always have
 all fields from that schema.
@@ -65,8 +75,7 @@ The `schema` option is incompatible with the `selector` option.
 
 ### `selector = str (optional)`
 
-Designates a field value as [schema](../../data-model/schemas.md) name with an
-optional dot-separated prefix.
+Designates a field value as schema name with an optional dot-separated prefix.
 
 The string is parsed as `<fieldname>[:<prefix>]`. The `prefix` is optional and
 will be prepended to the field value to generate the schema name.

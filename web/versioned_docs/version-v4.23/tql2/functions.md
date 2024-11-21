@@ -7,7 +7,6 @@ TODO: the following functions still need to be documented:
 - `format`
 - `parse_*`
 - `print_*`
-- `grok`
 
 ## OCSF
 
@@ -67,6 +66,16 @@ Function | Description | Example
 [`sum`](functions/sum.md) | Computes the sum of all values | `sum([1,2,3])`
 [`value_counts`](functions/value_counts.md) | Returns a list of values with their frequency | `value_counts([1,2,2,3])`
 [`variance`](functions/variance.md) | Computes the variance of all values | `variance([1,2,3])`
+
+## List
+
+Function | Description | Example
+:--------|:------------|:-------
+[`append`](functions/append.md) | Inserts an element at the back of a list | `xs.append(y)`
+[`prepend`](functions/prepend.md) | Inserts an element at the front of a list | `xs.prepend(y)`
+[`concatenate`](functions/concatenate.md) | Merges two lists | `concatenate(xs, ys)`
+[`map`](functions/map.md) | Maps each list element to an expression | `xs.map(x, x + 3)`
+[`where`](functions/where.md) | Removes list elements based on a predicate | `xs.where(x, x > 5)`
 
 ## String
 

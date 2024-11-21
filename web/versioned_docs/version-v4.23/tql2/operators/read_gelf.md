@@ -29,7 +29,7 @@ but every JSON string remains a string, unless the field is in the `schema`.
 
 ### `schema = str (optional)`
 
-Provide the name of a [schema](../../data-model/schemas.md) to be used by the
+Provide the name of a schema to be used by the
 parser.
 
 If a schema with a matching name is installed, the result will always have
@@ -44,8 +44,7 @@ The `schema` option is incompatible with the `selector` option.
 
 ### `selector = str (optional)`
 
-Designates a field value as [schema](../../data-model/schemas.md) name with an
-optional dot-separated prefix.
+Designates a field value as schema name with an optional dot-separated prefix.
 
 The string is parsed as `<fieldname>[:<prefix>]`. The `prefix` is optional and
 will be prepended to the field value to generate the schema name.
