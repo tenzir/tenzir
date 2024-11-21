@@ -60,6 +60,18 @@ Fluent Bit according to your needs.
 We recommend factoring these options into the plugin-specific `fluent-bit.yaml`
 so that they are independent of the `fluent-bit` operator arguments.
 
+## URI support & integration with `from`
+
+The `from_fluent_bit` operator can also be used from the [`from`](from.md)
+operator. For this, the `fluentbit://` scheme can be used. The URI is then translated:
+
+```tql
+to "fluentbit://plugin"
+```
+```tql
+to_fluent_bit "plugin"
+```
+
 ## Examples
 
 ### ElasticSearch

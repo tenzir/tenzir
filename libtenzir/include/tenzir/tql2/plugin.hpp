@@ -42,7 +42,7 @@ public:
     /// if requested.
     std::function<std::vector<ast::expression>(located<std::string>,
                                                diagnostic_handler&)>
-      transform_uri;
+      transform_uri = {};
   };
   using load_properties_t = connector_properties_t;
   using save_properties_t = connector_properties_t;

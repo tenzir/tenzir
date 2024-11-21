@@ -90,6 +90,13 @@ public:
     return std::make_unique<Adapter<Plugin>>(Plugin{std::move(args)});
   }
 
+  virtual auto save_properties() const
+    -> operator_factory_plugin::load_properties_t override {
+    return {
+      .schemes = {"s3"},
+    };
+  }
+
 private:
   std::optional<s3_config> config_ = {};
 };

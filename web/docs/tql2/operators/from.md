@@ -134,9 +134,11 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 | Scheme | Operator | Example |
 | ------ | -------- | ------- |
 | `file` | [`load_file`](load_file.md) | `from "file://path/to/file.json"` |
+| `fluentbit` | [`from_fluent_bit`](from_fluent_bit.md) | `from "fluentbit://elasticsearch"` |
 | `ftp`, `ftps` | [`load_ftp`](load_ftp.md) | `from "ftp://example.com/file.json"` |
 | `gcps` | [`load_google_cloud_pubsub`](load_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id"` |
 | `http`, `https` | [`load_http`](load_http.md) | `from "http://example.com/file.json"` |
+| `s3` | [`load_s3`](load_s3.md) | `from "s3://bucket/file.json"` |
 | `tcp` | [`load_tcp`](load_tcp.md) | `from "tcp://127.0.0.1:13245" { read_json }` |
 
 Please see the respective operator pages for details on the URI's locator format.

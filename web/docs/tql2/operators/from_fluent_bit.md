@@ -125,6 +125,18 @@ the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
 top-level. The data is best modeled as an `id` record with four nested fields
 `orig_h`, `orig_p`, `resp_h`, and `resp_p`.
 
+## URI support & integration with `from`
+
+The `from_fluent_bit` operator can also be used from the [`from`](from.md)
+operator. For this, the `fluentbit://` scheme can be used. The URI is then translated:
+
+```tql
+from "fluentbit://plugin"
+```
+```tql
+from_fluent_bit "plugin"
+```
+
 ## Examples
 
 ### OpenTelemetry

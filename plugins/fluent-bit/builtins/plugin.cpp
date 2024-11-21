@@ -61,6 +61,16 @@ public:
       std::move(args), std::move(builder_options), config_);
   }
 
+  virtual auto load_properties() const -> load_properties_t override {
+    return {
+      .schemes = {"fluentbit"},
+      .accepts_pipeline = false,
+      .strip_scheme = true,
+      .events = true,
+      .transform_uri = {},
+    };
+  }
+
 private:
   record config_;
 };
@@ -107,6 +117,16 @@ public:
       .args = to_property_map(plugin_options),
     };
     return std::make_unique<fluent_bit_sink_operator>(std::move(args), config_);
+  }
+
+  virtual auto save_properties() const -> save_properties_t override {
+    return {
+      .schemes = {"fluentbit"},
+      .accepts_pipeline = false,
+      .strip_scheme = true,
+      .events = true,
+      .transform_uri = {},
+    };
   }
 
 private:

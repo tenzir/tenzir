@@ -64,6 +64,7 @@ public:
     TRY(parser.parse(inv, ctx));
     return std::make_unique<save_operator>(std::move(args));
   }
+
   virtual auto save_properties() const -> save_properties_t override {
     return {
       .schemes = {"gcps"},

@@ -93,9 +93,11 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | Scheme | Operator | Example |
 | ------ | -------- | ------- |
 | `file` | [`save_file`](save_file.md) | `from "file://path/to/file.json"` |
+| `fluentbit` | [`to_fluent_bit`](to_fluent_bit.md) | `to "fluentbit://elasticsearch"` |
 | `ftp`, `ftps` | [`save_ftp`](save_ftp.md) | `from "ftp://example.com/file.json"` |
 | `gcps` | [`save_google_cloud_pubsub`](save_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id"` |
 | `http`, `https` | [`save_http`](save_http.md) | `from "http://example.com/file.json"` |
+| `s3` | [`save_s3`](save_s3.md) | `to "s3://bucket/file.json"` |
 
 Please see the respective operator pages for details on the URI's locator format.
 
