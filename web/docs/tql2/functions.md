@@ -71,6 +71,9 @@ Function | Description | Example
 
 Function | Description | Example
 :--------|:------------|:-------
+[`append`](functions/append.md) | Inserts an element at the back of a list | `xs.append(y)`
+[`prepend`](functions/prepend.md) | Inserts an element at the front of a list | `xs.prepend(y)`
+[`concatenate`](functions/concatenate.md) | Merges two lists | `concatenate(xs, ys)`
 [`map`](functions/map.md) | Maps each list element to an expression | `xs.map(x, x + 3)`
 [`where`](functions/where.md) | Removes list elements based on a predicate | `xs.where(x, x > 5)`
 
