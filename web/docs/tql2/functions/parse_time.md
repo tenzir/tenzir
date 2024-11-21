@@ -17,7 +17,7 @@ The input string from which the timestamp should be extracted.
 ### `format: string`
 
 The string that specifies the format of `input`, for example `"%m-%d-%Y"`. The
-allowed placeholders are the same as for `strptime`.
+allowed format specifiers are the same as for `strptime(3)`:
 <!-- TODO: Properly describe this or link something. -->
 
 ## Examples
