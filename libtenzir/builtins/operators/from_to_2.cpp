@@ -104,6 +104,38 @@ auto find_connector_given(std::string_view what, auto func, auto member,
   return nullptr;
 }
 
+auto strip_scheme(ast::expression& expr, std::string_view scheme) -> void {
+  auto arg = expr.as<ast::constant>();
+  TENZIR_ASSERT(arg);
+  auto strip_size = scheme.size() + 3;
+  // remove the quotes and scheme from the location
+  arg->source.begin += 1 + strip_size;
+  // remove the quotes from the location
+  arg->source.end -= 1;
+  match(
+    arg->value,
+    [strip_size](std::string& s) {
+      s.erase(0, strip_size);
+    },
+    [](const auto&) {
+      TENZIR_UNREACHABLE();
+    });
+}
+
+auto extract_located_url(ast::expression& expr) -> located<std::string> {
+  auto arg = expr.as<ast::constant>();
+  auto str = match(
+    arg->value,
+    [](std::string& s) -> std::string {
+      return std::move(s);
+    },
+    [](const auto&) -> std::string {
+      TENZIR_UNREACHABLE();
+      return {};
+    });
+  return located{std::move(str), arg->source};
+}
+
 auto find_formatter_given(std::string_view what, auto func, auto member,
                           std::string_view path, location loc, const char* docs,
                           session ctx) -> const operator_factory_plugin* {
@@ -161,7 +193,7 @@ auto strip_prefix(std::string name) -> std::string {
 
 class from_plugin2 final : public virtual operator_factory_plugin {
   static auto
-  create_pipeline_from_uri(std::string_view path, invocation inv,
+  create_pipeline_from_uri(std::string path, invocation inv,
                            session ctx) -> failure_or<operator_ptr> {
     const operator_factory_plugin* load_plugin = nullptr;
     const operator_factory_plugin* decompress_plugin = nullptr;
@@ -199,6 +231,21 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         url->scheme(), &operator_factory_plugin::load_properties,
         &operator_factory_plugin::load_properties_t::schemes, path,
         inv.args.front().get_location(), ctx);
+      if (load_plugin) {
+        if (load_plugin->load_properties().strip_scheme) {
+          strip_scheme(inv.args.front(), url->scheme());
+        }
+        if (load_plugin->load_properties().transform_uri) {
+          auto uri_replacement = load_plugin->load_properties().transform_uri(
+            extract_located_url(inv.args.front()), ctx);
+          TENZIR_TRACE("from operator: URI replacement size  : {}",
+                       uri_replacement.size());
+          TENZIR_ASSERT(not uri_replacement.empty());
+          inv.args.erase(inv.args.begin());
+          inv.args.insert(inv.args.begin(), uri_replacement.begin(),
+                          uri_replacement.end());
+        }
+      }
     } else {
       load_plugin = plugins::find<operator_factory_plugin>("tql2.load_file");
     }
@@ -250,7 +297,10 @@ class from_plugin2 final : public virtual operator_factory_plugin {
                  decompress_plugin ? decompress_plugin->name() : "none");
     TENZIR_TRACE("from operator: determined read       : {}",
                  read_plugin ? read_plugin->name() : "none");
-    if (not load_plugin or not read_plugin) {
+    if (not load_plugin) {
+      return failure::promise();
+    }
+    if (not read_plugin and not pipeline_argument) {
       return failure::promise();
     }
     if (not pipeline_argument) {
@@ -271,6 +321,10 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       pipeline_argument->inner.body.emplace_back(
         ast::invocation{std::move(read_ent), {}});
       TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
+    }
+    TENZIR_TRACE("from operator: final pipeline        :");
+    for (auto& arg : inv.args) {
+      TENZIR_TRACE("    {:?}", arg);
     }
     if (load_plugin->load_properties().accepts_pipeline) {
       return load_plugin->make(std::move(inv), std::move(ctx));
@@ -340,7 +394,7 @@ public:
 
 class to_plugin2 final : public virtual operator_factory_plugin {
   static auto
-  create_pipeline_from_uri(std::string_view path, invocation inv,
+  create_pipeline_from_uri(std::string path, invocation inv,
                            session ctx) -> failure_or<operator_ptr> {
     const operator_factory_plugin* save_plugin = nullptr;
     const operator_factory_plugin* compress_plugin = nullptr;
@@ -378,6 +432,21 @@ class to_plugin2 final : public virtual operator_factory_plugin {
         url->scheme(), &operator_factory_plugin::save_properties,
         &operator_factory_plugin::save_properties_t::schemes, path,
         inv.args.front().get_location(), ctx);
+      if (save_plugin) {
+        if (save_plugin->save_properties().strip_scheme) {
+          strip_scheme(inv.args.front(), url->scheme());
+        }
+        if (save_plugin->save_properties().transform_uri) {
+          auto uri_replacement = save_plugin->save_properties().transform_uri(
+            extract_located_url(inv.args.front()), ctx);
+          TENZIR_TRACE("to operator: URI replacement size  : {}",
+                       uri_replacement.size());
+          TENZIR_ASSERT(not uri_replacement.empty());
+          inv.args.erase(inv.args.begin());
+          inv.args.insert(inv.args.begin(), uri_replacement.begin(),
+                          uri_replacement.end());
+        }
+      }
     } else {
       save_plugin = plugins::find<operator_factory_plugin>("tql2.save_file");
     }
@@ -432,7 +501,10 @@ class to_plugin2 final : public virtual operator_factory_plugin {
                  compress_plugin ? compress_plugin->name() : "none");
     TENZIR_TRACE("to operator: determined read       : {}",
                  write_plugin ? write_plugin->name() : "none");
-    if (not save_plugin or not write_plugin) {
+    if (not save_plugin) {
+      return failure::promise();
+    }
+    if (not write_plugin and not pipeline_argument) {
       return failure::promise();
     }
     if (not pipeline_argument) {
@@ -453,6 +525,10 @@ class to_plugin2 final : public virtual operator_factory_plugin {
       pipeline_argument->inner.body.emplace_back(
         ast::invocation{std::move(read_ent), {}});
       TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
+    }
+    TENZIR_TRACE("to operator: final pipeline        :");
+    for (auto& arg : inv.args) {
+      TENZIR_TRACE("    {:?}", arg);
     }
     if (save_plugin->load_properties().accepts_pipeline) {
       return save_plugin->make(std::move(inv), std::move(ctx));
