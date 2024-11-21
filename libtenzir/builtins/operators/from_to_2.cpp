@@ -67,29 +67,33 @@ private:
 
 using from_events_plugin = operator_inspection_plugin<from_events>;
 
+template <typename F>
+using pair_for = std::pair<const operator_factory_plugin*,
+                           decltype((std::declval<operator_factory_plugin>()
+                                     .*std::declval<F>())())>;
+
 auto find_given(std::string_view what, auto func, auto member,
                 std::vector<std::string>& possibilities)
-  -> const operator_factory_plugin* {
+  -> pair_for<decltype(func)> {
   for (const auto& p : plugins::get<operator_factory_plugin>()) {
     auto properties = (p->*func)();
     for (auto possibility : properties.*member) {
       if (what.ends_with(possibility)) {
-        return p;
-        break;
+        return {p, std::move(properties)};
       }
       possibilities.push_back(std::move(possibility));
     }
   }
-  return nullptr;
+  return {};
 }
 
 auto find_connector_given(std::string_view what, auto func, auto member,
-                          std::string_view path, location loc,
-                          session ctx) -> const operator_factory_plugin* {
+                          std::string_view path, location loc, const char* docs,
+                          session ctx) -> pair_for<decltype(func)> {
   auto possibilities = std::vector<std::string>{};
-  auto plugin = find_given(what, func, member, possibilities);
-  if (plugin) {
-    return plugin;
+  auto res = find_given(what, func, member, possibilities);
+  if (res.first) {
+    return res;
   }
   std::ranges::sort(possibilities);
   if (loc.end - loc.begin == path.size() + 2) {
@@ -100,8 +104,35 @@ auto find_connector_given(std::string_view what, auto func, auto member,
     .primary(loc)
     .note("supported schemes for deduction: : `{}`",
           fmt::join(possibilities, "`, `"))
+    .docs(docs)
     .emit(ctx);
-  return nullptr;
+  return {};
+}
+
+auto find_formatter_given(std::string_view what, auto func, auto member,
+                          std::string_view path, location loc, const char* docs,
+                          session ctx) -> pair_for<decltype(func)> {
+  auto possibilities = std::vector<std::string>{};
+  auto res = find_given(what, func, member, possibilities);
+  if (res.first) {
+    return res;
+  }
+  std::ranges::sort(possibilities);
+  if (loc.end - loc.begin == path.size() + 2) {
+    auto file_start = path.find(what);
+    loc.begin += file_start + 1;
+    loc.end -= 1; // TODO this may be shorted in case we have already cut out
+                  // the compression
+  }
+  diagnostic::error("no known format for extension `{}`", what)
+    .primary(loc)
+    .note("supported extensions for deduction:  `{}`",
+          fmt::join(possibilities, "`, `"))
+    .note("this could also be caused by an unknown compression extension")
+    .hint("you can pass a pipeline to handle compression and format")
+    .docs(docs)
+    .emit(ctx);
+  return {};
 }
 
 auto strip_scheme(ast::expression& expr, std::string_view scheme) -> void {
@@ -134,32 +165,6 @@ auto extract_located_url(ast::expression& expr) -> located<std::string> {
       return {};
     });
   return located{std::move(str), arg->source};
-}
-
-auto find_formatter_given(std::string_view what, auto func, auto member,
-                          std::string_view path, location loc, const char* docs,
-                          session ctx) -> const operator_factory_plugin* {
-  auto possibilities = std::vector<std::string>{};
-  auto plugin = find_given(what, func, member, possibilities);
-  if (plugin) {
-    return plugin;
-  }
-  std::ranges::sort(possibilities);
-  if (loc.end - loc.begin == path.size() + 2) {
-    auto file_start = path.find(what);
-    loc.begin += file_start + 1;
-    loc.end -= 1; // TODO this may be shorted in case we have already cut out
-                  // the compression
-  }
-  diagnostic::error("no known format for extension `{}`", what)
-    .primary(loc)
-    .note("supported extensions for deduction:  `{}`",
-          fmt::join(possibilities, "`, `"))
-    .note("this could also be caused by an unknown compression extension")
-    .hint("you can pass a pipeline to handle compression and format")
-    .docs(docs)
-    .emit(ctx);
-  return nullptr;
 }
 
 auto determine_compression(std::string_view& file_ending) -> std::string_view {
@@ -198,6 +203,8 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     const operator_factory_plugin* load_plugin = nullptr;
     const operator_factory_plugin* decompress_plugin = nullptr;
     const operator_factory_plugin* read_plugin = nullptr;
+    auto load_properties = operator_factory_plugin::load_properties_t{};
+    auto read_properties = operator_factory_plugin::read_properties_t{};
     const auto pipeline_count = std::ranges::count_if(
       inv.args, &ast::expression::is<ast::pipeline_expr>);
     if (pipeline_count > 1) {
@@ -227,16 +234,16 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     }
     // determine loader based on schema
     if (url->has_scheme()) {
-      load_plugin = find_connector_given(
+      std::tie(load_plugin, load_properties) = find_connector_given(
         url->scheme(), &operator_factory_plugin::load_properties,
         &operator_factory_plugin::load_properties_t::schemes, path,
-        inv.args.front().get_location(), ctx);
+        inv.args.front().get_location(), docs, ctx);
       if (load_plugin) {
-        if (load_plugin->load_properties().strip_scheme) {
+        if (load_properties.strip_scheme) {
           strip_scheme(inv.args.front(), url->scheme());
         }
-        if (load_plugin->load_properties().transform_uri) {
-          auto uri_replacement = load_plugin->load_properties().transform_uri(
+        if (load_properties.transform_uri) {
+          auto uri_replacement = load_properties.transform_uri(
             extract_located_url(inv.args.front()), ctx);
           TENZIR_TRACE("from operator: URI replacement size  : {}",
                        uri_replacement.size());
@@ -244,13 +251,18 @@ class from_plugin2 final : public virtual operator_factory_plugin {
           inv.args.erase(inv.args.begin());
           inv.args.insert(inv.args.begin(), uri_replacement.begin(),
                           uri_replacement.end());
+          if (pipeline_argument) {
+            pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+          }
         }
       }
     } else {
       load_plugin = plugins::find<operator_factory_plugin>("tql2.load_file");
     }
     auto compression_name = std::string_view{};
-    if (not pipeline_argument) {
+    const bool has_pipeline_or_events
+      = pipeline_argument or load_properties.events;
+    if (not has_pipeline_or_events) {
       const auto& file = url->segments().back();
       auto first_dot = file.find('.');
       if (first_dot == file.npos) {
@@ -279,7 +291,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         TENZIR_ASSERT(decompress_plugin);
       }
       // determine read operator based on file ending
-      read_plugin = find_formatter_given(
+      std::tie(read_plugin, read_properties) = find_formatter_given(
         file_ending, &operator_factory_plugin::read_properties,
         &operator_factory_plugin::read_properties_t::extensions, path,
         inv.args.front().get_location(), docs, ctx);
@@ -291,8 +303,9 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     TENZIR_TRACE("from operator: determined loader     : {}",
                  load_plugin ? load_plugin->name() : "none");
     TENZIR_TRACE("from operator: loader accepts pipe   : {}",
-                 load_plugin ? load_plugin->load_properties().accepts_pipeline
-                             : false);
+                 load_plugin ? load_properties.accepts_pipeline : false);
+    TENZIR_TRACE("from operator: loader produces events: {}",
+                 load_plugin ? load_properties.events : false);
     TENZIR_TRACE("from operator: determined decompress : {}",
                  decompress_plugin ? decompress_plugin->name() : "none");
     TENZIR_TRACE("from operator: determined read       : {}",
@@ -300,10 +313,10 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     if (not load_plugin) {
       return failure::promise();
     }
-    if (not read_plugin and not pipeline_argument) {
+    if (not read_plugin and not has_pipeline_or_events) {
       return failure::promise();
     }
-    if (not pipeline_argument) {
+    if (not has_pipeline_or_events) {
       inv.args.emplace_back(ast::pipeline_expr{});
       pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
       if (decompress_plugin) {
@@ -326,18 +339,22 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     for (auto& arg : inv.args) {
       TENZIR_TRACE("    {:?}", arg);
     }
-    if (load_plugin->load_properties().accepts_pipeline) {
+    if (load_properties.accepts_pipeline) {
       return load_plugin->make(std::move(inv), std::move(ctx));
     } else {
-      TRY(auto compiled_pipeline,
-          compile(std::move(pipeline_argument->inner), ctx));
-      TENZIR_TRACE("from operator: compiled pipeline ops : {}",
-                   compiled_pipeline.operators().size());
-      inv.args.pop_back();
+      auto compiled_pipeline = pipeline{};
+      if (read_plugin) {
+        TRY(compiled_pipeline,
+            compile(std::move(pipeline_argument->inner), ctx));
+        TENZIR_TRACE("from operator: compiled pipeline ops : {}",
+                     compiled_pipeline.operators().size());
+        inv.args.pop_back();
+      }
       TRY(auto load_op, load_plugin->make(std::move(inv), ctx));
       compiled_pipeline.prepend(std::move(load_op));
       return std::make_unique<pipeline>(std::move(compiled_pipeline));
     }
+    /// TODO dont return directly, do additional error output
   }
 
 public:
@@ -399,6 +416,8 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     const operator_factory_plugin* save_plugin = nullptr;
     const operator_factory_plugin* compress_plugin = nullptr;
     const operator_factory_plugin* write_plugin = nullptr;
+    auto save_properties = operator_factory_plugin::save_properties_t{};
+    auto write_properties = operator_factory_plugin::write_properties_t{};
     const auto pipeline_count = std::ranges::count_if(
       inv.args, &ast::expression::is<ast::pipeline_expr>);
     if (pipeline_count > 1) {
@@ -428,16 +447,16 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     }
     // determine loader based on schema
     if (url->has_scheme()) {
-      save_plugin = find_connector_given(
+      std::tie(save_plugin, save_properties) = find_connector_given(
         url->scheme(), &operator_factory_plugin::save_properties,
         &operator_factory_plugin::save_properties_t::schemes, path,
-        inv.args.front().get_location(), ctx);
+        inv.args.front().get_location(), docs, ctx);
       if (save_plugin) {
-        if (save_plugin->save_properties().strip_scheme) {
+        if (save_properties.strip_scheme) {
           strip_scheme(inv.args.front(), url->scheme());
         }
-        if (save_plugin->save_properties().transform_uri) {
-          auto uri_replacement = save_plugin->save_properties().transform_uri(
+        if (save_properties.transform_uri) {
+          auto uri_replacement = save_properties.transform_uri(
             extract_located_url(inv.args.front()), ctx);
           TENZIR_TRACE("to operator: URI replacement size  : {}",
                        uri_replacement.size());
@@ -445,13 +464,18 @@ class to_plugin2 final : public virtual operator_factory_plugin {
           inv.args.erase(inv.args.begin());
           inv.args.insert(inv.args.begin(), uri_replacement.begin(),
                           uri_replacement.end());
+          if (pipeline_argument) {
+            pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+          }
         }
       }
     } else {
       save_plugin = plugins::find<operator_factory_plugin>("tql2.save_file");
     }
+    const bool has_pipeline_or_events
+      = pipeline_argument or save_properties.events;
     auto compression_name = std::string_view{};
-    if (not pipeline_argument) {
+    if (not has_pipeline_or_events) {
       const auto& file = url->segments().back();
       auto first_dot = file.find('.');
       auto file_ending = std::string_view{file}.substr(first_dot);
@@ -483,7 +507,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
         TENZIR_ASSERT(compress_plugin);
       }
       // determine write operator based on file ending
-      write_plugin = find_formatter_given(
+      std::tie(write_plugin, write_properties) = find_formatter_given(
         file_ending, &operator_factory_plugin::write_properties,
         &operator_factory_plugin::write_properties_t::extensions, path,
         inv.args.front().get_location(), docs, ctx);
@@ -494,9 +518,10 @@ class to_plugin2 final : public virtual operator_factory_plugin {
                    : -1);
     TENZIR_TRACE("to operator: determined loader     : {}",
                  save_plugin ? save_plugin->name() : "none");
-    TENZIR_TRACE("to operator: loader accepts pipe   : {}",
-                 save_plugin ? save_plugin->save_properties().accepts_pipeline
-                             : false);
+    TENZIR_TRACE("to operator: saver accepts pipe    : {}",
+                 save_plugin ? save_properties.accepts_pipeline : false);
+    TENZIR_TRACE("to operator: saver accepts events  : {}",
+                 save_plugin ? save_properties.events : false);
     TENZIR_TRACE("to operator: determined decompress : {}",
                  compress_plugin ? compress_plugin->name() : "none");
     TENZIR_TRACE("to operator: determined read       : {}",
@@ -504,10 +529,10 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     if (not save_plugin) {
       return failure::promise();
     }
-    if (not write_plugin and not pipeline_argument) {
+    if (not write_plugin and not has_pipeline_or_events) {
       return failure::promise();
     }
-    if (not pipeline_argument) {
+    if (not has_pipeline_or_events) {
       inv.args.emplace_back(ast::pipeline_expr{});
       pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
       if (compress_plugin) {
@@ -533,11 +558,14 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     if (save_plugin->load_properties().accepts_pipeline) {
       return save_plugin->make(std::move(inv), std::move(ctx));
     } else {
-      TRY(auto compiled_pipeline,
-          compile(std::move(pipeline_argument->inner), ctx));
-      TENZIR_TRACE("from operator: compiled pipeline ops : {}",
-                   compiled_pipeline.operators().size());
-      inv.args.pop_back();
+      auto compiled_pipeline = pipeline{};
+      if (write_plugin) {
+        TRY(compiled_pipeline,
+            compile(std::move(pipeline_argument->inner), ctx));
+        TENZIR_TRACE("from operator: compiled pipeline ops : {}",
+                     compiled_pipeline.operators().size());
+        inv.args.pop_back();
+      }
       TRY(auto load_op, save_plugin->make(std::move(inv), ctx));
       compiled_pipeline.append(std::move(load_op));
       return std::make_unique<pipeline>(std::move(compiled_pipeline));

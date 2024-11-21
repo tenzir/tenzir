@@ -7,7 +7,7 @@ sidebar_class_name: hidden
 Saves to an URI, inferring the destination, compression and format.
 
 ```tql
-to uri:str, [saver_args... { … }]
+to uri:str, [saver_args… { … }]
 ```
 
 :::tip Use `to` if you can
@@ -25,7 +25,7 @@ It will try to infer the connector, compression and format based on the given UR
 
 The URI to load from.
 
-### `saver_args... (optional)`
+### `saver_args… (optional)`
 
 An optional set of arguments passed to the saver.
 This can be used to e.g. pass credentials to a connector:

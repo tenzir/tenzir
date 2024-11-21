@@ -33,6 +33,8 @@ public:
     /// Whether to strip the scheme before passing the URI to the transformer
     /// or the operator itself.
     bool strip_scheme = false;
+    /// Whether the connector produces/consumes events
+    bool events = false;
     /// A function that can be used to transform a URI into ast arguments.
     /// This function may be empty, in which case the URI is just directly
     /// passed as the first argument to the operator.

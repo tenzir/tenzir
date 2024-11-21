@@ -7,9 +7,9 @@ sidebar_class_name: hidden
 Loads from an URI, inferring the source, compression and format.
 
 ```tql
-from uri:str, [loader_args... { … }]
+from uri:str, [loader_args… { … }]
 from event:record
-from [ event... ]
+from [ event… ]
 ```
 
 :::tip Use `from` if you can
@@ -28,7 +28,7 @@ Alternatively, it can be used to create ad-hoc events from records.
 
 The URI to load from.
 
-### `loader_args... (optional)`
+### `loader_args… (optional)`
 
 An optional set of arguments passed to the loader.
 This can be used to e.g. pass credentials to a connector:
@@ -54,7 +54,7 @@ If you want to perform other operations on the data afterwards, continue the
 pipeline after this operator instead of providing a sub-pipeline.
 :::
 
-### `event`/`events... :record`
+### `event`/`events… :record`
 
 Instead of a URI, you can also provide a *record' or a *list of records* as a
 first argument to `from`. This will be treated as input events and simply passed
