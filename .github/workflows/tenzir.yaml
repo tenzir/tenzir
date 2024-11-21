@@ -345,6 +345,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Require contrib/tenzir-plugins to be downstream of current `main`
+        if: github.event_name == 'pull_request' && github.base_ref == 'refs/heads/main'
         run: |
           git submodule update --init contrib/tenzir-plugins
           git -C contrib/tenzir-plugins fetch origin main
@@ -357,6 +358,7 @@ jobs:
             $(git -C contrib/tenzir-plugins rev-parse HEAD) \
             $(git -C contrib/tenzir-plugins rev-parse origin/main)
       - name: Generate a token
+        if: github.event_name == 'pull_request' && github.base_ref == 'refs/heads/main'
         id: generate_token
         uses: actions/create-github-app-token@v1
         with:
@@ -364,6 +366,7 @@ jobs:
           private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
       - name: Require an open PR for a submodule bump
+        if: github.event_name == 'pull_request' && github.base_ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
