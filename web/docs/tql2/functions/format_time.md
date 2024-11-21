@@ -19,7 +19,6 @@ The input time for which a string should be constructed.
 The string that specifies the desired output format, for example `"%m-%d-%Y"`. The
 allowed format specifiers are the same as for `strftime`:
 
-
 | Specifier | Description                                                                                                                |
 |-----------|----------------------------------------------------------------------------------------------------------------------------|
 | `%a`      | Abbreviated name of the day of the week (locale-specific).                                                                 |
