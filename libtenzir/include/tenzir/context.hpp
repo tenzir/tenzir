@@ -15,6 +15,8 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
+#include <caf/actor_registry.hpp>
+
 #include <cctype>
 
 namespace tenzir {

@@ -86,7 +86,7 @@ public:
     auto file_saver = parsed->instantiate(ctrl, std::move(info));
     if (not file_saver)
       return std::move(file_saver.error());
-    auto guard = caf::detail::make_scope_guard([=] {
+    auto guard = detail::scope_guard([=]() noexcept {
       // We also print this when the operator fails at runtime, but
       // then again this also means that we did create the file, so
       // that's probably alright.

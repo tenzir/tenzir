@@ -35,7 +35,6 @@
 #include <arrow/array/builder_primitive.h>
 #include <arrow/type.h>
 #include <caf/error.hpp>
-#include <caf/sum_type.hpp>
 #include <tsl/robin_map.h>
 
 #include <memory>

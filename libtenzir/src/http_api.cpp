@@ -103,7 +103,7 @@ auto parse_skeleton(simdjson::ondemand::value value, size_t depth = 0)
       return xs;
     }
   }
-  die("missing return in switch statement");
+  TENZIR_ASSERT_ALWAYS(false, "missing return in switch statement");
 }
 
 auto http_parameter_map::from_json(std::string_view json)

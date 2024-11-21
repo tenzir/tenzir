@@ -11,6 +11,7 @@
 #include <caf/blocking_actor.hpp>
 
 #include <csignal>
+#include <iostream>
 
 namespace tenzir {
 

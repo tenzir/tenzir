@@ -10,6 +10,7 @@
 
 #include "tenzir/config.hpp"
 #include "tenzir/detail/discard.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/error.hpp"
 
 #include <string>
@@ -136,7 +137,7 @@ namespace tenzir {
 /// Used to make log level strings from config, like 'debug', to a log level int.
 int loglevel_to_int(std::string c, int default_value = TENZIR_LOG_LEVEL_QUIET);
 
-[[nodiscard]] caf::expected<caf::detail::scope_guard<void (*)()>>
+[[nodiscard]] caf::expected<detail::scope_guard<void (*)() noexcept>>
 create_log_context(bool is_server, const tenzir::invocation& cmd_invocation,
                    const caf::settings& cfg_file);
 

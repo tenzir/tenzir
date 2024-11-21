@@ -32,7 +32,6 @@ using caf::detail::tl_forall;
 using caf::detail::tl_head;
 using caf::detail::tl_index_of;
 using caf::detail::tl_is_distinct;
-using caf::detail::tl_map;
 using caf::detail::tl_size;
 
 template <class List>
@@ -183,6 +182,31 @@ struct tl_push_back<type_list<ListTs...>, What> {
 template <class List, class What>
 using tl_push_back_t = typename tl_push_back<List, What>::type;
 
+template <class T, template <class> class... Funs>
+struct tl_apply_all;
+
+template <class T>
+struct tl_apply_all<T> {
+  using type = T;
+};
+
+template <class T, template <class> class Fun0, template <class> class... Funs>
+struct tl_apply_all<T, Fun0, Funs...> {
+  using type = typename tl_apply_all<typename Fun0<T>::type, Funs...>::type;
+};
+
+template <class T, template <class> class... Funs>
+using tl_apply_all_t = typename tl_apply_all<T, Funs...>::type;
+
+/// Creates a new list by applying a "template function" to each element.
+template <class List, template <class> class... Funs>
+struct tl_map;
+
+template <class... Ts, template <class> class... Funs>
+struct tl_map<type_list<Ts...>, Funs...> {
+  using type = type_list<tl_apply_all_t<Ts, Funs...>...>;
+};
+
 template <class List, template <class> class... Funs>
 using tl_map_t = typename tl_map<List, Funs...>::type;
 
@@ -237,6 +261,21 @@ struct tl_filter_type<type_list<T...>, Type> {
 
 template <class List, class T>
 using tl_filter_type_t = typename tl_filter_type<List, T>::type;
+
+/// Creates a new list containing all elements which
+///    are not equal to `Type`.
+template <class List, class Type>
+struct tl_filter_not_type;
+
+template <class Type, class... T>
+struct tl_filter_not_type<type_list<T...>, Type> {
+  using type =
+    typename tl_filter_impl<type_list<T...>,
+                            (!std::is_same<T, Type>::value)...>::type;
+};
+
+template <class List, class T>
+using tl_filter_not_type_t = typename tl_filter_not_type<List, T>::type;
 
 /// Creates a new list from `List` without any duplicate elements.
 template <class List>

@@ -32,7 +32,6 @@
 #include <arrow/array/builder_primitive.h>
 #include <arrow/type.h>
 #include <caf/error.hpp>
-#include <caf/sum_type.hpp>
 
 #include <memory>
 #include <string>

@@ -28,6 +28,7 @@
 #include <tenzir/uuid.hpp>
 
 #include <arrow/type.h>
+#include <caf/actor_registry.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/scheduled_actor.hpp>

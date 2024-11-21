@@ -21,6 +21,7 @@
 
 #include <arrow/config.h>
 #include <arrow/util/byte_size.h>
+#include <caf/detail/scope_guard.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
@@ -74,8 +75,8 @@ namespace {
 template <class... Duration>
   requires(std::is_same_v<Duration, duration> && ...)
 auto make_timer_guard(Duration&... elapsed) {
-  return caf::detail::make_scope_guard(
-    [&, start_time = std::chrono::steady_clock::now()] {
+  return caf::detail::scope_guard(
+    [&, start_time = std::chrono::steady_clock::now()]() noexcept {
       const auto delta = std::chrono::steady_clock::now() - start_time;
       ((void)(elapsed += delta, true), ...);
     });

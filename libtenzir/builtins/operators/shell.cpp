@@ -12,6 +12,7 @@
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/preserved_fds.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
@@ -22,7 +23,6 @@
 
 #include <boost/asio.hpp>
 #include <boost/process.hpp>
-#include <caf/detail/scope_guard.hpp>
 
 #include <mutex>
 #include <queue>
@@ -243,7 +243,7 @@ public:
     });
     {
       // Coroutines require RAII-style exit handling.
-      auto unplanned_exit = caf::detail::make_scope_guard([&] {
+      auto unplanned_exit = detail::scope_guard([&]() noexcept {
         child->terminate();
         TENZIR_DEBUG("joining thread");
         thread.join();

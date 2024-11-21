@@ -50,7 +50,7 @@ bool connected_to_journal() {
 // reference implementation at `libsystemd/sd-daemon/sd-daemon.c` to decide
 // which conditions should result in errors.
 caf::error notify_ready() {
-  caf::detail::scope_guard guard([] {
+  detail::scope_guard guard([]() noexcept {
     // Always unset $NOTIFY_SOCKET.
     if (auto err = detail::unsetenv("NOTIFY_SOCKET"))
       TENZIR_WARN("failed to unset NOTIFY_SOCKET: {}", err);

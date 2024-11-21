@@ -13,6 +13,7 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>
 
+#include <caf/actor_registry.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <queue>

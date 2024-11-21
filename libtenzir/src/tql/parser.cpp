@@ -180,7 +180,7 @@ private:
 
   template <typename F>
   auto rollback(F&& f) {
-    auto guard = caf::detail::scope_guard{[this, previous = current_] {
+    auto guard = caf::detail::scope_guard{[this, previous = current_]() noexcept {
       current_ = previous;
     }};
     return std::forward<F>(f)();

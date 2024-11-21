@@ -7,8 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/detail/installdirs.hpp>
+#include <tenzir/optional.hpp>
 
 #include <web/configuration.hpp>
+
+#include <fmt/std.h>
 
 namespace tenzir::plugins::web {
 
@@ -65,8 +68,7 @@ caf::expected<server_config> convert_and_validate(configuration config) {
     // This doesn't help against TOCTOU errors, but at least it
     // catches obvious ones.
     if (!is_directory(*result.webroot, ec))
-      return caf::make_error(ec::invalid_argument, fmt::format("directory not "
-                                                               "found: {}",
+      return caf::make_error(ec::invalid_argument, fmt::format("directory not found: {}",
                                                                result.webroot));
   } else {
     result.webroot = std::nullopt;

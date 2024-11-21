@@ -141,7 +141,7 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
-    auto [importer] = node->state.registry.find<importer_actor>();
+    auto [importer] = node->state().registry.find<importer_actor>();
     return node->spawn<caf::linked>(metrics_collector, std::move(importer));
   }
 };

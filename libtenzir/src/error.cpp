@@ -174,18 +174,20 @@ auto add_context_impl(const caf::error& error, std::string str) -> caf::error {
         ec::diagnostic, std::move(*inner).modify().note(std::move(str)).done());
     }
   }
-  if (!error.context()) {
-    return caf::error{
-      error.code(),
-      error.category(),
-      caf::make_message(std::move(str)),
-    };
-  }
-  return caf::error{
-    error.code(),
-    error.category(),
-    caf::message::concat(error.context(), caf::make_message(std::move(str))),
-  };
+  // FIXME: Replace all use-sites of add_context with diagnostic.
+  //if (!error.context()) {
+  //  return caf::error{
+  //    error.code(),
+  //    error.category(),
+  //    caf::make_message(std::move(str)),
+  //  };
+  //}
+  //return caf::error{
+  //  error.code(),
+  //  error.category(),
+  //  caf::message::concat(error.context(), caf::make_message(std::move(str))),
+  //};
+  return caf::error{};
 }
 
 } // namespace tenzir

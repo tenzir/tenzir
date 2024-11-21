@@ -363,7 +363,7 @@ public:
         continue;
       }
       status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
-      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+      auto free_entry_data_list = detail::scope_guard([&]() noexcept {
         if (entry_data_list) {
           MMDB_free_entry_data_list(entry_data_list);
         }
@@ -434,7 +434,7 @@ public:
         continue;
       }
       status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
-      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+      auto free_entry_data_list = detail::scope_guard([&]() noexcept {
         if (entry_data_list) {
           MMDB_free_entry_data_list(entry_data_list);
         }
@@ -511,7 +511,7 @@ public:
         if (current_dump->status != MMDB_SUCCESS) {
           break;
         }
-        auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+        auto free_entry_data_list = detail::scope_guard([&]() noexcept {
           if (entry_data_list) {
             MMDB_free_entry_data_list(entry_data_list);
           }

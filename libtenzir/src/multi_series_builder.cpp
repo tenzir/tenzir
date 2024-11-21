@@ -16,7 +16,6 @@
 #include <tenzir/multi_series_builder.hpp>
 
 #include <caf/none.hpp>
-#include <caf/sum_type.hpp>
 #include <fmt/core.h>
 
 #include <optional>

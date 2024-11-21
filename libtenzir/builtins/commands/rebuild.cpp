@@ -33,6 +33,7 @@
 #include <tenzir/uuid.hpp>
 
 #include <arrow/table.h>
+#include <caf/actor_registry.hpp>
 #include <caf/expected.hpp>
 #include <caf/policy/select_all.hpp>
 #include <caf/scoped_actor.hpp>
@@ -728,7 +729,7 @@ public:
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
     auto [catalog, index]
-      = node->state.registry.find<catalog_actor, index_actor>();
+      = node->state().registry.find<catalog_actor, index_actor>();
     return node->spawn(rebuilder, std::move(catalog), std::move(index));
   }
 };

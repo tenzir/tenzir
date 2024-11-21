@@ -38,6 +38,7 @@
 #include "tenzir/uuid.hpp"
 #include "tenzir/version.hpp"
 
+#include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/function_view.hpp>
 #include <caf/io/middleman.hpp>
