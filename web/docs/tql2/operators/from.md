@@ -73,8 +73,8 @@ The `from` operator tries to infer all three steps from the given URI.
 
 ### Loading
 
-The connector is inferred based on the URI `scheme://`.
-If no scheme is present, the connector attempts to load from the filesystem.
+The connector is inferred based on the URI `scheme://`. See the [URI schemes section](#uri-schemes) for supported
+schemes. If no scheme is present, the connector attempts to load from the filesystem.
 
 ### Decompressing
 
@@ -126,6 +126,47 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
   read_gelf
 }
 ```
+
+## Supported Deductions
+
+### URI schemes
+
+| Scheme | Operator | Example |
+| ------ | -------- | ------- |
+| `file` | [`load_file`](load_file.md) | `from "file://path/to/file.json"` |
+| `ftp`, `ftps` | [`load_ftp`](load_ftp.md) | `from "ftp://example.com/file.json"` |
+| `gcps` | [`load_google_cloud_pubsub`](load_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id"` |
+| `http`, `https` | [`load_http`](load_http.md) | `from "http://example.com/file.json"` |
+| `tcp` | [`load_tcp`](load_tcp.md) | `from "tcp://127.0.0.1:13245" { read_json }` |
+
+Please see the respective operator pages for details on the URI's locator format.
+
+### File endings
+
+#### Format
+
+The `from` operator can deduce the file format based on these file-endings:
+
+| Format | File Endings | Operator  |
+| ------ | ------------ | --------- |
+|  JSON  | `.json` | [`read_json`](read_json.md) |
+|  YAML  | `.yaml` | [`read_yaml`](read_yaml.md) |
+|  CSV  | `.csv` | [`read_csv`](read_csv.md) |
+|  SSV  | `.ssv` | [`read_ssv`](read_ssv.md) |
+|  TSV  | `.tsv` | [`read_tsv`](read_tsv.md) |
+
+#### Compression
+
+The `from` operator can deduce the following compressions based on these
+file-endings:
+
+| Compression |    File Endings   |
+| ----------- | ----------------- |
+| Brotoli     | `.br`, `.brotoli` |
+| Bzip2       | `.bz2`            |
+| Gzip        | `.gz`, `.gzip`    |
+| LZ4         | `.lz4`            |
+| Zstd        | `.zst`, `.zstd`   |
 
 ## Examples
 

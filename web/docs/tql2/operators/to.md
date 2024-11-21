@@ -85,6 +85,47 @@ If you want to write with specific compression settings, you can use the
 The connector is inferred based on the URI `scheme://`.
 If no scheme is present, the connector attempts to save to the local filesystem.
 
+
+## Supported Deductions
+
+### URI schemes
+
+| Scheme | Operator | Example |
+| ------ | -------- | ------- |
+| `file` | [`save_file`](save_file.md) | `from "file://path/to/file.json"` |
+| `ftp`, `ftps` | [`save_ftp`](save_ftp.md) | `from "ftp://example.com/file.json"` |
+| `gcps` | [`save_google_cloud_pubsub`](save_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id"` |
+| `http`, `https` | [`save_http`](save_http.md) | `from "http://example.com/file.json"` |
+
+Please see the respective operator pages for details on the URI's locator format.
+
+### File endings
+
+#### Format
+
+The `from` operator can deduce the file format based on these file-endings:
+
+| Format | File Endings | Operator  |
+| ------ | ------------ | --------- |
+|  JSON  | `.json` | [`write_json`](write_json.md) |
+|  YAML  | `.yaml` | [`write_yaml`](write_yaml.md) |
+|  CSV  | `.csv` | [`write_csv`](write_csv.md) |
+|  SSV  | `.ssv` | [`write_ssv`](write_ssv.md) |
+|  TSV  | `.tsv` | [`write_tsv`](read_tsv.md) |
+
+#### Compression
+
+The `from` operator can deduce the following compressions based on these
+file-endings:
+
+| Compression |    File Endings   |
+| ----------- | ----------------- |
+| Brotoli     | `.br`, `.brotoli` |
+| Bzip2       | `.bz2`            |
+| Gzip        | `.gz`, `.gzip`    |
+| LZ4         | `.lz4`            |
+| Zstd        | `.zst`, `.zstd`   |
+
 #### Example transformation:
 
 ```tql title="to operator"
