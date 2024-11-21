@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/detail/assert.hpp"
+
 #include <fmt/format.h>
 
 #include <optional>
@@ -15,10 +17,21 @@
 namespace tenzir {
 
 template <typename T>
-std::optional<T> to_optional(const T* ptr) {
-  if (ptr)
+auto to_optional(const T* ptr) -> std::optional<T> {
+  if (ptr) {
     return *ptr;
+  }
   return std::nullopt;
+}
+
+template <class T>
+[[nodiscard]] auto
+check(std::optional<T> result, std::source_location location
+                               = std::source_location::current()) -> T {
+  if (not result) [[unlikely]] {
+    detail::panic_impl("invalid optional access", location);
+  }
+  return std::move(result.value());
 }
 
 } // namespace tenzir
