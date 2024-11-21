@@ -123,7 +123,10 @@ Function | Description | Example
 [`now`](functions/now.md) | Gets the current wallclock time | `now()`
 [`since_epoch`](functions/since_epoch.md) | Turns a time into a duration since the Unix epoch | `since_epoch(2021-02-24)`
 [`parse_time`](functions/parse_time.md) | Parses a timestamp following a given format | `"10/11/2012".parse_time("%d/%m/%Y")`
+<!--
+This is hidden because there is an issue with the timezone DB.
 [`format_time`](functions/format_time.md) | Format a timestamp following a given format | `2012-11-10.format_time("%d/%m/%Y")`
+-->
 
 <!--
 
