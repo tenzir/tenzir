@@ -12,9 +12,8 @@ Reads bytes from the given endpoint via TCP or TLS.
 
 ### `endpoint: string`
 
-The endpoint at which the server will listen. If `connect=true`, this is instead
-the remote endpoint to connect to. Must be of the form
-`[tcp://]<hostname>:<port>`. Use the hostname `0.0.0.0` o accept connections on
+The endpoint at which the server will listen. Must be of the form
+`[tcp://]<hostname>:<port>`. Use the hostname `0.0.0.0` to accept connections on
 all interfaces.
 
 ### `parallel = int (optional)`
