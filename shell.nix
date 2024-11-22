@@ -12,11 +12,13 @@ in
           pkgs.ccache
           pkgs.clang-tools
           pkgs.cmake-format
+          pkgs.gdb
           pkgs.speeve
           pkgs.shfmt
           pkgs.poetry
           pkgs.python3Packages.spdx-tools
           pkgs.uv
+          pkgs.yarn
           (pkgs.python3.withPackages (ps: with ps; [
             aiohttp
             dynaconf

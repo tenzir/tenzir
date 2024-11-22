@@ -404,11 +404,11 @@ in {
           export LD_LIBRARY_PATH=$PWD/lib
           export DYLD_LIBRARY_PATH=$PWD/lib
         '';
-      }
-      // lib.optionalAttrs isStatic {
-        cmakeFlags =
-          old.cmakeFlags
+        cmakeFlags = old.cmakeFlags
           ++ [
+            #"-DCMAKE_BUILD_TYPE=DEBUG"
+          ]
+          ++ lib.optionals isStatic ([
             "-DCAF_BUILD_STATIC=ON"
             "-DCAF_BUILD_STATIC_ONLY=ON"
             "-DCAF_ENABLE_TESTING=OFF"
@@ -417,7 +417,9 @@ in {
           ]
           ++ lib.optionals isLinux [
             "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
-          ];
+          ]);
+      }
+      // lib.optionalAttrs isStatic {
         hardeningDisable = [
           "fortify"
           "pic"
