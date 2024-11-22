@@ -250,3 +250,8 @@ EOF
     x = x.parse_time("%Y-%m-%d")
   '
 }
+
+@test "hex" {
+  check tenzir 'from {bytes: "Tenzir"} | encoded = bytes.encode_hex()'
+  check tenzir 'from {bytes: "54656E7a6972"} | decoded = bytes.decode_hex()'
+}
