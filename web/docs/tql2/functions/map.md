@@ -1,9 +1,9 @@
-# all
+# map
 
 Maps each list element to an expression.
 
 ```tql
-map(list:list, capture:field, expression:any) -> list
+map(xs:list, capture:field, expression:any) -> list
 ```
 
 ## Description
@@ -11,40 +11,58 @@ map(list:list, capture:field, expression:any) -> list
 The `map` function applies an expression to each element within a list,
 returning a list of the same length.
 
-### `list : list`
+### `xs: list`
 
 A list of values.
 
-### `capture : field`
+### `capture: field`
 
 The name of each list element in the mapping expression.
 
-### `expression : any`
+### `expression: any`
 
 The expression applied to each list element.
 
 ## Examples
 
-### Stringify all elements of list
+### Check a predicate for all members of a list
 
 ```tql
 from {
   hosts: [1.2.3.4, 127.0.0.1, 10.0.0.127]
 }
-hosts = hosts.map(host, str(host))
+hosts = hosts.map(x, x in 10.0.0.0/8)
 ```
 
 ```tql
-{hosts: ["1.2.3.4", "127.0.0.1", "10.0.0.127"]}
+{
+  hosts: [false, false, true]
+}
 ```
 
 ### Reshape a record inside a list
 
-```
+```tql
 from {
-  answers: [{rdata: 76.76.21.21, rrname: "tenzir.com"}]
+  answers: [
+    {
+      rdata: 76.76.21.21,
+      rrname: "tenzir.com"
+    }
+  ]
 }
 answers = answers.map(x, {hostname: x.rrname, ip: x.rdata})
+```
+
+```tql
+{
+  answers: [
+    {
+      hostname: "tenzir.com",
+      ip: "76.76.21.21",
+    }
+  ]
+}
 ```
 
 ## See Also

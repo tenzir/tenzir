@@ -1,9 +1,9 @@
-# all
+# where
 
 Removes list elements based on a predicate.
 
 ```tql
-where(list:list, capture:field, predicate:bool) -> list
+where(xs:list, capture:field, predicate:bool) -> list
 ```
 
 ## Description
@@ -11,15 +11,15 @@ where(list:list, capture:field, predicate:bool) -> list
 The `where` function removes all elements of a list for which a predicate
 evaluates to `false`.
 
-### `list : list`
+### `xs: list`
 
 A list of values.
 
-### `capture : field`
+### `capture: field`
 
 The name of each list element in each predicate.
 
-### `predicate : bool`
+### `predicate: bool`
 
 The predicate evaluated for each list element.
 
