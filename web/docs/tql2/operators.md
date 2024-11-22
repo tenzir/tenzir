@@ -12,6 +12,7 @@ Operator | Description | Example
 [`select`](./operators/select.md) | Selects some values and discard the rest | `select name, id=metadata.id`
 [`drop`](./operators/drop.md) | Removes fields from the event | `drop name, metadata.id`
 [`enumerate`](./operators/enumerate.md) | Adds a field with the number of the event | `enumerate num`
+[`timeshift`](./operators/timeshift.md) | Adjusts timestamps relative to a given start time | `timeshift ts, start=2020-01-01`
 [`unroll`](./operators/unroll.md) | Unrolls a field of type list, duplicating the surrounding event | `unroll names` |
 
 ## Filter
@@ -44,10 +45,15 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
+[`buffer`](./operators/buffer.md) | Adds additional buffering to handle spikes | `buffer 10M, policy="drop"`
+[`delay`](./operators/delay.md) | Delays events relative to a start time | `delay ts, speed=2.5`
 [`every`](./operators/every.md) | Restarts a pipeline periodically | `every 10s { summarize sum(amount) }`
 [`fork`](./operators/fork.md) | Forwards a copy of the events to another pipeline | `fork { to "copy.json" }`
 [`if`](language/statements.md#if) | Splits the flow based on a predicate | `if transaction > 0 { … } else { … }`
+[`pass`](./operators/pass.md) | Does nothing with the input | `pass`
 [`load_balance`](./operators/load_balance.md) | Routes the data to one of multiple subpipelines | `load_balance $over { publish $over }`
+[`repeat`](./operators/repeat.md) | Repeats the input after it has finished | `repeat 100`
+[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
 
 <!--
 [`group`]() | Starts a new pipeline for each group | `group path { to $path }`
@@ -60,8 +66,8 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`from`](./operators/from.md) | Loads from an URI or creates events ad-hoc | `from "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
-[`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
+[`from`](./operators/from.md) | Loads from an URI <br/> Creates events ad-hoc | `from "s3://examplebucket/obj.json.gz"` <br/> `from {field:"value"}` <!--at the top because its important-->
+[`subscribe`](./operators/subscribe.md) | Subscribes to events of a certain topic | `subscribe "topic"`
 [`export`](./operators/export.md) | Retrieves events from the node | `export`
 [`from_fluent_bit`](./operators/from_fluent_bit.md) | Returns results from a fluent-bit | `from_fluent_bit "opentelemetry"`
 [`from_velociraptor`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
@@ -77,8 +83,8 @@ Operator | Description | Example
 [`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
 [`load_udp`](./operators/load_udp.md) | Loads bytes from a UDP socket | `load_udp "0.0.0.0:8090"`
 [`load_zmq`](./operators/load_zmq.md) | Receives bytes from ZeroMQ messages | `load_zmq`
+[`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
 [`metrics`](./operators/metrics.md) | Retrieves metrics events from a Tenzir node | `metrics "cpu"`
-[`subscribe`](./operators/subscribe.md) | Subscribes to events of a certain topic | `subscribe "topic"`
 
 <!--
 [`load`](./operators/load.md) | Load bytes according to a URL | `load "https://example.org/api/list"`
@@ -202,9 +208,7 @@ Operator | Description | Example
 :--------|:------------|:-------
 [`api`](./operators/api.md) | Calls Tenzir's REST API from a pipeline | `api "/pipeline/list"`
 [`batch`](./operators/batch.md) | Controls the batch size of events | `batch timeout=1s`
-[`buffer`](./operators/buffer.md) | Adds additional buffering to handle spikes | `buffer 10M, policy="drop"`
 [`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
-[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
 [`cache`](./operators/cache.md) | In-memory cache shared between pipelines | `cache "w01wyhTZm3", ttl=10min`
 [`legacy`](./operators/legacy.md) | Provides a compatibility fallback to TQL1 pipelines | `legacy "chart area"`
 
@@ -244,13 +248,9 @@ Operator | Description | Example
 [`package::list`](./operators/package/list.md) | Shows installed packages | `package::list`
 [`package::remove`](./operators/package/add.md) | Uninstalls a package | `package::remove "suricata-ocsf"`
 
-## Uncategorized
+## Escape Hatches
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`delay`](./operators/delay.md) | Delays events relative to a start time | `delay ts, speed=2.5`
-[`pass`](./operators/pass.md) | Does nothing with the input | `pass`
-[`repeat`](./operators/repeat.md) | Repeats the input after it has finished | `repeat 100`
-[`timeshift`](./operators/timeshift.md) | Adjusts timestamps relative to a given start time | `timeshift ts, start=2020-01-01`
 [`python`](./operators/python.md) | Executes a Python snippet for each event | `python "self.x = self.y"`
 [`shell`](./operators/shell.md) | Runs a shell command within the pipeline | <code>shell "./process.sh \| tee copy.txt"</code>
