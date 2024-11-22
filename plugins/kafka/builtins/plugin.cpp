@@ -70,7 +70,7 @@ public:
     auto offset = std::optional<ast::expression>{};
     auto options = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
-          .add("topic", args.topic)
+          .add(args.topic, "topic")
           .add("count", args.count)
           .add("exit", args.exit)
           .add("offset", offset)
@@ -169,7 +169,7 @@ class save_plugin final
     auto ts = std::optional<located<time>>{};
     auto options = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
-          .add("topic", args.topic)
+          .add(args.topic, "topic")
           .add("key", args.key)
           .add("timestamp", ts)
           .add("options", options)
