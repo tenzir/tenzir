@@ -5,11 +5,10 @@ Sends events to a Splunk [HTTP Event Collector (HEC)][hec].
 [hec]: https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector
 
 ```tql
-to_splunk
- url:str, hec_token=str,
-      [host=str, source=str, sourcetype=expr, index=expr,
-       tls_no_verify=bool, print_nulls=bool,
-       max_content_length=int, send_timeout=duration, compress=bool]
+to_splunk url:str, hec_token=str,
+         [host=str, source=str, sourcetype=expr, index=expr,
+          tls_no_verify=bool, print_nulls=bool,
+          max_content_length=int, send_timeout=duration, compress=bool]
 ```
 
 ## Description

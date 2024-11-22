@@ -133,6 +133,7 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 
 | Scheme | Operator | Example |
 |:------ |:-------- |:------- |
+| `abfs`,`abfss` | [`load_azure_blob_storage`](load_azure_blob_storage.md) | `from "abfs://path/to/file.json"` |
 | `file` | [`load_file`](load_file.md) | `from "file://path/to/file.json"` |
 | `fluentbit` | [`from_fluent_bit`](from_fluent_bit.md) | `from "fluentbit://elasticsearch"` |
 | `ftp`, `ftps` | [`load_ftp`](load_ftp.md) | `from "ftp://example.com/file.json"` |
@@ -145,7 +146,7 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 
 Please see the respective operator pages for details on the URI's locator format.
 
-### File endings
+### File extensions
 
 #### Format
 
@@ -189,7 +190,7 @@ from "path/to/my/load/file.csv"
 ### Load a compressed file
 
 ```tql
-from "path/to/my/load/file.json.bt"
+from "path/to/my/load/file.json.bz2"
 ```
 
 ### Load a file with parser arguments
@@ -197,7 +198,7 @@ from "path/to/my/load/file.json.bt"
 Note how the explicit `decompress` step is now necessary:
 
 ```tql
-from "path/to/my/load/file.json.bt" {
+from "path/to/my/load/file.json.bz2" {
   decompress "brotoli" // this is now necessary due to the pipeline argument
   read_ndjson selector="event_type:suricata"
 }
@@ -206,7 +207,7 @@ from "path/to/my/load/file.json.bt" {
 ### Load from HTTP with a header
 
 ```tql
-from "https:://example.org/file.json", header={Token: 0}
+from "https://example.org/file.json", header={Token: 0}
 ```
 ### Create a single event ad-hoc
 
