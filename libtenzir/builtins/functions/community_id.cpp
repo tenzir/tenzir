@@ -37,12 +37,12 @@ public:
     -> failure_or<function_ptr> override {
     auto args = arguments{};
     TRY(argument_parser2::function("community_id")
-          .key("src_ip", args.src_ip, "ip")
-          .key("dst_ip", args.dst_ip, "ip")
-          .key("src_port", args.src_port, "int")
-          .key("dst_port", args.dst_port, "int")
-          .key("proto", args.proto, "string")
-          .key("seed", args.seed, "int")
+          .named("src_ip", args.src_ip, "ip")
+          .named("dst_ip", args.dst_ip, "ip")
+          .named("src_port", args.src_port, "int")
+          .named("dst_port", args.dst_port, "int")
+          .named("proto", args.proto, "string")
+          .named("seed", args.seed, "int")
           .parse(inv, ctx));
     return function_use::make([args = std::move(args)](evaluator eval,
                                                        session ctx) -> series {

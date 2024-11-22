@@ -32,7 +32,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .pos("x", expr, "string|number")
+          .positional("x", expr, "string|number")
           .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](auto eval, session ctx) -> series {

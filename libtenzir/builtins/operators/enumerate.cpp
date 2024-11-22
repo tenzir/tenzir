@@ -200,7 +200,7 @@ public:
       ast::root_field{ast::identifier{"#", inv.self.get_location()}});
     TENZIR_ASSERT(selector.has_value());
     TRY(argument_parser2::operator_("enumerate")
-          .pos("out", selector)
+          .positional("out", selector)
           .parse(inv, ctx));
     return std::make_unique<enumerate_operator2>(std::move(selector.value()));
   }

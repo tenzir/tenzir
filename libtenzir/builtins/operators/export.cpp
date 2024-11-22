@@ -522,10 +522,10 @@ public:
     auto internal = false;
     auto parallel = std::optional<located<uint64_t>>{};
     argument_parser2::operator_("export")
-      .key("live", live)
-      .key("retro", retro)
-      .key("internal", internal)
-      .key("parallel", parallel)
+      .named("live", live)
+      .named("retro", retro)
+      .named("internal", internal)
+      .named("parallel", parallel)
       .parse(inv, ctx)
       .ignore();
     if (not live) {
@@ -600,9 +600,9 @@ public:
     const auto internal = true;
     auto parallel = std::optional<located<uint64_t>>{};
     TRY(argument_parser2::operator_("diagnostics")
-          .key("live", live)
-          .key("retro", retro)
-          .key("parallel", parallel)
+          .named("live", live)
+          .named("retro", retro)
+          .named("parallel", parallel)
           .parse(inv, ctx));
     if (not live) {
       retro = true;
@@ -685,10 +685,10 @@ public:
     const auto internal = true;
     auto parallel = std::optional<located<uint64_t>>{};
     TRY(argument_parser2::operator_("metrics")
-          .pos("name", name)
-          .key("live", live)
-          .key("retro", retro)
-          .key("parallel", parallel)
+          .positional("name", name)
+          .named("live", live)
+          .named("retro", retro)
+          .named("parallel", parallel)
           .parse(inv, ctx));
     if (not live) {
       retro = true;

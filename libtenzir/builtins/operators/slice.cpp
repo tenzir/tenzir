@@ -381,9 +381,9 @@ public:
     auto stride = std::optional<int64_t>{};
     // TODO: Range selector syntax
     TRY(argument_parser2::operator_(name())
-          .key("begin", begin)
-          .key("end", end)
-          .key("stride", stride)
+          .named("begin", begin)
+          .named("end", end)
+          .named("stride", stride)
           .parse(inv, ctx));
     return std::make_unique<slice_operator>(begin, end, stride);
   }
@@ -414,7 +414,7 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto n = std::optional<int64_t>{10};
-    TRY(argument_parser2::operator_(name()).pos("n", n).parse(inv, ctx));
+    TRY(argument_parser2::operator_(name()).positional("n", n).parse(inv, ctx));
     if (Mode == mode::head) {
       return std::make_unique<slice_operator>(std::nullopt, n, std::nullopt);
     }

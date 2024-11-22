@@ -148,7 +148,7 @@ auto argument_parser2::parse(const ast::entity& self,
           return;
         }
         auto& name = sel->path()[0].name;
-        auto it = std::ranges::find(named_, name, &named::name);
+        auto it = std::ranges::find(named_, name, &named_t::name);
         if (it == named_.end()) {
           emit(diagnostic::error("named argument `{}` does not exist", name)
                  .primary(assignment.left));
@@ -269,7 +269,7 @@ auto argument_parser2::usage() const -> std::string {
         } else if constexpr (concepts::one_of<T, double>) {
           return "number";
         } else {
-          return fmt::to_string(type_kind::of<data_to_type_t<T>>);
+          return fmt::format("{}", type_kind::of<data_to_type_t<T>>);
         }
       },
       [](const setter<ast::expression>&) -> std::string {
@@ -317,7 +317,7 @@ auto argument_parser2::usage() const -> std::string {
                                           : positional.type;
       usage_cache_ += fmt::format("{}:{}", positional.name, type);
     }
-    const auto append_named_option = [&](const named& opt) {
+    const auto append_named_option = [&](const named_t& opt) {
       if (opt.name.starts_with("_")) {
         // This denotes an internal/unstable option.
         return;
@@ -413,7 +413,7 @@ auto argument_parser2::make_setter(T& x) -> auto {
 }
 
 template <argument_parser_type T>
-auto argument_parser2::pos(std::string name, T& x, std::string type)
+auto argument_parser2::positional(std::string name, T& x, std::string type)
   -> argument_parser2& {
   TENZIR_ASSERT(not first_optional_, "encountered required positional after "
                                      "optional positional argument");
@@ -422,8 +422,8 @@ auto argument_parser2::pos(std::string name, T& x, std::string type)
 }
 
 template <argument_parser_type T>
-auto argument_parser2::pos(std::string name, std::optional<T>& x,
-                           std::string type) -> argument_parser2& {
+auto argument_parser2::positional(std::string name, std::optional<T>& x,
+                                  std::string type) -> argument_parser2& {
   if (not first_optional_) {
     first_optional_ = positional_.size();
   }
@@ -432,26 +432,26 @@ auto argument_parser2::pos(std::string name, std::optional<T>& x,
 }
 
 template <argument_parser_type T>
-auto argument_parser2::key(std::string name, T& x, std::string type)
+auto argument_parser2::named(std::string name, T& x, std::string type)
   -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), true);
   return *this;
 }
 
 template <argument_parser_type T>
-auto argument_parser2::key(std::string name, std::optional<T>& x,
-                           std::string type) -> argument_parser2& {
+auto argument_parser2::named(std::string name, std::optional<T>& x,
+                             std::string type) -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
 
-auto argument_parser2::key(std::string name, std::optional<location>& x,
-                           std::string type) -> argument_parser2& {
+auto argument_parser2::named(std::string name, std::optional<location>& x,
+                             std::string type) -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
 
-auto argument_parser2::key(std::string name, bool& x, std::string type)
+auto argument_parser2::named(std::string name, bool& x, std::string type)
   -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
@@ -466,10 +466,10 @@ struct instantiate_argument_parser_methods {
   template <class... T>
   struct inner {
     static constexpr auto value = std::tuple{
-      static_cast<func<T>>(&argument_parser2::pos)...,
-      static_cast<func<std::optional<T>>>(&argument_parser2::pos)...,
-      static_cast<func<T>>(&argument_parser2::key)...,
-      static_cast<func<std::optional<T>>>(&argument_parser2::key)...,
+      static_cast<func<T>>(&argument_parser2::positional)...,
+      static_cast<func<std::optional<T>>>(&argument_parser2::positional)...,
+      static_cast<func<T>>(&argument_parser2::named)...,
+      static_cast<func<std::optional<T>>>(&argument_parser2::named)...,
     };
   };
 

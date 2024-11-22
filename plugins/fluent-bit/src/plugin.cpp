@@ -30,9 +30,9 @@ public:
     std::optional<tenzir::record> plugin_options;
     std::optional<tenzir::record> fluentbit_options;
     auto parser = argument_parser2::operator_(name());
-    parser.pos("plugin", plugin)
-      .key("options", plugin_options)
-      .key("fluent_bit_options", fluentbit_options);
+    parser.positional("plugin", plugin)
+      .named("options", plugin_options)
+      .named("fluent_bit_options", fluentbit_options);
     auto opt_parser = multi_series_builder_argument_parser{};
     opt_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx))

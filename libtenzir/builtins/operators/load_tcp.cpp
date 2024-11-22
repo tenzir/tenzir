@@ -863,12 +863,12 @@ public:
     auto tls = std::optional<located<bool>>{};
     auto args = load_tcp_args{};
     auto parser = argument_parser2::operator_("load_tcp")
-                    .pos("endpoint", endpoint)
-                    .key("parallel", parallel)
-                    .key("tls", tls)
-                    .key("certfile", args.certfile)
-                    .key("keyfile", args.keyfile)
-                    .pos("{ … }", args.pipeline);
+                    .positional("endpoint", endpoint)
+                    .named("parallel", parallel)
+                    .named("tls", tls)
+                    .named("certfile", args.certfile)
+                    .named("keyfile", args.keyfile)
+                    .positional("{ … }", args.pipeline);
     TRY(parser.parse(inv, ctx));
     auto failed = false;
     if (endpoint.inner.starts_with("tcp://")) {

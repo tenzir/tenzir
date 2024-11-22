@@ -226,10 +226,10 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = files_args{};
     TRY(argument_parser2::operator_("files")
-          .pos("dir", args.path)
-          .key("recurse", args.recurse_directories)
-          .key("follow_symlinks", args.follow_directory_symlink)
-          .key("skip_permission_denied", args.skip_permission_denied)
+          .positional("dir", args.path)
+          .named("recurse", args.recurse_directories)
+          .named("follow_symlinks", args.follow_directory_symlink)
+          .named("skip_permission_denied", args.skip_permission_denied)
           .parse(inv, ctx));
     return std::make_unique<files_operator>(std::move(args));
   }

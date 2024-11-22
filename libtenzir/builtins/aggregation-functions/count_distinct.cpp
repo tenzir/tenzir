@@ -196,8 +196,9 @@ class plugin : public virtual aggregation_function_plugin,
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     // TODO: Maybe merge this functionality into `count` or `distinct`
-    TRY(
-      argument_parser2::function(name()).key("x", expr, "any").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .named("x", expr, "any")
+          .parse(inv, ctx));
     return std::make_unique<count_distinct_instance>(std::move(expr));
   }
 

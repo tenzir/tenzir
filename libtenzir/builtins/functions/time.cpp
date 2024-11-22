@@ -32,7 +32,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("time")
-          .pos("x", expr, "string")
+          .positional("x", expr, "string")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
@@ -86,8 +86,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function(name()).pos("x", expr, "time").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "time")
+          .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](evaluator eval, session ctx) -> series {
       auto arg = eval(expr);
@@ -135,7 +136,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .pos("x", expr, "number")
+          .positional("x", expr, "number")
           .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](evaluator eval, session ctx) -> series {
@@ -212,8 +213,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function(name()).pos("x", expr, "time").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "time")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -276,7 +278,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .pos("x", expr, "duration")
+          .positional("x", expr, "duration")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
@@ -349,9 +351,9 @@ public:
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
-          .pos("input", subject_expr, "time")
-          .pos("format", format)
-          .key("locale", locale)
+          .positional("input", subject_expr, "time")
+          .positional("format", format)
+          .named("locale", locale)
           .parse(inv, ctx));
     return function_use::make(
       [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
@@ -404,8 +406,8 @@ public:
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
-          .pos("input", subject_expr, "string")
-          .pos("format", format)
+          .positional("input", subject_expr, "string")
+          .positional("format", format)
           .parse(inv, ctx));
     return function_use::make(
       [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),

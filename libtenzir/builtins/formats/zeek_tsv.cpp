@@ -941,10 +941,10 @@ class write_zeek_tsv final
     auto args = zeek_tsv_printer::args{};
     auto set_separator = std::optional<located<std::string>>{};
     TRY(argument_parser2::operator_("write_zeek_tsv")
-          .key("set_separator", set_separator)
-          .key("empty_field", args.empty_field)
-          .key("unset_field", args.unset_field)
-          .key("disable_timestamp_tags", args.disable_timestamp_tags)
+          .named("set_separator", set_separator)
+          .named("empty_field", args.empty_field)
+          .named("unset_field", args.unset_field)
+          .named("disable_timestamp_tags", args.disable_timestamp_tags)
           .parse(inv, ctx));
     if (set_separator) {
       auto converted = to_xsv_sep(set_separator->inner);

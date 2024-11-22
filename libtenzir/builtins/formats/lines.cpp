@@ -275,8 +275,8 @@ class read_lines final
     -> failure_or<operator_ptr> override {
     auto args = parser_args{};
     argument_parser2::operator_(name())
-      .key("skip_empty", args.skip_empty)
-      .key("split_at_null", args.null)
+      .named("skip_empty", args.skip_empty)
+      .named("split_at_null", args.null)
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<parser_adapter<lines_parser>>(

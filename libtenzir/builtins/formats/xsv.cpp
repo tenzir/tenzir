@@ -144,19 +144,19 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
   }
   auto add_to_parser(argument_parser2& parser) -> void {
     if (mode_ == mode::special_optional) {
-      parser.key("list_sep", list_sep_str_);
-      parser.key("null_value", null_value_);
+      parser.named("list_sep", list_sep_str_);
+      parser.named("null_value", null_value_);
     } else {
       field_sep_str_ = located{"REQUIRED", location::unknown};
       list_sep_str_ = located{"REQUIRED", location::unknown};
       null_value_ = located{"REQUIRED", location::unknown};
-      parser.pos("field_sep", *field_sep_str_);
-      parser.pos("list_sep", *list_sep_str_);
-      parser.pos("null_value", *null_value_);
+      parser.positional("field_sep", *field_sep_str_);
+      parser.positional("list_sep", *list_sep_str_);
+      parser.positional("null_value", *null_value_);
     }
-    parser.key("comments", allow_comments_);
-    parser.key("header", header_);
-    parser.key("auto_expand", auto_expand_);
+    parser.named("comments", allow_comments_);
+    parser.named("header", header_);
+    parser.named("auto_expand", auto_expand_);
     multi_series_builder_argument_parser::add_policy_to_parser(parser);
     multi_series_builder_argument_parser::add_settings_to_parser(parser, true,
                                                                  false);
@@ -750,10 +750,10 @@ public:
     auto null_value = located<std::string>{};
     auto no_header = bool{};
     TRY(argument_parser2::operator_(name())
-          .pos("field_sep", field_sep_str)
-          .pos("list_sep", list_sep_str)
-          .pos("null_value", null_value)
-          .key("no_header", args.no_header)
+          .positional("field_sep", field_sep_str)
+          .positional("list_sep", list_sep_str)
+          .positional("null_value", null_value)
+          .named("no_header", args.no_header)
           .parse(inv, ctx));
     auto field_sep = to_xsv_sep(field_sep_str.inner);
     if (!field_sep) {
@@ -841,7 +841,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto no_header = bool{};
     TRY(argument_parser2::operator_(name())
-          .key("no_header", no_header)
+          .named("no_header", no_header)
           .parse(inv, ctx));
     return std::make_unique<writer_adapter<xsv_printer>>(xsv_printer{{
       .name = std::string{Name.str()},

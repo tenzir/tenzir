@@ -467,10 +467,10 @@ auto parse_http_args(std::string name,
   auto params = std::optional<located<record>>{};
   auto headers = std::optional<located<record>>{};
   argument_parser2::operator_(std::move(name))
-    .pos("url", url)
-    .key("method", method)
-    .key("params", params)
-    .key("headers", headers)
+    .positional("url", url)
+    .named("method", method)
+    .named("params", params)
+    .named("headers", headers)
     .parse(inv, ctx)
     .ignore();
   auto args = connector_args{};
@@ -547,8 +547,9 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = connector_args{};
-    TRY(
-      argument_parser2::operator_(name()).pos("url", args.url).parse(inv, ctx));
+    TRY(argument_parser2::operator_(name())
+          .positional("url", args.url)
+          .parse(inv, ctx));
     if (not args.url.starts_with("ftp://")) {
       args.url.insert(0, "ftp://");
     }
@@ -570,8 +571,9 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = connector_args{};
-    TRY(
-      argument_parser2::operator_(name()).pos("url", args.url).parse(inv, ctx));
+    TRY(argument_parser2::operator_(name())
+          .positional("url", args.url)
+          .parse(inv, ctx));
     if (not args.url.starts_with("ftp://")) {
       args.url.insert(0, "ftp://");
     }

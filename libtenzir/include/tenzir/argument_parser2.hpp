@@ -69,32 +69,32 @@ public:
 
   /// Adds a required positional argument.
   template <argument_parser_type T>
-  auto pos(std::string name, T& x, std::string type = maybe_default<T>)
+  auto positional(std::string name, T& x, std::string type = maybe_default<T>)
     -> argument_parser2&;
 
   /// Adds an optional positional argument.
   template <argument_parser_type T>
-  auto pos(std::string name, std::optional<T>& x,
-           std::string type = maybe_default<T>) -> argument_parser2&;
+  auto positional(std::string name, std::optional<T>& x,
+                  std::string type = maybe_default<T>) -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
   /// Adds a required named argument.
   template <argument_parser_type T>
-  auto key(std::string name, T& x, std::string type = maybe_default<T>)
+  auto named(std::string name, T& x, std::string type = maybe_default<T>)
     -> argument_parser2&;
 
   /// Adds an optional named argument.
   template <argument_parser_type T>
-  auto key(std::string name, std::optional<T>& x,
-           std::string type = maybe_default<T>) -> argument_parser2&;
+  auto named(std::string name, std::optional<T>& x,
+             std::string type = maybe_default<T>) -> argument_parser2&;
 
   /// Adds an optional named argument.
-  auto key(std::string name, std::optional<location>& x, std::string type = "")
-    -> argument_parser2&;
+  auto named(std::string name, std::optional<location>& x,
+             std::string type = "") -> argument_parser2&;
 
   /// Adds an optional named argument.
-  auto key(std::string name, bool& x, std::string type = "")
+  auto named(std::string name, bool& x, std::string type = "")
     -> argument_parser2&;
 
   // ------------------------------------------------------------------------
@@ -143,8 +143,8 @@ private:
   using any_setter
     = caf::detail::tl_apply_t<argument_parser_full_types, setter_variant>;
 
-  struct positional {
-    positional(std::string name, std::string type, any_setter set)
+  struct positional_t {
+    positional_t(std::string name, std::string type, any_setter set)
       : name{std::move(name)}, type{std::move(type)}, set{std::move(set)} {
     }
 
@@ -153,8 +153,8 @@ private:
     any_setter set;
   };
 
-  struct named {
-    named(std::string name, std::string type, any_setter set, bool required)
+  struct named_t {
+    named_t(std::string name, std::string type, any_setter set, bool required)
       : name{std::move(name)},
         type{std::move(type)},
         set{std::move(set)},
@@ -170,9 +170,9 @@ private:
 
   mutable std::string usage_cache_;
   kind kind_;
-  std::vector<positional> positional_;
+  std::vector<positional_t> positional_;
   std::optional<size_t> first_optional_;
-  std::vector<named> named_;
+  std::vector<named_t> named_;
   std::string name_;
 };
 

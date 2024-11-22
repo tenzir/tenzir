@@ -41,8 +41,8 @@ public:
     auto args = connector_args{};
     auto dur = std::optional<located<duration>>{};
     TRY(argument_parser2::operator_(this->name())
-          .pos("queue", args.queue)
-          .key("poll_time", dur)
+          .positional("queue", args.queue)
+          .named("poll_time", dur)
           .parse(inv, ctx));
     if (args.queue.inner.empty()) {
       diagnostic::error("queue must not be empty")

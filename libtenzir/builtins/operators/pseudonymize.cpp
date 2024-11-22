@@ -213,8 +213,8 @@ class plugin2 : public virtual function_plugin {
     auto expr = ast::expression{};
     auto seed = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
-          .pos("x", expr, "ip")
-          .key("seed", seed)
+          .positional("x", expr, "ip")
+          .named("seed", seed)
           .parse(inv, ctx));
     auto seed_bytes
       = std::array<ip::byte_type,

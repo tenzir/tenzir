@@ -33,7 +33,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("sqrt")
-          .pos("x", expr, "number")
+          .positional("x", expr, "number")
           .parse(inv, ctx));
     return function_use::make([expr = std::move(expr)](evaluator eval,
                                                        session ctx) -> series {
@@ -167,8 +167,9 @@ public:
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = std::optional<ast::expression>{};
-    TRY(
-      argument_parser2::function("count").pos("x", expr, "any").parse(inv, ctx));
+    TRY(argument_parser2::function("count")
+          .positional("x", expr, "any")
+          .parse(inv, ctx));
     return std::make_unique<count_instance>(std::move(expr));
   }
 };
@@ -281,11 +282,11 @@ public:
     auto delta_opt = std::optional<located<int64_t>>{};
     auto buffer_size_opt = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function("quantile")
-          .pos("x", expr, "number|duration")
-          .key("q", quantile_opt)
+          .positional("x", expr, "number|duration")
+          .named("q", quantile_opt)
           // TODO: This is a test for hidden parameters.
-          .key("_delta", delta_opt)
-          .key("_buffer_size", buffer_size_opt)
+          .named("_delta", delta_opt)
+          .named("_buffer_size", buffer_size_opt)
           .parse(inv, ctx));
     // TODO: Type conversion? Probably not necessary here, but maybe elsewhere.
     // TODO: This is too much manual labor.
@@ -343,10 +344,10 @@ public:
     auto delta_opt = std::optional<located<int64_t>>{};
     auto buffer_size_opt = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function("median")
-          .pos("value", expr, "number|duration")
+          .positional("value", expr, "number|duration")
           // TODO: This is a test for hidden parameters.
-          .key("_delta", delta_opt)
-          .key("_buffer_size", buffer_size_opt)
+          .named("_delta", delta_opt)
+          .named("_buffer_size", buffer_size_opt)
           .parse(inv, ctx));
     // TODO: This function probably already exists. If not, it should.
     auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {

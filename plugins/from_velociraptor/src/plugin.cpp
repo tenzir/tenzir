@@ -383,13 +383,13 @@ public:
     auto query = std::optional<located<std::string>>{};
     auto profile = std::optional<located<std::string>>{};
     argument_parser2::operator_("from_velociraptor")
-      .key("request_name", request_name)
-      .key("org_id", org_id)
-      .key("query", query)
-      .key("max_rows", max_rows)
-      .key("subscribe", subscribe)
-      .key("max_wait", max_wait)
-      .key("profile", profile)
+      .named("request_name", request_name)
+      .named("org_id", org_id)
+      .named("query", query)
+      .named("max_rows", max_rows)
+      .named("subscribe", subscribe)
+      .named("max_wait", max_wait)
+      .named("profile", profile)
       .parse(inv, ctx)
       .ignore();
     if (max_wait && max_wait->inner < 1s) {

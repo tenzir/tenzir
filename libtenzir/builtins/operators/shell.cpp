@@ -359,7 +359,8 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto command = located<std::string>{};
-    auto parser = argument_parser2::operator_("shell").pos("cmd", command);
+    auto parser
+      = argument_parser2::operator_("shell").positional("cmd", command);
     TRY(parser.parse(inv, ctx));
     return std::make_unique<shell_operator>(std::move(command).inner);
   }

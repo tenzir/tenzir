@@ -23,7 +23,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto string = located<std::string>{};
     TRY(argument_parser2::operator_(name())
-          .pos("definition", string)
+          .positional("definition", string)
           .parse(inv, ctx));
     auto [pipe, diags] = tql::parse_internal_with_diags(string.inner);
     for (auto& diag : diags) {

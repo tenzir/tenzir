@@ -72,22 +72,22 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser2& parser, bool add_unflatten_option,
   bool add_merge_option) -> void {
-  parser.key("schema_only", schema_only_);
+  parser.named("schema_only", schema_only_);
   if (add_merge_option) {
-    parser.key("merge", merge_);
+    parser.named("merge", merge_);
   }
-  parser.key("raw", raw_);
+  parser.named("raw", raw_);
   if (add_unflatten_option) {
-    parser.key("unflatten", unnest_);
+    parser.named("unflatten", unnest_);
   }
-  parser.key("_batch_timeout", timeout_);
-  parser.key("_batch_size", batch_size_);
+  parser.named("_batch_timeout", timeout_);
+  parser.named("_batch_size", batch_size_);
 }
 
 auto multi_series_builder_argument_parser::add_policy_to_parser(
   argument_parser2& parser) -> void {
-  parser.key("schema", schema_);
-  parser.key("selector", selector_);
+  parser.named("schema", schema_);
+  parser.named("selector", selector_);
 }
 
 auto multi_series_builder_argument_parser::add_all_to_parser(

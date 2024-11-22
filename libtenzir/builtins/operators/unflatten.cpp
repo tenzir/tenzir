@@ -78,8 +78,8 @@ public:
     auto expr = ast::expression{};
     auto sep = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
-          .pos("x", expr, "any")
-          .key("sep", sep)
+          .positional("x", expr, "any")
+          .named("sep", sep)
           .parse(inv, ctx));
     return function_use::make([expr = std::move(expr), sep = std::move(sep)](
                                 evaluator eval, session) -> series {

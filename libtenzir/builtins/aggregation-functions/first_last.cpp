@@ -106,8 +106,9 @@ public:
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function(name()).pos("x", expr, "any").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "any")
+          .parse(inv, ctx));
     return std::make_unique<first_last_instance<Mode>>(std::move(expr));
   }
 };

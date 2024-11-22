@@ -33,8 +33,8 @@ public:
     auto expr = ast::expression{};
     auto spec = std::optional<located<duration>>{};
     TRY(argument_parser2::function(name())
-          .pos("x", expr, "number|duration|time")
-          .pos("unit", spec, "duration")
+          .positional("x", expr, "number|duration|time")
+          .positional("unit", spec, "duration")
           .parse(inv, ctx));
     if (spec && spec->inner.count() == 0) {
       diagnostic::error("resolution must not be 0")

@@ -248,20 +248,20 @@ class save_plugin final
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto parser = argument_parser2::operator_(name());
-    parser.pos("email", args.to);
-    parser.key("endpoint", args.endpoint);
-    parser.key("from", args.from);
-    parser.key("subject", args.subject);
-    parser.key("username", args.transfer_opts.username);
-    parser.key("password", args.transfer_opts.password);
-    parser.key("authzid", args.transfer_opts.authzid);
-    parser.key("authorization", args.transfer_opts.authorization);
-    parser.key("skip_peer_verification",
-               args.transfer_opts.skip_peer_verification);
-    parser.key("skip_hostname_verification",
-               args.transfer_opts.skip_hostname_verification);
-    parser.key("mime", args.mime);
-    parser.key("verbose", args.transfer_opts.verbose);
+    parser.positional("email", args.to);
+    parser.named("endpoint", args.endpoint);
+    parser.named("from", args.from);
+    parser.named("subject", args.subject);
+    parser.named("username", args.transfer_opts.username);
+    parser.named("password", args.transfer_opts.password);
+    parser.named("authzid", args.transfer_opts.authzid);
+    parser.named("authorization", args.transfer_opts.authorization);
+    parser.named("skip_peer_verification",
+                 args.transfer_opts.skip_peer_verification);
+    parser.named("skip_hostname_verification",
+                 args.transfer_opts.skip_hostname_verification);
+    parser.named("mime", args.mime);
+    parser.named("verbose", args.transfer_opts.verbose);
     TRY(parser.parse(inv, ctx));
     if (args.endpoint.empty()) {
       args.endpoint = default_smtp_server;

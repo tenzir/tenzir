@@ -28,8 +28,8 @@ public:
     auto list = ast::expression{};
     auto element = ast::expression{};
     TRY(argument_parser2::function(name())
-          .pos("xs", list, "list")
-          .pos("x", element, "any")
+          .positional("xs", list, "list")
+          .positional("x", element, "any")
           .parse(inv, ctx));
     return function_use::make(
       [list = std::move(list),
@@ -60,8 +60,8 @@ public:
     auto list = ast::expression{};
     auto element = ast::expression{};
     TRY(argument_parser2::function(name())
-          .pos("xs", list, "list")
-          .pos("x", element, "any")
+          .positional("xs", list, "list")
+          .positional("x", element, "any")
           .parse(inv, ctx));
     return function_use::make(
       [list = std::move(list),
@@ -92,8 +92,8 @@ public:
     auto list1 = ast::expression{};
     auto list2 = ast::expression{};
     TRY(argument_parser2::function(name())
-          .pos("xs", list1, "list")
-          .pos("ys", list2, "list")
+          .positional("xs", list1, "list")
+          .positional("ys", list2, "list")
           .parse(inv, ctx));
     return function_use::make(
       [list1 = std::move(list1), list2 = std::move(list2)](evaluator eval,

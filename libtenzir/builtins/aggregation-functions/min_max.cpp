@@ -271,7 +271,7 @@ public:
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .pos("x", expr, "number|duration|time")
+          .positional("x", expr, "number|duration|time")
           .parse(inv, ctx));
     return std::make_unique<min_max_instance<Mode>>(std::move(expr));
   }

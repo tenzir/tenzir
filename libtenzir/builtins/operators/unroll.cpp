@@ -287,7 +287,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto field = ast::simple_selector{};
     auto parser
-      = argument_parser2::operator_(name()).pos("field", field, "list");
+      = argument_parser2::operator_(name()).positional("field", field, "list");
     TRY(parser.parse(inv, ctx));
     return std::make_unique<unroll_operator>(std::move(field));
   }

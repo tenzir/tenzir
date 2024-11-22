@@ -423,7 +423,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .pos("packet", expr, "record")
+          .positional("packet", expr, "record")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {

@@ -28,8 +28,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function("ip").pos("x", expr, "string").parse(inv, ctx));
+    TRY(argument_parser2::function("ip")
+          .positional("x", expr, "string")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -83,8 +84,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function(name()).pos("x", expr, "ip").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "ip")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);

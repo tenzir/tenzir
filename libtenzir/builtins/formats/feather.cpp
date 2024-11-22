@@ -582,9 +582,9 @@ public:
     -> failure_or<operator_ptr> override {
     auto options = feather_options{};
     TRY(argument_parser2::operator_(name())
-          .key("compression_level", options.compression_level)
-          .key("compression_type", options.compression_type)
-          .key("min_space_savings", options.min_space_savings)
+          .named("compression_level", options.compression_level)
+          .named("compression_type", options.compression_type)
+          .named("min_space_savings", options.min_space_savings)
           .parse(inv, ctx));
     return std::make_unique<writer_adapter<feather_printer>>(
       feather_printer{std::move(options)});

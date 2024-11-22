@@ -88,7 +88,9 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipe = located<pipeline>{};
-    TRY(argument_parser2::operator_("fork").pos("{ … }", pipe).parse(inv, ctx));
+    TRY(argument_parser2::operator_("fork")
+          .positional("{ … }", pipe)
+          .parse(inv, ctx));
     auto loc = operator_location::anywhere;
     for (auto& op : pipe.inner.operators()) {
       auto op_loc = op->location();

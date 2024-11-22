@@ -365,8 +365,8 @@ public:
     auto interval = located<duration>{};
     auto pipe = pipeline{};
     TRY(argument_parser2::operator_("every")
-          .pos("interval", interval)
-          .pos("{ … }", pipe)
+          .positional("interval", interval)
+          .positional("{ … }", pipe)
           .parse(inv, ctx));
     auto fail = std::optional<failure>{};
     if (interval.inner <= duration::zero()) {

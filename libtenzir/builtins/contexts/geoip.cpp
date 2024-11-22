@@ -725,8 +725,8 @@ class plugin : public virtual context_factory_plugin<"geoip"> {
     auto name = located<std::string>{};
     auto db_path = std::optional<located<std::string>>{};
     auto parser = argument_parser2::context("geoip");
-    parser.pos("name", name);
-    parser.key("db_path", db_path);
+    parser.positional("name", name);
+    parser.named("db_path", db_path);
     TRY(parser.parse(inv, ctx));
     if (not db_path) {
       return make_context_result{

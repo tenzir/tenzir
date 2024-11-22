@@ -238,7 +238,7 @@ class plugin : public virtual aggregation_function_plugin,
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .pos("x", expr, "number|duration")
+          .positional("x", expr, "number|duration")
           .parse(inv, ctx));
     return std::make_unique<mean_instance>(std::move(expr));
   }

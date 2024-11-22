@@ -23,7 +23,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("file_name")
-          .pos("path", expr, "string")
+          .positional("path", expr, "string")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
@@ -76,7 +76,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("file_name")
-          .pos("path", expr, "string")
+          .positional("path", expr, "string")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
