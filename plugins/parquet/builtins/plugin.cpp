@@ -33,8 +33,8 @@ public:
     -> failure_or<operator_ptr> override {
     auto options = parquet_options{};
     TRY(argument_parser2::operator_(this->name())
-          .add("compression_level", options.compression_level)
-          .add("compression_type", options.compression_type)
+          .named("compression_level", options.compression_level)
+          .named("compression_type", options.compression_type)
           .parse(inv, ctx));
     return std::make_unique<writer_adapter<parquet_printer>>(parquet_printer{});
   }

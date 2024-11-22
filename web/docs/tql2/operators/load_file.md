@@ -3,14 +3,14 @@
 Loads the contents of the file at `path` as a byte stream.
 
 ```tql
-load_file path:str, [follow=bool, mmap=bool, timeout=duration]
+load_file path:string, [follow=bool, mmap=bool, timeout=duration]
 ```
 
 ## Description
 
 The `file` loader acquires raw bytes from a file.
 
-### `path: str`
+### `path: string`
 
 The file path to load from. When `~` is the first character, it will be
 substituted with the value of the `$HOME` environment variable.

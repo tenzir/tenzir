@@ -3,9 +3,9 @@
 Read XSV from a byte stream.
 
 ```tql
-read_xsv field_sep:str, list_sep:str, null_value:str,
-        [comments=bool, header=str, auto_expand=bool, schema=str,
-         selector=str, schema_only=bool, raw=bool, unflatten=str]
+read_xsv field_sep:string, list_sep:string, null_value:string,
+        [comments=bool, header=string, auto_expand=bool, schema=string,
+         selector=string, schema_only=bool, raw=bool, unflatten=string]
 ```
 
 ## Description
@@ -25,15 +25,15 @@ The following table lists existing XSV configurations:
 [csv]: https://en.wikipedia.org/wiki/Comma-separated_values
 [xsv]: https://en.wikipedia.org/wiki/Delimiter-separated_values
 
-### `field_sep: str`
+### `field_sep: string`
 
 The string separating different fields.
 
-### `list_sep: str`
+### `list_sep: string`
 
 The string separating different elements in a list within a single field.
 
-### `null_value: str`
+### `null_value: string`
 
 The string denoting an absent value.
 
@@ -46,7 +46,7 @@ values instead of dropping the excess values.
 
 Treat lines beginning with `#` as comments.
 
-### `header = str (optional)`
+### `header = string (optional)`
 
 The string to be used as the header for the parsed values. If unspecified, the
 first line of the input is used as the header.
@@ -59,7 +59,7 @@ specified in the chosen `schema` will still be parsed according to the schema.
 In the case of XSV this means that no parsing of data takes place at all
 and every value remains a string.
 
-### `schema = str (optional)`
+### `schema = string (optional)`
 
 Provide the name of a schema to be used by the parser.
 
@@ -73,7 +73,7 @@ If the given schema does not exist, this option instead assigns the output schem
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector = string (optional)`
 
 Designates a field value as schema name with an optional dot-separated prefix.
 
@@ -95,7 +95,7 @@ and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten = str (optional)`
+### `unflatten = string (optional)`
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.

@@ -3,7 +3,7 @@
 Computes a SHA-384 hash digest.
 
 ```tql
-hash_sha384(x:any, [seed=str]) -> string
+hash_sha384(x:any, [seed=string]) -> string
 ```
 
 ## Description

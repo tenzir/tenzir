@@ -5,7 +5,7 @@ Filter the input with [Sigma rules][sigma] and output matching events.
 [sigma]: https://github.com/SigmaHQ/sigma
 
 ```tql
-sigma path:str, [refresh_interval=duration]
+sigma path:string, [refresh_interval=duration]
 ```
 
 ## Description
@@ -89,7 +89,7 @@ yet implemented but possible, and ❌ not yet supported:
 |`gte`|compare greater than or equal to (`>=`) the value|❌|✅
 |`expand`|expand value to placeholder strings, e.g., `%something%`|❌|❌
 
-### `path: str`
+### `path: string`
 
 The rule to match.
 

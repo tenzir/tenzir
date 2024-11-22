@@ -158,8 +158,8 @@ public:
     auto limit = std::optional<located<uint64_t>>{};
     auto timeout = std::optional<located<duration>>{};
     argument_parser2::operator_("batch")
-      .add(limit, "<limit>")
-      .add("timeout", timeout)
+      .positional("limit", limit)
+      .named("timeout", timeout)
       .parse(inv, ctx)
       .ignore();
     auto failed = false;

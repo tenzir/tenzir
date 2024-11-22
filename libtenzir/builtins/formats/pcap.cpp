@@ -583,7 +583,7 @@ class read_plugin final
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = parser_args{};
     TRY(argument_parser2::operator_(name())
-          .add("emit_file_headers", args.emit_file_headers)
+          .named("emit_file_headers", args.emit_file_headers)
           .parse(inv, ctx));
     return std::make_unique<parser_adapter<pcap_parser>>(
       pcap_parser{std::move(args)});

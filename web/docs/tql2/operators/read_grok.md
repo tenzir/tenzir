@@ -1,9 +1,9 @@
 # read_grok
 
 ```tql
-read_grok pattern:str, [pattern_definitions=str, indexed_captures=bool,
-          include_unnamed=bool, schema=str, selector=str,
-          schema_only=bool, merge=bool, raw=bool, unflatten=str]
+read_grok pattern:string, [pattern_definitions=string, indexed_captures=bool,
+          include_unnamed=bool, schema=string, selector=string,
+          schema_only=bool, merge=bool, raw=bool, unflatten=string]
 ```
 
 ## Description
@@ -25,11 +25,11 @@ The supported regular expression syntax is the one supported by
 [Boost.Regex](https://www.boost.org/doc/libs/1_81_0/libs/regex/doc/html/boost_regex/syntax/perl_syntax.html),
 which is effectively Perl-compatible.
 
-### `pattern: str`
+### `pattern: string`
 
 The `grok` pattern used for matching. Must match the input in its entirety.
 
-### `pattern_definitions = str (optional)`
+### `pattern_definitions = string (optional)`
 
 A user-defined newline-delimited list of patterns, where a line starts
 with the pattern name, followed by a space, and the `grok`-pattern for that
@@ -69,7 +69,7 @@ specified in the chosen `schema` will still be parsed according to the schema.
 Since grok is just textual parsing, this means that no parsing of data takes place at all
 and every value remains a string, unless the field is in the `schema`.
 
-### `schema = str (optional)`
+### `schema = string (optional)`
 
 Provide the name of a schema to be used by the parser.
 
@@ -83,7 +83,7 @@ If the given schema does not exist, this option instead assigns the output schem
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector = string (optional)`
 
 Designates a field value as schema name with an optional dot-separated prefix.
 
@@ -105,7 +105,7 @@ and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten = str (optional)`
+### `unflatten = string (optional)`
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.

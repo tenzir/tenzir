@@ -195,8 +195,8 @@ class plugin final : public virtual operator_plugin<sigma_operator>,
     auto refresh_interval = std::optional<located<duration>>{};
     auto path = std::string{};
     argument_parser2::operator_("sigma")
-      .add(path, "<rule-or-directory>")
-      .add("refresh_interval", refresh_interval)
+      .positional("path", path)
+      .named("refresh_interval", refresh_interval)
       .parse(inv, ctx)
       .ignore();
     if (not refresh_interval) {

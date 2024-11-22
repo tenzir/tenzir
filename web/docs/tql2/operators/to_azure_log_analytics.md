@@ -5,7 +5,7 @@ Sends events via the [Microsoft Azure Logs Ingestion API][api].
 [api]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview
 
 ```tql
-to_azure_log_analytics tenant_id=str, client_id=str, client_secret=str, dce=str, dcr=str, table=str
+to_azure_log_analytics tenant_id=string, client_id=string, client_secret=string, dce=string, dcr=string, table=string
 ```
 
 ## Description
@@ -19,29 +19,29 @@ The `to_azure_log_analytics` operator makes it possible to upload events to
 The operator handles access token retrievals by itself and updates that token
 automatically, if needed.
 
-### `tenant_id = str`
+### `tenant_id = string`
 
 The Microsoft Directory (tenant) ID, written as
 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 
-### `client_id = str`
+### `client_id = string`
 
 The Microsoft Application (client) ID, written as
 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 
-### `client_secret = str`
+### `client_secret = string`
 
 The client secret.
 
-### `dce = str`
+### `dce = string`
 
 The data collection endpoint URL.
 
-### `dcr = str`
+### `dcr = string`
 
 The data collection rule ID, written as `dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`.
 
-### `table = str`
+### `table = string`
 
 The table to upload events to.
 

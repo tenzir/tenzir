@@ -10,7 +10,7 @@ automatically manage caches for you.
 An in-memory cache shared between pipelines.
 
 ```tql
-cache id:str, [mode=str, capacity=int, read_timeout=duration, write_timeout=duration]
+cache id:string, [mode=string, capacity=int, read_timeout=duration, write_timeout=duration]
 ```
 
 ## Description
@@ -22,11 +22,11 @@ The first pipeline to use a cache writes into the cache. All further pipelines
 using the same cache will read from the cache instead of executing the operators
 before the `cache` operator in the same pipeline.
 
-### `id: str`
+### `id: string`
 
 An arbitrary string that uniquely identifies the cache.
 
-### `mode = str (optional)`
+### `mode = string (optional)`
 
 Configures whether the operator is used a source, a sink, or a transformation.
 The following modes are available currently:

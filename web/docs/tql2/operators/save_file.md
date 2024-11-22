@@ -3,14 +3,14 @@
 Writes a byte stream to a file.
 
 ```tql
-save_file path:str, [append=bool, real_time=bool, uds=bool]
+save_file path:string, [append=bool, real_time=bool, uds=bool]
 ```
 
 ## Description
 
 Writes a byte stream to a file.
 
-### `path: str`
+### `path: string`
 
 The file path to write to. If intermediate directories do not exist, they will
 be created. When `~` is the first character, it will be substituted with the

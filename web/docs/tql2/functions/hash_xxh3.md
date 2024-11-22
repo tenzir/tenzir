@@ -3,7 +3,7 @@
 Computes an XXH3 hash digest.
 
 ```tql
-hash_xxh3(x:any, [seed=str]) -> string
+hash_xxh3(x:any, [seed=string]) -> string
 ```
 
 ## Description

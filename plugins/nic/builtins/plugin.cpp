@@ -36,9 +36,9 @@ class plugin : public virtual operator_plugin2<loader_adapter<nic_loader>> {
     auto snaplen = std::optional<located<uint64_t>>{};
     auto args = loader_args{};
     auto parser = argument_parser2::operator_(name());
-    parser.add(args.iface, "<iface>");
-    parser.add("snaplen", snaplen);
-    parser.add("emit_file_headers", args.emit_file_headers);
+    parser.positional("iface", args.iface);
+    parser.named("snaplen", snaplen);
+    parser.named("emit_file_headers", args.emit_file_headers);
     TRY(parser.parse(inv, ctx));
     if (snaplen) {
       args.snaplen

@@ -3,7 +3,7 @@
 Computes a SHA-1 hash digest.
 
 ```tql
-hash_sha1(x:any, [seed=str]) -> string
+hash_sha1(x:any, [seed=string]) -> string
 ```
 
 ## Description

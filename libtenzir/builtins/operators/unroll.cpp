@@ -286,8 +286,8 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto field = ast::simple_selector{};
-    auto parser = argument_parser2::operator_(name());
-    parser.add(field, "<field>");
+    auto parser
+      = argument_parser2::operator_(name()).positional("field", field, "list");
     TRY(parser.parse(inv, ctx));
     return std::make_unique<unroll_operator>(std::move(field));
   }

@@ -3,7 +3,7 @@
 Sends a byte stream via HTTP.
 
 ```tql
-save_http url:str, [method=str, params=record, headers=record]
+save_http url:string, [method=string, params=record, headers=record]
 ```
 
 ## Description
@@ -11,11 +11,11 @@ save_http url:str, [method=str, params=record, headers=record]
 The `save_http` operator performs a HTTP request with the request body being the
 bytes provided by the previous operator.
 
-### `url: str`
+### `url: string`
 
 The URL to write to. The `http://` scheme can be omitted.
 
-### `method = str (optional)`
+### `method = string (optional)`
 
 The HTTP method, such as `POST` or `GET`.
 

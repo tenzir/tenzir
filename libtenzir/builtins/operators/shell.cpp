@@ -360,7 +360,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto command = located<std::string>{};
     auto parser
-      = argument_parser2::operator_("shell").add(command, "<command>");
+      = argument_parser2::operator_("shell").positional("cmd", command);
     TRY(parser.parse(inv, ctx));
     return std::make_unique<shell_operator>(std::move(command).inner);
   }

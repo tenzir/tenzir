@@ -3,13 +3,12 @@
 Checks whether a record has a specified field.
 
 ```tql
-has(x:string) -> bool
+has(x:record, field:string) -> bool
 ```
 
 ## Description
 
-The `has` function returns `true` if the record contains the specified field `x`
-and `false` otherwise.
+The `has` function returns `true` if the record contains the specified field and `false` otherwise.
 
 ## Examples
 

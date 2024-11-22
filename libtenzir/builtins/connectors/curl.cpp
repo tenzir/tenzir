@@ -467,10 +467,10 @@ auto parse_http_args(std::string name,
   auto params = std::optional<located<record>>{};
   auto headers = std::optional<located<record>>{};
   argument_parser2::operator_(std::move(name))
-    .add(url, "<url>")
-    .add("method", method)
-    .add("params", params)
-    .add("headers", headers)
+    .positional("url", url)
+    .named("method", method)
+    .named("params", params)
+    .named("headers", headers)
     .parse(inv, ctx)
     .ignore();
   auto args = connector_args{};
@@ -548,7 +548,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = connector_args{};
     TRY(argument_parser2::operator_(name())
-          .add(args.url, "<url>")
+          .positional("url", args.url)
           .parse(inv, ctx));
     if (not args.url.starts_with("ftp://")) {
       args.url.insert(0, "ftp://");
@@ -572,7 +572,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = connector_args{};
     TRY(argument_parser2::operator_(name())
-          .add(args.url, "<url>")
+          .positional("url", args.url)
           .parse(inv, ctx));
     if (not args.url.starts_with("ftp://")) {
       args.url.insert(0, "ftp://");

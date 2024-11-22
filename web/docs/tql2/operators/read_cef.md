@@ -3,7 +3,7 @@
 Parses an incoming [Common Event Format (CEF)][cef] stream into events.
 
 ```tql
-read_cef [merge=bool, raw=bool, schema=str, selector=str, schema_only=bool, unflatten=str]
+read_cef [merge=bool, raw=bool, schema=string, selector=string, schema_only=bool, unflatten=string]
 ```
 
 ## Description
@@ -71,7 +71,7 @@ specified in the chosen `schema` will still be parsed according to the schema.
 In the case of CEF, this means that no parsing of data takes place at all
 and every value remains a string, unless the field is in the `schema`.
 
-### `schema = str (optional)`
+### `schema = string (optional)`
 
 Provide the name of a schema to be used by the parser.
 
@@ -85,7 +85,7 @@ If the given schema does not exist, this option instead assigns the output schem
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector = string (optional)`
 
 Designates a field value as schema name with an optional dot-separated prefix.
 
@@ -108,7 +108,7 @@ and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten = str (optional)`
+### `unflatten = string (optional)`
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.
