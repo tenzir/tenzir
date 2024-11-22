@@ -363,8 +363,8 @@ public:
       auto b = arrow::StringBuilder{};
       for (auto&& value : subject.values()) {
         auto f = detail::overload{
-          [](const std::string& x) {
-            return x;
+          [](std::string_view x) {
+            return std::string{x};
           },
           [](int64_t x) {
             return fmt::to_string(x);
