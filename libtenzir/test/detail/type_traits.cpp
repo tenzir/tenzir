@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/variant.hpp"
 
 #include "tenzir/test/test.hpp"
 
@@ -27,5 +28,5 @@ TEST(contains_type) {
   check<std::variant>();
   check<std::tuple>();
   check<fake_list>();
-  check<caf::variant>();
+  check<tenzir::variant>();
 }

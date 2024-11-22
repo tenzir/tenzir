@@ -608,9 +608,11 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   auto result = actor_system_config::parse(std::move(caf_args));
   // Load OpenSSL last because it uses the parsed configuration.
   const auto use_encryption
-    = !caf::holds_alternative<std::string>(content, "caf.openssl.certificate") || !caf::holds_alternative<std::string>(content, "caf.openssl.key")
-      || !caf::holds_alternative<std::string>(content, "caf.openssl.passphrase") || !caf::holds_alternative<std::string>(content, "caf.openssl.capath")
-      || !caf::holds_alternative<std::string>(content, "caf.openssl.cafile");
+    = caf::holds_alternative<std::string>(content, "caf.openssl.certificate")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.key")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.passphrase")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.capath")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.cafile");
   if (use_encryption) {
     load<caf::openssl::manager>();
   }

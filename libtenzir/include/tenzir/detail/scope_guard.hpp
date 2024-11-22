@@ -19,17 +19,26 @@ public:
   static_assert(noexcept(std::declval<Fun>()()),
                 "scope_guard requires a noexcept cleanup function");
 
-  explicit scope_guard(Fun f) noexcept : fun_(std::move(f)), enabled_(true) {
+  explicit scope_guard(Fun f) noexcept : fun_{std::move(f)}, enabled_{true} {
     // nop
   }
 
   scope_guard() = delete;
 
   scope_guard(const scope_guard&) = delete;
-  scope_guard(scope_guard&&) = default;
+  scope_guard(scope_guard&& other) noexcept
+    : fun_{std::move(other.fun_)}, enabled_{other.enabled_} {
+    //other.fun_ = nullptr;
+    other.enabled_ = false;
+  }
 
   auto operator=(const scope_guard&) -> scope_guard& = delete;
-  auto operator=(scope_guard&&) -> scope_guard& = default;
+  auto operator=(scope_guard&& other) noexcept -> scope_guard& {
+    fun_ = std::move(other.fun_);
+    enabled_ = std::move(other.enabled_);
+    //other.fun_ = nullptr;
+    other.enabled_ = false;
+  }
 
   ~scope_guard() noexcept {
     if (enabled_) {

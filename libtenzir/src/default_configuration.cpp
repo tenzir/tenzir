@@ -20,6 +20,8 @@ namespace tenzir {
 default_configuration::default_configuration() {
   // Tweak default logging options.
   using namespace std::chrono_literals;
+  //set("caf.logger.console.verbosity", "trace");
+  //set("caf.logger.console.format", "%r %c %p %a %t %M %F:%L %d %m");
   set("caf.logger.file.excluded-components",
       caf::make_config_value_list("caf", "caf_flow", "caf_stream"));
   set("caf.logger.console.excluded-components",
@@ -48,11 +50,11 @@ default_configuration::default_configuration() {
   //     deadlocked actors, eventually the downstream actors will be able to
   //     make progress and the deadlock can be resolved.
   // We do a combination of (1) and (2).
-  set("caf.stream.max-batch-delay", caf::timespan{15ms});
+  //set("caf.stream.max-batch-delay", caf::timespan{15ms});
   set("caf.scheduler.max-throughput", 500);
-  set("caf.stream.credit-policy", "token-based");
-  set("caf.stream.token-based-policy.batch-size", 1);
-  set("caf.stream.token-based-policy.buffer-size", 64);
+  //set("caf.stream.credit-policy", "token-based");
+  //set("caf.stream.token-based-policy.batch-size", 1);
+  //set("caf.stream.token-based-policy.buffer-size", 64);
   set("caf.middleman.connection-timeout", caf::timespan{120s});
 }
 

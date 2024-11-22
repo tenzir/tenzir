@@ -187,7 +187,7 @@ auto add_context_impl(const caf::error& error, std::string str) -> caf::error {
   //  error.category(),
   //  caf::message::concat(error.context(), caf::make_message(std::move(str))),
   //};
-  return caf::error{};
+  return caf::make_error(ec::unimplemented, std::move(str));
 }
 
 } // namespace tenzir

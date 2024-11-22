@@ -10,6 +10,7 @@
 
 #include "tenzir/connect_request.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/detail/backtrace.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/logger.hpp"
 
@@ -156,12 +157,13 @@ std::string format_time(caf::timespan timespan) {
 }
 
 void log_connection_failed(connect_request request,
+                           caf::error err,
                            caf::timespan remaining_time,
                            caf::timespan retry_delay) {
-  TENZIR_INFO("client failed to connect to remote node {}:{}{}; attempting to "
+  TENZIR_WARN("client failed to connect to remote node {}:{}{}: {}; attempting to "
               "reconnect in {} (remaining time: {})",
               request.host, request.port,
-              formatted_resolved_host_suffix(request.host),
+              formatted_resolved_host_suffix(request.host), err,
               format_time(retry_delay), format_time(remaining_time));
 }
 
@@ -225,8 +227,9 @@ connector(connector_actor::stateful_pointer<connector_state> self,
       auto handle_error
         = [self, rp, request, delay, deadline](const caf::error& err) mutable {
             const auto remaining_time = calculate_remaining_time(deadline);
+            detail::backtrace();
             if (should_retry(err, remaining_time, delay)) {
-              log_connection_failed(request, *remaining_time, delay);
+              log_connection_failed(request, err, *remaining_time, delay);
               detail::weak_run_delayed(
                 self, delay, [self, rp, request]() mutable {
                   rp.delegate(static_cast<connector_actor>(self),
