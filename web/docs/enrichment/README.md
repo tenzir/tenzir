@@ -195,7 +195,7 @@ same set with XXX memory. A lot less!
 ### GeoIP Database
 
 The GeoIP context provides geo-spatial information about a given IP address.
-Conceptually, it is a lookup table with IP addresses as keys that maps to  
+Conceptually, it is a lookup table with IP addresses as keys that maps to
 country codes/names, region codes/names, cities, zip codes, and geographic
 coordinates.
 

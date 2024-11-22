@@ -28,9 +28,10 @@ The `filetype` setting determines how you'd process the log file.
 By default, Suricata uses the file type `regular`. Ingest into a node as
 follows:
 
-```
-from /path/to/eve.json read suricata
-| import
+```tql
+load_file "/path/to/eve.json"
+read_suricata
+import
 ```
 
 ### Import from a Unix domain socket
@@ -42,5 +43,5 @@ socket first, e.g., like this:
 nc -U -l /tmp/eve.socket
 ```
 
-Then you can use the same pipeline as above, since Tenzir's
-[`file`](../connectors/file.md) automatically detects the file type.
+Then you can use the same pipeline as above, since Tenzir automatically detects
+the file type.

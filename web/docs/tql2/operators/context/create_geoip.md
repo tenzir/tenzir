@@ -3,7 +3,7 @@
 Creates a GeoIP context.
 
 ```tql
-context::create_geoip name:string [db_path:string]
+context::create_geoip name:string, [db_path=string]
 ```
 
 ## Description
@@ -28,11 +28,11 @@ tenzir:
 
 Making changes to `arguments` of an already created context has no effect.
 
-### `name : string`
+### `name: string`
 
 The name of the new GeoIP context.
 
-### `db_path : string (optional)`
+### `db_path = string (optional)`
 
 The path to the [MMDB](https://maxmind.github.io/MaxMind-DB/) database, relative
 to the node's working directory.

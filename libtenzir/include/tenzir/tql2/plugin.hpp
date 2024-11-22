@@ -22,8 +22,9 @@ public:
     std::vector<ast::expression> args;
   };
 
-  virtual auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> = 0;
+  virtual auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr>
+    = 0;
 
   struct connector_properties_t {
     /// URI schemes the connector supports
@@ -106,15 +107,16 @@ public:
     }
     ~invocation() = default;
     invocation(const invocation&) = delete;
-    invocation(invocation&&) = delete;
+    invocation(invocation&&) = default;
     auto operator=(const invocation&) -> invocation& = delete;
     auto operator=(invocation&&) -> invocation& = delete;
 
     const ast::function_call& call;
   };
 
-  virtual auto make_function(invocation inv,
-                             session ctx) const -> failure_or<function_ptr> = 0;
+  virtual auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr>
+    = 0;
 
   virtual auto function_name() const -> std::string;
 };
@@ -137,11 +139,12 @@ public:
 
 class aggregation_plugin : public virtual function_plugin {
 public:
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override;
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override;
 
   virtual auto make_aggregation(invocation inv, session ctx) const
-    -> failure_or<std::unique_ptr<aggregation_instance>> = 0;
+    -> failure_or<std::unique_ptr<aggregation_instance>>
+    = 0;
 };
 
 /// This adapter transforms a legacy parser object to an operator.
@@ -162,8 +165,8 @@ public:
   }
 
   auto
-  operator()(generator<chunk_ptr> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto gen = parser_.instantiate(std::move(input), ctrl);
     if (not gen) {
       co_return;
@@ -173,8 +176,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter);
     // TODO: Function should be const.
     auto parser = parser_;
@@ -240,8 +243,8 @@ public:
     return loader_.internal();
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -269,8 +272,8 @@ public:
   }
 
   auto
-  operator()(generator<chunk_ptr> input,
-             operator_control_plane& ctrl) const -> generator<std::monostate> {
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
     // TODO: Extend API to allow schema-less make_saver().
     auto new_saver = Saver{saver_}.instantiate(ctrl, std::nullopt);
     if (!new_saver) {
@@ -294,8 +297,8 @@ public:
     return operator_location::local;
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -388,8 +391,8 @@ public:
     }
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 

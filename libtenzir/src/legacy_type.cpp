@@ -31,7 +31,7 @@ legacy_attribute::legacy_attribute(std::string key) : key{std::move(key)} {
 }
 
 legacy_attribute::legacy_attribute(std::string key,
-                                   caf::optional<std::string> value)
+                                   std::optional<std::string> value)
   : key{std::move(key)}, value{std::move(value)} {
 }
 

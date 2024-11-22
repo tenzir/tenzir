@@ -451,7 +451,7 @@ public:
           .note("skipped invalid JSON `{}`", truncate(source))
           .emit(*dh);
         ++diags_emitted;
-        continue;
+        break;
       }
       auto val = doc.get_value();
       if (auto err = val.error()) {
@@ -460,14 +460,14 @@ public:
           .note("skipped invalid JSON `{}`", truncate(source))
           .emit(*dh);
         ++diags_emitted;
-        continue;
+        break;
       }
       auto parser = doc_parser{json_line, *dh, lines_processed_};
       auto success = parser.parse_object(val.value_unsafe(), builder.record());
       if (not success) {
         builder.remove_last();
         ++diags_emitted;
-        continue;
+        break;
       }
     }
     if (objects_parsed == 0 and diags_emitted == 0) {

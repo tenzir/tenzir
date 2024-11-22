@@ -60,15 +60,16 @@
       [
         "plugins/amqp"
         "plugins/azure-blob-storage"
+        "plugins/fluent-bit"
+        "plugins/from_velociraptor"
         "plugins/gcs"
         "plugins/google-cloud-pubsub"
-        "plugins/fluent-bit"
         "plugins/kafka"
         "plugins/nic"
         "plugins/parquet"
+        "plugins/s3"
         "plugins/sigma"
         "plugins/sqs"
-        "plugins/velociraptor"
         "plugins/web"
         "plugins/zmq"
       ]

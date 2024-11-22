@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
@@ -21,17 +22,23 @@
 #include <tenzir/modules.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql/basic.hpp>
+#include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 #include <tenzir/try.hpp>
+#include <tenzir/type.hpp>
 
 #include <arrow/compute/api.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
 
 namespace tenzir::plugins::where {
+
+TENZIR_ENUM(mode, map, where);
 
 namespace {
 
@@ -110,7 +117,7 @@ private:
   located<expression> expr_;
 };
 
-class plugin final : public virtual operator_plugin<where_operator> {
+class tql1_plugin final : public virtual operator_plugin<where_operator> {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -134,11 +141,12 @@ public:
   }
 };
 
-class where_operator2 final : public crtp_operator<where_operator2> {
+class tql2_where_assert_operator final
+  : public crtp_operator<tql2_where_assert_operator> {
 public:
-  where_operator2() = default;
+  tql2_where_assert_operator() = default;
 
-  explicit where_operator2(ast::expression expr, bool warn)
+  explicit tql2_where_assert_operator(ast::expression expr, bool warn)
     : expr_{std::move(expr)}, warn_{warn} {
   }
 
@@ -164,7 +172,7 @@ public:
         co_yield {};
         continue;
       }
-      if (array->false_count() == 0) {
+      if (array->true_count() == array->length()) {
         co_yield std::move(slice);
         continue;
       }
@@ -179,7 +187,7 @@ public:
       // We add an artificial `false` at index `length` to flush.
       auto results = std::vector<table_slice>{};
       for (auto i = int64_t{1}; i < length + 1; ++i) {
-        auto next = i != length && array->Value(i);
+        const auto next = i != length && array->IsValid(i) && array->Value(i);
         if (current_value == next) {
           continue;
         }
@@ -199,10 +207,10 @@ public:
       return optimize_result::order_invariant(*this, order);
     }
     auto [legacy, remainder] = split_legacy_expression(expr_);
-    auto remainder_op
-      = is_true_literal(remainder)
-          ? nullptr
-          : std::make_unique<where_operator2>(std::move(remainder), warn_);
+    auto remainder_op = is_true_literal(remainder)
+                          ? nullptr
+                          : std::make_unique<tql2_where_assert_operator>(
+                            std::move(remainder), warn_);
     if (filter == trivially_true_expression()) {
       return optimize_result{std::move(legacy), order, std::move(remainder_op)};
     }
@@ -213,7 +221,7 @@ public:
                            std::move(remainder_op)};
   }
 
-  friend auto inspect(auto& f, where_operator2& x) -> bool {
+  friend auto inspect(auto& f, tql2_where_assert_operator& x) -> bool {
     return f.object(x).fields(f.field("expression", x.expr_),
                               f.field("warn", x.warn_));
   }
@@ -223,30 +231,170 @@ private:
   bool warn_;
 };
 
-class plugin2 final : public virtual operator_plugin2<where_operator2> {
-public:
-  explicit plugin2(bool warn) : warn_{warn} {
-  }
+struct arguments {
+  ast::expression field;
+  ast::simple_selector capture;
+  ast::expression expr;
+};
 
+auto make_where_map_function(function_plugin::invocation inv, session ctx,
+                             enum mode mode) -> failure_or<function_ptr> {
+  auto args = arguments{};
+  TRY(argument_parser2::function(fmt::to_string(mode))
+        .add(args.field, "<field>")
+        .add(args.capture, "<capture>")
+        .add(args.expr, "<expr>")
+        .parse(inv, ctx));
+  return function_use::make(
+    [mode, args = std::move(args)](function_plugin::evaluator eval,
+                                   session ctx) -> series {
+      auto field = eval(args.field);
+      if (field.as<null_type>()) {
+        return field;
+      }
+      auto field_list = field.as<list_type>();
+      if (not field_list) {
+        diagnostic::warning("expected `list`, but got `{}`", field.type.kind())
+          .primary(args.field)
+          .emit(ctx);
+        return series::null(null_type{}, eval.length());
+      }
+      // We get the field's inner values array and create a dummy table slice
+      // with a single field to evaluate the mapped expression on. TODO: We
+      // should consider unrolling the surrounding event to make more than just
+      // the capture evailable. This may be rather expensive, though, so we
+      // should consider doing some static analysis to only unroll the fields
+      // actually used.
+      auto values
+        = series{field_list->type.value_type(), field_list->array->values()};
+      if (values.length() == 0) {
+        return field;
+      }
+      const auto name
+        = eval(ast::meta{ast::meta::name, location::unknown}).as<string_type>();
+      TENZIR_ASSERT(name);
+      TENZIR_ASSERT(name->length() > 0);
+      TENZIR_ASSERT(name->array->IsValid(0));
+      const auto empty_type = type{name->array->GetView(0), record_type{}};
+      auto slice = table_slice{
+        arrow::RecordBatch::Make(empty_type.to_arrow_schema(), values.length(),
+                                 arrow::ArrayVector{}),
+        empty_type,
+      };
+      slice = assign(args.capture, values, slice, ctx);
+      values = tenzir::eval(args.expr, slice, ctx);
+      switch (mode) {
+        case mode::map: {
+          // Lastly, we create a new series with the value offsets from the
+          // original list array and the mapped list array's values.
+          return series{
+            list_type{values.type},
+            std::make_shared<arrow::ListArray>(
+              list_type{values.type}.to_arrow_type(),
+              field_list->array->length(), field_list->array->value_offsets(),
+              values.array, field_list->array->null_bitmap(),
+              field_list->array->null_count(), field_list->array->offset()),
+          };
+        }
+        case mode::where: {
+          if (values.as<null_type>()) {
+            auto builder = series_builder{field.type};
+            for (auto i = int64_t{0}; i < field.length(); ++i) {
+              builder.list();
+            }
+            return builder.finish_assert_one_array();
+          }
+          const auto predicate = values.as<bool_type>();
+          if (not predicate) {
+            diagnostic::warning("expected `bool`, but got `{}`",
+                                values.type.kind())
+              .primary(args.expr)
+              .emit(ctx);
+            return series::null(field.type, field.length());
+          }
+          if (predicate->array->true_count() == predicate->length()) {
+            return field;
+          }
+          auto predicate_gen = predicate->values();
+          auto builder = series_builder{field.type};
+          match(field_list->type.value_type(), [&]<concrete_type T>(const T&) {
+            for (auto&& list : field_list->values()) {
+              if (not list) {
+                builder.null();
+                continue;
+              }
+              auto list_builder = builder.list();
+              for (auto&& element : *list) {
+                auto should_filter = predicate_gen.next();
+                TENZIR_ASSERT(should_filter);
+                if (should_filter->value_or(false)) {
+                  list_builder.data(as<view<type_to_data_t<T>>>(element));
+                }
+              }
+            }
+            // Check that we actually did iterate over all evaluated
+            TENZIR_ASSERT(not predicate_gen.next());
+          });
+          return builder.finish_assert_one_array();
+        }
+      }
+      TENZIR_UNREACHABLE();
+    });
+}
+
+class assert_plugin final
+  : public virtual operator_plugin2<tql2_where_assert_operator> {
+public:
   auto name() const -> std::string override {
-    return warn_ ? "tql2.assert" : "tql2.where";
+    return "tql2.assert";
   }
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
     TRY(
-      argument_parser2::operator_("where").add(expr, "<expr>").parse(inv, ctx));
-    return std::make_unique<where_operator2>(std::move(expr), warn_);
+      argument_parser2::operator_("assert").add(expr, "<expr>").parse(inv, ctx));
+    return std::make_unique<tql2_where_assert_operator>(std::move(expr), true);
+  }
+};
+
+class where_plugin final : public virtual operator_factory_plugin,
+                           public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.where";
   }
 
-private:
-  bool warn_ = {};
+  auto make(operator_factory_plugin::invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto expr = ast::expression{};
+    TRY(
+      argument_parser2::operator_("where").add(expr, "<expr>").parse(inv, ctx));
+    return std::make_unique<tql2_where_assert_operator>(std::move(expr), false);
+  }
+
+  auto make_function(function_plugin::invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    return make_where_map_function(std::move(inv), ctx, mode::where);
+  }
+};
+
+class map_plugin final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.map";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    return make_where_map_function(std::move(inv), ctx, mode::map);
+  }
 };
 
 } // namespace
 } // namespace tenzir::plugins::where
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::plugin2{true})
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::plugin2{false})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::tql1_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::assert_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::where_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::map_plugin)

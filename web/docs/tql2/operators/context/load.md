@@ -11,7 +11,7 @@ context::load name:string
 The `context::load` operator replaces the state of the specified context with
 its (binary) input.
 
-### `name : string`
+### `name: string`
 
 The name of the context whose state to update.
 

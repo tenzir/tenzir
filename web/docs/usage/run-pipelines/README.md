@@ -20,44 +20,55 @@ The diagram below illustrates these mechanics:
 
 ![Pipeline in the Browser](pipeline-browser.excalidraw.svg)
 
-For example, write [`version`](../../operators/version.md) and click *Run* to
-see a single event arrive.
+For example, write [`version`](../../tql2/operators/version.md) and click *Run*
+to see a single event arrive.
 
 ## On the command line
 
 On the command line, run `tenzir <pipeline>` where `<pipeline>` is the
 definition of the pipeline.
 
-If the pipeline expects events as its input, an implicit `load - | read json`
-will be prepended. If it expects bytes instead, only `load -` is prepended.
-Likewise, if the pipeline outputs events, an implicit `write json | save -` will
-be appended. If it outputs bytes instead, only `save -` is appended.
+If the pipeline expects events as its input, an implicit `load_stdin |
+read_json` will be prepended. If it expects bytes instead, only `load_stdin` is
+prepended. Likewise, if the pipeline outputs events, an implicit `write_json |
+save_stdout` will be appended. If it outputs bytes instead, only `save_stdout`
+is appended.
 
 The diagram below illustrates these mechanics:
 
-![Pipeline on the command line](pipeline-cli.excalidraw.svg)
+![Pipeline on the command line](pipeline-cli.svg)
 
-For example, run [`tenzir 'version'`](../../operators/version.md) to
-see a single event rendered as JSON:
+For example, run [`tenzir 'version | drop
+dependencies'`](../../tql2/operators/version.md) to see a single event in the
+terminal:
 
-```json
+```tql
 {
-  "version": "v4.6.4-155-g0b75e93026",
-  "major": 4,
-  "minor": 6,
-  "patch": 4,
-  "tweak": 155
+  version: "4.22.1+g324214e6de",
+  tag: "g324214e6de",
+  major: 4,
+  minor: 22,
+  patch: 1,
+  features: [],
+  build: {
+    type: "Release",
+    tree_hash: "c4c37acb5f9dc1ce3806f40bbde17a08",
+    assertions: false,
+    sanitizers: {
+      address: false,
+      undefined_behavior: false,
+    },
+  },
 }
 ```
 
-You could also render it differently by passing a different
-[format](../../formats.md) to [`write`](../../operators/write.md), or by
-inferring the format from the file extension:
+You could also render the output differently by choosing a different
+[format](../../formats.md):
 
 ```bash
-tenzir 'version | write csv'
-tenzir 'version | to /tmp/version.ssv'
-tenzir 'version | to /tmp/version.parquet'
+tenzir 'version | drop dependencies | write_csv'
+tenzir 'version | drop dependencies | write_ssv'
+tenzir 'version | drop dependencies | write_parquet | save_file "version.parquet'
 ```
 
 Instead of passing the pipeline description to the `tenzir` executable, you can
@@ -88,15 +99,16 @@ tenzir:
     # and API calls interacting with the pipeline.
     suricata-over-tcp:
       # An optional user-facing name for the pipeline. Defaults to the id.
-      name: Import Suricata from TCP
+      name: Onboard Suricata from TCP
       # An optional user-facing description of the pipeline.
       description: |
-        Imports Suricata Eve JSON from the port 34343 over TCP.
+        Onboards Suricata EVE JSON from TCP port 34343.
       # The definition of the pipeline. Configured pipelines that fail to start
       # cause the node to fail to start.
       definition: |
-        from tcp://0.0.0.0:34343 read suricata
-        | import
+        load_tcp "0.0.0.0:34343"
+        read_suricata
+        publish "suricata"
       # Pipelines that encounter an error stop running and show an error state.
       # This option causes pipelines to automatically restart when they
       # encounter an error instead. The first restart happens immediately, and
@@ -110,7 +122,7 @@ tenzir:
       # app.tenzir.com.
       labels:
         - Suricata
-        - Import
+        - Onboarding
       # Disable the pipeline.
       disabled: false
       # Pipelines that are unstoppable will run automatically and indefinitely.

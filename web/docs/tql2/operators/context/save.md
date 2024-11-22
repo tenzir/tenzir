@@ -11,7 +11,7 @@ context::save name:string
 The `context::save` operator dumps the state of the specified context into its
 (binary) output.
 
-### `name : string`
+### `name: string`
 
 The name of the context whose state to save.
 

@@ -220,6 +220,66 @@ auto evaluator::eval(const ast::index_expr& x) -> series {
   if (auto null = index.as<null_type>()) {
     return std::move(*null);
   }
+  if (auto str = index.as<string_type>()) {
+    const auto ty = try_as<record_type>(value.type);
+    if (not ty) {
+      diagnostic::warning("cannot access field of non-record type")
+        .primary(x.index)
+        .secondary(x.expr, "type `{}`", value.type.kind())
+        .emit(ctx_);
+      return null();
+    }
+    auto& s = as<arrow::StructArray>(*value.array);
+    // Keeps a track of the current series type we are building.
+    // TODO: Remove when we have heterogeneous evaluator
+    auto sty = std::optional<type>{};
+    auto b = series_builder{};
+    for (auto i = int64_t{}; i < s.length(); ++i) {
+      if (s.IsNull(i)) {
+        b.null();
+        diagnostic::warning("tried to access field of `null`")
+          .primary(x.expr)
+          .emit(ctx_);
+        continue;
+      }
+      if (str->array->IsNull(i)) {
+        b.null();
+        diagnostic::warning("cannot use `null` as index")
+          .primary(x.index)
+          .emit(ctx_);
+        continue;
+      }
+      auto name = value_at(string_type{}, *str->array, i);
+      auto found = false;
+      for (auto [j, field] : detail::enumerate<size_t>(ty->fields())) {
+        if (field.name == name) {
+          found = true;
+          auto [_, v] = value_at(*ty, s, i)->at(j);
+          if (sty and sty != field.type) {
+            b.null();
+            diagnostic::warning("indexing resulting in different types is "
+                                "currently not supported")
+              .primary(x, fmt::format("expected `{}`, got `{}`", sty.value(),
+                                      field.type))
+              .emit(ctx_);
+            break;
+          }
+          b.data(v);
+          if (not sty) {
+            sty = b.type();
+          }
+          break;
+        }
+      }
+      if (not found) {
+        diagnostic::warning("record does not have field '{}'", name)
+          .primary(x.index)
+          .emit(ctx_);
+        b.null();
+      }
+    }
+    return b.finish_assert_one_array();
+  }
   if (auto number = index.as<int64_type>()) {
     auto list = value.as<list_type>();
     if (not list) {

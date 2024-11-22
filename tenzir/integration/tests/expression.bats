@@ -55,6 +55,17 @@ z = [...x, 3, ...y, ...42]
 EOF
 }
 
+@test "record indexing" {
+  echo '
+  {"x": {"x": 1}, "y": "x"}
+  {"x": {"x": "1"}, "y": "x"}
+  {"x": {"x": 1}}
+  {"x": {}, "y": "x"}
+  {"y": "x"}
+  {}' |
+    check tenzir 'read_json | z = x[y]'
+}
+
 @test "list indexing" {
   check tenzir -f '/dev/stdin' <<EOF
 from [

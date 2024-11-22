@@ -3,8 +3,8 @@
 Updates a context with new data.
 
 ```tql
-context::update name:string, key=expression,
-               [value=expression, create_timeout=duration,
+context::update name:string, key=any,
+               [value=any, create_timeout=duration,
                 write_timeout=duration, read_timeout=duration]
 ```
 
@@ -21,30 +21,30 @@ with the given key.
 The three arguments `create_timeout`, `write_timeout`, and `read_timeout` only
 work with lookup tables and set the respective timeouts per table entry.
 
-### `name : string`
+### `name: string`
 
 The name of the context to update.
 
-### `key : expression`
+### `key = any`
 
 The field that represents the enrichment key in the data.
 
-### `value : expression (optional)`
+### `value = any (optional)`
 
 The field that represents the enrichment value to associate with `key`.
 
 Defaults to `this`.
 
-### `create_timeout : duration (optional)`
+### `create_timeout = duration (optional)`
 
 Expires a context entry after a given duration since entry creation.
 
-### `write_timeout : duration (optional)`
+### `write_timeout = duration (optional)`
 
 Expires a context entry after a given duration since the last update time. Every
 Every call to `context::update` resets the timeout for the respective key.
 
-### `read_timeout : duration (optional)`
+### `read_timeout = duration (optional)`
 
 Expires a context entry after a given duration since the last access time.
 Every call to `context::enrich` resets the timeout for the respective key.
