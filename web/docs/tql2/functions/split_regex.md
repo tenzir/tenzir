@@ -38,7 +38,7 @@ Defaults to `false`.
 ### Split a string using a regex pattern
 
 ```tql
-from {xs: split_regex("a1b2c", r"\\d")}
+from {xs: split_regex("a1b2c", r"\d")}
 ```
 
 ```tql
@@ -48,7 +48,7 @@ from {xs: split_regex("a1b2c", r"\\d")}
 ### Limit the number of splits
 
 ```tql
-from {xs: split_regex("a1b2c3", r"\\d", max=1)}
+from {xs: split_regex("a1b2c3", r"\d", max=1)}
 ```
 
 ```tql

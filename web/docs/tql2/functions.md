@@ -110,7 +110,7 @@ Function | Description | Example
 [`to_title`](functions/to_title.md) | Converts a string to title case | `"hello world".to_title()`
 [`to_upper`](functions/to_upper.md) | Converts a string to uppercase | `"hello".to_upper()`
 [`split`](functions/split.md) | Splits a string into substrings | `split("a,b,c", ",")`
-[`split_regex`](functions/split_regex.md) | Splits a string into substrings with a regex | `split_regex("a1b2c", "\\d")`
+[`split_regex`](functions/split_regex.md) | Splits a string into substrings with a regex | `split_regex("a1b2c", r"\d")`
 [`join`](functions/join.md) | Joins a list of strings into a single string | `join(["a", "b", "c"], ",")`
 
 ### File Paths
