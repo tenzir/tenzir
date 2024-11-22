@@ -227,7 +227,8 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     }
     auto url = boost::urls::parse_uri_reference(path);
     if (not url) {
-      diagnostic::error("invalid URI")
+      diagnostic::error("invalid URI `{}`", path)
+        .note(url.error().message())
         .primary(inv.args.front().get_location())
         .emit(ctx);
       return failure::promise();
@@ -440,7 +441,8 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     }
     auto url = boost::urls::parse_uri_reference(path);
     if (not url) {
-      diagnostic::error("invalid URI")
+      diagnostic::error("invalid URI `{}`", path)
+        .note(url.error().message())
         .primary(inv.args.front().get_location())
         .emit(ctx);
       return failure::promise();

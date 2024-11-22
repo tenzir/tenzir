@@ -132,7 +132,7 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 ### URI schemes
 
 | Scheme | Operator | Example |
-| ------ | -------- | ------- |
+|:------ |:-------- |:------- |
 | `file` | [`load_file`](load_file.md) | `from "file://path/to/file.json"` |
 | `fluentbit` | [`from_fluent_bit`](from_fluent_bit.md) | `from "fluentbit://elasticsearch"` |
 | `ftp`, `ftps` | [`load_ftp`](load_ftp.md) | `from "ftp://example.com/file.json"` |
@@ -150,8 +150,9 @@ Please see the respective operator pages for details on the URI's locator format
 The `from` operator can deduce the file format based on these file-endings:
 
 | Format | File Endings | Operator  |
-| ------ | ------------ | --------- |
+|:------ |:------------ |:--------- |
 |  JSON  | `.json` | [`read_json`](read_json.md) |
+|  NDJSON  | `.ndjson`,`.jsonl` | [`read_ndjson`](read_ndjson.md) |
 |  YAML  | `.yaml` | [`read_yaml`](read_yaml.md) |
 |  CSV  | `.csv` | [`read_csv`](read_csv.md) |
 |  SSV  | `.ssv` | [`read_ssv`](read_ssv.md) |
@@ -163,8 +164,8 @@ The `from` operator can deduce the following compressions based on these
 file-endings:
 
 | Compression |    File Endings   |
-| ----------- | ----------------- |
-| Brotoli     | `.br`, `.brotoli` |
+|:----------- |:----------------- |
+| Brotli     | `.br`, `.brotli` |
 | Bzip2       | `.bz2`            |
 | Gzip        | `.gz`, `.gzip`    |
 | LZ4         | `.lz4`            |
@@ -203,12 +204,12 @@ from "https:://example.org/file.json", header={Token: 0}
 ### Create a single event ad-hoc
 
 ```tql
-from {Field: "Value", Nested_field: {ip: 127.0.0.1, port: 42}}
+from {message: "Value", endpoint: {ip: 127.0.0.1, port: 42}}
 ```
 ```tql
 {
-  Field: "Value",
-  Nested_field: {
+  message: "Value",
+  endpoint: {
     ip: 127.0.0.1,
     port: 42
   }
