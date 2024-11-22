@@ -138,8 +138,10 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 | `ftp`, `ftps` | [`load_ftp`](load_ftp.md) | `from "ftp://example.com/file.json"` |
 | `gcps` | [`load_google_cloud_pubsub`](load_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id"` |
 | `http`, `https` | [`load_http`](load_http.md) | `from "http://example.com/file.json"` |
+| `kafka` | [`load_kafka`](load_kafka.md) | `from "kafka://topic"` |
 | `s3` | [`load_s3`](load_s3.md) | `from "s3://bucket/file.json"` |
 | `tcp` | [`load_tcp`](load_tcp.md) | `from "tcp://127.0.0.1:13245" { read_json }` |
+| `udp` | [`load_udp`](load_udp.md) | `from "udp://127.0.0.1:56789"` |
 
 Please see the respective operator pages for details on the URI's locator format.
 
@@ -151,25 +153,30 @@ The `from` operator can deduce the file format based on these file-endings:
 
 | Format | File Endings | Operator  |
 |:------ |:------------ |:--------- |
-|  JSON  | `.json` | [`read_json`](read_json.md) |
-|  NDJSON  | `.ndjson`,`.jsonl` | [`read_ndjson`](read_ndjson.md) |
-|  YAML  | `.yaml` | [`read_yaml`](read_yaml.md) |
 |  CSV  | `.csv` | [`read_csv`](read_csv.md) |
+|  CEF  | `.cef` | [`read_cef`](read_cef.md) |
+|  Feather  | `.feather`, `.arrow` | [`read_feather`](read_feather.md) |
+|  JSON  | `.json` | [`read_json`](read_json.md) |
+|  LEEF  | `.leef` | [`read_leef`](read_leef.md) |
+|  NDJSON  | `.ndjson`, `.jsonl` | [`read_ndjson`](read_ndjson.md) |
+|  Parquet  | `.parquet` | [`read_parquet`](read_parquet.md) |
+|  Pcap  | `.pcap` | [`read_pcap`](read_pcap.md) |
 |  SSV  | `.ssv` | [`read_ssv`](read_ssv.md) |
 |  TSV  | `.tsv` | [`read_tsv`](read_tsv.md) |
+|  YAML  | `.yaml` | [`read_yaml`](read_yaml.md) |
 
 #### Compression
 
 The `from` operator can deduce the following compressions based on these
 file-endings:
 
-| Compression |    File Endings   |
-|:----------- |:----------------- |
-| Brotli     | `.br`, `.brotli` |
-| Bzip2       | `.bz2`            |
-| Gzip        | `.gz`, `.gzip`    |
-| LZ4         | `.lz4`            |
-| Zstd        | `.zst`, `.zstd`   |
+| Compression |    File Endings  |
+|:----------- |:---------------- |
+| Brotli      | `.br`, `.brotli` |
+| Bzip2       | `.bz2`           |
+| Gzip        | `.gz`, `.gzip`   |
+| LZ4         | `.lz4`           |
+| Zstd        | `.zst`, `.zstd`  |
 
 ## Examples
 

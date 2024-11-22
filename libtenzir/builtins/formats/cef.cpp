@@ -266,6 +266,10 @@ public:
     return std::make_unique<parser_adapter<cef_parser>>(
       cef_parser{std::move(opts)});
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"def"}};
+  }
 };
 
 class parse_cef final : public virtual function_plugin {

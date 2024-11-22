@@ -264,6 +264,14 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     const bool has_pipeline_or_events
       = pipeline_argument or load_properties.events;
     if (not has_pipeline_or_events) {
+      if (url->segments().empty()) {
+        diagnostic::error("URL has no segments to deduce the format from")
+          .primary(inv.args.front().get_location())
+          .hint("you can pass a pipeline to handle compression and format")
+          .docs(docs)
+          .emit(ctx);
+        goto post_deduction;
+      }
       const auto& file = url->segments().back();
       auto first_dot = file.find('.');
       if (first_dot == file.npos) {
@@ -297,6 +305,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         &operator_factory_plugin::read_properties_t::extensions, path,
         inv.args.front().get_location(), docs, ctx);
     }
+  post_deduction:
     TENZIR_TRACE("from operator: given pipeline size   : {}",
                  pipeline_argument
                    ? static_cast<int>(pipeline_argument->inner.body.size())
@@ -478,6 +487,14 @@ class to_plugin2 final : public virtual operator_factory_plugin {
       = pipeline_argument or save_properties.events;
     auto compression_name = std::string_view{};
     if (not has_pipeline_or_events) {
+      if (url->segments().empty()) {
+        diagnostic::error("URL has no segments to deduce the format from")
+          .primary(inv.args.front().get_location())
+          .hint("you can pass a pipeline to handle compression and format")
+          .docs(docs)
+          .emit(ctx);
+        goto post_deduction;
+      }
       const auto& file = url->segments().back();
       auto first_dot = file.find('.');
       auto file_ending = std::string_view{file}.substr(first_dot);
@@ -514,6 +531,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
         &operator_factory_plugin::write_properties_t::extensions, path,
         inv.args.front().get_location(), docs, ctx);
     }
+  post_deduction:
     TENZIR_TRACE("to operator: given pipeline size   : {}",
                  pipeline_argument
                    ? static_cast<int>(pipeline_argument->inner.body.size())

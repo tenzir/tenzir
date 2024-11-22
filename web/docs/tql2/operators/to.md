@@ -97,7 +97,9 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | `ftp`, `ftps` | [`save_ftp`](save_ftp.md) | `to "ftp://example.com/file.json"` |
 | `gcps` | [`save_google_cloud_pubsub`](save_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id"` |
 | `http`, `https` | [`save_http`](save_http.md) | `to "http://example.com/file.json"` |
+| `kafka` | [`save_kafka`](save_kafka.md) | `to "kafka://topic"` |
 | `s3` | [`save_s3`](save_s3.md) | `to "s3://bucket/file.json"` |
+| `udp` | [`save_udp`](save_udp.md) | `to "udp://127.0.0.1:56789"` |
 
 Please see the respective operator pages for details on the URI's locator format.
 
@@ -109,25 +111,28 @@ The `from` operator can deduce the file format based on these file-endings:
 
 | Format | File Endings | Operator  |
 |:------ |:------------ |:--------- |
+|  CSV  | `.csv` | [`write_csv`](write_csv.md) |
+|  Feather  | `.feather`, `.arrow` | [`write_feather`](write_feather.md) |
 |  JSON  | `.json` | [`write_json`](write_json.md) |
 |  NDJSON  | `.ndjson`, `.jsonl` | [`write_ndjson`](write_ndjson.md) |
-|  YAML  | `.yaml` | [`write_yaml`](write_yaml.md) |
-|  CSV  | `.csv` | [`write_csv`](write_csv.md) |
+|  Parquet  | `.parquet` | [`write_parquet`](write_parquet.md) |
+|  Pcap  | `.pcap` | [`write_pcap`](write_pcap.md) |
 |  SSV  | `.ssv` | [`write_ssv`](write_ssv.md) |
 |  TSV  | `.tsv` | [`write_tsv`](read_tsv.md) |
+|  YAML  | `.yaml` | [`write_yaml`](write_yaml.md) |
 
 #### Compression
 
 The `from` operator can deduce the following compressions based on these
 file-endings:
 
-| Compression |    File Endings   |
-|:----------- |:----------------- |
-| Brotli     | `.br`, `.brotli` |
-| Bzip2       | `.bz2`            |
-| Gzip        | `.gz`, `.gzip`    |
-| LZ4         | `.lz4`            |
-| Zstd        | `.zst`, `.zstd`   |
+| Compression |    File Endings  |
+|:----------- |:---------------- |
+| Brotli      | `.br`, `.brotli` |
+| Bzip2       | `.bz2`           |
+| Gzip        | `.gz`, `.gzip`   |
+| LZ4         | `.lz4`           |
+| Zstd        | `.zst`, `.zstd`  |
 
 #### Example transformation:
 

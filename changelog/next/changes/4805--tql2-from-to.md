@@ -1,5 +1,2 @@
-The `load_kafka`'s `topic` argument is now a positional argument, instead of a
-name argument.
-
-The `save_kafka`'s `topic` argument is now a positional argument, instead of a
-name argument.
+The `topic` argument for `load_kafka` and `save_kafka` is now a positional
+argument, instead of a named argument.
