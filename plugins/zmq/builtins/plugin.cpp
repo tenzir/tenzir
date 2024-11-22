@@ -24,11 +24,11 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     TRY(argument_parser2::operator_(name())
-          .add(args.endpoint, "<endpoint>")
-          .add("filter", args.filter)
-          .add("listen", args.listen)
-          .add("connect", args.connect)
-          .add("monitor", args.monitor)
+          .pos("endpoint", args.endpoint)
+          .key("filter", args.filter)
+          .key("listen", args.listen)
+          .key("connect", args.connect)
+          .key("monitor", args.monitor)
           .parse(inv, ctx));
     if (args.listen and args.connect) {
       diagnostic::error("`listen` and `connect` are mutually exclusive")
@@ -62,10 +62,10 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     TRY(argument_parser2::operator_(name())
-          .add(args.endpoint, "<endpoint>")
-          .add("listen", args.listen)
-          .add("connect", args.connect)
-          .add("monitor", args.monitor)
+          .pos("endpoint", args.endpoint)
+          .key("listen", args.listen)
+          .key("connect", args.connect)
+          .key("monitor", args.monitor)
           .parse(inv, ctx));
     if (args.listen and args.connect) {
       diagnostic::error("`listen` and `connect` are mutually exclusive")

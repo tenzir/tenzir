@@ -75,22 +75,22 @@ class plugin : public virtual operator_plugin2<Adapter<Plugin>> {
     auto channel = std::optional<located<uint64_t>>{};
     auto options = std::optional<located<record>>{};
     auto parser = argument_parser2::operator_(this->name());
-    parser.add(args.url, "<url>");
-    parser.add("channel", channel);
-    parser.add("exchange", args.exchange);
-    parser.add("routing_key", args.routing_key);
-    parser.add("options", options);
+    parser.pos("url", args.url);
+    parser.key("channel", channel);
+    parser.key("exchange", args.exchange);
+    parser.key("routing_key", args.routing_key);
+    parser.key("options", options);
     if constexpr (std::is_same_v<Args, loader_args>) {
-      parser.add("queue", args.queue);
-      parser.add("passive", args.passive);
-      parser.add("durable", args.durable);
-      parser.add("exclusive", args.exclusive);
-      parser.add("no_auto_delete", args.no_auto_delete);
-      parser.add("no_local", args.no_local);
-      parser.add("ack", args.ack);
+      parser.key("queue", args.queue);
+      parser.key("passive", args.passive);
+      parser.key("durable", args.durable);
+      parser.key("exclusive", args.exclusive);
+      parser.key("no_auto_delete", args.no_auto_delete);
+      parser.key("no_local", args.no_local);
+      parser.key("ack", args.ack);
     } else if constexpr (std::is_same_v<Args, saver_args>) {
-      parser.add("mandatory", args.mandatory);
-      parser.add("immediate", args.immediate);
+      parser.key("mandatory", args.mandatory);
+      parser.key("immediate", args.immediate);
     }
     TRY(parser.parse(inv, ctx));
     auto config = config_;

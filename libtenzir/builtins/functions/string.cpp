@@ -403,10 +403,10 @@ public:
     auto reverse = std::optional<location>{};
     auto max_splits = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(pattern, "<pattern>")
-          .add("max", max_splits)
-          .add("reverse", reverse)
+          .pos("x", subject_expr, "string")
+          .pos("pattern", pattern)
+          .key("max", max_splits)
+          .key("reverse", reverse)
           .parse(inv, ctx));
     if (max_splits) {
       if (max_splits->inner < 0) {
@@ -474,8 +474,8 @@ public:
     // string.
     auto separator = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<list>")
-          .add(separator, "<separator>")
+          .pos("x", subject_expr, "list")
+          .pos("separator", separator)
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr),
                                separator = std::move(separator)](

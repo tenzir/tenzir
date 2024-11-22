@@ -248,20 +248,20 @@ class save_plugin final
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto parser = argument_parser2::operator_(name());
-    parser.add(args.to, "<email>");
-    parser.add("endpoint", args.endpoint);
-    parser.add("from", args.from);
-    parser.add("subject", args.subject);
-    parser.add("username", args.transfer_opts.username);
-    parser.add("password", args.transfer_opts.password);
-    parser.add("authzid", args.transfer_opts.authzid);
-    parser.add("authorization", args.transfer_opts.authorization);
-    parser.add("skip_peer_verification",
+    parser.pos("email", args.to);
+    parser.key("endpoint", args.endpoint);
+    parser.key("from", args.from);
+    parser.key("subject", args.subject);
+    parser.key("username", args.transfer_opts.username);
+    parser.key("password", args.transfer_opts.password);
+    parser.key("authzid", args.transfer_opts.authzid);
+    parser.key("authorization", args.transfer_opts.authorization);
+    parser.key("skip_peer_verification",
                args.transfer_opts.skip_peer_verification);
-    parser.add("skip_hostname_verification",
+    parser.key("skip_hostname_verification",
                args.transfer_opts.skip_hostname_verification);
-    parser.add("mime", args.mime);
-    parser.add("verbose", args.transfer_opts.verbose);
+    parser.key("mime", args.mime);
+    parser.key("verbose", args.transfer_opts.verbose);
     TRY(parser.parse(inv, ctx));
     if (args.endpoint.empty()) {
       args.endpoint = default_smtp_server;

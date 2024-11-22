@@ -80,8 +80,8 @@ auto multi_series_builder_argument_parser::add_settings_to_parser(
   if (add_unflatten_option) {
     parser.key("unflatten", unnest_);
   }
-  parser.add("_batch_timeout", timeout_);
-  parser.add("_batch_size", batch_size_);
+  parser.key("_batch_timeout", timeout_);
+  parser.key("_batch_size", batch_size_);
 }
 
 auto multi_series_builder_argument_parser::add_policy_to_parser(

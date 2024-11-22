@@ -349,9 +349,9 @@ public:
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<time>")
-          .add(format, "<format>")
-          .add("locale", locale)
+          .pos("input", subject_expr, "time")
+          .pos("format", format)
+          .key("locale", locale)
           .parse(inv, ctx));
     return function_use::make(
       [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
@@ -404,8 +404,8 @@ public:
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(format, "<format>")
+          .pos("input", subject_expr, "string")
+          .pos("format", format)
           .parse(inv, ctx));
     return function_use::make(
       [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),

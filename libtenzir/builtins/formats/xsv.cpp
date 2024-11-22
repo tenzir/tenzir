@@ -750,10 +750,10 @@ public:
     auto null_value = located<std::string>{};
     auto no_header = bool{};
     TRY(argument_parser2::operator_(name())
-          .add(field_sep_str, "<field-sep>")
-          .add(list_sep_str, "<list-sep>")
-          .add(null_value, "<null-value>")
-          .add("no_header", args.no_header)
+          .pos("field_sep", field_sep_str)
+          .pos("list_sep", list_sep_str)
+          .pos("null_value", null_value)
+          .key("no_header", args.no_header)
           .parse(inv, ctx));
     auto field_sep = to_xsv_sep(field_sep_str.inner);
     if (!field_sep) {
@@ -841,7 +841,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto no_header = bool{};
     TRY(argument_parser2::operator_(name())
-          .add("no_header", no_header)
+          .key("no_header", no_header)
           .parse(inv, ctx));
     return std::make_unique<writer_adapter<xsv_printer>>(xsv_printer{{
       .name = std::string{Name.str()},

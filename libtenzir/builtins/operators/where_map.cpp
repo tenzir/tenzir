@@ -241,9 +241,9 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
                              enum mode mode) -> failure_or<function_ptr> {
   auto args = arguments{};
   TRY(argument_parser2::function(fmt::to_string(mode))
-        .add(args.field, "<field>")
-        .add(args.capture, "<capture>")
-        .add(args.expr, "<expr>")
+        .pos("list", args.field, "list")
+        .pos("capture", args.capture)
+        .pos("expression", args.expr, "any")
         .parse(inv, ctx));
   return function_use::make(
     [mode, args = std::move(args)](function_plugin::evaluator eval,
