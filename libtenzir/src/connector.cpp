@@ -10,7 +10,6 @@
 
 #include "tenzir/connect_request.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/detail/backtrace.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/logger.hpp"
 
@@ -227,7 +226,6 @@ connector(connector_actor::stateful_pointer<connector_state> self,
       auto handle_error
         = [self, rp, request, delay, deadline](const caf::error& err) mutable {
             const auto remaining_time = calculate_remaining_time(deadline);
-            detail::backtrace();
             if (should_retry(err, remaining_time, delay)) {
               log_connection_failed(request, err, *remaining_time, delay);
               detail::weak_run_delayed(

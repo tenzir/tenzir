@@ -685,7 +685,9 @@ struct exec_node_state {
           TENZIR_DEBUG("{} {} failed to get its demand fulfilled: {}", *self,
                        op->name(), err);
           issue_demand_inflight = false;
-          if (err and err != caf::sec::request_receiver_down) {
+          if (err and err != caf::sec::request_receiver_down
+              // TODO: verify that this is fine.
+              and err != caf::exit_reason::remote_link_unreachable) {
             diagnostic::error(err)
               .note("{} {} failed to pull from previous execution node", *self,
                     op->name())
