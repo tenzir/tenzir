@@ -201,27 +201,68 @@ constexpr auto variant_index = std::invoke(
   },
   std::make_index_sequence<variant_traits<V>::count>());
 
-// Ensures that `F` can be invoked with alternative `I` in `V`, yielding result
-// type `R`
+// Ensures that `F` can be invoked with alternative `I` in `V`, yielding a type
+// that can be cast to `R`
 template <class F, class V, class R, size_t I>
 concept variant_invocable_for_r = requires(F f, V v) {
   static_cast<R>(std::invoke(f, variant_get<I>(std::forward<V>(v))));
 };
 
-template <class F, class V, class R, size_t... Is>
-consteval auto check_matcher(std::index_sequence<Is...>) {
-  return (variant_invocable_for_r<F, V, R, Is> && ...);
-}
+/// Ensures that `F` can be invoked with all alternatives `[0..Variant_Size)`
+/// in `V`, yielding a type that can be cast to `R`
+template <class F, class V, class R, size_t Variant_Size>
+concept variant_invocable_for_all
+  // This is implemented as a hand rolled version, because recursive concepts
+  // are illegal and an implementation via fold expressions does not allow the
+  // compiler to point at the alternative that failed.
+  = (Variant_Size < 33 // Concept is only implemented up to 32 alternatives. If
+                       // you ever need more, just add cases at the bottom
+     and ((Variant_Size < 1 or variant_invocable_for_r<F, V, R, 0>)
+          and (Variant_Size < 2 or variant_invocable_for_r<F, V, R, 1>)
+          and (Variant_Size < 3 or variant_invocable_for_r<F, V, R, 2>)
+          and (Variant_Size < 4 or variant_invocable_for_r<F, V, R, 3>)
+          and (Variant_Size < 5 or variant_invocable_for_r<F, V, R, 4>)
+          and (Variant_Size < 6 or variant_invocable_for_r<F, V, R, 5>)
+          and (Variant_Size < 7 or variant_invocable_for_r<F, V, R, 6>)
+          and (Variant_Size < 8 or variant_invocable_for_r<F, V, R, 7>)
+          and (Variant_Size < 9 or variant_invocable_for_r<F, V, R, 8>)
+          and (Variant_Size < 10 or variant_invocable_for_r<F, V, R, 9>)
+          and (Variant_Size < 11 or variant_invocable_for_r<F, V, R, 10>)
+          and (Variant_Size < 12 or variant_invocable_for_r<F, V, R, 11>)
+          and (Variant_Size < 13 or variant_invocable_for_r<F, V, R, 12>)
+          and (Variant_Size < 14 or variant_invocable_for_r<F, V, R, 13>)
+          and (Variant_Size < 15 or variant_invocable_for_r<F, V, R, 14>)
+          and (Variant_Size < 16 or variant_invocable_for_r<F, V, R, 15>)
+          and (Variant_Size < 17 or variant_invocable_for_r<F, V, R, 16>)
+          and (Variant_Size < 18 or variant_invocable_for_r<F, V, R, 17>)
+          and (Variant_Size < 19 or variant_invocable_for_r<F, V, R, 18>)
+          and (Variant_Size < 20 or variant_invocable_for_r<F, V, R, 19>)
+          and (Variant_Size < 21 or variant_invocable_for_r<F, V, R, 20>)
+          and (Variant_Size < 22 or variant_invocable_for_r<F, V, R, 21>)
+          and (Variant_Size < 24 or variant_invocable_for_r<F, V, R, 22>)
+          and (Variant_Size < 25 or variant_invocable_for_r<F, V, R, 23>)
+          and (Variant_Size < 26 or variant_invocable_for_r<F, V, R, 24>)
+          and (Variant_Size < 27 or variant_invocable_for_r<F, V, R, 25>)
+          and (Variant_Size < 28 or variant_invocable_for_r<F, V, R, 26>)
+          and (Variant_Size < 29 or variant_invocable_for_r<F, V, R, 27>)
+          and (Variant_Size < 30 or variant_invocable_for_r<F, V, R, 29>)
+          and (Variant_Size < 31 or variant_invocable_for_r<F, V, R, 30>)
+          and (Variant_Size < 32 or variant_invocable_for_r<F, V, R, 31>)));
 
 // Ensures that the Functor `F` can be invoked with every alternative in `V`,
-// respecting value categories
+// yielding convertible types.
 template <class F, class V>
-concept variant_matcher_for = has_variant_traits<V> and requires {
-  typename std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>;
-  requires check_matcher<
-    F, V, std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>>(
-    std::make_index_sequence<variant_traits<std::remove_cvref_t<V>>::count>{});
-};
+concept variant_matcher_for
+  = has_variant_traits<V>
+    and requires(F f, V v) { variant_get<0>(v); }
+    /// The return type of invoking the functor with the first alternative
+    /// determines the final return type
+    and requires(F f, V v) { f(variant_get<0>(v)); }
+    /// Invoking the functor with all of the alternatives must yield a type that
+    /// is convertible to the return type of the first alternative.
+    and variant_invocable_for_all<
+      F, V, std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>,
+      variant_traits<std::remove_cvref_t<V>>::count>;
 
 template <class V, variant_matcher_for<V> F>
 constexpr auto match_one(V&& v, F&& f) -> decltype(auto) {
