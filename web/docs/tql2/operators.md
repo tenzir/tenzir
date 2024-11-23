@@ -63,7 +63,6 @@ Operator | Description | Example
 
 ## Input
 
-
 Operator | Description | Example
 :--------|:------------|:-------
 [`export`](./operators/export.md) | Retrieves events from the node | `export`

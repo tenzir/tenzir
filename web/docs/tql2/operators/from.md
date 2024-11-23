@@ -8,8 +8,7 @@ Loads from an URI, inferring the source, compression and format.
 
 ```tql
 from uri:str, [loader_args… { … }]
-from event:record
-from [ event… ]
+from events…
 ```
 
 :::tip Use `from` if you can
@@ -54,12 +53,14 @@ If you want to perform other operations on the data afterwards, continue the
 pipeline after this operator instead of providing a sub-pipeline.
 :::
 
-### `event`/`events… :record`
+### `events…`
 
-Instead of a URI, you can also provide a *record' or a *list of records* as a
-first argument to `from`. This will be treated as input events and simply passed
-on as-is to the pipeline. This is mainly useful to test pipelines during
-development.
+Instead of a URI, you can also provide one or more `record`s, which will be
+the operators output. This is mostly useful for testing pipelines without loading
+actual data.
+
+The operator also accepts lists of records. Those records will be merged into a
+single schema.
 
 ## Explanation
 
@@ -209,10 +210,13 @@ from "path/to/my/load/file.json.bz2" {
 ```tql
 from "https://example.org/file.json", header={Token: 0}
 ```
-### Create a single event ad-hoc
+### Create a events ad-hoc
 
 ```tql
-from {message: "Value", endpoint: {ip: 127.0.0.1, port: 42}}
+from
+  {message: "Value", endpoint: {ip: 127.0.0.1, port: 42}},
+  {message: "Value", endpoint: {ip: 127.0.0.1, port: 42}, raw: "text"}
+  {message: "Value", endpoint: null}
 ```
 ```tql
 {
@@ -222,28 +226,17 @@ from {message: "Value", endpoint: {ip: 127.0.0.1, port: 42}}
     port: 42
   }
 }
-```
-
-### Create multiple events ad-hoc
-
-```tql
-from [
-  {Field: "Value", Other_Field: 0 },
-  {Field: "Value", Other_Field: 1 },
-  {Field: "Value", Other_Field: 2 }
-]
-```
-```tql
 {
-  Field: "Value",
-  Other_Field: 0
+  message: "Value",
+  endpoint: {
+    ip: 127.0.0.1,
+    port: 42
+  },
+  raw: "text
+
 }
 {
-  Field: "Value",
-  Other_Field: 1
-}
-{
-  Field: "Value",
-  Other_Field: 2
+  message: "Value",
+  endpoint: null
 }
 ```

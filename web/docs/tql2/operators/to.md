@@ -85,7 +85,6 @@ If you want to write with specific compression settings, you can use the
 The connector is inferred based on the URI `scheme://`.
 If no scheme is present, the connector attempts to save to the local filesystem.
 
-
 ## Supported Deductions
 
 ### URI schemes

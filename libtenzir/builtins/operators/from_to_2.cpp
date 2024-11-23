@@ -7,9 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/multi_series_builder.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
-#include <tenzir/series_builder.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -38,15 +38,21 @@ public:
     return "tql2.from_events";
   }
 
-  auto operator()() const -> generator<table_slice> {
+  auto
+  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
     // TODO: We are combining all events into a single schema. Is this what we
     // want, or do we want a more "precise" output if possible?
-    auto sb = series_builder{};
+    auto msb = multi_series_builder{
+      multi_series_builder::policy_default{},
+      multi_series_builder::settings_type{
+        .default_schema_name = "tenzir.from",
+      },
+      ctrl.diagnostics(),
+    };
     for (auto& event : events_) {
-      sb.data(event);
+      msb.data(event);
     }
-    auto slices = sb.finish_as_table_slice("tenzir.from");
-    for (auto& slice : slices) {
+    for (auto& slice : msb.finalize_as_table_slice()) {
       co_yield std::move(slice);
     }
   }
@@ -109,8 +115,33 @@ auto find_connector_given(std::string_view what, auto func, auto member,
   return {};
 }
 
+constexpr static auto extension_to_compression_map
+  = std::array<std::pair<std::string_view, std::string_view>, 8>{{
+    {".br", "brotli"},
+    {".brotli", "brotli"},
+    {".bz2", "bz2"},
+    {".gz", "gzip"},
+    {".gzip", "gzip"},
+    {".lz4", "lz4"},
+    {".zst", "zstd"},
+    {".zstd", "zstd"},
+  }};
+
+auto determine_compression(std::string_view& file_ending)
+  -> std::pair<std::string_view, std::string_view> {
+  for (const auto& kvp : extension_to_compression_map) {
+    const auto [extension, name] = kvp;
+    if (file_ending.ends_with(extension)) {
+      file_ending.remove_suffix(extension.size());
+      return kvp;
+    }
+  }
+  return {};
+}
+
 auto find_formatter_given(std::string_view what, auto func, auto member,
-                          std::string_view path, location loc, const char* docs,
+                          std::string_view path, std::string_view compression,
+                          location loc, const char* docs,
                           session ctx) -> pair_for<decltype(func)> {
   auto possibilities = std::vector<std::string>{};
   auto res = find_given(what, func, member, possibilities);
@@ -121,17 +152,22 @@ auto find_formatter_given(std::string_view what, auto func, auto member,
   if (loc.end - loc.begin == path.size() + 2) {
     auto file_start = path.find(what);
     loc.begin += file_start + 1;
-    loc.end -= 1; // TODO this may be shorted in case we have already cut out
-                  // the compression
+    loc.end -= 1;
+    loc.end -= compression.size();
   }
-  diagnostic::error("no known format for extension `{}`", what)
-    .primary(loc)
-    .note("supported extensions for deduction:  `{}`",
-          fmt::join(possibilities, "`, `"))
-    .note("this could also be caused by an unknown compression extension")
-    .hint("you can pass a pipeline to handle compression and format")
-    .docs(docs)
-    .emit(ctx);
+  auto diag
+    = diagnostic::error("no known format for extension `{}`", what)
+        .primary(loc)
+        .note("supported extensions for format deduction:  `{}`",
+              fmt::join(possibilities, "`, `"))
+        .hint("you can pass a pipeline to handle compression and format")
+        .docs(docs);
+  if (compression.empty()) {
+    diag = std::move(diag).note(
+      "supported extensions for compression deduction: `{}`",
+      fmt::join(extension_to_compression_map | std::views::keys, "`, `"));
+  }
+  std::move(diag).emit(ctx);
   return {};
 }
 
@@ -153,7 +189,7 @@ auto strip_scheme(ast::expression& expr, std::string_view scheme) -> void {
     });
 }
 
-auto extract_located_url(ast::expression& expr) -> located<std::string> {
+auto to_located_string(ast::expression& expr) -> located<std::string> {
   auto arg = expr.as<ast::constant>();
   auto str = match(
     arg->value,
@@ -167,33 +203,22 @@ auto extract_located_url(ast::expression& expr) -> located<std::string> {
   return located{std::move(str), arg->source};
 }
 
-auto determine_compression(std::string_view& file_ending) -> std::string_view {
-  constexpr static auto extension_to_compression_map
-    = std::array<std::pair<std::string_view, std::string_view>, 8>{{
-      {".br", "brotli"},
-      {".brotli", "brotli"},
-      {".bz2", "bz2"},
-      {".gz", "gzip"},
-      {".gzip", "gzip"},
-      {".lz4", "lz4"},
-      {".zst", "zstd"},
-      {".zstd", "zstd"},
-    }};
-  for (const auto& [extension, name] : extension_to_compression_map) {
-    if (file_ending.ends_with(extension)) {
-      file_ending.remove_suffix(extension.size());
-      return name;
-    }
-  }
-  return {};
-}
-
 auto strip_prefix(std::string name) -> std::string {
   constexpr auto prefix = std::string_view{"tql2."};
   if (name.starts_with(prefix)) {
     return std::move(name).substr(prefix.size());
   }
   return name;
+}
+
+auto get_file(const boost::urls::url_view& url) -> std::string {
+  if (not url.segments().empty()) {
+    return url.segments().back();
+  }
+  if (url.host_type() == boost::urls::host_type::name) {
+    return url.host();
+  }
+  return {};
 }
 
 class from_plugin2 final : public virtual operator_factory_plugin {
@@ -208,9 +233,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     const auto pipeline_count = std::ranges::count_if(
       inv.args, &ast::expression::is<ast::pipeline_expr>);
     if (pipeline_count > 1) {
-      diagnostic::error(
-        "`from` can currently not handle more than one nested pipeline")
-        .emit(ctx);
+      diagnostic::error("`from` accepts at most one pipeline").emit(ctx);
       return failure::promise();
     }
     auto pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
@@ -228,8 +251,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     auto url = boost::urls::parse_uri_reference(path);
     if (not url) {
       diagnostic::error("invalid URI `{}`", path)
-        .note(url.error().message())
-        .primary(inv.args.front().get_location())
+        .primary(inv.args.front().get_location(), url.error().message())
         .emit(ctx);
       return failure::promise();
     }
@@ -245,7 +267,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
         }
         if (load_properties.transform_uri) {
           auto uri_replacement = load_properties.transform_uri(
-            extract_located_url(inv.args.front()), ctx);
+            to_located_string(inv.args.front()), ctx);
           TENZIR_TRACE("from operator: URI replacement size  : {}",
                        uri_replacement.size());
           TENZIR_ASSERT(not uri_replacement.empty());
@@ -264,7 +286,8 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     const bool has_pipeline_or_events
       = pipeline_argument or load_properties.events;
     if (not has_pipeline_or_events) {
-      if (url->segments().empty()) {
+      auto file = get_file(*url);
+      if (file.empty()) {
         diagnostic::error("URL has no segments to deduce the format from")
           .primary(inv.args.front().get_location())
           .hint("you can pass a pipeline to handle compression and format")
@@ -272,23 +295,25 @@ class from_plugin2 final : public virtual operator_factory_plugin {
           .emit(ctx);
         goto post_deduction;
       }
-      const auto& file = url->segments().back();
-      auto first_dot = file.find('.');
-      if (first_dot == file.npos) {
-        diagnostic::error("did not find extension in `{}`", file)
-          .primary(inv.args.front().get_location())
-          .emit(ctx);
-        return failure::promise();
-      }
-      auto file_ending = std::string_view{file}.substr(first_dot);
       auto filename_loc = inv.args.front().get_location();
       if (filename_loc.end - filename_loc.begin == path.size() + 2) {
         auto file_start = path.find(file);
         filename_loc.begin += file_start + 1;
         filename_loc.end -= 1;
       }
+      auto first_dot = file.find('.');
+      if (first_dot == file.npos) {
+        diagnostic::error("did not find extension in `{}`", file)
+          .primary(filename_loc)
+          .hint("you can pass a pipeline to handle compression and format")
+          .emit(ctx);
+        return failure::promise();
+      }
+      auto file_ending = std::string_view{file}.substr(first_dot);
       // determine compression based on ending
-      compression_name = determine_compression(file_ending);
+      auto compression_extension = std::string_view{};
+      std::tie(compression_extension, compression_name)
+        = determine_compression(file_ending);
       if (not compression_name.empty()) {
         for (const auto& p : plugins::get<operator_factory_plugin>()) {
           const auto name = p->name();
@@ -303,7 +328,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       std::tie(read_plugin, read_properties) = find_formatter_given(
         file_ending, &operator_factory_plugin::read_properties,
         &operator_factory_plugin::read_properties_t::extensions, path,
-        inv.args.front().get_location(), docs, ctx);
+        compression_extension, inv.args.front().get_location(), docs, ctx);
     }
   post_deduction:
     TENZIR_TRACE("from operator: given pipeline size   : {}",
@@ -384,38 +409,65 @@ public:
     }
     auto& expr = inv.args[0];
     TRY(auto value, const_eval(expr, ctx));
-    return match(
-      value,
-      [&](record& event) -> failure_or<operator_ptr> {
-        auto events = std::vector<record>{};
-        events.push_back(std::move(event));
-        return std::make_unique<from_events>(std::move(events));
-      },
-      [&](list& event_list) -> failure_or<operator_ptr> {
-        auto events = std::vector<record>{};
-        for (auto& event : event_list) {
-          auto event_record = try_as<record>(&event);
-          if (not event_record) {
-            diagnostic::error("expected list of records")
-              .primary(expr)
-              .docs(docs)
-              .emit(ctx);
-            return failure::promise();
-          }
-          events.push_back(std::move(*event_record));
+    auto events = std::vector<record>{};
+    using ret = std::variant<bool, failure_or<operator_ptr>>;
+    auto extract_single_event = [&](record& event) -> ret {
+      events.push_back(std::move(event));
+      return true;
+    };
+    auto extract_multiple_events = [&](list& event_list) -> ret {
+      for (auto& event : event_list) {
+        auto event_record = try_as<record>(&event);
+        if (not event_record) {
+          auto t = type::infer(value);
+          diagnostic::error("expected list of records")
+            .primary(expr, "got `{}`", t ? t->kind() : type_kind{})
+            .docs(docs)
+            .emit(ctx);
+          return failure::promise();
         }
-        return std::make_unique<from_events>(std::move(events));
-      },
-      [&](std::string& path) -> failure_or<operator_ptr> {
+        events.push_back(std::move(*event_record));
+      }
+      return true;
+    };
+    auto result = match(
+      value, extract_single_event, extract_multiple_events,
+      [&](std::string& path) -> ret {
         return create_pipeline_from_uri(path, std::move(inv), std::move(ctx));
       },
-      [&](auto&) -> failure_or<operator_ptr> {
+      [&]<typename T>(T& value) -> ret
+      // requires(not std::same_as<T, record>)
+      {
+        auto t = type::infer(value);
         diagnostic::error("expected a URI, record or list of records")
-          .primary(inv.args[0])
+          .primary(expr, "got `{}`", t ? t->kind() : type_kind{})
           .docs(docs)
           .emit(ctx);
         return failure::promise();
       });
+    if (auto* op = try_as<failure_or<operator_ptr>>(result)) {
+      return std::move(*op);
+    }
+    if (not as<bool>(result)) {
+      return failure::promise();
+    }
+    for (auto& expr : inv.args | std::views::drop(1)) {
+      TRY(value, const_eval(expr, ctx));
+      result = match(value, extract_single_event, extract_multiple_events,
+                     [&](const auto&) -> ret {
+                       const auto t = type::infer(value);
+                       diagnostic::error(
+                         "expected further records or lists of records")
+                         .primary(expr, "got `{}`", t ? t->kind() : type_kind{})
+                         .docs(docs)
+                         .emit(ctx);
+                       return failure::promise();
+                     });
+      if (auto* op = try_as<failure_or<operator_ptr>>(result)) {
+        return std::move(*op);
+      }
+    }
+    return std::make_unique<from_events>(std::move(events));
   }
 };
 
@@ -431,9 +483,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     const auto pipeline_count = std::ranges::count_if(
       inv.args, &ast::expression::is<ast::pipeline_expr>);
     if (pipeline_count > 1) {
-      diagnostic::error(
-        "`to` can currently not handle more than one nested pipeline")
-        .emit(ctx);
+      diagnostic::error("`to` accepts at most one pipeline").emit(ctx);
       return failure::promise();
     }
     auto pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
@@ -451,8 +501,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     auto url = boost::urls::parse_uri_reference(path);
     if (not url) {
       diagnostic::error("invalid URI `{}`", path)
-        .note(url.error().message())
-        .primary(inv.args.front().get_location())
+        .primary(inv.args.front().get_location(), url.error().message())
         .emit(ctx);
       return failure::promise();
     }
@@ -468,7 +517,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
         }
         if (save_properties.transform_uri) {
           auto uri_replacement = save_properties.transform_uri(
-            extract_located_url(inv.args.front()), ctx);
+            to_located_string(inv.args.front()), ctx);
           TENZIR_TRACE("to operator: URI replacement size  : {}",
                        uri_replacement.size());
           TENZIR_ASSERT(not uri_replacement.empty());
@@ -487,7 +536,8 @@ class to_plugin2 final : public virtual operator_factory_plugin {
       = pipeline_argument or save_properties.events;
     auto compression_name = std::string_view{};
     if (not has_pipeline_or_events) {
-      if (url->segments().empty()) {
+      auto file = get_file(*url);
+      if (file.empty()) {
         diagnostic::error("URL has no segments to deduce the format from")
           .primary(inv.args.front().get_location())
           .hint("you can pass a pipeline to handle compression and format")
@@ -495,24 +545,25 @@ class to_plugin2 final : public virtual operator_factory_plugin {
           .emit(ctx);
         goto post_deduction;
       }
-      const auto& file = url->segments().back();
-      auto first_dot = file.find('.');
-      auto file_ending = std::string_view{file}.substr(first_dot);
       auto filename_loc = inv.args.front().get_location();
       if (filename_loc.end - filename_loc.begin == path.size() + 2) {
         auto file_start = path.find(file);
         filename_loc.begin += file_start + 1;
         filename_loc.end -= 1;
       }
+      auto first_dot = file.find('.');
       if (first_dot == file.npos) {
-        diagnostic::error("did not find extension in filename `{}`",
-                          file_ending)
+        diagnostic::error("did not find extension in `{}`", file)
           .primary(filename_loc)
+          .hint("you can pass a pipeline to handle compression and format")
           .emit(ctx);
         return failure::promise();
       }
+      auto file_ending = std::string_view{file}.substr(first_dot);
       // determine compression based on ending
-      compression_name = determine_compression(file_ending);
+      auto compression_extension = std::string_view{};
+      std::tie(compression_extension, compression_name)
+        = determine_compression(file_ending);
       if (not compression_name.empty()) {
         for (const auto& p : plugins::get<operator_factory_plugin>()) {
           const auto name = p->name();
@@ -529,7 +580,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
       std::tie(write_plugin, write_properties) = find_formatter_given(
         file_ending, &operator_factory_plugin::write_properties,
         &operator_factory_plugin::write_properties_t::extensions, path,
-        inv.args.front().get_location(), docs, ctx);
+        compression_extension, inv.args.front().get_location(), docs, ctx);
     }
   post_deduction:
     TENZIR_TRACE("to operator: given pipeline size   : {}",

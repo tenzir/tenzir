@@ -43,7 +43,6 @@ from "gcps://my_project/my_subscription"
 load_google_cloud_pubsub project_id="my_project", subscription_id="my_subscription"
 ```
 
-
 ## Examples
 
 ### Read JSON messages from a subscription
