@@ -321,35 +321,32 @@ constexpr auto match_tuple(std::tuple<Xs...> xs, F&& f) -> decltype(auto) {
                      });
   }
 }
-
-template <class T>
-using wrap_lvalue_ref
-  = std::conditional_t<std::is_lvalue_reference_v<T>,
-                       std::reference_wrapper<std::remove_reference_t<T>>,
-                       std::remove_cvref_t<T>>;
 } // namespace detail
 
-/// Calls one of the given functions with the current variant inhabitant.
+/// Calls one of the given functions with the current variant alternative.
+/// This overload takes by value, as it makes a copy internally.
+/// If you need your matcher to be a reference, you can pass it as a `std::ref`.
 template <has_variant_traits V, class... Fs>
-constexpr auto match(V&& v, Fs&&... fs) -> decltype(auto) {
-  return detail::match_one(
-    std::forward<V>(v),
-    detail::overload<detail::wrap_lvalue_ref<Fs>...>{std::forward<Fs>(fs)...});
+constexpr auto match(V&& v, Fs... fs) -> decltype(auto) {
+  return detail::match_one(std::forward<V>(v),
+                           detail::overload{std::move(fs)...});
 }
 
+/// Calls the given functions with the current variant alternative.
 template <has_variant_traits V, class F>
 constexpr auto match(V&& v, F&& f) -> decltype(auto) {
   return detail::match_one(std::forward<V>(v), std::forward<F>(f));
 }
 
-/// Calls one of the given functions with the current variant inhabitants.
+/// Calls one of the given functions with the current variant alternatives.
+/// This overload takes by value, as it makes a copy internally.
+/// If you need your matcher to be a reference, you can pass it as a `std::ref`.
 template <has_variant_traits... Ts, class... Fs>
-constexpr auto match(std::tuple<Ts...> v, Fs&&... fs) -> decltype(auto) {
-  return detail::match_tuple(
-    std::move(v),
-    detail::overload<detail::wrap_lvalue_ref<Fs>...>{std::forward<Fs>(fs)...});
+constexpr auto match(std::tuple<Ts...> v, Fs... fs) -> decltype(auto) {
+  return detail::match_tuple(std::move(v), detail::overload{std::move(fs)...});
 }
 
+/// Calls the given function with the current variant alternatives
 template <has_variant_traits... Ts, class F>
 constexpr auto match(std::tuple<Ts...> v, F&& f) -> decltype(auto) {
   return detail::match_tuple(std::move(v), std::forward<F>(f));
