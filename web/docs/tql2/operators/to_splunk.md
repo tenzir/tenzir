@@ -24,21 +24,21 @@ message to the HEC endpoint. You can control the maximum message size via the
 `max_content_length` and the timeout before sending all accumulated events via
 the `send_timeout` option.
 
-### `url: str`
+### `url: string`
 
 The address of the Splunk indexer.
 
-### `hec_token = str`
+### `hec_token = string`
 
 The [HEC
 token](https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector#Create_an_Event_Collector_token_on_Splunk_Cloud_Platform)
 for authentication.
 
-### `host = str (optional)`
+### `host = string (optional)`
 
 An optional value for the [Splunk `host`](https://docs.splunk.com/Splexicon:Host).
 
-### `source = str (optional)`
+### `source = string (optional)`
 
 An optional value for the [Splunk `source`](https://docs.splunk.com/Splexicon:Source).
 

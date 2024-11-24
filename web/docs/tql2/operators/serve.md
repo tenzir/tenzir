@@ -4,7 +4,7 @@ Make events available under the [`/serve` REST API
 endpoint](/api#/paths/~1serve/post).
 
 ```tql
-serve id:str, [buffer_size=int]
+serve id:string, [buffer_size=int]
 ```
 
 ## Description
@@ -17,7 +17,7 @@ The `serve` operator bridges between pipelines and the corresponding `/serve`
 Pipelines ending with the `serve` operator exit when all events have been
 delivered over the corresponding endpoint.
 
-### `id: str`
+### `id: string`
 
 An identifier that uniquely identifies the operator. The `serve`
 operator errors when receiving a duplicate serve id.

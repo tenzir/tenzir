@@ -239,9 +239,9 @@ struct plugin2 : operator_plugin2<timeshift_operator2> {
     auto start = std::optional<time>{};
     auto selector = ast::simple_selector{};
     argument_parser2::operator_("timeshift")
-      .add(selector, "<selector>")
-      .add("speed", speed)
-      .add("start", start)
+      .positional("field", selector, "time")
+      .named("speed", speed)
+      .named("start", start)
       .parse(inv, ctx)
       .ignore();
     if (speed and speed->inner <= 0.0) {

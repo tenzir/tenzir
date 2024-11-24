@@ -65,8 +65,11 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
+[`from`](./operators/from.md) | | `from "https://example.com/file.json.gz"` <!--at the top because its important-->
+[`subscribe`](./operators/subscribe.md) | Subscribes to events of a certain topic | `subscribe "topic"`
 [`export`](./operators/export.md) | Retrieves events from the node | `export`
 [`from_fluent_bit`](./operators/from_fluent_bit.md) | Returns results from a fluent-bit | `from_fluent_bit "opentelemetry"`
+[`from_velocira…`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
 [`load_amqp`](./operators/load_amqp.md) | Loads bytes from an AMQP server | `load_amqp`
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
 [`load_ftp`](./operators/load_ftp.md) | Loads bytes via FTP | `load_ftp "ftp.example.org"`
@@ -78,15 +81,9 @@ Operator | Description | Example
 [`load_sqs`](./operators/load_sqs.md) | Receives bytes from an Amazon SQS queue | `load_sqs "sqs://tenzir"`
 [`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
 [`load_udp`](./operators/load_udp.md) | Loads bytes from a UDP socket | `load_udp "0.0.0.0:8090"`
-[`from_velocira…`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
 [`load_zmq`](./operators/load_zmq.md) | Receives bytes from ZeroMQ messages | `load_zmq`
 [`diagnostics`](./operators/diagnostics.md) | Retrieves diagnostic events of managed pipelines | `diagnostics`
 [`metrics`](./operators/metrics.md) | Retrieves metrics events from a Tenzir node | `metrics "cpu"`
-
-<!--
-[`load`](./operators/load.md) | Load bytes according to a URL | `load "https://example.org/api/list"`
-[`from`](./operators/from.md) | | `from "/tmp/data.json"`
--->
 
 ## Output
 
@@ -112,10 +109,6 @@ Operator | Description | Example
 [`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent-Bit| `to_fluent_bit fluent-bit "es" options= {host=…`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
 [`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
-
-<!---
-[`save`](./operators/save.md) | Save incoming bytes according to a URL | `save "https://example.org/api"`
--->
 
 ## Parsing
 

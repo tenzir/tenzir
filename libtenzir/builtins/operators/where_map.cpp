@@ -241,9 +241,9 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
                              enum mode mode) -> failure_or<function_ptr> {
   auto args = arguments{};
   TRY(argument_parser2::function(fmt::to_string(mode))
-        .add(args.field, "<field>")
-        .add(args.capture, "<capture>")
-        .add(args.expr, "<expr>")
+        .positional("list", args.field, "list")
+        .positional("capture", args.capture)
+        .positional("expression", args.expr, "any")
         .parse(inv, ctx));
   return function_use::make(
     [mode, args = std::move(args)](function_plugin::evaluator eval,
@@ -352,8 +352,9 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::operator_("assert").add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::operator_("assert")
+          .positional("invariant", expr, "bool")
+          .parse(inv, ctx));
     return std::make_unique<tql2_where_assert_operator>(std::move(expr), true);
   }
 };
@@ -368,8 +369,9 @@ public:
   auto make(operator_factory_plugin::invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::operator_("where").add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::operator_("where")
+          .positional("predicate", expr, "bool")
+          .parse(inv, ctx));
     return std::make_unique<tql2_where_assert_operator>(std::move(expr), false);
   }
 

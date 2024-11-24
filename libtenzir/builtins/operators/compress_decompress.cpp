@@ -387,8 +387,8 @@ public:
     auto args = operator_args{};
     auto level = std::optional<located<int64_t>>{};
     TRY(argument_parser2::operator_(name())
-          .add(args.type, "<type>")
-          .add("level", level)
+          .positional("type", args.type)
+          .named("level", level)
           .parse(inv, ctx));
     // TODO: Where is `try_narrow`?
     using T = decltype(args.level->inner);
@@ -427,7 +427,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = operator_args{};
     TRY(argument_parser2::operator_(name())
-          .add(args.type, "<type>")
+          .positional("type", args.type)
           .parse(inv, ctx));
     return std::make_unique<decompress_operator>(std::move(args));
   }

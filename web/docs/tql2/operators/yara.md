@@ -3,7 +3,7 @@
 Executes YARA rules on byte streams.
 
 ```tql
-yara rule:list<str>, [blockwise=bool, compiled_rules=bool, fast_scan=bool]
+yara rule:list<string>, [blockwise=bool, compiled_rules=bool, fast_scan=bool]
 ```
 
 ## Description
@@ -30,7 +30,7 @@ continuously running pipelines, use the `blockwise=true` option that considers e
 block as a separate unit. Otherwise the scanner engine would simply accumulate
 blocks but never trigger a scan.
 
-### `rule: list<str>`
+### `rule: list<string>`
 
 The path to the YARA rule(s).
 

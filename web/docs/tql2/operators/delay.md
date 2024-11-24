@@ -3,7 +3,7 @@
 Delays events relative to a given start time, with an optional speedup.
 
 ```tql
-delay by:field, [start=time, speed=double]
+delay field:time, [start=time, speed=double]
 ```
 
 ## Description
@@ -11,16 +11,16 @@ delay by:field, [start=time, speed=double]
 The `delay` operator replays a dataflow according to a time field by introducing
 sleeping periods proportional to the inter-arrival times of the events.
 
-With the `speed` option, you can adjust the sleep time of the time series induced by
-`by` with a multiplicative factor. This has the effect of making the time
-series "faster" for values great than 1 and "slower" for values less than 1.
-Unless you provide a start time with `start`, the operator will anchor the
-timestamps in `by` to begin with the current wall clock time, as if you
+With the `speed` option, you can adjust the sleep time of the time series
+induced by `field` with a multiplicative factor. This has the effect of making
+the time series "faster" for values great than 1 and "slower" for values less
+than 1. Unless you provide a start time with `start`, the operator will anchor
+the timestamps in `field` to begin with the current wall clock time, as if you
 provided `start=now()`.
 
 The diagram below illustrates the effect of applying `delay` to dataflow. If an
 event in the stream has a timestamp the precedes the previous event, `delay`
-emits it instanstly. Otherwise `delay` sleeps the amount of time to reach the
+emits it instantly. Otherwise `delay` sleeps the amount of time to reach the
 next timestamp. As shown in the last illustration, the `speed` factor has a
 scaling effect on the inter-arrival times.
 
@@ -29,7 +29,7 @@ scaling effect on the inter-arrival times.
 The options `start` and `speed` work independently, i.e., you can use them
 separately or both together.
 
-### `by: field`
+### `field: time`
 
 The field in the event containing the timestamp values.
 

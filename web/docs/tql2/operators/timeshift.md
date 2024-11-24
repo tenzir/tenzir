@@ -3,7 +3,7 @@
 Adjusts timestamps relative to a given start time, with an optional speedup.
 
 ```tql
-timeshift field, [start=time, speed=double]
+timeshift field:time, [start=time, speed=double]
 ```
 
 ## Description
@@ -17,7 +17,7 @@ series "faster" for values great than 1 and "slower" for values less than 1.
 
 ![Timeshift](timeshift.excalidraw.svg)
 
-### `<field>`
+### `field: time`
 
 The field containing the timestamp values.
 
@@ -40,7 +40,7 @@ Defaults to `1.0`.
 ### Reset events to begin at Jan 1, 1984
 
 ```tql
-load_http "https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst" 
+load_http "https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst"
 decompress "zstd"
 read_zeek_tsv
 timeshift ts, start=1984-01-01
@@ -51,7 +51,7 @@ timeshift ts, start=1984-01-01
 As above, but also make the time span of the trace 100 times longer:
 
 ```tql
-load_http "https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst" 
+load_http "https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst"
 decompress "zstd"
 read_zeek_tsv
 timeshift ts, start=1984-01-01, speed=0.01

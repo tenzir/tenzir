@@ -632,10 +632,10 @@ public:
     auto args = operator_args{};
     auto rules = located<list>{};
     argument_parser2::operator_("yara")
-      .add(rules, "<rules>")
-      .add("compiled_rules", args.compiled_rules)
-      .add("fast_scan", args.fast_scan)
-      .add("blockwise", args.blockwise)
+      .positional("rules", rules, "list<string>")
+      .named("compiled_rules", args.compiled_rules)
+      .named("fast_scan", args.fast_scan)
+      .named("blockwise", args.blockwise)
       .parse(inv, ctx)
       .ignore();
     for (const auto& rule : rules.inner) {

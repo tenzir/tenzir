@@ -60,7 +60,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto uri = located<std::string>{};
     TRY(argument_parser2::operator_("save_azure_blob_storage")
-          .add("uri", uri)
+          .named("uri", uri)
           .parse(inv, ctx));
     return std::make_unique<save_abs_operator>(std::move(uri));
   }

@@ -226,8 +226,8 @@ public:
     auto expr = std::optional<ast::expression>{};
     auto experimental_include_ranges = std::optional<location>{};
     TRY(argument_parser2::operator_("partitions")
-          .add(expr, "<expr>")
-          .add("experimental_include_ranges", experimental_include_ranges)
+          .positional("predicate", expr, "bool")
+          .named("experimental_include_ranges", experimental_include_ranges)
           .parse(inv, ctx));
     auto legacy_expr = [&] {
       if (not expr) {

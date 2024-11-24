@@ -561,7 +561,9 @@ public:
   auto make_function(function_plugin::invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "list|record")
+          .parse(inv, ctx));
     return function_use::make(
       [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
         auto arg = eval(expr);

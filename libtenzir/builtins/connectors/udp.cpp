@@ -306,9 +306,9 @@ class load_plugin final
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     auto parser = argument_parser2::operator_(name());
-    parser.add(args.url, "<endpoint>");
-    parser.add("connect", args.connect);
-    parser.add("insert_newlines", args.insert_newlines);
+    parser.named("endpoint", args.url);
+    parser.positional("connect", args.connect);
+    parser.positional("insert_newlines", args.insert_newlines);
     TRY(parser.parse(inv, ctx));
     if (not args.url.starts_with("udp://")) {
       args.url.insert(0, "udp://");
@@ -328,7 +328,7 @@ class save_plugin final
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto parser = argument_parser2::operator_(name());
-    parser.add(args.url, "<endpoint>");
+    parser.positional("endpoint", args.url);
     TRY(parser.parse(inv, ctx));
     if (not args.url.starts_with("udp://")) {
       args.url.insert(0, "udp://");

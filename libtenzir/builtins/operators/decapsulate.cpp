@@ -415,10 +415,6 @@ public:
 class plugin final : public virtual operator_plugin<decapsulate_operator>,
                      public virtual function_plugin {
 public:
-  auto name() const -> std::string override {
-    return "decapsulate";
-  }
-
   auto signature() const -> operator_signature override {
     return {.transformation = true};
   }
@@ -426,8 +422,8 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("tql2.decapsulate")
-          .add(expr, "<expr>")
+    TRY(argument_parser2::function(name())
+          .positional("packet", expr, "record")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {

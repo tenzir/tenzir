@@ -584,10 +584,10 @@ public:
     auto args = loader_args{};
     auto timeout = std::optional<located<duration>>{};
     TRY(argument_parser2::operator_("load_file")
-          .add(args.path, "<path>")
-          .add("follow", args.follow)
-          .add("mmap", args.mmap)
-          .add("timeout", timeout)
+          .positional("path", args.path)
+          .named("follow", args.follow)
+          .named("mmap", args.mmap)
+          .named("timeout", timeout)
           .parse(inv, ctx));
     auto& path = args.path.inner;
     for (const auto& scheme : load_properties().schemes) {
@@ -663,10 +663,10 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     TRY(argument_parser2::operator_("save_file")
-          .add(args.path, "<path>")
-          .add("append", args.append)
-          .add("real_time", args.real_time)
-          .add("uds", args.uds)
+          .positional("path", args.path)
+          .named("append", args.append)
+          .named("real_time", args.real_time)
+          .named("uds", args.uds)
           .parse(inv, ctx));
     auto& path = args.path.inner;
     for (const auto& scheme : save_properties().schemes) {

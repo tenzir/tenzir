@@ -30,8 +30,8 @@ public:
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(arg_expr, "<string>")
+          .positional("x", subject_expr, "string")
+          .positional("prefix", arg_expr, "string")
           .parse(inv, ctx));
     // TODO: This shows the need for some abstraction.
     return function_use::make([subject_expr = std::move(subject_expr),
@@ -88,8 +88,8 @@ public:
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(characters, "<characters>")
+          .positional("x", subject_expr, "string")
+          .positional("chars", characters)
           .parse(inv, ctx));
     auto options = std::optional<arrow::compute::TrimOptions>{};
     if (characters) {
@@ -160,8 +160,9 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
+    // TODO: Use `result_arrow_ty` to derive type name.
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
+          .positional("x", subject_expr, "")
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr)](
                                 evaluator eval, session ctx) -> series {
@@ -221,10 +222,10 @@ public:
     auto replacement = std::string{};
     auto max_replacements = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(pattern, "<pattern>")
-          .add(replacement, "<replacement>")
-          .add("max", max_replacements)
+          .positional("x", subject_expr, "string")
+          .positional("pattern", pattern)
+          .positional("replacement", replacement)
+          .named("max", max_replacements)
           .parse(inv, ctx));
     if (max_replacements) {
       if (max_replacements->inner < 0) {
@@ -293,10 +294,10 @@ public:
     auto end = std::optional<located<int64_t>>{};
     auto stride = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add("begin", begin)
-          .add("end", end)
-          .add("stride", stride)
+          .positional("x", subject_expr, "string")
+          .named("begin", begin)
+          .named("end", end)
+          .named("stride", stride)
           .parse(inv, ctx));
     if (stride) {
       if (stride->inner <= 0) {
@@ -355,7 +356,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     TRY(argument_parser2::function("string")
-          .add(subject_expr, "<expr>")
+          .positional("x", subject_expr, "any")
           .parse(inv, ctx));
     return function_use::make([subject_expr = std::move(subject_expr)](
                                 evaluator eval, session) -> series {
@@ -363,8 +364,8 @@ public:
       auto b = arrow::StringBuilder{};
       for (auto&& value : subject.values()) {
         auto f = detail::overload{
-          [](const std::string& x) {
-            return x;
+          [](std::string_view x) {
+            return std::string{x};
           },
           [](int64_t x) {
             return fmt::to_string(x);
@@ -402,10 +403,10 @@ public:
     auto reverse = std::optional<location>{};
     auto max_splits = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(pattern, "<pattern>")
-          .add("max", max_splits)
-          .add("reverse", reverse)
+          .positional("x", subject_expr, "string")
+          .positional("pattern", pattern)
+          .named("max", max_splits)
+          .named("reverse", reverse)
           .parse(inv, ctx));
     if (max_splits) {
       if (max_splits->inner < 0) {
@@ -473,8 +474,8 @@ public:
     // string.
     auto separator = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<list>")
-          .add(separator, "<separator>")
+          .positional("x", subject_expr, "list")
+          .positional("separator", separator)
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr),
                                separator = std::move(separator)](

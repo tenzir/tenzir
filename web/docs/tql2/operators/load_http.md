@@ -3,18 +3,18 @@
 Loads a byte stream via HTTP.
 
 ```tql
-load_http url:str, [method=str, params=record, headers=record]
+load_http url:string, [method=string, params=record, headers=record]
 ```
 
 ## Description
 
 The `save_http` operator performs a HTTP request and returns the response.
 
-### `url: str`
+### `url: string`
 
 The URL to request from. The `http://` scheme can be omitted.
 
-### `method = str (optional)`
+### `method = string (optional)`
 
 The HTTP method, such as `POST` or `GET`.
 

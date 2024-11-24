@@ -3,7 +3,7 @@
 Shows file information for a given directory.
 
 ```tql
-files [dir:str, recurse=bool, follow_symlinks=bool, skip_permission_denied=bool]
+files [dir:string, recurse=bool, follow_symlinks=bool, skip_permission_denied=bool]
 ```
 
 ## Description
@@ -11,7 +11,7 @@ files [dir:str, recurse=bool, follow_symlinks=bool, skip_permission_denied=bool]
 The `files` operator shows file information for all files in the given
 directory.
 
-### `dir: str (optional)`
+### `dir: string (optional)`
 
 The directory to list files in.
 

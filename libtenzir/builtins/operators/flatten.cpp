@@ -79,8 +79,8 @@ public:
     auto expr = ast::expression{};
     auto sep = std::optional<std::string>{default_flatten_separator};
     TRY(argument_parser2::function("flatten")
-          .add(expr, "<expr>")
-          .add("sep", sep)
+          .positional("x", expr, "record")
+          .named("sep", sep)
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr),

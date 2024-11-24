@@ -79,8 +79,8 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = s3_args{};
     TRY(argument_parser2::operator_(this->name())
-          .add("anonymous", args.anonymous)
-          .add(args.uri, "<uri>")
+          .positional("uri", args.uri)
+          .named("anonymous", args.anonymous)
           .parse(inv, ctx));
     // TODO: URI parser.
     if (not args.uri.inner.starts_with("s3://")) {

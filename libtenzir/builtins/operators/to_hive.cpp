@@ -370,11 +370,11 @@ public:
     auto max_size = std::optional<located<uint64_t>>{};
     auto format = located<std::string>{};
     TRY(argument_parser2::operator_(name())
-          .add(uri, "<uri>")
-          .add("partition_by", by_expr)
-          .add("format", format)
-          .add("timeout", timeout)
-          .add("max_size", max_size)
+          .positional("uri", uri)
+          .named("partition_by", by_expr, "list<field>")
+          .named("format", format)
+          .named("timeout", timeout)
+          .named("max_size", max_size)
           .parse(inv, ctx));
     auto by_list = std::get_if<ast::list>(&*by_expr.kind);
     if (not by_list) {

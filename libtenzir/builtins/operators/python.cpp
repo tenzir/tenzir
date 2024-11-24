@@ -550,9 +550,9 @@ public:
     auto path = std::optional<located<std::string>>{};
     auto code_or_path = std::variant<std::filesystem::path, std::string>{};
     auto parser = argument_parser2::operator_("python")
-                    .add(code, "<expr>")
-                    .add("file", path)
-                    .add("requirements", requirements);
+                    .positional("code", code)
+                    .named("file", path)
+                    .named("requirements", requirements);
     TRY(parser.parse(inv, ctx));
     if (not path && not code) {
       diagnostic::error("must have either the `file` argument or inline code")

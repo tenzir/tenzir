@@ -1045,8 +1045,8 @@ public:
     auto id = located<std::string>{};
     auto buffer_size = std::optional<located<uint64_t>>{};
     argument_parser2::operator_("serve")
-      .add(id, "<id>")
-      .add("buffer_size", buffer_size)
+      .positional("id", id)
+      .named("buffer_size", buffer_size)
       .parse(inv, ctx)
       .ignore();
     if (id.inner.empty()) {
