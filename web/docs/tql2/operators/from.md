@@ -135,6 +135,7 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 | Scheme | Operator | Example |
 |:------ |:-------- |:------- |
 | `abfs`,`abfss` | [`load_azure_blob_storage`](load_azure_blob_storage.md) | `from "abfs://path/to/file.json"` |
+| `amqp` | [`load_amqp`](load_amqp.md) | `from "amqp://…` |
 | `file` | [`load_file`](load_file.md) | `from "file://path/to/file.json"` |
 | `fluentbit` | [`from_fluent_bit`](from_fluent_bit.md) | `from "fluentbit://elasticsearch"` |
 | `ftp`, `ftps` | [`load_ftp`](load_ftp.md) | `from "ftp://example.com/file.json"` |

@@ -92,6 +92,7 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | Scheme | Operator | Example |
 |:------ |:-------- |:------- |
 | `abfs`,`abfss` | [`save_azure_blob_storage`](save_azure_blob_storage.md) | `to "abfs://path/to/file.json"` |
+| `amqp` | [`save_amqp`](save_amqp.md) | `to "amqp://…` |
 | `file` | [`save_file`](save_file.md) | `to "file://path/to/file.json"` |
 | `fluentbit` | [`to_fluent_bit`](to_fluent_bit.md) | `to "fluentbit://elasticsearch"` |
 | `ftp`, `ftps` | [`save_ftp`](save_ftp.md) | `to "ftp://example.com/file.json"` |
