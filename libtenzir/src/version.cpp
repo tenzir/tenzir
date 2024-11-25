@@ -73,7 +73,10 @@ auto tenzir_features() -> std::vector<std::string> {
   // that downstream API consumers can adjust their behavior depending on the
   // capabilities of the node. We remove entries once they're stabilized in the
   // Tenzir Platform.
-  return {"chart_limit"};
+  return {
+    // The node supports passing the `--limit` flag to the TQL1 `char` operator
+    "chart_limit",
+  };
 }
 
 } // namespace tenzir

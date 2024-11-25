@@ -193,19 +193,21 @@ public:
         co_yield {};
         continue;
       }
-      if (remaining == 0) {
-        co_yield {};
-        continue;
-      }
       if (slice.rows() > remaining) {
         slice = subslice(slice, 0, remaining);
-        diagnostic::warning("chart reached event limit of `{}`", limit)
-          .hint("You can use `--limit `value` to change this limit")
+        diagnostic::warning("chart exceeded event limit of `{}`", limit)
+          .hint("silence this warning by adding `head {}` before the `chart` "
+                "operator",
+                limit)
+          .hint("adjust the limit with the `--limit` option")
           .primary(loc_)
           .emit(ctrl.diagnostics());
         remaining = 0;
       } else {
         remaining -= slice.rows();
+      }
+      if (remaining == 0) {
+        co_return;
       }
       auto original_schema = slice.schema();
       if (auto it = enriched_schemas_cache.find(original_schema);

@@ -89,6 +89,8 @@ Defaults to every field but the first one.
 Limit the chart to `<uint>` data points. This will discard any further events
 and raise a warning.
 
+Defaults to 10,000.
+
 ## Examples
 
 Render most common `src_ip` values in `suricata.flow` events as a bar chart:
