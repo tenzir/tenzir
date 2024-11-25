@@ -3,7 +3,7 @@
 Decompresses a stream of bytes.
 
 ```tql
-decompress codec:str
+decompress codec:string
 ```
 
 ## Description
@@ -25,7 +25,7 @@ implemented.
 
 [apache-arrow-compression]: https://arrow.apache.org/docs/cpp/api/utilities.html#compression
 
-### `codec: str`
+### `codec: string`
 
 An identifier of the codec to use. Currently supported are `brotli`, `bz2`,
 `gzip`, `lz4`, and `zstd`.

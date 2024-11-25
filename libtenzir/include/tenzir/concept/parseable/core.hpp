@@ -10,7 +10,6 @@
 
 #include "tenzir/concept/parseable/core/action.hpp"       // IWYU pragma: export
 #include "tenzir/concept/parseable/core/and.hpp"          // IWYU pragma: export
-#include "tenzir/concept/parseable/core/as.hpp"           // IWYU pragma: export
 #include "tenzir/concept/parseable/core/choice.hpp"       // IWYU pragma: export
 #include "tenzir/concept/parseable/core/difference.hpp"   // IWYU pragma: export
 #include "tenzir/concept/parseable/core/end_of_input.hpp" // IWYU pragma: export
@@ -24,6 +23,7 @@
 #include "tenzir/concept/parseable/core/not.hpp"          // IWYU pragma: export
 #include "tenzir/concept/parseable/core/operators.hpp"    // IWYU pragma: export
 #include "tenzir/concept/parseable/core/optional.hpp"     // IWYU pragma: export
+#include "tenzir/concept/parseable/core/parse_as.hpp"     // IWYU pragma: export
 #include "tenzir/concept/parseable/core/plus.hpp"         // IWYU pragma: export
 #include "tenzir/concept/parseable/core/repeat.hpp"       // IWYU pragma: export
 #include "tenzir/concept/parseable/core/rule.hpp"         // IWYU pragma: export

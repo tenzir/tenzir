@@ -51,7 +51,7 @@ public:
 };
 
 auto safe_as_record(tenzir::data d) -> tenzir::record {
-  auto as_record = caf::get_if<tenzir::record>(&d);
+  auto as_record = try_as<tenzir::record>(&d);
   REQUIRE(as_record);
   return std::move(*as_record);
 }

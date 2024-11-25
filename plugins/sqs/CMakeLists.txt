@@ -12,7 +12,9 @@ find_package(Tenzir REQUIRED)
 TenzirRegisterPlugin(
   TARGET sqs
   ENTRYPOINT src/plugin.cpp
-  SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+  SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+  INCLUDE_DIRECTORIES include
+  BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 
 find_package(CURL)
 find_package(ZLIB)

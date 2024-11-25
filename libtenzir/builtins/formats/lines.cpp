@@ -115,7 +115,7 @@ struct lines_printer_impl {
   auto print_values(It& out, const view<record>& x) const -> bool {
     auto first = true;
     for (const auto& [_, v] : x) {
-      if (caf::holds_alternative<caf::none_t>(v)) {
+      if (is<caf::none_t>(v)) {
         continue;
       }
       if (!first) {
@@ -123,7 +123,7 @@ struct lines_printer_impl {
       } else {
         first = false;
       }
-      caf::visit(visitor{out}, v);
+      match(v, visitor{out});
     }
     return true;
   }
@@ -168,13 +168,13 @@ struct lines_printer_impl {
     auto operator()(const view<list>& x) -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
-        if (caf::holds_alternative<caf::none_t>(v)) {
+        if (is<caf::none_t>(v)) {
           continue;
         }
         if (!sequence_empty) {
           ++out = ',';
         }
-        if (!caf::visit(*this, v)) {
+        if (!match(v, *this)) {
           return false;
         }
       }
@@ -205,7 +205,7 @@ public:
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        const auto& input_type = caf::get<record_type>(input_schema);
+        const auto& input_type = as<record_type>(input_schema);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values(input_type, *array)) {
@@ -275,8 +275,8 @@ class read_lines final
     -> failure_or<operator_ptr> override {
     auto args = parser_args{};
     argument_parser2::operator_(name())
-      .add("skip_empty", args.skip_empty)
-      .add("split_at_null", args.null)
+      .named("skip_empty", args.skip_empty)
+      .named("split_at_null", args.null)
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<parser_adapter<lines_parser>>(
@@ -284,7 +284,16 @@ class read_lines final
   }
 };
 
+class write_lines final
+  : public virtual operator_plugin2<writer_adapter<lines_printer>> {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_("write_lines").parse(inv, ctx));
+    return std::make_unique<writer_adapter<lines_printer>>(lines_printer{});
+  }
+};
 } // namespace tenzir::plugins::lines
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_lines)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::write_lines)

@@ -24,19 +24,18 @@ public:
     return caf::none;
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    auto parser = argument_parser2::operator_(name());
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     located<std::string> plugin;
-    parser.add(plugin, "<plugin>");
     std::optional<tenzir::record> plugin_options;
-    parser.add("options", plugin_options);
     std::optional<tenzir::record> fluentbit_options;
-    parser.add("fluent_bit_options", fluentbit_options);
+    auto parser = argument_parser2::operator_(name());
+    parser.positional("plugin", plugin)
+      .named("options", plugin_options)
+      .named("fluent_bit_options", fluentbit_options);
     auto opt_parser = multi_series_builder_argument_parser{};
     opt_parser.add_all_to_parser(parser);
-    auto result = parser.parse(inv, ctx);
-    TRY(result);
+    TRY(parser.parse(inv, ctx))
     auto args = operator_args{
       .plugin = plugin.inner,
       .service_properties = to_property_map(fluentbit_options),

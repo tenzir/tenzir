@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/inspect_enum_str.hpp"
+#include "tenzir/error.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/try.hpp"
 
@@ -131,20 +132,21 @@ struct [[nodiscard]] diagnostic {
   std::vector<diagnostic_note> notes;
 
   template <class... Ts>
-  static auto builder(enum severity s, fmt::format_string<Ts...> str,
-                      Ts&&... xs) -> diagnostic_builder;
+  static auto
+  builder(enum severity s, fmt::format_string<Ts...> str, Ts&&... xs)
+    -> diagnostic_builder;
 
   static auto builder(enum severity s, caf::error err) -> diagnostic_builder;
 
   template <class... Ts>
-  static auto
-  error(fmt::format_string<Ts...> str, Ts&&... xs) -> diagnostic_builder;
+  static auto error(fmt::format_string<Ts...> str, Ts&&... xs)
+    -> diagnostic_builder;
 
   static auto error(caf::error err) -> diagnostic_builder;
 
   template <class... Ts>
-  static auto
-  warning(fmt::format_string<Ts...> str, Ts&&... xs) -> diagnostic_builder;
+  static auto warning(fmt::format_string<Ts...> str, Ts&&... xs)
+    -> diagnostic_builder;
 
   static auto warning(caf::error err) -> diagnostic_builder;
 
@@ -320,8 +322,8 @@ auto diagnostic::builder(enum severity s, fmt::format_string<Ts...> str,
 }
 
 template <class... Ts>
-auto diagnostic::error(fmt::format_string<Ts...> str,
-                       Ts&&... xs) -> diagnostic_builder {
+auto diagnostic::error(fmt::format_string<Ts...> str, Ts&&... xs)
+  -> diagnostic_builder {
   return builder(severity::error, std::move(str), std::forward<Ts>(xs)...);
 }
 
@@ -331,8 +333,8 @@ inline auto diagnostic::error(caf::error err) -> diagnostic_builder {
 }
 
 template <class... Ts>
-auto diagnostic::warning(fmt::format_string<Ts...> str,
-                         Ts&&... xs) -> diagnostic_builder {
+auto diagnostic::warning(fmt::format_string<Ts...> str, Ts&&... xs)
+  -> diagnostic_builder {
   return builder(severity::warning, std::move(str), std::forward<Ts>(xs)...);
 }
 
@@ -476,6 +478,13 @@ public:
     if constexpr (not std::same_as<T, void>) {
       return std::get<0>(*this);
     }
+  }
+
+  auto to_expected() && -> caf::expected<T> {
+    if (is_success()) {
+      return std::move(*this).unwrap();
+    }
+    return ec::diagnostic;
   }
 
   auto operator->()

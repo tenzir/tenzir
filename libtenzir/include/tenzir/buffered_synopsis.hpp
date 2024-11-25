@@ -74,7 +74,7 @@ public:
 
   // Implementation of the remainder of the `synopsis` API.
   void add(data_view x) override {
-    auto v = caf::get_if<view_type>(&x);
+    auto v = try_as<view_type>(&x);
     TENZIR_ASSERT(v);
     data_.insert(materialize(*v));
   }
@@ -90,17 +90,19 @@ public:
         return {};
       case relational_operator::equal: {
         if constexpr (std::is_same_v<view_type, view<std::string>>) {
-          if (caf::holds_alternative<view<pattern>>(rhs))
+          if (is<view<pattern>>(rhs)) {
             return {};
+          }
         }
         // TODO: Switch to tsl::robin_set here for heterogeneous lookup.
-        return data_.count(materialize(caf::get<view_type>(rhs)));
+        return data_.count(materialize(as<view_type>(rhs)));
       }
       case relational_operator::in: {
-        if (auto xs = caf::get_if<view<list>>(&rhs)) {
+        if (auto xs = try_as<view<list>>(&rhs)) {
           for (auto x : **xs)
-            if (data_.count(materialize(caf::get<view_type>(x))))
+            if (data_.count(materialize(as<view_type>(x)))) {
               return true;
+            }
           return false;
         }
         return {};

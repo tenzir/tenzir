@@ -33,8 +33,8 @@ public:
     auto expr = ast::expression{};
     auto spec = std::optional<located<duration>>{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<value>")
-          .add(spec, "<spec>")
+          .positional("x", expr, "number|duration|time")
+          .positional("unit", spec, "duration")
           .parse(inv, ctx));
     if (spec && spec->inner.count() == 0) {
       diagnostic::error("resolution must not be 0")
@@ -114,7 +114,7 @@ public:
             return series::null(ty, length);
           },
         };
-        return caf::visit(f, *value.inner.array);
+        return match(*value.inner.array, f);
       }
       // fn(<duration>, <duration>)
       // fn(x, 1h) -> to multiples of 1h
@@ -172,7 +172,7 @@ public:
             .emit(ctx);
           return series::null(ty, length);
         }};
-      return caf::visit(f, *value.inner.array);
+      return match(*value.inner.array, f);
     });
   }
 };

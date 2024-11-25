@@ -181,7 +181,7 @@ public:
   [[nodiscard]] std::optional<view<type_to_data_t<T>>>
   at(size_type row, size_type column, const T& t) const {
     auto result = at(row, column, type{t});
-    if (caf::holds_alternative<caf::none_t>(result)) {
+    if (is<caf::none_t>(result)) {
 #if defined(__GNUC__) && __GNUC__ <= 10
       // gcc-10 issues a bogus maybe-uninitialized warning for the return value
       // here. See also: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635

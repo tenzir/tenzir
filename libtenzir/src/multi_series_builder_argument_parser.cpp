@@ -72,20 +72,22 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser2& parser, bool add_unflatten_option,
   bool add_merge_option) -> void {
-  parser.add("schema_only", schema_only_);
+  parser.named("schema_only", schema_only_);
   if (add_merge_option) {
-    parser.add("merge", merge_);
+    parser.named("merge", merge_);
   }
-  parser.add("raw", raw_);
+  parser.named("raw", raw_);
   if (add_unflatten_option) {
-    parser.add("unflatten", unnest_);
+    parser.named("unflatten", unnest_);
   }
+  parser.named("_batch_timeout", timeout_);
+  parser.named("_batch_size", batch_size_);
 }
 
 auto multi_series_builder_argument_parser::add_policy_to_parser(
   argument_parser2& parser) -> void {
-  parser.add("schema", schema_);
-  parser.add("selector", selector_);
+  parser.named("schema", schema_);
+  parser.named("selector", selector_);
 }
 
 auto multi_series_builder_argument_parser::add_all_to_parser(
@@ -154,6 +156,12 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
     settings_.unnest_separator = unnest_->inner;
   }
   settings_.raw = raw_.has_value();
+  if (timeout_.has_value()) {
+    settings_.timeout = *timeout_;
+  }
+  if (batch_size_.has_value()) {
+    settings_.desired_batch_size = *batch_size_;
+  }
   return true;
 }
 

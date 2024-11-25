@@ -3,7 +3,7 @@
 Sends and receives events via [Fluent Bit](https://docs.fluentbit.io/).
 
 ```tql
-fluentbit plugin:str, [options=record, fluent_bit_options=record, schema=str, selector=str, schema_only=bool, merge=bool, raw=bool, unflatten=str]
+fluentbit plugin:string, [options=record, fluent_bit_options=record, schema=string, selector=string, schema_only=bool, merge=bool, raw=bool, unflatten=string]
 ```
 
 ## Description
@@ -28,7 +28,7 @@ translates to our `fluent-bit` operator as follows:
 fluentbit "plugin", ...
 ```
 
-### `plugin: str`
+### `plugin: string`
 
 The name of the Fluent Bit plugin.
 
@@ -77,14 +77,14 @@ Use with caution.
 
 This option can not be combined with `merge=true, schema=<schema>`.
 
-### `schema = str (optional)`
+### `schema = string (optional)`
 
 Provide the name of a schema to be used by the parser. If the schema uses the
 `blob` type, then the JSON parser expects base64-encoded strings.
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector = string (optional)`
 
 Designates a field value as schema name with an optional dot-separated prefix.
 
@@ -103,7 +103,7 @@ and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten = str (optional)`
+### `unflatten = string (optional)`
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.

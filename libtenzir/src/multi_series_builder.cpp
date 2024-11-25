@@ -370,7 +370,7 @@ auto list_generator::writable() -> bool {
 
 auto series_to_table_slice(series array,
                            std::string_view fallback_name) -> table_slice {
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(array.type));
+  TENZIR_ASSERT(is<record_type>(array.type));
   TENZIR_ASSERT(array.length() > 0);
   if (array.type.name().empty()) {
     array.type = tenzir::type{fallback_name, array.type};
@@ -475,7 +475,7 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
     return {};
   }
   last_yield_time_ = now;
-  if (settings_.merge and not get_policy<policy_selector>()) {
+  if (uses_merging_builder()) {
     return merging_builder_.finish();
   }
   make_events_available_where(

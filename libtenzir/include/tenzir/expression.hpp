@@ -22,7 +22,6 @@
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
 #include <caf/none.hpp>
-#include <caf/variant.hpp>
 
 #include <memory>
 #include <string>
@@ -134,8 +133,8 @@ auto inspect(Inspector& f, data_extractor& x) {
 }
 
 /// The operand of a predicate, which can be either LHS or RHS.
-using operand = caf::variant<meta_extractor, field_extractor, type_extractor,
-                             data_extractor, data>;
+using operand = tenzir::variant<meta_extractor, field_extractor, type_extractor,
+                                data_extractor, data>;
 
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
@@ -249,7 +248,7 @@ public:
   using types = caf::detail::type_list<caf::none_t, conjunction, disjunction,
                                        negation, predicate>;
 
-  using node = caf::detail::tl_apply_t<types, caf::variant>;
+  using node = caf::detail::tl_apply_t<types, tenzir::variant>;
 
   /// Default-constructs empty an expression.
   expression() = default;
@@ -261,7 +260,7 @@ public:
     requires(detail::contains_type_v<types, std::decay_t<T>>)
   expression(T&& x) : node_(std::forward<T>(x)) {
     if constexpr (detail::is_any_v<std::decay_t<T>, conjunction, disjunction>)
-      TENZIR_ASSERT(!caf::get<std::decay_t<T>>(node_).empty());
+      TENZIR_ASSERT(!as<std::decay_t<T>>(node_).empty());
   }
 
   /// @cond PRIVATE
@@ -306,7 +305,7 @@ struct predicate_transformer {
   }
 
   result_type operator()(const negation& n) const {
-    auto x = caf::visit(*this, n.expr());
+    auto x = match(n.expr(), *this);
     if constexpr (std::is_convertible_v<result_type, expression>) {
       return {negation{std::move(x)}};
     } else {
@@ -325,7 +324,7 @@ private:
   result_type make_result(const T& input) const {
     T result;
     for (const auto& op : input) {
-      auto x = caf::visit(*this, op);
+      auto x = match(op, *this);
       if constexpr (std::is_convertible_v<result_type, typename T::value_type>) {
         result.push_back(std::move(x));
       } else {
@@ -346,7 +345,7 @@ private:
 template <typename F>
 auto for_each_predicate(const expression& e, F&& f) {
   auto v = predicate_transformer<F>{std::forward<F>(f)};
-  return caf::visit(v, e);
+  return match(e, v);
 }
 
 /// Transforms an expression by pulling out nested connectives with a single
@@ -379,7 +378,7 @@ caf::expected<expression> normalize_and_validate(expression expr);
 /// Tailors an expression to a specific type.
 /// @param expr The expression to tailor to *schema*.
 /// @param schema The schema to tailor *expr* to.
-/// @pre `caf::holds_alternative<record_type>(schema)`
+/// @pre `is<record_type>(schema)`
 /// @returns An optimized version of *expr* specifically for evaluating events
 ///          of type *schema*.
 caf::expected<expression> tailor(expression expr, const type& schema);
@@ -401,6 +400,23 @@ const expression* at(const expression& expr, const offset& o);
 ///          the new predicates.
 std::vector<std::pair<offset, predicate>>
 resolve(const expression& expr, const type& t);
+
+template <>
+class variant_traits<expression> {
+public:
+  using backing_trait = variant_traits<expression::node>;
+
+  static constexpr auto count = backing_trait::count;
+
+  static auto index(const expression& x) -> size_t {
+    return backing_trait::index(x.get_data());
+  }
+
+  template <size_t I>
+  static auto get(const expression& x) -> decltype(auto) {
+    return backing_trait::get<I>(x.get_data());
+  }
+};
 
 } // namespace tenzir
 

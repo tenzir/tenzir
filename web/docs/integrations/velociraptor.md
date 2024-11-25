@@ -47,14 +47,15 @@ as a static binary that we refer to as `velociraptor-binary` here.)
 
 ## Run raw VQL
 
-After you have created a TLS certificate, you can use the `velociraptor`
+After you have created a TLS certificate, you can use the
+[`from_velociraptor`](../tql2/operators/from_velociraptor.md)
 operator to execute a [Velociraptor Query Language
 (VQL)](https://docs.velociraptor.app/docs/vql/) query:
 
-```
-velociraptor --query "select * from pslist()"
-| select Name, Pid, PPid, CommandLine
-| where Name == "remotemanagement"
+```tql
+from_velociraptor query="select * from pslist()"
+select Name, Pid, PPid, CommandLine
+where Name == "remotemanagement"
 ```
 
 ## Subscribe to forensic artifacts
@@ -68,9 +69,7 @@ sends the result into the pipeline.
 For example, run this pipeline to subscribe to an artifact collection of Windows
 startup items and import them into a node:
 
+```tql
+from_velociraptor subscribe="Windows.Sys.StartupItems"
+import
 ```
-velociraptor --subscribe Windows.Sys.StartupItems | import
-```
-
-For additional information, read our blog post [Integrating Velociraptor into
-Tenzir Pipelines](/blog/integrating-velociraptor-into-tenzir-pipelines).

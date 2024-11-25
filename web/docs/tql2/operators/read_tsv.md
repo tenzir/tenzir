@@ -3,8 +3,8 @@
 Read TSV (Tab-Separated Values) from a byte stream.
 
 ```tql
-read_tsv [list_sep=str, null_value=str, comments=bool, header=str, auto_expand=bool,
-					schema=str, selector=str, schema_only=bool, raw=bool, unflatten=str]
+read_tsv [list_sep=string, null_value=string, comments=bool, header=string, auto_expand=bool,
+					schema=string, selector=string, schema_only=bool, raw=bool, unflatten=string]
 ```
 
 ## Description
@@ -21,18 +21,18 @@ values instead of dropping the excess values.
 
 Treat lines beginning with "#" as comments.
 
-### `header = str (optional)`
+### `header = string (optional)`
 
 The `string` to be used as a `header` for the parsed values.
 If unspecified, the first line of the input is used as the header.
 
-### `list_sep = str (optional)`
+### `list_sep = string (optional)`
 
 The `string` separating the elements _inside_ a list.
 
 Defaults to `,`.
 
-### `null_value = str (optional)`
+### `null_value = string (optional)`
 
 The `string` denoting an absent value.
 
@@ -46,7 +46,7 @@ specified in the chosen `schema` will still be parsed according to the schema.
 In the case of TSV this means that no parsing of data takes place at all
 and every value remains a string.
 
-### `schema = str (optional)`
+### `schema = string (optional)`
 
 Provide the name of a schema to be used by the parser.
 
@@ -60,7 +60,7 @@ If the given schema does not exist, this option instead assigns the output schem
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector = string (optional)`
 
 Designates a field value as schema name with an optional dot-separated prefix.
 
@@ -82,7 +82,7 @@ and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten = str (optional)`
+### `unflatten = string (optional)`
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.

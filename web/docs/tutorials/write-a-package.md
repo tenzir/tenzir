@@ -18,8 +18,8 @@ the idea is as follows:
 3. We generate a detection finding when we encounter a match.
 
 Given this idea, we have to it to the building blocks we have in Tenzir:
-[pipelines](pipelines.md) and [contexts](contexts.md). We can model it as
-follows.
+[pipelines](pipelines.md) and [contexts](enrichment/README.md). We can model it
+as follows.
 
 1. A lookup table that includes a copy of the SSLBL data.
 2. A pipeline that synchronizes the SSLBL data with the lookup table.
@@ -94,16 +94,16 @@ read_csv comments=true, header="timestamp,SHA1,reason"
 ```
 
 Now that we have onboarded the data into a pipeline, we just need to push it
-into the context by piping it to `context update`:
+into the context by piping it to `context::update`:
 
 ```tql
 load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
 read_csv comments=true, header="timestamp,SHA1,reason"
-legacy "context update sslbl --key=SHA1"
+context::update "sslbl", key="SHA1"
 ```
 
-With `context inspect sslbl` we can list the table contents, keyed by SHA1 hash
-and ready for enrichment.
+With `context::inspect "sslbl"` we can list the table contents, keyed by SHA1
+hash and ready for enrichment.
 
 ### Keep the context synchronized
 
@@ -118,7 +118,7 @@ every 1h {
   load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
   read_csv comments=true, header="timestamp,SHA1,reason"
 }
-legacy "context update sslbl --key=SHA1"
+context::update sslbl key="SHA1"
 ```
 
 :::tip Why not wrap the entire pipeline in `every`?
@@ -145,7 +145,7 @@ pipelines:
         load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
         read_csv comments=true, header="timestamp,SHA1,reason"
       }
-      legacy "context update sslbl --key=SHA1"
+      context::update "sslbl", key=SHA1
     restart-on-error: 1 hour
 ```
 
@@ -172,22 +172,18 @@ examples:
       Enriches the certificate SHA1 fingerprint from Suricata TLS logs with the
       SSLBL data.
     definition: |
-      // tql2
       subscribe "suricata"
       where @name == "suricata.tls"
       sha1 = tls.fingerprint.replace(":", "")
-      legacy "enrich sha1 sslbl"
+      context::enrich "sslbl", key="sha1"
 
   - name: Display top-10 listing reasons
     description: |
-      Shows a bar chart of the top-10 reasons why a certificate is in the
-      dataset.
+      Shows the top-10 reasons why a certificate is in the dataset.
     definition: |
-      context inspect sslbl
-      | yield value
-      | top reason
-      | head
-      | chart bar
+      context::inspect "sslbl"
+      top value.reason
+      head
 ```
 
 ## Make the package configurable
@@ -235,7 +231,7 @@ pipelines:
       every {{ inputs.refresh-interval }} {
         load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
         read_csv comments=true, header="timestamp,SHA1,reason"
-        legacy "context update sslbl --key=SHA1"
+        context::update "sslbl", key="SHA1"
       }
     restart-on-error: 1 hour
 ```

@@ -29,7 +29,7 @@ x12 = int("-9223372036854775808") + -1
 x13 = null + 1
 x14 = int(null) + 1
 
-write_json ndjson=false
+write_json
 EOF
 }
 
@@ -53,6 +53,17 @@ from [
 y = [...x]
 z = [...x, 3, ...y, ...42]
 EOF
+}
+
+@test "record indexing" {
+  echo '
+  {"x": {"x": 1}, "y": "x"}
+  {"x": {"x": "1"}, "y": "x"}
+  {"x": {"x": 1}}
+  {"x": {}, "y": "x"}
+  {"y": "x"}
+  {}' |
+    check tenzir 'read_json | z = x[y]'
 }
 
 @test "list indexing" {

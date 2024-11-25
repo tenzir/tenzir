@@ -3,7 +3,7 @@
 Dynamically samples events from a event stream.
 
 ```tql
-sample [period:duration, mode=str, min_events=int, max_rate=int, max_samples=int]
+sample [period:duration, mode=string, min_events=int, max_rate=int, max_samples=int]
 ```
 
 ## Description
@@ -23,7 +23,7 @@ The sampling rate for the first window is `1:1`.
 
 Defaults to `30s`.
 
-### `mode = str (optional)`
+### `mode = string (optional)`
 
 The function used to compute the sampling rate:
 

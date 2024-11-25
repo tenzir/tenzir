@@ -136,7 +136,7 @@ struct formatter<tenzir::query_context> {
         out = fmt::format_to(out, "extract(");
       },
     };
-    caf::visit(f, value.cmd);
+    match(value.cmd, f);
     return fmt::format_to(out, "{} (priority={}), ids={}, issuer={})",
                           value.expr, value.priority, value.ids, value.issuer);
   }

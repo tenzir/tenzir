@@ -239,7 +239,7 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
                  shared_diagnostic_handler diagnostics_handler)
   -> caf::behavior {
   self->state.self = self;
-  self->state.expr = std::move(expr);
+  self->state.expr = normalize(std::move(expr));
   self->state.mode = mode;
   self->state.metrics_handler = std::move(metrics_handler);
   self->state.diagnostics_handler = std::move(diagnostics_handler);
@@ -522,10 +522,10 @@ public:
     auto internal = false;
     auto parallel = std::optional<located<uint64_t>>{};
     argument_parser2::operator_("export")
-      .add("live", live)
-      .add("retro", retro)
-      .add("internal", internal)
-      .add("parallel", parallel)
+      .named("live", live)
+      .named("retro", retro)
+      .named("internal", internal)
+      .named("parallel", parallel)
       .parse(inv, ctx)
       .ignore();
     if (not live) {
@@ -600,9 +600,9 @@ public:
     const auto internal = true;
     auto parallel = std::optional<located<uint64_t>>{};
     TRY(argument_parser2::operator_("diagnostics")
-          .add("live", live)
-          .add("retro", retro)
-          .add("parallel", parallel)
+          .named("live", live)
+          .named("retro", retro)
+          .named("parallel", parallel)
           .parse(inv, ctx));
     if (not live) {
       retro = true;
@@ -685,10 +685,10 @@ public:
     const auto internal = true;
     auto parallel = std::optional<located<uint64_t>>{};
     TRY(argument_parser2::operator_("metrics")
-          .add(name, "<name>")
-          .add("live", live)
-          .add("retro", retro)
-          .add("parallel", parallel)
+          .positional("name", name)
+          .named("live", live)
+          .named("retro", retro)
+          .named("parallel", parallel)
           .parse(inv, ctx));
     if (not live) {
       retro = true;

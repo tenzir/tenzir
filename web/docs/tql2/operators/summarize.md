@@ -10,7 +10,8 @@ summarize (group|aggregation)...
 
 The `summarize` operator groups events according to certain fields and applies
 [aggregation functions](../functions.md#aggregation) to each group. The operator
-consumes the entire input before producing any output.
+consumes the entire input before producing any output, and may reorder the event
+stream.
 
 The order of the output fields follows the sequence of the provided arguments.
 Unspecified fields are dropped.

@@ -239,7 +239,7 @@ public:
           TENZIR_TRACE("creating group for: {}", key_data);
           auto relative_path = std::string{};
           for (auto [sel, data] :
-               detail::zip_equal(args_.by, caf::get<list>(key_data))) {
+               detail::zip_equal(args_.by, as<list>(key_data))) {
             auto f = detail::overload{
               [](int64_t x) {
                 return fmt::to_string(x);
@@ -253,7 +253,7 @@ public:
               },
             };
             relative_path += fmt::format("/{}={}", selector_to_name(sel),
-                                         caf::visit(f, data));
+                                         match(data, f));
           }
           relative_path += fmt::format("/{}.{}", next_id, args_.extension);
           next_id += 1;
@@ -341,6 +341,10 @@ public:
     return "to_hive";
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     TENZIR_UNUSED(filter, order);
@@ -366,11 +370,11 @@ public:
     auto max_size = std::optional<located<uint64_t>>{};
     auto format = located<std::string>{};
     TRY(argument_parser2::operator_(name())
-          .add(uri, "<uri>")
-          .add("partition_by", by_expr)
-          .add("format", format)
-          .add("timeout", timeout)
-          .add("max_size", max_size)
+          .positional("uri", uri)
+          .named("partition_by", by_expr, "list<field>")
+          .named("format", format)
+          .named("timeout", timeout)
+          .named("max_size", max_size)
           .parse(inv, ctx));
     auto by_list = std::get_if<ast::list>(&*by_expr.kind);
     if (not by_list) {

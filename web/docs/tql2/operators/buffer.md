@@ -3,7 +3,7 @@
 An in-memory buffer to improve handling of data spikes in upstream operators.
 
 ```tql
-buffer [capacity:int, policy=str]
+buffer [capacity:int, policy=string]
 ```
 
 ## Description
@@ -26,7 +26,7 @@ The number of events or bytes that may be kept at most in the buffer.
 Note that every operator already buffers up to `254Ki` events before it starts
 applying back pressure. Smaller buffers may decrease performance.
 
-### `policy = str (optional)`
+### `policy = string (optional)`
 
 Specifies what the operator does when the buffer runs full.
 

@@ -41,7 +41,7 @@ caf::expected<record_type> to_record(const std::vector<type>& known_types,
   auto record_fields = std::vector<record_type::field_view>{};
   record_fields.reserve(field_declarations.size());
   for (const auto& record_value : field_declarations) {
-    const auto* record_record_ptr = caf::get_if<record>(&record_value);
+    const auto* record_record_ptr = try_as<record>(&record_value);
     if (record_record_ptr == nullptr)
       return caf::make_error(ec::parse_error, "a field in record type must be "
                                               "specified as a YAML dictionary");
@@ -77,7 +77,7 @@ constexpr auto reserved_names
 
 caf::expected<type> to_enum(std::string_view name, const data& enumeration,
                             std::vector<type::attribute_view>&& attributes) {
-  const auto* enum_list_ptr = caf::get_if<list>(&enumeration);
+  const auto* enum_list_ptr = try_as<list>(&enumeration);
   if (enum_list_ptr == nullptr)
     return caf::make_error(ec::parse_error, "enum must be specified as a "
                                             "YAML list");
@@ -87,7 +87,7 @@ caf::expected<type> to_enum(std::string_view name, const data& enumeration,
   auto enum_fields = std::vector<enumeration_type::field_view>{};
   enum_fields.reserve(enum_list.size());
   for (const auto& enum_value : enum_list) {
-    const auto* enum_string_ptr = caf::get_if<std::string>(&enum_value);
+    const auto* enum_string_ptr = try_as<std::string>(&enum_value);
     if (enum_string_ptr == nullptr)
       return caf::make_error(ec::parse_error, "enum value must be specified "
                                               "as a YAML string");
@@ -99,7 +99,7 @@ caf::expected<type> to_enum(std::string_view name, const data& enumeration,
 caf::expected<type> to_map(std::string_view name, const data& map_to_parse,
                            std::vector<type::attribute_view>&& attributes,
                            const std::vector<type>& known_types) {
-  const auto* map_record_ptr = caf::get_if<record>(&map_to_parse);
+  const auto* map_record_ptr = try_as<record>(&map_to_parse);
   if (map_record_ptr == nullptr)
     return caf::make_error(ec::parse_error, "a map type must be specified as "
                                             "a YAML dictionary");
@@ -127,7 +127,7 @@ caf::expected<type>
 to_record_algebra(std::string_view name, const data& record_algebra,
                   std::vector<type::attribute_view>&& attributes,
                   const std::vector<type>& known_types) {
-  const auto* record_algebra_record_ptr = caf::get_if<record>(&record_algebra);
+  const auto* record_algebra_record_ptr = try_as<record>(&record_algebra);
   if (record_algebra_record_ptr == nullptr)
     return caf::make_error(ec::parse_error, "record algebra must be "
                                             "specified as a YAML dictionary");
@@ -161,7 +161,7 @@ to_record_algebra(std::string_view name, const data& record_algebra,
   if (found_fields == record_algebra_record.end())
     return caf::make_error(ec::parse_error, "record algebra must have one "
                                             "'fields'");
-  const auto* fields_list_ptr = caf::get_if<list>(&found_fields->second);
+  const auto* fields_list_ptr = try_as<list>(&found_fields->second);
   if (fields_list_ptr == nullptr)
     return caf::make_error(ec::parse_error, "'fields' in record algebra must "
                                             "be specified as YAML list");
@@ -178,7 +178,7 @@ to_record_algebra(std::string_view name, const data& record_algebra,
   const auto& records = is_base_found      ? found_base->second
                         : is_implant_found ? found_implant->second
                                            : found_extend->second;
-  const auto* records_list_ptr = caf::get_if<list>(&records);
+  const auto* records_list_ptr = try_as<list>(&records);
   if (records_list_ptr == nullptr)
     return caf::make_error(ec::parse_error, "'base', 'implant' or 'extend' "
                                             "in a record algebra must be "
@@ -190,7 +190,7 @@ to_record_algebra(std::string_view name, const data& record_algebra,
                                             "'extend'");
   std::optional<record_type> merged_base_record{};
   for (const auto& record : record_list) {
-    const auto* record_name_ptr = caf::get_if<std::string>(&record);
+    const auto* record_name_ptr = try_as<std::string>(&record);
     if (record_name_ptr == nullptr)
       return caf::make_error(
         ec::parse_error, "the 'base', 'implant' or 'extend' keywords of a "
@@ -204,7 +204,7 @@ to_record_algebra(std::string_view name, const data& record_algebra,
                              "record algebra base, implant or extend");
     for (const auto& attribute : base_type.attributes())
       attributes.push_back(attribute);
-    const auto* base_record_ptr = caf::get_if<record_type>(&base_type);
+    const auto* base_record_ptr = try_as<record_type>(&base_type);
     if (base_record_ptr == nullptr)
       return caf::make_error(ec::parse_error, "'base', 'implant' or 'extend' "
                                               "of a record algebra must be "
@@ -232,7 +232,7 @@ to_record_algebra(std::string_view name, const data& record_algebra,
 
 caf::expected<type> to_type(const std::vector<type>& known_types,
                             const data& declaration, std::string_view name) {
-  const auto* known_type_name_ptr = caf::get_if<std::string>(&declaration);
+  const auto* known_type_name_ptr = try_as<std::string>(&declaration);
   // Prevent using reserved names as types names
   if (std::any_of(reserved_names.begin(), reserved_names.end(),
                   [&](const auto& reserved_name) {
@@ -272,7 +272,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
                                                           known_type_name));
     return type{name, known_type};
   }
-  const auto* declaration_record_ptr = caf::get_if<record>(&declaration);
+  const auto* declaration_record_ptr = try_as<record>(&declaration);
   if (declaration_record_ptr == nullptr)
     return caf::make_error(ec::parse_error, "type alias must be specified as a "
                                             "YAML dictionary");
@@ -281,16 +281,16 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
   auto attributes = std::vector<type::attribute_view>{};
   auto found_attributes = declaration_record.find("attributes");
   if (found_attributes != declaration_record.end()) {
-    const auto* attribute_list = caf::get_if<list>(&found_attributes->second);
+    const auto* attribute_list = try_as<list>(&found_attributes->second);
     if (attribute_list == nullptr)
       return caf::make_error(ec::parse_error, "the attribute list must be "
                                               "specified as a YAML list");
     for (const auto& attribute : *attribute_list) {
-      const auto* attribute_string_ptr = caf::get_if<std::string>(&attribute);
+      const auto* attribute_string_ptr = try_as<std::string>(&attribute);
       if (attribute_string_ptr != nullptr)
         attributes.push_back({*attribute_string_ptr});
       else {
-        const auto* attribute_record_ptr = caf::get_if<record>(&attribute);
+        const auto* attribute_record_ptr = try_as<record>(&attribute);
         if (attribute_record_ptr == nullptr)
           return caf::make_error(ec::parse_error, "attribute must be specified "
                                                   "as a YAML dictionary");
@@ -300,7 +300,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
                                                   "single field");
         const auto& attribute_key = attribute_record.begin()->first;
         const auto* attribute_value_ptr
-          = caf::get_if<std::string>(&attribute_record.begin()->second);
+          = try_as<std::string>(&attribute_record.begin()->second);
         if (attribute_value_ptr == nullptr)
           return caf::make_error(ec::parse_error, "attribute must be a string");
         const auto& attribute_value = *attribute_value_ptr;
@@ -353,7 +353,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
     return to_map(name, found_map->second, std::move(attributes), known_types);
   // Record or Record algebra
   if (is_record_found) {
-    const auto* record_list_ptr = caf::get_if<list>(&found_record->second);
+    const auto* record_list_ptr = try_as<list>(&found_record->second);
     if (record_list_ptr != nullptr) {
       // Record
       const auto& new_record = to_record(known_types, *record_list_ptr);

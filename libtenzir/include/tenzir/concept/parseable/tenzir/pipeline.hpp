@@ -69,8 +69,8 @@ const inline auto operator_arg = qstr | qqstr | unquoted_operator_arg;
 namespace detail {
 
 constexpr inline auto or_default
-  = [](caf::optional<std::vector<std::string>> x) -> std::vector<std::string> {
-  // Note: `caf::optional::value_or` always performs a copy.
+  = [](std::optional<std::vector<std::string>> x) -> std::vector<std::string> {
+  // Note: `std::optional::value_or` always performs a copy.
   if (!x) {
     return {};
   }

@@ -151,7 +151,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name_)
-          .add(expr, fmt::format("<{}>", input_meta_))
+          .positional("x", expr, input_meta_)
           .parse(inv, ctx));
     return function_use::make(
       [&, expr = std::move(expr)](evaluator eval, session ctx) -> series {
@@ -206,7 +206,7 @@ public:
             return series::null(OutTy{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 

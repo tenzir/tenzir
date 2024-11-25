@@ -115,13 +115,13 @@ components:
               type: integer
               description: The maximum number of events to keep in the `cache` operator.
               example: 4000
-            cache_ttl:
+            cache_read_timeout:
               type: string
               description: "The time to live of the cache. Resets when reading from the cache.\n"
               example: 1.0m
-            cache_max_ttl:
+            cache_write_timeout:
               type: string
-              description: "The maximum time to live of the cache. Unlike the `cache_ttl`\nparameter, this does not reset when reading from the cache.\n"
+              description: "The maximum time to live of the cache. Unlike the `cache_read_timeout`\nparameter, this does not reset when reading from the cache.\n"
               example: 1.0h
             serve_id:
               type: string

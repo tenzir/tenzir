@@ -3,23 +3,19 @@
 Loads bytes from a TCP or TLS connection.
 
 ```tql
-load_tcp endpoint:str, [connect=bool, parallel=int, tls=bool, certfile=str, keyfile=str { … }]
+load_tcp endpoint:string, [parallel=int, tls=bool, certfile=string, keyfile=string { … }]
 ```
 
 ## Description
 
 Reads bytes from the given endpoint via TCP or TLS.
 
-### `endpoint: str`
+### `endpoint: string`
 
 The endpoint at which the server will listen. If `connect=true`, this is instead
 the remote endpoint to connect to. Must be of the form
 `[tcp://]<hostname>:<port>`. Use the hostname `0.0.0.0` o accept connections on
 all interfaces.
-
-### `connect = bool (optional)`
-
-Connect to the endpoint instead of listening at it.
 
 ### `parallel = int (optional)`
 
@@ -29,11 +25,11 @@ Maximum number of parallel connections at once.
 
 Whether to use TLS.
 
-### `certfile = str (optional)`
+### `certfile = string (optional)`
 
 Path to a `.pem` file containing the TLS certificate.
 
-### `keyfile = str (optional)`
+### `keyfile = string (optional)`
 
 Path to a `.pem` file containing the private key for the certificate.
 

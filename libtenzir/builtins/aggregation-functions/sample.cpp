@@ -29,18 +29,18 @@ private:
   }
 
   void add(const data_view& view) override {
-    if (!caf::holds_alternative<caf::none_t>(sample_)) {
+    if (!is<caf::none_t>(sample_)) {
       return;
     }
     sample_ = materialize(view);
   }
 
   void add(const arrow::Array& array) override {
-    if (!caf::holds_alternative<caf::none_t>(sample_)) {
+    if (!is<caf::none_t>(sample_)) {
       return;
     }
     for (const auto& value : values(input_type(), array)) {
-      if (!caf::holds_alternative<caf::none_t>(value)) {
+      if (!is<caf::none_t>(value)) {
         sample_ = materialize(value);
         return;
       }

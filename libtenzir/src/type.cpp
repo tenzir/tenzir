@@ -870,7 +870,7 @@ auto type::to_definition(std::optional<std::string> field_name,
       // Recursively create the definition for the nested type, but add a -1 to
       // it for the values. We override the type to include the list, but leave
       // the kind as the nested value.
-      if (caf::holds_alternative<record_type>(self.value_type())) {
+      if (is<record_type>(self.value_type())) {
         parent_path.push_back(-1);
       }
       auto result = self.value_type().to_definition(
@@ -980,7 +980,7 @@ type::to_arrow_field(std::string_view name, bool nullable) const noexcept {
 
 std::shared_ptr<arrow::Schema> type::to_arrow_schema() const noexcept {
   TENZIR_ASSERT(!name().empty());
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(*this));
+  TENZIR_ASSERT(is<record_type>(*this));
   return arrow::schema(as<record_type>(*this).to_arrow_type()->fields(),
                        make_arrow_metadata(*this));
 }
@@ -1407,7 +1407,7 @@ bool congruent(const type& x, const type& y) noexcept {
              || std::is_same_v<U, null_type>;
     },
   }; // namespace tenzir
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 bool congruent(const type& x, const data& y) noexcept {
@@ -1476,7 +1476,7 @@ bool congruent(const type& x, const data& y) noexcept {
       return true;
     },
   };
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 bool congruent(const data& x, const type& y) noexcept {
@@ -1491,23 +1491,17 @@ bool compatible(const type& lhs, relational_operator op,
 bool compatible(const type& lhs, relational_operator op,
                 const data& rhs) noexcept {
   auto string_and_pattern = [](auto& x, auto& y) {
-    return caf::holds_alternative<string_type>(x)
-           && caf::holds_alternative<pattern>(y);
+    return is<string_type>(x) && is<pattern>(y);
   };
   auto numeric = [](auto& x, auto& y) {
-    return (caf::holds_alternative<int64_type>(x)
-            or caf::holds_alternative<uint64_type>(x)
-            or caf::holds_alternative<double_type>(x))
-           and (caf::holds_alternative<int64_t>(y)
-                or caf::holds_alternative<uint64_t>(y)
-                or caf::holds_alternative<double>(y));
+    return (is<int64_type>(x) or is<uint64_type>(x) or is<double_type>(x))
+           and (is<int64_t>(y) or is<uint64_t>(y) or is<double>(y));
   };
   switch (op) {
     case relational_operator::equal:
     case relational_operator::not_equal:
-      return !lhs || caf::holds_alternative<caf::none_t>(rhs)
-             || numeric(lhs, rhs) || string_and_pattern(lhs, rhs)
-             || congruent(lhs, rhs);
+      return !lhs || is<caf::none_t>(rhs) || numeric(lhs, rhs)
+             || string_and_pattern(lhs, rhs) || congruent(lhs, rhs);
     case relational_operator::less:
     case relational_operator::less_equal:
     case relational_operator::greater:
@@ -1515,21 +1509,19 @@ bool compatible(const type& lhs, relational_operator op,
       return congruent(lhs, rhs) or numeric(lhs, rhs);
     case relational_operator::in:
     case relational_operator::not_in:
-      if (caf::holds_alternative<string_type>(lhs))
-        return caf::holds_alternative<std::string>(rhs) || is_container(rhs);
-      else if (caf::holds_alternative<ip_type>(lhs)
-               || caf::holds_alternative<subnet_type>(lhs))
-        return caf::holds_alternative<subnet>(rhs) || is_container(rhs);
-      else
+      if (is<string_type>(lhs)) {
+        return is<std::string>(rhs) || is_container(rhs);
+      } else if (is<ip_type>(lhs) || is<subnet_type>(lhs)) {
+        return is<subnet>(rhs) || is_container(rhs);
+      } else
         return is_container(rhs);
     case relational_operator::ni:
     case relational_operator::not_ni:
-      if (caf::holds_alternative<std::string>(rhs))
-        return caf::holds_alternative<string_type>(lhs) || is_container(lhs);
-      else if (caf::holds_alternative<ip>(rhs)
-               || caf::holds_alternative<subnet>(rhs))
-        return caf::holds_alternative<subnet_type>(lhs) || is_container(lhs);
-      else
+      if (is<std::string>(rhs)) {
+        return is<string_type>(lhs) || is_container(lhs);
+      } else if (is<ip>(rhs) || is<subnet>(rhs)) {
+        return is<subnet_type>(lhs) || is_container(lhs);
+      } else
         return is_container(lhs);
   }
   __builtin_unreachable();
@@ -1636,7 +1628,7 @@ bool type_check(const type& x, const data& y) noexcept {
       return false;
     },
   };
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 caf::error
@@ -3508,8 +3500,7 @@ merge(const record_type& lhs, const record_type& rhs,
         ([&, rfield = std::move(rfield)](
            const record_type::field_view& lfield) mutable noexcept
          -> std::vector<struct record_type::field> {
-          if (auto result = caf::visit(do_merge(lfield, rfield), lfield.type,
-                                       rfield.type)) {
+          if (auto result = match(std::tie(lfield.type, rfield.type), do_merge(lfield, rfield))) {
             return {{
               std::string{rfield.name},
               *result,
@@ -3596,7 +3587,7 @@ auto unify(const type& a, const type& b) -> std::optional<type> {
       return std::nullopt;
     },
   };
-  return caf::visit(f, a, b);
+  return match(std::tie(a, b), f);
 }
 
 auto variant_traits<type>::index(const type& x) -> size_t {

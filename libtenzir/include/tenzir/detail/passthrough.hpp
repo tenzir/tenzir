@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+#include <tenzir/variant_traits.hpp>
 
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
@@ -67,3 +68,23 @@ struct sum_type_access<tenzir::detail::passthrough_type<T, Forward>> final {
 };
 
 } // namespace caf
+
+namespace tenzir {
+template <class T, class Forward>
+class variant_traits<detail::passthrough_type<T, Forward>> {
+  using V = detail::passthrough_type<T, Forward>;
+
+public:
+  static constexpr auto count = size_t{1};
+
+  static auto index(const V&) -> size_t {
+    return 0;
+  }
+
+  template <size_t I>
+  static auto get(const V& x) -> decltype(auto) {
+    static_assert(I == 0, "passthrough should only ever be visited on index 0");
+    return x.ref;
+  }
+};
+} // namespace tenzir

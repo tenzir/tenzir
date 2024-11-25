@@ -29,9 +29,32 @@ constexpr auto stringify = detail::overload{
 class load_plugin final
   : public virtual operator_plugin2<loader_adapter<kafka_loader>> {
 public:
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
-    config_ = config;
+  auto initialize(const record& unused_plugin_config,
+                  const record& global_config) -> caf::error override {
+    if (not unused_plugin_config.empty()) {
+      return diagnostic::error("`{}.yaml` is unused; Use `kafka.yaml` instead",
+                               this->name())
+        .to_error();
+    }
+    [&] {
+      auto ptr = global_config.find("plugins");
+      if (ptr == global_config.end()) {
+        return;
+      }
+      const auto* plugin_config = try_as<record>(&ptr->second);
+      if (not plugin_config) {
+        return;
+      }
+      auto kafka_config_ptr = plugin_config->find("kafka");
+      if (kafka_config_ptr == plugin_config->end()) {
+        return;
+      }
+      auto kafka_config = try_as<record>(&kafka_config_ptr->second);
+      if (not kafka_config or kafka_config->empty()) {
+        return;
+      }
+      config_ = flatten(*kafka_config);
+    }();
     if (!config_.contains("bootstrap.servers")) {
       config_["bootstrap.servers"] = "localhost";
     }
@@ -47,11 +70,11 @@ public:
     auto offset = std::optional<ast::expression>{};
     auto options = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
-          .add("topic", args.topic)
-          .add("count", args.count)
-          .add("exit", args.exit)
-          .add("offset", offset)
-          .add("options", options)
+          .named("topic", args.topic)
+          .named("count", args.count)
+          .named("exit", args.exit)
+          .named("offset", offset, "string|int")
+          .named("options", options)
           .parse(inv, ctx));
     if (offset) {
       TRY(auto evaluated, const_eval(offset.value(), ctx.dh()));
@@ -65,7 +88,7 @@ public:
         [](const auto&) -> std::optional<std::string> {
           return std::nullopt;
         }};
-      auto result = caf::visit(f, evaluated);
+      auto result = tenzir::match(evaluated, f);
       if (not result) {
         diagnostic::error("expected `string` or `int`")
           .primary(offset->get_location())
@@ -84,7 +107,7 @@ public:
     }
     if (options) {
       for (auto& [k, v] : options->inner) {
-        if (auto str = caf::visit(stringify, v)) {
+        if (auto str = tenzir::match(v, stringify)) {
           args.options.inner.emplace_back(k, std::move(str).value());
           continue;
         }
@@ -105,9 +128,32 @@ private:
 
 class save_plugin final
   : public virtual operator_plugin2<saver_adapter<kafka_saver>> {
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
-    config_ = config;
+  auto initialize(const record& unused_plugin_config,
+                  const record& global_config) -> caf::error override {
+    if (not unused_plugin_config.empty()) {
+      return diagnostic::error("`{}.yaml` is unused; Use `kafka.yaml` instead",
+                               this->name())
+        .to_error();
+    }
+    [&] {
+      auto ptr = global_config.find("plugins");
+      if (ptr == global_config.end()) {
+        return;
+      }
+      const auto* plugin_config = try_as<record>(&ptr->second);
+      if (not plugin_config) {
+        return;
+      }
+      auto kafka_config_ptr = plugin_config->find("kafka");
+      if (kafka_config_ptr == plugin_config->end()) {
+        return;
+      }
+      const auto kafka_config = try_as<record>(&kafka_config_ptr->second);
+      if (not kafka_config or kafka_config->empty()) {
+        return;
+      }
+      config_ = flatten(*kafka_config);
+    }();
     if (!config_.contains("bootstrap.servers")) {
       config_["bootstrap.servers"] = "localhost";
     }
@@ -123,10 +169,10 @@ class save_plugin final
     auto ts = std::optional<located<time>>{};
     auto options = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
-          .add("topic", args.topic)
-          .add("key", args.key)
-          .add("timestamp", ts)
-          .add("options", options)
+          .named("topic", args.topic)
+          .named("key", args.key)
+          .named("timestamp", ts)
+          .named("options", options)
           .parse(inv, ctx));
     // HACK: Should directly accept a time
     if (ts) {
@@ -134,7 +180,7 @@ class save_plugin final
     }
     if (options) {
       for (auto& [k, v] : options->inner) {
-        if (auto str = caf::visit(stringify, v)) {
+        if (auto str = tenzir::match(v, stringify)) {
           args.options.inner.emplace_back(k, std::move(str).value());
           continue;
         }

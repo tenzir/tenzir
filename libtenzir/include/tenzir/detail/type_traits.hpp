@@ -113,11 +113,6 @@ struct remove_optional {
 };
 
 template <class T>
-struct remove_optional<caf::optional<T>> {
-  using type = T;
-};
-
-template <class T>
 struct remove_optional<std::optional<T>> {
   using type = T;
 };

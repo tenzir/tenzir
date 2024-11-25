@@ -4,7 +4,7 @@ Subscribes to events from a channel with a topic. The dual to
 [`publish`](publish.md).
 
 ```tql
-subscribe [topic:str]
+subscribe [topic:string]
 ```
 
 ## Description
@@ -19,7 +19,7 @@ avoid data loss. This mechanism is disabled for pipelines that are not visible
 on the overview page on [app.tenzir.com](https://app.tenzir.com), which drop
 data rather than slow down their publishers.
 
-### `topic: str (optional)`
+### `topic: string (optional)`
 
 An optional channel name to subscribe to. If unspecified, the operator
 subscribes to the topic `main`.

@@ -7,7 +7,6 @@ TODO: the following functions still need to be documented:
 - `format`
 - `parse_*`
 - `print_*`
-- `grok`
 
 ## OCSF
 
@@ -68,6 +67,16 @@ Function | Description | Example
 [`value_counts`](functions/value_counts.md) | Returns a list of values with their frequency | `value_counts([1,2,2,3])`
 [`variance`](functions/variance.md) | Computes the variance of all values | `variance([1,2,3])`
 
+## List
+
+Function | Description | Example
+:--------|:------------|:-------
+[`append`](functions/append.md) | Inserts an element at the back of a list | `xs.append(y)`
+[`prepend`](functions/prepend.md) | Inserts an element at the front of a list | `xs.prepend(y)`
+[`concatenate`](functions/concatenate.md) | Merges two lists | `concatenate(xs, ys)`
+[`map`](functions/map.md) | Maps each list element to an expression | `xs.map(x, x + 3)`
+[`where`](functions/where.md) | Removes list elements based on a predicate | `xs.where(x, x > 5)`
+
 ## String
 
 ### Inspection
@@ -100,6 +109,9 @@ Function | Description | Example
 [`to_lower`](functions/to_lower.md) | Converts a string to lowercase | `"HELLO".to_lower()`
 [`to_title`](functions/to_title.md) | Converts a string to title case | `"hello world".to_title()`
 [`to_upper`](functions/to_upper.md) | Converts a string to uppercase | `"hello".to_upper()`
+[`split`](functions/split.md) | Splits a string into substrings | `split("a,b,c", ",")`
+[`split_regex`](functions/split_regex.md) | Splits a string into substrings with a regex | `split_regex("a1b2c", r"\d")`
+[`join`](functions/join.md) | Joins a list of strings into a single string | `join(["a", "b", "c"], ",")`
 
 ### File Paths
 
@@ -115,7 +127,12 @@ Function | Description | Example
 [`as_secs`](functions/as_secs.md) | Converts a duration into seconds | `as_secs(42ms)`
 [`from_epoch_ms`](functions/from_epoch_ms.md) | Interprets a number as Unix time | `from_epoch_ms(1730234246123.456)`
 [`now`](functions/now.md) | Gets the current wallclock time | `now()`
-[`since_epoch`](functions/since_epoch.md) | Turns a time value into a duration since the Unix epoch | `since_epoch(2021-02-24)`
+[`since_epoch`](functions/since_epoch.md) | Turns a time into a duration since the Unix epoch | `since_epoch(2021-02-24)`
+[`parse_time`](functions/parse_time.md) | Parses a timestamp following a given format | `"10/11/2012".parse_time("%d/%m/%Y")`
+<!--
+This is hidden because there is an issue with the timezone DB.
+[`format_time`](functions/format_time.md) | Format a timestamp following a given format | `2012-11-10.format_time("%d/%m/%Y")`
+-->
 
 <!--
 

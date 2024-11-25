@@ -5,7 +5,7 @@ Encrypts an IP address via Crypto-PAn.
 ## Synopsis
 
 ```tql
-encrypt_cryptopan(address:ip, [seed=str])
+encrypt_cryptopan(address:ip, [seed=string])
 ```
 
 ## Description
@@ -17,7 +17,7 @@ The `encrypt_cryptopan` function encrypts the IP `address` using the
 
 The IP address to encrypt.
 
-### `seed = str (optional)`
+### `seed = string (optional)`
 
 A 64-byte seed that describes a hexadecimal value. When the seed is shorter than
 64 bytes, the function appends zeros to match the size; when it is longer, it

@@ -29,7 +29,7 @@ public:
 
   auto update(const table_slice& input, session ctx) -> void override {
     auto arg = eval(expr_, input, ctx);
-    if (caf::holds_alternative<null_type>(arg.type)) {
+    if (is<null_type>(arg.type)) {
       return;
     }
     for (int64_t i = 0; i < arg.array->length(); ++i) {
@@ -65,7 +65,7 @@ public:
         });
       }
       std::ranges::sort(result, std::less<>{}, [](const auto& x) {
-        return as_vector(caf::get<record>(x))[0].second;
+        return as_vector(as<record>(x))[0].second;
       });
       return result;
     }
@@ -148,7 +148,9 @@ class plugin : public virtual aggregation_plugin {
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "any")
+          .parse(inv, ctx));
     return std::make_unique<instance<Kind>>(std::move(expr));
   }
 };

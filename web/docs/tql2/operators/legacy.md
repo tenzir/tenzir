@@ -8,14 +8,14 @@ ported over.
 Provides a compatibility fallback to TQL1 pipelines.
 
 ```tql
-legacy definition:str
+legacy definition:string
 ```
 
 ## Description
 
 This operator takes a TQL1 pipeline as a string and evaluates it.
 
-### `definition: str`
+### `definition: string`
 
 The TQL1 pipeline to evaluate.
 

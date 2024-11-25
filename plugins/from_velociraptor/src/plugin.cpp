@@ -138,13 +138,13 @@ auto parse(const proto::VQLResponse& response)
       return caf::make_error(ec::parse_error,
                              "Velociraptor response not in JSON format");
     }
-    const auto* objects = caf::get_if<list>(&*json);
+    const auto* objects = try_as<list>(&*json);
     if (objects == nullptr) {
       return caf::make_error(ec::parse_error,
                              "expected JSON array in Velociraptor response");
     }
     for (const auto& object : *objects) {
-      const auto* rec = caf::get_if<record>(&object);
+      const auto* rec = try_as<record>(&object);
       if (rec == nullptr) {
         return caf::make_error(ec::parse_error,
                                "expected objects in Velociraptor response");
@@ -347,9 +347,22 @@ private:
 class plugin final : public operator_plugin<velociraptor_operator>,
                      public virtual operator_factory_plugin {
 public:
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
-    config_ = config;
+  auto initialize(const record& unused_plugin_config,
+                  const record& global_config) -> caf::error override {
+    if (not unused_plugin_config.empty()) {
+      return diagnostic::error("`{}.yaml` is unused; Use `velociraptor.yaml` "
+                               "instead",
+                               this->name())
+        .to_error();
+    }
+    auto c
+      = try_get_only<tenzir::record>(global_config, "plugins.velociraptor");
+    if (not c) {
+      return c.error();
+    }
+    if (*c) {
+      config_ = **c;
+    }
     return caf::none;
   }
 
@@ -370,16 +383,15 @@ public:
     auto query = std::optional<located<std::string>>{};
     auto profile = std::optional<located<std::string>>{};
     argument_parser2::operator_("from_velociraptor")
-      .add("request_name", request_name)
-      .add("org_id", org_id)
-      .add("query", query)
-      .add("max_rows", max_rows)
-      .add("subscribe", subscribe)
-      .add("max_wait", max_wait)
-      .add("profile", profile)
+      .named("request_name", request_name)
+      .named("org_id", org_id)
+      .named("query", query)
+      .named("max_rows", max_rows)
+      .named("subscribe", subscribe)
+      .named("max_wait", max_wait)
+      .named("profile", profile)
       .parse(inv, ctx)
       .ignore();
-
     if (max_wait && max_wait->inner < 1s) {
       diagnostic::error("`max_wait` too low")
         .primary(max_wait->source)

@@ -39,10 +39,10 @@ public:
     }
 
     auto add_to(argument_parser2& parser) -> void {
-      parser.add("project_id", project_id);
-      parser.add("subscription_id", subscription_id);
-      parser.add("timeout", timeout);
-      parser.add("_yield_timeout", timeout);
+      parser.named("project_id", project_id);
+      parser.named("subscription_id", subscription_id);
+      parser.named("timeout", timeout);
+      parser.named("_yield_timeout", timeout);
     }
 
     friend auto inspect(auto& f, args& x) -> bool {

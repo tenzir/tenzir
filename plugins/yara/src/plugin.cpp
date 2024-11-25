@@ -632,20 +632,20 @@ public:
     auto args = operator_args{};
     auto rules = located<list>{};
     argument_parser2::operator_("yara")
-      .add(rules, "<rules>")
-      .add("compiled_rules", args.compiled_rules)
-      .add("fast_scan", args.fast_scan)
-      .add("blockwise", args.blockwise)
+      .positional("rules", rules, "list<string>")
+      .named("compiled_rules", args.compiled_rules)
+      .named("fast_scan", args.fast_scan)
+      .named("blockwise", args.blockwise)
       .parse(inv, ctx)
       .ignore();
     for (const auto& rule : rules.inner) {
-      if (not caf::holds_alternative<std::string>(rule)) {
+      if (not is<std::string>(rule)) {
         diagnostic::error("expected type string for rule")
           .primary(rules)
           .emit(ctx);
         return failure::promise();
       }
-      args.rules.push_back(std::move(caf::get<std::string>(rule)));
+      args.rules.push_back(std::move(as<std::string>(rule)));
     }
     if (args.rules.empty()) {
       diagnostic::error("no rules provided").emit(ctx);

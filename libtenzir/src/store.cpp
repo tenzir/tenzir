@@ -98,7 +98,7 @@ handle_query(const auto& self, const query_context& query_context) {
           });
     },
   };
-  caf::visit(f, query_context.cmd);
+  match(query_context.cmd, f);
   return rp;
 }
 

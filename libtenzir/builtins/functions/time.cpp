@@ -12,6 +12,8 @@
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <arrow/compute/api.h>
+
 namespace tenzir::plugins::time_ {
 
 // TODO: gcc emits a bogus -Wunused-function warning for this macro when used
@@ -29,8 +31,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function("time").add(expr, "<string>").parse(inv, ctx));
+    TRY(argument_parser2::function("time")
+          .positional("x", expr, "string")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -69,7 +72,7 @@ public:
             return series::null(time_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };
@@ -83,7 +86,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<time>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "time")
+          .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](evaluator eval, session ctx) -> series {
       auto arg = eval(expr);
@@ -92,7 +97,7 @@ public:
           return series::null(duration_type{}, arg.length());
         },
         [&](const arrow::TimestampArray& arg) {
-          auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+          auto& ty = as<arrow::TimestampType>(*arg.type());
           TENZIR_ASSERT(ty.timezone().empty());
           auto b
             = duration_type::make_arrow_builder(arrow::default_memory_pool());
@@ -116,7 +121,7 @@ public:
           return series::null(duration_type{}, arg.length());
         },
       };
-      return caf::visit(f, *arg.array);
+      return match(*arg.array, f);
     });
   }
 };
@@ -130,8 +135,9 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function(name()).add(expr, "<number>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "number")
+          .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](evaluator eval, session ctx) -> series {
       auto arg = eval(expr);
@@ -190,7 +196,7 @@ public:
           return series::null(duration_type{}, arg.length());
         },
       };
-      return caf::visit(f, *arg.array);
+      return match(*arg.array, f);
     });
   }
 };
@@ -207,7 +213,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<time>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "time")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -216,7 +224,7 @@ public:
             return series::null(int64_type{}, arg.length());
           },
           [&](const arrow::TimestampArray& arg) {
-            auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+            auto& ty = as<arrow::TimestampType>(*arg.type());
             TENZIR_ASSERT(ty.timezone().empty());
             auto b = arrow::Int64Builder{};
             check(b.Reserve(arg.length()));
@@ -252,7 +260,7 @@ public:
             return series::null(int64_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 
@@ -270,7 +278,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<duration>")
+          .positional("x", expr, "duration")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
@@ -280,7 +288,7 @@ public:
             return series::null(double_type{}, arg.length());
           },
           [&](const arrow::DurationArray& arg) {
-            auto& ty = caf::get<arrow::DurationType>(*arg.type());
+            auto& ty = as<arrow::DurationType>(*arg.type());
             TENZIR_ASSERT(ty.unit() == arrow::TimeUnit::NANO);
             auto factor = 1000 * 1000 * 1000;
             auto b = arrow::DoubleBuilder{};
@@ -305,7 +313,7 @@ public:
             return series::null(double_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };
@@ -331,6 +339,122 @@ public:
   }
 };
 
+class format_time : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.format_time";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto format = located<std::string>{};
+    auto locale = std::optional<located<std::string>>{};
+    TRY(argument_parser2::function(name())
+          .positional("input", subject_expr, "time")
+          .positional("format", format)
+          .named("locale", locale)
+          .parse(inv, ctx));
+    return function_use::make(
+      [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
+       format = std::move(format),
+       locale = std::move(locale)](evaluator eval, session ctx) -> series {
+        auto result_type = string_type{};
+        auto result_arrow_type
+          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::TimestampArray& array) {
+            auto options = arrow::compute::StrftimeOptions(
+              format.inner,
+              locale ? locale->inner : "C");
+            auto result = arrow::compute::CallFunction("strftime",
+                                                       {array}, &options);
+            if (not result.ok()) {
+              diagnostic::warning("{}", result.status().ToString())
+                .primary(fn)
+                .emit(ctx);
+              return series::null(result_type, subject.length());
+            }
+            return series{result_type, result.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(result_type, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`format_time` expected `time`, but got `{}`",
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+};
+
+class parse_time : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.parse_time";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto format = located<std::string>{};
+    auto locale = std::optional<located<std::string>>{};
+    TRY(argument_parser2::function(name())
+          .positional("input", subject_expr, "string")
+          .positional("format", format)
+          .parse(inv, ctx));
+    return function_use::make(
+      [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
+       format = std::move(format),
+       locale = std::move(locale)](evaluator eval, session ctx) -> series {
+        auto result_type = time_type{};
+        auto result_arrow_type
+          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            constexpr auto error_is_null = true;
+            auto options = arrow::compute::StrptimeOptions(
+              format.inner, arrow::TimeUnit::NANO, error_is_null);
+            auto result = arrow::compute::CallFunction("strptime",
+                                                       {array}, &options);
+            if (not result.ok()) {
+              diagnostic::warning("{}", result.status().ToString())
+                .primary(fn)
+                .emit(ctx);
+              return series::null(result_type, subject.length());
+            }
+            auto pre_nulls = array.null_count();
+            auto post_nulls = result->null_count();
+            if (pre_nulls != post_nulls) {
+              TENZIR_ASSERT(pre_nulls < post_nulls);
+              diagnostic::warning("failed to apply `parse_time`")
+                .primary(fn)
+                .emit(ctx);
+            }
+            return series{result_type, result.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(result_type, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`parse_time` expected `time`, but got `{}`",
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+};
 } // namespace
 
 } // namespace tenzir::plugins::time_
@@ -345,3 +469,5 @@ TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::year});
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::month});
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::day});
 TENZIR_REGISTER_PLUGIN(now)
+TENZIR_REGISTER_PLUGIN(format_time)
+TENZIR_REGISTER_PLUGIN(parse_time)

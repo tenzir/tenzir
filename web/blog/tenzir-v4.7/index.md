@@ -16,8 +16,8 @@ and a sizable under-the-hood performance improvement.
 
 ## Enrich with the GeoIP context
 
-Use the [`geoip`](/next/contexts/geoip) context to enrich events with
-information from a MaxMind GeoIP® database.
+Use the `geoip` context to enrich events with information from a MaxMind GeoIP®
+database.
 
 To get started, [download the freely available GeoLite2 MaxMind
 database](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data), or use
@@ -61,11 +61,11 @@ export
 }
 ```
 
-The [`geoip`](/next/contexts/geoip) context is a powerful building block for
-in-band enrichments. Besides country codes and country names you can add region
-codes, region names, cities, zip codes, and geographic coordinates. With the
-flexibility of the [contextualization framework](/next/contexts) this
-information you can now get this information in real-time.
+The `geoip` context is a powerful building block for in-band enrichments.
+Besides country codes and country names you can add region codes, region names,
+cities, zip codes, and geographic coordinates. With the flexibility of the
+contextualization framework this information you can now get this information in
+real-time.
 
 :::info Follow our Blog Post Series
 Read more about contexts in our blog post series:

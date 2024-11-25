@@ -160,7 +160,7 @@ public:
           TENZIR_UNREACHABLE();
         },
       };
-      auto constant = caf::visit(f, entry);
+      auto constant = tenzir::match(entry, f);
       map_.insert_or_assign(var->name, constant);
       auto pipe_copy = *pipe;
       visit(pipe_copy);

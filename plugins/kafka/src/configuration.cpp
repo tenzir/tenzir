@@ -65,8 +65,9 @@ auto configuration::set(const record& options) -> caf::error {
     },
   };
   for (const auto& [key, value] : options)
-    if (auto err = set(key, caf::visit(stringify, value)))
+    if (auto err = set(key, tenzir::match(value, stringify))) {
       return err;
+    }
   return {};
 }
 

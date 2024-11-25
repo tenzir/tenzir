@@ -91,10 +91,11 @@ pipelines:
     # The definition of the pipeline. Configured pipelines that fail to start
     # cause the node to fail to start.
     definition: |
-      every ${{ inputs.refresh-rate }}
-        from https://example.org/
-          read csv --allow-comments
-      | context update example --key foo
+      every ${{ inputs.refresh-rate }} {
+        load https://example.org/
+        read_csv allow-comments=true
+        context::update "example", key="foo"
+      }
     # Pipelines that encounter an error stop running and show an error state.
     # This option causes pipelines to automatically restart when they
     # encounter an error instead. The first restart happens immediately, and
@@ -115,8 +116,8 @@ pipelines:
 
 # Define any number of contexts.
 contexts:
-  # A unique name for the context that's used in the context, enrich, and
-  # lookup operators to refer to the context.
+  # A unique name for the context that's used in the context::* operators to
+  # refer to the context.
   example:
     # The type of the context (required).
     type: lookup-table
@@ -153,7 +154,7 @@ examples:
     description: |
       This pipelines shows the contents of the example lookup table.
     definition: |
-      context inspect example
+      context::inspect "example"
   - name: |
       Visualize successful lookups with the `example` context in the last week
     description: |

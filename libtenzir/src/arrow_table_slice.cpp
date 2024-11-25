@@ -149,7 +149,7 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     } else {
       state_.schema = type::from_arrow(*state_.record_batch->schema());
     }
-    TENZIR_ASSERT(caf::holds_alternative<record_type>(state_.schema));
+    TENZIR_ASSERT(is<record_type>(state_.schema));
     state_.flat_columns = index_column_arrays(state_.record_batch);
     TENZIR_ASSERT_EXPENSIVE(state_.flat_columns.size()
                             == as<record_type>(state_.schema).num_leaves());
@@ -216,8 +216,9 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
       const auto& schema = as<record_type>(this->schema());
       auto type = schema.field(schema.resolve_flat_index(column)).type;
       for (size_t row = 0; auto&& value : values(type, *array)) {
-        if (!caf::holds_alternative<view<caf::none_t>>(value))
+        if (!is<view<caf::none_t>>(value)) {
           index.append(value, offset + row);
+        }
         ++row;
       }
     }

@@ -45,7 +45,7 @@ auto offset::get(const table_slice& slice) const noexcept
     };
   }
   return {
-    caf::get<record_type>(slice.schema()).field(*this).type,
+    as<record_type>(slice.schema()).field(*this).type,
     get(*to_record_batch(slice)),
   };
 }
@@ -70,7 +70,7 @@ auto offset::get(const arrow::StructArray& struct_array) const noexcept
     index = index.subspan(1);
     if (index.empty())
       return field;
-    return impl(impl, index, caf::get<arrow::StructArray>(*field));
+    return impl(impl, index, as<arrow::StructArray>(*field));
   };
   return impl(impl, *this, struct_array);
 }

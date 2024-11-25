@@ -775,7 +775,7 @@ public:
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto it = std::back_inserter(event);
       for (const auto& row :
-           values(caf::get<record_type>(resolved_slice.schema()), *array)) {
+           values(as<record_type>(resolved_slice.schema()), *array)) {
         TENZIR_ASSERT(row);
         auto printer = json_printer{{
           .oneline = true,

@@ -4,7 +4,7 @@ Publishes events to a channel with a topic. The dual to
 [`subscribe`](subscribe.md).
 
 ```tql
-publish [topic:str]
+publish [topic:string]
 ```
 ## Description
 
@@ -17,7 +17,7 @@ The `publish` operator does not guarantee that events stay in their
 original order.
 :::
 
-### `topic: str (optional)`
+### `topic: string (optional)`
 
 An optional topic for publishing events under. If unspecified, the operator
 publishes events to the topic `main`.

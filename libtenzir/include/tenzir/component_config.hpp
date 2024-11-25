@@ -32,13 +32,13 @@ bool extract_settings(T& to, const caf::settings& from, std::string_view path) {
     return true;
   if constexpr (detail::contains_type_v<caf::config_value::variant_type::types,
                                         T>) {
-    auto x = caf::get_if<T>(&*cv);
+    auto x = try_as<T>(&*cv);
     if (!x)
       return false;
     to = *x;
     return true;
   } else {
-    auto x = caf::get_if<std::string>(&*cv);
+    auto x = try_as<std::string>(&*cv);
     if (!x)
       return false;
     auto f = x->begin();

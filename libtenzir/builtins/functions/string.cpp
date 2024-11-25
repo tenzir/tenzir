@@ -30,8 +30,8 @@ public:
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(arg_expr, "<string>")
+          .positional("x", subject_expr, "string")
+          .positional("prefix", arg_expr, "string")
           .parse(inv, ctx));
     // TODO: This shows the need for some abstraction.
     return function_use::make([subject_expr = std::move(subject_expr),
@@ -65,7 +65,7 @@ public:
           return series::null(bool_type{}, subject.length());
         },
       };
-      return caf::visit(f, *subject.array, *arg.array);
+      return match(std::tie(*subject.array, *arg.array), f);
     });
   }
 
@@ -88,8 +88,8 @@ public:
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(characters, "<characters>")
+          .positional("x", subject_expr, "string")
+          .positional("chars", characters)
           .parse(inv, ctx));
     auto options = std::optional<arrow::compute::TrimOptions>{};
     if (characters) {
@@ -122,7 +122,7 @@ public:
             return series::null(string_type{}, subject.length());
           },
         };
-        return caf::visit(f, *subject.array);
+        return match(*subject.array, f);
       });
   }
 
@@ -160,8 +160,9 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
+    // TODO: Use `result_arrow_ty` to derive type name.
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
+          .positional("x", subject_expr, "")
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr)](
                                 evaluator eval, session ctx) -> series {
@@ -193,7 +194,7 @@ public:
           return series::null(result_ty_, subject.length());
         },
       };
-      return caf::visit(f, *subject.array);
+      return match(*subject.array, f);
     });
   }
 
@@ -221,10 +222,10 @@ public:
     auto replacement = std::string{};
     auto max_replacements = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(pattern, "<pattern>")
-          .add(replacement, "<replacement>")
-          .add("max", max_replacements)
+          .positional("x", subject_expr, "string")
+          .positional("pattern", pattern)
+          .positional("replacement", replacement)
+          .named("max", max_replacements)
           .parse(inv, ctx));
     if (max_replacements) {
       if (max_replacements->inner < 0) {
@@ -272,7 +273,7 @@ public:
             return series::null(result_type, subject.length());
           },
         };
-        return caf::visit(f, *subject.array);
+        return match(*subject.array, f);
       });
   }
 
@@ -293,10 +294,10 @@ public:
     auto end = std::optional<located<int64_t>>{};
     auto stride = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add("begin", begin)
-          .add("end", end)
-          .add("stride", stride)
+          .positional("x", subject_expr, "string")
+          .named("begin", begin)
+          .named("end", end)
+          .named("stride", stride)
           .parse(inv, ctx));
     if (stride) {
       if (stride->inner <= 0) {
@@ -340,7 +341,7 @@ public:
             return series::null(result_type, subject.length());
           },
         };
-        return caf::visit(f, *subject.array);
+        return match(*subject.array, f);
       });
   }
 };
@@ -355,7 +356,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     TRY(argument_parser2::function("string")
-          .add(subject_expr, "<expr>")
+          .positional("x", subject_expr, "any")
           .parse(inv, ctx));
     return function_use::make([subject_expr = std::move(subject_expr)](
                                 evaluator eval, session) -> series {
@@ -363,15 +364,14 @@ public:
       auto b = arrow::StringBuilder{};
       for (auto&& value : subject.values()) {
         auto f = detail::overload{
-          [](const std::string& x) {
-            return x;
+          [](std::string_view x) {
+            return std::string{x};
           },
           [](int64_t x) {
             return fmt::to_string(x);
           },
           [&](enumeration x) {
-            return std::string{
-              caf::get<enumeration_type>(subject.type).field(x)};
+            return std::string{as<enumeration_type>(subject.type).field(x)};
           },
           [&](const auto&) {
             // TODO: This should probably use the TQL printer, once it exists.
@@ -379,9 +379,140 @@ public:
             return fmt::to_string(value);
           },
         };
-        check(b.Append(caf::visit(f, value)));
+        check(b.Append(match(value, f)));
       }
       return {string_type{}, finish(b)};
+    });
+  }
+};
+
+class split_fn : public virtual function_plugin {
+public:
+  split_fn() = default;
+  explicit split_fn(bool regex) : regex_{regex} {
+  }
+
+  auto name() const -> std::string override {
+    return regex_ ? "tql2.split_regex" : "tql2.split";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto pattern = located<std::string>{};
+    auto reverse = std::optional<location>{};
+    auto max_splits = std::optional<located<int64_t>>{};
+    TRY(argument_parser2::function(name())
+          .positional("x", subject_expr, "string")
+          .positional("pattern", pattern)
+          .named("max", max_splits)
+          .named("reverse", reverse)
+          .parse(inv, ctx));
+    if (max_splits) {
+      if (max_splits->inner < 0) {
+        diagnostic::error("`max` must be at least 0, but got {}",
+                          max_splits->inner)
+          .primary(*max_splits)
+          .emit(ctx);
+      }
+    }
+    return function_use::make([this, subject_expr = std::move(subject_expr),
+                               pattern = std::move(pattern), max_splits,
+                               reverse](evaluator eval, session ctx) -> series {
+      static const auto result_type = type{list_type{string_type{}}};
+      static const auto result_arrow_type = result_type.to_arrow_type();
+      auto subject = eval(subject_expr);
+      auto f = detail::overload{
+        [&](const arrow::StringArray& array) {
+          auto options = arrow::compute::SplitPatternOptions();
+          options.pattern = pattern.inner;
+          options.max_splits = max_splits ? max_splits->inner : -1;
+          options.reverse = reverse.has_value();
+          auto result = arrow::compute::CallFunction(
+            regex_ ? "split_pattern_regex" : "split_pattern", {array},
+            &options);
+          if (not result.ok()) {
+            diagnostic::warning("{}",
+                                result.status().ToStringWithoutContextLines())
+              .severity(result.status().IsInvalid() ? severity::error
+                                                    : severity::warning)
+              .primary(pattern.source)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          }
+          return series{result_type, result.MoveValueUnsafe().make_array()};
+        },
+        [&](const arrow::NullArray& array) {
+          return series::null(result_type, array.length());
+        },
+        [&](const auto&) {
+          diagnostic::warning("`{}` expected `string`, but got `{}`", name(),
+                              subject.type.kind())
+            .primary(subject_expr)
+            .emit(ctx);
+          return series::null(result_type, subject.length());
+        },
+      };
+      return match(*subject.array, f);
+    });
+  }
+
+private:
+  bool regex_ = {};
+};
+
+class join : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.join";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    // TODO: Technically, this could be an expression and not just a constant
+    // string.
+    auto separator = std::optional<located<std::string>>{};
+    TRY(argument_parser2::function(name())
+          .positional("x", subject_expr, "list")
+          .positional("separator", separator)
+          .parse(inv, ctx));
+    return function_use::make([this, subject_expr = std::move(subject_expr),
+                               separator = std::move(separator)](
+                                evaluator eval, session ctx) -> series {
+      static const auto result_type = type{string_type{}};
+      static const auto result_arrow_type = result_type.to_arrow_type();
+      auto subject = eval(subject_expr);
+      auto f = detail::overload{
+        [&](const arrow::ListArray& array) {
+          auto result = arrow::compute::CallFunction(
+            "binary_join",
+            {array, std::make_shared<arrow::StringScalar>(
+                      separator ? separator->inner : "")},
+            nullptr, nullptr);
+          if (not result.ok()) {
+            diagnostic::warning("{}",
+                                result.status().ToStringWithoutContextLines())
+              .severity(result.status().IsInvalid() ? severity::error
+                                                    : severity::warning)
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          }
+          return series{result_type, result.MoveValueUnsafe().make_array()};
+        },
+        [&](const arrow::NullArray& array) {
+          return series::null(result_type, array.length());
+        },
+        [&](const auto&) {
+          diagnostic::warning("`{}` expected `list`, but got `{}`", name(),
+                              subject.type.kind())
+            .primary(subject_expr)
+            .emit(ctx);
+          return series::null(result_type, subject.length());
+        },
+      };
+      return match(*subject.array, f);
     });
   }
 };
@@ -427,3 +558,7 @@ TENZIR_REGISTER_PLUGIN(replace{true});
 TENZIR_REGISTER_PLUGIN(replace{false});
 TENZIR_REGISTER_PLUGIN(slice);
 TENZIR_REGISTER_PLUGIN(str);
+
+TENZIR_REGISTER_PLUGIN(split_fn{true});
+TENZIR_REGISTER_PLUGIN(split_fn{false});
+TENZIR_REGISTER_PLUGIN(join);

@@ -4,7 +4,7 @@ Computes the [Community ID](https://github.com/corelight/community-id-spec) for
 a network connection/flow.
 
 ```tql
-community_id(src_ip=ip, dst_ip=ip, proto=str,
+community_id(src_ip=ip, dst_ip=ip, proto=string,
              [src_port=int, dst_port=int, seed=int]) -> str
 ```
 

@@ -31,8 +31,8 @@ namespace {
 
 auto sort_list(const series& input) -> series {
   auto builder = series_builder{input.type};
-  for (const auto& value : values(caf::get<list_type>(input.type),
-                                  caf::get<arrow::ListArray>(*input.array))) {
+  for (const auto& value :
+       values(as<list_type>(input.type), as<arrow::ListArray>(*input.array))) {
     if (not value) {
       builder.null();
       continue;
@@ -71,7 +71,7 @@ auto sort_record(const arrow::StructArray& array)
 }
 
 auto sort_record(const series& input) -> series {
-  auto array = sort_record(caf::get<arrow::StructArray>(*input.array));
+  auto array = sort_record(as<arrow::StructArray>(*input.array));
   auto type = type::from_arrow(*array->struct_type());
   return series{
     std::move(type),
@@ -167,8 +167,8 @@ private:
       return key_path->second;
     }
     auto current_key_type
-      = caf::get<record_type>(schema).field(*key_path->second).type.prune();
-    if (caf::holds_alternative<subnet_type>(current_key_type)) {
+      = as<record_type>(schema).field(*key_path->second).type.prune();
+    if (is<subnet_type>(current_key_type)) {
       // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
       // supported for extension types. We can fall back to the storage array
       // for all types but subnet, which has a nested extension type.
@@ -318,12 +318,12 @@ public:
           }) >> required_ws_or_comment)
         >> ((extractor
              >> (-(required_ws_or_comment >> (str{"asc"} | str{"desc"})))
-                  .then([&](caf::optional<std::string> sort_order) {
+                  .then([&](std::optional<std::string> sort_order) {
                     return sort_order.value_or("asc") == "desc";
                   })
              >> (-(required_ws_or_comment
                    >> (str{"nulls-first"} | str{"nulls-last"})))
-                  .then([&](caf::optional<std::string> null_placement) {
+                  .then([&](std::optional<std::string> null_placement) {
                     return null_placement.value_or("nulls-last")
                            == "nulls-first";
                   })
@@ -480,10 +480,10 @@ public:
             return lhs_value.index() < rhs_value.index();
           },
         };
-        if (caf::visit(cmp, lhs_value, rhs_value)) {
+        if (match(std::tie(lhs_value, rhs_value), cmp)) {
           return not sort_key.reverse;
         }
-        if (caf::visit(cmp, rhs_value, lhs_value)) {
+        if (match(std::tie(rhs_value, lhs_value), cmp)) {
           return sort_key.reverse;
         }
       }
@@ -561,7 +561,9 @@ public:
   auto make_function(function_plugin::invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "list|record")
+          .parse(inv, ctx));
     return function_use::make(
       [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
         auto arg = eval(expr);
@@ -583,7 +585,7 @@ public:
             return series::null(null_type{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 };

@@ -796,7 +796,7 @@ auto exec_node(
   const metrics_receiver_actor& metrics_receiver, int index, bool has_terminal,
   bool is_hidden, uuid run_id) -> exec_node_actor::behavior_type {
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
-    const auto name = fmt::format("tenzir.exec-node.{}", op->name());
+    const auto name = fmt::format("tnz.{}", op->name());
     caf::detail::set_thread_name(name.c_str());
   }
   self->state.self = self;

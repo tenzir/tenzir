@@ -8,8 +8,8 @@ variable of the `tenzir` or `tenzir-node` process.
 Executes Python code against each event of the input.
 
 ```tql
-python code:str, [requirements=str]
-python file=str, [requirements=str]
+python code:string, [requirements=string]
+python file=string, [requirements=string]
 ```
 
 ## Description
@@ -30,7 +30,7 @@ values to native Python data types and back to the Tenzir data model after the
 transformation.
 :::
 
-### `code: str`
+### `code: string`
 
 The provided Python code describes an event-for-event transformation, i.e., it
 is executed once for each input event and produces exactly output event.
@@ -43,12 +43,12 @@ new fields are added by assigning to `self.fieldname` and existing fields can be
 removed by deleting them from `self`. When new fields are added, it is required
 that the new field has the same type for every row of the event.
 
-### `file: str`
+### `file: string`
 
 Instead of providing the code inline, the `file` option allows for passing
 a path to a file containing the code the operator executes per event.
 
-### `requirements = str (optional)`
+### `requirements = string (optional)`
 
 The `requirements` flag can be used to pass additional package dependencies in
 the pip format. When it is used, the argument is passed on to `pip install` in a

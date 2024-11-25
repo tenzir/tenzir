@@ -53,15 +53,13 @@ auto argument_parser2::parse(const ast::entity& self,
   };
   auto kind = [](const data& x) -> std::string_view {
     // TODO: Refactor this.
-    return caf::visit(
-      []<class Data>(const Data&) -> std::string_view {
+    return match(x, []<class Data>(const Data&) -> std::string_view {
         if constexpr (caf::detail::is_one_of<Data, pattern>::value) {
           TENZIR_UNREACHABLE();
         } else {
           return to_string(type_kind::of<data_to_type_t<Data>>);
         }
-      },
-      x);
+      });
   };
   auto arg = args.begin();
   auto positional_idx = size_t{0};
@@ -73,7 +71,7 @@ auto argument_parser2::parse(const ast::entity& self,
         break;
       }
       emit(diagnostic::error("expected additional positional argument `{}`",
-                             positional.meta)
+                             positional.name)
              .primary(self));
       break;
     }
@@ -90,10 +88,10 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         // TODO: Make this more beautiful.
         auto storage = T{};
-        auto cast = caf::get_if<T>(&*value);
+        auto cast = try_as<T>(&*value);
         if constexpr (std::same_as<T, uint64_t>) {
           if (not cast) {
-            auto other = caf::get_if<int64_t>(&*value);
+            auto other = try_as<int64_t>(&*value);
             if (other) {
               if (*other < 0) {
                 emit(diagnostic::error("expected positive integer, got `{}`",
@@ -150,7 +148,7 @@ auto argument_parser2::parse(const ast::entity& self,
           return;
         }
         auto& name = sel->path()[0].name;
-        auto it = std::ranges::find(named_, name, &named::name);
+        auto it = std::ranges::find(named_, name, &named_t::name);
         if (it == named_.end()) {
           emit(diagnostic::error("named argument `{}` does not exist", name)
                  .primary(assignment.left));
@@ -171,10 +169,10 @@ auto argument_parser2::parse(const ast::entity& self,
               result = value.error();
               return;
             }
-            auto cast = caf::get_if<T>(&*value);
+            auto cast = try_as<T>(&*value);
             if constexpr (std::same_as<T, uint64_t>) {
               if (not cast) {
-                auto other = caf::get_if<int64_t>(&*value);
+                auto other = try_as<int64_t>(&*value);
                 if (other) {
                   if (*other < 0) {
                     emit(diagnostic::error(
@@ -183,7 +181,7 @@ auto argument_parser2::parse(const ast::entity& self,
                     return;
                   }
                   value = static_cast<uint64_t>(*other);
-                  cast = caf::get_if<T>(&*value);
+                  cast = try_as<T>(&*value);
                 }
               }
             }
@@ -260,51 +258,83 @@ auto argument_parser2::parse(const ast::entity& self,
 }
 
 auto argument_parser2::usage() const -> std::string {
+  enum class pipeline_last_t { none, req, opt };
+  auto setter_to_string = [](const any_setter& set) {
+    return set.match(
+      []<data_type T>(const setter<located<T>>&) -> std::string {
+        if constexpr (std::same_as<T, std::string>) {
+          return "string";
+        } else if constexpr (concepts::one_of<T, uint64_t, int64_t>) {
+          return "int";
+        } else if constexpr (concepts::one_of<T, double>) {
+          return "number";
+        } else {
+          return fmt::format("{}", type_kind::of<data_to_type_t<T>>);
+        }
+      },
+      [](const setter<ast::expression>&) -> std::string {
+        // TODO: This might not be what we want. Perhaps we make this
+        // customizable instead.
+        return "any";
+      },
+      [](const setter<ast::simple_selector>&) -> std::string {
+        // TODO: `field` is not 100% accurate, but we use it in the docs.
+        return "field";
+      },
+      [](const setter<located<pipeline>>&) -> std::string {
+        return "{ … }";
+      });
+  };
   if (usage_cache_.empty()) {
     usage_cache_ += name_;
     usage_cache_ += kind_ == kind::op ? ' ' : '(';
     auto has_previous = false;
+    auto in_brackets = false;
+    auto pipeline_last = pipeline_last_t::none;
     for (auto [idx, positional] : detail::enumerate(positional_)) {
       auto last = idx == positional_.size() - 1;
       auto is_pipeline
         = std::holds_alternative<setter<located<pipeline>>>(positional.set);
+      auto is_optional = first_optional_ && idx >= *first_optional_;
       if (last && is_pipeline && kind_ == kind::op) {
-        usage_cache_ += ' ';
-      } else if (std::exchange(has_previous, true)) {
-        usage_cache_ += ", ";
-      }
-      if (first_optional_ && idx >= *first_optional_) {
-        usage_cache_ += fmt::format("{}?", positional.meta);
-      } else {
-        usage_cache_ += positional.meta;
-      }
-    }
-    const auto append_named_option = [&](const named& opt) {
-      if (opt.name.starts_with("_")) {
-        // This denotes an internal/unstable option.
-        return;
+        // We want to print named arguments before, so we skip this for now.
+        pipeline_last
+          = is_optional ? pipeline_last_t::opt : pipeline_last_t::req;
+        continue;
       }
       if (std::exchange(has_previous, true)) {
         usage_cache_ += ", ";
       }
-      auto meta = opt.set.match(
-        []<data_type T>(const setter<located<T>>&) {
-          return fmt::format("<{}>", type_kind::of<data_to_type_t<T>>);
-        },
-        [](const setter<ast::expression>&) -> std::string {
-          return "<expr>";
-        },
-        [](const setter<ast::simple_selector>&) -> std::string {
-          return "<selector>";
-        },
-        [](const setter<located<pipeline>>&) -> std::string {
-          return "{ ... }";
-        });
-      auto txt = fmt::format("{}={}", opt.name, meta);
-      usage_cache_ += txt;
-      if (not opt.required) {
-        usage_cache_ += "?";
+      if (is_optional) {
+        if (not in_brackets) {
+          usage_cache_ += '[';
+          in_brackets = true;
+        }
+      } else {
+        TENZIR_ASSERT(not in_brackets);
       }
+      auto type = positional.type.empty() ? setter_to_string(positional.set)
+                                          : positional.type;
+      usage_cache_ += fmt::format("{}:{}", positional.name, type);
+    }
+    const auto append_named_option = [&](const named_t& opt) {
+      if (opt.name.starts_with("_")) {
+        // This denotes an internal/unstable option.
+        return;
+      }
+      if (opt.required and in_brackets) {
+        usage_cache_ += ']';
+        in_brackets = false;
+      }
+      if (std::exchange(has_previous, true)) {
+        usage_cache_ += ", ";
+      }
+      if (not opt.required and not in_brackets) {
+        usage_cache_ += '[';
+        in_brackets = true;
+      }
+      auto type = opt.type.empty() ? setter_to_string(opt.set) : opt.type;
+      usage_cache_ += fmt::format("{}={}", opt.name, type);
     };
     for (const auto& opt : named_) {
       if (opt.required) {
@@ -316,7 +346,24 @@ auto argument_parser2::usage() const -> std::string {
         append_named_option(opt);
       }
     }
-
+    if (pipeline_last != pipeline_last_t::none) {
+      auto is_optional = pipeline_last == pipeline_last_t::opt;
+      if (is_optional and not in_brackets) {
+        usage_cache_ += '[';
+        in_brackets = true;
+      } else if (not is_optional and in_brackets) {
+        usage_cache_ += ']';
+        in_brackets = false;
+      }
+      if (std::exchange(has_previous, true)) {
+        usage_cache_ += " ";
+      }
+      usage_cache_ += "{ … }";
+    }
+    if (in_brackets) {
+      usage_cache_ += ']';
+      in_brackets = false;
+    }
     if (kind_ != kind::op) {
       usage_cache_ += ')';
     }
@@ -337,113 +384,92 @@ auto argument_parser2::docs() const -> std::string {
   return fmt::format("https://docs.tenzir.com/{}/{}", category, name_);
 }
 
+template <class T>
+auto argument_parser2::make_setter(T& x) -> auto {
+  using value_type = decltype(std::invoke([] {
+    if constexpr (caf::detail::is_specialization<std::optional, T>::value) {
+      return tag_v<typename T::value_type>;
+    } else {
+      return tag_v<T>;
+    }
+  }))::type;
+  if constexpr (std::same_as<T, std::optional<location>>) {
+    return setter<located<bool>>{[&x](located<bool> y) {
+      if (y.inner) {
+        x = y.source;
+      } else {
+        x = std::nullopt;
+      }
+    }};
+  } else if constexpr (argument_parser_bare_type<value_type>) {
+    return setter<located<value_type>>{[&x](located<value_type> y) {
+      x = std::move(y.inner);
+    }};
+  } else {
+    return setter<value_type>{[&x](value_type y) {
+      x = std::move(y);
+    }};
+  }
+}
+
 template <argument_parser_type T>
-auto argument_parser2::add(T& x, std::string meta) -> argument_parser2& {
+auto argument_parser2::positional(std::string name, T& x, std::string type)
+  -> argument_parser2& {
   TENZIR_ASSERT(not first_optional_, "encountered required positional after "
                                      "optional positional argument");
-  if constexpr (argument_parser_bare_type<T>) {
-    positional_.emplace_back(setter<located<T>>{[&x](located<T> y) {
-                               x = std::move(y.inner);
-                             }},
-                             std::move(meta));
-  } else {
-    positional_.emplace_back(setter<T>{[&x](T y) {
-                               x = std::move(y);
-                             }},
-                             std::move(meta));
-  }
+  positional_.emplace_back(std::move(name), std::move(type), make_setter(x));
   return *this;
 }
 
 template <argument_parser_type T>
-auto argument_parser2::add(std::optional<T>& x, std::string meta)
-  -> argument_parser2& {
+auto argument_parser2::positional(std::string name, std::optional<T>& x,
+                                  std::string type) -> argument_parser2& {
   if (not first_optional_) {
     first_optional_ = positional_.size();
   }
-  if constexpr (argument_parser_bare_type<T>) {
-    positional_.emplace_back(setter<located<T>>{[&x](located<T> y) {
-                               x = std::move(y.inner);
-                             }},
-                             std::move(meta));
-  } else {
-    positional_.emplace_back(setter<T>{[&x](T y) {
-                               x = std::move(y);
-                             }},
-                             std::move(meta));
-  }
+  positional_.emplace_back(std::move(name), std::move(type), make_setter(x));
   return *this;
 }
 
 template <argument_parser_type T>
-auto argument_parser2::add(std::string name, T& x) -> argument_parser2& {
-  if constexpr (argument_parser_bare_type<T>) {
-    named_.emplace_back(std::move(name), setter<located<T>>{[&x](located<T> y) {
-                          x = std::move(y.inner);
-                        }},
-                        true);
-  } else {
-    named_.emplace_back(std::move(name), setter<T>{[&x](T y) {
-                          x = std::move(y);
-                        }},
-                        true);
-  }
+auto argument_parser2::named(std::string name, T& x, std::string type)
+  -> argument_parser2& {
+  named_.emplace_back(std::move(name), std::move(type), make_setter(x), true);
   return *this;
 }
 
 template <argument_parser_type T>
-auto argument_parser2::add(std::string name, std::optional<T>& x)
-  -> argument_parser2& {
-  if constexpr (argument_parser_bare_type<T>) {
-    named_.emplace_back(std::move(name), setter<located<T>>{[&x](located<T> y) {
-                          x = std::move(y.inner);
-                        }});
-  } else {
-    named_.emplace_back(std::move(name), setter<T>{[&x](T y) {
-                          x = std::move(y);
-                        }});
-  }
+auto argument_parser2::named(std::string name, std::optional<T>& x,
+                             std::string type) -> argument_parser2& {
+  named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
 
-auto argument_parser2::add(std::string name, std::optional<location>& x)
-  -> argument_parser2& {
-  named_.emplace_back(std::move(name),
-                      setter<located<bool>>{[&x](located<bool> y) {
-                        if (y.inner) {
-                          x = y.source;
-                        } else {
-                          x = std::nullopt;
-                        }
-                      }});
+auto argument_parser2::named(std::string name, std::optional<location>& x,
+                             std::string type) -> argument_parser2& {
+  named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
 
-auto argument_parser2::add(std::string name, bool& x) -> argument_parser2& {
-  named_.emplace_back(std::move(name),
-                      setter<located<bool>>{[&x](located<bool> y) {
-                        x = y.inner;
-                      }});
+auto argument_parser2::named(std::string name, bool& x, std::string type)
+  -> argument_parser2& {
+  named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
 
 template <std::monostate>
-struct instantiate_argument_parser_add {
+struct instantiate_argument_parser_methods {
   template <class T>
-  using positional
-    = auto (argument_parser2::*)(T&, std::string) -> argument_parser2&;
-
-  template <class T>
-  using named
-    = auto (argument_parser2::*)(std::string, T&) -> argument_parser2&;
+  using func = auto (argument_parser2::*)(std::string, T&, std::string)
+    -> argument_parser2&;
 
   template <class... T>
   struct inner {
     static constexpr auto value = std::tuple{
-      static_cast<positional<T>>(&argument_parser2::add)...,
-      static_cast<positional<std::optional<T>>>(&argument_parser2::add)...,
-      static_cast<named<T>>(&argument_parser2::add)...,
-      static_cast<named<std::optional<T>>>(&argument_parser2::add)...,
+      static_cast<func<T>>(&argument_parser2::positional)...,
+      static_cast<func<std::optional<T>>>(&argument_parser2::positional)...,
+      static_cast<func<T>>(&argument_parser2::named)...,
+      static_cast<func<std::optional<T>>>(&argument_parser2::named)...,
     };
   };
 
@@ -451,6 +477,6 @@ struct instantiate_argument_parser_add {
     = detail::tl_apply_t<argument_parser_types, inner>::value;
 };
 
-template struct instantiate_argument_parser_add<std::monostate{}>;
+template struct instantiate_argument_parser_methods<std::monostate{}>;
 
 } // namespace tenzir

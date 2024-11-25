@@ -274,7 +274,7 @@ public:
 
   static auto parse(parser_interface& p) -> every_scheduler {
     auto interval_data = p.parse_data();
-    const auto* interval = caf::get_if<duration>(&interval_data.inner);
+    const auto* interval = try_as<duration>(&interval_data.inner);
     if (not interval) {
       diagnostic::error("interval must be a duration")
         .primary(interval_data.source)
@@ -365,8 +365,8 @@ public:
     auto interval = located<duration>{};
     auto pipe = pipeline{};
     TRY(argument_parser2::operator_("every")
-          .add(interval, "<duration>")
-          .add(pipe, "{ ... }")
+          .positional("interval", interval)
+          .positional("{ … }", pipe)
           .parse(inv, ctx));
     auto fail = std::optional<failure>{};
     if (interval.inner <= duration::zero()) {

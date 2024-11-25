@@ -29,7 +29,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("type_id")
-          .add(expr, "<value>")
+          .positional("x", expr, "any")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
@@ -64,7 +64,7 @@ public:
         .to_error();
     }
     for (const auto& [key, value] : *secrets) {
-      const auto* str = caf::get_if<std::string>(&value);
+      const auto* str = try_as<std::string>(&value);
       if (not str) {
         return diagnostic::error("secrets must be strings")
           .note("configuration key `tenzir.secrets.{}` is of type `{}`", key,
@@ -79,8 +79,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function("secret").add(expr, "<key>").parse(inv, ctx));
+    TRY(argument_parser2::function("secret")
+          .positional("key", expr, "string")
+          .parse(inv, ctx));
     return function_use::make([this, expr = std::move(expr)](
                                 evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -116,7 +117,7 @@ public:
           return series::null(string_type{}, value.length());
         },
       };
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 
@@ -143,7 +144,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("env").add(expr, "<key>").parse(inv, ctx));
+    TRY(argument_parser2::function("env")
+          .positional("key", expr, "string")
+          .parse(inv, ctx));
     return function_use::make([this, expr = std::move(expr)](
                                 evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -176,7 +179,7 @@ public:
           return series::null(string_type{}, value.length());
         },
       };
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 
@@ -193,7 +196,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "list")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         TENZIR_UNUSED(ctx);
@@ -226,7 +231,7 @@ public:
             return series::null(int64_type{}, value.length());
           },
         };
-        return caf::visit(f, *value.array);
+        return match(*value.array, f);
       });
   }
 };
@@ -242,8 +247,8 @@ public:
     auto expr = ast::expression{};
     auto needle = located<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<expr>")
-          .add(needle, "<string>")
+          .positional("x", expr, "record")
+          .positional("field", needle)
           .parse(inv, ctx));
     return function_use::make([needle = std::move(needle),
                                expr = std::move(expr)](evaluator eval,
@@ -275,7 +280,7 @@ public:
             .emit(ctx);
           return series::null(bool_type{}, value.length());
         }};
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 };
@@ -294,8 +299,8 @@ public:
     auto expr = ast::expression{};
     auto str = located<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<expr>")
-          .add(str, "<pattern>")
+          .positional("x", expr, "record")
+          .positional("regex", str)
           .parse(inv, ctx));
     auto pattern = pattern::make(str.inner);
     if (not pattern) {
@@ -331,7 +336,7 @@ public:
             .emit(ctx);
           return series::null(null_type{}, value.length());
         }};
-      return caf::visit(f, *value.array);
+      return match(*value.array, f);
     });
   }
 

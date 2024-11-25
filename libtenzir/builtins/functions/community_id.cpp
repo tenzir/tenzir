@@ -37,12 +37,12 @@ public:
     -> failure_or<function_ptr> override {
     auto args = arguments{};
     TRY(argument_parser2::function("community_id")
-          .add("src_ip", args.src_ip)
-          .add("dst_ip", args.dst_ip)
-          .add("src_port", args.src_port)
-          .add("dst_port", args.dst_port)
-          .add("proto", args.proto)
-          .add("seed", args.seed)
+          .named("src_ip", args.src_ip, "ip")
+          .named("dst_ip", args.dst_ip, "ip")
+          .named("src_port", args.src_port, "int")
+          .named("dst_port", args.dst_port, "int")
+          .named("proto", args.proto, "string")
+          .named("seed", args.seed, "int")
           .parse(inv, ctx));
     return function_use::make([args = std::move(args)](evaluator eval,
                                                        session ctx) -> series {
@@ -50,35 +50,35 @@ public:
         return series::null(string_type{}, eval.length());
       };
       auto src_ip_series = eval(args.src_ip);
-      if (caf::holds_alternative<null_type>(src_ip_series.type)) {
+      if (is<null_type>(src_ip_series.type)) {
         return null_series();
       }
       auto dst_ip_series = eval(args.dst_ip);
-      if (caf::holds_alternative<null_type>(dst_ip_series.type)) {
+      if (is<null_type>(dst_ip_series.type)) {
         return null_series();
       }
       auto proto_series = eval(args.proto);
-      if (caf::holds_alternative<null_type>(proto_series.type)) {
+      if (is<null_type>(proto_series.type)) {
         return null_series();
       }
       auto src_port_series = std::optional<series>{};
       if (args.src_port) {
         src_port_series = eval(*args.src_port);
-        if (caf::holds_alternative<null_type>(src_port_series->type)) {
+        if (is<null_type>(src_port_series->type)) {
           src_port_series = std::nullopt;
         }
       }
       auto dst_port_series = std::optional<series>{};
       if (args.dst_port) {
         dst_port_series = eval(*args.dst_port);
-        if (caf::holds_alternative<null_type>(dst_port_series->type)) {
+        if (is<null_type>(dst_port_series->type)) {
           dst_port_series = std::nullopt;
         }
       }
       auto seed_series = std::optional<series>{};
       if (args.seed) {
         seed_series = eval(*args.seed);
-        if (caf::holds_alternative<null_type>(seed_series->type)) {
+        if (is<null_type>(seed_series->type)) {
           seed_series = std::nullopt;
         }
       }

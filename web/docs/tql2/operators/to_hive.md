@@ -3,7 +3,7 @@
 Writes events to a URI using hive partitioning.
 
 ```tql
-to_hive uri:str, partition_by=list<field>, format=str, [timeout=duration, max_size=int]
+to_hive uri:string, partition_by=list<field>, format=string, [timeout=duration, max_size=int]
 ```
 
 ## Description
@@ -15,7 +15,7 @@ if the events are partitioned by the fields `year` and `month`, then the files
 in the directory `/year=2024/month=10` will contain all events where
 `year == 2024` and `month == 10`.
 
-### `uri: str`
+### `uri: string`
 
 The base URI for all partitions.
 
@@ -24,7 +24,7 @@ The base URI for all partitions.
 A list of fields that will be used for partitioning. Note that these fields will
 be elided from the output, as their value is already specified by the path.
 
-### `format = str`
+### `format = string`
 
 The name of the format that will be used for writing, for example `json` or
 `parquet`. This will also be used for the file extension.

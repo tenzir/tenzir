@@ -5,7 +5,7 @@ Computes an MD5 hash digest.
 ## Synopsis
 
 ```tql
-hash_md5(x:any, [seed=str])
+hash_md5(x:any, [seed=string])
 ```
 
 ## Description
@@ -16,7 +16,7 @@ The `hash` function calculates a hash digest of a given value `x`.
 
 The value to hash.
 
-### `seed = str (optional)`
+### `seed = string (optional)`
 
 The seed for the hash.
 

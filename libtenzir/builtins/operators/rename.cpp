@@ -116,7 +116,7 @@ public:
           TENZIR_ASSERT(!schema.has_attributes());
           return type{schema_mapping->to, pruned_schema};
         };
-        renamed_schema = caf::visit(rename_schema, schema);
+        renamed_schema = match(schema, rename_schema);
       }
     }
     return state_t{std::move(field_transformations), std::move(renamed_schema)};

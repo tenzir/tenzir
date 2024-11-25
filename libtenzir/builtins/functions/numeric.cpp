@@ -32,8 +32,9 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function("sqrt").add(expr, "<number>").parse(inv, ctx));
+    TRY(argument_parser2::function("sqrt")
+          .positional("x", expr, "number")
+          .parse(inv, ctx));
     return function_use::make([expr = std::move(expr)](evaluator eval,
                                                        session ctx) -> series {
       auto value = eval(expr);
@@ -87,7 +88,7 @@ public:
           return finish(b);
         },
       };
-      return {double_type{}, caf::visit(f, *value.array)};
+      return {double_type{}, match(*value.array, f)};
     });
   }
 };
@@ -166,8 +167,9 @@ public:
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = std::optional<ast::expression>{};
-    TRY(
-      argument_parser2::function("count").add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function("count")
+          .positional("x", expr, "any")
+          .parse(inv, ctx));
     return std::make_unique<count_instance>(std::move(expr));
   }
 };
@@ -196,7 +198,7 @@ public:
           return;
         }
         state_ = state::numeric;
-        auto& array = caf::get<type_to_arrow_array_t<Type>>(*arg.array);
+        auto& array = as<type_to_arrow_array_t<Type>>(*arg.array);
         for (auto value : values(ty, array)) {
           if (value) {
             digest_.NanAdd(*value);
@@ -213,8 +215,7 @@ public:
           return;
         }
         state_ = state::dur;
-        for (auto value :
-             values(ty, caf::get<arrow::DurationArray>(*arg.array))) {
+        for (auto value : values(ty, as<arrow::DurationArray>(*arg.array))) {
           if (value) {
             digest_.Add(value->count());
           }
@@ -232,7 +233,7 @@ public:
         state_ = state::failed;
       },
     };
-    caf::visit(f, arg.type);
+    match(arg.type, f);
   }
 
   auto get() const -> data override {
@@ -281,11 +282,11 @@ public:
     auto delta_opt = std::optional<located<int64_t>>{};
     auto buffer_size_opt = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function("quantile")
-          .add(expr, "expr")
-          .add("q", quantile_opt)
+          .positional("x", expr, "number|duration")
+          .named("q", quantile_opt)
           // TODO: This is a test for hidden parameters.
-          .add("_delta", delta_opt)
-          .add("_buffer_size", buffer_size_opt)
+          .named("_delta", delta_opt)
+          .named("_buffer_size", buffer_size_opt)
           .parse(inv, ctx));
     // TODO: Type conversion? Probably not necessary here, but maybe elsewhere.
     // TODO: This is too much manual labor.
@@ -343,10 +344,10 @@ public:
     auto delta_opt = std::optional<located<int64_t>>{};
     auto buffer_size_opt = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function("median")
-          .add(expr, "expr")
+          .positional("value", expr, "number|duration")
           // TODO: This is a test for hidden parameters.
-          .add("_delta", delta_opt)
-          .add("_buffer_size", buffer_size_opt)
+          .named("_delta", delta_opt)
+          .named("_buffer_size", buffer_size_opt)
           .parse(inv, ctx));
     // TODO: This function probably already exists. If not, it should.
     auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {
