@@ -469,6 +469,7 @@ auto parse_http_args(std::string name,
   auto params = std::optional<located<record>>{};
   auto headers = std::optional<located<record>>{};
   auto args = connector_args{};
+  args.transfer_opts.default_protocol = "https";
   argument_parser2::operator_(std::move(name))
     .positional("url", url)
     .named("data", body_data)
