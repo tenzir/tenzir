@@ -465,20 +465,35 @@ auto parse_http_args(std::string name,
                      const operator_factory_plugin::invocation& inv,
                      session ctx) -> failure_or<connector_args> {
   auto url = std::string{};
-  auto method = std::optional<std::string>{};
+  auto body_data = std::optional<located<record>>{};
   auto params = std::optional<located<record>>{};
   auto headers = std::optional<located<record>>{};
+  auto args = connector_args{};
   argument_parser2::operator_(std::move(name))
     .positional("url", url)
-    .named("method", method)
+    .named("data", body_data)
     .named("params", params)
     .named("headers", headers)
+    .named("method", args.http_opts.method)
+    .named("json", args.http_opts.json)
+    .named("form", args.http_opts.form)
+    .named("chunked", args.http_opts.chunked)
+    .named("multipart", args.http_opts.multipart)
+    .named("skip_peer_verification", args.transfer_opts.skip_peer_verification)
+    .named("skip_hostname_verification",
+           args.transfer_opts.skip_hostname_verification)
+    .named("verbose", args.transfer_opts.verbose)
     .parse(inv, ctx)
     .ignore();
-  auto args = connector_args{};
   args.url = std::move(url);
-  if (method) {
-    args.http_opts.method = *method;
+  if (body_data) {
+    for (auto& [key, value] : body_data->inner) {
+      // FIXME: use a better stringification method that doesn't render 1 as +1,
+      // escapes strings, etc. We should have this already somewhere as utility.
+      auto str = to_string(value);
+      args.http_opts.items.emplace_back(tenzir::http::request_item::data_json,
+                                        std::move(key), std::move(str));
+    }
   }
   if (params) {
     for (auto& [name, value] : params->inner) {
