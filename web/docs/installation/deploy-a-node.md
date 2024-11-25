@@ -61,16 +61,9 @@ Download the latest [Debian package][tenzir-debian-package] and install it via
 dpkg -i tenzir-static-amd64-linux.deb
 ```
 
-You can uninstall the Tenzir package as follows:
-```bash
-apt-get remove tenzir
-```
-
-Use purge instead of remove if you also want to delete the state directory and
-leave no trace:
-```bash
-apt-get purge tenzir
-```
+You can uninstall the Tenzir package via `apt-get remove tenzir`. Use `purge`
+instead of `remove` if you also want to delete the state directory and leave no
+trace.
 
 [tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-amd64-linux.deb
 
