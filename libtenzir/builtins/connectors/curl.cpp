@@ -468,6 +468,7 @@ auto parse_http_args(std::string name,
   auto body_data = std::optional<located<record>>{};
   auto params = std::optional<located<record>>{};
   auto headers = std::optional<located<record>>{};
+  auto method = std::optional<std::string>{};
   auto args = connector_args{};
   args.transfer_opts.default_protocol = "https";
   argument_parser2::operator_(std::move(name))
@@ -475,7 +476,7 @@ auto parse_http_args(std::string name,
     .named("data", body_data)
     .named("params", params)
     .named("headers", headers)
-    .named("method", args.http_opts.method)
+    .named("method", method)
     .named("json", args.http_opts.json)
     .named("form", args.http_opts.form)
     .named("chunked", args.http_opts.chunked)
@@ -523,6 +524,9 @@ auto parse_http_args(std::string name,
       args.http_opts.items.emplace_back(tenzir::http::request_item::header,
                                         std::move(name), std::move(*str));
     }
+  }
+  if (method) {
+    args.http_opts.method = std::move(*method);
   }
   return args;
 }
