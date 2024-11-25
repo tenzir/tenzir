@@ -36,8 +36,8 @@ Install a node as follows:
 1. Enter a name for your node and click the download button to obtain a
    `platform.yaml` configuration file.
 2. Move the `platform.yaml` to `<sysconfdir>/tenzir/plugin/platform.yaml` so
-   that the node can find it during startup where `<sysconfdir>` might be
-   `/etc`. See the [configuration files
+   that the node can find it during startup; `<sysconfdir>` might be
+   `/opt/tenzir/etc` or just `/etc`. See the [configuration files
    documentation](../configuration.md#configuration-files) for more options.
 3. Run our installer to install a binary package on any Linux distribution:
    ```bash
