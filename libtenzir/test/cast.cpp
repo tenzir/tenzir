@@ -702,8 +702,9 @@ TEST(cast int64_t array to a string builder) {
   auto arr = (*out)->Finish().ValueOrDie();
   auto vals = tenzir::values(tenzir::type{tenzir::string_type{}}, *arr);
   std::vector<tenzir::data_view> views;
-  for (const auto& val : vals)
+  for (const auto& val : vals) {
     views.push_back(val);
+  }
   REQUIRE_EQUAL(views.size(), 4u);
   CHECK_EQUAL(materialize(views[0]), "+1");
   CHECK_EQUAL(materialize(views[1]), "+2");
@@ -739,8 +740,9 @@ TEST(
   auto arr = (*out)->Finish().ValueOrDie();
   auto vals = tenzir::values(tenzir::type{tenzir::uint64_type{}}, *arr);
   std::vector<tenzir::data_view> views;
-  for (const auto& val : vals)
+  for (const auto& val : vals) {
     views.push_back(val);
+  }
   REQUIRE_EQUAL(views.size(), 3u);
   CHECK_EQUAL(materialize(views[0]), uint64_t{1});
   CHECK_EQUAL(materialize(views[1]), uint64_t{2});
@@ -763,16 +765,14 @@ TEST(string to blob without padding) {
   auto out = tenzir::cast_value(tenzir::string_type{}, "dGVuemly",
                                 tenzir::blob_type{});
   REQUIRE_NOERROR(out);
-  CHECK_EQUAL(std::string_view{reinterpret_cast<char const*>(out->data())},
-              "tenzir");
+  CHECK_EQUAL(std::span{out.value()}, as_bytes("tenzir", 6));
 }
 
 TEST(string to blob with padding) {
   auto out = tenzir::cast_value(tenzir::string_type{},
                                 "dmFzdA==", tenzir::blob_type{});
   REQUIRE_NOERROR(out);
-  CHECK_EQUAL(std::string_view{reinterpret_cast<char const*>(out->data())},
-              "vast");
+  CHECK_EQUAL(std::span{out.value()}, as_bytes("vast", 4));
 }
 
 TEST(string to blob error) {
