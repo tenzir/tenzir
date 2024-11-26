@@ -26,9 +26,11 @@ public:
     -> failure_or<operator_ptr>
     = 0;
 
-  struct connector_properties_t {
+  struct load_properties_t {
     /// URI schemes the connector supports
     std::vector<std::string> schemes = {};
+    const operator_factory_plugin* default_format
+      = plugins::find<operator_factory_plugin>("read_json");
     /// Whether the connector accepts a pipeline as the final argument
     bool accepts_pipeline = false;
     /// Whether to strip the scheme before passing the URI to the transformer
@@ -45,8 +47,29 @@ public:
                                                diagnostic_handler&)>
       transform_uri = {};
   };
-  using load_properties_t = connector_properties_t;
-  using save_properties_t = connector_properties_t;
+
+  struct save_properties_t {
+    /// URI schemes the connector supports
+    std::vector<std::string> schemes = {};
+    const operator_factory_plugin* default_format
+      = plugins::find<operator_factory_plugin>("write_ndjson");
+    /// Whether the connector accepts a pipeline as the final argument
+    bool accepts_pipeline = false;
+    /// Whether to strip the scheme before passing the URI to the transformer
+    /// or the operator itself.
+    bool strip_scheme = false;
+    /// Whether the connector produces/consumes events
+    bool events = false;
+    /// A function that can be used to transform a URI into ast arguments.
+    /// This function may be empty, in which case the URI is just directly
+    /// passed as the first argument to the operator.
+    /// The location will refer to the URIs location, with the scheme stripped
+    /// if requested.
+    std::function<std::vector<ast::expression>(located<std::string>,
+                                               diagnostic_handler&)>
+      transform_uri = {};
+  };
+
   virtual auto load_properties() const -> load_properties_t {
     return {};
   }

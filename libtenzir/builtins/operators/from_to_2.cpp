@@ -345,6 +345,11 @@ class from_plugin2 final : public virtual operator_factory_plugin {
                  decompress_plugin ? decompress_plugin->name() : "none");
     TENZIR_TRACE("from operator: determined read       : {}",
                  read_plugin ? read_plugin->name() : "none");
+    if (not read_plugin and not has_pipeline_or_events) {
+      read_plugin = load_properties.default_format;
+      TENZIR_TRACE("from operator: fallback read         : {}",
+                   read_plugin ? read_plugin->name() : "none");
+    }
     if (not load_plugin) {
       return failure::promise();
     }
@@ -378,7 +383,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       return load_plugin->make(std::move(inv), std::move(ctx));
     } else {
       auto compiled_pipeline = pipeline{};
-      if (read_plugin) {
+      if (pipeline_argument) {
         TRY(compiled_pipeline,
             compile(std::move(pipeline_argument->inner), ctx));
         TENZIR_TRACE("from operator: compiled pipeline ops : {}",
@@ -389,7 +394,6 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       compiled_pipeline.prepend(std::move(load_op));
       return std::make_unique<pipeline>(std::move(compiled_pipeline));
     }
-    /// TODO dont return directly, do additional error output
   }
 
 public:
@@ -597,6 +601,11 @@ class to_plugin2 final : public virtual operator_factory_plugin {
                  compress_plugin ? compress_plugin->name() : "none");
     TENZIR_TRACE("to operator: determined read       : {}",
                  write_plugin ? write_plugin->name() : "none");
+    if (not write_plugin and not has_pipeline_or_events) {
+      write_plugin = save_properties.default_format;
+      TENZIR_TRACE("to operator: fallback read         : {}",
+                   write_plugin ? write_plugin->name() : "none");
+    }
     if (not save_plugin) {
       return failure::promise();
     }
@@ -630,7 +639,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
       return save_plugin->make(std::move(inv), std::move(ctx));
     } else {
       auto compiled_pipeline = pipeline{};
-      if (write_plugin) {
+      if (pipeline_argument) {
         TRY(compiled_pipeline,
             compile(std::move(pipeline_argument->inner), ctx));
         TENZIR_TRACE("from operator: compiled pipeline ops : {}",

@@ -67,8 +67,9 @@ The format to write inferred from the file-ending.
 Supported file formats are the common file endings for our [`read_*` operators](operators.md#parsing).
 
 If you want to provide additional arguments to the writer, you can use the
-[pipeline argument](#---optional) to specify the parsing manually. This can be useful,
-if you want to write as `ndjson` instead of just plain `json`.
+[pipeline argument](#---optional) to specify the parsing manually.
+
+If inference fails, the `to` operator writes NDJSON.
 
 ### Compressing
 
