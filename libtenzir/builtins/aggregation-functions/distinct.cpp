@@ -203,7 +203,7 @@ class plugin : public virtual aggregation_function_plugin,
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .named("x", expr, "any")
+          .positional("x", expr, "any")
           .parse(inv, ctx));
     return std::make_unique<distinct_instance>(std::move(expr));
   }
