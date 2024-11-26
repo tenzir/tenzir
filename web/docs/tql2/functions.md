@@ -179,6 +179,18 @@ Function | Description | Example
 [`hash_sha512`](functions/hash_sha512.md) | Computes a SHA512 hash digest | `hash_sha512("foo")`
 [`hash_xxh3`](functions/hash_xxh3.md) | Computes a XXH3 hash digest | `hash_xxh3("foo")`
 
+## Encoding
+
+function | description | example
+:--------|:-------------|:-------
+[`encode_base64`](functions/encode_base64.md) | Encodes bytes as Base64 | `encode_base64("Tenzir")`
+
+## Decoding
+
+function | description | example
+:--------|:-------------|:-------
+[`decode_base64`](functions/decode_base64.md) | Decodes bytes as Base64 | `decode_base64("VGVuemly")`
+
 ## Type System
 
 ### Introspection
