@@ -93,12 +93,12 @@ auto try_lossless_cast(From from) -> std::optional<To>
 // conversion is lossless. The original type information is retained, to be used
 // with context dumps and binary serialization.
 class key_data {
-  static constexpr size_t i64_index = static_cast<size_t>(
-    caf::detail::tl_index_of<data::types, int64_t>::value);
-  static constexpr size_t u64_index = static_cast<size_t>(
-    caf::detail::tl_index_of<data::types, uint64_t>::value);
+  static constexpr size_t i64_index
+    = static_cast<size_t>(detail::tl_index_of<data::types, int64_t>::value);
+  static constexpr size_t u64_index
+    = static_cast<size_t>(detail::tl_index_of<data::types, uint64_t>::value);
   static constexpr size_t double_index
-    = static_cast<size_t>(caf::detail::tl_index_of<data::types, double>::value);
+    = static_cast<size_t>(detail::tl_index_of<data::types, double>::value);
 
 public:
   key_data() = default;

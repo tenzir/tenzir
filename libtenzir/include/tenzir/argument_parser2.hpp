@@ -23,7 +23,7 @@
 namespace tenzir {
 
 using argument_parser_data_types
-  = detail::tl_map_t<caf::detail::tl_filter_not_type_t<data::types, pattern>,
+  = detail::tl_map_t<detail::tl_filter_not_type_t<data::types, pattern>,
                      as_located>;
 
 using argument_parser_full_types = detail::tl_concat_t<
@@ -141,7 +141,7 @@ private:
   using setter_variant = variant<setter<Ts>...>;
 
   using any_setter
-    = caf::detail::tl_apply_t<argument_parser_full_types, setter_variant>;
+    = detail::tl_apply_t<argument_parser_full_types, setter_variant>;
 
   struct positional_t {
     positional_t(std::string name, std::string type, any_setter set)

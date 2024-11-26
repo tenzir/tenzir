@@ -91,7 +91,7 @@ auto expression::get_location() const -> location {
 }
 
 expression::expression(expression const& other) {
-  static_assert(caf::detail::tl_empty<caf::detail::tl_filter_not_t<
+  static_assert(detail::tl_empty<detail::tl_filter_not_t<
                   expression_kinds, std::is_copy_constructible>>::value);
   if (other.kind) {
     kind = std::make_unique<expression_kind>(*other.kind);

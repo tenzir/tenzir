@@ -22,6 +22,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/factory.hpp"
 #include "tenzir/synopsis_factory.hpp"
@@ -363,11 +364,11 @@ configuration::configuration() {
   factory<value_index>::initialize();
   // Register Arrow extension types.
   auto register_extension_types
-    = []<concrete_type... Ts>(caf::detail::type_list<Ts...>) {
+    = []<concrete_type... Ts>(detail::type_list<Ts...>) {
         (static_cast<void>(Ts::arrow_type::register_extension()), ...);
       };
   register_extension_types(
-    caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
+    detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
 auto configuration::parse(int argc, char** argv) -> caf::error {
