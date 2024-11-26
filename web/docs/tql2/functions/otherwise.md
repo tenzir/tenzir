@@ -3,7 +3,7 @@
 Returns a `fallback` value if `primary` is `null`.
 
 ```tql
-otherwise(primary:expr, fallback:expr)
+otherwise(primary:any, fallback:any) -> any
 ```
 
 ## Description
@@ -11,13 +11,14 @@ otherwise(primary:expr, fallback:expr)
 The `otherwise` function evaluates its arguments and replaces `primary` with
 `fallback` where `primary` would be `null`.
 
-### `primary: expr`
+### `primary: any`
 
 The expression to return if not `null`.
 
-### `fallback: expr`
+### `fallback: any`
 
-The expression to return if `primary` evaluated to `null`.
+The expression to return if `primary` evaluated to `null`. Currently, must be
+evaluate to the same type as `primary`.
 
 ## Examples
 
@@ -33,7 +34,7 @@ x = x.otherwise(-1)
 ```
 
 ```tql
-{x:  1 }
-{x:  2 }
-{x: -1 }
+{x: 1}
+{x: 2}
+{x: -1}
 ```

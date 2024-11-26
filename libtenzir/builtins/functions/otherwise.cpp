@@ -25,8 +25,8 @@ public:
     auto primary = ast::expression{};
     auto fallback = ast::expression{};
     TRY(argument_parser2::function(name())
-          .positional("primary", primary, "expr")
-          .positional("fallback", fallback, "expr")
+          .positional("primary", primary, "any")
+          .positional("fallback", fallback, "any")
           .parse(inv, ctx));
     return function_use::make(
       [primary = std::move(primary), fallback = std::move(fallback),
