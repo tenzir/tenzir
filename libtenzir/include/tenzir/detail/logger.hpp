@@ -33,7 +33,7 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
 /// Shuts down the logging system
 /// Since tenzir logger runs async and has therefore a  background thread.
 /// for a graceful exit this function should be called.
-void shutdown_spdlog();
+void shutdown_spdlog() noexcept;
 
 /// Get a spdlog::logger handel
 std::shared_ptr<spdlog::logger>& logger();
