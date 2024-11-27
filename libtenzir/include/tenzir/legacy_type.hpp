@@ -18,6 +18,7 @@
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/range.hpp"
 #include "tenzir/detail/stack_vector.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/operator.hpp"
 #include "tenzir/time.hpp"
@@ -26,7 +27,6 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
-#include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
 #include <caf/intrusive_cow_ptr.hpp>
 #include <caf/make_counted.hpp>
@@ -65,7 +65,7 @@ struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
 
 // clang-format off
 /// @relates type
-using legacy_concrete_types = caf::detail::type_list<
+using legacy_concrete_types = detail::type_list<
   legacy_none_type,
   legacy_bool_type,
   legacy_integer_type,
@@ -93,7 +93,7 @@ template <class T>
 constexpr type_id_type type_id() {
   static_assert(detail::contains_type_v<legacy_concrete_types, T>,
                 "type IDs only available for concrete types");
-  return caf::detail::tl_index_of<legacy_concrete_types, T>::value;
+  return detail::tl_index_of<legacy_concrete_types, T>::value;
 }
 
 // -- type ------------------------------------------------------------------
@@ -712,8 +712,7 @@ remove_field(const legacy_record_type& r, offset o);
 template <>
 class variant_traits<legacy_type> {
 public:
-  static constexpr auto count
-    = caf::detail::tl_size<legacy_concrete_types>::value;
+  static constexpr auto count = detail::tl_size<legacy_concrete_types>::value;
 
   static auto index(const legacy_type& x) -> size_t {
     return detail::narrow<size_t>(x->index());
@@ -721,8 +720,7 @@ public:
 
   template <size_t I>
   static auto get(const legacy_type& x) -> decltype(auto) {
-    return static_cast<const caf::detail::tl_at_t<legacy_concrete_types, I>&>(
-      *x);
+    return static_cast<const detail::tl_at_t<legacy_concrete_types, I>&>(*x);
   }
 };
 
@@ -769,7 +767,7 @@ struct sum_type_access<tenzir::legacy_type> {
   struct dispatcher {
     using const_reference = const tenzir::legacy_abstract_type&;
     template <class... Us>
-    Result dispatch(const_reference x, caf::detail::type_list<Us...>) {
+    Result dispatch(const_reference x, detail::type_list<Us...>) {
       using fun = Result (*)(dispatcher*, const_reference);
       static fun tbl[] = {make_dispatch_fun<Result, dispatcher, Us>()...};
       return tbl[x.index()](this, x);
@@ -816,7 +814,7 @@ auto make_inspect_fun() {
 
 /// @private
 template <class Inspector, class... Ts>
-auto make_inspect(caf::detail::type_list<Ts...>) {
+auto make_inspect(detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> bool {
     if constexpr (!Inspector::is_loading) {
       if (x.type_tag != invalid_type_id) {

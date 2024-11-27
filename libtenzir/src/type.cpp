@@ -14,6 +14,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/die.hpp"
 #include "tenzir/error.hpp"
@@ -3595,15 +3596,13 @@ auto variant_traits<type>::index(const type& x) -> size_t {
     return std::invoke(
       []<size_t... Is>(std::index_sequence<Is...>) {
         constexpr auto max_index
-          = std::max({caf::detail::tl_at_t<concrete_types, Is>::type_index...});
+          = std::max({detail::tl_at_t<concrete_types, Is>::type_index...});
         constexpr auto table_size = max_index + 1;
         auto table = std::array<uint8_t, table_size>{};
         std::ranges::fill(table, -1);
-        ((table[caf::detail::tl_at_t<concrete_types, Is>::type_index] = Is),
-         ...);
+        ((table[detail::tl_at_t<concrete_types, Is>::type_index] = Is), ...);
         // TODO: Why doesn't this make it throw below?
-        static_assert(table_size
-                      == caf::detail::tl_size<concrete_types>::value + 2);
+        static_assert(table_size == detail::tl_size<concrete_types>::value + 2);
         for (auto value : table) {
           if (value == -1) {
             throw std::runtime_error("element not set");
@@ -3629,7 +3628,7 @@ auto variant_traits<arrow::DataType>::index(const arrow::DataType& x)
     [&]<size_t... Is>(std::index_sequence<Is...>) {
       return (
         std::invoke([&] {
-          using Type = caf::detail::tl_at_t<concrete_types, Is>;
+          using Type = detail::tl_at_t<concrete_types, Is>;
           // TODO: Extension!
           if (Type::arrow_type::type_id != type_id) {
             return false;
@@ -3645,7 +3644,7 @@ auto variant_traits<arrow::DataType>::index(const arrow::DataType& x)
         })
         || ...);
     },
-    std::make_index_sequence<caf::detail::tl_size<concrete_types>::value>());
+    std::make_index_sequence<detail::tl_size<concrete_types>::value>());
   TENZIR_ASSERT(found);
   return result;
 }
@@ -3672,14 +3671,14 @@ uint8_t
 sum_type_access<tenzir::type>::index_from_type(const tenzir::type& x) noexcept {
   static const auto table =
     []<tenzir::concrete_type... Ts, uint8_t... Indices>(
-      caf::detail::type_list<Ts...>,
+      detail::type_list<Ts...>,
       std::integer_sequence<uint8_t, Indices...>) noexcept {
       std::array<uint8_t, std::numeric_limits<uint8_t>::max()> tbl{};
       tbl.fill(std::numeric_limits<uint8_t>::max());
       (static_cast<void>(tbl[Ts::type_index] = Indices), ...);
       return tbl;
     }(types{},
-      std::make_integer_sequence<uint8_t, caf::detail::tl_size<types>::value>());
+      std::make_integer_sequence<uint8_t, detail::tl_size<types>::value>());
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
   auto result = table[x.type_index()];
   TENZIR_ASSERT(result != std::numeric_limits<uint8_t>::max());
@@ -3696,7 +3695,7 @@ int sum_type_access<arrow::DataType>::index_from_type(
   // is not in the type list, and extension_id if the type is an extension type.
   static const auto table =
     []<class... Ts, int... Indices>(
-      caf::detail::type_list<Ts...>,
+      detail::type_list<Ts...>,
       std::integer_sequence<int, Indices...>) noexcept {
       std::array<int, arrow::Type::type::MAX_ID> tbl{};
       tbl.fill(unknown_id);
@@ -3706,11 +3705,11 @@ int sum_type_access<arrow::DataType>::index_from_type(
        ...);
       return tbl;
     }(sum_type_access<arrow::DataType>::types{},
-      std::make_integer_sequence<int, caf::detail::tl_size<types>::value>());
+      std::make_integer_sequence<int, detail::tl_size<types>::value>());
   // The second-stage O(n) lookup table for extension types that identifies the
   // types by their unique identifier string.
   static const auto extension_table =
-    []<class... Ts, int... Indices>(caf::detail::type_list<Ts...>,
+    []<class... Ts, int... Indices>(detail::type_list<Ts...>,
                                     std::integer_sequence<int, Indices...>) {
       std::array<std::pair<std::string_view, int>,
                  detail::tl_size<extension_types>::value>
@@ -3723,8 +3722,8 @@ int sum_type_access<arrow::DataType>::index_from_type(
        ...);
       return tbl;
     }(extension_types{},
-      std::make_integer_sequence<
-        int, caf::detail::tl_size<extension_types>::value>());
+      std::make_integer_sequence<int,
+                                 detail::tl_size<extension_types>::value>());
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
   auto result = table[x.id()];
   TENZIR_ASSERT(result != unknown_id,

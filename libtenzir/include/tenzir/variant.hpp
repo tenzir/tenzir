@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/variant_traits.hpp"
 
@@ -56,7 +57,7 @@ class variant : public std::variant<Ts...> {
 public:
   using std::variant<Ts...>::variant;
 
-  using types = caf::detail::type_list<Ts...>;
+  using types = detail::type_list<Ts...>;
 
   template <class T>
   static constexpr auto can_have = (std::same_as<T, Ts> || ...);
@@ -66,7 +67,7 @@ public:
     // This can save about ~10% size since the type index is repeated once
     // per `data`, but the main purpose of this compression is to achieve
     // binary compatibility with the previously used `caf::variant`.
-    constexpr auto size = caf::detail::tl_size<types>::value;
+    constexpr auto size = tenzir::detail::tl_size<types>::value;
     auto result = bool{false};
     if constexpr (size < (1u << 8)) {
       auto u8 = static_cast<uint8_t>(idx);

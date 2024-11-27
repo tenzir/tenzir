@@ -527,7 +527,7 @@ struct instantiate_append_array_slice {
   };
 
   static constexpr auto value
-    = caf::detail::tl_apply_t<concrete_types, inner>::value;
+    = detail::tl_apply_t<concrete_types, inner>::value;
 };
 
 template struct instantiate_append_array_slice<std::monostate{}>;

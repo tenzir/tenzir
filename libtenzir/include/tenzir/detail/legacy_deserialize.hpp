@@ -11,6 +11,7 @@
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/detail/byteswap.hpp"
 #include "tenzir/detail/inspection_common.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/variant_traits.hpp"
@@ -249,7 +250,7 @@ public:
   template <class... Ts>
   result_type apply(uint8_t type_tag, caf::variant<Ts...>& x) {
     using namespace caf;
-    using caf::detail::tl_at;
+    using detail::tl_at;
     auto& f = *this;
     switch (type_tag) {
       default:
@@ -257,8 +258,8 @@ public:
 #define CAF_VARIANT_ASSIGN_CASE_IMPL(n)                                        \
   case n: {                                                                    \
     using tmp_t =                                                              \
-      typename caf::detail::tl_at<caf::detail::type_list<Ts...>,               \
-                                  ((n) < sizeof...(Ts) ? (n) : 0)>::type;      \
+      typename detail::tl_at<detail::type_list<Ts...>,                         \
+                             ((n) < sizeof...(Ts) ? (n) : 0)>::type;           \
     x = tmp_t{};                                                               \
     return f(as<tmp_t>(x));                                                    \
   }
@@ -315,8 +316,8 @@ public:
 #define TENZIR_VARIANT_ASSIGN_CASE_IMPL(n)                                     \
   case n: {                                                                    \
     using tmp_t =                                                              \
-      typename caf::detail::tl_at<caf::detail::type_list<Ts...>,               \
-                                  ((n) < sizeof...(Ts) ? (n) : 0)>::type;      \
+      typename detail::tl_at<detail::type_list<Ts...>,                         \
+                             ((n) < sizeof...(Ts) ? (n) : 0)>::type;           \
     x = tmp_t{};                                                               \
     return f(as<tmp_t>(x));                                                    \
   }

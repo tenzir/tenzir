@@ -12,6 +12,7 @@
 
 #include "tenzir/aliases.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/generator.hpp"
@@ -25,7 +26,6 @@
 #include <arrow/type_traits.h>
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
-#include <caf/detail/type_list.hpp>
 #include <caf/sum_type.hpp>
 #include <fmt/format.h>
 
@@ -52,13 +52,13 @@ protected:
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<null_type, bool_type, int64_type, uint64_type,
-                           double_type, duration_type, time_type, string_type,
-                           ip_type, subnet_type, enumeration_type, list_type,
-                           map_type, record_type, blob_type>;
+  = detail::type_list<null_type, bool_type, int64_type, uint64_type,
+                      double_type, duration_type, time_type, string_type,
+                      ip_type, subnet_type, enumeration_type, list_type,
+                      map_type, record_type, blob_type>;
 
 /// Reification of the variant inhabitants of `type`.
-using type_kind = caf::detail::tl_apply_t<concrete_types, tag_variant>;
+using type_kind = detail::tl_apply_t<concrete_types, tag_variant>;
 
 /// Returns the name of the type kind.
 auto to_string(type_kind x) -> std::string_view;
@@ -67,7 +67,7 @@ auto to_string(type_kind x) -> std::string_view;
 template <class T>
 concept concrete_type = requires(const T& value) {
   // The type must be explicitly whitelisted above.
-  requires caf::detail::tl_contains<concrete_types, T>::value;
+  requires detail::tl_contains<concrete_types, T>::value;
   // The type must not be inherited from to avoid slicing issues.
   requires std::is_final_v<T>;
   // The type must offer a way to get a unique type index.
@@ -1495,10 +1495,10 @@ using type_to_data_t = typename type_to_data<T>::type;
 
 template <class T>
 struct data_to_type
-  : caf::detail::tl_at<
-      concrete_types,
-      caf::detail::tl_index_of<
-        caf::detail::tl_map_t<concrete_types, type_to_data>, T>::value> {};
+  : detail::tl_at<concrete_types,
+                  detail::tl_index_of<
+                    detail::tl_map_t<concrete_types, type_to_data>, T>::value> {
+};
 
 template <class T>
 using data_to_type_t = typename data_to_type<T>::type;
@@ -1587,20 +1587,18 @@ struct type_from_arrow : type_from_arrow<typename T::TypeClass> {};
 template <class T>
   requires(std::is_base_of_v<arrow::DataType, T>)
 struct type_from_arrow<T>
-  : caf::detail::tl_at<
+  : detail::tl_at<
       concrete_types,
-      caf::detail::tl_index_of<
-        caf::detail::tl_map_t<concrete_types, type_to_arrow_type>, T>::value> {
-};
+      detail::tl_index_of<detail::tl_map_t<concrete_types, type_to_arrow_type>,
+                          T>::value> {};
 
 template <class T>
   requires(std::is_base_of_v<arrow::ArrayBuilder, T>)
 struct type_from_arrow<T>
-  : caf::detail::tl_at<
+  : detail::tl_at<
       concrete_types,
-      caf::detail::tl_index_of<
-        caf::detail::tl_map_t<concrete_types, type_to_arrow_builder>, T>::value> {
-};
+      detail::tl_index_of<
+        detail::tl_map_t<concrete_types, type_to_arrow_builder>, T>::value> {};
 
 template <>
 struct type_from_arrow<arrow::DataType> : std::type_identity<type> {};
@@ -1621,14 +1619,14 @@ using type_from_arrow_t = typename type_from_arrow<T>::type;
 template <>
 class variant_traits<type> {
 public:
-  static constexpr auto count = caf::detail::tl_size<concrete_types>::value;
+  static constexpr auto count = detail::tl_size<concrete_types>::value;
 
   // TODO: Can we maybe align the indices here?
   static auto index(const type& x) -> size_t;
 
   template <size_t I>
   static auto get(const type& x) -> decltype(auto) {
-    using Type = caf::detail::tl_at_t<concrete_types, I>;
+    using Type = detail::tl_at_t<concrete_types, I>;
     if constexpr (basic_type<Type>) {
       // TODO: We potentially hand out a `&` to a const... Probably okay because
       // we can't do any mutations, but still fishy.
@@ -1646,24 +1644,24 @@ public:
 template <>
 class variant_traits<arrow::DataType> {
 public:
-  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_type>;
+  using types = detail::tl_map_t<concrete_types, type_to_arrow_type>;
 
-  static constexpr auto count = caf::detail::tl_size<types>::value;
+  static constexpr auto count = detail::tl_size<types>::value;
 
   static auto index(const arrow::DataType& x) -> size_t;
 
   template <size_t I>
   static auto get(const arrow::DataType& x) -> decltype(auto) {
-    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+    return static_cast<const detail::tl_at_t<types, I>&>(x);
   }
 };
 
 template <>
 class variant_traits<arrow::Array> {
 public:
-  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_array>;
+  using types = detail::tl_map_t<concrete_types, type_to_arrow_array>;
 
-  static constexpr auto count = caf::detail::tl_size<types>::value;
+  static constexpr auto count = detail::tl_size<types>::value;
 
   static auto index(const arrow::Array& x) -> size_t {
     return variant_traits<arrow::DataType>::index(*x.type());
@@ -1671,16 +1669,16 @@ public:
 
   template <size_t I>
   static auto get(const arrow::Array& x) -> decltype(auto) {
-    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+    return static_cast<const detail::tl_at_t<types, I>&>(x);
   }
 };
 
 template <>
 class variant_traits<arrow::ArrayBuilder> {
 public:
-  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_builder>;
+  using types = detail::tl_map_t<concrete_types, type_to_arrow_builder>;
 
-  static constexpr auto count = caf::detail::tl_size<types>::value;
+  static constexpr auto count = detail::tl_size<types>::value;
 
   static auto index(const arrow::ArrayBuilder& x) -> size_t {
     return variant_traits<arrow::DataType>::index(*x.type());
@@ -1688,7 +1686,7 @@ public:
 
   template <size_t I>
   static auto get(const arrow::ArrayBuilder& x) -> decltype(auto) {
-    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+    return static_cast<const detail::tl_at_t<types, I>&>(x);
   }
 };
 
