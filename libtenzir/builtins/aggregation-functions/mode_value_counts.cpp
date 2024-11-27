@@ -134,6 +134,10 @@ public:
     }
   }
 
+  auto reset() -> void override {
+    counts_ = {};
+  }
+
 private:
   const ast::expression expr_ = {};
   tsl::robin_map<data, int64_t> counts_ = {};
