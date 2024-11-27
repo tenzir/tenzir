@@ -708,10 +708,10 @@ public:
       include_unnamed,
       multi_series_builder::options{},
     };
-    return function_use::make(
-      [input = std::move(input),
-       parser = std::move(parser)](evaluator eval, session ctx) -> series {
-        auto values = eval(input);
+    return function_use::make([input = std::move(input),
+                               parser = std::move(parser)](evaluator eval,
+                                                           session ctx) {
+      return map_series(eval(input), [&](series values) {
         if (values.type.kind().is<null_type>()) {
           return values;
         }
@@ -732,6 +732,7 @@ public:
         }
         return std::move(output[0]);
       });
+    });
   }
 };
 

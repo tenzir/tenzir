@@ -66,7 +66,7 @@ auto resolve(const ast::simple_selector& sel, type ty)
 }
 
 auto eval(const ast::expression& expr, const table_slice& input,
-          diagnostic_handler& dh) -> series {
+          diagnostic_handler& dh) -> multi_series {
   // TODO: Do not create a new session here.
   auto sp = session_provider::make(dh);
   return evaluator{&input, sp.as_session()}.eval(expr);
@@ -79,7 +79,8 @@ auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
     auto sp = session_provider::make(dh);
     auto result = evaluator{nullptr, sp.as_session()}.eval(expr);
     TENZIR_ASSERT(result.length() == 1);
-    return materialize(value_at(result.type, *result.array, 0));
+    auto& part = result.part(0);
+    return materialize(value_at(part.type, *part.array, 0));
   } catch (failure fail) {
     return fail;
   }
