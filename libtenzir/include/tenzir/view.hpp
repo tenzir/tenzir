@@ -20,7 +20,6 @@
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
-#include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 
 #include <array>

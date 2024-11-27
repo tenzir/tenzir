@@ -31,7 +31,6 @@
 #include <caf/intrusive_cow_ptr.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/none.hpp>
-#include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 #include <caf/sum_type.hpp>
 #include <fmt/core.h>
