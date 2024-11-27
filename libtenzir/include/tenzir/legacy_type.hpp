@@ -32,7 +32,6 @@
 #include <caf/make_counted.hpp>
 #include <caf/none.hpp>
 #include <caf/ref_counted.hpp>
-#include <caf/sum_type.hpp>
 #include <fmt/core.h>
 
 #include <optional>
@@ -725,75 +724,7 @@ public:
 
 } // namespace tenzir
 
-// -- helpers ----------------------------------------------------------------
-
-namespace caf {
-
-template <class Result, class Dispatcher, class T>
-auto make_dispatch_fun() {
-  using fun = Result (*)(Dispatcher*, const tenzir::legacy_abstract_type&);
-  auto lambda = [](Dispatcher* d, const tenzir::legacy_abstract_type& ref) {
-    return d->invoke(static_cast<const T&>(ref));
-  };
-  return static_cast<fun>(lambda);
-}
-
-template <>
-struct sum_type_access<tenzir::legacy_type> {
-  using types = tenzir::legacy_concrete_types;
-
-  using type0 = tenzir::legacy_none_type;
-
-  static constexpr bool specialized = true;
-
-  template <class T, int Pos>
-  static bool is(const tenzir::legacy_type& x, sum_type_token<T, Pos>) {
-    return x->index() == Pos;
-  }
-
-  template <class T, int Pos>
-  static const T& get(const tenzir::legacy_type& x, sum_type_token<T, Pos>) {
-    return static_cast<const T&>(*x);
-  }
-
-  template <class T, int Pos>
-  static const T* get_if(const tenzir::legacy_type* x, sum_type_token<T, Pos>) {
-    auto ptr = x->raw_ptr();
-    return ptr->index() == Pos ? static_cast<const T*>(ptr) : nullptr;
-  }
-
-  template <class Result, class Visitor, class... Ts>
-  struct dispatcher {
-    using const_reference = const tenzir::legacy_abstract_type&;
-    template <class... Us>
-    Result dispatch(const_reference x, detail::type_list<Us...>) {
-      using fun = Result (*)(dispatcher*, const_reference);
-      static fun tbl[] = {make_dispatch_fun<Result, dispatcher, Us>()...};
-      return tbl[x.index()](this, x);
-    }
-
-    template <class T>
-    Result invoke(const T& x) {
-      auto is = caf::detail::get_indices(xs_);
-      return caf::detail::apply_args_suffxied(v, is, xs_, x);
-    }
-
-    Visitor& v;
-    std::tuple<Ts&...> xs_;
-  };
-
-  template <class Result, class Visitor, class... Ts>
-  static Result apply(const tenzir::legacy_type& x, Visitor&& v, Ts&&... xs) {
-    dispatcher<Result, decltype(v), decltype(xs)...> d{
-      v, std::forward_as_tuple(xs...)};
-    types token;
-    return d.dispatch(*x, token);
-  }
-};
-
-} // namespace caf
-
-// -- inspect (needs caf::visit first) -----------------------------------------
+// -- inspect ------------------------------------------------------------------
 
 namespace tenzir {
 

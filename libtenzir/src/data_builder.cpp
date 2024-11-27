@@ -28,7 +28,6 @@
 #include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
 #include <caf/none.hpp>
-#include <caf/sum_type.hpp>
 #include <fmt/core.h>
 
 #include <algorithm>

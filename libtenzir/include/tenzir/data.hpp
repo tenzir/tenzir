@@ -27,11 +27,9 @@
 #include "tenzir/variant.hpp"
 #include "tenzir/variant_traits.hpp"
 
-#include <caf/default_sum_type_access.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/none.hpp>
-#include <caf/sum_type.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -216,17 +214,6 @@ public:
     return impl::get<I>(x.get_data());
   }
 };
-
-} // namespace tenzir
-
-namespace caf {
-
-template <>
-struct sum_type_access<tenzir::data> : default_sum_type_access<tenzir::data> {};
-
-} // namespace caf
-
-namespace tenzir {
 
 // -- helpers -----------------------------------------------------------------
 

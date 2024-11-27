@@ -130,14 +130,6 @@ bitmap_bit_range bit_range(const bitmap& bm);
 
 } // namespace tenzir
 
-namespace caf {
-
-template <>
-struct sum_type_access<tenzir::bitmap>
-  : default_sum_type_access<tenzir::bitmap> {};
-
-} // namespace caf
-
 #include "tenzir/concept/printable/tenzir/bitmap.hpp"
 
 namespace fmt {
