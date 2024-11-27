@@ -39,35 +39,36 @@ public:
     return function_use::make([subject_expr = std::move(subject_expr),
                                arg_expr = std::move(arg_expr),
                                this](evaluator eval, session ctx) -> series {
-      auto subject = eval(subject_expr);
-      auto arg = eval(arg_expr);
-      TENZIR_ASSERT(subject.length() == arg.length());
-      auto f = detail::overload{
-        [&](const arrow::StringArray& subject, const arrow::StringArray& arg) {
-          auto b = arrow::BooleanBuilder{};
-          check(b.Reserve(arg.length()));
-          for (auto i = int64_t{0}; i < subject.length(); ++i) {
-            if (subject.IsNull(i) || arg.IsNull(i)) {
-              check(b.AppendNull());
-              continue;
-            }
-            auto result = bool{};
-            if (starts_with_) {
-              result = subject.Value(i).starts_with(arg.Value(i));
-            } else {
-              result = subject.Value(i).ends_with(arg.Value(i));
-            }
-            check(b.Append(result));
-          }
-          return series{bool_type{}, finish(b)};
-        },
-        [&](const auto&, const auto&) {
-          // TODO: Handle null array. Emit warning.
-          TENZIR_UNUSED(ctx);
-          return series::null(bool_type{}, subject.length());
-        },
-      };
-      return match(std::tie(*subject.array, *arg.array), f);
+      auto b = arrow::BooleanBuilder{};
+      check(b.Reserve(eval.length()));
+      iter_series(std::tuple{eval(subject_expr), eval(arg_expr)},
+                  [&](series subject, series arg) {
+                    TENZIR_ASSERT(subject.length() == arg.length());
+                    auto f = detail::overload{
+                      [&](const arrow::StringArray& subject,
+                          const arrow::StringArray& arg) {
+                        for (auto i = int64_t{0}; i < subject.length(); ++i) {
+                          if (subject.IsNull(i) || arg.IsNull(i)) {
+                            check(b.AppendNull());
+                            continue;
+                          }
+                          auto result = bool{};
+                          if (starts_with_) {
+                            result = subject.Value(i).starts_with(arg.Value(i));
+                          } else {
+                            result = subject.Value(i).ends_with(arg.Value(i));
+                          }
+                          check(b.Append(result));
+                        }
+                      },
+                      [&](const auto&, const auto&) {
+                        // TODO: Handle null array. Emit warning.
+                        check(b.AppendNulls(arg.length()));
+                      },
+                    };
+                    match(std::tie(*subject.array, *arg.array), f);
+                  });
+      return series{bool_type{}, finish(b)};
     });
   }
 
@@ -98,11 +99,11 @@ public:
       options.emplace(std::move(*characters));
     }
     auto fn_name = options ? fn_name_ : fmt::format("{}_whitespace", fn_name_);
-    return function_use::make(
-      [subject_expr = std::move(subject_expr), options = std::move(options),
-       name = name_,
-       fn_name = std::move(fn_name)](evaluator eval, session ctx) -> series {
-        auto subject = eval(subject_expr);
+    return function_use::make([subject_expr = std::move(subject_expr),
+                               options = std::move(options), name = name_,
+                               fn_name = std::move(fn_name)](
+                                evaluator eval, session ctx) -> multi_series {
+      return map_series(eval(subject_expr), [&](series subject) {
         auto f = detail::overload{
           [&](const arrow::StringArray& array) {
             auto trimmed_array = arrow::compute::CallFunction(
@@ -126,6 +127,7 @@ public:
         };
         return match(*subject.array, f);
       });
+    });
   }
 
 private:
@@ -167,36 +169,37 @@ public:
           .positional("x", subject_expr, "")
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr)](
-                                evaluator eval, session ctx) -> series {
-      auto subject = eval(subject_expr);
-      auto f = detail::overload{
-        [&](const arrow::StringArray& array) {
-          auto result = arrow::compute::CallFunction(fn_name_, {array});
-          if (not result.ok()) {
-            diagnostic::warning("{}", result.status().ToString())
+                                evaluator eval, session ctx) {
+      return map_series(eval(subject_expr), [&](series subject) {
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            auto result = arrow::compute::CallFunction(fn_name_, {array});
+            if (not result.ok()) {
+              diagnostic::warning("{}", result.status().ToString())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(result_ty_, subject.length());
+            }
+            if (not result->type()->Equals(result_arrow_ty_)) {
+              result = arrow::compute::Cast(result.MoveValueUnsafe(),
+                                            result_arrow_ty_);
+              TENZIR_ASSERT(result.ok(), result.status().ToString());
+            }
+            return series{result_ty_, result.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(result_ty_, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name_,
+                                subject.type.kind())
               .primary(subject_expr)
               .emit(ctx);
             return series::null(result_ty_, subject.length());
-          }
-          if (not result->type()->Equals(result_arrow_ty_)) {
-            result = arrow::compute::Cast(result.MoveValueUnsafe(),
-                                          result_arrow_ty_);
-            TENZIR_ASSERT(result.ok(), result.status().ToString());
-          }
-          return series{result_ty_, result.MoveValueUnsafe().make_array()};
-        },
-        [&](const arrow::NullArray& array) {
-          return series::null(result_ty_, array.length());
-        },
-        [&](const auto&) {
-          diagnostic::warning("`{}` expected `string`, but got `{}`", name_,
-                              subject.type.kind())
-            .primary(subject_expr)
-            .emit(ctx);
-          return series::null(result_ty_, subject.length());
-        },
-      };
-      return match(*subject.array, f);
+          },
+        };
+        return match(*subject.array, f);
+      });
     });
   }
 
@@ -240,42 +243,43 @@ public:
     return function_use::make(
       [this, subject_expr = std::move(subject_expr),
        pattern = std::move(pattern), replacement = std::move(replacement),
-       max_replacements](evaluator eval, session ctx) -> series {
+       max_replacements](evaluator eval, session ctx) {
         auto result_type = string_type{};
         auto result_arrow_type
           = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
-        auto subject = eval(subject_expr);
-        auto f = detail::overload{
-          [&](const arrow::StringArray& array) {
-            auto max = max_replacements ? max_replacements->inner : -1;
-            auto options = arrow::compute::ReplaceSubstringOptions(
-              pattern.inner, replacement, max);
-            auto result = arrow::compute::CallFunction(
-              regex_ ? "replace_substring_regex" : "replace_substring", {array},
-              &options);
-            if (not result.ok()) {
-              diagnostic::warning("{}",
-                                  result.status().ToStringWithoutContextLines())
-                .severity(result.status().IsInvalid() ? severity::error
-                                                      : severity::warning)
-                .primary(pattern.source)
+        return map_series(eval(subject_expr), [&](series subject) {
+          auto f = detail::overload{
+            [&](const arrow::StringArray& array) {
+              auto max = max_replacements ? max_replacements->inner : -1;
+              auto options = arrow::compute::ReplaceSubstringOptions(
+                pattern.inner, replacement, max);
+              auto result = arrow::compute::CallFunction(
+                regex_ ? "replace_substring_regex" : "replace_substring",
+                {array}, &options);
+              if (not result.ok()) {
+                diagnostic::warning(
+                  "{}", result.status().ToStringWithoutContextLines())
+                  .severity(result.status().IsInvalid() ? severity::error
+                                                        : severity::warning)
+                  .primary(pattern.source)
+                  .emit(ctx);
+                return series::null(result_type, subject.length());
+              }
+              return series{result_type, result.MoveValueUnsafe().make_array()};
+            },
+            [&](const arrow::NullArray& array) {
+              return series::null(result_type, array.length());
+            },
+            [&](const auto&) {
+              diagnostic::warning("`{}` expected `string`, but got `{}`",
+                                  name(), subject.type.kind())
+                .primary(subject_expr)
                 .emit(ctx);
               return series::null(result_type, subject.length());
-            }
-            return series{result_type, result.MoveValueUnsafe().make_array()};
-          },
-          [&](const arrow::NullArray& array) {
-            return series::null(result_type, array.length());
-          },
-          [&](const auto&) {
-            diagnostic::warning("`{}` expected `string`, but got `{}`", name(),
-                                subject.type.kind())
-              .primary(subject_expr)
-              .emit(ctx);
-            return series::null(result_type, subject.length());
-          },
-        };
-        return match(*subject.array, f);
+            },
+          };
+          return match(*subject.array, f);
+        });
       });
   }
 
@@ -311,39 +315,40 @@ public:
     }
     return function_use::make(
       [this, subject_expr = std::move(subject_expr), begin = begin, end = end,
-       stride = stride](evaluator eval, session ctx) -> series {
+       stride = stride](evaluator eval, session ctx) {
         auto result_type = string_type{};
         auto result_arrow_type
           = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
-        auto subject = eval(subject_expr);
-        auto f = detail::overload{
-          [&](const arrow::StringArray& array) {
-            auto options = arrow::compute::SliceOptions(
-              begin ? begin->inner : 0,
-              end ? end->inner : std::numeric_limits<int64_t>::max(),
-              stride ? stride->inner : 1);
-            auto result = arrow::compute::CallFunction("utf8_slice_codeunits",
-                                                       {array}, &options);
-            if (not result.ok()) {
-              diagnostic::warning("{}", result.status().ToString())
+        return map_series(eval(subject_expr), [&](series subject) {
+          auto f = detail::overload{
+            [&](const arrow::StringArray& array) {
+              auto options = arrow::compute::SliceOptions(
+                begin ? begin->inner : 0,
+                end ? end->inner : std::numeric_limits<int64_t>::max(),
+                stride ? stride->inner : 1);
+              auto result = arrow::compute::CallFunction("utf8_slice_codeunits",
+                                                         {array}, &options);
+              if (not result.ok()) {
+                diagnostic::warning("{}", result.status().ToString())
+                  .primary(subject_expr)
+                  .emit(ctx);
+                return series::null(result_type, subject.length());
+              }
+              return series{result_type, result.MoveValueUnsafe().make_array()};
+            },
+            [&](const arrow::NullArray& array) {
+              return series::null(result_type, array.length());
+            },
+            [&](const auto&) {
+              diagnostic::warning("`{}` expected `string`, but got `{}`",
+                                  name(), subject.type.kind())
                 .primary(subject_expr)
                 .emit(ctx);
               return series::null(result_type, subject.length());
-            }
-            return series{result_type, result.MoveValueUnsafe().make_array()};
-          },
-          [&](const arrow::NullArray& array) {
-            return series::null(result_type, array.length());
-          },
-          [&](const auto&) {
-            diagnostic::warning("`{}` expected `string`, but got `{}`", name(),
-                                subject.type.kind())
-              .primary(subject_expr)
-              .emit(ctx);
-            return series::null(result_type, subject.length());
-          },
-        };
-        return match(*subject.array, f);
+            },
+          };
+          return match(*subject.array, f);
+        });
       });
   }
 };

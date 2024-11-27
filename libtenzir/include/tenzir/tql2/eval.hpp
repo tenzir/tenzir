@@ -10,13 +10,14 @@
 
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/multi_series.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
 namespace tenzir {
 
 auto eval(const ast::expression& expr, const table_slice& input,
-          diagnostic_handler& dh) -> series;
+          diagnostic_handler& dh) -> multi_series;
 
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   -> failure_or<data>;

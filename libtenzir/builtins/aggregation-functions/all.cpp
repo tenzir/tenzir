@@ -67,24 +67,25 @@ public:
     if (state_ == state::failed) {
       return;
     }
-    auto arg = eval(expr_, input, ctx);
-    auto f = detail::overload{
-      [&](const arrow::NullArray&) {
-        state_ = state::nulled;
-      },
-      [&](const arrow::BooleanArray& array) {
-        all_ = all_ and array.false_count() == 0;
-        if (array.null_count() > 0) {
+    iter_series(eval(expr_, input, ctx), [&](const series& arg) {
+      auto f = detail::overload{
+        [&](const arrow::NullArray&) {
           state_ = state::nulled;
-        }
-      },
-      [&](auto&&) {
-        diagnostic::warning("expected type `bool`, got `{}`", arg.type.kind())
-          .primary(expr_)
-          .emit(ctx);
-        state_ = state::failed;
-      }};
-    match(*arg.array, f);
+        },
+        [&](const arrow::BooleanArray& array) {
+          all_ = all_ and array.false_count() == 0;
+          if (array.null_count() > 0) {
+            state_ = state::nulled;
+          }
+        },
+        [&](auto&&) {
+          diagnostic::warning("expected type `bool`, got `{}`", arg.type.kind())
+            .primary(expr_)
+            .emit(ctx);
+          state_ = state::failed;
+        }};
+      match(*arg.array, f);
+    });
   }
 
   auto get() const -> data override {

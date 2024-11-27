@@ -9,6 +9,7 @@
 #include "tenzir/tql2/plugin.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
 
@@ -19,7 +20,7 @@ auto function_use::evaluator::length() const -> int64_t {
 }
 
 auto function_use::evaluator::operator()(const ast::expression& expr) const
-  -> series {
+  -> multi_series {
   return static_cast<tenzir::evaluator*>(self_)->eval(expr);
 }
 
@@ -39,64 +40,66 @@ auto aggregation_plugin::make_function(invocation inv, session ctx) const
     = ast::root_field{ast::identifier{"x", subject_arg.get_location()}};
   adjusted_call.args.front() = inner_selector;
   TRY(auto fn, this->make_aggregation(invocation{adjusted_call}, ctx));
-  return function_use::make([fn = std::move(fn), subject_arg
-                                                 = std::move(subject_arg)](
-                              evaluator eval, session ctx) mutable -> series {
-    const auto subject = eval(subject_arg);
-    if (is<null_type>(subject.type)) {
-      return series::null(null_type{}, eval.length());
-    }
-    const auto lists = subject.as<list_type>();
-    if (not lists) {
-      diagnostic::warning("expected `list`, but got `{}`", subject.type.kind())
-        .primary(subject_arg)
-        .emit(ctx);
-      return series::null(null_type{}, eval.length());
-    }
-    const auto dummy_type = type{
-      "dummy",
-      record_type{
-        {"x", lists->type.value_type()},
-      },
-    };
-    auto slice = table_slice{
-      arrow::RecordBatch::Make(dummy_type.to_arrow_schema(),
-                               lists->array->values()->length(),
-                               arrow::ArrayVector{lists->array->values()}),
-      dummy_type,
-    };
-    auto builder = series_builder{};
-    for (auto i = int64_t{}; i < lists->array->length(); ++i) {
-      if (lists->array->IsNull(i)) {
-        builder.null();
-        continue;
-      }
-      const auto start = lists->array->value_offset(i);
-      const auto end = start + lists->array->value_length(i);
-      fn->update(subslice(slice, start, end), ctx);
-      builder.data(fn->get());
-      fn->reset();
-    }
-    return builder.finish_assert_one_array();
-  });
+  return function_use::make(
+    [fn = std::move(fn), subject_arg = std::move(subject_arg)](
+      evaluator eval, session ctx) mutable -> multi_series {
+      return map_series(eval(subject_arg), [&](series subject) -> series {
+        if (is<null_type>(subject.type)) {
+          return series::null(null_type{}, eval.length());
+        }
+        const auto lists = subject.as<list_type>();
+        if (not lists) {
+          diagnostic::warning("expected `list`, but got `{}`",
+                              subject.type.kind())
+            .primary(subject_arg)
+            .emit(ctx);
+          return series::null(null_type{}, eval.length());
+        }
+        const auto dummy_type = type{
+          "dummy",
+          record_type{
+            {"x", lists->type.value_type()},
+          },
+        };
+        auto slice = table_slice{
+          arrow::RecordBatch::Make(dummy_type.to_arrow_schema(),
+                                   lists->array->values()->length(),
+                                   arrow::ArrayVector{lists->array->values()}),
+          dummy_type,
+        };
+        auto builder = series_builder{};
+        for (auto i = int64_t{}; i < lists->array->length(); ++i) {
+          if (lists->array->IsNull(i)) {
+            builder.null();
+            continue;
+          }
+          const auto start = lists->array->value_offset(i);
+          const auto end = start + lists->array->value_length(i);
+          fn->update(subslice(slice, start, end), ctx);
+          builder.data(fn->get());
+          fn->reset();
+        }
+        return builder.finish_assert_one_array();
+      });
+    });
 }
 
 auto function_use::make(
-  detail::unique_function<auto(evaluator eval, session ctx)->series> f)
+  detail::unique_function<auto(evaluator eval, session ctx)->multi_series> f)
   -> std::unique_ptr<function_use> {
   class result final : public function_use {
   public:
     explicit result(
-      detail::unique_function<auto(evaluator eval, session ctx)->series> f)
+      detail::unique_function<auto(evaluator eval, session ctx)->multi_series> f)
       : f_{std::move(f)} {
     }
 
-    auto run(evaluator eval, session ctx) -> series override {
+    auto run(evaluator eval, session ctx) -> multi_series override {
       return f_(eval, ctx);
     }
 
   private:
-    detail::unique_function<auto(evaluator eval, session ctx)->series> f_;
+    detail::unique_function<auto(evaluator eval, session ctx)->multi_series> f_;
   };
   return std::make_unique<result>(std::move(f));
 }
