@@ -15,12 +15,12 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/detail/recursive_size.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/uuid.hpp"
 
-#include <caf/detail/scope_guard.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
@@ -49,8 +49,8 @@ struct diskstate_blacklist_comparator {
 };
 
 template <typename Fun>
-std::shared_ptr<caf::detail::scope_guard<Fun>> make_shared_guard(Fun f) {
-  return std::make_shared<caf::detail::scope_guard<Fun>>(std::forward<Fun>(f));
+std::shared_ptr<detail::scope_guard<Fun>> make_shared_guard(Fun f) {
+  return std::make_shared<detail::scope_guard<Fun>>(std::forward<Fun>(f));
 }
 
 } // namespace
