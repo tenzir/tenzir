@@ -56,6 +56,6 @@ using variant_type_concat =
 
 template <class T, class U>
 using flattened_variant
-  = caf::detail::tl_apply_t<variant_type_concat<T, U>, tenzir::variant>;
+  = detail::tl_apply_t<variant_type_concat<T, U>, tenzir::variant>;
 
 } // namespace tenzir::detail

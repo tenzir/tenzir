@@ -60,7 +60,7 @@ public:
     if constexpr (sizeof...(xs) == 0) {
       if constexpr (std::is_same_v<T, data_view>) {
         return add(x);
-      } else if constexpr (caf::detail::tl_contains<data_view::types, T>::value) {
+      } else if constexpr (detail::tl_contains<data_view::types, T>::value) {
         return add(data_view{x});
       } else {
         return add(make_view(x));

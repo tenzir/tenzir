@@ -22,7 +22,6 @@
 #include "tenzir/view.hpp"
 
 #include <arrow/api.h>
-#include <caf/sum_type.hpp>
 
 /// The implementation of `series_builder` consists of the following components:
 ///
@@ -100,11 +99,11 @@ template <class T>
 concept atom_type = is_atom_type<T>::value;
 
 using atom_view_types
-  = caf::detail::tl_map_t<caf::detail::tl_filter_t<concrete_types, is_atom_type>,
-                          type_to_data, view_trait>;
+  = detail::tl_map_t<detail::tl_filter_t<concrete_types, is_atom_type>,
+                     type_to_data, view_trait>;
 
 template <class T>
-concept atom_view_type = caf::detail::tl_contains<atom_view_types, T>::value;
+concept atom_view_type = detail::tl_contains<atom_view_types, T>::value;
 
 template <class T>
 struct atom_view_to_type : data_to_type<T> {};
@@ -126,7 +125,7 @@ using atom_view_to_type_t = atom_view_to_type<T>::type;
 
 namespace detail {
 
-struct atom_view : caf::detail::tl_apply_t<atom_view_types, variant> {
+struct atom_view : detail::tl_apply_t<atom_view_types, variant> {
   using variant::variant;
 };
 

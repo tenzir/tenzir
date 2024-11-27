@@ -16,7 +16,6 @@
 #include "tenzir/type.hpp"
 
 #include <caf/error.hpp>
-#include <caf/sum_type.hpp>
 #include <caf/test/dsl.hpp>
 #include <fmt/format.h>
 

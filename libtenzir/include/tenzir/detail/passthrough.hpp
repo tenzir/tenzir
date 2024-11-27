@@ -12,13 +12,12 @@
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
 #include <caf/detail/type_list.hpp>
-#include <caf/sum_type_access.hpp>
-#include <caf/sum_type_token.hpp>
 
 #include <tuple>
 #include <utility>
 
-namespace tenzir::detail {
+namespace tenzir {
+namespace detail {
 
 /// @copydoc passthrough
 template <class T, class Forward>
@@ -34,42 +33,8 @@ auto passthrough(T&& value) noexcept
   return {.ref = std::forward<T>(value)};
 }
 
-} // namespace tenzir::detail
+} // namespace detail
 
-namespace caf {
-
-template <class T, class Forward>
-struct sum_type_access<tenzir::detail::passthrough_type<T, Forward>> final {
-  using type0 = T;
-  using types = detail::type_list<T>;
-  static constexpr bool specialized = true;
-
-  template <int Index>
-  static bool
-  is(tenzir::detail::passthrough_type<T, Forward>, sum_type_token<T, Index>) {
-    return true;
-  }
-
-  template <int Index>
-  static Forward get(tenzir::detail::passthrough_type<T, Forward> x,
-                     sum_type_token<T, Index>) {
-    return static_cast<Forward>(x.ref);
-  }
-
-  template <class Result, class Visitor, class... Args>
-  static Result apply(tenzir::detail::passthrough_type<T, Forward> x,
-                      Visitor&& v, Args&&... xs) {
-    auto xs_as_tuple = std::forward_as_tuple(xs...);
-    auto indices = detail::get_indices(xs_as_tuple);
-    return detail::apply_args_suffxied(
-      std::forward<Visitor>(v), std::move(indices), xs_as_tuple,
-      get(std::move(x), sum_type_token<type0, 0>{}));
-  }
-};
-
-} // namespace caf
-
-namespace tenzir {
 template <class T, class Forward>
 class variant_traits<detail::passthrough_type<T, Forward>> {
   using V = detail::passthrough_type<T, Forward>;

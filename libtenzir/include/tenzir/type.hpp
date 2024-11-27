@@ -12,6 +12,7 @@
 
 #include "tenzir/aliases.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/generator.hpp"
@@ -25,8 +26,6 @@
 #include <arrow/type_traits.h>
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
-#include <caf/detail/type_list.hpp>
-#include <caf/sum_type.hpp>
 #include <fmt/format.h>
 
 #include <compare>
@@ -52,13 +51,13 @@ protected:
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<null_type, bool_type, int64_type, uint64_type,
-                           double_type, duration_type, time_type, string_type,
-                           ip_type, subnet_type, enumeration_type, list_type,
-                           map_type, record_type, blob_type>;
+  = detail::type_list<null_type, bool_type, int64_type, uint64_type,
+                      double_type, duration_type, time_type, string_type,
+                      ip_type, subnet_type, enumeration_type, list_type,
+                      map_type, record_type, blob_type>;
 
 /// Reification of the variant inhabitants of `type`.
-using type_kind = caf::detail::tl_apply_t<concrete_types, tag_variant>;
+using type_kind = detail::tl_apply_t<concrete_types, tag_variant>;
 
 /// Returns the name of the type kind.
 auto to_string(type_kind x) -> std::string_view;
@@ -67,7 +66,7 @@ auto to_string(type_kind x) -> std::string_view;
 template <class T>
 concept concrete_type = requires(const T& value) {
   // The type must be explicitly whitelisted above.
-  requires caf::detail::tl_contains<concrete_types, T>::value;
+  requires detail::tl_contains<concrete_types, T>::value;
   // The type must not be inherited from to avoid slicing issues.
   requires std::is_final_v<T>;
   // The type must offer a way to get a unique type index.
@@ -879,7 +878,6 @@ struct subnet_type::arrow_type : arrow::ExtensionType {
 /// @relates type
 class enumeration_type final : public stateful_type_base {
   friend class type;
-  friend struct caf::sum_type_access<tenzir::type>;
 
 public:
   /// A field of an enumeration type.
@@ -1051,7 +1049,6 @@ private:
 /// @relates type
 class list_type final : public stateful_type_base {
   friend class type;
-  friend struct caf::sum_type_access<tenzir::type>;
 
 public:
   /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
@@ -1119,7 +1116,6 @@ public:
 /// @relates type
 class map_type final : public stateful_type_base {
   friend class type;
-  friend struct caf::sum_type_access<tenzir::type>;
 
 public:
   /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
@@ -1191,7 +1187,6 @@ public:
 /// @relates type
 class record_type final : public stateful_type_base {
   friend class type;
-  friend struct caf::sum_type_access<tenzir::type>;
 
 public:
   template <class String>
@@ -1495,10 +1490,10 @@ using type_to_data_t = typename type_to_data<T>::type;
 
 template <class T>
 struct data_to_type
-  : caf::detail::tl_at<
-      concrete_types,
-      caf::detail::tl_index_of<
-        caf::detail::tl_map_t<concrete_types, type_to_data>, T>::value> {};
+  : detail::tl_at<concrete_types,
+                  detail::tl_index_of<
+                    detail::tl_map_t<concrete_types, type_to_data>, T>::value> {
+};
 
 template <class T>
 using data_to_type_t = typename data_to_type<T>::type;
@@ -1587,20 +1582,18 @@ struct type_from_arrow : type_from_arrow<typename T::TypeClass> {};
 template <class T>
   requires(std::is_base_of_v<arrow::DataType, T>)
 struct type_from_arrow<T>
-  : caf::detail::tl_at<
+  : detail::tl_at<
       concrete_types,
-      caf::detail::tl_index_of<
-        caf::detail::tl_map_t<concrete_types, type_to_arrow_type>, T>::value> {
-};
+      detail::tl_index_of<detail::tl_map_t<concrete_types, type_to_arrow_type>,
+                          T>::value> {};
 
 template <class T>
   requires(std::is_base_of_v<arrow::ArrayBuilder, T>)
 struct type_from_arrow<T>
-  : caf::detail::tl_at<
+  : detail::tl_at<
       concrete_types,
-      caf::detail::tl_index_of<
-        caf::detail::tl_map_t<concrete_types, type_to_arrow_builder>, T>::value> {
-};
+      detail::tl_index_of<
+        detail::tl_map_t<concrete_types, type_to_arrow_builder>, T>::value> {};
 
 template <>
 struct type_from_arrow<arrow::DataType> : std::type_identity<type> {};
@@ -1621,14 +1614,14 @@ using type_from_arrow_t = typename type_from_arrow<T>::type;
 template <>
 class variant_traits<type> {
 public:
-  static constexpr auto count = caf::detail::tl_size<concrete_types>::value;
+  static constexpr auto count = detail::tl_size<concrete_types>::value;
 
   // TODO: Can we maybe align the indices here?
   static auto index(const type& x) -> size_t;
 
   template <size_t I>
   static auto get(const type& x) -> decltype(auto) {
-    using Type = caf::detail::tl_at_t<concrete_types, I>;
+    using Type = detail::tl_at_t<concrete_types, I>;
     if constexpr (basic_type<Type>) {
       // TODO: We potentially hand out a `&` to a const... Probably okay because
       // we can't do any mutations, but still fishy.
@@ -1646,24 +1639,24 @@ public:
 template <>
 class variant_traits<arrow::DataType> {
 public:
-  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_type>;
+  using types = detail::tl_map_t<concrete_types, type_to_arrow_type>;
 
-  static constexpr auto count = caf::detail::tl_size<types>::value;
+  static constexpr auto count = detail::tl_size<types>::value;
 
   static auto index(const arrow::DataType& x) -> size_t;
 
   template <size_t I>
   static auto get(const arrow::DataType& x) -> decltype(auto) {
-    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+    return static_cast<const detail::tl_at_t<types, I>&>(x);
   }
 };
 
 template <>
 class variant_traits<arrow::Array> {
 public:
-  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_array>;
+  using types = detail::tl_map_t<concrete_types, type_to_arrow_array>;
 
-  static constexpr auto count = caf::detail::tl_size<types>::value;
+  static constexpr auto count = detail::tl_size<types>::value;
 
   static auto index(const arrow::Array& x) -> size_t {
     return variant_traits<arrow::DataType>::index(*x.type());
@@ -1671,16 +1664,16 @@ public:
 
   template <size_t I>
   static auto get(const arrow::Array& x) -> decltype(auto) {
-    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+    return static_cast<const detail::tl_at_t<types, I>&>(x);
   }
 };
 
 template <>
 class variant_traits<arrow::ArrayBuilder> {
 public:
-  using types = caf::detail::tl_map_t<concrete_types, type_to_arrow_builder>;
+  using types = detail::tl_map_t<concrete_types, type_to_arrow_builder>;
 
-  static constexpr auto count = caf::detail::tl_size<types>::value;
+  static constexpr auto count = detail::tl_size<types>::value;
 
   static auto index(const arrow::ArrayBuilder& x) -> size_t {
     return variant_traits<arrow::DataType>::index(*x.type());
@@ -1688,428 +1681,11 @@ public:
 
   template <size_t I>
   static auto get(const arrow::ArrayBuilder& x) -> decltype(auto) {
-    return static_cast<const caf::detail::tl_at_t<types, I>&>(x);
+    return static_cast<const detail::tl_at_t<types, I>&>(x);
   }
 };
 
 } // namespace tenzir
-
-// -- sum_type_access ---------------------------------------------------------
-
-namespace caf {
-
-template <>
-struct sum_type_access<tenzir::type> final {
-  using types = tenzir::concrete_types;
-  using type0 = detail::tl_head_t<types>;
-  static constexpr bool specialized = true;
-
-  template <tenzir::concrete_type T, int Index>
-  static bool is(const tenzir::type& x, sum_type_token<T, Index>) {
-    return x.type_index() == T::type_index;
-  }
-
-  template <class T, int Index>
-  static bool is(const tenzir::type&, sum_type_token<T, Index>) {
-    static_assert(tenzir::detail::always_false_v<T>,
-                  "T must be a concrete type");
-    __builtin_unreachable();
-  }
-
-  template <tenzir::basic_type T, int Index>
-  static const T& get(const tenzir::type& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    static const auto instance = T{};
-    return instance;
-  }
-
-  template <tenzir::complex_type T, int Index>
-  static const T& get(const tenzir::type& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    return static_cast<const T&>(
-      static_cast<const tenzir::stateful_type_base&>(x));
-  }
-
-  template <class T, int Index>
-  static const T& get(const tenzir::type&, sum_type_token<T, Index>) {
-    static_assert(tenzir::detail::always_false_v<T>,
-                  "T must be a concrete type");
-    __builtin_unreachable();
-  }
-
-  template <tenzir::concrete_type T, int Index>
-  static const T*
-  get_if(const tenzir::type* x, sum_type_token<T, Index> token) {
-    if (x && is(*x, token))
-      return &get(*x, token);
-    return nullptr;
-  }
-
-  template <class T, int Index>
-  static const T* get_if(const tenzir::type*, sum_type_token<T, Index>) {
-    static_assert(tenzir::detail::always_false_v<T>,
-                  "T must be a concrete type");
-    __builtin_unreachable();
-  }
-
-  // A helper function that dispatches from concrete type id to index of the
-  // concrete type in the type list. This is intentionally not templatized
-  // because it contains a static lookup table that we only ever want to create
-  // once.
-  static uint8_t index_from_type(const tenzir::type& x) noexcept;
-
-  template <class Result, class Visitor, class... Args>
-  static auto apply(const tenzir::type& x, Visitor&& v, Args&&... xs)
-    -> Result {
-    // A dispatch table that maps variant type index to dispatch function for
-    // the concrete type.
-    static constexpr auto table =
-      []<tenzir::concrete_type... Ts, uint8_t... Indices>(
-        detail::type_list<Ts...>,
-        std::integer_sequence<uint8_t, Indices...>) noexcept {
-        return std::array{
-          +[](const tenzir::type& x, Visitor&& v, Args&&... xs) -> Result {
-            auto xs_as_tuple = std::forward_as_tuple(xs...);
-            auto indices = detail::get_indices(xs_as_tuple);
-            return detail::apply_args_suffxied(
-              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-              get(x, sum_type_token<Ts, Indices>{}));
-          }...};
-      }(types{},
-        std::make_integer_sequence<uint8_t, detail::tl_size<types>::value>());
-    auto index = index_from_type(x);
-    TENZIR_ASSERT(0 <= index);
-    TENZIR_ASSERT(index < static_cast<int>(table.size()));
-    const auto dispatch = table[index];
-    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
-  }
-};
-
-template <>
-struct sum_type_access<arrow::DataType> final {
-  using types = detail::tl_map_t<typename sum_type_access<tenzir::type>::types,
-                                 tenzir::type_to_arrow_type>;
-  using type0 = detail::tl_head_t<types>;
-  static constexpr bool specialized = true;
-
-  template <class T, int Index>
-  static bool is(const arrow::DataType& x, sum_type_token<T, Index>) {
-    if (x.id() != T::type_id)
-      return false;
-    if constexpr (arrow::is_extension_type<T>::value)
-      return static_cast<const arrow::ExtensionType&>(x).extension_name()
-             == T::name;
-    return true;
-  }
-
-  template <class T, int Index>
-  static const T&
-  get(const arrow::DataType& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    return static_cast<const T&>(x);
-  }
-
-  template <class T, int Index>
-  static T& get(arrow::DataType& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    return static_cast<T&>(x);
-  }
-
-  template <class T, int Index>
-  static const T*
-  get_if(const arrow::DataType* x, sum_type_token<T, Index> token) {
-    if (x && is(*x, token))
-      return &get(*x, token);
-    return nullptr;
-  }
-
-  template <class T, int Index>
-  static T* get_if(arrow::DataType* x, sum_type_token<T, Index> token) {
-    if (x && is(*x, token))
-      return &get(*x, token);
-    return nullptr;
-  }
-
-  // A helper function that dispatches from concrete type id to index of the
-  // concrete type in the type list. This is intentionally not templatized
-  // because it contains a static lookup table that we only ever want to create
-  // once.
-  static int index_from_type(const arrow::DataType& x) noexcept;
-
-  template <class Result, class Visitor, class... Args>
-  static auto apply(const arrow::DataType& x, Visitor&& v, Args&&... xs)
-    -> Result {
-    // A dispatch table that maps variant type index to dispatch function for
-    // the concrete type.
-    static constexpr auto table =
-      []<class... Ts, int... Indices>(
-        detail::type_list<Ts...>,
-        std::integer_sequence<int, Indices...>) noexcept {
-        return std::array{
-          +[](const arrow::DataType& x, Visitor&& v, Args&&... xs) -> Result {
-            auto xs_as_tuple = std::forward_as_tuple(xs...);
-            auto indices = detail::get_indices(xs_as_tuple);
-            return detail::apply_args_suffxied(
-              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-              get(x, sum_type_token<Ts, Indices>{}));
-          }...};
-      }(types{},
-        std::make_integer_sequence<int, detail::tl_size<types>::value>());
-    auto index = index_from_type(x);
-    TENZIR_ASSERT(0 <= index);
-    TENZIR_ASSERT(index < static_cast<int>(table.size()));
-    const auto dispatch = table[index];
-    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
-  }
-};
-
-template <>
-struct sum_type_access<arrow::Array> final {
-  template <class T>
-  using map_array_type
-    = std::type_identity<typename arrow::TypeTraits<T>::ArrayType>;
-
-  using types
-    = detail::tl_map_t<typename sum_type_access<arrow::DataType>::types,
-                       map_array_type>;
-  using type0 = detail::tl_head_t<types>;
-  static constexpr bool specialized = true;
-
-  template <class T, int Index>
-  static bool is(const arrow::Array& x, sum_type_token<T, Index>) {
-    static_assert(std::is_base_of_v<arrow::Array, T>);
-    if (x.type_id() != T::TypeClass::type_id)
-      return false;
-    if constexpr (arrow::is_extension_type<typename T::TypeClass>::value)
-      return static_cast<const arrow::ExtensionType&>(*x.type()).extension_name()
-             == T::TypeClass::name;
-    return true;
-  }
-
-  template <class T, int Index>
-  static const T& get(const arrow::Array& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    return static_cast<const T&>(x);
-  }
-
-  template <class T, int Index>
-  static T& get(arrow::Array& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    return static_cast<T&>(x);
-  }
-
-  template <class T, int Index>
-  static const T*
-  get_if(const arrow::Array* x, sum_type_token<T, Index> token) {
-    if (x && is(*x, token))
-      return &get(*x, token);
-    return nullptr;
-  }
-
-  template <class T, int Index>
-  static T* get_if(arrow::Array* x, sum_type_token<T, Index> token) {
-    if (x && is(*x, token))
-      return &get(*x, token);
-    return nullptr;
-  }
-
-  template <class Result, class Visitor, class... Args>
-  static auto apply(const arrow::Array& x, Visitor&& v, Args&&... xs)
-    -> Result {
-    TENZIR_ASSERT(x.type());
-    // A dispatch table that maps variant type index to dispatch function for
-    // the concrete type.
-    static constexpr auto table =
-      []<class... Ts, int... Indices>(
-        detail::type_list<Ts...>,
-        std::integer_sequence<int, Indices...>) noexcept {
-        return std::array{
-          +[](const arrow::Array& x, Visitor&& v, Args&&... xs) -> Result {
-            auto xs_as_tuple = std::forward_as_tuple(xs...);
-            auto indices = detail::get_indices(xs_as_tuple);
-            return detail::apply_args_suffxied(
-              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-              get(x, sum_type_token<Ts, Indices>{}));
-          }...};
-      }(types{},
-        std::make_integer_sequence<int, detail::tl_size<types>::value>());
-    const auto dispatch
-      = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
-    TENZIR_ASSERT(dispatch);
-    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
-  }
-};
-
-template <>
-struct sum_type_access<arrow::Scalar> final {
-  template <class T>
-  using map_scalar_type
-    = std::type_identity<typename arrow::TypeTraits<T>::ScalarType>;
-
-  using types
-    = detail::tl_map_t<typename sum_type_access<arrow::DataType>::types,
-                       map_scalar_type>;
-
-  using type0 = detail::tl_head_t<types>;
-  static constexpr bool specialized = true;
-
-  template <class T, int Index>
-  static bool is(const arrow::Scalar& x, sum_type_token<T, Index>) {
-    static_assert(std::is_base_of_v<arrow::Scalar, T>);
-    if (!x.is_valid)
-      return false;
-    TENZIR_ASSERT(x.type);
-    if (x.type->id() != T::TypeClass::type_id)
-      return false;
-    if constexpr (arrow::is_extension_type<typename T::TypeClass>::value)
-      return static_cast<const arrow::ExtensionType&>(*x.type).extension_name()
-             == T::TypeClass::name;
-    return true;
-  }
-
-  template <class T, int Index>
-  static const T& get(const arrow::Scalar& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    return static_cast<const T&>(x);
-  }
-
-  template <class T, int Index>
-  static T& get(arrow::Scalar& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    return static_cast<T&>(x);
-  }
-
-  template <class T, int Index>
-  static const T*
-  get_if(const arrow::Scalar* x, sum_type_token<T, Index> token) {
-    if (x && is(*x, token))
-      return &get(*x, token);
-    return nullptr;
-  }
-
-  template <class T, int Index>
-  static T* get_if(arrow::Scalar* x, sum_type_token<T, Index> token) {
-    if (x && is(*x, token))
-      return &get(*x, token);
-    return nullptr;
-  }
-
-  template <class Result, class Visitor, class... Args>
-  static auto apply(const arrow::Scalar& x, Visitor&& v, Args&&... xs)
-    -> Result {
-    TENZIR_ASSERT(x.is_valid);
-    TENZIR_ASSERT(x.type);
-    // A dispatch table that maps variant type index to dispatch function for
-    // the concrete type.
-    static constexpr auto table =
-      []<class... Ts, int... Indices>(
-        detail::type_list<Ts...>,
-        std::integer_sequence<int, Indices...>) noexcept {
-        return std::array{
-          +[](const arrow::Scalar& x, Visitor&& v, Args&&... xs) -> Result {
-            auto xs_as_tuple = std::forward_as_tuple(xs...);
-            auto indices = detail::get_indices(xs_as_tuple);
-            return detail::apply_args_suffxied(
-              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-              get(x, sum_type_token<Ts, Indices>{}));
-          }...};
-      }(types{},
-        std::make_integer_sequence<int, detail::tl_size<types>::value>());
-    const auto dispatch
-      = table[sum_type_access<arrow::DataType>::index_from_type(*x.type)];
-    TENZIR_ASSERT(dispatch);
-    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
-  }
-};
-
-template <>
-struct sum_type_access<arrow::ArrayBuilder> final {
-  template <class T>
-  using map_builder_type
-    = std::type_identity<typename arrow::TypeTraits<T>::BuilderType>;
-
-  using types
-    = detail::tl_map_t<typename sum_type_access<arrow::DataType>::types,
-                       map_builder_type>;
-  using type0 = detail::tl_head_t<types>;
-  static constexpr bool specialized = true;
-
-  template <class T, int Index>
-  static bool is(const arrow::ArrayBuilder& x, sum_type_token<T, Index>) {
-    static_assert(std::is_base_of_v<arrow::ArrayBuilder, T>);
-    using arrow_type
-      = tenzir::type_to_arrow_type_t<tenzir::type_from_arrow_t<T>>;
-    if (x.type()->id() != arrow_type::type_id)
-      return false;
-    if constexpr (arrow::is_extension_type<arrow_type>::value)
-      return static_cast<const arrow::ExtensionType&>(*x.type()).extension_name()
-             == T::TypeClass::name;
-    return true;
-  }
-
-  template <class T, int Index>
-  static const T&
-  get(const arrow::ArrayBuilder& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    return static_cast<const T&>(x);
-  }
-
-  template <class T, int Index>
-  static T& get(arrow::ArrayBuilder& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
-    return static_cast<T&>(x);
-  }
-
-  template <class T, int Index>
-  static const T*
-  get_if(const arrow::ArrayBuilder* x, sum_type_token<T, Index> token) {
-    if (x && is(*x, token))
-      return &get(*x, token);
-    return nullptr;
-  }
-
-  template <class T, int Index>
-  static T* get_if(arrow::ArrayBuilder* x, sum_type_token<T, Index> token) {
-    if (x && is(*x, token))
-      return &get(*x, token);
-    return nullptr;
-  }
-
-  template <class Result, class Visitor, class... Args>
-  static auto apply(const arrow::ArrayBuilder& x, Visitor&& v, Args&&... xs)
-    -> Result {
-    TENZIR_ASSERT(x.type());
-    // A dispatch table that maps variant type index to dispatch function for
-    // the concrete type.
-    static constexpr auto table =
-      []<class... Ts, int... Indices>(
-        detail::type_list<Ts...>,
-        std::integer_sequence<int, Indices...>) noexcept {
-        return std::array{+[](const arrow::ArrayBuilder& x, Visitor&& v,
-                              Args&&... xs) -> Result {
-          auto xs_as_tuple = std::forward_as_tuple(xs...);
-          auto indices = detail::get_indices(xs_as_tuple);
-          return detail::apply_args_suffxied(
-            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-            get(x, sum_type_token<Ts, Indices>{}));
-        }...};
-      }(types{},
-        std::make_integer_sequence<int, detail::tl_size<types>::value>());
-    auto index = sum_type_access<arrow::DataType>::index_from_type(*x.type());
-    TENZIR_ASSERT(0 <= index);
-    TENZIR_ASSERT(index < static_cast<int>(table.size()));
-    const auto dispatch = table[index];
-    return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
-  }
-};
-
-extern template struct sum_type_access<tenzir::type>;
-extern template struct sum_type_access<arrow::DataType>;
-extern template struct sum_type_access<arrow::Array>;
-extern template struct sum_type_access<arrow::Scalar>;
-extern template struct sum_type_access<arrow::ArrayBuilder>;
-
-} // namespace caf
 
 // -- standard library specializations ----------------------------------------
 
