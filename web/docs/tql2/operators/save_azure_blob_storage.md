@@ -21,7 +21,7 @@ may read from multiple environment variables, such as:
 - `AZURE_CLIENT_CERTIFICATE_PATH`
 - `AZURE_FEDERATED_TOKEN_FILE`
 
-### `uri:string`
+### `uri: string`
 
 An URI identifying the blob to save to. If the blob and/or do not
 exist, they will be created.

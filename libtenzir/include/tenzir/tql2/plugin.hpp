@@ -29,8 +29,8 @@ public:
   struct load_properties_t {
     /// URI schemes the connector supports
     std::vector<std::string> schemes = {};
-    const operator_factory_plugin* default_format
-      = plugins::find<operator_factory_plugin>("read_json");
+    /// A default `load_*` operator to be used if it couldnt be deduced.
+    const operator_factory_plugin* default_format = nullptr;
     /// Whether the connector accepts a pipeline as the final argument
     bool accepts_pipeline = false;
     /// Whether to strip the scheme before passing the URI to the transformer
@@ -51,8 +51,8 @@ public:
   struct save_properties_t {
     /// URI schemes the connector supports
     std::vector<std::string> schemes = {};
-    const operator_factory_plugin* default_format
-      = plugins::find<operator_factory_plugin>("write_ndjson");
+    /// A default `load_*` operator to be used if it couldnt be deduced.
+    const operator_factory_plugin* default_format = nullptr;
     /// Whether the connector accepts a pipeline as the final argument
     bool accepts_pipeline = false;
     /// Whether to strip the scheme before passing the URI to the transformer

@@ -69,8 +69,6 @@ Supported file formats are the common file endings for our [`read_*` operators](
 If you want to provide additional arguments to the writer, you can use the
 [pipeline argument](#---optional) to specify the parsing manually.
 
-If inference fails, the `to` operator writes NDJSON.
-
 ### Compressing
 
 The compression, just as the format, is inferred from the "file-ending" in the URI. Under the hood,

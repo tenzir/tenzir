@@ -65,7 +65,7 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`from`](./operators/from.md) | | `from "https://example.com/file.json.gz"` <!--at the top because its important-->
+[`from`](./operators/from.md) | Read events from an URI <br/> Create events ad-hoc| `from "https://example.com/file.json.gz"` <br/> `from {key: "value"}…` <!--at the top because its important-->
 [`subscribe`](./operators/subscribe.md) | Subscribes to events of a certain topic | `subscribe "topic"`
 [`export`](./operators/export.md) | Retrieves events from the node | `export`
 [`from_fluent_bit`](./operators/from_fluent_bit.md) | Returns results from a fluent-bit | `from_fluent_bit "opentelemetry"`

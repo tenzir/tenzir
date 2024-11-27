@@ -32,7 +32,7 @@ from_fluent_bit "plugin" options{ key1: value1, key2:value2 ... }
 You can acquire events from Fluent Bit using the [`from_fluent_bit` operator](from_fluent_bit.md).
 :::
 
-### `plugin:str`
+### `plugin: str`
 
 The name of the Fluent Bit plugin.
 
@@ -41,14 +41,14 @@ help text for available plugin names. The web documentation often comes with an
 example invocation near the bottom of the page, which also provides a good idea
 how you could use the operator.
 
-### `options=record (optional)`
+### `options = record (optional)`
 
 Sets plugin configuration properties.
 
 The key-value pairs in this record are equivalent to `-p key=value` for the
 `fluent-bit` executable.
 
-### `fluent_bit_options=record (optional)`
+### `fluent_bit_options = record (optional)`
 
 Sets global properties of the Fluent Bit service., e.g., `fluent_bit_options= {flush:1,grace=3}`.
 

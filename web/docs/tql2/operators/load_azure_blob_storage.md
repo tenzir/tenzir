@@ -21,7 +21,7 @@ may read from multiple environment variables, such as:
 - `AZURE_CLIENT_CERTIFICATE_PATH`
 - `AZURE_FEDERATED_TOKEN_FILE`
 
-### `uri:string` (Loader, Saver)
+### `uri: string`
 
 A URI identifying the blob to load from
 
@@ -49,6 +49,6 @@ Read JSON from a blob `obj.json` in the blob container `container`, using the
 `tenzirdev` user:
 
 ```tql
-read_azure_blob_storage "abfss://tenzirdev@container/obj.json"
+load_azure_blob_storage "abfss://tenzirdev@container/obj.json"
 read_json
 ```

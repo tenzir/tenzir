@@ -155,18 +155,19 @@ auto find_formatter_given(std::string_view what, auto func, auto member,
     loc.end -= 1;
     loc.end -= compression.size();
   }
-  auto diag
-    = diagnostic::error("no known format for extension `{}`", what)
-        .primary(loc)
-        .note("supported extensions for format deduction:  `{}`",
-              fmt::join(possibilities, "`, `"))
-        .hint("you can pass a pipeline to handle compression and format")
-        .docs(docs);
+  auto diag = diagnostic::error("no known format for extension `{}`", what)
+                .primary(loc)
+                .note("supported extensions for format deduction:  `{}`",
+                      fmt::join(possibilities, "`, `"));
+
   if (compression.empty()) {
     diag = std::move(diag).note(
       "supported extensions for compression deduction: `{}`",
       fmt::join(extension_to_compression_map | std::views::keys, "`, `"));
   }
+  diag = std::move(diag)
+           .hint("you can pass a pipeline to handle compression and format")
+           .docs(docs);
   std::move(diag).emit(ctx);
   return {};
 }
@@ -317,10 +318,11 @@ class from_plugin2 final : public virtual operator_factory_plugin {
       if (not compression_name.empty()) {
         for (const auto& p : plugins::get<operator_factory_plugin>()) {
           const auto name = p->name();
-          if (name != "decompress") {
-            continue;
+          // TODO These should ultimately be different operators
+          if (name == "decompress") {
+            decompress_plugin = p;
+            break;
           }
-          decompress_plugin = p;
         }
         TENZIR_ASSERT(decompress_plugin);
       }
@@ -345,10 +347,16 @@ class from_plugin2 final : public virtual operator_factory_plugin {
                  decompress_plugin ? decompress_plugin->name() : "none");
     TENZIR_TRACE("from operator: determined read       : {}",
                  read_plugin ? read_plugin->name() : "none");
-    if (not read_plugin and not has_pipeline_or_events) {
+    /// TODO: Decide on whether/where we actually want this
+    if (not read_plugin and not has_pipeline_or_events
+        and load_properties.default_format) {
       read_plugin = load_properties.default_format;
       TENZIR_TRACE("from operator: fallback read         : {}",
-                   read_plugin ? read_plugin->name() : "none");
+                   read_plugin->name());
+      diagnostic::warning(
+        "The deduced load operator `{}` suggests `{}`, which will be used.",
+        strip_prefix(load_plugin->name()), strip_prefix(read_plugin->name()))
+        .emit(ctx);
     }
     if (not load_plugin) {
       return failure::promise();
@@ -571,12 +579,12 @@ class to_plugin2 final : public virtual operator_factory_plugin {
       if (not compression_name.empty()) {
         for (const auto& p : plugins::get<operator_factory_plugin>()) {
           const auto name = p->name();
-          // TODO, the decompress operators should ultimately be separate
+          // TODO, the compress operators should ultimately be separate
           // operators
-          if (name != "compress") {
-            continue;
+          if (name == "compress") {
+            compress_plugin = p;
+            break;
           }
-          compress_plugin = p;
         }
         TENZIR_ASSERT(compress_plugin);
       }
@@ -601,10 +609,18 @@ class to_plugin2 final : public virtual operator_factory_plugin {
                  compress_plugin ? compress_plugin->name() : "none");
     TENZIR_TRACE("to operator: determined read       : {}",
                  write_plugin ? write_plugin->name() : "none");
-    if (not write_plugin and not has_pipeline_or_events) {
+    /// TODO: Decide on whether/where we actually want this.
+    /// Currently its never going to happen, because no operator has a
+    /// `default_format`.
+    if (not write_plugin and not has_pipeline_or_events
+        and save_properties.default_format) {
       write_plugin = save_properties.default_format;
       TENZIR_TRACE("to operator: fallback read         : {}",
-                   write_plugin ? write_plugin->name() : "none");
+                   write_plugin->name());
+      diagnostic::warning(
+        "The deduced save operator `{}` suggests `{}`, which will be used.",
+        strip_prefix(save_plugin->name()), strip_prefix(write_plugin->name()))
+        .emit(ctx);
     }
     if (not save_plugin) {
       return failure::promise();
@@ -615,6 +631,11 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     if (not has_pipeline_or_events) {
       inv.args.emplace_back(ast::pipeline_expr{});
       pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+      auto write_ent = ast::entity{std::vector{
+        ast::identifier{strip_prefix(write_plugin->name()), location::unknown},
+      }};
+      pipeline_argument->inner.body.emplace_back(
+        ast::invocation{std::move(write_ent), {}});
       if (compress_plugin) {
         auto decompress_ent = ast::entity{std::vector{
           ast::identifier{strip_prefix(compress_plugin->name()),
@@ -624,11 +645,6 @@ class to_plugin2 final : public virtual operator_factory_plugin {
           std::move(decompress_ent),
           {ast::constant{std::string{compression_name}, location::unknown}}});
       }
-      auto read_ent = ast::entity{std::vector{
-        ast::identifier{strip_prefix(write_plugin->name()), location::unknown},
-      }};
-      pipeline_argument->inner.body.emplace_back(
-        ast::invocation{std::move(read_ent), {}});
       TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
     }
     TENZIR_TRACE("to operator: final pipeline        :");
@@ -653,7 +669,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
   }
 
 public:
-  constexpr static auto docs = "https://docs.tenzir.com/tql2/operators/tp";
+  constexpr static auto docs = "https://docs.tenzir.com/tql2/operators/to";
   auto name() const -> std::string override {
     return "tql2.to";
   }

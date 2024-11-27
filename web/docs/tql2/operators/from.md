@@ -92,8 +92,6 @@ If you know that the source is compressed and the compression cannot be inferred
 The format to read is, just as the compression, inferred from the file-ending.
 Supported file formats are the common file endings for our [`read_*` operators](operators.md#parsing).
 
-If inference fails, the `from` operator tries to read the input as JSON.
-
 If you want to provide additional arguments to the parser, you can use the
 [pipeline argument](#---optional) to specify the parsing manually. This can be useful,
 if you e.g. know that the input is `suricata` or `ndjson` instead of just plain `json`.
