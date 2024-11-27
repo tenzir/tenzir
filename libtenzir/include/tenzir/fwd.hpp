@@ -229,6 +229,7 @@ struct model;
 struct negation;
 struct node_state;
 struct offset;
+struct operator_index;
 struct operator_metric;
 struct package;
 struct package_pipelines_map;
@@ -237,6 +238,7 @@ struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
 struct passive_partition_state;
+struct pipeline_path;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
@@ -466,6 +468,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::negation))
   TENZIR_ADD_TYPE_ID((tenzir::null_bitmap))
   TENZIR_ADD_TYPE_ID((tenzir::operator_box))
+  TENZIR_ADD_TYPE_ID((tenzir::operator_index))
   TENZIR_ADD_TYPE_ID((tenzir::operator_metric))
   TENZIR_ADD_TYPE_ID((tenzir::operator_type))
   TENZIR_ADD_TYPE_ID((tenzir::package))
@@ -474,6 +477,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::pattern))
   TENZIR_ADD_TYPE_ID((tenzir::pipeline))
+  TENZIR_ADD_TYPE_ID((tenzir::pipeline_path))
   TENZIR_ADD_TYPE_ID((tenzir::port))
   TENZIR_ADD_TYPE_ID((tenzir::port_type))
   TENZIR_ADD_TYPE_ID((tenzir::predicate))

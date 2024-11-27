@@ -16,6 +16,7 @@
 #include <tenzir/location.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
+#include <tenzir/pipeline_id.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -271,6 +272,7 @@ struct connection_manager_state {
   static constexpr auto tcp_metrics_id = uint64_t{0};
   uint64_t next_metrics_id = tcp_metrics_id + 1;
   uint64_t operator_id = {};
+  pipeline_path position = {};
 
   // Everything required for the I/O worker.
   std::vector<std::thread> io_workers = {};
@@ -316,6 +318,7 @@ struct connection_manager_state {
 
     metrics_receiver_actor metrics_receiver = {};
     uint64_t operator_id = {};
+    pipeline_path position = {};
     uint64_t reads = {};
     uint64_t bytes_read = {};
     caf::disposable next_emit_metrics = {};
@@ -330,7 +333,7 @@ struct connection_manager_state {
         {"bytes_read", std::exchange(bytes_read, {})},
         {"bytes_written", uint64_t{0}},
       };
-      caf::anon_send(metrics_receiver, operator_id, tcp_metrics_id,
+      caf::anon_send(metrics_receiver, position, tcp_metrics_id,
                      std::move(metric));
       if (self) {
         next_emit_metrics
@@ -413,6 +416,9 @@ struct connection_manager_state {
                      std::shared_ptr<connection_state>>
     connections = {};
 
+  std::unordered_map<boost::asio::ip::address, size_t> client_connection_count
+    = {};
+
   // Everything required for spawning the nested pipeline.
   static constexpr auto has_terminal = false;
   bool is_hidden = {};
@@ -445,7 +451,7 @@ struct connection_manager_state {
       },
     };
     self
-      ->request(metrics_receiver, caf::infinite, operator_id, tcp_metrics_id,
+      ->request(metrics_receiver, caf::infinite, position, tcp_metrics_id,
                 std::move(tcp_metrics_schema))
       .then([]() {},
             [this](const caf::error& err) {
@@ -525,6 +531,25 @@ struct connection_manager_state {
     }
     connection->metrics_receiver = metrics_receiver;
     connection->operator_id = operator_id;
+    auto nested_position = pipeline_path{position};
+    // This is a bit annoying, the tcp metrics will be at the same operator path
+    // as the first operator of the nested pipeline. Given that there is an
+    // implicitly injected operator at this position anyways, this is
+    // acceptable.
+    const auto ep = connection->socket->remote_endpoint();
+    // Attempt to get the hostname of the client.
+    auto resolver = boost::asio::ip::tcp::resolver{*io_ctx};
+    auto iter = resolver.resolve(ep);
+    boost::asio::ip::tcp::resolver::iterator end;
+    auto parent_id = iter != end ? iter->host_name() : ep.address().to_string();
+    nested_position.push_back({
+      .parent_id = parent_id,
+      // Keep a counter per source address.
+      .run = client_connection_count[connection->socket->remote_endpoint()
+                                       .address()]++,
+      .position = 0,
+    });
+    connection->position = std::move(nested_position);
     connection->emit_metrics(self);
     if (args.tls) {
       TENZIR_ASSERT(not connection->ssl_ctx);
@@ -585,8 +610,9 @@ struct connection_manager_state {
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
     connection->pipeline_executor = self->template spawn<caf::monitored>(
-      pipeline_executor, std::move(pipeline), receiver_actor<diagnostic>{self},
-      metrics_receiver_actor{self}, node, has_terminal, is_hidden);
+      pipeline_executor, connection->position, std::move(pipeline),
+      receiver_actor<diagnostic>{self}, metrics_receiver_actor{self}, node,
+      has_terminal, is_hidden);
     if (std::is_same_v<Elements, chunk_ptr> and connections.size() > 1) {
       diagnostic::warning(
         "potentially interleaved bytes from parallel connections")
@@ -721,7 +747,7 @@ auto make_connection_manager(
     self,
   const load_tcp_args& args, const shared_diagnostic_handler& diagnostics,
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
-  bool is_hidden, const node_actor& node)
+  pipeline_path position, bool is_hidden, const node_actor& node)
   -> connection_manager_actor<Elements>::behavior_type {
   self->state.self = self;
   self->state.args = args;
@@ -729,6 +755,7 @@ auto make_connection_manager(
   self->state.metrics_receiver = metrics_receiver;
   self->state.operator_id = operator_id;
   self->state.is_hidden = is_hidden;
+  self->state.position = std::move(position);
   self->state.node = node;
   if (auto ok = self->state.start(); not ok) {
     self->quit(std::move(ok.error()));
@@ -749,26 +776,24 @@ auto make_connection_manager(
     [self](atom::read) -> caf::result<Elements> {
       return self->state.read_elements();
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](pipeline_path position, uint64_t metric_index,
            type& schema) -> caf::result<void> {
-      auto& id = self->state.metrics_id_map[op_index][metric_index];
+      auto& id = self->state.metrics_id_map[position[0].position][metric_index];
       if (id == 0) {
         id = self->state.next_metrics_id++;
       }
-      return self->delegate(self->state.metrics_receiver,
-                            self->state.operator_id, id, std::move(schema));
+      return self->delegate(self->state.metrics_receiver, position, id,
+                            std::move(schema));
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](pipeline_path position, uint64_t metric_index,
            record& metric) -> caf::result<void> {
-      const auto& id = self->state.metrics_id_map[op_index][metric_index];
-      return self->delegate(self->state.metrics_receiver,
-                            self->state.operator_id, id, std::move(metric));
+      const auto& id
+        = self->state.metrics_id_map[position[0].position][metric_index];
+      return self->delegate(self->state.metrics_receiver, position, id,
+                            std::move(metric));
     },
-    [](const operator_metric& op_metric) -> caf::result<void> {
-      // We have no mechanism for forwarding operator metrics. That's a bit
-      // annoying, but there also really isn't a good solution to this.
-      TENZIR_UNUSED(op_metric);
-      return {};
+    [self](operator_metric& op_metric) -> caf::result<void> {
+      return self->delegate(self->state.metrics_receiver, std::move(op_metric));
     },
     [self](diagnostic& diagnostic) -> caf::result<void> {
       TENZIR_ASSERT(diagnostic.severity != severity::error);
@@ -795,8 +820,8 @@ public:
     const auto connection_manager_actor
       = scope_linked{ctrl.self().spawn<caf::linked>(
         make_connection_manager<Elements>, args_, ctrl.shared_diagnostics(),
-        ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
-        ctrl.node())};
+        ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.operator_path(),
+        ctrl.is_hidden(), ctrl.node())};
     while (true) {
       auto result = Elements{};
       ctrl.set_waiting(true);

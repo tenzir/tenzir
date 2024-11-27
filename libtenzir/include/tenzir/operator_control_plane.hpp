@@ -38,6 +38,9 @@ struct operator_control_plane {
   /// Returns the operator index.
   virtual auto operator_index() const noexcept -> uint64_t = 0;
 
+  /// Returns the operator index.
+  virtual auto operator_path() const noexcept -> pipeline_path = 0;
+
   /// Returns the pipeline's diagnostic handler.
   virtual auto diagnostics() noexcept -> diagnostic_handler& = 0;
 

@@ -20,14 +20,14 @@ struct operator_metric;
 class metric_handler {
 public:
   metric_handler() = default;
-  metric_handler(metrics_receiver_actor receiver, uint64_t operator_index,
+  metric_handler(metrics_receiver_actor receiver, pipeline_path position,
                  uint64_t metric_index, const type& metric_type);
 
   auto emit(record&& r) -> void;
 
 private:
   metrics_receiver_actor receiver_ = {};
-  uint64_t op_index_ = {};
+  pipeline_path position_ = {};
   uint64_t metric_index_ = {};
 };
 

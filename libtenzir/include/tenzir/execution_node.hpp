@@ -1,9 +1,18 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
 #pragma once
 
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/pipeline_id.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -45,6 +54,8 @@ namespace tenzir {
 /// the operator runs at a remote node.
 /// @param diagnostics_handler The handler asked to spawn diagnostics.
 /// @param metrices_receiver The handler asked to receive and forward metrics.
+/// @param position the path into the tree of nested pipelines at which the
+///        operator resides.
 /// @param has_terminal True if the operator shall have access to the terminal.
 /// @param is_hidden Whether the operator is run in the background.
 /// @param run_id A unique id for the current pipeline run.
@@ -56,8 +67,9 @@ namespace tenzir {
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
-                     metrics_receiver_actor metrics_receiver, int index,
-                     bool has_terminal, bool is_hidden, uuid run_id)
+                     metrics_receiver_actor metrics_receiver,
+                     pipeline_path position, int index, bool has_terminal,
+                     bool is_hidden, uuid run_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>>;
 
 } // namespace tenzir

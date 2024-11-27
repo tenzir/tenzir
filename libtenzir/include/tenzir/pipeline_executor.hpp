@@ -5,6 +5,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/pipeline_id.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -24,6 +25,7 @@ struct pipeline_executor_state {
   node_actor node = {};
 
   /// The currently running pipeline.
+  pipeline_path pipeline_id_path = {};
   std::optional<pipeline> pipe = {};
   std::vector<exec_node_actor> exec_nodes = {};
   caf::typed_response_promise<void> start_rp = {};
@@ -61,8 +63,9 @@ struct pipeline_executor_state {
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  metrics_receiver_actor metrics, node_actor node, bool has_terminal,
-  bool is_hidden) -> pipeline_executor_actor::behavior_type;
+  pipeline_path pipeline_id_path, pipeline pipe,
+  receiver_actor<diagnostic> diagnostics, metrics_receiver_actor metrics,
+  node_actor node, bool has_terminal, bool is_hidden)
+  -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir

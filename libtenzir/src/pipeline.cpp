@@ -38,6 +38,10 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
+  auto operator_path() const noexcept -> pipeline_path override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
   auto diagnostics() noexcept -> diagnostic_handler& override {
     struct handler final : public diagnostic_handler {
       handler(local_control_plane& ctrl) : ctrl{ctrl} {
