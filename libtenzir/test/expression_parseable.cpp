@@ -17,8 +17,6 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/sum_type.hpp>
-
 using namespace tenzir;
 using namespace std::string_literals;
 

@@ -22,7 +22,6 @@
 #include "tenzir/view.hpp"
 
 #include <arrow/api.h>
-#include <caf/sum_type.hpp>
 
 /// The implementation of `series_builder` consists of the following components:
 ///

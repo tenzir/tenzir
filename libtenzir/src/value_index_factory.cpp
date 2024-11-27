@@ -23,7 +23,6 @@
 #include "tenzir/type.hpp"
 #include "tenzir/value_index.hpp"
 
-#include <caf/optional.hpp>
 #include <caf/settings.hpp>
 
 #include <bit>

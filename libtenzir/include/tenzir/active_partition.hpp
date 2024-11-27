@@ -26,7 +26,6 @@
 #include "tenzir/uuid.hpp"
 #include "tenzir/value_index.hpp"
 
-#include <caf/optional.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>

@@ -19,7 +19,6 @@
 #include "tenzir/operator.hpp"
 #include "tenzir/type.hpp"
 
-#include <caf/default_sum_type_access.hpp>
 #include <caf/none.hpp>
 
 #include <memory>
@@ -418,16 +417,6 @@ public:
 };
 
 } // namespace tenzir
-
-namespace caf {
-
-template <>
-struct sum_type_access<tenzir::expression>
-  : default_sum_type_access<tenzir::expression> {
-  // nop
-};
-
-} // namespace caf
 
 namespace std {
 

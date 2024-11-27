@@ -11,8 +11,6 @@
 #include "tenzir/concept/parseable/core/parser.hpp"
 #include "tenzir/concept/support/detail/attr_fold.hpp"
 
-#include <caf/optional.hpp>
-
 namespace tenzir {
 
 template <class Parser>

@@ -20,8 +20,6 @@
 #include "tenzir/detail/escapers.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/optional.hpp>
-
 #include <sstream>
 
 using namespace std::string_literals;

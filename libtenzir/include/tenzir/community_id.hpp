@@ -21,8 +21,6 @@
 #include "tenzir/ip.hpp"
 #include "tenzir/port.hpp"
 
-#include <caf/optional.hpp>
-
 #include <cstddef>
 #include <span>
 #include <string>
