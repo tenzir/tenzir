@@ -747,7 +747,7 @@ auto make_connection_manager(
     self,
   const load_tcp_args& args, const shared_diagnostic_handler& diagnostics,
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
-  bool is_hidden, const node_actor& node)
+  pipeline_path position, bool is_hidden, const node_actor& node)
   -> connection_manager_actor<Elements>::behavior_type {
   self->state.self = self;
   self->state.args = args;
@@ -755,6 +755,7 @@ auto make_connection_manager(
   self->state.metrics_receiver = metrics_receiver;
   self->state.operator_id = operator_id;
   self->state.is_hidden = is_hidden;
+  self->state.position = std::move(position);
   self->state.node = node;
   if (auto ok = self->state.start(); not ok) {
     self->quit(std::move(ok.error()));
@@ -819,8 +820,8 @@ public:
     const auto connection_manager_actor
       = scope_linked{ctrl.self().spawn<caf::linked>(
         make_connection_manager<Elements>, args_, ctrl.shared_diagnostics(),
-        ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
-        ctrl.node())};
+        ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.operator_path(),
+        ctrl.is_hidden(), ctrl.node())};
     while (true) {
       auto result = Elements{};
       ctrl.set_waiting(true);

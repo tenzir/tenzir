@@ -56,8 +56,8 @@ struct operator_index {
   auto to_record() const -> record {
     return record{
       {"parent_id", parent_id},
-      {"parent_id", run},
-      {"parent_id", position},
+      {"run", run},
+      {"position", position},
     };
   }
 
