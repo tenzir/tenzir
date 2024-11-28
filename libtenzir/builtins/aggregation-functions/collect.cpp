@@ -130,6 +130,10 @@ public:
     }
   }
 
+  auto reset() -> void override {
+    result_ = {};
+  }
+
 private:
   ast::expression expr_;
   list result_;

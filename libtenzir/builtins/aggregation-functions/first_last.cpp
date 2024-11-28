@@ -91,6 +91,10 @@ public:
     }
   }
 
+  auto reset() -> void override {
+    result_ = {};
+  }
+
 private:
   ast::expression expr_ = {};
   data result_ = {};

@@ -166,6 +166,10 @@ public:
     }
   }
 
+  auto reset() -> void override {
+    distinct_ = {};
+  }
+
 private:
   ast::expression expr_;
   tsl::robin_set<data> distinct_;

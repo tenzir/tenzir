@@ -195,6 +195,12 @@ public:
       .emit(ctx);
   }
 
+  auto reset() -> void override {
+    mean_ = {};
+    count_ = {};
+    state_ = state::none;
+  }
+
 private:
   ast::expression expr_;
   enum class state { none, failed, dur, numeric } state_{};
