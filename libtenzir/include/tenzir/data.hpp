@@ -357,7 +357,7 @@ template <class T>
 auto try_get_or(const record& r, std::string_view path, const T& fallback)
   -> caf::expected<T> {
   auto result = try_get<T>(r, path);
-  if (!result.engaged()) {
+  if (!result.has_value()) {
     return std::move(result.error());
   }
   if (!result->has_value()) {
