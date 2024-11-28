@@ -80,7 +80,7 @@ void debug_writer::reset() {
 
 // -- overrides ----------------------------------------------------------------
 
-bool debug_writer::begin_object(type_id_t id, string_view name) {
+bool debug_writer::begin_object(type_id_t id, std::string_view name) {
   (void)id;
   (void)name;
   return begin_associative_array(0);
@@ -90,7 +90,7 @@ bool debug_writer::end_object() {
   return end_associative_array();
 }
 
-bool debug_writer::begin_field(string_view name) {
+bool debug_writer::begin_field(std::string_view name) {
   if (begin_key_value_pair()) {
     CAF_ASSERT(top() == type::key);
     add(name);
@@ -103,7 +103,7 @@ bool debug_writer::begin_field(string_view name) {
   }
 }
 
-bool debug_writer::begin_field(string_view name, bool is_present) {
+bool debug_writer::begin_field(std::string_view name, bool is_present) {
   if (skip_empty_fields_ && !is_present) {
     auto t = top();
     switch (t) {
@@ -133,14 +133,14 @@ bool debug_writer::begin_field(string_view name, bool is_present) {
   }
 }
 
-bool debug_writer::begin_field(string_view name, span<const type_id_t> types,
-                               size_t index) {
+bool debug_writer::begin_field(std::string_view name,
+                               span<const type_id_t> types, size_t index) {
   (void)types;
   (void)index;
   return begin_field(name);
 }
 
-bool debug_writer::begin_field(string_view name, bool is_present,
+bool debug_writer::begin_field(std::string_view name, bool is_present,
                                span<const type_id_t> types, size_t index) {
   if (is_present)
     return begin_field(name, types, index);
@@ -319,7 +319,7 @@ bool debug_writer::value(long double x) {
   return number(x);
 }
 
-bool debug_writer::value(string_view x) {
+bool debug_writer::value(std::string_view x) {
   switch (top()) {
     case type::element:
       caf::detail::print_escaped(buf_, x);
