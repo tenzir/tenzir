@@ -67,6 +67,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/record_batch.h>
+#include <caf/actor_registry.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 

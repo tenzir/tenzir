@@ -33,6 +33,7 @@
 #include <tenzir/uuid.hpp>
 
 #include <arrow/table.h>
+#include <caf/actor_registry.hpp>
 #include <caf/expected.hpp>
 #include <caf/policy/select_all.hpp>
 #include <caf/scoped_actor.hpp>
