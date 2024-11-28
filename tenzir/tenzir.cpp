@@ -133,10 +133,13 @@ auto main(int argc, char** argv) -> int {
     return -errno;
   }
 #endif
-  // Print the configuration file(s) that were loaded.
-  if (!cfg.config_file_path.empty()) {
-    cfg.config_files.emplace_back(std::move(cfg.config_file_path));
+  // Copy CAF detected default config file paths.
+  for (const auto& path : cfg.config_file_paths()) {
+    cfg.config_files.emplace_back(path);
   }
+  // Clear the CAF based default config file paths to avoid duplicates.
+  cfg.config_file_paths({});
+  // Print the configuration file(s) that were loaded.
   for (const auto& file : loaded_config_files()) {
     TENZIR_VERBOSE("loaded configuration file: {}", file.path);
   }
