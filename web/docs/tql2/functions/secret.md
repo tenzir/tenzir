@@ -19,6 +19,10 @@ tenzir:
     geheim: 1528F9F3-FAFA-45B4-BC3C-B755D0E0D9C2
 ```
 
+The [`serve`](../operators/serve.md) operator unconditionally replaces all
+secrets with `***` in all schemas and data of all events. This is to prevent
+secrets from showing up in the Tenzir Platform.
+
 ## Examples
 
 ### Read a secret from the configuration

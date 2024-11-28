@@ -48,12 +48,14 @@
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/node_control.hpp>
@@ -67,10 +69,9 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/record_batch.h>
+#include <caf/config_option.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
-
-#include <sstream>
 
 namespace tenzir::plugins::serve {
 
@@ -817,6 +818,91 @@ auto serve_handler(
 
 // -- serve operator ----------------------------------------------------------
 
+auto mask_secrets(const std::vector<std::string>& secrets, std::string_view str)
+  -> std::string {
+  auto result = std::string{str};
+  // TODO: This should really be a trie; the current implementation is
+  // neither correct when secrets overlap nor is it efficient.
+  for (const auto& secret : secrets) {
+    result = detail::replace_all(std::move(result), secret, "***");
+  }
+  return result;
+};
+
+auto mask_secrets(const std::vector<std::string>& secrets,
+                  const std::shared_ptr<arrow::Field>& field)
+  -> std::shared_ptr<arrow::Field>;
+
+auto mask_secrets(const std::vector<std::string>& secrets,
+                  std::shared_ptr<arrow::DataType> type)
+  -> std::shared_ptr<arrow::DataType> {
+  auto f = detail::overload{
+    [&](const arrow::StructType& type) {
+      auto fields = type.fields();
+      for (auto& field : fields) {
+        field = mask_secrets(secrets, field);
+      }
+      return arrow::struct_(fields);
+    },
+    [&](const arrow::ListType& type) {
+      return arrow::list(mask_secrets(secrets, type.value_type()));
+    },
+    [&](const auto&) {
+      return type;
+    },
+  };
+  return caf::visit(f, *type);
+}
+
+auto mask_secrets(const std::vector<std::string>& secrets,
+                  const std::shared_ptr<arrow::Field>& field)
+  -> std::shared_ptr<arrow::Field> {
+  return arrow::field(mask_secrets(secrets, field->name()),
+                      mask_secrets(secrets, field->type()), field->nullable(),
+                      field->metadata());
+}
+
+auto mask_secrets(const std::vector<std::string>& secrets,
+                  std::shared_ptr<arrow::Array> array)
+  -> std::shared_ptr<arrow::Array> {
+  auto f = detail::overload{
+    [&](const arrow::StructArray& array) {
+      auto fields = array.struct_type()->fields();
+      for (auto& field : fields) {
+        field = mask_secrets(secrets, field);
+      }
+      auto arrays = array.fields();
+      for (auto& array : arrays) {
+        array = mask_secrets(secrets, std::move(array));
+      }
+      return std::make_shared<arrow::StructArray>(
+        arrow::struct_(fields), array.length(), arrays, array.null_bitmap(),
+        array.null_count(), array.offset());
+    },
+    [&](const arrow::ListArray& array) {
+      return check(arrow::ListArray::FromArrays(
+        *array.offsets(), *mask_secrets(secrets, array.values()),
+        arrow::default_memory_pool(), array.null_bitmap(), array.null_count()));
+    },
+    [&](const arrow::StringArray& array) {
+      auto builder = arrow::StringBuilder{};
+      check(builder.Reserve(array.length()));
+      for (const auto& str : array) {
+        if (not str) {
+          check(builder.AppendNull());
+        } else {
+          check(builder.Append(mask_secrets(secrets, *str)));
+        }
+      }
+      return finish(builder);
+    },
+    [&](const auto&) {
+      return array;
+    },
+  };
+  return caf::visit(f, *array);
+}
+
 class serve_operator final : public crtp_operator<serve_operator> {
 public:
   serve_operator() = default;
@@ -848,11 +934,33 @@ public:
             .emit(ctrl.diagnostics());
         });
     co_yield {};
-    //  Forward events to the SERVE MANAGER.
+    const auto secrets = [&] {
+      auto result = std::vector<std::string>{};
+      if (const auto* secrets = caf::get_if<caf::settings>(
+            &ctrl.self().config(), "tenzir.secrets")) {
+        result.reserve(secrets->size());
+        for (const auto& [_, value] : *secrets) {
+          if (const auto* secret = caf::get_if<std::string>(&value)) {
+            result.push_back(*secret);
+          }
+        }
+      }
+      return result;
+    }();
+    // Forward events to the SERVE MANAGER.
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
+      }
+      // Mask all secrets in the table slice before sending it over.
+      if (not secrets.empty()) {
+        const auto masked_batch
+          = check(arrow::RecordBatch::FromStructArray(mask_secrets(
+            secrets, check(to_record_batch(slice)->ToStructArray()))));
+        auto masked_type = type::from_arrow(*masked_batch->schema());
+        masked_type.assign_metadata(slice.schema());
+        slice = table_slice{masked_batch, masked_type};
       }
       // Send slice to SERVE MANAGER.
       ctrl.set_waiting(true);
