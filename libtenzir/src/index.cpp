@@ -573,10 +573,10 @@ caf::error index_state::load_from_disk() {
           // data is somewhere else entirely, but no known implementation ever
           // deviated from the default path scheme, so we assume filesystem
           // corruption here.
-          return add_context(ec::no_such_file,
-                             "discarding partition {} due to a missing store "
-                             "file",
-                             partition_uuid);
+          return diagnostic::error(ec::no_such_file)
+            .note("discarding partition {} due to a missing store file",
+                  partition_uuid)
+            .to_error();
         }
         auto store_path = f->second;
         auto store_size = std::filesystem::file_size(store_path, err);
