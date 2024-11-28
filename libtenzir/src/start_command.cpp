@@ -32,6 +32,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <csignal>
+#include <iostream>
 
 namespace tenzir {
 

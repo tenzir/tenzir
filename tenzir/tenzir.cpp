@@ -22,6 +22,7 @@
 #include "tenzir/tql/parser.hpp"
 
 #include <arrow/util/compression.h>
+#include <caf/actor_registry.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/fwd.hpp>
 #include <sys/resource.h>
