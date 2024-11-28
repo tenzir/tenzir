@@ -20,6 +20,7 @@
 #include "tenzir/node_control.hpp"
 #include "tenzir/version.hpp"
 
+#include <caf/actor_registry.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>

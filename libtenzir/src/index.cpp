@@ -49,6 +49,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/uuid.hpp"
 
+#include <caf/actor_registry.hpp>
 #include <caf/error.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <caf/response_promise.hpp>
