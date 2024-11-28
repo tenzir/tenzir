@@ -25,7 +25,6 @@ namespace tenzir {
 class debug_writer : public caf::serializer {
 private:
   using type_id_t = caf::type_id_t;
-  using byte = caf::byte;
   template <class T>
   using span = caf::span<T>;
 
@@ -153,7 +152,7 @@ public:
 
   bool end_associative_array() override;
 
-  bool value(byte x) override;
+  bool value(std::byte x) override;
 
   bool value(bool x) override;
 
@@ -185,7 +184,7 @@ public:
 
   bool value(const std::u32string& x) override;
 
-  bool value(span<const byte> x) override;
+  bool value(span<const std::byte> x) override;
 
   // Adds `c` to the output buffer.
   void add(char c) {

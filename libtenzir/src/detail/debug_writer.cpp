@@ -244,7 +244,7 @@ bool debug_writer::end_associative_array() {
   }
 }
 
-bool debug_writer::value(byte x) {
+bool debug_writer::value(std::byte x) {
   return number(to_integer<uint8_t>(x));
 }
 
@@ -352,7 +352,7 @@ bool debug_writer::value(const std::u32string&) {
   return false;
 }
 
-bool debug_writer::value(span<const byte> x) {
+bool debug_writer::value(span<const std::byte> x) {
   switch (top()) {
     case type::element:
       add('"');
