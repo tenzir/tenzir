@@ -31,7 +31,6 @@
 #include <caf/deep_to_string.hpp>
 #include <caf/detail/pretty_type_name.hpp>
 #include <fmt/chrono.h>
-#include <fmt/ostream.h>
 #include <fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
@@ -261,34 +260,6 @@ struct formatter<std::span<std::byte>> {
   auto format(const std::span<std::byte>&, FormatContext& ctx) const {
     // Inentioanlly unprintable.
     return fmt::format_to(ctx.out(), "tenzir.span(<bytes>)");
-  }
-};
-
-template <class T>
-struct formatter<caf::stream<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::stream<T>&, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "caf.stream<{}>",
-                          caf::detail::pretty_type_name(typeid(T)));
-  }
-};
-
-template <class T>
-struct formatter<caf::downstream<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::downstream<T>&, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "caf.downstream<{}>",
-                          caf::detail::pretty_type_name(typeid(T)));
   }
 };
 

@@ -22,7 +22,6 @@
 
 #include <arrow/config.h>
 #include <arrow/util/byte_size.h>
-#include <caf/downstream.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>

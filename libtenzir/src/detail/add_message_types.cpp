@@ -50,8 +50,6 @@
 #include <caf/init_global_meta_objects.hpp>
 #include <caf/inspector_access.hpp>
 #include <caf/io/middleman.hpp>
-#include <caf/stream.hpp>
-#include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
