@@ -21,12 +21,6 @@
 #include <string>
 #include <string_view>
 
-namespace caf::test {
-
-int main(int, char**);
-
-} // namespace caf::test
-
 namespace tenzir::test {
 
 extern std::set<std::string> config;

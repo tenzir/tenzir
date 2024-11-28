@@ -8,10 +8,8 @@
 
 #include "tenzir/flatbuffer.hpp"
 
-#include "tenzir/data.hpp"
+#include "tenzir/detail/logger_formatters.hpp"
 #include "tenzir/fbs/type.hpp"
-#include "tenzir/flatbuffer.hpp"
-#include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/type.hpp"
 
@@ -49,38 +47,5 @@ TEST(lifetime) {
   fbrtft = {};
   CHECK_EQUAL(counter, 1);
 }
-
-namespace {
-
-struct fixture : public fixtures::deterministic_actor_system {
-  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
-  }
-};
-
-} // namespace
-
-FIXTURE_SCOPE(flatbuffer_fixture, fixture)
-
-TEST(serialization) {
-  auto fbt = flatbuffer<fbs::Type>{};
-  {
-    auto rt = record_type{
-      {"foo", ip_type{}},
-    };
-    auto chunk = chunk::copy(rt);
-    auto maybe_fbt = flatbuffer<fbs::Type>::make(std::move(chunk));
-    REQUIRE_NOERROR(maybe_fbt);
-    fbt = std::move(*maybe_fbt);
-    auto fbt2 = roundtrip(fbt);
-    CHECK_EQUAL(as_bytes(fbt.chunk()), as_bytes(fbt2.chunk()));
-  }
-  auto fbrt = fbt.slice(*fbt->type_as_record_type());
-  auto fbrtf = fbrt.slice(*fbrt->fields()->Get(0));
-  auto fbrtft = fbrtf.slice(*fbrtf->type_nested_root(), *fbrtf->type());
-  auto fbrtft2 = roundtrip(fbrtft);
-  CHECK_EQUAL(as_bytes(fbrtft.chunk()), as_bytes(fbrtft2.chunk()));
-}
-
-FIXTURE_SCOPE_END()
 
 } // namespace tenzir

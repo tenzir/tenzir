@@ -18,7 +18,6 @@
 #include "tenzir/fbs/coder.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/null_bitmap.hpp"
-#include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <caf/test/dsl.hpp>

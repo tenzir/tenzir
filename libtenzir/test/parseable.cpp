@@ -51,7 +51,7 @@ auto skip_to_eoi(Parser&& parser) {
 TEST(choice - LHS and RHS) {
   using namespace parsers;
   auto p = chr{'x'} | i32;
-  caf::variant<char, int32_t> x;
+  variant<char, int32_t> x;
   CHECK(p("123", x));
   auto i = try_as<int32_t>(&x);
   REQUIRE(i);
@@ -79,7 +79,7 @@ TEST(choice triple) {
   auto p = chr{'x'} | i32 | eps->*[&] {
     fired = true;
   };
-  caf::variant<char, int32_t> x;
+  variant<char, int32_t> x;
   CHECK(skip_to_eoi(p)("foobar", x));
   CHECK(fired);
 }

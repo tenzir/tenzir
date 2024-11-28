@@ -165,24 +165,10 @@ struct less_equal_compare {
 namespace tenzir::test {
 
 template <class T>
-T unbox(std::optional<T>&& x) {
+T unbox(std::optional<T> x) {
   if (!x)
     CAF_FAIL("x == none");
   return std::move(*x);
-}
-
-template <class T>
-T unbox(std::optional<T>& x) {
-  if (!x)
-    CAF_FAIL("x == none");
-  return std::move(*x);
-}
-
-template <class T>
-T unbox(const std::optional<T>& x) {
-  if (!x)
-    CAF_FAIL("x == none");
-  return *x;
 }
 
 // Holds global configuration options passed on the command line after the

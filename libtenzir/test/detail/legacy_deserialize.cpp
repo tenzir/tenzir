@@ -17,10 +17,11 @@
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/synopsis_factory.hpp"
-#include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/time_synopsis.hpp"
 #include "tenzir/type.hpp"
+
+#include <caf/test/dsl.hpp>
 
 #include <climits>
 #include <span>
