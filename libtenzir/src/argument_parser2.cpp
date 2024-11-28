@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/type_traits.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
 
@@ -393,7 +394,7 @@ auto argument_parser2::docs() const -> std::string {
 template <class T>
 auto argument_parser2::make_setter(T& x) -> auto {
   using value_type = decltype(std::invoke([] {
-    if constexpr (caf::detail::is_specialization<std::optional, T>::value) {
+    if constexpr (detail::is_specialization_of<std::optional, T>::value) {
       return tag_v<typename T::value_type>;
     } else {
       return tag_v<T>;

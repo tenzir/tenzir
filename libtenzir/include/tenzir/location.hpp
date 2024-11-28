@@ -12,6 +12,7 @@
 
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/default_formatter.hpp"
+#include "tenzir/detail/type_traits.hpp"
 
 #include <fmt/format.h>
 
@@ -175,6 +176,6 @@ struct as_located {
 };
 
 template <class T>
-struct is_located : caf::detail::is_specialization<located, T> {};
+struct is_located : detail::is_specialization_of<located, T> {};
 
 } // namespace tenzir
