@@ -44,7 +44,7 @@ class plugin final : public virtual command_plugin,
 
   component_plugin_actor
   make_component(node_actor::stateful_pointer<node_state> node) const override {
-    auto [filesystem] = node->state.registry.find<filesystem_actor>();
+    auto [filesystem] = node->state().registry.find<filesystem_actor>();
     return node->spawn(authenticator, std::move(filesystem));
   }
 

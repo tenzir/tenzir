@@ -157,23 +157,23 @@ auto make_cache(cache_actor::stateful_pointer<cache_state> self,
                 shared_diagnostic_handler diagnostics,
                 located<uint64_t> capacity, duration read_timeout,
                 duration write_timeout) -> cache_actor::behavior_type {
-  self->state.self = self;
-  self->state.diagnostics = std::move(diagnostics);
-  self->state.capacity = capacity;
-  self->state.read_timeout = read_timeout;
-  self->state.write_timeout = write_timeout;
+  self->state().self = self;
+  self->state().diagnostics = std::move(diagnostics);
+  self->state().capacity = capacity;
+  self->state().read_timeout = read_timeout;
+  self->state().write_timeout = write_timeout;
   self->set_down_handler([self](const caf::down_msg& msg) {
-    self->state.handle_down(msg);
+    self->state().handle_down(msg);
   });
   return {
     [self](atom::write, atom::ok) -> caf::result<bool> {
-      return self->state.write_ok();
+      return self->state().write_ok();
     },
     [self](atom::write, table_slice& events) -> caf::result<bool> {
-      return self->state.write(std::move(events));
+      return self->state().write(std::move(events));
     },
     [self](atom::read) -> caf::result<table_slice> {
-      return self->state.read();
+      return self->state().read();
     },
   };
 }
@@ -253,23 +253,23 @@ struct cache_manager_state {
 auto make_cache_manager(
   cache_manager_actor::stateful_pointer<cache_manager_state> self)
   -> cache_manager_actor::behavior_type {
-  self->state.self = self;
+  self->state().self = self;
   self->set_down_handler([self](const caf::down_msg& msg) {
-    self->state.handle_down(msg);
+    self->state().handle_down(msg);
   });
   return {
     [self](atom::get, std::string& id,
            bool exclusive) -> caf::result<caf::actor> {
-      return self->state.get(std::move(id), exclusive);
+      return self->state().get(std::move(id), exclusive);
     },
     [self](atom::create, std::string& id, bool exclusive,
            shared_diagnostic_handler& diagnostics, uint64_t capacity,
            location capacity_loc, duration read_timeout,
            duration write_timeout) -> caf::result<caf::actor> {
-      return self->state.create(std::move(id), exclusive,
-                                std::move(diagnostics),
-                                {capacity, capacity_loc}, read_timeout,
-                                write_timeout);
+      return self->state().create(std::move(id), exclusive,
+                                  std::move(diagnostics),
+                                  {capacity, capacity_loc}, read_timeout,
+                                  write_timeout);
     },
     [](atom::status, status_verbosity, duration) -> caf::result<record> {
       return {};

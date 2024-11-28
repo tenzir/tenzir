@@ -218,12 +218,12 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
         }
         self->quit();
       });
-      self->state.executor = self->spawn<caf::monitored>(
+      self->state().executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),
         caf::actor_cast<receiver_actor<diagnostic>>(self),
         caf::actor_cast<metrics_receiver_actor>(self), node_actor{}, true,
         true);
-      self->request(self->state.executor, caf::infinite, atom::start_v)
+      self->request(self->state().executor, caf::infinite, atom::start_v)
         .then(
           []() {
             TENZIR_DEBUG("started pipeline successfully");

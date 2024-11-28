@@ -84,8 +84,8 @@ auto find_endpoint_plugin(const http_request_description& desc)
 auto register_component(node_actor::stateful_pointer<node_state> self,
                         const caf::actor& component, std::string_view type,
                         std::string_view label = {}) -> caf::error {
-  if (!self->state.registry.add(component, std::string{type},
-                                std::string{label})) {
+  if (!self->state().registry.add(component, std::string{type},
+                                  std::string{label})) {
     auto msg // separate variable for clang-format only
       = fmt::format("{} failed to add component to registry: {}", *self,
                     label.empty() ? type : label);
@@ -105,8 +105,8 @@ auto register_component(node_actor::stateful_pointer<node_state> self,
     // handler; we should really aim to fix this sometime in the future.
     self->system().registry().put(fmt::format("tenzir.{}", tag), component);
   }
-  self->state.component_names.emplace(component->address(), tag);
-  const auto [it, inserted] = self->state.alive_components.insert(
+  self->state().component_names.emplace(component->address(), tag);
+  const auto [it, inserted] = self->state().alive_components.insert(
     std::pair{component->address(), std::move(tag)});
   TENZIR_ASSERT(
     inserted,
@@ -147,7 +147,7 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
 auto spawn_filesystem(node_actor::stateful_pointer<node_state> self)
   -> filesystem_actor {
   auto filesystem
-    = self->spawn<caf::detached>(posix_filesystem, self->state.dir);
+    = self->spawn<caf::detached>(posix_filesystem, self->state().dir);
   TENZIR_ASSERT(filesystem);
   if (auto err = register_component(
         self, caf::actor_cast<caf::actor>(filesystem), "filesystem")) {
@@ -188,14 +188,14 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
       }
     }
     return self->spawn<caf::detached>(
-      tenzir::index, filesystem, catalog, self->state.dir / "index",
+      tenzir::index, filesystem, catalog, self->state().dir / "index",
       std::string{defaults::store_backend},
       get_or(settings, "tenzir.max-partition-size",
              defaults::max_partition_size),
       get_or(settings, "tenzir.active-partition-timeout",
              defaults::active_partition_timeout),
       defaults::max_in_mem_partitions, defaults::taste_partitions,
-      defaults::num_query_supervisors, self->state.dir / "index",
+      defaults::num_query_supervisors, self->state().dir / "index",
       std::move(index_config));
   }();
   TENZIR_ASSERT(index);
@@ -209,7 +209,7 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
 auto spawn_importer(node_actor::stateful_pointer<node_state> self,
                     const index_actor& index) -> importer_actor {
   auto importer
-    = self->spawn(tenzir::importer, self->state.dir / "importer", index);
+    = self->spawn(tenzir::importer, self->state().dir / "importer", index);
   TENZIR_ASSERT(importer);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(importer),
                                     "importer")) {
@@ -269,7 +269,7 @@ auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
       }
       return disk_monitor_actor{};
     }
-    const auto db_dir_abs = std::filesystem::absolute(self->state.dir);
+    const auto db_dir_abs = std::filesystem::absolute(self->state().dir);
     return self->spawn(tenzir::disk_monitor, disk_monitor_config, db_dir_abs,
                        index);
   }();
@@ -336,36 +336,36 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
               name)
         .throw_();
     }
-    self->state.ordered_components.push_back(name);
+    self->state().ordered_components.push_back(name);
   }
 }
 
 auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           std::filesystem::path dir) -> node_actor::behavior_type {
-  self->state.self = self;
-  self->state.dir = std::move(dir);
+  self->state().self = self;
+  self->state().dir = std::move(dir);
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
     TENZIR_DEBUG("{} got DOWN from {}", *self, msg.source);
-    if (self->state.monitored_exec_nodes.erase(msg.source) > 0) {
+    if (self->state().monitored_exec_nodes.erase(msg.source) > 0) {
       return;
     }
-    auto it = std::ranges::find_if(self->state.alive_components,
+    auto it = std::ranges::find_if(self->state().alive_components,
                                    [&](const auto& alive_component) {
                                      return alive_component.first == msg.source;
                                    });
-    if (it != self->state.alive_components.end()) {
+    if (it != self->state().alive_components.end()) {
       auto component = it->second;
-      self->state.alive_components.erase(it);
+      self->state().alive_components.erase(it);
       TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])",
-                     component, self->state.alive_components.size(),
-                     fmt::join(self->state.alive_components
+                     component, self->state().alive_components.size(),
+                     fmt::join(self->state().alive_components
                                  | std::ranges::views::values,
                                ", "));
     }
-    if (!self->state.tearing_down) {
+    if (!self->state().tearing_down) {
       auto actor = caf::actor_cast<caf::actor>(msg.source);
-      auto component = self->state.registry.remove(actor);
+      auto component = self->state().registry.remove(actor);
       TENZIR_ASSERT(component);
       self->system().registry().erase(component->actor.id());
       // Terminate if a singleton dies.
@@ -392,8 +392,8 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     const auto source_name = [&]() -> std::string {
-      const auto component = self->state.component_names.find(msg.source);
-      if (component == self->state.component_names.end()) {
+      const auto component = self->state().component_names.find(msg.source);
+      if (component == self->state().component_names.end()) {
         return "an unknown component";
       }
       return fmt::format("the {} component", component->second);
@@ -406,9 +406,9 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
               .note("node terminates after receiving error from {}",
                     source_name)
               .to_error();
-    self->state.tearing_down = true;
+    self->state().tearing_down = true;
     for (auto&& exec_node :
-         std::exchange(self->state.monitored_exec_nodes, {})) {
+         std::exchange(self->state().monitored_exec_nodes, {})) {
       if (auto handle = caf::actor_cast<caf::actor>(exec_node)) {
         self->send_exit(handle, msg.reason);
       }
@@ -423,12 +423,12 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                      msg.source);
       }
     });
-    auto& registry = self->state.registry;
+    auto& registry = self->state().registry;
     // Core components are terminated in a second stage, we remove them from the
     // registry upfront and deal with them later.
     std::vector<caf::actor> core_shutdown_handles;
     for (const auto& name :
-         self->state.ordered_components | std::ranges::views::reverse) {
+         self->state().ordered_components | std::ranges::views::reverse) {
       if (auto comp = registry.remove(name)) {
         core_shutdown_handles.push_back(comp->actor);
       }
@@ -490,7 +490,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       self->send(importer,
                  detail::generate_actor_metrics(actor_metrics_builder, self));
       TENZIR_ASSERT(importer);
-      for (auto& [_, builder] : self->state.api_metrics_builders) {
+      for (auto& [_, builder] : self->state().api_metrics_builders) {
         if (builder.length() == 0) {
           continue;
         }
@@ -502,7 +502,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
            std::string& request_id) -> caf::result<rest_response> {
       TENZIR_DEBUG("{} proxying request with id {} to {} with {}", *self,
                    request_id, desc.canonical_path, desc.json_body);
-      auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
+      auto [handler, endpoint] = self->state().get_endpoint_handler(desc);
       if (!handler) {
         auto canonical_paths = std::unordered_set<std::string>{};
         for (const auto& plugin : plugins::get<rest_endpoint_plugin>()) {
@@ -536,8 +536,8 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                       request_id = std::move(request_id),
                       start_time = std::chrono::steady_clock::now()](
                        caf::expected<rest_response> response) mutable {
-        auto it = self->state.api_metrics_builders.find(desc.canonical_path);
-        if (it == self->state.api_metrics_builders.end()) {
+        auto it = self->state().api_metrics_builders.find(desc.canonical_path);
+        if (it == self->state().api_metrics_builders.end()) {
           auto builder = series_builder{type{
             "tenzir.metrics.api",
             record_type{
@@ -551,7 +551,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
             },
             {{"internal"}},
           }};
-          it = self->state.api_metrics_builders.emplace_hint(
+          it = self->state().api_metrics_builders.emplace_hint(
             it, desc.canonical_path, std::move(builder));
         }
         auto metric = it->second.record();
@@ -592,7 +592,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       result.reserve(labels.size());
       auto failed = std::vector<std::string>{};
       for (const auto& label : labels) {
-        auto handle = self->state.registry.find_by_label(label);
+        auto handle = self->state().registry.find_by_label(label);
         if (not handle) {
           failed.push_back(label);
           continue;
@@ -636,7 +636,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                                            spawn_result.error()));
       }
       self->monitor(spawn_result->first);
-      self->state.monitored_exec_nodes.insert(spawn_result->first->address());
+      self->state().monitored_exec_nodes.insert(spawn_result->first->address());
       // TODO: Check output type.
       return spawn_result->first;
     },

@@ -153,34 +153,35 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           ids ids_to_use_for_no_indexer) {
   TENZIR_TRACE("{} {}", TENZIR_ARG(expr), caf::deep_to_string(eval));
   TENZIR_ASSERT(!eval.empty());
-  self->state.expr = std::move(expr);
-  self->state.eval = std::move(eval);
-  self->state.ids_to_use_for_no_indexer = std::move(ids_to_use_for_no_indexer);
+  self->state().expr = std::move(expr);
+  self->state().eval = std::move(eval);
+  self->state().ids_to_use_for_no_indexer
+    = std::move(ids_to_use_for_no_indexer);
   return {
     [self](atom::run) {
-      self->state.promise = self->make_response_promise<ids>();
-      self->state.pending_responses += self->state.eval.size();
-      for (auto& [pos, curried_pred, indexer] : self->state.eval) {
-        ++self->state.predicate_hits[pos].first;
+      self->state().promise = self->make_response_promise<ids>();
+      self->state().pending_responses += self->state().eval.size();
+      for (auto& [pos, curried_pred, indexer] : self->state().eval) {
+        ++self->state().predicate_hits[pos].first;
         if (!indexer) {
-          self->state.handle_no_indexer(pos);
+          self->state().handle_no_indexer(pos);
           continue;
         }
 
         self->request(indexer, caf::infinite, atom::evaluate_v, curried_pred)
           .then(
             [self, pos_ = pos](const ids& hits) {
-              self->state.handle_result(pos_, hits);
+              self->state().handle_result(pos_, hits);
             },
             [self, pos_ = pos](const caf::error& err) {
-              self->state.handle_missing_result(pos_, err);
+              self->state().handle_missing_result(pos_, err);
             });
       }
-      if (self->state.pending_responses == 0) {
+      if (self->state().pending_responses == 0) {
         TENZIR_DEBUG("{} has nothing to evaluate for expression", *self);
-        self->state.promise.deliver(ids{});
+        self->state().promise.deliver(ids{});
       }
-      return self->state.promise;
+      return self->state().promise;
     },
   };
 }

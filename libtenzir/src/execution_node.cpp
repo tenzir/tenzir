@@ -127,8 +127,8 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   }
 
   void emit(diagnostic diag) override {
-    TENZIR_TRACE("{} {} emits diagnostic: {:?}", *self, self->state.op->name(),
-                 diag);
+    TENZIR_TRACE("{} {} emits diagnostic: {:?}", *self,
+                 self->state().op->name(), diag);
     if (diag.severity == severity::error) {
       throw std::move(diag);
     }
@@ -150,7 +150,7 @@ struct exec_node_control_plane final : public operator_control_plane {
     receiver_actor<diagnostic> diagnostic_handler,
     metrics_receiver_actor metric_receiver, uint64_t op_index,
     bool has_terminal, bool is_hidden)
-    : state{self->state},
+    : state{self->state()},
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
           self, std::move(diagnostic_handler))},
@@ -801,8 +801,8 @@ auto exec_node(
     const auto name = fmt::format("tnz.{}", op->name());
     caf::detail::set_thread_name(name.c_str());
   }
-  self->state.self = self;
-  self->state.run_id = run_id;
+  self->state().self = self;
+  self->state().run_id = run_id;
   auto read_config = [&](auto& key, std::string_view config, uint64_t min) {
     key = caf::get_or(content(self->system().config()),
                       fmt::format("tenzir.demand.{}", config), key);
@@ -812,35 +812,36 @@ auto exec_node(
                       key);
     key = std::max(min, key);
   };
-  read_config(self->state.min_elements, "min-elements", 1);
-  read_config(self->state.max_elements, "max-elements",
-              self->state.min_elements);
-  read_config(self->state.max_batches, "max-batches", 1);
-  self->state.op = std::move(op);
+  read_config(self->state().min_elements, "min-elements", 1);
+  read_config(self->state().max_elements, "max-elements",
+              self->state().min_elements);
+  read_config(self->state().max_batches, "max-batches", 1);
+  self->state().op = std::move(op);
   auto time_starting_guard = make_timer_guard(
-    self->state.metrics.time_scheduled, self->state.metrics.time_starting);
-  self->state.metrics_receiver = metrics_receiver;
-  self->state.metrics.operator_index = index;
-  self->state.metrics.operator_name = self->state.op->name();
-  self->state.metrics.inbound_measurement.unit = operator_type_name<Input>();
-  self->state.metrics.outbound_measurement.unit = operator_type_name<Output>();
+    self->state().metrics.time_scheduled, self->state().metrics.time_starting);
+  self->state().metrics_receiver = metrics_receiver;
+  self->state().metrics.operator_index = index;
+  self->state().metrics.operator_name = self->state().op->name();
+  self->state().metrics.inbound_measurement.unit = operator_type_name<Input>();
+  self->state().metrics.outbound_measurement.unit
+    = operator_type_name<Output>();
   // We make an exception here for transformations, which are always considered
   // internal as they cannot transport data outside of the pipeline.
-  self->state.metrics.internal
-    = self->state.op->internal()
+  self->state().metrics.internal
+    = self->state().op->internal()
       and (std::is_same_v<Input, std::monostate>
            or std::is_same_v<Output, std::monostate>);
-  self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self, diagnostic_handler, self->state.metrics_receiver, index, has_terminal,
-    is_hidden);
+  self->state().ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
+    self, diagnostic_handler, self->state().metrics_receiver, index,
+    has_terminal, is_hidden);
   // The node actor must be set when the operator is not a source.
-  if (self->state.op->location() == operator_location::remote and not node) {
-    self->state.on_error(caf::make_error(
+  if (self->state().op->location() == operator_location::remote and not node) {
+    self->state().on_error(caf::make_error(
       ec::logic_error,
       fmt::format("{} runs a remote operator and must have a node", *self)));
     return exec_node_actor::behavior_type::make_empty_behavior();
   }
-  self->state.weak_node = node;
+  self->state().weak_node = node;
   self->set_exception_handler(
     [self](const std::exception_ptr& exception) -> caf::error {
       auto error = std::invoke([&] {
@@ -850,16 +851,17 @@ auto exec_node(
           return std::move(diag).to_error();
         } catch (const std::exception& err) {
           return diagnostic::error("{}", err.what())
-            .note("unhandled exception in {} {}", *self, self->state.op->name())
+            .note("unhandled exception in {} {}", *self,
+                  self->state().op->name())
             .to_error();
         } catch (...) {
           return diagnostic::error("unhandled exception in {} {}", *self,
-                                   self->state.op->name())
+                                   self->state().op->name())
             .to_error();
         }
       });
-      if (self->state.start_rp.pending()) {
-        self->state.start_rp.deliver(std::move(error));
+      if (self->state().start_rp.pending()) {
+        self->state().start_rp.deliver(std::move(error));
         return ec::silent;
       }
       return error;
@@ -867,36 +869,37 @@ auto exec_node(
   return {
     [self](atom::internal, atom::run) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics.time_scheduled);
-      return self->state.internal_run();
+        = make_timer_guard(self->state().metrics.time_scheduled);
+      return self->state().internal_run();
     },
     [self](atom::start,
            std::vector<caf::actor>& all_previous) -> caf::result<void> {
-      auto time_scheduled_guard = make_timer_guard(
-        self->state.metrics.time_scheduled, self->state.metrics.time_starting);
-      return self->state.start(std::move(all_previous));
+      auto time_scheduled_guard
+        = make_timer_guard(self->state().metrics.time_scheduled,
+                           self->state().metrics.time_starting);
+      return self->state().start(std::move(all_previous));
     },
     [self](atom::pause) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics.time_scheduled);
-      return self->state.pause();
+        = make_timer_guard(self->state().metrics.time_scheduled);
+      return self->state().pause();
     },
     [self](atom::resume) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics.time_scheduled);
-      return self->state.resume();
+        = make_timer_guard(self->state().metrics.time_scheduled);
+      return self->state().resume();
     },
     [self](diagnostic& diag) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics.time_scheduled);
-      self->state.ctrl->diagnostics().emit(std::move(diag));
+        = make_timer_guard(self->state().metrics.time_scheduled);
+      self->state().ctrl->diagnostics().emit(std::move(diag));
       return {};
     },
     [self](atom::push, table_slice& events) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics.time_scheduled);
+        = make_timer_guard(self->state().metrics.time_scheduled);
       if constexpr (std::is_same_v<Input, table_slice>) {
-        return self->state.push(std::move(events));
+        return self->state().push(std::move(events));
       } else {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} does not accept events as input",
@@ -905,9 +908,9 @@ auto exec_node(
     },
     [self](atom::push, chunk_ptr& bytes) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics.time_scheduled);
+        = make_timer_guard(self->state().metrics.time_scheduled);
       if constexpr (std::is_same_v<Input, chunk_ptr>) {
-        return self->state.push(std::move(bytes));
+        return self->state().push(std::move(bytes));
       } else {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} does not accept bytes as input",
@@ -917,9 +920,9 @@ auto exec_node(
     [self](atom::pull, exec_node_sink_actor& sink,
            uint64_t batch_size) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics.time_scheduled);
+        = make_timer_guard(self->state().metrics.time_scheduled);
       if constexpr (not std::is_same_v<Output, std::monostate>) {
-        return self->state.pull(std::move(sink), batch_size);
+        return self->state().pull(std::move(sink), batch_size);
       } else {
         return caf::make_error(
           ec::logic_error,

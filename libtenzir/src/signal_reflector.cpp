@@ -31,7 +31,7 @@ signal_reflector_actor::behavior_type signal_reflector(
       auto sigset = termsigset();
       pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
       // If no actor registered itself we emulate the default behavior.
-      if (!self->state.handler) {
+      if (!self->state().handler) {
         if (raise(signum) != 0) {
           // We don't want a backtrace when we get here.
           std::signal(SIGABRT, SIG_DFL); // NOLINT
@@ -41,10 +41,10 @@ signal_reflector_actor::behavior_type signal_reflector(
       }
       std::cerr << "\rinitiating graceful shutdown... (repeat request to "
                    "terminate immediately)\n";
-      self->send(self->state.handler, atom::signal_v, signum);
+      self->send(self->state().handler, atom::signal_v, signum);
     },
     [self](atom::subscribe) {
-      self->state.handler
+      self->state().handler
         = caf::actor_cast<termination_handler_actor>(self->current_sender());
     },
   };
