@@ -5,11 +5,11 @@ Sends events to a Splunk [HTTP Event Collector (HEC)][hec].
 [hec]: https://docs.splunk.com/Documentation/Splunk/9.3.1/Data/UsetheHTTPEventCollector
 
 ```tql
-to_splunk
- url:string, hec_token=string,
-      [host=string, source=string, sourcetype=expr, index=expr,
-       tls_no_verify=bool, print_nulls=bool,
-       max_content_length=int, send_timeout=duration, compress=bool]
+to_splunk url:string, hec_token=string,
+          [host=string, source=string, sourcetype=expr, index=expr,
+          cacert=string, certfile=string, keyfile=string,
+          skip_peer_verification=bool, print_nulls=bool,
+          max_content_length=int, buffer_timeout=duration, compress=bool]
 ```
 
 ## Description
@@ -64,7 +64,19 @@ If you do not provide this option, Splunk will use the default index.
 
 **NB**: HEC silently drops events with an invalid `index`.
 
-### `tls_no_verify = bool (optional)`
+### `cacert = string (optional)`
+
+Path to the CA certificate used to verify the server's certificate.
+
+### `certfile = string (optional)`
+
+Path to the client certificate.
+
+### `keyfile = string (optional)`
+
+Path to the key for the client certificate.
+
+### `skip_peer_verification = bool (optional)`
 
 Toggles TLS certificate verification.
 
