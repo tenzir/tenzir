@@ -21,6 +21,7 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/die.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
@@ -255,7 +256,7 @@ public:
       TENZIR_ERROR(client.error());
       return client.error();
     };
-    auto guard = caf::detail::make_scope_guard([client = *client]() mutable {
+    auto guard = detail::scope_guard([client = *client]() mutable noexcept {
       TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
       if (auto err = client.flush(10s)) {
         TENZIR_WARN(err);

@@ -10,6 +10,7 @@
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/default_configuration.hpp"
 #include "tenzir/detail/posix.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/logger.hpp"
@@ -62,7 +63,7 @@ auto main(int argc, char** argv) -> int {
   // created before the call to `make_application`, as the return value of that
   // can reference dynamically loaded command plugins, which must not be
   // unloaded before the destructor of the return value.
-  auto plugin_guard = caf::detail::make_scope_guard([&]() noexcept {
+  auto plugin_guard = detail::scope_guard([&]() noexcept {
     plugins::get_mutable().clear();
   });
   // Application setup.

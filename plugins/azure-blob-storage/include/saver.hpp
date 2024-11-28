@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -57,7 +58,7 @@ public:
         .to_error();
     }
     auto stream_guard
-      = caf::detail::make_scope_guard([this, &ctrl, output_stream]() {
+      = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
           auto status = output_stream.ValueUnsafe()->Close();
           if (not output_stream.ok()) {
             diagnostic::error("failed to close stream: {}", status.ToString())

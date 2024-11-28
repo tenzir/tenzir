@@ -16,6 +16,7 @@
 #include <tenzir/detail/fdoutbuf.hpp>
 #include <tenzir/detail/file_path_to_plugin_name.hpp>
 #include <tenzir/detail/posix.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/fwd.hpp>
@@ -24,7 +25,6 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <caf/detail/scope_guard.hpp>
 #include <caf/error.hpp>
 
 #include <chrono>
@@ -408,7 +408,7 @@ public:
       stream = std::make_shared<file_writer>(handle);
     }
     TENZIR_ASSERT(stream);
-    auto guard = caf::detail::make_scope_guard([&ctrl, stream] {
+    auto guard = detail::scope_guard([&ctrl, stream]() noexcept {
       if (auto error = stream->close()) {
         diagnostic::error(error)
           .note("failed to close stream")

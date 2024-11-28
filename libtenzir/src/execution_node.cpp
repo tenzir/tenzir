@@ -11,6 +11,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -75,8 +76,8 @@ namespace {
 template <class... Duration>
   requires(std::is_same_v<Duration, duration> && ...)
 auto make_timer_guard(Duration&... elapsed) {
-  return caf::detail::make_scope_guard(
-    [&, start_time = std::chrono::steady_clock::now()] {
+  return detail::scope_guard(
+    [&, start_time = std::chrono::steady_clock::now()]() noexcept {
       const auto delta = std::chrono::steady_clock::now() - start_time;
       ((void)(elapsed += delta, true), ...);
     });

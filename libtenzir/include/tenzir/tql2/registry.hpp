@@ -9,9 +9,8 @@
 #pragma once
 
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/tql2/plugin.hpp"
-
-#include <caf/detail/scope_guard.hpp>
 
 namespace tenzir {
 
@@ -82,7 +81,7 @@ template <class F>
 auto with_thread_local_registry(const registry& reg, F&& f) -> decltype(auto) {
   auto prev = thread_local_registry();
   set_thread_local_registry(&reg);
-  auto guard = caf::detail::scope_guard{[&] {
+  auto guard = detail::scope_guard{[&]() noexcept {
     set_thread_local_registry(prev);
   }};
   return std::invoke(std::forward<F>(f));
