@@ -118,9 +118,9 @@ disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              const disk_monitor_config& config,
              const std::filesystem::path& db_dir, index_actor index) {
-  TENZIR_TRACE_SCOPE("disk_monitor {} {} {} {}", TENZIR_ARG(self->id()),
-                     TENZIR_ARG(config.high_water_mark),
-                     TENZIR_ARG(config.low_water_mark), TENZIR_ARG(db_dir));
+  TENZIR_TRACE("disk_monitor {} {} {} {}", TENZIR_ARG(self->id()),
+               TENZIR_ARG(config.high_water_mark),
+               TENZIR_ARG(config.low_water_mark), TENZIR_ARG(db_dir));
   using namespace std::string_literals;
   if (auto error = validate(config)) {
     self->quit(error);

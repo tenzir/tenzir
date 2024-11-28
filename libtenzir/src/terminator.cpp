@@ -20,7 +20,7 @@ namespace tenzir {
 template <class Policy>
 terminator_actor::behavior_type
 terminator(terminator_actor::stateful_pointer<terminator_state> self) {
-  TENZIR_TRACE_SCOPE("terminator {}", TENZIR_ARG(self->id()));
+  TENZIR_TRACE("terminator {}", TENZIR_ARG(self->id()));
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
     TENZIR_DEBUG("{} received DOWN from actor {}", *self, msg.source);

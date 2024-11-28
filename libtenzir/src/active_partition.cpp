@@ -152,7 +152,7 @@ void serialize(
 } // namespace
 
 void active_partition_state::handle_slice(table_slice x) {
-  TENZIR_TRACE_SCOPE("partition {} got table slice {}", data.id, TENZIR_ARG(x));
+  TENZIR_TRACE("partition {} got table slice {}", data.id, TENZIR_ARG(x));
   x.offset(data.events);
   // Adjust the import time range iff necessary.
   auto& mutable_synopsis = data.synopsis.unshared();
@@ -287,8 +287,8 @@ active_partition_actor::behavior_type active_partition(
   type schema, uuid id, filesystem_actor filesystem, caf::settings index_opts,
   const index_config& synopsis_opts, const store_actor_plugin* store_plugin,
   std::shared_ptr<tenzir::taxonomies> taxonomies) {
-  TENZIR_TRACE_SCOPE("active partition {} {}", TENZIR_ARG(self->id()),
-                     TENZIR_ARG(id));
+  TENZIR_TRACE("active partition {} {}", TENZIR_ARG(self->id()),
+               TENZIR_ARG(id));
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
   self->state.data.id = id;
