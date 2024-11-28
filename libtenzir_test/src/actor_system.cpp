@@ -15,6 +15,7 @@
 #include <caf/io/middleman.hpp>
 
 #include <filesystem>
+#include <string_view>
 
 namespace fixtures {
 

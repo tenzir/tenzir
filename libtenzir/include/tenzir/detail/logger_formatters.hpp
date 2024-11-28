@@ -10,6 +10,8 @@
 
 #include "tenzir/fwd.hpp"
 
+#include <string_view>
+
 // clang-format off
 // We need to define SPDLOG_ACTIVE_LEVEL before we include spdlog.h,
 // so we have to include `logger.hpp` first in case someone else is

@@ -16,6 +16,7 @@
 #include <fmt/format.h>
 
 #include <iterator>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 

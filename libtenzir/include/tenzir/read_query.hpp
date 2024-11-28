@@ -12,6 +12,8 @@
 
 #include <caf/fwd.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 /// Whether a query must be provided.

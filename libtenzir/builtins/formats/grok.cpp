@@ -16,6 +16,8 @@
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <string_view>
+
 // Both Boost.Regex and RE2 are used:
 //  - Boost.Regex is used for actual grokking
 //  - RE2 is used for parsing the patterns we're given

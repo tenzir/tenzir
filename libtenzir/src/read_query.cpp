@@ -28,6 +28,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <string_view>
 #include <unistd.h>
 
 using namespace caf;

@@ -27,6 +27,7 @@
 #include <iostream>
 #include <numeric>
 #include <string>
+#include <string_view>
 
 namespace tenzir {
 

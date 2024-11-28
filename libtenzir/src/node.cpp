@@ -46,6 +46,7 @@
 
 #include <chrono>
 #include <ranges>
+#include <string_view>
 
 namespace tenzir {
 

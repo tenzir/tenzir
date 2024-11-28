@@ -17,6 +17,8 @@
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 qualified_record_field::qualified_record_field(const class type& schema,

@@ -15,6 +15,7 @@
 #include <caf/expected.hpp>
 
 #include <string>
+#include <string_view>
 
 namespace tenzir {
 

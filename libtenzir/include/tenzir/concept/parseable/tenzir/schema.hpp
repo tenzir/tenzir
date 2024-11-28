@@ -20,6 +20,8 @@
 #include "tenzir/module.hpp"
 #include "tenzir/type.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 using symbol_map = std::unordered_map<std::string, legacy_type>;

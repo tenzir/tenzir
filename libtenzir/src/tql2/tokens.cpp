@@ -14,6 +14,8 @@
 
 #include <arrow/util/utf8.h>
 
+#include <string_view>
+
 namespace tenzir {
 
 auto tokenize(std::string_view content, session ctx)

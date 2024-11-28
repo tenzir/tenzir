@@ -23,6 +23,8 @@
 #include <arrow/record_batch.h>
 #include <netinet/in.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::decapsulate {
 
 namespace {

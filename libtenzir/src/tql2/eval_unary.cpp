@@ -10,6 +10,8 @@
 #include "tenzir/tql2/eval_impl.hpp"
 #include "tenzir/type.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 namespace {

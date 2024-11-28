@@ -16,6 +16,7 @@
 #include <fmt/core.h>
 
 #include <compare>
+#include <string_view>
 
 namespace tenzir {
 

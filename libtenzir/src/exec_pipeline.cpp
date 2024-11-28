@@ -17,6 +17,8 @@
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 namespace {

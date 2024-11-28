@@ -22,6 +22,8 @@
 #include <caf/test/dsl.hpp>
 #include <caf/test/io_dsl.hpp>
 
+#include <string_view>
+
 // Defined in dsl.hpp and clashes with range_map::inject
 #undef inject
 

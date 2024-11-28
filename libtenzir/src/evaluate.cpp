@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <regex>
 #include <span>
+#include <string_view>
 
 namespace tenzir {
 

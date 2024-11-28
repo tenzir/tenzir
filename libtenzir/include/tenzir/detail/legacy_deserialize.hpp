@@ -30,6 +30,7 @@
 #include <iterator>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <type_traits>
 
 namespace tenzir::detail {

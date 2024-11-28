@@ -35,6 +35,8 @@
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 auto catalog_lookup_result::size() const noexcept -> size_t {

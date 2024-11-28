@@ -14,6 +14,8 @@
 
 #include <arrow/util/uri.h>
 
+#include <string_view>
+
 namespace tenzir::detail {
 
 namespace {

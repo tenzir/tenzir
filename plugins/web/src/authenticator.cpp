@@ -15,6 +15,7 @@
 #include <openssl/rand.h>
 
 #include <array>
+#include <string_view>
 
 namespace tenzir::plugins::web {
 

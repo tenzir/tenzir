@@ -10,6 +10,8 @@
 
 #include "tenzir/test/test.hpp"
 
+#include <string_view>
+
 namespace {
 constexpr auto padding_len = 3u;
 constexpr auto padding_val = 'S';

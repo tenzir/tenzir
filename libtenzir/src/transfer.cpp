@@ -13,6 +13,8 @@
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/diagnostics.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 transfer::transfer(transfer_options opts) : options{std::move(opts)} {

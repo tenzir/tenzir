@@ -31,6 +31,7 @@
 #include <compare>
 #include <functional>
 #include <initializer_list>
+#include <string_view>
 
 namespace tenzir {
 

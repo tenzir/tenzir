@@ -19,6 +19,7 @@
 #include <arrow/util/utf8.h>
 
 #include <ranges>
+#include <string_view>
 
 namespace tenzir {
 

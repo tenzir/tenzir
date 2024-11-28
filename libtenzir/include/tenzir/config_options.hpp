@@ -13,6 +13,7 @@
 #include <caf/config_option_set.hpp>
 #include <fmt/format.h>
 
+#include <string_view>
 #include <unordered_set>
 
 namespace tenzir {

@@ -19,6 +19,7 @@
 #include <iostream>
 #include <set>
 #include <string>
+#include <string_view>
 
 namespace caf::test {
 

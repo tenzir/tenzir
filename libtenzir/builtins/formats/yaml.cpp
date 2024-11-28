@@ -28,6 +28,8 @@
 #include <caf/expected.hpp>
 #include <fmt/format.h>
 
+#include <string_view>
+
 #include <yaml-cpp/yaml.h>
 
 namespace tenzir::plugins::yaml {

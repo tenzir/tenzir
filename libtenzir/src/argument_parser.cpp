@@ -14,6 +14,7 @@
 #include "tenzir/concept/parseable/tenzir/si.hpp"
 #include "tenzir/pipeline.hpp"
 
+#include <string_view>
 #include <variant>
 
 namespace tenzir {

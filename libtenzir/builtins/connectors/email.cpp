@@ -13,6 +13,8 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/transfer.hpp>
 
+#include <string_view>
+
 using namespace std::chrono_literals;
 
 namespace tenzir::plugins::email {

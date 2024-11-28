@@ -38,6 +38,7 @@
 #include <filesystem>
 #include <iterator>
 #include <optional>
+#include <string_view>
 
 namespace tenzir {
 

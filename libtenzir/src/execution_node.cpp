@@ -27,6 +27,8 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 namespace {

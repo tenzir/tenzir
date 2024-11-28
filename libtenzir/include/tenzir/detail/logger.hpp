@@ -17,6 +17,7 @@
 #include <spdlog/spdlog.h>
 
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace tenzir::detail {

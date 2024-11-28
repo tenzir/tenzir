@@ -24,6 +24,8 @@
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 
+#include <string_view>
+
 using namespace std::string_literals;
 using namespace caf;
 using namespace tenzir;

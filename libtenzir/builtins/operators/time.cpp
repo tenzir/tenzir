@@ -15,6 +15,8 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 
+#include <string_view>
+
 #if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 17000
 // libc++ v17 or later conflicts with <date.h>
 // In that case, we just won't use it, and use an alternative code path,

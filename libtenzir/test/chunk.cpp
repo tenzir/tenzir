@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <span>
+#include <string_view>
 
 using namespace tenzir;
 

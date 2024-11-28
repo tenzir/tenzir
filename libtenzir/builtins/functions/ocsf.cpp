@@ -12,6 +12,8 @@
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <string_view>
+
 namespace tenzir::plugins::ocsf {
 
 namespace {

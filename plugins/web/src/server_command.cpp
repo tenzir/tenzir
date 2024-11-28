@@ -37,6 +37,8 @@
 #include <restinio/tls.hpp>
 #include <restinio/websocket/websocket.hpp>
 
+#include <string_view>
+
 // Needed to forward incoming requests to the request_dispatcher
 
 namespace tenzir::plugins::web {

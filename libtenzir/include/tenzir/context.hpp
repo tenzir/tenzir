@@ -18,6 +18,7 @@
 #include <caf/actor_registry.hpp>
 
 #include <cctype>
+#include <string_view>
 
 namespace tenzir {
 
