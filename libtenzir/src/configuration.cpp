@@ -544,11 +544,12 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   }
   // Work around CAF quirk where options in the `openssl` group have no effect
   // if they are not seen by the native option or config file parsers.
-  openssl_certificate = caf::get_or(content, "caf.openssl.certificate", "");
-  openssl_key = caf::get_or(content, "caf.openssl.key", "");
-  openssl_passphrase = caf::get_or(content, "caf.openssl.passphrase", "");
-  openssl_capath = caf::get_or(content, "caf.openssl.capath", "");
-  openssl_cafile = caf::get_or(content, "caf.openssl.cafile", "");
+  // FIXME: Are these handled automatically now?
+  // openssl_certificate = caf::get_or(content, "caf.openssl.certificate", "");
+  // openssl_key = caf::get_or(content, "caf.openssl.key", "");
+  // openssl_passphrase = caf::get_or(content, "caf.openssl.passphrase", "");
+  // openssl_capath = caf::get_or(content, "caf.openssl.capath", "");
+  // openssl_cafile = caf::get_or(content, "caf.openssl.cafile", "");
   // Detect when plugins, plugin-dirs, or schema-dirs are specified on the
   // command line. This needs to happen before the regular parsing of the
   // command line since plugins may add additional commands and schemas.
@@ -604,13 +605,16 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   // Now parse all CAF options from the command line. Prior to doing so, we
   // clear the config_file_path first so it does not use caf-application.ini as
   // fallback during actor_system_config::parse().
-  config_file_path.clear();
+  // FIXME: Find a new way to prevent it from loading caf-application.ini.
+  // config_file_path.clear();
   auto result = actor_system_config::parse(std::move(caf_args));
   // Load OpenSSL last because it uses the parsed configuration.
   const auto use_encryption
-    = !openssl_certificate.empty() || !openssl_key.empty()
-      || !openssl_passphrase.empty() || !openssl_capath.empty()
-      || !openssl_cafile.empty();
+    = caf::holds_alternative<std::string>(content, "caf.openssl.certificate")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.key")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.passphrase")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.capath")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.cafile");
   if (use_encryption) {
     load<caf::openssl::manager>();
   }
