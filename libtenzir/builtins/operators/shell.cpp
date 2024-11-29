@@ -12,6 +12,7 @@
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/preserved_fds.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
@@ -22,7 +23,6 @@
 
 #include <boost/asio.hpp>
 #include <boost/process.hpp>
-#include <caf/detail/scope_guard.hpp>
 
 #include <mutex>
 #include <queue>
@@ -168,8 +168,8 @@ public:
     auto mode = ctrl.has_terminal() ? stdin_mode::inherit : stdin_mode::none;
     auto child = child::make(command_, mode);
     if (!child) {
-      diagnostic::error(
-        add_context(child.error(), "failed to spawn child process"))
+      diagnostic::error(child.error())
+        .note("failed to spawn child process")
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -180,8 +180,8 @@ public:
     while (true) {
       auto bytes_read = child->read(as_writeable_bytes(buffer));
       if (not bytes_read) {
-        diagnostic::error(
-          add_context(bytes_read.error(), "failed to read from child process"))
+        diagnostic::error(bytes_read.error())
+          .note("failed to read from child process")
           .emit(ctrl.diagnostics());
         co_return;
       }
@@ -194,7 +194,8 @@ public:
       co_yield chk;
     }
     if (auto error = child->wait()) {
-      diagnostic::error(add_context(error, "child process execution failed"))
+      diagnostic::error(error)
+        .note("child process execution failed")
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -205,8 +206,8 @@ public:
     // TODO: Handle exceptions from `boost::process`.
     auto child = child::make(command_, stdin_mode::pipe);
     if (!child) {
-      diagnostic::error(
-        add_context(child.error(), "failed to spawn child process"))
+      diagnostic::error(child.error())
+        .note("failed to spawn child process")
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -243,7 +244,7 @@ public:
     });
     {
       // Coroutines require RAII-style exit handling.
-      auto unplanned_exit = caf::detail::make_scope_guard([&] {
+      auto unplanned_exit = detail::scope_guard([&]() noexcept {
         child->terminate();
         TENZIR_DEBUG("joining thread");
         thread.join();
@@ -256,8 +257,8 @@ public:
           // TODO: If the reading end of the pipe to the child's stdin is
           // already closed, this will generate a SIGPIPE.
           if (auto err = child->write(as_bytes(*chunk))) {
-            diagnostic::error(
-              add_context(err, "failed to write to child process"))
+            diagnostic::error(err)
+              .note("failed to write to child process")
               .emit(ctrl.diagnostics());
             co_return;
           }
@@ -285,7 +286,8 @@ public:
       child->close_stdin();
       thread.join();
       if (auto error = child->wait()) {
-        diagnostic::error(add_context(error, "child process execution failed"))
+        diagnostic::error(error)
+          .note("child process execution failed")
           .emit(ctrl.diagnostics());
         co_return;
       }

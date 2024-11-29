@@ -8,6 +8,7 @@
 
 #include "tenzir/configuration.hpp"
 #include "tenzir/detail/env.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/test/test.hpp"
@@ -88,7 +89,7 @@ int main(int argc, char** argv) {
   }
 
   // Make sure to deinitialize all plugins at the end.
-  auto plugin_guard = caf::detail::make_scope_guard([]() noexcept {
+  auto plugin_guard = tenzir::detail::scope_guard([]() noexcept {
     tenzir::plugins::get_mutable().clear();
   });
   caf::settings log_settings;

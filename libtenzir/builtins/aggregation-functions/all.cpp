@@ -143,6 +143,11 @@ public:
       .emit(ctx);
   }
 
+  auto reset() -> void override {
+    all_ = true;
+    state_ = state::none;
+  }
+
 private:
   ast::expression expr_;
   bool all_{true};

@@ -234,6 +234,13 @@ public:
       .emit(ctx);
   }
 
+  auto reset() -> void override {
+    mean_ = {};
+    mean_squared_ = {};
+    count_ = {};
+    state_ = state::none;
+  }
+
 private:
   double mean_ = {};
   double mean_squared_ = {};

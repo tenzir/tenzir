@@ -29,8 +29,8 @@ public:
     return "tql2.sqrt";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("sqrt")
           .positional("x", expr, "number")
@@ -99,8 +99,8 @@ public:
     return "tql2.random";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     argument_parser2::function("random").parse(inv, ctx).ignore();
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -151,6 +151,10 @@ public:
       return;
     }
     count_ = (*fb)->result();
+  }
+
+  auto reset() -> void override {
+    count_ = {};
   }
 
 private:
@@ -259,6 +263,12 @@ public:
     diagnostic::warning(
       "restoring `quantile` aggregation instances is not implemented")
       .emit(ctx);
+  }
+
+  auto reset() -> void override {
+    quantile_ = {};
+    state_ = state::none;
+    digest_.Reset();
   }
 
 private:
