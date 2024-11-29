@@ -39,6 +39,8 @@ struct xsv_options {
   char field_sep = {};
   char list_sep = {};
   std::string null_value = {};
+  std::string quotes = "\"\'";
+  bool doubled_quotes_escape = {};
   bool no_header = {};
   bool auto_expand = {};
   bool allow_comments = {};
@@ -123,6 +125,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
   xsv_common_parser_options_parser(std::string name) : name_{std::move(name)} {
     settings_.merge = true;
   }
+
   auto add_to_parser(argument_parser& parser) -> void {
     if (mode_ == mode::special_optional) {
       parser.add("--list-sep", list_sep_str_, "<list-sep>");
@@ -142,6 +145,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     multi_series_builder_argument_parser::add_settings_to_parser(parser, true,
                                                                  false);
   }
+
   auto add_to_parser(argument_parser2& parser) -> void {
     if (mode_ == mode::special_optional) {
       parser.named("list_sep", list_sep_str_);
@@ -154,6 +158,8 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       parser.positional("list_sep", *list_sep_str_);
       parser.positional("null_value", *null_value_);
     }
+    parser.named("quotes", quotes_);
+    parser.named("doubled_quotes_escape", doubled_quotes_escape_);
     parser.named("comments", allow_comments_);
     parser.named("header", header_);
     parser.named("auto_expand", auto_expand_);
@@ -201,12 +207,39 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
         return failure::promise();
       }
     }
+    for (auto ch : quotes_->inner) {
+      if (ch == *field_sep) {
+        diagnostic::error("quote character conflicts with field separator")
+          .primary(field_sep_str_->source)
+          .primary(null_value_->source)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (ch == *list_sep) {
+        diagnostic::error("quote character conflicts with list separator")
+          .primary(field_sep_str_->source)
+          .primary(null_value_->source)
+          .emit(dh);
+        return failure::promise();
+      }
+      for (auto ch2 : null_value_->inner) {
+        if (ch == ch2) {
+          diagnostic::error("quote character conflicts with null value")
+            .primary(field_sep_str_->source)
+            .primary(null_value_->source)
+            .emit(dh);
+          return failure::promise();
+        }
+      }
+    }
     TRY(auto opts, multi_series_builder_argument_parser::get_options(dh));
     return xsv_options{
       .name = "xsv",
       .field_sep = *field_sep,
       .list_sep = *list_sep,
       .null_value = null_value_->inner,
+      .quotes = quotes_->inner,
+      .doubled_quotes_escape = doubled_quotes_escape_,
       .no_header = false,
       .auto_expand = auto_expand_,
       .allow_comments = allow_comments_,
@@ -226,6 +259,9 @@ protected:
   std::optional<located<std::string>> field_sep_str_{};
   std::optional<located<std::string>> list_sep_str_{};
   std::optional<located<std::string>> null_value_{};
+  std::optional<located<std::string>> quotes_
+    = located{xsv_options{}.quotes, location::unknown};
+  bool doubled_quotes_escape_{};
   bool auto_expand_{};
   mode mode_ = mode::all_required;
 };
@@ -352,18 +388,24 @@ struct xsv_printer_impl {
   char list_sep{';'};
   std::string null{};
 };
-} // namespace
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 operator_control_plane& ctrl,
                 xsv_options args) -> generator<table_slice> {
   // Parse header.
   auto it = lines.begin();
+  auto line = std::optional<std::string_view>{};
+  auto field_text = std::string_view{};
   size_t line_counter = 0;
   auto header = args.header;
+  const auto quoting_options = detail::quoting_escaping_policy{
+    .quotes = args.quotes,
+    .backslashes_escape = true,
+    .doubled_quotes_escape = args.doubled_quotes_escape,
+  };
   if (not header) {
     for (; it != lines.end(); ++it) {
-      auto line = *it;
+      line = *it;
       if (not line) {
         co_yield {};
         continue;
@@ -384,34 +426,14 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     }
   }
   TENZIR_ASSERT(header);
-  const auto qqstring_value_parser = parsers::qqstr.then([](std::string in) {
-    static auto unescaper = [](auto& f, auto l, auto out) {
-      if (*f != '\\') { // Skip every non-escape character.
-        *out++ = *f++;
-        return true;
-      }
-      if (l - f < 2) {
-        return false;
-      }
-      switch (auto c = *++f) {
-        case '\\':
-          *out++ = '\\';
-          break;
-        case '"':
-          *out++ = '"';
-          break;
-      }
-      ++f;
-      return true;
-    };
-    return detail::unescape(in, unescaper);
-  });
-  const auto string_value_parser
-    = ((qqstring_value_parser >> &(args.field_sep | parsers::eoi))
-       | *(parsers::any - args.field_sep));
-  auto header_parser = (string_value_parser % args.field_sep);
   auto fields = std::vector<std::string>{};
-  if (!header_parser(*header, fields)) {
+  line = header;
+  while (not line->empty()) {
+    std::tie(field_text, *line)
+      = quoting_options.split_at_unquoted(*line, args.field_sep);
+    fields.emplace_back(quoting_options.unquote_unescape(field_text));
+  }
+  if (fields.empty()) {
     diagnostic::error("failed to parse header")
       .note("from `{}`", args.name)
       .emit(ctrl.diagnostics());
@@ -438,7 +460,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     for (auto& v : msb.yield_ready_as_table_slice()) {
       co_yield std::move(v);
     }
-    auto line = *it;
+    line = *it;
     if (not line) {
       co_yield {};
       continue;
@@ -490,37 +512,37 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         }
       }
       auto field = r.unflattened_field(fields[field_idx]);
-      const auto field_end
-        = detail::find_first_not_in_quotes(*line, args.field_sep);
-      auto field_text = line->substr(0, field_end);
-      auto list_element_end
-        = detail::find_first_not_in_quotes(field_text, args.list_sep);
-      if (list_element_end != line->npos) { // its a list
+      std::tie(field_text, line)
+        = quoting_options.split_at_unquoted(*line, args.field_sep);
+      auto list_element_text = std::string_view{};
+      std::tie(list_element_text, field_text)
+        = quoting_options.split_at_unquoted(field_text, args.list_sep);
+      // If it is a list, then there remains text in `field_text` (because it is
+      // after the list separator)
+      if (not field_text.empty()) {
         auto l = field.list();
-        auto list_text = field_text;
         while (true) {
-          auto list_element_text = list_text.substr(0, list_element_end);
-          if (list_element_text.empty()) {
+          if (list_element_text.empty() and field_text.empty()) {
+            break;
+          } else if (list_element_text.empty()) {
             l.null();
           } else {
-            l.data_unparsed(detail::unquote(list_element_text));
+            l.data_unparsed(
+              quoting_options.unquote_unescape(list_element_text));
           }
-          if (list_element_end == list_text.npos) {
-            break;
-          }
-          list_text.remove_prefix(
-            std::min(list_element_end + 1, list_text.size()));
-          list_element_end
-            = detail::find_first_not_in_quotes(list_text, args.list_sep);
-        }
-      } else { // its not a list
-        if (field_text == args.null_value) {
-          field.null();
-        } else {
-          field.data_unparsed(detail::unquote(field_text));
+          std::tie(list_element_text, field_text)
+            = quoting_options.split_at_unquoted(field_text, args.list_sep);
         }
       }
-      line->remove_prefix(std::min(field_text.size() + 1, line->size()));
+      // If it is NOT a list, then all text was moved into `list_element_text`
+      else {
+        if (list_element_text.empty()) {
+          field.null();
+        } else {
+          field.data_unparsed(
+            quoting_options.unquote_unescape(list_element_text));
+        }
+      }
     }
     for (; field_idx < fields.size(); ++field_idx) {
       r.unflattened_field(fields[field_idx]).null();
@@ -530,6 +552,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     co_yield std::move(v);
   }
 }
+} // namespace
 
 class xsv_parser final : public plugin_parser {
 public:
