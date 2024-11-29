@@ -13,6 +13,8 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/type.hpp"
 
+#include <caf/binary_serializer.hpp>
+
 namespace tenzir {
 
 TEST(lifetime) {
@@ -46,6 +48,54 @@ TEST(lifetime) {
   CHECK_EQUAL(counter, 0);
   fbrtft = {};
   CHECK_EQUAL(counter, 1);
+}
+
+namespace {
+
+template <class... Ts>
+auto serialize(const Ts&... xs) {
+  caf::byte_buffer buf;
+  caf::binary_serializer bs{buf};
+  if (!tenzir::detail::apply_all(bs, xs...)) {
+    FAIL("error during serialization: ");
+  }
+  return buf;
+}
+
+template <class... Ts>
+void deserialize(const caf::byte_buffer& buf, Ts&... xs) {
+  if (!(tenzir::detail::legacy_deserialize(buf, xs) && ...)) {
+    FAIL("error during deserialization");
+  }
+}
+
+template <class T>
+T roundtrip(const T& x) {
+  T y;
+  deserialize(serialize(x), y);
+  return y;
+}
+
+} // namespace
+
+TEST(serialization) {
+  auto fbt = flatbuffer<fbs::Type>{};
+  {
+    auto rt = record_type{
+      {"foo", ip_type{}},
+    };
+    auto chunk = chunk::copy(rt);
+    auto maybe_fbt = flatbuffer<fbs::Type>::make(std::move(chunk));
+    REQUIRE_NOERROR(maybe_fbt);
+    fbt = std::move(*maybe_fbt);
+    auto fbt2 = roundtrip(fbt);
+    CHECK_EQUAL(as_bytes(fbt.chunk()), as_bytes(fbt2.chunk()));
+  }
+  auto fbrt = fbt.slice(*fbt->type_as_record_type());
+  auto fbrtf = fbrt.slice(*fbrt->fields()->Get(0));
+  auto fbrtft = fbrtf.slice(*fbrtf->type_nested_root(), *fbrtf->type());
+  auto fbrtft2 = roundtrip(fbrtft);
+  CHECK_EQUAL(as_bytes(fbrtft.chunk()), as_bytes(fbrtft2.chunk()));
 }
 
 } // namespace tenzir
