@@ -14,6 +14,7 @@
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
@@ -32,7 +33,8 @@ namespace {
 
 using tcp_bridge_actor = caf::typed_actor<
   // Connect to a TCP endpoint.
-  auto(atom::connect, bool tls, std::string hostname, std::string port)
+  auto(atom::connect, bool tls, bool skip_peer_verification,
+       std::string hostname, std::string port)
     ->caf::result<void>,
   // Wait for an incoming TCP connection.
   auto(atom::accept, std::string hostname, std::string port,
@@ -132,7 +134,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
     },
     /*run_immediately=*/false);
   return {
-    [self](atom::connect, bool tls, const std::string& hostname,
+    [self](atom::connect, bool tls, bool skip_peer_verification,
+           const std::string& hostname,
            const std::string& service) -> caf::result<void> {
       if (self->state.connection_rp.pending()) {
         return caf::make_error(ec::logic_error,
@@ -159,9 +162,13 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
       if (tls) {
         self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_client);
         self->state.ssl_ctx->set_default_verify_paths();
-        self->state.ssl_ctx->set_verify_mode(
-          boost::asio::ssl::verify_peer
-          | boost::asio::ssl::verify_fail_if_no_peer_cert);
+        if (skip_peer_verification) {
+          self->state.ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
+        } else {
+          self->state.ssl_ctx->set_verify_mode(
+            boost::asio::ssl::verify_peer
+            | boost::asio::ssl::verify_fail_if_no_peer_cert);
+        }
         self->state.tls_socket.emplace(*self->state.socket,
                                        *self->state.ssl_ctx);
         auto tls_handle = self->state.tls_socket->native_handle();
@@ -286,40 +293,39 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
               caf::actor_cast<caf::actor>(hdl),
-              caf::make_action([self, certfile, keyfile, ec,
-                                peer = std::move(peer),
-                                fcntl_error
-                                = std::move(fcntl_error)]() mutable {
-                if (ec) {
-                  return self->state.connection_rp.deliver(caf::make_error(
-                    ec::system_error,
-                    fmt::format("failed to accept: {}", ec.message())));
-                }
-                if (fcntl_error) {
-                  return self->state.connection_rp.deliver(*fcntl_error);
-                }
-                self->state.socket.emplace(std::move(peer));
-                if (!certfile.empty()) {
-                  self->state.ssl_ctx.emplace(
-                    boost::asio::ssl::context::tls_server);
-                  self->state.ssl_ctx->use_certificate_chain_file(certfile);
-                  self->state.ssl_ctx->use_private_key_file(
-                    keyfile, boost::asio::ssl::context::pem);
-                  self->state.ssl_ctx->set_verify_mode(
-                    boost::asio::ssl::verify_none);
-                  self->state.tls_socket.emplace(*self->state.socket,
-                                                 *self->state.ssl_ctx);
-                  auto server_context = boost::asio::ssl::stream<
-                    boost::asio::ip::tcp::socket>::server;
-                  self->state.tls_socket->handshake(server_context, ec);
+              caf::make_action(
+                [self, certfile, keyfile, ec, peer = std::move(peer),
+                 fcntl_error = std::move(fcntl_error)]() mutable {
                   if (ec) {
                     return self->state.connection_rp.deliver(caf::make_error(
                       ec::system_error,
-                      fmt::format("TLS handshake failed: {}", ec.message())));
+                      fmt::format("failed to accept: {}", ec.message())));
                   }
-                }
-                return self->state.connection_rp.deliver();
-              }));
+                  if (fcntl_error) {
+                    return self->state.connection_rp.deliver(*fcntl_error);
+                  }
+                  self->state.socket.emplace(std::move(peer));
+                  if (!certfile.empty()) {
+                    self->state.ssl_ctx.emplace(
+                      boost::asio::ssl::context::tls_server);
+                    self->state.ssl_ctx->use_certificate_chain_file(certfile);
+                    self->state.ssl_ctx->use_private_key_file(
+                      keyfile, boost::asio::ssl::context::pem);
+                    self->state.ssl_ctx->set_verify_mode(
+                      boost::asio::ssl::verify_none);
+                    self->state.tls_socket.emplace(*self->state.socket,
+                                                   *self->state.ssl_ctx);
+                    auto server_context = boost::asio::ssl::stream<
+                      boost::asio::ip::tcp::socket>::server;
+                    self->state.tls_socket->handshake(server_context, ec);
+                    if (ec) {
+                      return self->state.connection_rp.deliver(caf::make_error(
+                        ec::system_error,
+                        fmt::format("TLS handshake failed: {}", ec.message())));
+                    }
+                  }
+                  return self->state.connection_rp.deliver();
+                }));
           }
         });
       return self->state.connection_rp;
@@ -428,6 +434,7 @@ struct connector_args {
   std::string port = {};
   bool listen_once = false;
   bool tls = false;
+  bool skip_peer_verification = false;
   std::optional<std::string> tls_certfile = {};
   std::optional<std::string> tls_keyfile = {};
 };
@@ -516,7 +523,7 @@ public:
         if (args.connect) {
           ctrl.self()
             .request(tcp_bridge, caf::infinite, atom::connect_v, args.tls,
-                     args.hostname, args.port)
+                     false, args.hostname, args.port)
             .await(
               [&]() {
                 // nop
@@ -631,7 +638,7 @@ public:
     if (not args_.listen) {
       ctrl.self()
         .request(tcp_bridge, caf::infinite, atom::connect_v, args_.tls,
-                 args_.hostname, args_.port)
+                 args_.skip_peer_verification, args_.hostname, args_.port)
         .await(
           [&]() {
             // nop
@@ -655,8 +662,9 @@ public:
           });
     }
     return [&ctrl, tcp_bridge](chunk_ptr chunk) mutable {
-      if (not chunk || chunk->size() == 0)
+      if (not chunk || chunk->size() == 0) {
         return;
+      }
       ctrl.self()
         .request(tcp_bridge, caf::infinite, atom::write_v, std::move(chunk))
         .await(
@@ -782,8 +790,39 @@ public:
   }
 };
 
+class save_tcp final : public virtual operator_plugin2<saver_adapter<saver>> {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = saver_args{};
+    auto parser = argument_parser2::operator_(name());
+    auto uri = located<std::string>{};
+    parser.positional("endpoint", uri, "string");
+    parser.named("tls", args.tls);
+    parser.named("skip_peer_verification", args.skip_peer_verification);
+    TRY(parser.parse(inv, ctx));
+    if (uri.inner.starts_with("tcp://")) {
+      uri.inner.erase(0, 6);
+    }
+    auto split = detail::split(uri.inner, ":", 1);
+    if (split.size() != 2) {
+      diagnostic::error("malformed endpoint")
+        .primary(uri.source)
+        .hint("format must be 'tcp://address:port'")
+        .emit(ctx);
+      return failure::promise();
+    }
+    args.hostname = std::string{split[0]};
+    args.port = std::string{split[1]};
+    if (args.skip_peer_verification) {
+      args.tls = true;
+    }
+    return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::tcp
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::tcp::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::tcp::save_tcp)

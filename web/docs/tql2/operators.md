@@ -98,6 +98,7 @@ Operator | Description | Example
 [`save_kafka`](./operators/save_kafka.md) | Saves incoming bytes to an Apache Kafka topic | `save_kafka topic="example"`
 [`save_s3`](./operators/save_s3.md) | Saves incoming bytes to an Amazon S3 object | `save_s3 "s3://my-bucket/obj.csv"`
 [`save_sqs`](./operators/save_sqs.md) | Saves incoming bytes to an Amazon SQS queue | `save_sqs "sqs://tenzir"`
+[`save_tcp`](./operators/save_tcp.md) | Saves incoming bytes to a TCP or TLS connection | `save_tcp "0.0.0.0:8090", tls=true`
 [`save_udp`](./operators/save_udp.md) | Saves incoming bytes to a UDP socket | `save_udp "0.0.0.0:8090"`
 [`save_zmq`](./operators/save_zmq.md) | Saves incoming bytes to ZeroMQ messages | `save_zmq`
 [`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
