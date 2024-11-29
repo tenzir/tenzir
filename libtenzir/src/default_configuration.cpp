@@ -21,8 +21,6 @@ default_configuration::default_configuration() {
       caf::make_config_value_list("caf", "caf_flow"));
   set("caf.logger.console.excluded-components",
       caf::make_config_value_list("caf", "caf_flow"));
-  // TODO: Validate these.
-  set("caf.scheduler.max-throughput", 500);
   set("caf.middleman.connection-timeout", caf::timespan{120s});
 }
 
