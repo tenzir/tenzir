@@ -405,7 +405,7 @@ debug_writer::type debug_writer::top() {
 
 // Enters a new level of nesting.
 void debug_writer::push(type t) {
-  stack_.push_back({t, false});
+  stack_.emplace_back(t, false);
 }
 
 // Backs up one level of nesting.
