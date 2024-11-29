@@ -1,6 +1,6 @@
 # load_azure_blob_storage
 
-Saves bytes to an Azure Blob Storage
+Loads bytes from an Azure Blob Storage.
 
 ```tql
 load_azure_blob_storage uri:string
@@ -8,8 +8,7 @@ load_azure_blob_storage uri:string
 
 ## Description
 
-The `load_azure_blob_storage` operator writes bytes to a blob in an
-Azure Blob Store.
+The `load_azure_blob_storage` operator loads bytes from an Azure Blob Storage.
 
 By default, authentication is handled by the Azure SDK’s credential chain which
 may read from multiple environment variables, such as:

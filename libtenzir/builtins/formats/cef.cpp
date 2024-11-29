@@ -268,7 +268,7 @@ public:
   }
 
   auto read_properties() const -> read_properties_t override {
-    return {.extensions = {"def"}};
+    return {.extensions = {"cef"}};
   }
 };
 

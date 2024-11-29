@@ -31,7 +31,7 @@ An optional set of arguments passed to the saver.
 This can be used to e.g. pass credentials to a connector:
 
 ```tql
-to  "https:://example.org/file.json", header={Token: 0}
+to "https://example.org/file.json", headers={Token: "XYZ"}
 ```
 
 ### `{ … } (optional)`

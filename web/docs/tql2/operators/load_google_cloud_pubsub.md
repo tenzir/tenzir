@@ -13,8 +13,7 @@ The connector tries to retrieve the appropriate credentials using Google's
 
 ## Description
 
-The `google_cloud_pubsub` loader acquires raw bytes from a Google Cloud Pub/Sub
-subscription.
+The operator acquires raw bytes from a Google Cloud Pub/Sub subscription.
 
 ### `project_id = string`
 

@@ -13,7 +13,7 @@ The connector tries to retrieve the appropriate credentials using Google's
 
 ## Description
 
-The `google_cloud_pubsub` saver publishes bytes to a Google Cloud Pub/Sub topic.
+The operator publishes bytes to a Google Cloud Pub/Sub topic.
 
 ### `project_id = string`
 

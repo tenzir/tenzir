@@ -43,8 +43,8 @@ public:
     /// passed as the first argument to the operator.
     /// The location will refer to the URIs location, with the scheme stripped
     /// if requested.
-    std::function<std::vector<ast::expression>(located<std::string>,
-                                               diagnostic_handler&)>
+    std::function<failure_or<std::vector<ast::expression>>(located<std::string>,
+                                                           diagnostic_handler&)>
       transform_uri = {};
   };
 
@@ -65,8 +65,8 @@ public:
     /// passed as the first argument to the operator.
     /// The location will refer to the URIs location, with the scheme stripped
     /// if requested.
-    std::function<std::vector<ast::expression>(located<std::string>,
-                                               diagnostic_handler&)>
+    std::function<failure_or<std::vector<ast::expression>>(located<std::string>,
+                                                           diagnostic_handler&)>
       transform_uri = {};
   };
 

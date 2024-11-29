@@ -4,7 +4,7 @@ sidebar_class_name: hidden
 
 # from
 
-Loads from an URI, inferring the source, compression and format.
+Obtains events from an URI, inferring the source, compression and format.
 
 ```tql
 from uri:str, [loader_args… { … }]
@@ -21,7 +21,7 @@ without having to manually write the separate steps of data ingestion manually.
 The `from` operator is an easy way to get data into Tenzir.
 It will try to infer the connector, compression and format based on the given URI.
 
-Alternatively, it can be used to create ad-hoc events from records.
+Alternatively, it can be used to create events from records.
 
 ### `uri: str`
 
@@ -33,7 +33,7 @@ An optional set of arguments passed to the loader.
 This can be used to e.g. pass credentials to a connector:
 
 ```tql
-from "https:://example.org/file.json", header={Token: 0}
+from "https://example.org/file.json", headers={Token: "XYZ"}
 ```
 
 ### `{ … } (optional)`
@@ -211,7 +211,7 @@ from "path/to/my/load/file.json.bz2" {
 ```tql
 from "https://example.org/file.json", header={Token: 0}
 ```
-### Create a events ad-hoc
+### Create events from records
 
 ```tql
 from

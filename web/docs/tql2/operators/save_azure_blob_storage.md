@@ -1,6 +1,6 @@
 # save_azure_blob_storage
 
-Saves bytes to an Azure Blob Storage
+Saves bytes to an Azure Blob Storage.
 
 ```tql
 save_azure_blob_storage uri:string

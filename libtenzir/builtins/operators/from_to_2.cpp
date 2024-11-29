@@ -40,8 +40,6 @@ public:
 
   auto
   operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
-    // TODO: We are combining all events into a single schema. Is this what we
-    // want, or do we want a more "precise" output if possible?
     auto msb = multi_series_builder{
       multi_series_builder::policy_default{},
       multi_series_builder::settings_type{
@@ -173,7 +171,7 @@ auto find_formatter_given(std::string_view what, auto func, auto member,
 }
 
 auto strip_scheme(ast::expression& expr, std::string_view scheme) -> void {
-  auto arg = expr.as<ast::constant>();
+  auto arg = try_as<ast::constant>(expr);
   TENZIR_ASSERT(arg);
   auto strip_size = scheme.size() + 3;
   // remove the quotes and scheme from the location
@@ -191,7 +189,7 @@ auto strip_scheme(ast::expression& expr, std::string_view scheme) -> void {
 }
 
 auto to_located_string(ast::expression& expr) -> located<std::string> {
-  auto arg = expr.as<ast::constant>();
+  auto arg = try_as<ast::constant>(expr);
   auto str = match(
     arg->value,
     [](std::string& s) -> std::string {
@@ -231,16 +229,19 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     const operator_factory_plugin* read_plugin = nullptr;
     auto load_properties = operator_factory_plugin::load_properties_t{};
     auto read_properties = operator_factory_plugin::read_properties_t{};
-    const auto pipeline_count = std::ranges::count_if(
-      inv.args, &ast::expression::is<ast::pipeline_expr>);
+    const auto pipeline_count
+      = std::ranges::count_if(inv.args, [](const ast::expression& expr) {
+          return is<ast::pipeline_expr>(expr);
+        });
     if (pipeline_count > 1) {
       diagnostic::error("`from` accepts at most one pipeline").emit(ctx);
       return failure::promise();
     }
-    auto pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+    auto pipeline_argument = try_as<ast::pipeline_expr>(inv.args.back());
     if (pipeline_count > 0) {
-      auto it = std::ranges::find_if(inv.args,
-                                     &ast::expression::is<ast::pipeline_expr>);
+      auto it = std::ranges::find_if(inv.args, [](const ast::expression& expr) {
+        return is<ast::pipeline_expr>(expr);
+      });
       if (it != std::prev(inv.args.end())) {
         diagnostic::error("data ingestion pipeline must be the last argument")
           .primary(it->get_location())
@@ -267,8 +268,9 @@ class from_plugin2 final : public virtual operator_factory_plugin {
           strip_scheme(inv.args.front(), url->scheme());
         }
         if (load_properties.transform_uri) {
-          auto uri_replacement = load_properties.transform_uri(
-            to_located_string(inv.args.front()), ctx);
+          TRY(auto uri_replacement,
+              load_properties.transform_uri(to_located_string(inv.args.front()),
+                                            ctx));
           TENZIR_TRACE("from operator: URI replacement size  : {}",
                        uri_replacement.size());
           TENZIR_ASSERT(not uri_replacement.empty());
@@ -276,7 +278,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
           inv.args.insert(inv.args.begin(), uri_replacement.begin(),
                           uri_replacement.end());
           if (pipeline_argument) {
-            pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+            pipeline_argument = try_as<ast::pipeline_expr>(inv.args.back());
           }
         }
       }
@@ -366,7 +368,7 @@ class from_plugin2 final : public virtual operator_factory_plugin {
     }
     if (not has_pipeline_or_events) {
       inv.args.emplace_back(ast::pipeline_expr{});
-      pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+      pipeline_argument = try_as<ast::pipeline_expr>(inv.args.back());
       if (decompress_plugin) {
         auto decompress_ent = ast::entity{std::vector{
           ast::identifier{strip_prefix(decompress_plugin->name()),
@@ -492,16 +494,19 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     const operator_factory_plugin* write_plugin = nullptr;
     auto save_properties = operator_factory_plugin::save_properties_t{};
     auto write_properties = operator_factory_plugin::write_properties_t{};
-    const auto pipeline_count = std::ranges::count_if(
-      inv.args, &ast::expression::is<ast::pipeline_expr>);
+    const auto pipeline_count
+      = std::ranges::count_if(inv.args, [](const ast::expression& expr) {
+          return is<ast::pipeline_expr>(expr);
+        });
     if (pipeline_count > 1) {
       diagnostic::error("`to` accepts at most one pipeline").emit(ctx);
       return failure::promise();
     }
-    auto pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+    auto pipeline_argument = try_as<ast::pipeline_expr>(inv.args.back());
     if (pipeline_count > 0) {
-      auto it = std::ranges::find_if(inv.args,
-                                     &ast::expression::is<ast::pipeline_expr>);
+      auto it = std::ranges::find_if(inv.args, [](const ast::expression& expr) {
+        return is<ast::pipeline_expr>(expr);
+      });
       if (it != std::prev(inv.args.end())) {
         diagnostic::error("writing pipeline must be the last argument")
           .primary(it->get_location())
@@ -528,8 +533,9 @@ class to_plugin2 final : public virtual operator_factory_plugin {
           strip_scheme(inv.args.front(), url->scheme());
         }
         if (save_properties.transform_uri) {
-          auto uri_replacement = save_properties.transform_uri(
-            to_located_string(inv.args.front()), ctx);
+          TRY(auto uri_replacement,
+              save_properties.transform_uri(to_located_string(inv.args.front()),
+                                            ctx));
           TENZIR_TRACE("to operator: URI replacement size  : {}",
                        uri_replacement.size());
           TENZIR_ASSERT(not uri_replacement.empty());
@@ -537,7 +543,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
           inv.args.insert(inv.args.begin(), uri_replacement.begin(),
                           uri_replacement.end());
           if (pipeline_argument) {
-            pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+            pipeline_argument = try_as<ast::pipeline_expr>(inv.args.back());
           }
         }
       }
@@ -630,7 +636,7 @@ class to_plugin2 final : public virtual operator_factory_plugin {
     }
     if (not has_pipeline_or_events) {
       inv.args.emplace_back(ast::pipeline_expr{});
-      pipeline_argument = inv.args.back().as<ast::pipeline_expr>();
+      pipeline_argument = try_as<ast::pipeline_expr>(inv.args.back());
       auto write_ent = ast::entity{std::vector{
         ast::identifier{strip_prefix(write_plugin->name()), location::unknown},
       }};

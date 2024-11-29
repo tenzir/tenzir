@@ -5,9 +5,9 @@ Receives events via [Fluent Bit](https://docs.fluentbit.io/).
 ## Synopsis
 
 ```tql
-from_fluent_bit plugin:str, [options=record, fluent_bit_options=record,
-                schema=str, selector=str, schema_only=bool, merge=bool, raw=bool,
-                unflatten=str, arrays_of_objects=bool]
+from_fluent_bit plugin:string, [options=record, fluent_bit_options=record,
+                schema=string, selector=string, schema_only=bool, merge=bool, raw=bool,
+                unflatten=string, arrays_of_objects=bool]
 ```
 
 ## Description
@@ -17,24 +17,23 @@ making it possible to acquire events from a Fluent Bit [input plugin][inputs].
 
 [inputs]: https://docs.fluentbit.io/manual/pipeline/inputs
 
-Syntactically, the `from_fluent_bit` operator behaves similar to an invocation of the
-`fluent-bit` command line utility. For example, the invocation
+An invocation of the `fluent-bit` commandline utility
 
 ```bash
-fluent-bit -o plugin -p key1=value1 -p key2=value2 -p ...
+fluent-bit -o plugin -p key1=value1 -p key2=value2 -p…
 ```
 
 translates to our `from_fluent_bit` operator as follows:
 
 ```tql
-from_fluent_bit "plugin" options{ key1: value1, key2:value2 ... }
+from_fluent_bit "plugin", options{key1: value1, key2:value2, …}
 ```
 
 :::tip Output to Fluent Bit
 You can output events to Fluent Bit using the [`to_fluent_bit` operator](to_fluent_bit.md).
 :::
 
-### `plugin: str`
+### `plugin: string`
 
 The name of the Fluent Bit plugin.
 
@@ -52,7 +51,7 @@ The key-value pairs in this record are equivalent to `-p key=value` for the
 
 ### `fluent_bit_options = record (optional)`
 
-Sets global properties of the Fluent Bit service., e.g., `fluent_bit_options= {flush:1,grace=3}`.
+Sets global properties of the Fluent Bit service., e.g., `fluent_bit_options={flush:1, grace:3}`.
 
 Consult the list of available [key-value pairs][service-properties] to configure
 Fluent Bit according to your needs.
@@ -79,7 +78,7 @@ specified in the chosen `schema` will still be parsed according to the schema.
 This means that JSON numbers will be parsed as numbers,
 but every JSON string remains a string, unless the field is in the `schema`.
 
-### `schema = str (optional)`
+### `schema = string (optional)`
 
 Provide the name of a schema to be used by the parser.
 
@@ -93,7 +92,7 @@ If the given schema does not exist, this option instead assigns the output schem
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector = string (optional)`
 
 Designates a field value as schema name with an optional dot-separated prefix.
 
@@ -115,7 +114,7 @@ and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten = str (optional)`
+### `unflatten = string (optional)`
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.
@@ -172,5 +171,5 @@ Handle [ElasticSearch & OpenSearch](https://docs.fluentbit.io/manual/pipeline/in
 Bulk API requests or ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat):
 
 ```tql
-from_fluent_bit "elasticsearch" options={port: 9200}
+from_fluent_bit "elasticsearch", options={port: 9200}
 ```
