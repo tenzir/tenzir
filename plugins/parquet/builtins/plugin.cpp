@@ -24,6 +24,11 @@ public:
     TRY(argument_parser2::operator_(this->name()).parse(inv, ctx));
     return std::make_unique<parser_adapter<parquet_parser>>(parquet_parser{});
   }
+
+  auto read_properties() const
+    -> operator_factory_plugin::read_properties_t override {
+    return {.extensions = {"parquet"}};
+  }
 };
 
 class write_plugin final
@@ -37,6 +42,11 @@ public:
           .named("compression_type", options.compression_type)
           .parse(inv, ctx));
     return std::make_unique<writer_adapter<parquet_printer>>(parquet_printer{});
+  }
+
+  auto write_properties() const
+    -> operator_factory_plugin::write_properties_t override {
+    return {.extensions = {"parquet"}};
   }
 };
 } // namespace

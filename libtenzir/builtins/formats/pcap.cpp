@@ -1,3 +1,4 @@
+
 //    _   _____   __________
 //   | | / / _ | / __/_  __/     Visibility
 //   | |/ / __ |_\ \  / /          Across
@@ -588,6 +589,10 @@ class read_plugin final
     return std::make_unique<parser_adapter<pcap_parser>>(
       pcap_parser{std::move(args)});
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"pcap"}};
+  }
 };
 
 class write_plugin final
@@ -597,6 +602,10 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<pcap_printer>>(pcap_printer{});
+  }
+
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {"pcap"}};
   }
 };
 

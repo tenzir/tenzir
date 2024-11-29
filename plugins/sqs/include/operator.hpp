@@ -40,8 +40,13 @@ auto to_aws_string(chunk_ptr chunk) -> Aws::String {
 /// A wrapper around SQS.
 class sqs_queue {
 public:
+  static inline std::once_flag flag;
   explicit sqs_queue(located<std::string> name, std::chrono::seconds poll_time)
     : name_{std::move(name)} {
+    std::call_once(flag, []() {
+      Aws::SDKOptions options;
+      Aws::InitAPI(options);
+    });
     auto config = Aws::Client::ClientConfiguration{};
     // TODO: remove this after upgrading to Arrow 15, as it's no longer
     // necessary. This is just a bandaid fix to make an old version of the SDK

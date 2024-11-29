@@ -59,7 +59,7 @@ public:
         diagnostic::error("missing fluent-bit plugin").throw_();
       }
     }
-    args.plugin = std::move(arg->inner);
+    args.plugin = std::move(*arg);
     while (true) {
       arg = p.accept_shell_arg();
       if (arg == std::nullopt) {

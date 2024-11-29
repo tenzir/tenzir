@@ -262,6 +262,16 @@ public:
     }
   }
 
+  /// @brief Inserts a new value into the builder.
+  auto data(tenzir::data value) -> void {
+    if (uses_merging_builder()) {
+      return merging_builder_.data(value);
+    } else {
+      complete_last_event();
+      return builder_raw_.data(std::move(value));
+    }
+  }
+
   auto null() -> void {
     return data(caf::none);
   }

@@ -9,6 +9,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include "loader.hpp"
+#include "uri_transform.hpp"
 
 namespace tenzir::plugins::google_cloud_pubsub {
 
@@ -60,6 +61,15 @@ public:
     args.add_to(parser);
     TRY(parser.parse(inv, ctx));
     return std::make_unique<load_operator>(std::move(args));
+  }
+
+  virtual auto load_properties() const -> load_properties_t override {
+    return {
+      .schemes = {"gcps"},
+      .accepts_pipeline = false,
+      .strip_scheme = true,
+      .transform_uri = make_uri_transform("subscription_id"),
+    };
   }
 };
 
