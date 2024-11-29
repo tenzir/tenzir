@@ -266,7 +266,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
       };
     });
   self->wait_for(handler);
-  TENZIR_DEBUG("command is done");
+  TENZIR_DEBUG("command is done, result? {}", result.has_value());
   if (cfg.dump_metrics) {
     for (auto i = size_t{0}; i < metrics.size(); ++i) {
       const auto& metric = metrics[i];
@@ -288,7 +288,7 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
                    caf::actor_system& sys) -> caf::expected<void> {
   if (cfg.tql2) {
     auto success = exec2(std::move(content), dh, cfg, sys);
-    return success ? ec::no_error : ec::silent;
+    return success ? caf::expected<void>{} : ec::silent;
   }
   auto parsed = tql::parse(std::move(content), dh);
   if (not parsed) {
