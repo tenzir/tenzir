@@ -151,6 +151,16 @@ truncate(std::string_view text, const size_t N = 50) -> std::string {
 /// Parses simdjson objects into the given `series_builder` handles.
 class doc_parser {
 public:
+  /// The result of a parsing operation
+  enum class result {
+    /// The parsing succeeded
+    success,
+    /// The parsing failed, but wrote elements into the builder
+    failure_with_write,
+    /// The parsing failed, but did not affect the builder
+    failure_no_change,
+  };
+
   doc_parser(std::string_view parsed_document, diagnostic_handler& diag)
     : parsed_document_{parsed_document}, diag_{diag} {
   }
@@ -163,29 +173,33 @@ public:
   }
 
   [[nodiscard]] auto parse_object(simdjson::ondemand::value v, auto builder,
-                                  size_t depth = 0u) -> bool {
+                                  size_t depth = 0u) -> result {
     auto obj = v.get_object();
     if (obj.error()) {
       report_parse_err(v, "object");
-      return false;
+      return result::failure_no_change;
     }
+    auto written_once = false;
     for (auto pair : obj) {
       if (pair.error()) {
         report_parse_err(v, "key value pair");
-        return false;
+        return written_once ? result::failure_with_write
+                            : result::failure_no_change;
       }
       auto maybe_key = pair.unescaped_key();
       if (maybe_key.error()) {
         report_parse_err(v, "key in an object");
-        return false;
+        return written_once ? result::failure_with_write
+                            : result::failure_no_change;
       }
       auto key = maybe_key.value_unsafe();
       auto val = pair.value();
       if (val.error()) {
         report_parse_err(val, fmt::format("object value at key `{}`", key));
-        return false;
+        return written_once ? result::failure_with_write
+                            : result::failure_no_change;
       }
-      bool value_parse_success = false;
+      auto value_parse_success = result::success;
       // this guards the base series_builder currently used by tql2 parse_json
       if constexpr (std::same_as<detail::multi_series_builder::record_generator,
                                  decltype(builder)>) {
@@ -195,56 +209,67 @@ public:
         value_parse_success
           = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
       }
-      if (not value_parse_success) {
-        return false;
+      written_once = true;
+      if (value_parse_success != result::success) {
+        return result::failure_with_write;
       }
     }
-    return true;
+    return result::success;
   }
 
   [[nodiscard]] auto parse_value(simdjson::ondemand::value val, auto builder,
-                                 size_t depth) -> bool {
+                                 size_t depth) -> result {
     TENZIR_ASSERT(depth <= defaults::max_recursion,
                   "nesting too deep in JSON parser");
     auto type = val.type();
     if (type.error()) {
       report_parse_err(val, "a value");
-      return false;
+      return result::failure_no_change;
     }
     switch (type.value_unsafe()) {
       case simdjson::ondemand::json_type::null:
         builder.null();
-        return true;
+        return result::success;
       case simdjson::ondemand::json_type::number:
         return parse_number(val, builder);
       case simdjson::ondemand::json_type::boolean: {
         auto result = val.get_bool();
         if (result.error()) {
           report_parse_err(val, "a boolean value");
-          return false;
+          return result::failure_no_change;
         }
         builder.data(result.value_unsafe());
-        return true;
+        return result::success;
       }
       case simdjson::ondemand::json_type::string:
         return parse_string(val, builder);
-      case simdjson::ondemand::json_type::array:
-        return parse_array(val.get_array().value_unsafe(), builder.list(),
-                           depth + 1);
-      case simdjson::ondemand::json_type::object:
-        return parse_object(val, builder.record(), depth + 1);
+      case simdjson::ondemand::json_type::array: {
+        const auto res = parse_array(val.get_array().value_unsafe(),
+                                     builder.list(), depth + 1);
+        if (res != result::success) {
+          return result::failure_with_write;
+        }
+        return res;
+      }
+      case simdjson::ondemand::json_type::object: {
+        const auto res = parse_object(val, builder.record(), depth + 1);
+        if (res != result::success) {
+          return result::failure_with_write;
+        }
+        return res;
+      }
     }
     TENZIR_UNREACHABLE();
   }
 
 private:
   [[nodiscard]] auto
-  parse_number(simdjson::ondemand::value val, auto builder) -> bool {
+  parse_number(simdjson::ondemand::value val, auto builder) -> result {
     auto kind = simdjson::ondemand::number_type{};
     auto result = val.get_number_type();
     if (result.error()) {
       report_parse_err(val, "a number");
-      return false;
+      return result::failure_no_change;
     }
     kind = result.value_unsafe();
     switch (kind) {
@@ -252,28 +277,28 @@ private:
         auto result = val.get_double();
         if (result.error()) {
           report_parse_err(val, "a number");
-          return false;
+          return result::failure_no_change;
         }
         builder.data(result.value_unsafe());
-        return true;
+        return result::success;
       }
       case simdjson::ondemand::number_type::signed_integer: {
         auto result = val.get_int64();
         if (result.error()) {
           report_parse_err(val, "a number");
-          return false;
+          return result::failure_no_change;
         }
         builder.data(result.value_unsafe());
-        return true;
+        return result::success;
       }
       case simdjson::ondemand::number_type::unsigned_integer: {
         auto result = val.get_uint64();
         if (result.error()) {
           report_parse_err(val, "a number");
-          return false;
+          return result::failure_no_change;
         }
         builder.data(result.value_unsafe());
-        return true;
+        return result::success;
       }
       case simdjson::ondemand::number_type::big_integer: {
         report_parse_err(val, "a big integer",
@@ -287,18 +312,18 @@ private:
         // * store the value as a string
         // builder.null();
         builder.data(std::string{val.raw_json_token()});
-        return true;
+        return result::success;
       }
     }
     TENZIR_UNREACHABLE();
   }
 
   [[nodiscard]] auto
-  parse_string(simdjson::ondemand::value val, auto builder) -> bool {
+  parse_string(simdjson::ondemand::value val, auto builder) -> result {
     auto maybe_str = val.get_string();
     if (maybe_str.error()) {
       report_parse_err(val, "a string");
-      return false;
+      return result::failure_no_change;
     }
     // TODO because of this it would be better to adapt the multi_series_builder
     if constexpr (std::same_as<decltype(builder), builder_ref>) {
@@ -316,21 +341,25 @@ private:
     } else {
       builder.data_unparsed(std::string{maybe_str.value_unsafe()});
     }
-    return true;
+    return result::success;
   }
 
   [[nodiscard]] auto parse_array(simdjson::ondemand::array arr, auto builder,
-                                 size_t depth) -> bool {
+                                 size_t depth) -> result {
+    auto written_once = false;
     for (auto element : arr) {
       if (element.error()) {
         report_parse_err(element, "an array element");
-        return false;
+        return written_once ? result::failure_with_write
+                            : result::failure_no_change;
       }
-      if (not parse_value(element.value_unsafe(), builder, depth + 1)) {
-        return false;
+      auto res = parse_value(element.value_unsafe(), builder, depth + 1);
+      if (res != result::success) {
+        return written_once ? result::failure_with_write
+                            : result::failure_no_change;
       }
     }
-    return true;
+    return result::success;
   }
 
   void emit_unparsed_json_diagnostics(
@@ -463,11 +492,14 @@ public:
         break;
       }
       auto parser = doc_parser{json_line, *dh, lines_processed_};
-      auto success = parser.parse_object(val.value_unsafe(), builder.record());
-      if (not success) {
-        builder.remove_last();
-        ++diags_emitted;
-        break;
+      auto result = parser.parse_object(val.value_unsafe(), builder.record());
+      switch (result) {
+        case doc_parser::result::failure_with_write:
+          builder.remove_last();
+          [[fallthrough]];
+        case doc_parser::result::failure_no_change:
+          ++diags_emitted;
+        case doc_parser::result::success: /*no op*/;
       }
     }
     if (objects_parsed == 0 and diags_emitted == 0) {
@@ -586,15 +618,10 @@ public:
               view.data() + view.size(),
             };
             auto row = builder.record();
-            auto success
+            auto result
               = doc_parser{source, *dh}.parse_object(elem.value_unsafe(), row);
-            if (not success) {
-              // We already reported the issue.
+            if (result == doc_parser::result::failure_with_write) {
               builder.remove_last();
-              // It should be fine to continue here, because at least the array
-              // structure we are iterating is valid. That is ensured by the
-              // elem.error() check above
-              continue;
             }
           }
         } else {
@@ -615,14 +642,13 @@ public:
             return;
           }
           auto row = builder.record();
-          auto success
+          auto result
             = doc_parser{source, *dh}.parse_object(doc.value_unsafe(), row);
-          if (not success) {
-            // We already reported the issue.
+          if (result == doc_parser::result::failure_with_write) {
             builder.remove_last();
-            // It should be fine to advance to the next document here, because
-            // the document iterator itself did not give us an error.
-            continue;
+          }
+          if (result != doc_parser::result::success) {
+            break;
           }
         }
       }
@@ -1268,17 +1294,16 @@ public:
                   .emit(ctx);
                 continue;
               }
-              const auto old_length = b.length();
               const auto res
                 = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
-              if (not res) {
+              if (res != doc_parser::result::success) {
                 diagnostic::warning("could not parse json")
                   .primary(call)
                   .emit(ctx);
-                if (b.length() != old_length) {
+                if (res == doc_parser::result::failure_with_write) {
                   b.remove_last();
+                  b.null();
                 }
-                b.null();
                 continue;
               }
             }
