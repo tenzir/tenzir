@@ -407,9 +407,9 @@ struct exec_node_state {
       if (not output_generator) {
         TENZIR_DEBUG("{} {} failed to instantiate operator: {}", *self,
                      op->name(), output_generator.error());
-        return add_context(output_generator.error(),
-                           "{} {} failed to instantiate operator", *self,
-                           op->name());
+        return diagnostic::error(output_generator.error())
+          .note("{} {} failed to instantiate operator", *self, op->name())
+          .to_error();
       }
       if (not std::holds_alternative<generator<Output>>(*output_generator)) {
         return caf::make_error(

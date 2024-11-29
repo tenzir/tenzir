@@ -111,15 +111,6 @@ auto inspect(Inspector& f, ec& x) {
   return detail::inspect_enum(f, x);
 }
 
-auto add_context_impl(const caf::error& error, std::string str) -> caf::error;
-
-template <class... Ts>
-auto add_context(const caf::error& error, fmt::format_string<Ts...> fmt,
-                 Ts&&... args) -> caf::error {
-  return add_context_impl(error, fmt::format(std::move(fmt),
-                                             std::forward<Ts>(args)...));
-}
-
 inline void check(const caf::error& err, std::source_location location
                                          = std::source_location::current()) {
   if (err) [[unlikely]] {
