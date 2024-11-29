@@ -43,5 +43,5 @@ load_sqs "sqs://tenzir"
 Read JSON messages with a 20-second long poll timeout:
 
 ```tql
-load_sqs "sqs://tenzir" poll_time=20s
+load_sqs "sqs://tenzir", poll_time=20s
 ```
