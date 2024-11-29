@@ -34,7 +34,7 @@ xs = xs.append(4)
 ```
 
 ```tql
-{xs: [1, 2, 3, 4}
+{xs: [1, 2, 3, 4]}
 ```
 
 ```tql title="Prepend to a list"
@@ -143,7 +143,7 @@ unique = xs.distinct()
 ```
 
 :::info Aggregation Functions
-With this change, all aggregation functiosn work with lists. Check the
+With this change, all aggregation functions work with lists. Check the
 [functions reference](/tql2/functions#aggregation) for a full list of available
 functions.
 :::
@@ -207,7 +207,7 @@ operators remain to be migrated to TQL2: `chart`, `deduplicate`, `lookup`,
 that at this point we're already covering 99% of our use cases with TQL2.
 
 In addition to the above, the release also contains numerous quality-of-life
-improvemnts and bug fixes, so be sure to check out the [changelog][changelog].
+improvements and bug fixes, so be sure to check out the [changelog][changelog].
 
 ## Let's Connect!
 
