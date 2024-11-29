@@ -409,9 +409,8 @@ public:
         continue;
       }
       auto address_info_error = 0;
-      const auto ip_string = is_ip
-                               ? fmt::to_string(value)
-                               : materialize(as<std::string_view>(value));
+      const auto ip_string = is_ip ? fmt::to_string(value)
+                                   : materialize(as<std::string_view>(value));
       auto result = MMDB_lookup_string(mmdb_.get(), ip_string.data(),
                                        &address_info_error, &status);
       if (address_info_error != MMDB_SUCCESS) {
@@ -579,7 +578,7 @@ public:
 
   auto save() const -> caf::expected<context_save_result> override {
     return context_save_result{
-      .data = mapped_mmdb_,
+      .data = mapped_mmdb_ ? mapped_mmdb_ : chunk::make_empty(),
       .version = latest_version,
     };
   }
@@ -628,7 +627,7 @@ struct v2_loader : public context_loader {
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
-    if (not serialized) {
+    if (not serialized or serialized->size() == 0) {
       return std::make_unique<geoip_context>();
     }
     const auto* cache_dir
