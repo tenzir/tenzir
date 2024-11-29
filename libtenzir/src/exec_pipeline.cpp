@@ -266,7 +266,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
       };
     });
   self->wait_for(handler);
-  TENZIR_DEBUG("command is done, result? {}", result.has_value());
+  TENZIR_DEBUG("command is done");
   if (cfg.dump_metrics) {
     for (auto i = size_t{0}; i < metrics.size(); ++i) {
       const auto& metric = metrics[i];

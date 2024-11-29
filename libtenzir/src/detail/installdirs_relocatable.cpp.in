@@ -7,10 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/assert.hpp"
-#include <string_view>
 #include "tenzir/detail/installdirs.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/detail/string.hpp"
+
+#include <string_view>
 
 namespace tenzir::detail {
 
