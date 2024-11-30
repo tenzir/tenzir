@@ -603,11 +603,24 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   }
   TENZIR_ASSERT(it == plugin_args.end());
   // Now parse all CAF options from the command line. Prior to doing so, we
-  // clear the config_file_path first so it does not use caf-application.ini as
-  // fallback during actor_system_config::parse().
-  // FIXME: Find a new way to prevent it from loading caf-application.ini.
-  // config_file_path.clear();
+  // set the `config-file` option to `/dev/null` so CAF does not try to read
+  // from caf-application.conf.
+  caf_args.erase(
+    std::remove_if(caf_args.begin(), caf_args.end(),
+                   [](const std::string& x) {
+                     return x.starts_with(
+                       "--config-file="); // put your condition here
+                   }),
+    caf_args.end());
+#if TENZIR_POSIX
+  caf_args.emplace_back("--config-file=/dev/null");
+#elif TENZIR_WINDOWS
+  caf_args.emplace_back("--config-file=NUL");
+#else
+#  error "unimplemented"
+#endif
   auto result = actor_system_config::parse(std::move(caf_args));
+  content.erase("config-file");
   // Load OpenSSL last because it uses the parsed configuration.
   const auto use_encryption
     = caf::holds_alternative<std::string>(content, "caf.openssl.certificate")
