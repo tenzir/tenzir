@@ -2,7 +2,7 @@
 title: "Tenzir Node v4.24: List Manipulation"
 slug: tenzir-node-v4.24
 authors: [dominiklohmann]
-date: 2024-12-02
+date: 2024-12-03
 tags: [release, node]
 comments: true
 ---
