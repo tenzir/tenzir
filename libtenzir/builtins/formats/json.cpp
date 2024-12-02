@@ -199,20 +199,21 @@ public:
         return written_once ? result::failure_with_write
                             : result::failure_no_change;
       }
-      auto value_parse_success = result::success;
+      auto value_parse_result = result::success;
       // this guards the base series_builder currently used by tql2 parse_json
       if constexpr (std::same_as<detail::multi_series_builder::record_generator,
                                  decltype(builder)>) {
-        value_parse_success = parse_value(
+        written_once = true;
+        value_parse_result = parse_value(
           val.value_unsafe(), builder.unflattened_field(key), depth + 1);
       } else {
-        value_parse_success
+        value_parse_result
           = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
       }
-      written_once = true;
-      if (value_parse_success != result::success) {
-        return result::failure_with_write;
+      if (value_parse_result != result::success) {
+        return written_once ? result::failure_with_write : value_parse_result;
       }
+      written_once = true;
     }
     return result::success;
   }
@@ -358,6 +359,7 @@ private:
         return written_once ? result::failure_with_write
                             : result::failure_no_change;
       }
+      written_once = true;
     }
     return result::success;
   }
@@ -493,13 +495,10 @@ public:
       }
       auto parser = doc_parser{json_line, *dh, lines_processed_};
       auto result = parser.parse_object(val.value_unsafe(), builder.record());
-      switch (result) {
-        case doc_parser::result::failure_with_write:
-          builder.remove_last();
-          [[fallthrough]];
-        case doc_parser::result::failure_no_change:
-          ++diags_emitted;
-        case doc_parser::result::success: /*no op*/;
+      if (result != doc_parser::result::success) {
+        builder.remove_last();
+        ++diags_emitted;
+        break;
       }
     }
     if (objects_parsed == 0 and diags_emitted == 0) {
@@ -622,6 +621,10 @@ public:
               = doc_parser{source, *dh}.parse_object(elem.value_unsafe(), row);
             if (result == doc_parser::result::failure_with_write) {
               builder.remove_last();
+              // It should be fine to continue here, because at least the array
+              // structure we are iterating is valid. That is ensured by the
+              // elem.error() check above
+              continue;
             }
           }
         } else {
@@ -1294,17 +1297,18 @@ public:
                   .emit(ctx);
                 continue;
               }
-              const auto res
+              const auto result
                 = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
-              if (res != doc_parser::result::success) {
-                diagnostic::warning("could not parse json")
-                  .primary(call)
-                  .emit(ctx);
-                if (res == doc_parser::result::failure_with_write) {
+              switch (result) {
+                case doc_parser::result::failure_with_write:
                   b.remove_last();
-                  b.null();
-                }
-                continue;
+                  [[fallthrough]];
+                case doc_parser::result::failure_no_change:
+                  diagnostic::warning("could not parse json")
+                    .primary(call)
+                    .emit(ctx);
+                  break;
+                case doc_parser::result::success: /*no op*/;
               }
             }
             auto result = b.finish();
