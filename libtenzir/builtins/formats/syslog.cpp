@@ -564,7 +564,6 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       diag.message = fmt::format("syslog parser: {}", diag.message);
       return diag;
     }};
-  const auto timeout = opts.settings.timeout;
   auto msb = multi_series_builder{std::move(opts), dh};
   // This will be called when switching the builder and at the very end of
   // execution
@@ -619,19 +618,30 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     finish_all();
     builder.template emplace<Builder>();
   };
+  const auto length = [&]() {
+    return std::visit(
+      [](const auto& b) {
+        return b.rows_.size();
+      },
+      builder);
+  };
   auto line_nr = size_t{0};
-  auto last_finish = time::clock::now();
+  auto last_line_received = time::clock::now();
+  co_yield {};
   for (auto&& line : lines) {
-    for (auto&& slice : msb.yield_ready_as_table_slice()) {
-      co_yield std::move(slice);
-    }
     // We need our own timeout logic here, because we dont directly write events
     // into the MSB. Only on a `finish_all` or `finish_all_but_last` call events
     // are actually written into the MSB.
     auto now = time::clock::now();
-    if (now - last_finish > timeout) {
+    if (now - last_line_received > opts.settings.timeout) {
+      finish_all();
+      // We call finalize here because we do the timeout handling ourselves.
+      // Otherwise we would double the timeout.
+      for (auto&& slice : msb.finalize_as_table_slice()) {
+        co_yield std::move(slice);
+      }
+    } else {
       finish_all_but_last();
-      last_finish = now;
     }
     if (not line) {
       co_yield {};
@@ -641,6 +651,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     if (line->empty()) {
       continue;
     }
+    last_line_received = now;
     const auto* f = line->begin();
     const auto* const l = line->end();
     message msg{};
@@ -659,6 +670,11 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       // This line is not a valid syslog message.
       // The current builder is `unknown_syslog_builder`,
       // so this line will also become an event of type `syslog.unknown`.
+      add_new(std::string{*line}, line_nr);
+    } else if (length() == 0) {
+      /// In case there is no active message in the builder, the new part cannot
+      /// be a continuation.
+      change_builder(tag_v<unknown_syslog_builder>);
       add_new(std::string{*line}, line_nr);
     } else {
       // This line is not a valid syslog message,
