@@ -11,9 +11,7 @@ Working with lists is easier than ever with [Tenzir Node v4.24][github-release]
 and its new functions for list manipulation. Also, contexts are now first-class
 citizens in TQL2.
 
-<!-- FIXME: title image
-![Tenzir Node v4.24](tenzir-node-v4.24.excalidraw.svg)
--->
+![Tenzir Node v4.24](tenzir-node-v4.24.svg)
 
 [github-release]: https://github.com/tenzir/tenzir/releases/tag/v4.24.0
 
@@ -173,7 +171,7 @@ subscribe "suricata"
 where event_type == "dns"
 unroll dns.answers
 where dns.answers.rrtype in ["A", "AAAA"]
-context::update "my_threats", key: dest_ip, dns.answers.rdata
+context::update "ip-to-hostname", key: dns.answers.rdata
 ```
 
 ```tql title="Enrich other data with context"
@@ -189,10 +187,6 @@ Each context type has its own strengths:
 - **Bloom Filters** provide space-efficient set membership testing
 - **GeoIP Databases** offer specialized geographic information lookup for IP
   addresses
-
-We've made contexts first-class citizens in TQL2 with robust APIs for creation,
-updates, and enrichment operations. At this point, only the `lookup` operator is
-missing in TQL2.
 
 Stay tuned for the next Tenzir Platform release, which adds support for
 contexts.
