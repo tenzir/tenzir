@@ -149,7 +149,7 @@ functions.
 ## Contexts in TQL2
 
 Contexts have arrived in TQL2, bringing powerful enrichment capabilities to your
-pipelines. Our new [Enrichments](/next/enrichments) documentation explains how
+pipelines. Our new [Enrichment](/next/enrichment) documentation explains how
 they work in detail, but here's a quick overview of what you can do with
 contexts.
 
