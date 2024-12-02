@@ -200,6 +200,7 @@ Function | Description | Example
 [`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
 [`has`](functions/has.md) | Checks whether a record has a field | `record.has("field")`
 [`length`](functions/length.md) | Retrieves the length of a list | `[1,2,3].length()`
+[`network`](functions/network.md) | Retrieves the network address of a subnet | `10.0.0.0/8.network()`
 
 ### Conversion
 
