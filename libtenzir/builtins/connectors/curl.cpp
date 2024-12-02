@@ -468,33 +468,49 @@ auto parse_http_args(std::string name,
   auto body_data = std::optional<located<record>>{};
   auto params = std::optional<located<record>>{};
   auto headers = std::optional<located<record>>{};
+  auto json = std::optional<location>{};
+  auto form = std::optional<location>{};
   auto method = std::optional<std::string>{};
   auto args = connector_args{};
   args.transfer_opts.default_protocol = "https";
-  argument_parser2::operator_(std::move(name))
-    .positional("url", url)
-    .named("data", body_data)
-    .named("params", params)
-    .named("headers", headers)
-    .named("method", method)
-    .named("json", args.http_opts.json)
-    .named("form", args.http_opts.form)
-    .named("chunked", args.http_opts.chunked)
-    .named("multipart", args.http_opts.multipart)
-    .named("skip_peer_verification", args.transfer_opts.skip_peer_verification)
-    .named("skip_hostname_verification",
-           args.transfer_opts.skip_hostname_verification)
-    .named("verbose", args.transfer_opts.verbose)
-    .parse(inv, ctx)
-    .ignore();
+  auto parser = argument_parser2::operator_(name);
+  parser.positional("url", url);
+  parser.named("params", params);
+  parser.named("headers", headers);
+  parser.named("method", method);
+  if (name == "load_http") {
+    parser.named("data", body_data);
+    parser.named("json", json);
+    parser.named("form", form);
+    parser.named("chunked", args.http_opts.chunked);
+    parser.named("multipart", args.http_opts.multipart);
+  }
+  parser.named("skip_peer_verification",
+               args.transfer_opts.skip_peer_verification);
+  parser.named("skip_hostname_verification",
+               args.transfer_opts.skip_hostname_verification);
+  parser.named("verbose", args.transfer_opts.verbose);
+  TRY(parser.parse(inv, ctx));
   args.url = std::move(url);
+  if (json and form) {
+    diagnostic::error("cannot encode `data` as both `json` and `form`")
+      .primary(*json)
+      .primary(*form)
+      .emit(ctx);
+    return failure::promise();
+  }
+  if (json) {
+    args.http_opts.json = true;
+  }
+  if (form) {
+    args.http_opts.form = true;
+  }
   if (body_data) {
     for (auto& [key, value] : body_data->inner) {
-      // FIXME: use a better stringification method that doesn't render 1 as +1,
-      // escapes strings, etc. We should have this already somewhere as utility.
-      auto str = to_string(value);
+      auto str = to_json(value);
+      TENZIR_ASSERT(str);
       args.http_opts.items.emplace_back(tenzir::http::request_item::data_json,
-                                        std::move(key), std::move(str));
+                                        std::move(key), std::move(*str));
     }
   }
   if (params) {
