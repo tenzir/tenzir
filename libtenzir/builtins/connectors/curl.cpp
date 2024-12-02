@@ -521,6 +521,7 @@ public:
   auto load_properties() const -> load_properties_t override {
     return {
       .schemes = {"http", "https"},
+      .default_format = plugins::find<operator_factory_plugin>("read_json"),
     };
   }
 };
@@ -537,6 +538,7 @@ public:
   auto save_properties() const -> save_properties_t override {
     return {
       .schemes = {"http", "https"},
+      .default_format = plugins::find<operator_factory_plugin>("write_ndjson"),
     };
   }
 };
