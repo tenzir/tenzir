@@ -49,15 +49,17 @@ public:
                 continue;
               }
               auto result = tenzir::duration{};
-              if (parsers::duration(arg.GetView(i), result)) {
+              constexpr auto p = ignore(*parsers::space) >> parsers::duration
+                                 >> ignore(*parsers::space);
+              if (p(arg.GetView(i), result)) {
                 check(b->Append(result.count()));
-              } else {
-                diagnostic::warning("failed to parse string")
-                  .primary(expr)
-                  .note(fmt::format("tried to convert: {}", arg.GetView(i)))
-                  .emit(ctx);
-                check(b->AppendNull());
+                continue;
               }
+              diagnostic::warning("failed to parse string")
+                .primary(expr)
+                .note(fmt::format("tried to convert: {}", arg.GetView(i)))
+                .emit(ctx);
+              check(b->AppendNull());
             }
           },
           [&](const auto&) {
