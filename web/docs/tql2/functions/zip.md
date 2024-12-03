@@ -13,7 +13,7 @@ The `zip` function returns a list containing records with two fields `left` and
 
 If both lists are null, `zip` returns null. If one of the lists is null or has a
 mismatching length, missing values are filled in with nulls, using the longer
-list's length and emitting a warning.
+list's length, and a warning is emitted.
 
 ## Examples
 
