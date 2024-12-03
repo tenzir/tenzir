@@ -3,7 +3,7 @@
 Loads a byte stream from a Apache Kafka topic.
 
 ```tql
-load_kafka [topic=str, count=int, exit=bool, offset=int|str, options=record]
+load_kafka topic:string, [count=int, exit=bool, offset=int|string, options=record]
 ```
 
 ## Description
@@ -30,11 +30,9 @@ include them:
 - `client.id`: `tenzir`
 - `group.id`: `tenzir`
 
-### `topic = str (optional)`
+### `topic: string`
 
 The Kafka topic to use.
-
-Defaults to `"tenzir"`.
 
 ### `count = int (optional)`
 
@@ -47,7 +45,7 @@ Exit successfully after having received the last message.
 Without this option, the operator waits for new messages after having consumed the
 last one.
 
-### `offset = int|str (optional)`
+### `offset = int|string (optional)`
 
 The offset to start consuming from. Possible values are:
 
@@ -80,13 +78,13 @@ that they are indpendent of the `load_kafka` arguments.
 ### Read 100 JSON messages from the topic `tenzir`
 
 ```tql
-load_kafka count=100
+load_kafka "tenzir", count=100
 read_json
 ```
 
 ### Read Zeek Streaming JSON logs starting at the beginning
 
 ```tql
-load_kafka topic="zeek", offset="beginning"
+load_kafka "zeek", offset="beginning"
 read_zeek_json
 ```

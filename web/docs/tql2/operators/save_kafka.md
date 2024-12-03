@@ -3,7 +3,7 @@
 Saves a byte stream to a Apache Kafka topic.
 
 ```tql
-save_kafka [topic=str, key=str, timestamp=time, options=record]
+save_kafka topic:string, [key=string, timestamp=time, options=record]
 ```
 
 ## Description
@@ -30,13 +30,11 @@ include them:
 - `client.id`: `tenzir`
 - `group.id`: `tenzir`
 
-### `topic = str (optional)`
+### `topic: string`
 
 The Kafka topic to use.
 
-Defaults to `"tenzir"`.
-
-### `key = str (optional)`
+### `key = string (optional)`
 
 Sets a fixed key for all messages.
 
@@ -64,7 +62,7 @@ that they are indpendent of the `save_kafka` arguments.
 ```tql
 version
 write_json
-save_kafka timestamp=1984-01-01
+save_kafka "tenzir", timestamp=1984-01-01
 ```
 
 ### Follow a CSV file and publish it to topic `data`
@@ -73,5 +71,5 @@ save_kafka timestamp=1984-01-01
 load_file "/tmp/data.csv"
 read_csv
 write_json
-save_kafka topic="data"
+save_kafka "data"
 ```
