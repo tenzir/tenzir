@@ -1,7 +1,4 @@
 #! /usr/bin/env bash
-# This script creates an arrow package that is tailored to Tenzir's needs.
-# This is required because as of Arrow 17 the official debian packages lack
-# support for the Azure filesystem integration.
 
 set -euo pipefail
 
@@ -31,12 +28,13 @@ apt-get install -y --reinstall \
 
 mkdir -p source
 pushd source
-curl -L 'https://github.com/apache/arrow/archive/refs/tags/apache-arrow-17.0.0.tar.gz' | tar -xz --strip-components=1
+curl -L 'https://github.com/apache/arrow/archive/refs/tags/apache-arrow-18.1.0.tar.gz' | tar -xz --strip-components=1
 cd cpp
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr \
   -DCMAKE_INSTALL_SYSCONFDIR=/etc \
+  -DAWSSDK_SOURCE=SYSTEM \
   -DARROW_FILESYSTEM=ON \
   -DARROW_AZURE=ON \
   -DARROW_GCS=ON \
@@ -54,11 +52,11 @@ cmake --install build
 cd build
 checkinstall \
   --pakdir / \
-  --pkgsource="https://github.com/raboof/nethogs/" \
+  --pkgsource="https://github.com/apache/arrow/" \
   --pkglicense="ASL2.0" \
   --deldesc=no \
   --nodoc \
-  --pkgversion="17.0.0" \
+  --pkgversion="18.1.0" \
   --pkgrelease="TENZIR" \
   --pkgname=arrow \
   --requires="libc6,libcurl4,libgcc1,libssl3,libstdc++6,libxml2,zlib1g" \
