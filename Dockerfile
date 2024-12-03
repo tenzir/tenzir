@@ -21,13 +21,13 @@ ENV CC="gcc-12" \
 WORKDIR /tmp/tenzir
 
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
-COPY scripts/debian/install-dev-dependencies.sh ./scripts/debian/
+COPY scripts/debian/install-aws-sdk.sh ./scripts/debian/
+RUN ./scripts/debian/install-aws-sdk.sh
+COPY scripts/debian/* ./scripts/debian/
 RUN ./scripts/debian/install-dev-dependencies.sh && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
     rm /root/fluent-bit_*.deb && \
     rm -rf /var/lib/apt/lists/*
-COPY scripts/debian/install-aws-sdk.sh ./scripts/debian/
-RUN ./scripts/debian/install-aws-sdk.sh
 
 # Tenzir
 COPY changelog ./changelog
@@ -61,7 +61,6 @@ ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
 ARG TENZIR_BUILD_OPTIONS
 
 RUN cmake -B build -G Ninja \
-      -D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp" \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
@@ -275,7 +274,8 @@ COPY --from=development --chown=tenzir:tenzir $PREFIX/ $PREFIX/
 COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
-COPY --from=development /opt/aws-sdk-cpp/lib/ /opt/aws-sdk-cpp/lib/
+COPY --from=dependencies /aws-sdk*.deb /root/
+COPY --from=dependencies /arrow_*.deb /root/
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 
 RUN apt-get update && \
@@ -309,13 +309,10 @@ RUN apt-get update && \
       python3-venv \
       robin-map-dev \
       wget && \
-    wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-    apt-get -y --no-install-recommends install \
-      ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install libarrow1800=18.0.0-1 libparquet1800=18.0.0-1 && \
+    apt-get -y --no-install-recommends install /root/aws-sdk*.deb && \
+    apt-get -y --no-install-recommends install /root/arrow_*.deb && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
-    rm /root/fluent-bit_*.deb && \
+    rm /root/aws-sdk*.deb /root/arrow_*.deb /root/fluent-bit_*.deb && \
     rm -rf /var/lib/apt/lists/* && \
     echo "/opt/aws-sdk-cpp/lib" > /etc/ld.so.conf.d/aws-cpp-sdk.conf && \
     ldconfig
