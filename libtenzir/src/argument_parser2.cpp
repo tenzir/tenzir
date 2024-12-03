@@ -115,6 +115,14 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         set(located{std::move(*cast), expr.get_location()});
       },
+      [&](setter<located<data>>& set) {
+        auto value = const_eval(expr, ctx);
+        if (not value) {
+          result = value.error();
+          return;
+        }
+        set(located{std::move(*value), expr.get_location()});
+      },
       [&](setter<ast::expression>& set) {
         set(expr);
       },
@@ -198,6 +206,14 @@ auto argument_parser2::parse(const ast::entity& self,
             }
             set(located{std::move(*cast), expr.get_location()});
           },
+          [&](setter<located<data>>& set) {
+            auto value = const_eval(expr, ctx);
+            if (not value) {
+              result = value.error();
+              return;
+            }
+            set(located{std::move(*value), expr.get_location()});
+          },
           [&](setter<ast::expression>& set) {
             set(expr);
           },
@@ -274,6 +290,9 @@ auto argument_parser2::usage() const -> std::string {
         } else {
           return fmt::format("{}", type_kind::of<data_to_type_t<T>>);
         }
+      },
+      [](const setter<located<data>>&) -> std::string {
+        return "any";
       },
       [](const setter<ast::expression>&) -> std::string {
         // TODO: This might not be what we want. Perhaps we make this
