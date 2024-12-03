@@ -1,0 +1,4 @@
+from {group: "A", count: 1}, {group: "A", count: 45}, {group: "C", count:null},
+      {group: "B", count: 10s}
+x = 1
+chart_line x=x, y=sum(count), group=group

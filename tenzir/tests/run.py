@@ -215,7 +215,7 @@ class ExecRunner(TqlRunner):
         super().__init__(prefix="exec")
 
     def run(self, test: str, update: bool) -> bool:
-        return run_simple_test(test, update=update, ext="json")
+        return run_simple_test(test, update=update, ext="txt")
 
 
 @contextmanager
