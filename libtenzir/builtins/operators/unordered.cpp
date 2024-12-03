@@ -99,17 +99,10 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto pipe = std::optional<pipeline>{};
+    auto pipe = pipeline{};
     auto parser = argument_parser2::operator_(name()).positional("{ … }", pipe);
     TRY(parser.parse(inv, ctx));
-    if (not pipe) {
-      const auto* pass_plugin = plugins::find<operator_factory_plugin>("pass");
-      TENZIR_ASSERT(pass_plugin);
-      TRY(auto pass,
-          pass_plugin->make(invocation{.self = inv.self, .args = {}}, ctx));
-      return std::make_unique<unordered_operator>(std::move(pass));
-    }
-    auto ops = std::move(*pipe).unwrap();
+    auto ops = std::move(pipe).unwrap();
     for (auto& op : ops) {
       op = std::make_unique<unordered_operator>(std::move(op));
     }
