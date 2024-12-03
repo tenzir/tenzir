@@ -91,7 +91,7 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
     auto selector = ast::simple_selector{};
     const auto loc = inv.self.get_location();
     TRY(argument_parser2::operator_(name())
-          .add(selector, "<field>")
+          .positional("x", selector)
           .parse(inv, ctx));
     const auto* summarize
       = plugins::find<operator_factory_plugin>("tql2.summarize");
@@ -108,7 +108,10 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
     auto summarized = summarize->make(
       {
         inv.self,
-        {summarize_args, std::move(selector).unwrap()},
+        {
+          std::move(selector).unwrap(),
+          summarize_args,
+        },
       },
       ctx);
     const auto sort_args = [&]() {

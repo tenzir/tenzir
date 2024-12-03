@@ -16,7 +16,6 @@
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/expected.hpp>
-#include <caf/optional.hpp>
 
 #include <cstdint>
 #include <string>

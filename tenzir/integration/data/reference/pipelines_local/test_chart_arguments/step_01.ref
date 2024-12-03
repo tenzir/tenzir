@@ -4,5 +4,5 @@ error: unknown option `-x`
 1 | from stdin read json | chart pie --value b -x e
   |                                            ^^ 
   |
-  = usage: chart pie [--name <field>] [--value <fields>]
+  = usage: chart pie [--name <field>] [--limit <limit>] [--value <fields>]
   = docs: https://docs.tenzir.com/operators/chart

@@ -303,7 +303,7 @@ struct json_printer : printer_base<json_printer> {
   }
 
   template <class Iterator, class T>
-    requires caf::detail::tl_contains<view<data>::types, T>::value
+    requires detail::tl_contains<view<data>::types, T>::value
   auto print(Iterator& out, const T& d) const noexcept -> bool {
     return print_visitor{out, options_}(d);
   }
@@ -314,8 +314,8 @@ struct json_printer : printer_base<json_printer> {
   }
 
   template <class Iterator, class T>
-    requires(!caf::detail::tl_contains<view<data>::types, T>::value
-             && caf::detail::tl_contains<data::types, T>::value)
+    requires(!detail::tl_contains<view<data>::types, T>::value
+             && detail::tl_contains<data::types, T>::value)
   auto print(Iterator& out, const T& d) const noexcept -> bool {
     return print(out, make_view(d));
   }

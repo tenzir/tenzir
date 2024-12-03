@@ -336,7 +336,7 @@ const char* kind_tbl[] = {
   "list", "map",    "record",  "alias",
 };
 
-using caf::detail::tl_size;
+using detail::tl_size;
 
 static_assert(std::size(kind_tbl) == tl_size<legacy_concrete_types>::value);
 

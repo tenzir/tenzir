@@ -9,6 +9,7 @@
 #pragma once
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -200,7 +201,7 @@ public:
                                          output_stream.status().ToString()));
     }
     auto stream_guard
-      = caf::detail::make_scope_guard([this, &ctrl, output_stream]() {
+      = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
           auto status = output_stream.ValueUnsafe()->Close();
           if (not output_stream.ok()) {
             diagnostic::error("{}", status.ToString())

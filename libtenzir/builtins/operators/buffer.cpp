@@ -13,6 +13,7 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>
 
+#include <caf/actor_registry.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <queue>
@@ -402,8 +403,8 @@ public:
     auto capacity = located<uint64_t>{};
     auto policy_str = std::optional<located<std::string>>{};
     argument_parser2::operator_("buffer")
-      .add(capacity, "<capacity>")
-      .add("policy", policy_str)
+      .positional("capacity", capacity)
+      .named("policy", policy_str)
       .parse(inv, ctx)
       .ignore();
     auto failed = false;

@@ -12,6 +12,8 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <caf/actor_registry.hpp>
+
 namespace tenzir::plugins::schemas {
 
 namespace {

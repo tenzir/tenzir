@@ -10,6 +10,7 @@
 
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/config.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/diagnostics.hpp"
 
 namespace tenzir {
@@ -200,7 +201,7 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
   auto multi = curl::multi{};
   auto multi_code = multi.add(easy_);
   TENZIR_ASSERT(multi_code == curl::multi::code::ok);
-  auto guard = caf::detail::make_scope_guard([&] {
+  auto guard = detail::scope_guard([&]() noexcept {
     multi_code = multi.remove(easy_);
     TENZIR_ASSERT(multi_code == curl::multi::code::ok);
   });

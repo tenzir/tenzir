@@ -30,8 +30,8 @@ public:
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(arg_expr, "<string>")
+          .positional("x", subject_expr, "string")
+          .positional("prefix", arg_expr, "string")
           .parse(inv, ctx));
     // TODO: This shows the need for some abstraction.
     return function_use::make([subject_expr = std::move(subject_expr),
@@ -88,8 +88,8 @@ public:
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(characters, "<characters>")
+          .positional("x", subject_expr, "string")
+          .positional("chars", characters)
           .parse(inv, ctx));
     auto options = std::optional<arrow::compute::TrimOptions>{};
     if (characters) {
@@ -160,8 +160,9 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
+    // TODO: Use `result_arrow_ty` to derive type name.
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
+          .positional("x", subject_expr, "")
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr)](
                                 evaluator eval, session ctx) -> series {
@@ -221,10 +222,10 @@ public:
     auto replacement = std::string{};
     auto max_replacements = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(pattern, "<pattern>")
-          .add(replacement, "<replacement>")
-          .add("max", max_replacements)
+          .positional("x", subject_expr, "string")
+          .positional("pattern", pattern)
+          .positional("replacement", replacement)
+          .named("max", max_replacements)
           .parse(inv, ctx));
     if (max_replacements) {
       if (max_replacements->inner < 0) {
@@ -293,10 +294,10 @@ public:
     auto end = std::optional<located<int64_t>>{};
     auto stride = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add("begin", begin)
-          .add("end", end)
-          .add("stride", stride)
+          .positional("x", subject_expr, "string")
+          .named("begin", begin)
+          .named("end", end)
+          .named("stride", stride)
           .parse(inv, ctx));
     if (stride) {
       if (stride->inner <= 0) {
@@ -345,17 +346,25 @@ public:
   }
 };
 
-class str : public virtual function_plugin {
+template <bool Deprecated>
+class string_fn : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.str";
+    return Deprecated ? "tql2.str" : "tql2.string";
   }
 
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
+    if constexpr (Deprecated) {
+      diagnostic::warning("`str` has been renamed to `string`")
+        .note("`str` alias will be removed and become a hard error in a future "
+              "release")
+        .primary(inv.call.get_location())
+        .emit(ctx);
+    }
     auto subject_expr = ast::expression{};
-    TRY(argument_parser2::function("string")
-          .add(subject_expr, "<expr>")
+    TRY(argument_parser2::function(name())
+          .positional("x", subject_expr, "any")
           .parse(inv, ctx));
     return function_use::make([subject_expr = std::move(subject_expr)](
                                 evaluator eval, session) -> series {
@@ -363,8 +372,8 @@ public:
       auto b = arrow::StringBuilder{};
       for (auto&& value : subject.values()) {
         auto f = detail::overload{
-          [](const std::string& x) {
-            return x;
+          [](std::string_view x) {
+            return std::string{x};
           },
           [](int64_t x) {
             return fmt::to_string(x);
@@ -395,17 +404,17 @@ public:
     return regex_ ? "tql2.split_regex" : "tql2.split";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
     auto reverse = std::optional<location>{};
     auto max_splits = std::optional<located<int64_t>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(pattern, "<pattern>")
-          .add("max", max_splits)
-          .add("reverse", reverse)
+          .positional("x", subject_expr, "string")
+          .positional("pattern", pattern)
+          .named("max", max_splits)
+          .named("reverse", reverse)
           .parse(inv, ctx));
     if (max_splits) {
       if (max_splits->inner < 0) {
@@ -466,15 +475,15 @@ public:
     return "tql2.join";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     // TODO: Technically, this could be an expression and not just a constant
     // string.
     auto separator = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<list>")
-          .add(separator, "<separator>")
+          .positional("x", subject_expr, "list")
+          .positional("separator", separator)
           .parse(inv, ctx));
     return function_use::make([this, subject_expr = std::move(subject_expr),
                                separator = std::move(separator)](
@@ -556,7 +565,8 @@ TENZIR_REGISTER_PLUGIN(nullary_method{"length_chars", "utf8_length",
 TENZIR_REGISTER_PLUGIN(replace{true});
 TENZIR_REGISTER_PLUGIN(replace{false});
 TENZIR_REGISTER_PLUGIN(slice);
-TENZIR_REGISTER_PLUGIN(str);
+TENZIR_REGISTER_PLUGIN(string_fn<false>);
+TENZIR_REGISTER_PLUGIN(string_fn<true>);
 
 TENZIR_REGISTER_PLUGIN(split_fn{true});
 TENZIR_REGISTER_PLUGIN(split_fn{false});

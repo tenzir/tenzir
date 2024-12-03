@@ -23,7 +23,6 @@
 #include <arrow/compute/api.h>
 #include <arrow/extension_type.h>
 #include <arrow/util/utf8.h>
-#include <caf/sum_type.hpp>
 
 #include <cstddef>
 #include <iterator>

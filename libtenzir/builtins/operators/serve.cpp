@@ -67,6 +67,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/record_batch.h>
+#include <caf/actor_registry.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -1045,8 +1046,8 @@ public:
     auto id = located<std::string>{};
     auto buffer_size = std::optional<located<uint64_t>>{};
     argument_parser2::operator_("serve")
-      .add(id, "<id>")
-      .add("buffer_size", buffer_size)
+      .positional("id", id)
+      .named("buffer_size", buffer_size)
       .parse(inv, ctx)
       .ignore();
     if (id.inner.empty()) {

@@ -34,8 +34,8 @@ public:
     }
 
     auto add_to(argument_parser2& parser) -> void {
-      parser.add("project_id", project_id);
-      parser.add("topic_id", topic_id);
+      parser.named("project_id", project_id);
+      parser.named("topic_id", topic_id);
     }
 
     friend auto inspect(auto& f, args& x) -> bool {

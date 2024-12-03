@@ -9,18 +9,16 @@
 #pragma once
 
 #include "detail/inspection_common.hpp"
-#include "tenzir/atoms.hpp"
 #include "tenzir/concept/printable/print.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/operators.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/offset.hpp"
 #include "tenzir/operator.hpp"
 #include "tenzir/type.hpp"
 
-#include <caf/default_sum_type_access.hpp>
-#include <caf/detail/type_list.hpp>
 #include <caf/none.hpp>
 
 #include <memory>
@@ -245,10 +243,10 @@ auto inspect(Inspector& f, negation& x) {
 /// A query expression.
 class expression : detail::totally_ordered<expression> {
 public:
-  using types = caf::detail::type_list<caf::none_t, conjunction, disjunction,
-                                       negation, predicate>;
+  using types = detail::type_list<caf::none_t, conjunction, disjunction,
+                                  negation, predicate>;
 
-  using node = caf::detail::tl_apply_t<types, tenzir::variant>;
+  using node = detail::tl_apply_t<types, tenzir::variant>;
 
   /// Default-constructs empty an expression.
   expression() = default;
@@ -419,16 +417,6 @@ public:
 };
 
 } // namespace tenzir
-
-namespace caf {
-
-template <>
-struct sum_type_access<tenzir::expression>
-  : default_sum_type_access<tenzir::expression> {
-  // nop
-};
-
-} // namespace caf
 
 namespace std {
 

@@ -31,8 +31,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function("time").add(expr, "<string>").parse(inv, ctx));
+    TRY(argument_parser2::function("time")
+          .positional("x", expr, "string")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -85,7 +86,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<time>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "time")
+          .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](evaluator eval, session ctx) -> series {
       auto arg = eval(expr);
@@ -132,8 +135,9 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function(name()).add(expr, "<number>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "number")
+          .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](evaluator eval, session ctx) -> series {
       auto arg = eval(expr);
@@ -209,7 +213,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<time>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "time")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -272,7 +278,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<duration>")
+          .positional("x", expr, "duration")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
@@ -345,9 +351,9 @@ public:
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<time>")
-          .add(format, "<format>")
-          .add("locale", locale)
+          .positional("input", subject_expr, "time")
+          .positional("format", format)
+          .named("locale", locale)
           .parse(inv, ctx));
     return function_use::make(
       [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
@@ -357,7 +363,8 @@ public:
         auto result_arrow_type
           = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
         auto subject = eval(subject_expr);
-        auto f = detail::overload{
+        return match(
+          *subject.array,
           [&](const arrow::TimestampArray& array) {
             auto options = arrow::compute::StrftimeOptions(
               format.inner,
@@ -381,9 +388,7 @@ public:
               .primary(subject_expr)
               .emit(ctx);
             return series::null(result_type, subject.length());
-          },
-        };
-        return caf::visit(f, *subject.array);
+          });
       });
   }
 };
@@ -400,8 +405,8 @@ public:
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};
     TRY(argument_parser2::function(name())
-          .add(subject_expr, "<string>")
-          .add(format, "<format>")
+          .positional("input", subject_expr, "string")
+          .positional("format", format)
           .parse(inv, ctx));
     return function_use::make(
       [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
@@ -411,7 +416,8 @@ public:
         auto result_arrow_type
           = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
         auto subject = eval(subject_expr);
-        auto f = detail::overload{
+        return match(
+          *subject.array,
           [&](const arrow::StringArray& array) {
             constexpr auto error_is_null = true;
             auto options = arrow::compute::StrptimeOptions(
@@ -443,9 +449,7 @@ public:
               .primary(subject_expr)
               .emit(ctx);
             return series::null(result_type, subject.length());
-          },
-        };
-        return caf::visit(f, *subject.array);
+          });
       });
   }
 };

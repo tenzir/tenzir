@@ -17,11 +17,9 @@
 #include "tenzir/data.hpp"
 #include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/test.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <string_view>
-
-using caf::get_if;
-using caf::holds_alternative;
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -30,36 +28,36 @@ using namespace tenzir;
 TEST(default construction) {
   legacy_type t;
   CHECK(!t);
-  CHECK(!holds_alternative<legacy_bool_type>(t));
+  CHECK(!is<legacy_bool_type>(t));
 }
 
 TEST(construction) {
   auto s = legacy_string_type{};
   auto t = legacy_type{s};
   CHECK(t);
-  CHECK(holds_alternative<legacy_string_type>(t));
-  CHECK(get_if<legacy_string_type>(&t) != nullptr);
+  CHECK(is<legacy_string_type>(t));
+  CHECK(try_as<legacy_string_type>(&t) != nullptr);
 }
 
 TEST(assignment) {
   auto t = legacy_type{legacy_string_type{}};
   CHECK(t);
-  CHECK(holds_alternative<legacy_string_type>(t));
+  CHECK(is<legacy_string_type>(t));
   t = legacy_real_type{};
   CHECK(t);
-  CHECK(holds_alternative<legacy_real_type>(t));
+  CHECK(is<legacy_real_type>(t));
   t = {};
   CHECK(!t);
-  CHECK(!holds_alternative<legacy_real_type>(t));
+  CHECK(!is<legacy_real_type>(t));
   auto u = legacy_type{legacy_none_type{}};
   CHECK(u);
-  CHECK(holds_alternative<legacy_none_type>(u));
+  CHECK(is<legacy_none_type>(u));
 }
 
 TEST(copying) {
   auto t = legacy_type{legacy_string_type{}};
   auto u = t;
-  CHECK(holds_alternative<legacy_string_type>(u));
+  CHECK(is<legacy_string_type>(u));
 }
 
 TEST(names) {

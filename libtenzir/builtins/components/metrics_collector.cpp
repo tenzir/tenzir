@@ -121,7 +121,9 @@ auto metrics_collector(
   self->state.self = self;
   self->state.importer = std::move(importer);
   if (const auto ok = self->state.setup(); not ok) {
-    self->quit(add_context(ok.error(), "failed to create {}", *self));
+    self->quit(diagnostic::error(ok.error())
+                 .note("failed to create {}", *self)
+                 .to_error());
     return metrics_collector_actor::behavior_type::make_empty_behavior();
   }
   return {

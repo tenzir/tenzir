@@ -74,6 +74,8 @@ auto tenzir_features() -> std::vector<std::string> {
   // capabilities of the node. We remove entries once they're stabilized in the
   // Tenzir Platform.
   return {
+    // The node supports passing the `--limit` flag to the TQL1 `chart` operator
+    "chart_limit",
     // The node supports modules in TQL2. Alongside this a few operators were
     // renamed, e.g., `package_add` was renamed to `package::add`.
     "modules",

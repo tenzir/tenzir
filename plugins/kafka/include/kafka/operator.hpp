@@ -21,6 +21,7 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/die.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
@@ -34,9 +35,6 @@ using namespace std::chrono_literals;
 namespace tenzir::plugins::kafka {
 
 namespace {
-
-// Default topic if the user doesn't provide one.
-inline constexpr auto default_topic = "tenzir";
 
 // Valid values:
 // - beginning | end | stored
@@ -67,7 +65,7 @@ inline auto offset_parser() {
 }
 
 struct loader_args {
-  std::optional<located<std::string>> topic;
+  std::string topic;
   std::optional<located<uint64_t>> count;
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
@@ -150,9 +148,8 @@ public:
           .done());
       return {};
     };
-    auto topic = args_.topic ? args_.topic->inner : default_topic;
-    TENZIR_INFO("kafka subscribes to topic {}", topic);
-    if (auto err = client->subscribe({topic})) {
+    TENZIR_INFO("kafka subscribes to topic {}", args_.topic);
+    if (auto err = client->subscribe({args_.topic})) {
       ctrl.diagnostics().emit(
         diagnostic::error("failed to subscribe to topic: {}", err).done());
       return {};
@@ -206,7 +203,7 @@ private:
 };
 
 struct saver_args {
-  std::optional<located<std::string>> topic;
+  std::string topic;
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
   located<std::vector<std::pair<std::string, std::string>>> options;
@@ -255,7 +252,7 @@ public:
       TENZIR_ERROR(client.error());
       return client.error();
     };
-    auto guard = caf::detail::make_scope_guard([client = *client]() mutable {
+    auto guard = detail::scope_guard([client = *client]() mutable noexcept {
       TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
       if (auto err = client.flush(10s)) {
         TENZIR_WARN(err);
@@ -265,8 +262,7 @@ public:
         TENZIR_ERROR("{} messages were not delivered", num_messages);
       }
     });
-    auto topic = args_.topic ? args_.topic->inner : default_topic;
-    auto topics = std::vector<std::string>{std::move(topic)};
+    auto topics = std::vector<std::string>{std::move(args_.topic)};
     std::string key;
     if (args_.key) {
       key = args_.key->inner;

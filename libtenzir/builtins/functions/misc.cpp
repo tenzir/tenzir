@@ -29,7 +29,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("type_id")
-          .add(expr, "<value>")
+          .positional("x", expr, "any")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
@@ -79,8 +79,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function("secret").add(expr, "<key>").parse(inv, ctx));
+    TRY(argument_parser2::function("secret")
+          .positional("key", expr, "string")
+          .parse(inv, ctx));
     return function_use::make([this, expr = std::move(expr)](
                                 evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -143,7 +144,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("env").add(expr, "<key>").parse(inv, ctx));
+    TRY(argument_parser2::function("env")
+          .positional("key", expr, "string")
+          .parse(inv, ctx));
     return function_use::make([this, expr = std::move(expr)](
                                 evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -193,7 +196,9 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "list")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         TENZIR_UNUSED(ctx);
@@ -231,6 +236,44 @@ public:
   }
 };
 
+class network final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "network";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "subnet")
+          .parse(inv, ctx));
+    return function_use::make([expr = std::move(expr)](evaluator eval,
+                                                       session ctx) -> series {
+      TENZIR_UNUSED(ctx);
+      auto value = eval(expr);
+      auto f = detail::overload{
+        [&](const subnet_type::array_type& array) {
+          return series{
+            ip_type{},
+            check(array.storage()->GetFlattenedField(0)),
+          };
+        },
+        [&](const arrow::NullArray&) {
+          return series::null(ip_type{}, value.length());
+        },
+        [&]<class T>(const T&) {
+          diagnostic::warning("expected `subnet`, got `{}`", value.type.kind())
+            .primary(expr)
+            .emit(ctx);
+          return series::null(ip_type{}, value.length());
+        },
+      };
+      return match(*value.array, f);
+    });
+  }
+};
+
 class has final : public function_plugin {
 public:
   auto name() const -> std::string override {
@@ -242,8 +285,8 @@ public:
     auto expr = ast::expression{};
     auto needle = located<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<expr>")
-          .add(needle, "<string>")
+          .positional("x", expr, "record")
+          .positional("field", needle)
           .parse(inv, ctx));
     return function_use::make([needle = std::move(needle),
                                expr = std::move(expr)](evaluator eval,
@@ -294,8 +337,8 @@ public:
     auto expr = ast::expression{};
     auto str = located<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<expr>")
-          .add(str, "<pattern>")
+          .positional("x", expr, "record")
+          .positional("regex", str)
           .parse(inv, ctx));
     auto pattern = pattern::make(str.inner);
     if (not pattern) {
@@ -347,6 +390,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::secret)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::network)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{false})

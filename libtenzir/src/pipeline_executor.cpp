@@ -242,7 +242,8 @@ auto pipeline_executor_state::pause() -> caf::result<void> {
         rp.deliver();
       },
       [rp](const caf::error& err) mutable {
-        rp.deliver(add_context(err, "failed to pause exec-node"));
+        rp.deliver(
+          diagnostic::error(err).note("failed to pause exec-node").to_error());
       });
   return rp;
 }
@@ -258,7 +259,8 @@ auto pipeline_executor_state::resume() -> caf::result<void> {
         rp.deliver();
       },
       [rp](const caf::error& err) mutable {
-        rp.deliver(add_context(err, "failed to resume exec-node"));
+        rp.deliver(
+          diagnostic::error(err).note("failed to resume exec-node").to_error());
       });
   return rp;
 }

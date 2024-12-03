@@ -210,16 +210,16 @@ public:
       return;
     }
     match(result, [&]<class T>(const T& x) {
-        if constexpr (std::is_same_v<T, caf::none_t>) {
-          sum_.reset();
-        } else if constexpr (sum_t::can_have<T>) {
-          sum_.emplace(x);
-        } else {
-          diagnostic::warning("invalid value for field `result`: `{}`", result)
-            .note("failed to restore `sum` aggregation instance")
-            .emit(ctx);
-        }
-      });
+      if constexpr (std::is_same_v<T, caf::none_t>) {
+        sum_.reset();
+      } else if constexpr (sum_t::can_have<T>) {
+        sum_.emplace(x);
+      } else {
+        diagnostic::warning("invalid value for field `result`: `{}`", result)
+          .note("failed to restore `sum` aggregation instance")
+          .emit(ctx);
+      }
+    });
     const auto* fb_type = (*fb)->type();
     if (not fb_type) {
       diagnostic::warning("missing field `type`")
@@ -230,6 +230,11 @@ public:
     const auto* fb_type_nested_root = (*fb)->type_nested_root();
     TENZIR_ASSERT(fb_type_nested_root);
     type_ = type{fb->slice(*fb_type_nested_root, *fb_type)};
+  }
+
+  auto reset() -> void override {
+    type_ = {};
+    sum_ = {};
   }
 
 private:
@@ -309,7 +314,9 @@ class plugin : public virtual aggregation_function_plugin,
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("sum").add(expr, "<expr>").parse(inv, ctx));
+    TRY(argument_parser2::function("sum")
+          .positional("x", expr, "number|duration")
+          .parse(inv, ctx));
     return std::make_unique<sum_instance>(std::move(expr));
   }
 };

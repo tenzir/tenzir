@@ -32,7 +32,6 @@
 #include <arrow/array/builder_primitive.h>
 #include <arrow/type.h>
 #include <caf/error.hpp>
-#include <caf/sum_type.hpp>
 
 #include <memory>
 #include <string>
@@ -242,7 +241,9 @@ public:
   auto save() const -> caf::expected<context_save_result> override {
     std::vector<std::byte> buffer;
     if (auto err = convert(bloom_filter_, buffer)) {
-      return add_context(err, "failed to serialize Bloom filter context");
+      return diagnostic::error(err)
+        .note("failed to serialize Bloom filter context")
+        .to_error();
     }
     return context_save_result{.data = chunk::make(std::move(buffer)),
                                .version = 1};
@@ -262,7 +263,9 @@ struct v1_loader : public context_loader {
     TENZIR_ASSERT(serialized != nullptr);
     auto bloom_filter = dcso_bloom_filter{};
     if (auto err = convert(as_bytes(*serialized), bloom_filter)) {
-      return add_context(err, "failed to deserialize Bloom filter context");
+      return diagnostic::error(err)
+        .note("failed to deserialize Bloom filter context")
+        .to_error();
     }
     return std::make_unique<bloom_filter_context>(std::move(bloom_filter));
   }
@@ -317,9 +320,9 @@ class plugin : public virtual context_factory_plugin<"bloom-filter"> {
     auto capacity = located<uint64_t>{};
     auto fp_probability = located<double>{};
     auto parser = argument_parser2::context("bloom-filter");
-    parser.add(name, "<context>");
-    parser.add("capacity", capacity);
-    parser.add("fp_probability", fp_probability);
+    parser.positional("name", name);
+    parser.named("capacity", capacity);
+    parser.named("fp_probability", fp_probability);
     TRY(parser.parse(inv, ctx));
     auto failed = false;
     if (capacity.inner == 0) {

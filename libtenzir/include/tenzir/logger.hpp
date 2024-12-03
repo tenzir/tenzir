@@ -10,6 +10,7 @@
 
 #include "tenzir/config.hpp"
 #include "tenzir/detail/discard.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/error.hpp"
 
 #include <string>
@@ -63,7 +64,7 @@
           const std::string& format, auto&&... args) {                         \
           TENZIR_DEBUG(TENZIR_FMT_RUNTIME("ENTER {} " + format), __func__,     \
                        std::forward<decltype(args)>(args)...);                 \
-          return ::caf::detail::make_scope_guard([func_name_] {                \
+          return ::tenzir::detail::scope_guard([func_name_]() noexcept {       \
             TENZIR_DEBUG("EXIT {}", func_name_);                               \
           });                                                                  \
         }(__VA_ARGS__);
@@ -152,7 +153,7 @@ namespace tenzir {
 /// Used to make log level strings from config, like 'debug', to a log level int.
 int loglevel_to_int(std::string c, int default_value = TENZIR_LOG_LEVEL_QUIET);
 
-[[nodiscard]] caf::expected<caf::detail::scope_guard<void (*)()>>
+[[nodiscard]] caf::expected<detail::scope_guard<void (*)() noexcept>>
 create_log_context(bool is_server, const tenzir::invocation& cmd_invocation,
                    const caf::settings& cfg_file);
 

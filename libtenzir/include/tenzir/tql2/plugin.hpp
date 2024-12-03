@@ -63,9 +63,10 @@ public:
     void* self_;
   };
 
-  virtual auto run(evaluator eval, session ctx) const -> series = 0;
+  virtual auto run(evaluator eval, session ctx) -> series = 0;
 
-  static auto make(std::function<auto(evaluator eval, session ctx)->series> f)
+  static auto
+  make(detail::unique_function<auto(evaluator eval, session ctx)->series> f)
     -> function_ptr;
 };
 class function_plugin : public virtual plugin {
@@ -98,6 +99,8 @@ public:
   virtual void update(const table_slice& input, session ctx) = 0;
 
   virtual auto get() const -> data = 0;
+
+  virtual auto reset() -> void = 0;
 
   /// Save and restore the state of the aggregation instance. Note that the
   /// restore function should eventually be moved into `aggregation_plugin`, but
