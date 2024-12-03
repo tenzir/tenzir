@@ -75,7 +75,7 @@ Function | Description | Example
 [`prepend`](functions/prepend.md) | Inserts an element at the front of a list | `xs.prepend(y)`
 [`concatenate`](functions/concatenate.md) | Merges two lists | `concatenate(xs, ys)`
 [`map`](functions/map.md) | Maps each list element to an expression | `xs.map(x, x + 3)`
-[`where`](functions/where.md) | Removes list elements based on a predicate | `xs.where(x, x > 5)`
+[`where`](functions/where.md) | Filters list elements based on a predicate | `xs.where(x, x > 5)`
 
 ## String
 
@@ -184,12 +184,14 @@ Function | Description | Example
 function | description | example
 :--------|:-------------|:-------
 [`encode_base64`](functions/encode_base64.md) | Encodes bytes as Base64 | `encode_base64("Tenzir")`
+[`encode_hex`](functions/encode_hex.md) | Encodes bytes as their hexadecimal representation | `encode_hex("Tenzir")`
 
 ## Decoding
 
 function | description | example
 :--------|:-------------|:-------
 [`decode_base64`](functions/decode_base64.md) | Decodes bytes as Base64 | `decode_base64("VGVuemly")`
+[`decode_hex`](functions/decode_hex.md) | Decodes bytes from their hexadecimal representation | `decode_hex("4e6f6E6365")`
 
 ## Type System
 
@@ -210,7 +212,7 @@ Function | Description | Example
 [`uint`](functions/uint.md) | Casts an expression to an unsigned integer | `uint(4.2)`
 [`float`](functions/float.md) | Casts an expression to a float | `float(42)`
 [`time`](functions/time.md) | Casts an expression to a time value | `time("2020-03-15")`
-[`str`](functions/str.md) | Casts an expression to string | `str(1.2.3.4)`
+[`string`](functions/string.md) | Casts an expression to string | `string(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
 
 ### Transposition

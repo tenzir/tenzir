@@ -24,4 +24,4 @@ from {x: time("2020-03-15")}
 
 ## See Also
 
-[int](int.md), [uint](uint.md), [float](float.md), [str](str.md), [ip](ip.md)
+[int](int.md), [uint](uint.md), [float](float.md), [string](string.md), [ip](ip.md)

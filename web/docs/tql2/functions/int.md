@@ -35,4 +35,4 @@ from {x: int("42")}
 
 ## See Also
 
-[uint](uint.md), [float](float.md), [time](time.md), [str](str.md), [ip](ip.md)
+[uint](uint.md), [float](float.md), [time](time.md), [string](string.md), [ip](ip.md)

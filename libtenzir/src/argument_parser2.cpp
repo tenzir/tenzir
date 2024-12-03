@@ -13,6 +13,8 @@
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
 
+#include <boost/algorithm/string.hpp>
+
 namespace tenzir {
 
 namespace {
@@ -34,15 +36,15 @@ auto argument_parser2::parse(const function_plugin::invocation& inv,
   return parse(inv.call.fn, inv.call.args, ctx);
 }
 
-auto argument_parser2::parse(const ast::function_call& call, session ctx)
-  -> failure_or<void> {
+auto argument_parser2::parse(const ast::function_call& call,
+                             session ctx) -> failure_or<void> {
   TENZIR_ASSERT(kind_ == kind::fn);
   return parse(call.fn, call.args, ctx);
 }
 
 auto argument_parser2::parse(const ast::entity& self,
-                             std::span<ast::expression const> args, session ctx)
-  -> failure_or<void> {
+                             std::span<ast::expression const> args,
+                             session ctx) -> failure_or<void> {
   // TODO: Simplify and deduplicate everything in this function.
   auto result = failure_or<void>{};
   auto emit = [&](diagnostic_builder d) {
@@ -54,12 +56,12 @@ auto argument_parser2::parse(const ast::entity& self,
   auto kind = [](const data& x) -> std::string_view {
     // TODO: Refactor this.
     return match(x, []<class Data>(const Data&) -> std::string_view {
-        if constexpr (caf::detail::is_one_of<Data, pattern>::value) {
-          TENZIR_UNREACHABLE();
-        } else {
-          return to_string(type_kind::of<data_to_type_t<Data>>);
-        }
-      });
+      if constexpr (caf::detail::is_one_of<Data, pattern>::value) {
+        TENZIR_UNREACHABLE();
+      } else {
+        return to_string(type_kind::of<data_to_type_t<Data>>);
+      }
+    });
   };
   auto arg = args.begin();
   auto positional_idx = size_t{0};
@@ -372,16 +374,18 @@ auto argument_parser2::usage() const -> std::string {
 }
 
 auto argument_parser2::docs() const -> std::string {
+  auto name = name_;
   auto category = std::invoke([&] {
     switch (kind_) {
       case kind::op:
-        return "tql2/operators";
+        return "operators";
       case kind::fn:
         return "functions";
     }
     TENZIR_UNREACHABLE();
   });
-  return fmt::format("https://docs.tenzir.com/{}/{}", category, name_);
+  boost::replace_all(name, "::", "/");
+  return fmt::format("https://docs.tenzir.com/tql2/{}/{}", category, name);
 }
 
 template <class T>
@@ -413,8 +417,8 @@ auto argument_parser2::make_setter(T& x) -> auto {
 }
 
 template <argument_parser_type T>
-auto argument_parser2::positional(std::string name, T& x, std::string type)
-  -> argument_parser2& {
+auto argument_parser2::positional(std::string name, T& x,
+                                  std::string type) -> argument_parser2& {
   TENZIR_ASSERT(not first_optional_, "encountered required positional after "
                                      "optional positional argument");
   positional_.emplace_back(std::move(name), std::move(type), make_setter(x));
@@ -432,8 +436,8 @@ auto argument_parser2::positional(std::string name, std::optional<T>& x,
 }
 
 template <argument_parser_type T>
-auto argument_parser2::named(std::string name, T& x, std::string type)
-  -> argument_parser2& {
+auto argument_parser2::named(std::string name, T& x,
+                             std::string type) -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), true);
   return *this;
 }
@@ -451,8 +455,8 @@ auto argument_parser2::named(std::string name, std::optional<location>& x,
   return *this;
 }
 
-auto argument_parser2::named(std::string name, bool& x, std::string type)
-  -> argument_parser2& {
+auto argument_parser2::named(std::string name, bool& x,
+                             std::string type) -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
@@ -460,8 +464,8 @@ auto argument_parser2::named(std::string name, bool& x, std::string type)
 template <std::monostate>
 struct instantiate_argument_parser_methods {
   template <class T>
-  using func = auto (argument_parser2::*)(std::string, T&, std::string)
-    -> argument_parser2&;
+  using func = auto (argument_parser2::*)(std::string, T&,
+                                          std::string) -> argument_parser2&;
 
   template <class... T>
   struct inner {
