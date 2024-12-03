@@ -173,31 +173,27 @@ public:
   }
 
   [[nodiscard]] auto parse_object(simdjson::ondemand::value v, auto builder,
-                                  size_t depth = 0u) -> result {
+                                  size_t depth = 0u) -> bool {
     auto obj = v.get_object();
     if (obj.error()) {
       report_parse_err(v, "object");
-      return result::failure_no_change;
+      return false;
     }
-    auto written_once = false;
     for (auto pair : obj) {
       if (pair.error()) {
         report_parse_err(v, "key value pair");
-        return written_once ? result::failure_with_write
-                            : result::failure_no_change;
+        return false;
       }
       auto maybe_key = pair.unescaped_key();
       if (maybe_key.error()) {
         report_parse_err(v, "key in an object");
-        return written_once ? result::failure_with_write
-                            : result::failure_no_change;
+        return false;
       }
       auto key = maybe_key.value_unsafe();
       auto val = pair.value();
       if (val.error()) {
         report_parse_err(val, fmt::format("object value at key `{}`", key));
-        return written_once ? result::failure_with_write
-                            : result::failure_no_change;
+        return false;
       }
       auto value_parse_result = result::success;
       // this guards the base series_builder currently used by tql2 parse_json
@@ -205,17 +201,15 @@ public:
                                  decltype(builder)>) {
         value_parse_result = parse_value(
           val.value_unsafe(), builder.unflattened_field(key), depth + 1);
-        written_once |= value_parse_result != result::failure_no_change;
       } else {
         value_parse_result
           = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
       }
       if (value_parse_result != result::success) {
-        return written_once ? result::failure_with_write : value_parse_result;
+        return false;
       }
-      written_once = true;
     }
-    return result::success;
+    return true;
   }
 
   [[nodiscard]] auto parse_value(simdjson::ondemand::value val, auto builder,
@@ -245,19 +239,13 @@ public:
       case simdjson::ondemand::json_type::string:
         return parse_string(val, builder);
       case simdjson::ondemand::json_type::array: {
-        const auto res = parse_array(val.get_array().value_unsafe(),
-                                     builder.list(), depth + 1);
-        if (res != result::success) {
-          return result::failure_with_write;
-        }
-        return res;
+        const auto success = parse_array(val.get_array().value_unsafe(),
+                                         builder.list(), depth + 1);
+        return success ? result::success : result::failure_with_write;
       }
       case simdjson::ondemand::json_type::object: {
-        const auto res = parse_object(val, builder.record(), depth + 1);
-        if (res != result::success) {
-          return result::failure_with_write;
-        }
-        return res;
+        const auto success = parse_object(val, builder.record(), depth + 1);
+        return success ? result::success : result::failure_with_write;
       }
     }
     TENZIR_UNREACHABLE();
@@ -346,22 +334,20 @@ private:
   }
 
   [[nodiscard]] auto parse_array(simdjson::ondemand::array arr, auto builder,
-                                 size_t depth) -> result {
+                                 size_t depth) -> bool {
     auto written_once = false;
     for (auto element : arr) {
       if (element.error()) {
         report_parse_err(element, "an array element");
-        return written_once ? result::failure_with_write
-                            : result::failure_no_change;
+        return false;
       }
       auto res = parse_value(element.value_unsafe(), builder, depth + 1);
       written_once |= res != result::failure_no_change;
       if (res != result::success) {
-        return written_once ? result::failure_with_write
-                            : result::failure_no_change;
+        return false;
       }
     }
-    return result::success;
+    return true;
   }
 
   void emit_unparsed_json_diagnostics(
@@ -494,8 +480,8 @@ public:
         break;
       }
       auto parser = doc_parser{json_line, *dh, lines_processed_};
-      auto result = parser.parse_object(val.value_unsafe(), builder.record());
-      if (result != doc_parser::result::success) {
+      auto success = parser.parse_object(val.value_unsafe(), builder.record());
+      if (not success) {
         builder.remove_last();
         ++diags_emitted;
         break;
@@ -617,9 +603,9 @@ public:
               view.data() + view.size(),
             };
             auto row = builder.record();
-            auto result
+            auto success
               = doc_parser{source, *dh}.parse_object(elem.value_unsafe(), row);
-            if (result == doc_parser::result::failure_with_write) {
+            if (not success) {
               builder.remove_last();
               // It should be fine to continue here, because at least the array
               // structure we are iterating is valid. That is ensured by the
@@ -645,12 +631,10 @@ public:
             return;
           }
           auto row = builder.record();
-          auto result
+          auto success
             = doc_parser{source, *dh}.parse_object(doc.value_unsafe(), row);
-          if (result == doc_parser::result::failure_with_write) {
+          if (not success) {
             builder.remove_last();
-          }
-          if (result != doc_parser::result::success) {
             break;
           }
         }
