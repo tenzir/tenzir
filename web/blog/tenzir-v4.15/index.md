@@ -43,10 +43,9 @@ curl https://get.tenzir.app | sh
 
 ## Subnet Keys in Lookup Tables
 
-The [`lookup-table` context](/contexts/lookup-table) now handles subnet keys
-correctly. Lookups with an IP address or subnet value now match if the key is
-within any of the subnets used as keys. If multiple subnets match, then the best
-match is returned.
+The `lookup-table` context now handles subnet keys correctly. Lookups with an IP
+address or subnet value now match if the key is within any of the subnets used
+as keys. If multiple subnets match, then the best match is returned.
 
 :::info Want to learn more?
 We wrote a new user guide about using subnet keys in lookup tables: [Enrich with
