@@ -1,6 +1,6 @@
 # where
 
-Removes list elements based on a predicate.
+Filters list elements based on a predicate.
 
 ```tql
 where(xs:list, capture:field, predicate:bool) -> list
@@ -8,8 +8,8 @@ where(xs:list, capture:field, predicate:bool) -> list
 
 ## Description
 
-The `where` function removes all elements of a list for which a predicate
-evaluates to `false`.
+The `where` function keeps only elements of a list for which a predicate
+evaluates to `true`.
 
 ### `xs: list`
 
@@ -25,17 +25,17 @@ The predicate evaluated for each list element.
 
 ## Examples
 
-### Remove all list elements smaller than 3
+### Keep only elements greater than 3
 
 ```tql
 from {
   xs: [1, 2, 3, 4, 5]
 }
-xs = xs.where(x, x >= 3)
+xs = xs.where(x, x > 3)
 ```
 
 ```tql
-{xs: [3, 4, 5]}
+{xs: [4, 5]}
 ```
 
 ## See Also
