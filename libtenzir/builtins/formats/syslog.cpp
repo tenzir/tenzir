@@ -635,13 +635,17 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     auto now = time::clock::now();
     if (now - last_line_received > opts.settings.timeout) {
       finish_all();
-      // We call finalize here because we do the timeout handling ourselves.
+      // We call finalize here because we did the timeout handling ourselves.
       // Otherwise we would double the timeout.
       for (auto&& slice : msb.finalize_as_table_slice()) {
         co_yield std::move(slice);
       }
     } else {
       finish_all_but_last();
+      // In here we rely on the timeout handling by the MSB.
+      for (auto&& slice : msb.yield_ready_as_table_slice()) {
+        co_yield std::move(slice);
+      }
     }
     if (not line) {
       co_yield {};
