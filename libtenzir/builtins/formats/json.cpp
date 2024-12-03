@@ -203,13 +203,9 @@ public:
       // this guards the base series_builder currently used by tql2 parse_json
       if constexpr (std::same_as<detail::multi_series_builder::record_generator,
                                  decltype(builder)>) {
-        auto did_unflatten = false;
-        value_parse_result
-          = parse_value(val.value_unsafe(),
-                        builder.unflattened_field(key, &did_unflatten),
-                        depth + 1);
+        value_parse_result = parse_value(
+          val.value_unsafe(), builder.unflattened_field(key), depth + 1);
         written_once |= value_parse_result != result::failure_no_change;
-        written_once |= did_unflatten;
       } else {
         value_parse_result
           = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
