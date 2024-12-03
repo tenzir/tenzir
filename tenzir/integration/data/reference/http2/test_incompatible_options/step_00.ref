@@ -1,0 +1,9 @@
+error: cannot encode `data` as both `json` and `form`
+ --> <input>:1:31
+  |
+1 | load_http "", form=true, json=true
+  |                               ^^^^ 
+  ⋮
+1 | load_http "", form=true, json=true
+  |                    ^^^^ 
+  |
