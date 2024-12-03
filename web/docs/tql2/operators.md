@@ -199,10 +199,13 @@ Operator | Description | Example
 [`api`](./operators/api.md) | Calls Tenzir's REST API from a pipeline | `api "/pipeline/list"`
 [`batch`](./operators/batch.md) | Controls the batch size of events | `batch timeout=1s`
 [`buffer`](./operators/buffer.md) | Adds additional buffering to handle spikes | `buffer 10M, policy="drop"`
-[`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
-[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
 [`cache`](./operators/cache.md) | In-memory cache shared between pipelines | `cache "w01wyhTZm3", ttl=10min`
 [`legacy`](./operators/legacy.md) | Provides a compatibility fallback to TQL1 pipelines | `legacy "chart area"`
+[`local`](./operators/local.md) | Forces a pipeline to run locally | `local { sort foo }`
+[`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
+[`remote`](./operators/remote.md) | Forces a pipeline to run remotely at a node | `remote { version }`
+[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
+[`unordered`](./operators/unordered.md) | Remove ordering assumptions in a pipeline | `unordered { read_ndjson }`
 
 ## Encode & Decode
 
