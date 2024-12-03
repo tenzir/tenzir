@@ -203,9 +203,9 @@ public:
       // this guards the base series_builder currently used by tql2 parse_json
       if constexpr (std::same_as<detail::multi_series_builder::record_generator,
                                  decltype(builder)>) {
-        written_once = true;
         value_parse_result = parse_value(
           val.value_unsafe(), builder.unflattened_field(key), depth + 1);
+        written_once |= value_parse_result != result::failure_no_change;
       } else {
         value_parse_result
           = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
@@ -355,11 +355,11 @@ private:
                             : result::failure_no_change;
       }
       auto res = parse_value(element.value_unsafe(), builder, depth + 1);
+      written_once |= res != result::failure_no_change;
       if (res != result::success) {
         return written_once ? result::failure_with_write
                             : result::failure_no_change;
       }
-      written_once = true;
     }
     return result::success;
   }
@@ -1295,6 +1295,7 @@ public:
                 diagnostic::warning("{}", error_message(doc.error()))
                   .primary(call)
                   .emit(ctx);
+                b.null();
                 continue;
               }
               const auto result
@@ -1307,6 +1308,7 @@ public:
                   diagnostic::warning("could not parse json")
                     .primary(call)
                     .emit(ctx);
+                  b.null();
                   break;
                 case doc_parser::result::success: /*no op*/;
               }
