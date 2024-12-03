@@ -76,6 +76,7 @@ Function | Description | Example
 [`concatenate`](functions/concatenate.md) | Merges two lists | `concatenate(xs, ys)`
 [`map`](functions/map.md) | Maps each list element to an expression | `xs.map(x, x + 3)`
 [`where`](functions/where.md) | Filters list elements based on a predicate | `xs.where(x, x > 5)`
+[`zip`](functions/zip.md) | Combines two lists into a list of pairs | `zip(xs, ys)`
 
 ## String
 
