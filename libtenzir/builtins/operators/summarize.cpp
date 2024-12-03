@@ -32,7 +32,6 @@
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
-#include <caf/sum_type.hpp>
 #include <tsl/robin_map.h>
 
 #include <algorithm>

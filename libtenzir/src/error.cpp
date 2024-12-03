@@ -155,37 +155,4 @@ auto render(const caf::error& err, bool pretty_diagnostics) -> std::string {
   return oss.str();
 }
 
-auto add_context_impl(const caf::error& error, std::string str) -> caf::error {
-  if (!error) {
-    return error;
-  }
-  if (error.category() == caf::type_id_v<tenzir::ec>
-      && static_cast<tenzir::ec>(error.code()) == ec::diagnostic) {
-    auto ctx = error.context();
-    auto* inner = static_cast<diagnostic*>(nullptr);
-    caf::message_handler{
-      [&](diagnostic& diag) {
-        inner = &diag;
-      },
-      [](const caf::message&) {},
-    }(ctx);
-    if (inner) {
-      return caf::make_error(
-        ec::diagnostic, std::move(*inner).modify().note(std::move(str)).done());
-    }
-  }
-  if (!error.context()) {
-    return caf::error{
-      error.code(),
-      error.category(),
-      caf::make_message(std::move(str)),
-    };
-  }
-  return caf::error{
-    error.code(),
-    error.category(),
-    caf::message::concat(error.context(), caf::make_message(std::move(str))),
-  };
-}
-
 } // namespace tenzir

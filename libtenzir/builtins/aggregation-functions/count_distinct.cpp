@@ -166,6 +166,10 @@ public:
     }
   }
 
+  auto reset() -> void override {
+    distinct_ = {};
+  }
+
 private:
   ast::expression expr_;
   tsl::robin_set<data> distinct_;
@@ -197,7 +201,7 @@ class plugin : public virtual aggregation_function_plugin,
     auto expr = ast::expression{};
     // TODO: Maybe merge this functionality into `count` or `distinct`
     TRY(argument_parser2::function(name())
-          .named("x", expr, "any")
+          .positional("x", expr, "any")
           .parse(inv, ctx));
     return std::make_unique<count_distinct_instance>(std::move(expr));
   }

@@ -15,14 +15,13 @@
 #include "tenzir/concept/parseable/tenzir/expression.hpp"
 #include "tenzir/concept/parseable/tenzir/pipeline.hpp"
 #include "tenzir/concept/parseable/tenzir/si.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/expression.hpp"
 #include "tenzir/type.hpp"
-
-#include <caf/detail/scope_guard.hpp>
 
 #include <iterator>
 
@@ -180,7 +179,7 @@ private:
 
   template <typename F>
   auto rollback(F&& f) {
-    auto guard = caf::detail::scope_guard{[this, previous = current_] {
+    auto guard = detail::scope_guard{[this, previous = current_]() noexcept {
       current_ = previous;
     }};
     return std::forward<F>(f)();

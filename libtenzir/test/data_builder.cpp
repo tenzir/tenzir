@@ -167,10 +167,9 @@ TEST(overwrite record fields) {
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, uint64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, uint64_t>::value));
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -213,18 +212,16 @@ TEST(signature record simple) {
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, uint64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, uint64_t>::value));
     }
     {
       const auto key_bytes = as_bytes("1"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, int64_t>::value));
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -245,10 +242,9 @@ TEST(signature list) {
     const auto key_bytes = as_bytes("l"sv);
     expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
     expected.insert(expected.end(), detail::data_builder::list_start_marker);
-    expected.insert(
-      expected.end(),
-      static_cast<std::byte>(
-        caf::detail::tl_index_of<field_type_list, uint64_t>::value));
+    expected.insert(expected.end(),
+                    static_cast<std::byte>(
+                      detail::tl_index_of<field_type_list, uint64_t>::value));
     expected.insert(expected.end(), detail::data_builder::list_end_marker);
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -310,10 +306,9 @@ TEST(signature list with null) {
     const auto key_bytes = as_bytes("l"sv);
     expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
     expected.insert(expected.end(), detail::data_builder::list_start_marker);
-    expected.insert(
-      expected.end(),
-      static_cast<std::byte>(
-        caf::detail::tl_index_of<field_type_list, uint64_t>::value));
+    expected.insert(expected.end(),
+                    static_cast<std::byte>(
+                      detail::tl_index_of<field_type_list, uint64_t>::value));
     expected.insert(expected.end(), detail::data_builder::list_end_marker);
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -362,10 +357,9 @@ TEST(signature list mismatch) {
   {
     expected.insert(expected.end(), detail::data_builder::list_start_marker);
     {
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, double>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, double>::value));
       expected.insert(expected.end(),
                       detail::data_builder::record_start_marker);
       expected.insert(expected.end(), detail::data_builder::record_end_marker);
@@ -401,18 +395,16 @@ TEST(signature record seeding matching) {
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, uint64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, uint64_t>::value));
     }
     {
       const auto key_bytes = as_bytes("1"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, int64_t>::value));
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -441,18 +433,16 @@ TEST(signature record seeding field not in data) {
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, uint64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, uint64_t>::value));
     }
     {
       const auto key_bytes = as_bytes("1"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, int64_t>::value));
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -528,10 +518,9 @@ TEST(signature record seeding nested record) {
     { // field x
       const auto key_bytes = as_bytes("x"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, int64_t>::value));
     }
     { // field y
       const auto key_bytes = as_bytes("y"sv);
@@ -544,7 +533,7 @@ TEST(signature record seeding nested record) {
         expected.insert(
           expected.end(),
           static_cast<std::byte>(
-            caf::detail::tl_index_of<field_type_list, int64_t>::value));
+            detail::tl_index_of<field_type_list, int64_t>::value));
       }
       expected.insert(expected.end(), detail::data_builder::record_end_marker);
     }
@@ -596,10 +585,9 @@ TEST(signature record seeding nested list) {
       const auto key_bytes = as_bytes("l"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
       expected.insert(expected.end(), detail::data_builder::list_start_marker);
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, int64_t>::value));
       expected.insert(expected.end(), detail::data_builder::list_end_marker);
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
@@ -641,18 +629,16 @@ TEST(signature record seeding field not in data schema_only) {
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, uint64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, uint64_t>::value));
     }
     {
       const auto key_bytes = as_bytes("1"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, int64_t>::value));
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -681,18 +667,16 @@ TEST(signature record seeding data - field not in seed) {
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, uint64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, uint64_t>::value));
     }
     {
       const auto key_bytes = as_bytes("1"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, int64_t>::value));
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -725,10 +709,9 @@ TEST(signature record seeding data - field not in seed schema_only) {
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, uint64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, uint64_t>::value));
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -758,10 +741,9 @@ TEST(signature record seeding numeric mismatch) {
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-      expected.insert(
-        expected.end(),
-        static_cast<std::byte>(
-          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      expected.insert(expected.end(),
+                      static_cast<std::byte>(
+                        detail::tl_index_of<field_type_list, int64_t>::value));
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }

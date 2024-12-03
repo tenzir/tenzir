@@ -28,7 +28,6 @@
 #include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
 #include <caf/none.hpp>
-#include <caf/sum_type.hpp>
 #include <fmt/core.h>
 
 #include <algorithm>
@@ -347,7 +346,7 @@ namespace {
 template <typename Field, typename Tenzir_Type>
 struct index_regression_tester {
   constexpr static auto index_in_field
-    = caf::detail::tl_index_of<field_type_list, Field>::value;
+    = detail::tl_index_of<field_type_list, Field>::value;
   constexpr static auto tenzir_type_index = Tenzir_Type::type_index;
 
   static_assert(index_in_field == tenzir_type_index);
@@ -355,8 +354,8 @@ struct index_regression_tester {
   using type = void;
 };
 
-static_assert(caf::detail::tl_size<field_type_list>::value
-                == caf::detail::tl_size<data::types>::value + 1,
+static_assert(detail::tl_size<field_type_list>::value
+                == detail::tl_size<data::types>::value + 1,
               "The could should match up, apart from the lack of `enriched` in "
               "`tenzir::data`");
 
@@ -747,7 +746,7 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
     },
     [&rb, seed, this]<non_structured_data_type T>(const T& v) {
       constexpr static auto type_idx
-        = caf::detail::tl_index_of<field_type_list, T>::value;
+        = detail::tl_index_of<field_type_list, T>::value;
       const auto seed_idx = seed->type_index();
       if (type_idx == seed_idx) {
         return;
@@ -756,7 +755,7 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
         // numeric conversion if possible
         if (is_numeric(seed_idx)) {
           switch (seed_idx) {
-            case caf::detail::tl_index_of<field_type_list, int64_t>::value: {
+            case detail::tl_index_of<field_type_list, int64_t>::value: {
               if constexpr (std::same_as<uint64_t, T>) {
                 if (v > static_cast<uint64_t>(
                       std::numeric_limits<int64_t>::max())) {
@@ -779,7 +778,7 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
               data(static_cast<int64_t>(v));
               return;
             }
-            case caf::detail::tl_index_of<field_type_list, uint64_t>::value: {
+            case detail::tl_index_of<field_type_list, uint64_t>::value: {
               if (v < 0) {
                 null();
                 rb.emit_or_throw(diagnostic::warning("value is out of range "
@@ -800,11 +799,11 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
               data(static_cast<uint64_t>(v));
               return;
             }
-            case caf::detail::tl_index_of<field_type_list, double>::value: {
+            case detail::tl_index_of<field_type_list, double>::value: {
               data(static_cast<double>(v));
               return;
             }
-            case caf::detail::tl_index_of<field_type_list, enumeration>::value: {
+            case detail::tl_index_of<field_type_list, enumeration>::value: {
               if (v < 0
                   or v > static_cast<T>(
                        std::numeric_limits<enumeration>::max())) {
@@ -830,8 +829,7 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
               TENZIR_UNREACHABLE();
           }
         } else if (seed_idx
-                   == caf::detail::tl_index_of<field_type_list,
-                                               duration>::value) {
+                   == detail::tl_index_of<field_type_list, duration>::value) {
           auto unit = seed->attribute("unit").value_or("s");
           auto res = cast_value(data_to_type_t<T>{}, v, duration_type{}, unit);
           if (res) {
@@ -839,7 +837,7 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
             return;
           }
         } else if (seed_idx
-                   == caf::detail::tl_index_of<field_type_list, time>::value) {
+                   == detail::tl_index_of<field_type_list, time>::value) {
           auto unit = seed->attribute("unit");
           if (not unit) {
             rb.emit_or_throw(
@@ -945,14 +943,14 @@ auto node_object::append_to_signature(signature_type& sig,
         return true;
       } else {
         constexpr static auto type_idx
-          = caf::detail::tl_index_of<field_type_list, caf::none_t>::value;
+          = detail::tl_index_of<field_type_list, caf::none_t>::value;
         sig.push_back(static_cast<std::byte>(type_idx));
         return true;
       }
     },
     [&sig, seed, this]<non_structured_data_type T>(T&) {
       constexpr static auto type_idx
-        = caf::detail::tl_index_of<field_type_list, T>::value;
+        = detail::tl_index_of<field_type_list, T>::value;
       if (seed) {
         const auto seed_idx = seed->type_index();
         if (seed_idx != type_idx) {
@@ -1224,11 +1222,11 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     auto large_positive = size_t{0};
     auto floating = size_t{0};
     constexpr static auto idx_int
-      = caf::detail::tl_index_of<field_type_list, int64_t>::value;
+      = detail::tl_index_of<field_type_list, int64_t>::value;
     constexpr static auto idx_uint
-      = caf::detail::tl_index_of<field_type_list, uint64_t>::value;
+      = detail::tl_index_of<field_type_list, uint64_t>::value;
     constexpr static auto idx_double
-      = caf::detail::tl_index_of<field_type_list, double>::value;
+      = detail::tl_index_of<field_type_list, double>::value;
     {
       const auto visitor = detail::overload{
         [](const auto&) {

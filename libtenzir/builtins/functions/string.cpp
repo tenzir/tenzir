@@ -346,16 +346,24 @@ public:
   }
 };
 
-class str : public virtual function_plugin {
+template <bool Deprecated>
+class string_fn : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.str";
+    return Deprecated ? "tql2.str" : "tql2.string";
   }
 
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
+    if constexpr (Deprecated) {
+      diagnostic::warning("`str` has been renamed to `string`")
+        .note("`str` alias will be removed and become a hard error in a future "
+              "release")
+        .primary(inv.call.get_location())
+        .emit(ctx);
+    }
     auto subject_expr = ast::expression{};
-    TRY(argument_parser2::function("string")
+    TRY(argument_parser2::function(name())
           .positional("x", subject_expr, "any")
           .parse(inv, ctx));
     return function_use::make([subject_expr = std::move(subject_expr)](
@@ -396,8 +404,8 @@ public:
     return regex_ ? "tql2.split_regex" : "tql2.split";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
     auto reverse = std::optional<location>{};
@@ -467,8 +475,8 @@ public:
     return "tql2.join";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     // TODO: Technically, this could be an expression and not just a constant
     // string.
@@ -557,7 +565,8 @@ TENZIR_REGISTER_PLUGIN(nullary_method{"length_chars", "utf8_length",
 TENZIR_REGISTER_PLUGIN(replace{true});
 TENZIR_REGISTER_PLUGIN(replace{false});
 TENZIR_REGISTER_PLUGIN(slice);
-TENZIR_REGISTER_PLUGIN(str);
+TENZIR_REGISTER_PLUGIN(string_fn<false>);
+TENZIR_REGISTER_PLUGIN(string_fn<true>);
 
 TENZIR_REGISTER_PLUGIN(split_fn{true});
 TENZIR_REGISTER_PLUGIN(split_fn{false});

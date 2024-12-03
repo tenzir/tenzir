@@ -8,9 +8,8 @@
 
 #include "tenzir/wah_bitmap.hpp"
 
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/fbs/bitmap.hpp"
-
-#include <caf/detail/scope_guard.hpp>
 
 #include <iostream>
 
@@ -134,7 +133,7 @@ void wah_bitmap::flip() {
 void wah_bitmap::merge_active_word() {
   TENZIR_ASSERT(!blocks_.empty());
   TENZIR_ASSERT(num_last_ == word_type::literal_word_size);
-  auto guard = caf::detail::make_scope_guard([&] {
+  auto guard = detail::scope_guard([&]() noexcept {
     blocks_.push_back(word_type::none);
     num_last_ = 0;
   });

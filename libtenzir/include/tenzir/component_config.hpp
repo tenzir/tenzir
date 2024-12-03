@@ -13,7 +13,6 @@
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
-#include <caf/sum_type.hpp>
 
 namespace tenzir {
 

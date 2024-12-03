@@ -363,7 +363,8 @@ public:
         auto result_arrow_type
           = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
         auto subject = eval(subject_expr);
-        auto f = detail::overload{
+        return match(
+          *subject.array,
           [&](const arrow::TimestampArray& array) {
             auto options = arrow::compute::StrftimeOptions(
               format.inner,
@@ -387,9 +388,7 @@ public:
               .primary(subject_expr)
               .emit(ctx);
             return series::null(result_type, subject.length());
-          },
-        };
-        return caf::visit(f, *subject.array);
+          });
       });
   }
 };
@@ -417,7 +416,8 @@ public:
         auto result_arrow_type
           = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
         auto subject = eval(subject_expr);
-        auto f = detail::overload{
+        return match(
+          *subject.array,
           [&](const arrow::StringArray& array) {
             constexpr auto error_is_null = true;
             auto options = arrow::compute::StrptimeOptions(
@@ -449,9 +449,7 @@ public:
               .primary(subject_expr)
               .emit(ctx);
             return series::null(result_type, subject.length());
-          },
-        };
-        return caf::visit(f, *subject.array);
+          });
       });
   }
 };

@@ -108,7 +108,10 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
     auto summarized = summarize->make(
       {
         inv.self,
-        {summarize_args, std::move(selector).unwrap()},
+        {
+          std::move(selector).unwrap(),
+          summarize_args,
+        },
       },
       ctx);
     const auto sort_args = [&]() {

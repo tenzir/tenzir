@@ -112,8 +112,8 @@ permitted by default and can be disallowed by using the new option
 Did you ever want to act on multiple fields in `enrich` or `lookup`? Now you
 can!
 
-For example, you can now use a [GeoIP context](/contexts/geoip) on all IP
-addresses in your data as simple as this:
+For example, you can now use a GeoIP context on all IP addresses in your data as
+simple as this:
 
 ```text {0} title="Enrich with a geoip context named country"
 …

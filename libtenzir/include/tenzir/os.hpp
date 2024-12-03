@@ -43,7 +43,7 @@ struct process {
 };
 
 /// A network socket.
-struct socket {
+struct net_socket {
   uint32_t pid;
   std::string process_name;
   int protocol;
@@ -78,10 +78,9 @@ public:
 
 protected:
   virtual auto current_pid() -> int = 0;
-  virtual auto fetch_processes(std::optional<int> pid_filter = std::nullopt)
-    -> std::vector<process>
-    = 0;
-  virtual auto fetch_sockets() -> std::vector<socket> = 0;
+  virtual auto fetch_processes(std::optional<int> pid_filter
+                               = std::nullopt) -> std::vector<process> = 0;
+  virtual auto fetch_sockets() -> std::vector<net_socket> = 0;
 };
 
 #if TENZIR_LINUX
@@ -94,9 +93,9 @@ public:
   ~linux_os() final;
 
   auto current_pid() -> int final;
-  auto fetch_processes(std::optional<int> pid_filterstd = std::nullopt)
-    -> std::vector<process> final;
-  auto fetch_sockets() -> std::vector<socket> final;
+  auto fetch_processes(std::optional<int> pid_filterstd
+                       = std::nullopt) -> std::vector<process> final;
+  auto fetch_sockets() -> std::vector<net_socket> final;
 
 private:
   linux_os();
@@ -115,14 +114,14 @@ public:
   ~darwin_os() final;
 
   auto current_pid() -> int final;
-  auto fetch_processes(std::optional<int> pid_filter = std::nullopt)
-    -> std::vector<process> final;
-  auto fetch_sockets() -> std::vector<socket> final;
+  auto fetch_processes(std::optional<int> pid_filter
+                       = std::nullopt) -> std::vector<process> final;
+  auto fetch_sockets() -> std::vector<net_socket> final;
 
 private:
   darwin_os();
 
-  auto sockets_for(uint32_t pid) -> std::vector<socket>;
+  auto sockets_for(uint32_t pid) -> std::vector<net_socket>;
 
   struct state;
   std::unique_ptr<state> state_;

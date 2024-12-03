@@ -150,7 +150,7 @@ auto limit_as_number(const configuration& cfg) -> std::optional<uint64_t> {
   const auto attr_end = attr_begin + attr_value.attr.size();
   auto res = uint64_t{};
   auto [ptr, ec] = std::from_chars(attr_begin, attr_end, res);
-  if (ec != std::errc{}) {
+  if (ec != std::errc{} or ptr != attr_end) {
     return std::nullopt;
   }
   return res;
@@ -188,26 +188,35 @@ public:
     auto remaining = limit;
     std::unordered_map<type, type> enriched_schemas_cache{};
     previous_values_type previous_values{};
+    bool limit_warning_done = false;
+    const auto emit_limit_warning = [&]() {
+      diagnostic::warning("chart exceeded event limit of `{}`", limit)
+        .hint("silence this warning by adding `head {}` before the `chart` "
+              "operator",
+              limit)
+        .hint("adjust the limit with the `--limit` option")
+        .primary(loc_)
+        .emit(ctrl.diagnostics());
+    };
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
+      if (remaining == 0) {
+        if (not limit_warning_done) {
+          emit_limit_warning();
+        }
+        co_return;
+      }
       if (slice.rows() > remaining) {
         slice = subslice(slice, 0, remaining);
-        diagnostic::warning("chart exceeded event limit of `{}`", limit)
-          .hint("silence this warning by adding `head {}` before the `chart` "
-                "operator",
-                limit)
-          .hint("adjust the limit with the `--limit` option")
-          .primary(loc_)
-          .emit(ctrl.diagnostics());
+        // need to emit the warning here, in case its the last slice
+        emit_limit_warning();
+        limit_warning_done = true;
         remaining = 0;
       } else {
         remaining -= slice.rows();
-      }
-      if (remaining == 0) {
-        co_return;
       }
       auto original_schema = slice.schema();
       if (auto it = enriched_schemas_cache.find(original_schema);

@@ -568,10 +568,11 @@ public:
     if (auto diags = std::move(diag_handler).collect(); not diags.empty()) {
       return {
         std::string_view{f, l},
-        add_context(diags.front().to_error(),
-                    "failed to parse the flags in the deduplicate "
-                    "operator: '{}'",
-                    pipeline),
+        diagnostic::error(diags.front().to_error())
+          .note("failed to parse the flags in the deduplicate "
+                "operator: '{}'",
+                pipeline)
+          .to_error(),
       };
     }
     // `0` as distance means infinity

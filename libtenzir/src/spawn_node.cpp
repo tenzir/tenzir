@@ -17,6 +17,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/scope_linked.hpp"
 
+#include <caf/actor_registry.hpp>
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>

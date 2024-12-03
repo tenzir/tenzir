@@ -10,6 +10,7 @@
 #include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/posix.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/fbs/geoip.hpp>
 #include <tenzir/fbs/utils.hpp>
@@ -128,7 +129,6 @@ public:
           auto sub_record_key
             = std::string{entry_data_list->entry_data.utf8_string,
                           entry_data_list->entry_data.data_size};
-
           entry_data_list = entry_data_list->next;
           entry_data_list = entry_data_list_to_record(entry_data_list, status,
                                                       sub_r, sub_record_key);
@@ -216,7 +216,6 @@ public:
     switch (entry_data_list->entry_data.type) {
       case MMDB_DATA_TYPE_MAP: {
         auto size = entry_data_list->entry_data.data_size;
-
         for (entry_data_list = entry_data_list->next;
              size > 0 && entry_data_list; size--) {
           if (MMDB_DATA_TYPE_UTF8_STRING != entry_data_list->entry_data.type) {
@@ -363,7 +362,7 @@ public:
         continue;
       }
       status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
-      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+      auto free_entry_data_list = detail::scope_guard([&]() noexcept {
         if (entry_data_list) {
           MMDB_free_entry_data_list(entry_data_list);
         }
@@ -410,9 +409,8 @@ public:
         continue;
       }
       auto address_info_error = 0;
-      const auto ip_string = is_ip
-                               ? fmt::to_string(value)
-                               : materialize(as<std::string_view>(value));
+      const auto ip_string = is_ip ? fmt::to_string(value)
+                                   : materialize(as<std::string_view>(value));
       auto result = MMDB_lookup_string(mmdb_.get(), ip_string.data(),
                                        &address_info_error, &status);
       if (address_info_error != MMDB_SUCCESS) {
@@ -434,7 +432,7 @@ public:
         continue;
       }
       status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
-      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+      auto free_entry_data_list = detail::scope_guard([&]() noexcept {
         if (entry_data_list) {
           MMDB_free_entry_data_list(entry_data_list);
         }
@@ -511,7 +509,7 @@ public:
         if (current_dump->status != MMDB_SUCCESS) {
           break;
         }
-        auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+        auto free_entry_data_list = detail::scope_guard([&]() noexcept {
           if (entry_data_list) {
             MMDB_free_entry_data_list(entry_data_list);
           }
@@ -541,7 +539,9 @@ public:
   }
 
   auto dump() -> generator<table_slice> override {
-    TENZIR_ASSERT(mmdb_);
+    if (not mmdb_) {
+      co_return;
+    }
     current_dump current_dump;
     for (auto&& slice : dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr,
                                      &current_dump)) {
@@ -577,12 +577,10 @@ public:
   }
 
   auto save() const -> caf::expected<context_save_result> override {
-    if (!mapped_mmdb_) {
-      return caf::make_error(ec::lookup_error,
-                             fmt::format("no GeoIP data currently exists for "
-                                         "this context"));
-    }
-    return context_save_result{.data = mapped_mmdb_, .version = latest_version};
+    return context_save_result{
+      .data = mapped_mmdb_ ? mapped_mmdb_ : chunk::make_empty(),
+      .version = latest_version,
+    };
   }
 
 private:
@@ -629,6 +627,9 @@ struct v2_loader : public context_loader {
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
+    if (not serialized or serialized->size() == 0) {
+      return std::make_unique<geoip_context>();
+    }
     const auto* cache_dir
       = get_if<std::string>(&global_config_, "tenzir.cache-directory");
     TENZIR_ASSERT(cache_dir);

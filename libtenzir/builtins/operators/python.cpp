@@ -16,6 +16,7 @@
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/detail/preserved_fds.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/detail/strip_leading_indentation.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/generator.hpp>
@@ -35,7 +36,6 @@
 #include <boost/interprocess/sync/named_semaphore.hpp>
 #include <boost/process.hpp>
 #include <caf/actor_system_config.hpp>
-#include <caf/detail/scope_guard.hpp>
 #include <caf/settings.hpp>
 
 #include <filesystem>
@@ -234,7 +234,7 @@ public:
           env["UV_CACHE_DIR"]
             = (venv_base_dir->parent_path() / "cache" / "uv").string();
         }
-        return caf::detail::scope_guard([maybe_venv] {
+        return detail::scope_guard([maybe_venv]() noexcept {
           if (maybe_venv) {
             std::error_code ec;
             auto exists = std::filesystem::exists(*maybe_venv, ec);
