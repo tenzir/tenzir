@@ -73,9 +73,8 @@ inputs: {}
 ```
 
 Packages may define any number of contexts. For our Feodo Abuse Blocklist
-package we'll define a context named `feodo` as a [Lookup
-Table](/contexts/lookup-table). We recommend writing a description for every
-context.
+package we'll define a context named `feodo` as a Lookup Table. We recommend
+writing a description for every context.
 
 ```yaml {0} title="feodo/package.yaml [3/5]"
 contexts:
