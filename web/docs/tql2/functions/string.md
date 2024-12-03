@@ -1,21 +1,21 @@
-# str
+# string
 
 Casts an expression to a string.
 
 ```tql
-str(x:any) -> string
+string(x:any) -> string
 ```
 
 ## Description
 
-The `str` function casts the given value `x` to a string.
+The `string` function casts the given value `x` to a string.
 
 ## Examples
 
 ### Cast an IP address to a string
 
 ```tql
-from {x: str(1.2.3.4)}
+from {x: string(1.2.3.4)}
 ```
 
 ```tql

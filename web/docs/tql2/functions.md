@@ -212,7 +212,7 @@ Function | Description | Example
 [`uint`](functions/uint.md) | Casts an expression to an unsigned integer | `uint(4.2)`
 [`float`](functions/float.md) | Casts an expression to a float | `float(42)`
 [`time`](functions/time.md) | Casts an expression to a time value | `time("2020-03-15")`
-[`str`](functions/str.md) | Casts an expression to string | `str(1.2.3.4)`
+[`string`](functions/string.md) | Casts an expression to string | `string(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
 
 ### Transposition
