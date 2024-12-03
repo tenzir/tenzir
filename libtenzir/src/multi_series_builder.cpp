@@ -71,7 +71,8 @@ auto record_generator::field(std::string_view name) -> object_generator {
 }
 
 auto record_generator::unflattened_field(
-  std::string_view key, std::string_view unflatten) -> object_generator {
+  std::string_view key, std::string_view unflatten,
+  bool* did_unflattend) -> object_generator {
   if (not msb_) {
     return object_generator{};
   }
@@ -80,7 +81,13 @@ auto record_generator::unflattened_field(
   }
   auto i = key.find(unflatten);
   if (i == key.npos) {
+    if (did_unflattend) {
+      *did_unflattend = false;
+    }
     return exact_field(key);
+  }
+  if (did_unflattend) {
+    *did_unflattend = true;
   }
   const auto pre = key.substr(0, i);
   const auto post = key.substr(i + unflatten.size());
@@ -88,12 +95,13 @@ auto record_generator::unflattened_field(
   return exact_field(pre).record().unflattened_field(post, unflatten);
 }
 
-auto record_generator::unflattened_field(std::string_view key)
-  -> object_generator {
+auto record_generator::unflattened_field(
+  std::string_view key, bool* did_unflatten) -> object_generator {
   if (not msb_) {
     return object_generator{};
   }
-  return unflattened_field(key, msb_->settings_.unnest_separator);
+  return unflattened_field(key, msb_->settings_.unnest_separator,
+                           did_unflatten);
 }
 
 auto record_generator::writable() -> bool {

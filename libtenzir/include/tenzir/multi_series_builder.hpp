@@ -68,11 +68,12 @@ public:
 
   /// @brief Creates an explicitly unflattend field. This function does
   /// not respect the builders unflatten setting.
-  auto unflattened_field(std::string_view key,
-                         std::string_view unflatten) -> object_generator;
+  auto unflattened_field(std::string_view key, std::string_view unflatten,
+                         bool* did_unflattend = nullptr) -> object_generator;
   /// @brief Creates an explicitly unflattend field according to the
   /// `multi_series_builder`s unflatten setting.
-  auto unflattened_field(std::string_view key) -> object_generator;
+  auto unflattened_field(std::string_view key, bool* did_unflattend
+                                               = nullptr) -> object_generator;
 
   /// Checks whether this is writable, i.e. it would not write into the void.
   auto writable() -> bool;
