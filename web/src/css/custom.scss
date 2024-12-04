@@ -200,6 +200,11 @@ figure[data-rehype-pretty-code-figure] > pre > code {
   padding: 0 !important;
 }
 
+figure[data-rehype-pretty-code-figure] > pre > code > code {
+  margin: 0 4px !important;
+  padding: 8px !important;
+}
+
 figure[data-rehype-pretty-code-figure] > pre > code > pre {
   margin: 0 !important;
   padding: 0 !important;
