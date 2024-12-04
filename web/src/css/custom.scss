@@ -194,3 +194,17 @@ figure[data-rehype-pretty-code-figure]+figure[data-rehype-pretty-code-figure]:no
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
+
+figure[data-rehype-pretty-code-figure] > pre > code {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+figure[data-rehype-pretty-code-figure] > pre > code > pre {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+figure[data-rehype-pretty-code-figure] code {
+  font-size: 1rem;
+}
