@@ -83,9 +83,8 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     // renamed, e.g., `package_add` was renamed to `package::add`.
     "modules",
   };
-  // The experimental TQL2-only mode is enabled.
-  const auto disabled = false;
-  if (get_or(cfg, "tenzir.tql2", disabled)) {
+  if (auto fallback = false; get_or(cfg, "tenzir.tql2", fallback)) {
+    // The experimental TQL2-only mode is enabled.
     result.emplace_back("tql2_only");
   }
   return result;
