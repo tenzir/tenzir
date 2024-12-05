@@ -26,7 +26,7 @@
 
 namespace tenzir {
 
-record retrieve_versions() {
+record retrieve_versions(const record& cfg) {
   record result;
   result["Tenzir"] = version::version;
   result["Build Configuration"] = record{
@@ -52,34 +52,43 @@ record retrieve_versions() {
 #endif
   list plugin_names;
   for (const auto& plugin : plugins::get()) {
-    if (plugin.type() == plugin_ptr::type::builtin)
+    if (plugin.type() == plugin_ptr::type::builtin) {
       continue;
-    if (auto v = plugin.version())
+    }
+    if (auto v = plugin.version()) {
       plugin_names.push_back(fmt::format("{}-{}", plugin->name(), v));
-    else
+    } else {
       plugin_names.push_back(fmt::format("{}", plugin->name()));
+    }
   }
   result["plugins"] = std::move(plugin_names);
   list features;
-  for (auto feature : tenzir_features())
+  for (auto feature : tenzir_features(cfg)) {
     features.push_back(feature);
+  }
   result["features"] = features;
   return result;
 }
 
-auto tenzir_features() -> std::vector<std::string> {
+auto tenzir_features(const record& cfg) -> std::vector<std::string> {
   // A list of features that are supported by this version of the node. This is
   // intended to support the rollout of potentially breaking new features, so
   // that downstream API consumers can adjust their behavior depending on the
   // capabilities of the node. We remove entries once they're stabilized in the
   // Tenzir Platform.
-  return {
+  auto result = std::vector<std::string>{
     // The node supports passing the `--limit` flag to the TQL1 `chart` operator
     "chart_limit",
     // The node supports modules in TQL2. Alongside this a few operators were
     // renamed, e.g., `package_add` was renamed to `package::add`.
     "modules",
   };
+  // The experimental TQL2-only mode is enabled.
+  const auto disabled = false;
+  if (get_or(cfg, "tenzir.tql2", disabled)) {
+    result.emplace_back("tql2_only");
+  }
+  return result;
 }
 
 } // namespace tenzir
