@@ -44,7 +44,7 @@ void add_root_opts(command& cmd) {
     "forbid unsafe location overrides for pipelines with the "
     "'local' and 'remote' keywords, e.g., remotely reading from "
     "a file");
-  cmd.options.add<bool>("tql2", "use TQL2 by default");
+  cmd.options.add<bool>("?tenzir", "tql2", "use TQL2 by default");
   cmd.options.add<std::string>("?tenzir", "console-verbosity",
                                "output verbosity level on the "
                                "console");
