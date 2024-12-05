@@ -146,9 +146,22 @@ EOF
 }
 
 @test "in list" {
-  check tenzir --tql2 -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
   from "${INPUTSDIR}/json/lists.json"
   exists = x in y
+EOF
+}
+
+@test "in subnet" {
+  check tenzir -f /dev/stdin <<EOF
+  from [
+    {x: 1.2.3.4, y: 1.2.3.4/16},
+    {x: 1.2.3.4, y: 4.5.6.7/16},
+    {x: 1.2.3.4, y: null},
+    {x: null, y: 4.5.6.7/16},
+    {x: null, y: null},
+  ]
+  z = x in y
 EOF
 }
 
