@@ -608,8 +608,8 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                    result);
       return result;
     },
-    [](atom::get, atom::version) { //
-      return retrieve_versions();
+    [self](atom::get, atom::version) {
+      return retrieve_versions(check(to<record>(content(self->config()))));
     },
     [self](atom::spawn, operator_box& box, operator_type input_type,
            const receiver_actor<diagnostic>& diagnostic_handler,

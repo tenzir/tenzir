@@ -2,7 +2,7 @@
 
 setup() {
   export TENZIR_EXEC__DUMP_TOKENS=true
-  export TENZIR_EXEC__TQL2=true
+  export TENZIR_TQL2=true
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir

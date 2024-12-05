@@ -34,7 +34,8 @@ class version_operator final : public crtp_operator<version_operator> {
 public:
   version_operator() = default;
 
-  auto operator()(operator_control_plane&) const -> generator<table_slice> {
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto builder = series_builder{type{
       "tenzir.version",
       record_type{
@@ -75,7 +76,8 @@ public:
     event.field("minor", tenzir::version::minor);
     event.field("patch", tenzir::version::patch);
     auto features = event.field("features").list();
-    for (const auto& feature : tenzir_features()) {
+    for (const auto& feature :
+         tenzir_features(check(to<record>(content(ctrl.self().config()))))) {
       features.data(feature);
     }
     auto build = event.field("build").record();

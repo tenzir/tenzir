@@ -34,7 +34,7 @@ teardown() {
 }
 
 @test "every with multiple operators" {
-  export TENZIR_EXEC__TQL2=true
+  export TENZIR_TQL2=true
   check tenzir -f /dev/stdin <<EOF
 every 10ms {
   from {x: 42}
