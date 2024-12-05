@@ -449,6 +449,13 @@ auto argument_parser2::named(std::string name, std::optional<T>& x,
   return *this;
 }
 
+template <argument_parser_type T>
+auto argument_parser2::named_optional(std::string name, T& x,
+                                      std::string type) -> argument_parser2& {
+  named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
+  return *this;
+}
+
 auto argument_parser2::named(std::string name, std::optional<location>& x,
                              std::string type) -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
@@ -472,6 +479,7 @@ struct instantiate_argument_parser_methods {
     static constexpr auto value = std::tuple{
       static_cast<func<T>>(&argument_parser2::positional)...,
       static_cast<func<std::optional<T>>>(&argument_parser2::positional)...,
+      static_cast<func<T>>(&argument_parser2::named_optional)...,
       static_cast<func<T>>(&argument_parser2::named)...,
       static_cast<func<std::optional<T>>>(&argument_parser2::named)...,
     };

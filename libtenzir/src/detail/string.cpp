@@ -17,6 +17,169 @@
 namespace tenzir {
 namespace detail {
 
+auto quoting_escaping_policy::is_inside_of_quotes(
+  std::string_view text, size_t idx) const noexcept -> bool {
+  if (idx > text.size()) {
+    return false;
+  }
+  auto start = size_t{0};
+  while (start < text.size()) {
+    auto open = find_opening_quote(text, start);
+    if (open > idx) {
+      return false;
+    }
+    auto close = find_closing_quote(text, open);
+    if (close == text.npos) {
+      return false;
+    }
+    if (close > idx) {
+      return true;
+    }
+    start = close + 1;
+  }
+  return false;
+}
+
+auto quoting_escaping_policy::find_opening_quote(
+  std::string_view text, size_t start) const -> std::string_view::size_type {
+  auto active_escape = false;
+  for (; start < text.size(); ++start) {
+    const auto character = text[start];
+    const auto is_quote = is_quote_character(character);
+    const auto is_backslash = character == '\\';
+    if (is_quote and not active_escape) {
+      return start;
+    } else if (is_backslash and not active_escape) {
+      active_escape = backslashes_escape;
+      continue;
+    }
+    active_escape = false;
+  }
+  return text.npos;
+}
+
+auto quoting_escaping_policy::find_closing_quote(
+  std::string_view text, size_t opening) const -> std::string_view::size_type {
+  auto active_escape = false;
+  TENZIR_ASSERT(is_quote_character(text[opening]));
+  for (size_t i = opening + 1; i < text.size(); ++i) {
+    const auto character = text[i];
+    const auto is_backslash = character == '\\';
+    if (not active_escape and character == text[opening]) {
+      if (doubled_quotes_escape and i < text.size() - 1
+          and text[i + 1] == character) {
+        ++i;
+        continue;
+      }
+      return i;
+    } else if (is_backslash and not active_escape) {
+      active_escape = backslashes_escape;
+      continue;
+    }
+    active_escape = false;
+  }
+  return text.npos;
+}
+
+auto quoting_escaping_policy::find_first_of_not_in_quotes(
+  std::string_view text, std::string_view targets,
+  size_t start) const -> std::string_view::size_type {
+  auto quote_start = text.npos;
+  auto active_escape = false;
+  for (size_t i = start; i < text.size(); ++i) {
+    const auto character = text[i];
+    const auto maybe_closing = quote_start != text.npos
+                               and character == text[quote_start]
+                               and not active_escape;
+    if (maybe_closing) {
+      if (doubled_quotes_escape and i < text.size() - 1
+          and text[i + 1] == character) {
+        ++i;
+      } else {
+        quote_start = text.npos;
+      }
+      continue;
+    }
+    const bool is_quote = is_quote_character(character);
+    if (is_quote) {
+      quote_start = i;
+      continue;
+    }
+    const auto is_target = targets.find(character) != text.npos;
+    if (is_target) {
+      if (quote_start == text.npos) {
+        return i;
+      }
+      auto end_of_quote = find_closing_quote(text, quote_start);
+      if (end_of_quote == text.npos) {
+        return i;
+      } else {
+        i = end_of_quote;
+        quote_start = text.npos;
+      }
+    }
+  }
+  return text.npos;
+};
+
+auto quoting_escaping_policy::find_first_not_in_quotes(
+  std::string_view text, char target,
+  size_t start) const -> std::string_view::size_type {
+  return find_first_of_not_in_quotes(text, std::string_view{&target, 1}, start);
+}
+
+auto quoting_escaping_policy::is_quoted(std::string_view text) const noexcept
+  -> bool {
+  return text.size() >= 2 and text.front() == text.back()
+         and is_quote_character(text.front())
+         and find_closing_quote(text, 0) == text.size() - 1;
+}
+
+auto quoting_escaping_policy::unquote(std::string_view text) const
+  -> std::string_view {
+  if (is_quoted(text)) {
+    text.remove_prefix(1);
+    text.remove_suffix(1);
+  }
+  return text;
+}
+
+auto quoting_escaping_policy::unquote_unescape(std::string_view text) const
+  -> std::string {
+  if (text.size() < 2) {
+    return std::string{text};
+  }
+  const auto orig_size = text.size();
+  const auto quote_char = text.front();
+  text = unquote(text);
+  const bool is_quoted = text.size() < orig_size;
+  auto result = std::string{};
+  result.reserve(text.size());
+  for (auto i = size_t{0}; i < text.size(); ++i) {
+    if (backslashes_escape and text[i] == '\\' and i < text.size() - 1) {
+      if (is_quote_character(text[i + 1])) {
+        ++i;
+      }
+    } else if (doubled_quotes_escape and is_quoted and text[i] == quote_char
+               and i < text.size() - 1) {
+      if (text[i + 1] == quote_char) {
+        ++i;
+      }
+    }
+    result += text[i];
+  }
+  return result;
+}
+
+auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
+                                                char target) const
+  -> std::pair<std::string_view, std::string_view> {
+  const auto field_end = find_first_not_in_quotes(text, target, 0);
+  auto first = text.substr(0, field_end);
+  text.remove_prefix(std::min(first.size() + 1, text.size()));
+  return {first, text};
+}
+
 std::string byte_escape(std::string_view str) {
   return escape(str, print_escaper);
 }
