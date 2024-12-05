@@ -526,6 +526,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::series>))
   TENZIR_ADD_TYPE_ID((std::vector<std::vector<tenzir::series>>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::table_slice>))
+  TENZIR_ADD_TYPE_ID((caf::typed_stream<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::uuid>))
   TENZIR_ADD_TYPE_ID(
     (std::unordered_map<tenzir::uuid, tenzir::partition_synopsis_ptr>))

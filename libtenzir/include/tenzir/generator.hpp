@@ -218,8 +218,9 @@ public:
   generator& operator=(const generator& other) = delete;
 
   generator& operator=(generator&& other) noexcept {
-    if (m_coroutine)
+    if (m_coroutine) {
       m_coroutine.destroy();
+    }
     m_coroutine = other.m_coroutine;
     other.m_coroutine = nullptr;
     return *this;
@@ -264,6 +265,12 @@ public:
       return {};
     }
     return *unsafe_current();
+  }
+
+  auto to_shared_callable() && {
+    return [gen = std::make_shared<generator>(std::move(*this))] {
+      return gen->next();
+    };
   }
 
 private:
