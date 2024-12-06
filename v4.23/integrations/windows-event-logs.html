@@ -14,9 +14,9 @@
 
 
 
-<script src="https://plausible.io/js/script.js" aysnc defer="defer" data-domain="docs.tenzir.com"></script><link rel="stylesheet" href="/assets/css/styles.85528f24.css">
-<link rel="preload" href="/assets/js/runtime~main.e5a858d8.js" as="script">
-<link rel="preload" href="/assets/js/main.d1af25bc.js" as="script">
+<script src="https://plausible.io/js/script.js" aysnc defer="defer" data-domain="docs.tenzir.com"></script><link rel="stylesheet" href="/assets/css/styles.8411515e.css">
+<link rel="preload" href="/assets/js/runtime~main.00a00843.js" as="script">
+<link rel="preload" href="/assets/js/main.1ee832b2.js" as="script">
 </head>
 <body class="navigation-with-keyboard">
 <script>!function(){function e(e){document.documentElement.setAttribute("data-theme",e)}var t=function(){var e=null;try{e=new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(e){}return e}()||function(){var e=null;try{e=localStorage.getItem("theme")}catch(e){}return e}();null!==t?e(t):window.matchMedia("(prefers-color-scheme: dark)").matches?e("dark"):(window.matchMedia("(prefers-color-scheme: light)").matches,e("light"))}()</script><div id="__docusaurus">
@@ -29,7 +29,7 @@ setup is always the same: the agent sends events in a push-based to a Tenzir
 pipeline.</p><h3 class="anchor anchorWithStickyNavbar_LWe7" id="winlogbeat">Winlogbeat<a href="#winlogbeat" class="hash-link" aria-label="Direct link to Winlogbeat" title="Direct link to Winlogbeat">​</a></h3><p><a href="https://www.elastic.co/beats/winlogbeat" target="_blank" rel="noopener noreferrer">Winlogbeat</a> is Elastic&#x27;s log shipper
 to get Windows Event Logs out of Windows machines into the Elastic stack.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="configure-winlogbeat">Configure Winlogbeat<a href="#configure-winlogbeat" class="hash-link" aria-label="Direct link to Configure Winlogbeat" title="Direct link to Configure Winlogbeat">​</a></h4><p>After <a href="https://www.elastic.co/guide/en/beats/winlogbeat/current/winlogbeat-installation-configuration.html" target="_blank" rel="noopener noreferrer">installing
 Winlogbeat</a>,
-create a configuration:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="yaml" data-theme="github-dark-default">winlogbeat.yml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#8B949E"># Choose your channels.</span></span>
+create a configuration:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="yaml" data-theme="github-dark-default">winlogbeat.yml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#8B949E"># Choose your channels.</span></span>
 <span data-line=""><span style="color:#7EE787">winlogbeat.event_logs</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#E6EDF3">  - </span><span style="color:#7EE787">name</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">Application</span></span>
 <span data-line=""><span style="color:#E6EDF3">  - </span><span style="color:#7EE787">name</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">System</span></span>
@@ -53,7 +53,93 @@ create a configuration:</p><figure data-rehype-pretty-code-figure=""><figcaption
 <span data-line=""><span style="color:#7EE787">    certificate_authorities</span><span style="color:#E6EDF3">: [</span><span style="color:#A5D6FF">C:\Program Files\Winlogbeat\ca.crt</span><span style="color:#E6EDF3">]</span></span>
 <span data-line=""><span style="color:#8B949E">    # PEM format</span></span>
 <span data-line=""><span style="color:#7EE787">    certificate</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">C:\Program Files\Winlogbeat\tenzir.crt</span></span>
-<span data-line=""><span style="color:#7EE787">    key</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">C:\Program Files\Winlogbeat\beat-win10\tenzir.key</span></span></code></pre></figure><h4 class="anchor anchorWithStickyNavbar_LWe7" id="start-winlogbeat-as-a-service">Start Winlogbeat as a service<a href="#start-winlogbeat-as-a-service" class="hash-link" aria-label="Direct link to Start Winlogbeat as a service" title="Direct link to Start Winlogbeat as a service">​</a></h4><p>After completing your configuration, start the Winlogbeat service:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">C:\Program Files\Winlogbeat&gt; Start-Service winlogbeat</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><h4 class="anchor anchorWithStickyNavbar_LWe7" id="run-a-tenzir-pipeline">Run a Tenzir pipeline<a href="#run-a-tenzir-pipeline" class="hash-link" aria-label="Direct link to Run a Tenzir pipeline" title="Direct link to Run a Tenzir pipeline">​</a></h4><p>Now consume the data via a Tenzir pipeline using the
+<span data-line=""><span style="color:#7EE787">    key</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">C:\Program Files\Winlogbeat\beat-win10\tenzir.key</span></span></code></pre><button type="button" data="# Choose your channels.
+winlogbeat.event_logs:
+  - name: Application
+  - name: System
+  - name: Security
+  - name: ForwardedEvents
+  - name: Windows PowerShell
+  - name: Microsoft-Windows-Sysmon/Operational
+  - name: Microsoft-Windows-PowerShell/Operational
+  - name: Microsoft-Windows-Windows Defender/Operational
+  - name: Microsoft-Windows-TaskScheduler/Operational
+  - name: Microsoft-Windows-TerminalServices-LocalSessionManager/Operational
+  - name: Microsoft-Windows-TerminalServices-RDPClient/Operational
+
+# Send data to a Tenzir pipeline with an ElasticSearch source.
+output.elasticsearch:
+  hosts: [&quot;https://10.0.0.1:9200&quot;]
+  username: &quot;$USER&quot;
+  password: &quot;$PASSWORD&quot; 
+  ssl:
+    enabled: true
+    certificate_authorities: [C:\Program Files\Winlogbeat\ca.crt]
+    # PEM format
+    certificate: C:\Program Files\Winlogbeat\tenzir.crt
+    key: C:\Program Files\Winlogbeat\beat-win10\tenzir.key" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><h4 class="anchor anchorWithStickyNavbar_LWe7" id="start-winlogbeat-as-a-service">Start Winlogbeat as a service<a href="#start-winlogbeat-as-a-service" class="hash-link" aria-label="Direct link to Start Winlogbeat as a service" title="Direct link to Start Winlogbeat as a service">​</a></h4><p>After completing your configuration, start the Winlogbeat service:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">C:\Program Files\Winlogbeat&gt; Start-Service winlogbeat</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><h4 class="anchor anchorWithStickyNavbar_LWe7" id="run-a-tenzir-pipeline">Run a Tenzir pipeline<a href="#run-a-tenzir-pipeline" class="hash-link" aria-label="Direct link to Run a Tenzir pipeline" title="Direct link to Run a Tenzir pipeline">​</a></h4><p>Now consume the data via a Tenzir pipeline using the
 <a href="/v4.23/operators/fluent-bit"><code>fluent-bit</code></a> operator that mimics an ElasticSearch
 bulk ingest endpoint:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">fluent-bit elasticsearch</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  port=9200</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  tls=on</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  tls.key_file=/opt/tenzir/elk.key</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  tls.crt_file=/opt/tenzir/elk.crt</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  tls.ca_file=/opt/tenzir/ca.crt</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| import</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><h3 class="anchor anchorWithStickyNavbar_LWe7" id="fluent-bit">Fluent Bit<a href="#fluent-bit" class="hash-link" aria-label="Direct link to Fluent Bit" title="Direct link to Fluent Bit">​</a></h3><p>Since Tenzir has native Fluent Bit support, collecting logs via the Fluent Bit
 agent is a simple approach.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="configure-fluent-bit">Configure Fluent Bit<a href="#configure-fluent-bit" class="hash-link" aria-label="Direct link to Configure Fluent Bit" title="Direct link to Configure Fluent Bit">​</a></h4><p>First, install Fluent Bit on Windows according to the <a href="https://docs.fluentbit.io/manual/installation/windows" target="_blank" rel="noopener noreferrer">official
@@ -61,7 +147,7 @@ instructions</a>.</p><p>Then create a <a href="https://docs.fluentbit.io/manual/
 configuration</a>
 to send Windows Event Logs out via the <a href="https://docs.fluentbit.io/manual/pipeline/outputs/forward" target="_blank" rel="noopener noreferrer">Forward
 output</a>, which
-encodes the events using Fluent Bit&#x27;s MsgPack-based wire format:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#7EE787">input</span><span style="color:#E6EDF3">:</span></span>
+encodes the events using Fluent Bit&#x27;s MsgPack-based wire format:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#7EE787">input</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#E6EDF3">  - </span><span style="color:#7EE787">name</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">winevtlog</span></span>
 <span data-line=""><span style="color:#7EE787">    channels</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">Setup,Windows PowerShell</span></span>
 <span data-line=""><span style="color:#7EE787">    interval_sec</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">1</span></span>
@@ -69,7 +155,77 @@ encodes the events using Fluent Bit&#x27;s MsgPack-based wire format:</p><figure
 <span data-line=""><span style="color:#7EE787">output</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#E6EDF3">  - </span><span style="color:#7EE787">name</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">forward</span></span>
 <span data-line=""><span style="color:#7EE787">    match</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&#x27;*&#x27;</span></span>
-<span data-line=""><span style="color:#7EE787">    host</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">10.0.0.1</span></span></code></pre></figure><p>Adapt <code>input.channels</code> according to the Event Log channels you would like Fluent
+<span data-line=""><span style="color:#7EE787">    host</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">10.0.0.1</span></span></code></pre><button type="button" data="input:
+  - name: winevtlog
+    channels: Setup,Windows PowerShell
+    interval_sec: 1
+    db: winevtlog.sqlite
+output:
+  - name: forward
+    match: &#x27;*&#x27;
+    host: 10.0.0.1" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Adapt <code>input.channels</code> according to the Event Log channels you would like Fluent
 Bit to monitor.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="run-a-tenzir-pipeline-1">Run a Tenzir pipeline<a href="#run-a-tenzir-pipeline-1" class="hash-link" aria-label="Direct link to Run a Tenzir pipeline" title="Direct link to Run a Tenzir pipeline">​</a></h4><p>Use the <a href="/v4.23/operators/fluent-bit"><code>fluent-bit</code></a> source operator with the
 <a href="https://docs.fluentbit.io/manual/pipeline/inputs/forward" target="_blank" rel="noopener noreferrer">Forward input</a>:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">fluent-bit forward listen=10.0.0.1 | import</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>Ensure that the <code>listen</code> parameter matches the <code>host</code> value in your Fluent Bit
 configuration.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="test-the-configuration">Test the configuration<a href="#test-the-configuration" class="hash-link" aria-label="Direct link to Test the configuration" title="Direct link to Test the configuration">​</a></h4><p>Test the setup by running the Fluent Bit command line utility:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">C:\Program Files\fluent-bit\bin\fluent-bit.exe -c \fluent-bit\conf\fluent-bit.yaml</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><h4 class="anchor anchorWithStickyNavbar_LWe7" id="deploy-fluent-bit-as-a-service">Deploy Fluent Bit as a service<a href="#deploy-fluent-bit-as-a-service" class="hash-link" aria-label="Direct link to Deploy Fluent Bit as a service" title="Direct link to Deploy Fluent Bit as a service">​</a></h4><p>To make the setup permanent, <a href="https://docs.fluentbit.io/manual/installation/windows#windows-service-support" target="_blank" rel="noopener noreferrer">run Fluent Bit as a
@@ -96,7 +252,69 @@ levels.</p><p>The diagram below illustrates a typical setup:</p><p></p><figure c
 agent, as described above. Read below on using
 <a href="#collect-logs-via-openwec">OpenWEC</a> as an agent-free alternative.</p><p>The following configuration steps are heavily inspired by
 <a href="https://docs.sekoia.io/xdr/features/collect/integrations/endpoint/windows/#windows-event-forwarder-to-windows-event-collector-to-a-concentrator" target="_blank" rel="noopener noreferrer">SEKOIA</a>&#x27;s
-instructions.</p><h3 class="anchor anchorWithStickyNavbar_LWe7" id="setup-the-window-event-collector-wec">Setup the Window Event Collector (WEC)<a href="#setup-the-window-event-collector-wec" class="hash-link" aria-label="Direct link to Setup the Window Event Collector (WEC)" title="Direct link to Setup the Window Event Collector (WEC)">​</a></h3><p>We begin with setting up the WEC prior to connecting the client to it.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="setup-windows-remote-management-winrm">Setup Windows Remote Management (WinRM)<a href="#setup-windows-remote-management-winrm" class="hash-link" aria-label="Direct link to Setup Windows Remote Management (WinRM)" title="Direct link to Setup Windows Remote Management (WinRM)">​</a></h4><p>Configure WinRM as follows:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">winrm qc </span><span style="color:#FF7B72">-</span><span style="color:#E6EDF3">q</span></span></code></pre></figure><p>The argument <code>qc</code> stands for &quot;quick configuration&quot; to perform a basic
+instructions.</p><h3 class="anchor anchorWithStickyNavbar_LWe7" id="setup-the-window-event-collector-wec">Setup the Window Event Collector (WEC)<a href="#setup-the-window-event-collector-wec" class="hash-link" aria-label="Direct link to Setup the Window Event Collector (WEC)" title="Direct link to Setup the Window Event Collector (WEC)">​</a></h3><p>We begin with setting up the WEC prior to connecting the client to it.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="setup-windows-remote-management-winrm">Setup Windows Remote Management (WinRM)<a href="#setup-windows-remote-management-winrm" class="hash-link" aria-label="Direct link to Setup Windows Remote Management (WinRM)" title="Direct link to Setup Windows Remote Management (WinRM)">​</a></h4><p>Configure WinRM as follows:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="cmd" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#E6EDF3">winrm qc </span><span style="color:#FF7B72">-</span><span style="color:#E6EDF3">q</span></span></code><button type="button" data="winrm qc -q" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>The argument <code>qc</code> stands for &quot;quick configuration&quot; to perform a basic
 configuration of WinRM with default settings. This configuration includes
 starting the WinRM service, setting it to start automatically with the system,
 creating a listener on HTTP to accept WS-Management protocol requests, and
@@ -105,10 +323,72 @@ confirmation, i.e., it makes the process non-interactive.</p><div class="theme-a
 secure production environment, it&#x27;s advisable to configure WinRM to use HTTPS,
 which requires additional steps, including setting up an appropriate server
 certificate for encryption.</p></div></div><h4 class="anchor anchorWithStickyNavbar_LWe7" id="enable-the-event-collector-service">Enable the Event Collector service<a href="#enable-the-event-collector-service" class="hash-link" aria-label="Direct link to Enable the Event Collector service" title="Direct link to Enable the Event Collector service">​</a></h4><p>Use the <code>wecutil</code> command to perform the necessary steps to set up the Windows
-Event Collector service:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">wecutil qc /q</span></span></code></pre></figure><p>As above, <code>qc</code> stands for &quot;quick configuration&quot; and <code>/q</code> for &quot;quiet&quot;. The setup
+Event Collector service:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="cmd" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#E6EDF3">wecutil qc /q</span></span></code><button type="button" data="wecutil qc /q" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>As above, <code>qc</code> stands for &quot;quick configuration&quot; and <code>/q</code> for &quot;quiet&quot;. The setup
 includes actions such as configuring the service to start automatically and
 ensuring that the service is in a state ready to create and manage event
-subscriptions.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="create-a-subscription-file">Create a subscription file<a href="#create-a-subscription-file" class="hash-link" aria-label="Direct link to Create a subscription file" title="Direct link to Create a subscription file">​</a></h4><p>Create a new file with the following contents:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="xml" data-theme="github-dark-default">DC_SUBSCRIPTION.xml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">&lt;?</span><span style="color:#7EE787">xml</span><span style="color:#79C0FF"> version</span><span style="color:#E6EDF3">=</span><span style="color:#A5D6FF">&quot;1.0&quot;</span><span style="color:#79C0FF"> encoding</span><span style="color:#E6EDF3">=</span><span style="color:#A5D6FF">&quot;UTF-8&quot;</span><span style="color:#E6EDF3">?&gt;</span></span>
+subscriptions.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="create-a-subscription-file">Create a subscription file<a href="#create-a-subscription-file" class="hash-link" aria-label="Direct link to Create a subscription file" title="Direct link to Create a subscription file">​</a></h4><p>Create a new file with the following contents:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="xml" data-theme="github-dark-default">DC_SUBSCRIPTION.xml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">&lt;?</span><span style="color:#7EE787">xml</span><span style="color:#79C0FF"> version</span><span style="color:#E6EDF3">=</span><span style="color:#A5D6FF">&quot;1.0&quot;</span><span style="color:#79C0FF"> encoding</span><span style="color:#E6EDF3">=</span><span style="color:#A5D6FF">&quot;UTF-8&quot;</span><span style="color:#E6EDF3">?&gt;</span></span>
 <span data-line=""><span style="color:#E6EDF3">&lt;</span><span style="color:#7EE787">Subscription</span><span style="color:#79C0FF"> xmlns</span><span style="color:#E6EDF3">=</span><span style="color:#A5D6FF">&quot;http://schemas.microsoft.com/2006/03/windows/events/subscription&quot;</span><span style="color:#E6EDF3">&gt;</span></span>
 <span data-line=""><span style="color:#8B949E">    &lt;!-- Name of subscription --&gt;</span></span>
 <span data-line=""><span style="color:#E6EDF3">    &lt;</span><span style="color:#7EE787">SubscriptionId</span><span style="color:#E6EDF3">&gt;DC_SUBSCRIPTION&lt;/</span><span style="color:#7EE787">SubscriptionId</span><span style="color:#E6EDF3">&gt;</span></span>
@@ -146,11 +426,297 @@ subscriptions.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="create-a-su
 <span data-line=""><span style="color:#8B949E">    &lt;!-- Define which domain computers are allowed or not to initiate subscriptions --&gt;</span></span>
 <span data-line=""><span style="color:#8B949E">    &lt;!-- This exemple grants members of the Domain Computers domain group, as well as the local Network Service group (for local forwarder) --&gt;</span></span>
 <span data-line=""><span style="color:#E6EDF3">    &lt;</span><span style="color:#7EE787">AllowedSourceDomainComputers</span><span style="color:#E6EDF3">&gt;O:NSG:NSD:(A;;GA;;;DC)(A;;GA;;;NS)&lt;/</span><span style="color:#7EE787">AllowedSourceDomainComputers</span><span style="color:#E6EDF3">&gt;</span></span>
-<span data-line=""><span style="color:#E6EDF3">&lt;/</span><span style="color:#7EE787">Subscription</span><span style="color:#E6EDF3">&gt;</span></span></code></pre></figure><p>Key elements are:</p><ul><li><code>SubscriptionId</code>: Give a unique name to your subscription.</li><li><code>SubscriptionType</code>: Choose between <code>SourceInitiated</code> (push) or <code>CollectorInitiated</code> (pull).</li><li><code>Description</code>: Provide a meaningful description.</li><li><code>Query</code>: Modify the event log query to specify which events to collect.</li><li><code>LogFile</code>: Define the destination log file on the collector.</li><li><code>AllowedSourceDomainComputers</code>: Adjust the <a href="https://learn.microsoft.com/en-gb/windows/win32/secauthz/security-descriptor-definition-language?redirectedfrom=MSDN" target="_blank" rel="noopener noreferrer">SDDL</a> string to specify which computers can forward events.</li></ul><p>There are <a href="https://github.com/palantir/windows-event-forwarding/tree/master/wef-subscriptions" target="_blank" rel="noopener noreferrer">several</a> <a href="https://github.com/nsacyber/Event-Forwarding-Guidance/tree/master/Subscriptions/samples" target="_blank" rel="noopener noreferrer">GitHub</a> <a href="https://github.com/mdecrevoisier/Windows-WEC-server_auto-deploy/tree/master/windows-subscriptions" target="_blank" rel="noopener noreferrer">repositories</a> out there with ideas for additional subscriptions.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="activate-the-subscription">Activate the subscription<a href="#activate-the-subscription" class="hash-link" aria-label="Direct link to Activate the subscription" title="Direct link to Activate the subscription">​</a></h4><p>Now that the collector is running, activate the subscription:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">wecutil cs </span><span style="color:#A5D6FF">&quot;&lt;FILE_PATH&gt;\DC_SUBSCRIPTION.xml&quot;</span></span></code></pre></figure><p>The <code>cs</code> subcommand stands for &quot;create subscription&quot; and creates a subscription
-according to the file passed as the next argument.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="verify-the-subscription">Verify the subscription<a href="#verify-the-subscription" class="hash-link" aria-label="Direct link to Verify the subscription" title="Direct link to Verify the subscription">​</a></h4><p>Finally, verify that the subscription is active:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">wecutil gr DC_SUBSCRIPTION</span></span></code></pre></figure><p>The <code>gr</code> subcommand stands for &quot;get runtime status&quot; and displays the
+<span data-line=""><span style="color:#E6EDF3">&lt;/</span><span style="color:#7EE787">Subscription</span><span style="color:#E6EDF3">&gt;</span></span></code></pre><button type="button" data="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;Subscription xmlns=&quot;http://schemas.microsoft.com/2006/03/windows/events/subscription&quot;&gt;
+    &lt;!-- Name of subscription --&gt;
+    &lt;SubscriptionId&gt;DC_SUBSCRIPTION&lt;/SubscriptionId&gt;
+    &lt;!-- Push mode (DC to WEC) --&gt;
+    &lt;SubscriptionType&gt;SourceInitiated&lt;/SubscriptionType&gt;
+    &lt;Description&gt;Source Initiated Subscription from DC_SUBSCRIPTION&lt;/Description&gt;
+    &lt;!-- Subscription is active --&gt;
+    &lt;Enabled&gt;true&lt;/Enabled&gt;
+    &lt;Uri&gt;http://schemas.microsoft.com/wbem/wsman/1/windows/EventLog&lt;/Uri&gt;
+    &lt;!-- This mode ensures that events are delivered with minimal delay --&gt;
+    &lt;!-- It is an appropriate choice if you are collecting alerts or critical events --&gt;
+    &lt;!-- It uses push delivery mode and sets a batch timeout of 30 seconds --&gt;
+    &lt;ConfigurationMode&gt;MinLatency&lt;/ConfigurationMode&gt;
+    &lt;!-- Event log to retrieved --&gt;
+    &lt;Query&gt;
+        &lt;![CDATA[
+            &lt;QueryList&gt;
+                &lt;Query Id=&quot;0&quot;&gt;
+                    &lt;Select Path=&quot;Application&quot;&gt;*&lt;/Select&gt;
+                    &lt;Select Path=&quot;Security&quot;&gt;*&lt;/Select&gt;
+                    &lt;Select Path=&quot;System&quot;&gt;*&lt;/Select&gt;
+                &lt;/Query&gt;
+            &lt;/QueryList&gt;
+        ]]&gt;
+    &lt;/Query&gt;
+    &lt;!-- Collect events generated since the subscription (not oldest) --&gt;
+    &lt;ReadExistingEvents&gt;false&lt;/ReadExistingEvents&gt;
+    &lt;!-- Protocol and port used (DC to WEC) --&gt;
+    &lt;TransportName&gt;http&lt;/TransportName&gt;
+    &lt;!-- Mandatory value (https://www-01.ibm.com/support/docview.wss?crawler=1&amp;uid=swg1IV71375) --&gt;
+    &lt;ContentFormat&gt;RenderedText&lt;/ContentFormat&gt;
+    &lt;Locale Language=&quot;en-US&quot;/&gt;
+    &lt;!-- Target Event log on WEC --&gt;
+    &lt;LogFile&gt;ForwardedEvents&lt;/LogFile&gt;
+    &lt;!-- Define which domain computers are allowed or not to initiate subscriptions --&gt;
+    &lt;!-- This exemple grants members of the Domain Computers domain group, as well as the local Network Service group (for local forwarder) --&gt;
+    &lt;AllowedSourceDomainComputers&gt;O:NSG:NSD:(A;;GA;;;DC)(A;;GA;;;NS)&lt;/AllowedSourceDomainComputers&gt;
+&lt;/Subscription&gt;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Key elements are:</p><ul><li><code>SubscriptionId</code>: Give a unique name to your subscription.</li><li><code>SubscriptionType</code>: Choose between <code>SourceInitiated</code> (push) or <code>CollectorInitiated</code> (pull).</li><li><code>Description</code>: Provide a meaningful description.</li><li><code>Query</code>: Modify the event log query to specify which events to collect.</li><li><code>LogFile</code>: Define the destination log file on the collector.</li><li><code>AllowedSourceDomainComputers</code>: Adjust the <a href="https://learn.microsoft.com/en-gb/windows/win32/secauthz/security-descriptor-definition-language?redirectedfrom=MSDN" target="_blank" rel="noopener noreferrer">SDDL</a> string to specify which computers can forward events.</li></ul><p>There are <a href="https://github.com/palantir/windows-event-forwarding/tree/master/wef-subscriptions" target="_blank" rel="noopener noreferrer">several</a> <a href="https://github.com/nsacyber/Event-Forwarding-Guidance/tree/master/Subscriptions/samples" target="_blank" rel="noopener noreferrer">GitHub</a> <a href="https://github.com/mdecrevoisier/Windows-WEC-server_auto-deploy/tree/master/windows-subscriptions" target="_blank" rel="noopener noreferrer">repositories</a> out there with ideas for additional subscriptions.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="activate-the-subscription">Activate the subscription<a href="#activate-the-subscription" class="hash-link" aria-label="Direct link to Activate the subscription" title="Direct link to Activate the subscription">​</a></h4><p>Now that the collector is running, activate the subscription:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="cmd" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#E6EDF3">wecutil cs </span><span style="color:#A5D6FF">&quot;&lt;FILE_PATH&gt;\DC_SUBSCRIPTION.xml&quot;</span></span></code><button type="button" data="wecutil cs &quot;&lt;FILE_PATH&gt;\DC_SUBSCRIPTION.xml&quot;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>The <code>cs</code> subcommand stands for &quot;create subscription&quot; and creates a subscription
+according to the file passed as the next argument.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="verify-the-subscription">Verify the subscription<a href="#verify-the-subscription" class="hash-link" aria-label="Direct link to Verify the subscription" title="Direct link to Verify the subscription">​</a></h4><p>Finally, verify that the subscription is active:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="cmd" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#E6EDF3">wecutil gr DC_SUBSCRIPTION</span></span></code><button type="button" data="wecutil gr DC_SUBSCRIPTION" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>The <code>gr</code> subcommand stands for &quot;get runtime status&quot; and displays the
 subscription status for the ID <code>DC_SUBSCRIPTION</code>, which corresponds to the
 <code>&lt;SubscriptionId&gt;</code> XML tag in the configuration file.</p><h3 class="anchor anchorWithStickyNavbar_LWe7" id="setup-windows-event-forwarding-wef">Setup Windows Event Forwarding (WEF)<a href="#setup-windows-event-forwarding-wef" class="hash-link" aria-label="Direct link to Setup Windows Event Forwarding (WEF)" title="Direct link to Setup Windows Event Forwarding (WEF)">​</a></h3><p>After you completed the server-side configuration, now configure the machines
-that should log to the WEC.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="setup-windows-remote-management-winrm-1">Setup Windows Remote Management (WinRM)<a href="#setup-windows-remote-management-winrm-1" class="hash-link" aria-label="Direct link to Setup Windows Remote Management (WinRM)" title="Direct link to Setup Windows Remote Management (WinRM)">​</a></h4><p>Active WinRM as follows:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">winrm qc </span><span style="color:#FF7B72">-</span><span style="color:#E6EDF3">q \</span></span></code></pre></figure><p>This step is identical to the WinRM configuration on the WEC.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="change-local-group-policy-settings">Change local group policy settings<a href="#change-local-group-policy-settings" class="hash-link" aria-label="Direct link to Change local group policy settings" title="Direct link to Change local group policy settings">​</a></h4><p>Use the Local Group Policy Editor (<code>gpedit.msc</code>) to navigate to the <code>Computer
+that should log to the WEC.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="setup-windows-remote-management-winrm-1">Setup Windows Remote Management (WinRM)<a href="#setup-windows-remote-management-winrm-1" class="hash-link" aria-label="Direct link to Setup Windows Remote Management (WinRM)" title="Direct link to Setup Windows Remote Management (WinRM)">​</a></h4><p>Active WinRM as follows:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="cmd" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#E6EDF3">winrm qc </span><span style="color:#FF7B72">-</span><span style="color:#E6EDF3">q \</span></span></code><button type="button" data="winrm qc -q \" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>This step is identical to the WinRM configuration on the WEC.</p><h4 class="anchor anchorWithStickyNavbar_LWe7" id="change-local-group-policy-settings">Change local group policy settings<a href="#change-local-group-policy-settings" class="hash-link" aria-label="Direct link to Change local group policy settings" title="Direct link to Change local group policy settings">​</a></h4><p>Use the Local Group Policy Editor (<code>gpedit.msc</code>) to navigate to the <code>Computer
 Configuration\Administrative Templates\Windows Components\Event Forwarding</code>
 path. Here, you&#x27;ll need to open the policy named &quot;Configure the server address,
 refresh interval, and issuer certificate authority of a target Subscription
@@ -168,17 +734,83 @@ OpenWEC documentation (see above) recommends to use <a href="https://gitlab.com/
 NXLog</a> that creates keys/certificates that can immediately be
 used to configure both Windows clients and the OpenWEC collector. Make sure to
 pay attention to specifying the correct hostnames for the sending and receiving
-machines.</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">git</span><span style="color:#A5D6FF"> clone</span><span style="color:#A5D6FF"> https://gitlab.com/nxlog-public/contrib</span></span>
+machines.</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">git</span><span style="color:#A5D6FF"> clone</span><span style="color:#A5D6FF"> https://gitlab.com/nxlog-public/contrib</span></span>
 <span data-line=""><span style="color:#79C0FF">cd</span><span style="color:#A5D6FF"> contrib/windows-event-forwarding</span></span>
 <span data-line=""><span style="color:#FFA657">./genca.sh</span><span style="color:#A5D6FF"> myca</span></span>
 <span data-line=""><span style="color:#FFA657">./gencert-client.sh</span><span style="color:#A5D6FF"> myclient.domain.com</span></span>
-<span data-line=""><span style="color:#FFA657">./gencert-server.sh</span><span style="color:#A5D6FF"> openwec.domain.com</span></span></code></pre></figure><p>Use the following for the Subscription Manager string:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">Server=HTTPS://openwec.domain.com:5985/wsman/,Refresh=14400,IssuerCA=6605742C5400141B76A747E19EA585E29B09F017</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>The string in the last line can be used to configure the Windows Event
+<span data-line=""><span style="color:#FFA657">./gencert-server.sh</span><span style="color:#A5D6FF"> openwec.domain.com</span></span></code></pre><button type="button" data="git clone https://gitlab.com/nxlog-public/contrib
+cd contrib/windows-event-forwarding
+./genca.sh myca
+./gencert-client.sh myclient.domain.com
+./gencert-server.sh openwec.domain.com" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Use the following for the Subscription Manager string:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">Server=HTTPS://openwec.domain.com:5985/wsman/,Refresh=14400,IssuerCA=6605742C5400141B76A747E19EA585E29B09F017</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>The string in the last line can be used to configure the Windows Event
 Forwarding subscription manager on the sending side as described in the section
 above (&quot;Change local group policy settings&quot;). While you&#x27;re at it, also import
 the <code>client.pfx</code> and <code>ca-cert.pem</code> into the corresponding stores (see <a href="https://github.com/cea-sec/openwec/blob/main/doc/tls.md#client-configuration" target="_blank" rel="noopener noreferrer">the
 documentation</a>).</p><p>Then, configure the OpenWEC server as follows (assuming the output files are in
 <code>/etc</code>, the directory <code>/var/db/openwec</code> exists and it is writable by the current
-user):</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="toml" data-theme="github-dark-default">openwec.conf.toml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">[</span><span style="color:#FFA657">server</span><span style="color:#E6EDF3">]</span></span>
+user):</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="toml" data-theme="github-dark-default">openwec.conf.toml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">[</span><span style="color:#FFA657">server</span><span style="color:#E6EDF3">]</span></span>
 <span data-line=""> </span>
 <span data-line=""><span style="color:#E6EDF3">[</span><span style="color:#FFA657">logging</span><span style="color:#E6EDF3">]</span></span>
 <span data-line=""><span style="color:#E6EDF3">verbosity = </span><span style="color:#A5D6FF">&quot;info&quot;</span></span>
@@ -195,28 +827,671 @@ user):</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pret
 <span data-line=""><span style="color:#E6EDF3">type = </span><span style="color:#A5D6FF">&quot;Tls&quot;</span></span>
 <span data-line=""><span style="color:#E6EDF3">ca_certificate = </span><span style="color:#A5D6FF">&quot;/etc/ca-cert.pem&quot;</span></span>
 <span data-line=""><span style="color:#E6EDF3">server_certificate = </span><span style="color:#A5D6FF">&quot;/etc/server-cert.pem&quot;</span></span>
-<span data-line=""><span style="color:#E6EDF3">server_private_key = </span><span style="color:#A5D6FF">&quot;/etc/server-key.pem&quot;</span></span></code></pre></figure><p>Create the database (only needs to be done once):</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">openwec</span><span style="color:#79C0FF"> -c</span><span style="color:#A5D6FF"> openwec.conf.toml</span><span style="color:#A5D6FF"> db</span><span style="color:#A5D6FF"> init</span></span></code></pre></figure><p>Start the server:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">openwecd</span><span style="color:#79C0FF"> -c</span><span style="color:#A5D6FF"> openwec.conf.toml</span></span></code></pre></figure><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.295792509+01:00 INFO server - Server settings: Server { db_sync_interval: None, flush_heartbeats_interval: None, heartbeats_queue_size: None, node_name: None, keytab: None, tcp_keepalive_time: None, tcp_keepalive_intvl: None, tcp_keepalive_probes: None }</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.295947557+01:00 INFO server::subscription - reload_subscriptions task started</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.296046314+01:00 INFO server::heartbeat - Heartbeat task started</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.297503212+01:00 WARN server::subscription - There are no active subscriptions!</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.306151854+01:00 INFO server::tls - Loaded TLS configuration with server certificate /etc/server-cert.pem</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.309876793+01:00 INFO server - Server listenning on 0.0.0.0:5985</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>It might make sense to ensure that the server is started and kept up via some
+<span data-line=""><span style="color:#E6EDF3">server_private_key = </span><span style="color:#A5D6FF">&quot;/etc/server-key.pem&quot;</span></span></code></pre><button type="button" data="[server]
+
+[logging]
+verbosity = &quot;info&quot;
+
+[database]
+type = &quot;SQLite&quot;
+path = &quot;/var/db/openwec/openwec.sqlite&quot;
+
+[[collectors]]
+listen_address = &quot;0.0.0.0&quot;
+hostname = &quot;openwec.domain.com&quot;
+
+[collectors.authentication]
+type = &quot;Tls&quot;
+ca_certificate = &quot;/etc/ca-cert.pem&quot;
+server_certificate = &quot;/etc/server-cert.pem&quot;
+server_private_key = &quot;/etc/server-key.pem&quot;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Create the database (only needs to be done once):</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">openwec</span><span style="color:#79C0FF"> -c</span><span style="color:#A5D6FF"> openwec.conf.toml</span><span style="color:#A5D6FF"> db</span><span style="color:#A5D6FF"> init</span></span></code><button type="button" data="openwec -c openwec.conf.toml db init" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Start the server:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">openwecd</span><span style="color:#79C0FF"> -c</span><span style="color:#A5D6FF"> openwec.conf.toml</span></span></code><button type="button" data="openwecd -c openwec.conf.toml" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.295792509+01:00 INFO server - Server settings: Server { db_sync_interval: None, flush_heartbeats_interval: None, heartbeats_queue_size: None, node_name: None, keytab: None, tcp_keepalive_time: None, tcp_keepalive_intvl: None, tcp_keepalive_probes: None }</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.295947557+01:00 INFO server::subscription - reload_subscriptions task started</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.296046314+01:00 INFO server::heartbeat - Heartbeat task started</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.297503212+01:00 WARN server::subscription - There are no active subscriptions!</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.306151854+01:00 INFO server::tls - Loaded TLS configuration with server certificate /etc/server-cert.pem</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">2024-01-30T13:59:26.309876793+01:00 INFO server - Server listenning on 0.0.0.0:5985</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>It might make sense to ensure that the server is started and kept up via some
 automated means, like systemd.</p><p>Then, while the server is running, create a subscription in OpenWEC for the
 desired channels. For example, to match the subscription from the example above,
-create an XML file like this:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="xml" data-theme="github-dark-default">subscription.xml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">&lt;</span><span style="color:#7EE787">QueryList</span><span style="color:#E6EDF3">&gt;</span></span>
+create an XML file like this:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="xml" data-theme="github-dark-default">subscription.xml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">&lt;</span><span style="color:#7EE787">QueryList</span><span style="color:#E6EDF3">&gt;</span></span>
 <span data-line=""><span style="color:#E6EDF3">    &lt;</span><span style="color:#7EE787">Query</span><span style="color:#79C0FF"> Id</span><span style="color:#E6EDF3">=</span><span style="color:#A5D6FF">&quot;0&quot;</span><span style="color:#E6EDF3">&gt;</span></span>
 <span data-line=""><span style="color:#E6EDF3">        &lt;</span><span style="color:#7EE787">Select</span><span style="color:#79C0FF"> Path</span><span style="color:#E6EDF3">=</span><span style="color:#A5D6FF">&quot;Application&quot;</span><span style="color:#E6EDF3">&gt;*&lt;/</span><span style="color:#7EE787">Select</span><span style="color:#E6EDF3">&gt;</span></span>
 <span data-line=""><span style="color:#E6EDF3">        &lt;</span><span style="color:#7EE787">Select</span><span style="color:#79C0FF"> Path</span><span style="color:#E6EDF3">=</span><span style="color:#A5D6FF">&quot;Security&quot;</span><span style="color:#E6EDF3">&gt;*&lt;/</span><span style="color:#7EE787">Select</span><span style="color:#E6EDF3">&gt;</span></span>
 <span data-line=""><span style="color:#E6EDF3">        &lt;</span><span style="color:#7EE787">Select</span><span style="color:#79C0FF"> Path</span><span style="color:#E6EDF3">=</span><span style="color:#A5D6FF">&quot;System&quot;</span><span style="color:#E6EDF3">&gt;*&lt;/</span><span style="color:#7EE787">Select</span><span style="color:#E6EDF3">&gt;</span></span>
 <span data-line=""><span style="color:#E6EDF3">    &lt;/</span><span style="color:#7EE787">Query</span><span style="color:#E6EDF3">&gt;</span></span>
-<span data-line=""><span style="color:#E6EDF3">&lt;/</span><span style="color:#7EE787">QueryList</span><span style="color:#E6EDF3">&gt;</span></span></code></pre></figure><p>Pass this file to <code>openwec</code> to create a subscription, e.g., with name
-<code>DC_SUBSCRIPTION</code>:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">openwec</span><span style="color:#A5D6FF"> subscriptions</span><span style="color:#A5D6FF"> new</span><span style="color:#A5D6FF"> DC_SUBSCRIPTION</span><span style="color:#A5D6FF"> subscription.xml</span></span></code></pre></figure><p>For the new subscription, configure JSON over TCP as
-<a href="https://github.com/cea-sec/openwec/blob/main/doc/outputs.md" target="_blank" rel="noopener noreferrer">output</a>:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">openwec</span><span style="color:#A5D6FF"> subscriptions</span><span style="color:#A5D6FF"> edit</span><span style="color:#A5D6FF"> DC_SUBSCRIPTION</span><span style="color:#A5D6FF"> outputs</span><span style="color:#A5D6FF"> add</span><span style="color:#79C0FF"> --format</span><span style="color:#A5D6FF"> json</span><span style="color:#A5D6FF"> tcp</span><span style="color:#79C0FF"> 10.0.0.1</span><span style="color:#79C0FF"> 1514</span></span></code></pre></figure><p>Finally, enable the subscription:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">openwec</span><span style="color:#A5D6FF"> subscriptions</span><span style="color:#A5D6FF"> enable</span><span style="color:#A5D6FF"> DC_SUBSCRIPTION</span></span></code></pre></figure><p>That&#x27;s it! You should now be able read the Windows event logs in JSON format by
+<span data-line=""><span style="color:#E6EDF3">&lt;/</span><span style="color:#7EE787">QueryList</span><span style="color:#E6EDF3">&gt;</span></span></code></pre><button type="button" data="&lt;QueryList&gt;
+    &lt;Query Id=&quot;0&quot;&gt;
+        &lt;Select Path=&quot;Application&quot;&gt;*&lt;/Select&gt;
+        &lt;Select Path=&quot;Security&quot;&gt;*&lt;/Select&gt;
+        &lt;Select Path=&quot;System&quot;&gt;*&lt;/Select&gt;
+    &lt;/Query&gt;
+&lt;/QueryList&gt;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Pass this file to <code>openwec</code> to create a subscription, e.g., with name
+<code>DC_SUBSCRIPTION</code>:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">openwec</span><span style="color:#A5D6FF"> subscriptions</span><span style="color:#A5D6FF"> new</span><span style="color:#A5D6FF"> DC_SUBSCRIPTION</span><span style="color:#A5D6FF"> subscription.xml</span></span></code><button type="button" data="openwec subscriptions new DC_SUBSCRIPTION subscription.xml" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>For the new subscription, configure JSON over TCP as
+<a href="https://github.com/cea-sec/openwec/blob/main/doc/outputs.md" target="_blank" rel="noopener noreferrer">output</a>:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">openwec</span><span style="color:#A5D6FF"> subscriptions</span><span style="color:#A5D6FF"> edit</span><span style="color:#A5D6FF"> DC_SUBSCRIPTION</span><span style="color:#A5D6FF"> outputs</span><span style="color:#A5D6FF"> add</span><span style="color:#79C0FF"> --format</span><span style="color:#A5D6FF"> json</span><span style="color:#A5D6FF"> tcp</span><span style="color:#79C0FF"> 10.0.0.1</span><span style="color:#79C0FF"> 1514</span></span></code><button type="button" data="openwec subscriptions edit DC_SUBSCRIPTION outputs add --format json tcp 10.0.0.1 1514" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Finally, enable the subscription:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">openwec</span><span style="color:#A5D6FF"> subscriptions</span><span style="color:#A5D6FF"> enable</span><span style="color:#A5D6FF"> DC_SUBSCRIPTION</span></span></code><button type="button" data="openwec subscriptions enable DC_SUBSCRIPTION" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>That&#x27;s it! You should now be able read the Windows event logs in JSON format by
 spinning up a server that listens at <code>tcp://10.0.0.1:1514</code>.</p><h3 class="anchor anchorWithStickyNavbar_LWe7" id="run-a-tenzir-pipeline-2">Run a Tenzir pipeline<a href="#run-a-tenzir-pipeline-2" class="hash-link" aria-label="Direct link to Run a Tenzir pipeline" title="Direct link to Run a Tenzir pipeline">​</a></h3><p>Import the logs sent with the configuration above into Tenzir using the
 <a href="/v4.23/connectors/tcp"><code>tcp</code></a> connector:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">from tcp://10.0.0.1:1514 | import</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><h2 class="anchor anchorWithStickyNavbar_LWe7" id="increase-visibility-with-sysmon">Increase visibility with Sysmon<a href="#increase-visibility-with-sysmon" class="hash-link" aria-label="Direct link to Increase visibility with Sysmon" title="Direct link to Increase visibility with Sysmon">​</a></h2><p><a href="https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon" target="_blank" rel="noopener noreferrer">Sysmon</a> (System
 Monitor) is a Windows system service and device driver that, once installed on a
 system, remains resident across system reboots to monitor and log system
 activity to the Windows event log. Key features include:</p><ul><li><strong>Process creation tracking</strong>: Logs details of new processes.</li><li><strong>Network connection monitoring</strong>: Records incoming and outgoing network
-connections.</li><li><strong>File creation time changes</strong>: Tracks changes to file creation times.</li><li><strong>Driver and image load monitoring</strong>: Logs loading of drivers and DLL files.</li><li><strong>Registry tracking</strong>: Monitors changes to the Windows registry.</li></ul><h3 class="anchor anchorWithStickyNavbar_LWe7" id="download-and-extract-sysmon-via-powershell">Download and extract Sysmon via Powershell<a href="#download-and-extract-sysmon-via-powershell" class="hash-link" aria-label="Direct link to Download and extract Sysmon via Powershell" title="Direct link to Download and extract Sysmon via Powershell">​</a></h3><p>Download Sysmon:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#79C0FF">Invoke-WebRequest</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">Uri </span><span style="color:#A5D6FF">&quot;https://download.sysinternals.com/files/Sysmon.zip&quot;</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">OutFile </span><span style="color:#A5D6FF">&quot;Sysmon.zip&quot;</span></span></code></pre></figure><p>Extract the archive:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">Expand-Archive -Path Sysmon.zip -DestinationPath Sysmon</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><h3 class="anchor anchorWithStickyNavbar_LWe7" id="choose-a-symon-configuration">Choose a Symon configuration<a href="#choose-a-symon-configuration" class="hash-link" aria-label="Direct link to Choose a Symon configuration" title="Direct link to Choose a Symon configuration">​</a></h3><p>Choose a suitable Sysmon configuration, e.g., from <a href="https://github.com/Neo23x0/sysmon-config/" target="_blank" rel="noopener noreferrer">Florian
+connections.</li><li><strong>File creation time changes</strong>: Tracks changes to file creation times.</li><li><strong>Driver and image load monitoring</strong>: Logs loading of drivers and DLL files.</li><li><strong>Registry tracking</strong>: Monitors changes to the Windows registry.</li></ul><h3 class="anchor anchorWithStickyNavbar_LWe7" id="download-and-extract-sysmon-via-powershell">Download and extract Sysmon via Powershell<a href="#download-and-extract-sysmon-via-powershell" class="hash-link" aria-label="Direct link to Download and extract Sysmon via Powershell" title="Direct link to Download and extract Sysmon via Powershell">​</a></h3><p>Download Sysmon:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="ps" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#79C0FF">Invoke-WebRequest</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">Uri </span><span style="color:#A5D6FF">&quot;https://download.sysinternals.com/files/Sysmon.zip&quot;</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">OutFile </span><span style="color:#A5D6FF">&quot;Sysmon.zip&quot;</span></span></code><button type="button" data="Invoke-WebRequest -Uri &quot;https://download.sysinternals.com/files/Sysmon.zip&quot; -OutFile &quot;Sysmon.zip&quot;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Extract the archive:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">Expand-Archive -Path Sysmon.zip -DestinationPath Sysmon</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><h3 class="anchor anchorWithStickyNavbar_LWe7" id="choose-a-symon-configuration">Choose a Symon configuration<a href="#choose-a-symon-configuration" class="hash-link" aria-label="Direct link to Choose a Symon configuration" title="Direct link to Choose a Symon configuration">​</a></h3><p>Choose a suitable Sysmon configuration, e.g., from <a href="https://github.com/Neo23x0/sysmon-config/" target="_blank" rel="noopener noreferrer">Florian
 Roth</a> or
-<a href="https://github.com/SwiftOnSecurity/sysmon-config" target="_blank" rel="noopener noreferrer">SwiftOnSecurity</a>:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#79C0FF">Invoke-WebRequest</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">Uri </span><span style="color:#A5D6FF">&quot;https://raw.githubusercontent.com/Neo23x0/sysmon-config/master/sysmonconfig-export.xml&quot;</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">OutFile </span><span style="color:#A5D6FF">&quot;sysmonconfig-export.xml&quot;</span></span></code></pre></figure><h3 class="anchor anchorWithStickyNavbar_LWe7" id="install-symon-with-a-configuration">Install Symon with a configuration<a href="#install-symon-with-a-configuration" class="hash-link" aria-label="Direct link to Install Symon with a configuration" title="Direct link to Install Symon with a configuration">​</a></h3><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">.\</span><span style="color:#79C0FF">Sysmon64.exe</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">accepteula </span><span style="color:#FF7B72">-</span><span style="color:#E6EDF3">i sysmonconfig</span><span style="color:#FF7B72">-</span><span style="color:#E6EDF3">export.xml</span></span></code></pre></figure><p>Now use any of the above techniques to collect event logs through the channel
+<a href="https://github.com/SwiftOnSecurity/sysmon-config" target="_blank" rel="noopener noreferrer">SwiftOnSecurity</a>:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="ps" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#79C0FF">Invoke-WebRequest</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">Uri </span><span style="color:#A5D6FF">&quot;https://raw.githubusercontent.com/Neo23x0/sysmon-config/master/sysmonconfig-export.xml&quot;</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">OutFile </span><span style="color:#A5D6FF">&quot;sysmonconfig-export.xml&quot;</span></span></code><button type="button" data="Invoke-WebRequest -Uri &quot;https://raw.githubusercontent.com/Neo23x0/sysmon-config/master/sysmonconfig-export.xml&quot; -OutFile &quot;sysmonconfig-export.xml&quot;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><h3 class="anchor anchorWithStickyNavbar_LWe7" id="install-symon-with-a-configuration">Install Symon with a configuration<a href="#install-symon-with-a-configuration" class="hash-link" aria-label="Direct link to Install Symon with a configuration" title="Direct link to Install Symon with a configuration">​</a></h3><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="ps" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#E6EDF3">.\</span><span style="color:#79C0FF">Sysmon64.exe</span><span style="color:#FF7B72"> -</span><span style="color:#E6EDF3">accepteula </span><span style="color:#FF7B72">-</span><span style="color:#E6EDF3">i sysmonconfig</span><span style="color:#FF7B72">-</span><span style="color:#E6EDF3">export.xml</span></span></code><button type="button" data=".\Sysmon64.exe -accepteula -i sysmonconfig-export.xml" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Now use any of the above techniques to collect event logs through the channel
 <code>Microsoft-Windows-Sysmon/Operational</code>.</p></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="theme-doc-footer-edit-meta-row row"><div class="col"><a href="https://github.com/tenzir/tenzir/tree/main/web/versioned_docs/version-v4.23/integrations/windows-event-logs.md" target="_blank" rel="noreferrer noopener" class="theme-edit-this-page"><svg fill="currentColor" height="20" width="20" viewBox="0 0 40 40" class="iconEdit_Z9Sw" aria-hidden="true"><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"></path></g></svg>Edit this page</a></div><div class="col lastUpdated_vwxv"></div></div></footer></article><nav class="pagination-nav docusaurus-mt-lg" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href="/v4.23/integrations/velociraptor"><div class="pagination-nav__sublabel">Previous</div><div class="pagination-nav__label">Velociraptor</div></a><a class="pagination-nav__link pagination-nav__link--next" href="/v4.23/integrations/zeek"><div class="pagination-nav__sublabel">Next</div><div class="pagination-nav__label">Zeek</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#collect-logs-with-an-agent" class="table-of-contents__link toc-highlight">Collect logs with an agent</a><ul><li><a href="#winlogbeat" class="table-of-contents__link toc-highlight">Winlogbeat</a></li><li><a href="#fluent-bit" class="table-of-contents__link toc-highlight">Fluent Bit</a></li><li><a href="#nxlog" class="table-of-contents__link toc-highlight">NXLog</a></li></ul></li><li><a href="#collect-logs-via-wef--wec" class="table-of-contents__link toc-highlight">Collect logs via WEF &amp; WEC</a><ul><li><a href="#setup-the-window-event-collector-wec" class="table-of-contents__link toc-highlight">Setup the Window Event Collector (WEC)</a></li><li><a href="#setup-windows-event-forwarding-wef" class="table-of-contents__link toc-highlight">Setup Windows Event Forwarding (WEF)</a></li></ul></li><li><a href="#collect-logs-via-openwec" class="table-of-contents__link toc-highlight">Collect logs via OpenWEC</a><ul><li><a href="#setup-openwec" class="table-of-contents__link toc-highlight">Setup OpenWEC</a></li><li><a href="#run-a-tenzir-pipeline-2" class="table-of-contents__link toc-highlight">Run a Tenzir pipeline</a></li></ul></li><li><a href="#increase-visibility-with-sysmon" class="table-of-contents__link toc-highlight">Increase visibility with Sysmon</a><ul><li><a href="#download-and-extract-sysmon-via-powershell" class="table-of-contents__link toc-highlight">Download and extract Sysmon via Powershell</a></li><li><a href="#choose-a-symon-configuration" class="table-of-contents__link toc-highlight">Choose a Symon configuration</a></li><li><a href="#install-symon-with-a-configuration" class="table-of-contents__link toc-highlight">Install Symon with a configuration</a></li></ul></li></ul></div></div></div></div></main></div></div><footer class="footer"><div class="container container-fluid"><div class="row footer__links"><div class="col footer__col"><div class="footer__title">Resources</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/">Docs</a></li><li class="footer__item"><a class="footer__link-item" href="/api">API</a></li><li class="footer__item"><a class="footer__link-item" href="/blog">Blog</a></li><li class="footer__item"><a class="footer__link-item" href="/changelog">Changelog</a></li><li class="footer__item"><a href="https://docs.google.com/presentation/d/1R59T2nuGJg43g6PVKogZbb6DjcJXRYBx3Bih8W-A-oM/present" target="_blank" rel="noopener noreferrer" class="footer__link-item">Release Notes<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Community</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/discord">Discord</a></li><li class="footer__item"><a href="https://github.com/tenzir/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">GitHub<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://twitter.com/tenzir_company" target="_blank" rel="noopener noreferrer" class="footer__link-item">Twitter<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://www.linkedin.com/company/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">LinkedIn<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Tenzir</div><ul class="footer__items clean-list"><li class="footer__item"><a href="https://tenzir.com" target="_blank" rel="noopener noreferrer" class="footer__link-item">Website<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a class="footer__link-item" href="/newsletter">Newsletter</a></li><li class="footer__item"><a class="footer__link-item" href="/privacy-statement">Privacy Statement</a></li><li class="footer__item"><a class="footer__link-item" href="/next/tenzir-vs-cribl">Tenzir vs. Cribl</a></li></ul></div></div><div class="footer__bottom text--center"><div class="footer__copyright">Copyright © 2024 Tenzir GmbH.</div></div></div></footer></div>
-<script src="/assets/js/runtime~main.e5a858d8.js"></script>
-<script src="/assets/js/main.d1af25bc.js"></script>
+<script src="/assets/js/runtime~main.00a00843.js"></script>
+<script src="/assets/js/main.1ee832b2.js"></script>
 </body>
 </html>

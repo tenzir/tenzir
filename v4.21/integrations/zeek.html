@@ -14,9 +14,9 @@
 
 
 
-<script src="https://plausible.io/js/script.js" aysnc defer="defer" data-domain="docs.tenzir.com"></script><link rel="stylesheet" href="/assets/css/styles.85528f24.css">
-<link rel="preload" href="/assets/js/runtime~main.e5a858d8.js" as="script">
-<link rel="preload" href="/assets/js/main.d1af25bc.js" as="script">
+<script src="https://plausible.io/js/script.js" aysnc defer="defer" data-domain="docs.tenzir.com"></script><link rel="stylesheet" href="/assets/css/styles.8411515e.css">
+<link rel="preload" href="/assets/js/runtime~main.00a00843.js" as="script">
+<link rel="preload" href="/assets/js/main.1ee832b2.js" as="script">
 </head>
 <body class="navigation-with-keyboard">
 <script>!function(){function e(e){document.documentElement.setAttribute("data-theme",e)}var t=function(){var e=null;try{e=new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(e){}return e}()||function(){var e=null;try{e=localStorage.getItem("theme")}catch(e){}return e}();null!==t?e(t):window.matchMedia("(prefers-color-scheme: dark)").matches?e("dark"):(window.matchMedia("(prefers-color-scheme: light)").matches,e("light"))}()</script><div id="__docusaurus">
@@ -27,16 +27,209 @@ Zeek integration in much more detail.</p><ul><li><a href="/blog/mobilizing-zeek-
 which Tenzir can parse natively:</p><ol><li><a href="/v4.21/formats/zeek-tsv"><code>zeek-tsv</code></a>: Tab-Separated Values (TSV) with a
 custom header.</li><li><a href="/v4.21/formats/zeek-tsv"><code>zeek-json</code></a>: One NDJSON file for all log types
 (aka. <em>JSON Streaming</em>) including an extra <code>_path</code> and <code>_write_ts</code> field.</li><li><a href="/v4.21/formats/json"><code>json</code></a>: One NDJSON file per log type.</li></ol><h2 class="anchor anchorWithStickyNavbar_LWe7" id="ingest-logs-into-a-node">Ingest logs into a node<a href="#ingest-logs-into-a-node" class="hash-link" aria-label="Direct link to Ingest logs into a node" title="Direct link to Ingest logs into a node">​</a></h2><p>To ingest Zeek logs into a Tenzir node, you have multiple options.</p><h3 class="anchor anchorWithStickyNavbar_LWe7" id="easy-button-import-with-the-official-zeek-package">Easy-button import with the official Zeek package<a href="#easy-button-import-with-the-official-zeek-package" class="hash-link" aria-label="Direct link to Easy-button import with the official Zeek package" title="Direct link to Easy-button import with the official Zeek package">​</a></h3><p>Our official <a href="https://github.com/tenzir/zeek-tenzir" target="_blank" rel="noopener noreferrer">Zeek package</a> makes it easy
-to ship your Zeek logs to a Tenzir node. Install the package first:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">zkg</span><span style="color:#A5D6FF"> install</span><span style="color:#A5D6FF"> zeek-tenzir</span></span></code></pre></figure><p>Then add this to your <code>$PREFIX/share/zeek/site/local.zeek</code> to send all logs that
-Zeek produces to a Tenzir node:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span>@load tenzir/import</span></span>
+to ship your Zeek logs to a Tenzir node. Install the package first:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">zkg</span><span style="color:#A5D6FF"> install</span><span style="color:#A5D6FF"> zeek-tenzir</span></span></code><button type="button" data="zkg install zeek-tenzir" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Then add this to your <code>$PREFIX/share/zeek/site/local.zeek</code> to send all logs that
+Zeek produces to a Tenzir node:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span>@load tenzir/import</span></span>
 <span data-line=""> </span>
 <span data-line=""><span># Uncomment to keep the original Zeek logs.</span></span>
-<span data-line=""><span># redef Tenzir::delete_after_postprocesing=F;</span></span></code></pre></figure><p>For ad-hoc command line processing you can also pass <code>tenzir/import</code> to a Zeek
-invocation:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#8B949E"># Ship logs to it and delete the original files.</span></span>
+<span data-line=""><span># redef Tenzir::delete_after_postprocesing=F;</span></span></code></pre><button type="button" data="@load tenzir/import
+
+# Uncomment to keep the original Zeek logs.
+# redef Tenzir::delete_after_postprocesing=F;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>For ad-hoc command line processing you can also pass <code>tenzir/import</code> to a Zeek
+invocation:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#8B949E"># Ship logs to it and delete the original files.</span></span>
 <span data-line=""><span style="color:#FFA657">zeek</span><span style="color:#79C0FF"> -r</span><span style="color:#A5D6FF"> trace.pcap</span><span style="color:#A5D6FF"> tenzir/import</span></span>
 <span data-line=""> </span>
 <span data-line=""><span style="color:#8B949E"># Ship logs to it and keep the original files.</span></span>
-<span data-line=""><span style="color:#FFA657">zeek</span><span style="color:#79C0FF"> -r</span><span style="color:#A5D6FF"> trace.pcap</span><span style="color:#A5D6FF"> tenzir/import</span><span style="color:#A5D6FF"> Tenzir::delete_after_postprocesing=F</span></span></code></pre></figure><p>For further details on how to use our Zeek package read our blog post <a href="/blog/native-zeek-log-rotation-and-shipping">Native
+<span data-line=""><span style="color:#FFA657">zeek</span><span style="color:#79C0FF"> -r</span><span style="color:#A5D6FF"> trace.pcap</span><span style="color:#A5D6FF"> tenzir/import</span><span style="color:#A5D6FF"> Tenzir::delete_after_postprocesing=F</span></span></code></pre><button type="button" data="# Ship logs to it and delete the original files.
+zeek -r trace.pcap tenzir/import
+
+# Ship logs to it and keep the original files.
+zeek -r trace.pcap tenzir/import Tenzir::delete_after_postprocesing=F" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>For further details on how to use our Zeek package read our blog post <a href="/blog/native-zeek-log-rotation-and-shipping">Native
 Zeek Log Rotation &amp; Shipping</a>.</p><h3 class="anchor anchorWithStickyNavbar_LWe7" id="run-an-import-pipeline-when-rotating-logs">Run an import pipeline when rotating logs<a href="#run-an-import-pipeline-when-rotating-logs" class="hash-link" aria-label="Direct link to Run an import pipeline when rotating logs" title="Direct link to Run an import pipeline when rotating logs">​</a></h3><p>If you cannot use our Zeek package, it is still possible to let Zeek trigger an
 import pipeline upon rotation. Zeek&#x27;s <a href="https://docs.zeek.org/en/master/frameworks/logging.html" target="_blank" rel="noopener noreferrer">logging
 framework</a> can execute
@@ -45,7 +238,7 @@ default of <code>0 secs</code> means that log rotation is disabled. Add this to
 <code>$PREFIX/share/zeek/site/local.zeek</code>, which is the place for local configuration
 changes:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">redef Log::default_rotation_interval = 1 day;</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>Then redefine
 <a href="https://docs.zeek.org/en/master/scripts/base/frameworks/logging/main.zeek.html#id-Log::default_rotation_postprocessor_cmd" target="_blank" rel="noopener noreferrer"><code>Log::default_rotation_postprocessor_cmd</code></a>
-to point to your shell script, e.g., <code>/usr/local/bin/ingest</code>:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">redef Log::default_rotation_postprocessor_cmd=/usr/local/bin/ingest;</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>Here is an example <code>ingest</code> script that imports all files into a Tenzir node:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="bash" data-theme="github-dark-default">ingest</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#8B949E">#!/bin/sh</span></span>
+to point to your shell script, e.g., <code>/usr/local/bin/ingest</code>:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">redef Log::default_rotation_postprocessor_cmd=/usr/local/bin/ingest;</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>Here is an example <code>ingest</code> script that imports all files into a Tenzir node:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="bash" data-theme="github-dark-default">ingest</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#8B949E">#!/bin/sh</span></span>
 <span data-line=""> </span>
 <span data-line=""><span style="color:#E6EDF3">file_name</span><span style="color:#FF7B72">=</span><span style="color:#A5D6FF">&quot;</span><span style="color:#79C0FF">$1</span><span style="color:#A5D6FF">&quot;</span></span>
 <span data-line=""><span style="color:#E6EDF3">base_name</span><span style="color:#FF7B72">=</span><span style="color:#A5D6FF">&quot;</span><span style="color:#79C0FF">$2</span><span style="color:#A5D6FF">&quot;</span></span>
@@ -65,12 +258,94 @@ to point to your shell script, e.g., <code>/usr/local/bin/ingest</code>:</p><div
 <span data-line=""> </span>
 <span data-line=""><span style="color:#E6EDF3">pipeline</span><span style="color:#FF7B72">=</span><span style="color:#A5D6FF">&quot;from file </span><span style="color:#FF7B72">\&quot;</span><span style="color:#E6EDF3">$file_name</span><span style="color:#FF7B72">\&quot;</span><span style="color:#A5D6FF"> read </span><span style="color:#E6EDF3">$format</span><span style="color:#A5D6FF"> | import&quot;</span></span>
 <span data-line=""> </span>
-<span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &quot;</span><span style="color:#E6EDF3">$pipeline</span><span style="color:#A5D6FF">&quot;</span></span></code></pre></figure><p>Our blog post <a href="/blog/native-zeek-log-rotation-and-shipping">Native Zeek Log Rotation &amp;
+<span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &quot;</span><span style="color:#E6EDF3">$pipeline</span><span style="color:#A5D6FF">&quot;</span></span></code></pre><button type="button" data="#!/bin/sh
+
+file_name=&quot;$1&quot;
+base_name=&quot;$2&quot;
+from=&quot;$3&quot;
+to=&quot;$4&quot;
+terminating=&quot;$5&quot;
+writer=&quot;$6&quot;
+
+if [ &quot;$writer&quot; = &quot;ascii&quot; ]; then
+  format=&quot;zeek-tsv&quot;
+elif [ &quot;$writer&quot; = &quot;json&quot; ]; then
+  format=&quot;json --schema zeek.$base_name&quot;
+else
+  echo &quot;unsupported Zeek writer: $writer&quot;
+  exit 1
+fi
+
+pipeline=&quot;from file \&quot;$file_name\&quot; read $format | import&quot;
+
+tenzir &quot;$pipeline&quot;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Our blog post <a href="/blog/native-zeek-log-rotation-and-shipping">Native Zeek Log Rotation &amp;
 Shipping</a> provides further details
 on this method.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="run-zeek-on-a-packet-pipeline">Run Zeek on a packet pipeline<a href="#run-zeek-on-a-packet-pipeline" class="hash-link" aria-label="Direct link to Run Zeek on a packet pipeline" title="Direct link to Run Zeek on a packet pipeline">​</a></h2><p>You can run Zeek on a pipeline of PCAP packets and continue processing the logs
 in the same pipeline. A stock Tenzir installation comes with a
 <a href="/v4.21/language/user-defined-operators">user-defined</a> <code>zeek</code> operator that looks
-as follows:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#7EE787">tenzir</span><span style="color:#E6EDF3">:</span></span>
+as follows:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#7EE787">tenzir</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#7EE787">  operators</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#7EE787">    zeek</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#A5D6FF">      shell &quot;eval \&quot;$(zkg env)\&quot; &amp;&amp;</span></span>
@@ -78,21 +353,467 @@ as follows:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class
 <span data-line=""><span style="color:#A5D6FF">             JSONStreaming::disable_default_logs=T</span></span>
 <span data-line=""><span style="color:#A5D6FF">             JSONStreaming::enable_log_rotation=F</span></span>
 <span data-line=""><span style="color:#A5D6FF">             json-streaming-logs&quot;</span></span>
-<span data-line=""><span style="color:#FF7B72">      |</span><span style="color:#FFA198;font-style:italic"> read zeek-json</span></span></code></pre></figure><p>This allows you run Zeek on a packet trace as follows:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;load /path/to/trace.pcap | zeek&#x27;</span></span></code></pre></figure><p>You can also perform more elaborate packet filtering by going through the
-<a href="/v4.21/formats/pcap"><code>pcap</code></a> parser:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;from /path/to/trace.pcap</span></span>
+<span data-line=""><span style="color:#FF7B72">      |</span><span style="color:#FFA198;font-style:italic"> read zeek-json</span></span></code></pre><button type="button" data="tenzir:
+  operators:
+    zeek:
+      shell &quot;eval \&quot;$(zkg env)\&quot; &amp;&amp;
+             zeek -r - LogAscii::output_to_stdout=T
+             JSONStreaming::disable_default_logs=T
+             JSONStreaming::enable_log_rotation=F
+             json-streaming-logs&quot;
+      | read zeek-json" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>This allows you run Zeek on a packet trace as follows:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;load /path/to/trace.pcap | zeek&#x27;</span></span></code><button type="button" data="tenzir &#x27;load /path/to/trace.pcap | zeek&#x27;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>You can also perform more elaborate packet filtering by going through the
+<a href="/v4.21/formats/pcap"><code>pcap</code></a> parser:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;from /path/to/trace.pcap</span></span>
 <span data-line=""><span style="color:#A5D6FF">       | decapsulate</span></span>
 <span data-line=""><span style="color:#A5D6FF">       | where 10.0.0.0/8 || community == &quot;1:YXWfTYEyYLKVv5Ge4WqijUnKTrM=&quot;</span></span>
 <span data-line=""><span style="color:#A5D6FF">       | write pcap</span></span>
-<span data-line=""><span style="color:#A5D6FF">       | zeek&#x27;</span></span></code></pre></figure><p>Read the <a href="/blog/shell-yeah-supercharging-zeek-and-suricata-with-tenzir">in-depth blog
+<span data-line=""><span style="color:#A5D6FF">       | zeek&#x27;</span></span></code></pre><button type="button" data="tenzir &#x27;from /path/to/trace.pcap
+       | decapsulate
+       | where 10.0.0.0/8 || community == &quot;1:YXWfTYEyYLKVv5Ge4WqijUnKTrM=&quot;
+       | write pcap
+       | zeek&#x27;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Read the <a href="/blog/shell-yeah-supercharging-zeek-and-suricata-with-tenzir">in-depth blog
 post</a> for more
 details about the inner workings of the <a href="/v4.21/operators/shell"><code>shell</code></a>
 operator.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="process-logs-with-a-pipeline-on-the-command-line">Process logs with a pipeline on the command line<a href="#process-logs-with-a-pipeline-on-the-command-line" class="hash-link" aria-label="Direct link to Process logs with a pipeline on the command line" title="Direct link to Process logs with a pipeline on the command line">​</a></h2><p>Zeek ships with a helper utility <code>zeek-cut</code> that operators on Zeek&#x27;s
-tab-separated logs. For example, to extract the host pairs from a conn log:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">zeek-cut</span><span style="color:#A5D6FF"> id.orig_h</span><span style="color:#A5D6FF"> id.resp_h</span><span style="color:#FF7B72"> &lt;</span><span style="color:#A5D6FF"> conn.log</span></span></code></pre></figure><p>The list of arguments to <code>zeek-cut</code> are the column names of the log. The
+tab-separated logs. For example, to extract the host pairs from a conn log:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">zeek-cut</span><span style="color:#A5D6FF"> id.orig_h</span><span style="color:#A5D6FF"> id.resp_h</span><span style="color:#FF7B72"> &lt;</span><span style="color:#A5D6FF"> conn.log</span></span></code><button type="button" data="zeek-cut id.orig_h id.resp_h &lt; conn.log" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>The list of arguments to <code>zeek-cut</code> are the column names of the log. The
 <a href="/v4.21/operators/select"><code>select</code></a> operator performs the equivalent in Tenzir
-after we parse the logs as <a href="/v4.21/formats/zeek-tsv"><code>zeek-tsv</code></a>:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;read zeek-tsv | select zeek-cut id.orig_h id.resp_h&#x27;</span><span style="color:#FF7B72"> &lt;</span><span style="color:#A5D6FF"> conn.log</span></span></code></pre></figure><p>Since pipelines are <em>multi-schema</em> and the Zeek TSV parser is aware of log
-boundaries, you can also concatenate logs of various types:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">cat</span><span style="color:#79C0FF"> *</span><span style="color:#A5D6FF">.log</span><span style="color:#FF7B72"> |</span><span style="color:#FFA657"> tenzir</span><span style="color:#A5D6FF"> &#x27;read zeek-tsv | select zeek-cut id.orig_h id.resp_h&#x27;</span></span></code></pre></figure><h2 class="anchor anchorWithStickyNavbar_LWe7" id="generate-zeek-tsv-from-arbitrary-data">Generate Zeek TSV from arbitrary data<a href="#generate-zeek-tsv-from-arbitrary-data" class="hash-link" aria-label="Direct link to Generate Zeek TSV from arbitrary data" title="Direct link to Generate Zeek TSV from arbitrary data">​</a></h2><p>The <a href="/v4.21/formats/zeek-tsv"><code>zeek-tsv</code></a> is not only a parser, but also a
-printer. This means you can render any data as Zeek TSV log.</p><p>For example, print the Tenzir version as Zeek TSV log:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;show version | write zeek-tsv&#x27;</span></span></code></pre></figure><p>This yields the following output:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">#separator \x09</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#set_separator  ,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#empty_field    (empty)</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#unset_field    -</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#path   tenzir.version</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#open   2023-12-16-08-47-12.372511</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#fields version major   minor   patch   tweak</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#types  string  count   count   count   count</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">v4.6.4-155-g0b75e93026  4   6   4   155</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#close  2023-12-16-08-47-12.372736</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="theme-doc-footer-edit-meta-row row"><div class="col"><a href="https://github.com/tenzir/tenzir/tree/main/web/versioned_docs/version-v4.21/integrations/zeek.md" target="_blank" rel="noreferrer noopener" class="theme-edit-this-page"><svg fill="currentColor" height="20" width="20" viewBox="0 0 40 40" class="iconEdit_Z9Sw" aria-hidden="true"><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"></path></g></svg>Edit this page</a></div><div class="col lastUpdated_vwxv"></div></div></footer></article><nav class="pagination-nav docusaurus-mt-lg" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href="/v4.21/integrations/windows-event-logs"><div class="pagination-nav__sublabel">Previous</div><div class="pagination-nav__label">Windows Event Logs</div></a><a class="pagination-nav__link pagination-nav__link--next" href="/v4.21/contribution"><div class="pagination-nav__sublabel">Next</div><div class="pagination-nav__label">Contribute</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#ingest-logs-into-a-node" class="table-of-contents__link toc-highlight">Ingest logs into a node</a><ul><li><a href="#easy-button-import-with-the-official-zeek-package" class="table-of-contents__link toc-highlight">Easy-button import with the official Zeek package</a></li><li><a href="#run-an-import-pipeline-when-rotating-logs" class="table-of-contents__link toc-highlight">Run an import pipeline when rotating logs</a></li></ul></li><li><a href="#run-zeek-on-a-packet-pipeline" class="table-of-contents__link toc-highlight">Run Zeek on a packet pipeline</a></li><li><a href="#process-logs-with-a-pipeline-on-the-command-line" class="table-of-contents__link toc-highlight">Process logs with a pipeline on the command line</a></li><li><a href="#generate-zeek-tsv-from-arbitrary-data" class="table-of-contents__link toc-highlight">Generate Zeek TSV from arbitrary data</a></li></ul></div></div></div></div></main></div></div><footer class="footer"><div class="container container-fluid"><div class="row footer__links"><div class="col footer__col"><div class="footer__title">Resources</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/">Docs</a></li><li class="footer__item"><a class="footer__link-item" href="/api">API</a></li><li class="footer__item"><a class="footer__link-item" href="/blog">Blog</a></li><li class="footer__item"><a class="footer__link-item" href="/changelog">Changelog</a></li><li class="footer__item"><a href="https://docs.google.com/presentation/d/1R59T2nuGJg43g6PVKogZbb6DjcJXRYBx3Bih8W-A-oM/present" target="_blank" rel="noopener noreferrer" class="footer__link-item">Release Notes<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Community</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/discord">Discord</a></li><li class="footer__item"><a href="https://github.com/tenzir/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">GitHub<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://twitter.com/tenzir_company" target="_blank" rel="noopener noreferrer" class="footer__link-item">Twitter<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://www.linkedin.com/company/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">LinkedIn<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Tenzir</div><ul class="footer__items clean-list"><li class="footer__item"><a href="https://tenzir.com" target="_blank" rel="noopener noreferrer" class="footer__link-item">Website<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a class="footer__link-item" href="/newsletter">Newsletter</a></li><li class="footer__item"><a class="footer__link-item" href="/privacy-statement">Privacy Statement</a></li><li class="footer__item"><a class="footer__link-item" href="/next/tenzir-vs-cribl">Tenzir vs. Cribl</a></li></ul></div></div><div class="footer__bottom text--center"><div class="footer__copyright">Copyright © 2024 Tenzir GmbH.</div></div></div></footer></div>
-<script src="/assets/js/runtime~main.e5a858d8.js"></script>
-<script src="/assets/js/main.d1af25bc.js"></script>
+after we parse the logs as <a href="/v4.21/formats/zeek-tsv"><code>zeek-tsv</code></a>:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;read zeek-tsv | select zeek-cut id.orig_h id.resp_h&#x27;</span><span style="color:#FF7B72"> &lt;</span><span style="color:#A5D6FF"> conn.log</span></span></code><button type="button" data="tenzir &#x27;read zeek-tsv | select zeek-cut id.orig_h id.resp_h&#x27; &lt; conn.log" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Since pipelines are <em>multi-schema</em> and the Zeek TSV parser is aware of log
+boundaries, you can also concatenate logs of various types:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">cat</span><span style="color:#79C0FF"> *</span><span style="color:#A5D6FF">.log</span><span style="color:#FF7B72"> |</span><span style="color:#FFA657"> tenzir</span><span style="color:#A5D6FF"> &#x27;read zeek-tsv | select zeek-cut id.orig_h id.resp_h&#x27;</span></span></code><button type="button" data="cat *.log | tenzir &#x27;read zeek-tsv | select zeek-cut id.orig_h id.resp_h&#x27;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><h2 class="anchor anchorWithStickyNavbar_LWe7" id="generate-zeek-tsv-from-arbitrary-data">Generate Zeek TSV from arbitrary data<a href="#generate-zeek-tsv-from-arbitrary-data" class="hash-link" aria-label="Direct link to Generate Zeek TSV from arbitrary data" title="Direct link to Generate Zeek TSV from arbitrary data">​</a></h2><p>The <a href="/v4.21/formats/zeek-tsv"><code>zeek-tsv</code></a> is not only a parser, but also a
+printer. This means you can render any data as Zeek TSV log.</p><p>For example, print the Tenzir version as Zeek TSV log:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;show version | write zeek-tsv&#x27;</span></span></code><button type="button" data="tenzir &#x27;show version | write zeek-tsv&#x27;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>This yields the following output:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">#separator \x09</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#set_separator  ,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#empty_field    (empty)</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#unset_field    -</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#path   tenzir.version</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#open   2023-12-16-08-47-12.372511</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#fields version major   minor   patch   tweak</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#types  string  count   count   count   count</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">v4.6.4-155-g0b75e93026  4   6   4   155</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">#close  2023-12-16-08-47-12.372736</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="theme-doc-footer-edit-meta-row row"><div class="col"><a href="https://github.com/tenzir/tenzir/tree/main/web/versioned_docs/version-v4.21/integrations/zeek.md" target="_blank" rel="noreferrer noopener" class="theme-edit-this-page"><svg fill="currentColor" height="20" width="20" viewBox="0 0 40 40" class="iconEdit_Z9Sw" aria-hidden="true"><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"></path></g></svg>Edit this page</a></div><div class="col lastUpdated_vwxv"></div></div></footer></article><nav class="pagination-nav docusaurus-mt-lg" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href="/v4.21/integrations/windows-event-logs"><div class="pagination-nav__sublabel">Previous</div><div class="pagination-nav__label">Windows Event Logs</div></a><a class="pagination-nav__link pagination-nav__link--next" href="/v4.21/contribution"><div class="pagination-nav__sublabel">Next</div><div class="pagination-nav__label">Contribute</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#ingest-logs-into-a-node" class="table-of-contents__link toc-highlight">Ingest logs into a node</a><ul><li><a href="#easy-button-import-with-the-official-zeek-package" class="table-of-contents__link toc-highlight">Easy-button import with the official Zeek package</a></li><li><a href="#run-an-import-pipeline-when-rotating-logs" class="table-of-contents__link toc-highlight">Run an import pipeline when rotating logs</a></li></ul></li><li><a href="#run-zeek-on-a-packet-pipeline" class="table-of-contents__link toc-highlight">Run Zeek on a packet pipeline</a></li><li><a href="#process-logs-with-a-pipeline-on-the-command-line" class="table-of-contents__link toc-highlight">Process logs with a pipeline on the command line</a></li><li><a href="#generate-zeek-tsv-from-arbitrary-data" class="table-of-contents__link toc-highlight">Generate Zeek TSV from arbitrary data</a></li></ul></div></div></div></div></main></div></div><footer class="footer"><div class="container container-fluid"><div class="row footer__links"><div class="col footer__col"><div class="footer__title">Resources</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/">Docs</a></li><li class="footer__item"><a class="footer__link-item" href="/api">API</a></li><li class="footer__item"><a class="footer__link-item" href="/blog">Blog</a></li><li class="footer__item"><a class="footer__link-item" href="/changelog">Changelog</a></li><li class="footer__item"><a href="https://docs.google.com/presentation/d/1R59T2nuGJg43g6PVKogZbb6DjcJXRYBx3Bih8W-A-oM/present" target="_blank" rel="noopener noreferrer" class="footer__link-item">Release Notes<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Community</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/discord">Discord</a></li><li class="footer__item"><a href="https://github.com/tenzir/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">GitHub<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://twitter.com/tenzir_company" target="_blank" rel="noopener noreferrer" class="footer__link-item">Twitter<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://www.linkedin.com/company/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">LinkedIn<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Tenzir</div><ul class="footer__items clean-list"><li class="footer__item"><a href="https://tenzir.com" target="_blank" rel="noopener noreferrer" class="footer__link-item">Website<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a class="footer__link-item" href="/newsletter">Newsletter</a></li><li class="footer__item"><a class="footer__link-item" href="/privacy-statement">Privacy Statement</a></li><li class="footer__item"><a class="footer__link-item" href="/next/tenzir-vs-cribl">Tenzir vs. Cribl</a></li></ul></div></div><div class="footer__bottom text--center"><div class="footer__copyright">Copyright © 2024 Tenzir GmbH.</div></div></div></footer></div>
+<script src="/assets/js/runtime~main.00a00843.js"></script>
+<script src="/assets/js/main.1ee832b2.js"></script>
 </body>
 </html>

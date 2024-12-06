@@ -14,9 +14,9 @@
 
 
 
-<script src="https://plausible.io/js/script.js" aysnc defer="defer" data-domain="docs.tenzir.com"></script><link rel="stylesheet" href="/assets/css/styles.85528f24.css">
-<link rel="preload" href="/assets/js/runtime~main.e5a858d8.js" as="script">
-<link rel="preload" href="/assets/js/main.d1af25bc.js" as="script">
+<script src="https://plausible.io/js/script.js" aysnc defer="defer" data-domain="docs.tenzir.com"></script><link rel="stylesheet" href="/assets/css/styles.8411515e.css">
+<link rel="preload" href="/assets/js/runtime~main.00a00843.js" as="script">
+<link rel="preload" href="/assets/js/main.1ee832b2.js" as="script">
 </head>
 <body class="navigation-with-keyboard">
 <script>!function(){function e(e){document.documentElement.setAttribute("data-theme",e)}var t=function(){var e=null;try{e=new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(e){}return e}()||function(){var e=null;try{e=localStorage.getItem("theme")}catch(e){}return e}();null!==t?e(t):window.matchMedia("(prefers-color-scheme: dark)").matches?e("dark"):(window.matchMedia("(prefers-color-scheme: light)").matches,e("light"))}()</script><div id="__docusaurus">
@@ -24,17 +24,206 @@
 The input of the operator is forwarded to the child&#x27;s standard input. Similarly,
 the child&#x27;s standard output is forwarded to the output of the operator.</p><h3 class="anchor anchorWithStickyNavbar_LWe7" id="command"><code>&lt;command&gt;</code><a href="#command" class="hash-link" aria-label="Direct link to command" title="Direct link to command">​</a></h3><p>The command to execute and hook into the pipeline processing.</p><p>The value of <code>command</code> is a single string. If you would like to pass a command
 line as you would on the shell, use single or double quotes for escaping, e.g.,
-<code>shell &#x27;jq -C&#x27;</code> or <code>shell &quot;jq -C&quot;</code>. The command is interpreted by <code>/bin/sh -c</code>.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="examples">Examples<a href="#examples" class="hash-link" aria-label="Direct link to Examples" title="Direct link to Examples">​</a></h2><p>Show a live log from the <code>tenzir-node</code> service:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">shell &quot;journalctl -u tenzir-node -f&quot; | read json</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>Consider the use case of converting CSV to JSON:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;read csv | write json&#x27;</span><span style="color:#FF7B72"> |</span><span style="color:#FFA657"> jq</span><span style="color:#79C0FF"> -C</span></span></code></pre></figure><p>The <code>write json</code> operator produces NDJSON. Piping this output to <code>jq</code> generates a
+<code>shell &#x27;jq -C&#x27;</code> or <code>shell &quot;jq -C&quot;</code>. The command is interpreted by <code>/bin/sh -c</code>.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="examples">Examples<a href="#examples" class="hash-link" aria-label="Direct link to Examples" title="Direct link to Examples">​</a></h2><p>Show a live log from the <code>tenzir-node</code> service:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">shell &quot;journalctl -u tenzir-node -f&quot; | read json</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>Consider the use case of converting CSV to JSON:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;read csv | write json&#x27;</span><span style="color:#FF7B72"> |</span><span style="color:#FFA657"> jq</span><span style="color:#79C0FF"> -C</span></span></code><button type="button" data="tenzir &#x27;read csv | write json&#x27; | jq -C" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>The <code>write json</code> operator produces NDJSON. Piping this output to <code>jq</code> generates a
 colored, tree-structured variation that is (arguably) easier to read. Using the
 <code>shell</code> operator, you can integrate Unix tools that rely on
 stdin/stdout for input/output as &quot;native&quot; operators that process raw bytes. For
 example, in this pipeline:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">write json | save stdout</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>The <a href="/next/operators/write"><code>write</code></a> operator produces raw bytes and <a href="/next/operators/save"><code>save</code></a>
 accepts raw bytes. The <code>shell</code> operator therefore fits right in the middle:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">write json | shell &quot;jq -C&quot; | save stdout</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>Using <a href="/next/language/user-defined-operators">user-defined operators</a>, we can
 expose this (potentially verbose) post-processing more succinctly in the
-pipeline language:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="yaml" data-theme="github-dark-default">tenzir.yaml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#7EE787">tenzir</span><span style="color:#E6EDF3">:</span></span>
+pipeline language:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="yaml" data-theme="github-dark-default">tenzir.yaml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#7EE787">tenzir</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#7EE787">  operators</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#7EE787">    jsonize</span><span style="color:#E6EDF3">:</span></span>
-<span data-line=""><span style="color:#A5D6FF">      write json | shell &quot;jq -C&quot; | save stdout</span></span></code></pre></figure><p>Now you can use <code>jsonize</code> as a custom operator in a pipeline:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;read csv | where field &gt; 42 | jsonize&#x27;</span><span style="color:#FF7B72"> &lt;</span><span style="color:#A5D6FF"> file.csv</span></span></code></pre></figure><p>This mechanism allows for wrapping also more complex invocation of tools.
+<span data-line=""><span style="color:#A5D6FF">      write json | shell &quot;jq -C&quot; | save stdout</span></span></code></pre><button type="button" data="tenzir:
+  operators:
+    jsonize:
+      write json | shell &quot;jq -C&quot; | save stdout" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Now you can use <code>jsonize</code> as a custom operator in a pipeline:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><code data-language="bash" data-theme="github-dark-default" style="display:grid"><span data-line=""><span style="color:#FFA657">tenzir</span><span style="color:#A5D6FF"> &#x27;read csv | where field &gt; 42 | jsonize&#x27;</span><span style="color:#FF7B72"> &lt;</span><span style="color:#A5D6FF"> file.csv</span></span></code><button type="button" data="tenzir &#x27;read csv | where field &gt; 42 | jsonize&#x27; &lt; file.csv" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>This mechanism allows for wrapping also more complex invocation of tools.
 <a href="https://zeek.org" target="_blank" rel="noopener noreferrer">Zeek</a>, for example, converts packets into structured network
 logs. Tenzir already has support for consuming Zeek output with the formats
 <a href="/next/formats/zeek-json"><code>zeek-json</code></a> and
@@ -43,19 +232,215 @@ downstream of a Zeek instance. Sometimes you want instant Zeek analytics given a
 PCAP trace.</p><p>With the <code>shell</code> operator, you can script a Zeek invocation and readily
 post-process the output with a rich set of operators, to filter, reshape,
 enrich, or route the logs as structured data. Let&#x27;s define a <code>zeek</code> operator for
-that:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="yaml" data-theme="github-dark-default">tenzir.yaml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#7EE787">tenzir</span><span style="color:#E6EDF3">:</span></span>
+that:</p><figure data-rehype-pretty-code-figure=""><figcaption data-rehype-pretty-code-title="" data-language="yaml" data-theme="github-dark-default">tenzir.yaml</figcaption><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#7EE787">tenzir</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#7EE787">  operators</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#7EE787">    zeek</span><span style="color:#E6EDF3">:</span></span>
 <span data-line=""><span style="color:#A5D6FF">      shell &quot;zeek -r - LogAscii::output_to_stdout=T</span></span>
 <span data-line=""><span style="color:#A5D6FF">             JSONStreaming::disable_default_logs=T</span></span>
 <span data-line=""><span style="color:#A5D6FF">             JSONStreaming::enable_log_rotation=F</span></span>
 <span data-line=""><span style="color:#A5D6FF">             json-streaming-logs&quot;</span></span>
-<span data-line=""><span style="color:#FF7B72">      |</span><span style="color:#FFA198;font-style:italic"> read zeek-json</span></span></code></pre></figure><p>Processing a PCAP trace now is a matter of calling the <code>zeek</code> operator:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">gunzip</span><span style="color:#79C0FF"> -c</span><span style="color:#A5D6FF"> example.pcap.gz</span><span style="color:#FF7B72"> |</span></span>
-<span data-line=""><span style="color:#FFA657">  tenzir</span><span style="color:#A5D6FF"> &#x27;zeek | select id.orig_h, id.orig_p, id.resp_h | head 3&#x27;</span></span></code></pre></figure><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;id&quot;</span><span style="color:#E6EDF3">: {</span><span style="color:#7EE787">&quot;orig_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_p&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span><span style="color:#E6EDF3">}}</span></span>
+<span data-line=""><span style="color:#FF7B72">      |</span><span style="color:#FFA198;font-style:italic"> read zeek-json</span></span></code></pre><button type="button" data="tenzir:
+  operators:
+    zeek:
+      shell &quot;zeek -r - LogAscii::output_to_stdout=T
+             JSONStreaming::disable_default_logs=T
+             JSONStreaming::enable_log_rotation=F
+             json-streaming-logs&quot;
+      | read zeek-json" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>Processing a PCAP trace now is a matter of calling the <code>zeek</code> operator:</p><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#FFA657">gunzip</span><span style="color:#79C0FF"> -c</span><span style="color:#A5D6FF"> example.pcap.gz</span><span style="color:#FF7B72"> |</span></span>
+<span data-line=""><span style="color:#FFA657">  tenzir</span><span style="color:#A5D6FF"> &#x27;zeek | select id.orig_h, id.orig_p, id.resp_h | head 3&#x27;</span></span></code></pre><button type="button" data="gunzip -c example.pcap.gz |
+  tenzir &#x27;zeek | select id.orig_h, id.orig_p, id.resp_h | head 3&#x27;" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;id&quot;</span><span style="color:#E6EDF3">: {</span><span style="color:#7EE787">&quot;orig_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_p&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span><span style="color:#E6EDF3">}}</span></span>
 <span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;id&quot;</span><span style="color:#E6EDF3">: {</span><span style="color:#7EE787">&quot;orig_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;192.168.168.100&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;83.135.95.78&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_p&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">0</span><span style="color:#E6EDF3">}}</span></span>
-<span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;id&quot;</span><span style="color:#E6EDF3">: {</span><span style="color:#7EE787">&quot;orig_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;192.168.168.100&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;83.135.95.78&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_p&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">22</span><span style="color:#E6EDF3">}}</span></span></code></pre></figure><p>NB: because <code>zeek</code> (= <code>shell</code>) reads bytes, we can drop the implicit <code>load
+<span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;id&quot;</span><span style="color:#E6EDF3">: {</span><span style="color:#7EE787">&quot;orig_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;192.168.168.100&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;83.135.95.78&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;resp_p&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">22</span><span style="color:#E6EDF3">}}</span></span></code></pre><button type="button" data="{&quot;id&quot;: {&quot;orig_h&quot;: null, &quot;resp_h&quot;: null, &quot;resp_p&quot;: null}}
+{&quot;id&quot;: {&quot;orig_h&quot;: &quot;192.168.168.100&quot;, &quot;resp_h&quot;: &quot;83.135.95.78&quot;, &quot;resp_p&quot;: 0}}
+{&quot;id&quot;: {&quot;orig_h&quot;: &quot;192.168.168.100&quot;, &quot;resp_h&quot;: &quot;83.135.95.78&quot;, &quot;resp_p&quot;: 22}}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>NB: because <code>zeek</code> (= <code>shell</code>) reads bytes, we can drop the implicit <code>load
 stdin</code> source operator in this pipeline.</p></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="theme-doc-footer-edit-meta-row row"><div class="col"><a href="https://github.com/tenzir/tenzir/tree/main/web/docs/operators/shell.md" target="_blank" rel="noreferrer noopener" class="theme-edit-this-page"><svg fill="currentColor" height="20" width="20" viewBox="0 0 40 40" class="iconEdit_Z9Sw" aria-hidden="true"><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"></path></g></svg>Edit this page</a></div><div class="col lastUpdated_vwxv"></div></div></footer></article><nav class="pagination-nav docusaurus-mt-lg" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href="/next/operators/set"><div class="pagination-nav__sublabel">Previous</div><div class="pagination-nav__label">set</div></a><a class="pagination-nav__link pagination-nav__link--next" href="/next/operators/show"><div class="pagination-nav__sublabel">Next</div><div class="pagination-nav__label">show</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#synopsis" class="table-of-contents__link toc-highlight">Synopsis</a></li><li><a href="#description" class="table-of-contents__link toc-highlight">Description</a><ul><li><a href="#command" class="table-of-contents__link toc-highlight"><code>&lt;command&gt;</code></a></li></ul></li><li><a href="#examples" class="table-of-contents__link toc-highlight">Examples</a></li></ul></div></div></div></div></main></div></div><footer class="footer"><div class="container container-fluid"><div class="row footer__links"><div class="col footer__col"><div class="footer__title">Resources</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/">Docs</a></li><li class="footer__item"><a class="footer__link-item" href="/api">API</a></li><li class="footer__item"><a class="footer__link-item" href="/blog">Blog</a></li><li class="footer__item"><a class="footer__link-item" href="/changelog">Changelog</a></li><li class="footer__item"><a href="https://docs.google.com/presentation/d/1R59T2nuGJg43g6PVKogZbb6DjcJXRYBx3Bih8W-A-oM/present" target="_blank" rel="noopener noreferrer" class="footer__link-item">Release Notes<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Community</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/discord">Discord</a></li><li class="footer__item"><a href="https://github.com/tenzir/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">GitHub<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://twitter.com/tenzir_company" target="_blank" rel="noopener noreferrer" class="footer__link-item">Twitter<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://www.linkedin.com/company/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">LinkedIn<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Tenzir</div><ul class="footer__items clean-list"><li class="footer__item"><a href="https://tenzir.com" target="_blank" rel="noopener noreferrer" class="footer__link-item">Website<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a class="footer__link-item" href="/newsletter">Newsletter</a></li><li class="footer__item"><a class="footer__link-item" href="/privacy-statement">Privacy Statement</a></li><li class="footer__item"><a class="footer__link-item" href="/next/tenzir-vs-cribl">Tenzir vs. Cribl</a></li></ul></div></div><div class="footer__bottom text--center"><div class="footer__copyright">Copyright © 2024 Tenzir GmbH.</div></div></div></footer></div>
-<script src="/assets/js/runtime~main.e5a858d8.js"></script>
-<script src="/assets/js/main.d1af25bc.js"></script>
+<script src="/assets/js/runtime~main.00a00843.js"></script>
+<script src="/assets/js/main.1ee832b2.js"></script>
 </body>
 </html>

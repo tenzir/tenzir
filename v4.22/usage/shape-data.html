@@ -14,9 +14,9 @@
 
 
 
-<script src="https://plausible.io/js/script.js" aysnc defer="defer" data-domain="docs.tenzir.com"></script><link rel="stylesheet" href="/assets/css/styles.85528f24.css">
-<link rel="preload" href="/assets/js/runtime~main.e5a858d8.js" as="script">
-<link rel="preload" href="/assets/js/main.d1af25bc.js" as="script">
+<script src="https://plausible.io/js/script.js" aysnc defer="defer" data-domain="docs.tenzir.com"></script><link rel="stylesheet" href="/assets/css/styles.8411515e.css">
+<link rel="preload" href="/assets/js/runtime~main.00a00843.js" as="script">
+<link rel="preload" href="/assets/js/main.1ee832b2.js" as="script">
 </head>
 <body class="navigation-with-keyboard">
 <script>!function(){function e(e){document.documentElement.setAttribute("data-theme",e)}var t=function(){var e=null;try{e=new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(e){}return e}()||function(){var e=null;try{e=localStorage.getItem("theme")}catch(e){}return e}();null!==t?e(t):window.matchMedia("(prefers-color-scheme: dark)").matches?e("dark"):(window.matchMedia("(prefers-color-scheme: light)").matches,e("light"))}()</script><div id="__docusaurus">
@@ -28,7 +28,7 @@ visual overview of transformations that you can perform over a data frame:</p><p
 the M57 sample data into a node, as explained in the
 <a href="/v4.22/tutorials/quickstart">quickstart</a>. We therefore start every pipeline with
 <a href="/v4.22/operators/export"><code>export</code></a>.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="filter-rows-with-where">Filter rows with <code>where</code><a href="#filter-rows-with-where" class="hash-link" aria-label="Direct link to filter-rows-with-where" title="Direct link to filter-rows-with-where">​</a></h2><p>Use <a href="/v4.22/operators/where"><code>where</code></a> to filter rows in the
-input with an <a href="/v4.22/language/expressions">expression</a>.</p><p>Filter by metadata using the <code>#schema</code> selector:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export | where #schema == &quot;suricata.alert&quot;</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+input with an <a href="/v4.22/language/expressions">expression</a>.</p><p>Filter by metadata using the <code>#schema</code> selector:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export | where #schema == &quot;suricata.alert&quot;</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;timestamp&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;2021-11-17T13:52:05.695469&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;flow_id&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">1868285155318879</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;pcap_cnt&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">143</span><span style="color:#E6EDF3">,</span></span>
@@ -87,7 +87,128 @@ input with an <a href="/v4.22/language/expressions">expression</a>.</p><p>Filter
 <span data-line=""><span style="color:#7EE787">    &quot;linktype&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span></span>
 <span data-line=""><span style="color:#E6EDF3">  },</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;app_proto&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;failed&quot;</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure><p>(Only 1 out of 19 shown.)</p></div></div></details><p>Or by using type and field extractors:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where 10.10.5.0/25 &amp;&amp; (orig_bytes &gt; 1 Mi || duration &gt; 30 min)</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;timestamp&quot;: &quot;2021-11-17T13:52:05.695469&quot;,
+  &quot;flow_id&quot;: 1868285155318879,
+  &quot;pcap_cnt&quot;: 143,
+  &quot;vlan&quot;: null,
+  &quot;in_iface&quot;: null,
+  &quot;src_ip&quot;: &quot;14.1.112.177&quot;,
+  &quot;src_port&quot;: 38376,
+  &quot;dest_ip&quot;: &quot;198.71.247.91&quot;,
+  &quot;dest_port&quot;: 123,
+  &quot;proto&quot;: &quot;UDP&quot;,
+  &quot;event_type&quot;: &quot;alert&quot;,
+  &quot;community_id&quot;: null,
+  &quot;alert&quot;: {
+    &quot;app_proto&quot;: null,
+    &quot;action&quot;: &quot;allowed&quot;,
+    &quot;gid&quot;: 1,
+    &quot;signature_id&quot;: 2017919,
+    &quot;rev&quot;: 2,
+    &quot;signature&quot;: &quot;ET DOS Possible NTP DDoS Inbound Frequent Un-Authed MON_LIST Requests IMPL 0x03&quot;,
+    &quot;category&quot;: &quot;Attempted Denial of Service&quot;,
+    &quot;severity&quot;: 2,
+    &quot;source&quot;: {
+      &quot;ip&quot;: null,
+      &quot;port&quot;: null
+    },
+    &quot;target&quot;: {
+      &quot;ip&quot;: null,
+      &quot;port&quot;: null
+    },
+    &quot;metadata&quot;: {
+      &quot;created_at&quot;: [
+        &quot;2014_01_03&quot;
+      ],
+      &quot;updated_at&quot;: [
+        &quot;2014_01_03&quot;
+      ]
+    }
+  },
+  &quot;flow&quot;: {
+    &quot;pkts_toserver&quot;: 2,
+    &quot;pkts_toclient&quot;: 0,
+    &quot;bytes_toserver&quot;: 468,
+    &quot;bytes_toclient&quot;: 0,
+    &quot;start&quot;: &quot;2021-11-17T13:52:05.695391&quot;,
+    &quot;end&quot;: null,
+    &quot;age&quot;: null,
+    &quot;state&quot;: null,
+    &quot;reason&quot;: null,
+    &quot;alerted&quot;: null
+  },
+  &quot;payload&quot;: null,
+  &quot;payload_printable&quot;: null,
+  &quot;stream&quot;: null,
+  &quot;packet&quot;: null,
+  &quot;packet_info&quot;: {
+    &quot;linktype&quot;: null
+  },
+  &quot;app_proto&quot;: &quot;failed&quot;
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure><p>(Only 1 out of 19 shown.)</p></div></div></details><p>Or by using type and field extractors:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where 10.10.5.0/25 &amp;&amp; (orig_bytes &gt; 1 Mi || duration &gt; 30 min)</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;ts&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;2021-11-19T06:30:30.918301&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;uid&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;C9T8pykxdsT7iSrc9&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;id&quot;</span><span style="color:#E6EDF3">: {</span></span>
@@ -167,7 +288,149 @@ input with an <a href="/v4.22/language/expressions">expression</a>.</p><p>Filter
 <span data-line=""><span style="color:#7EE787">  &quot;tunnel_parents&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;community_id&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;1:r337wYxbKPDv5Vkjoz3gGuld1bs=&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;_write_ts&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><p>The above example extracts connections from the subnet 10.10.5.0/25 that either
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;ts&quot;: &quot;2021-11-19T06:30:30.918301&quot;,
+  &quot;uid&quot;: &quot;C9T8pykxdsT7iSrc9&quot;,
+  &quot;id&quot;: {
+    &quot;orig_h&quot;: &quot;10.10.5.101&quot;,
+    &quot;orig_p&quot;: 50046,
+    &quot;resp_h&quot;: &quot;87.120.8.190&quot;,
+    &quot;resp_p&quot;: 9090
+  },
+  &quot;proto&quot;: &quot;tcp&quot;,
+  &quot;service&quot;: null,
+  &quot;duration&quot;: &quot;5.09m&quot;,
+  &quot;orig_bytes&quot;: 1394538,
+  &quot;resp_bytes&quot;: 95179,
+  &quot;conn_state&quot;: &quot;S1&quot;,
+  &quot;local_orig&quot;: null,
+  &quot;local_resp&quot;: null,
+  &quot;missed_bytes&quot;: 0,
+  &quot;history&quot;: &quot;ShADad&quot;,
+  &quot;orig_pkts&quot;: 5046,
+  &quot;orig_ip_bytes&quot;: 1596390,
+  &quot;resp_pkts&quot;: 5095,
+  &quot;resp_ip_bytes&quot;: 298983,
+  &quot;tunnel_parents&quot;: null,
+  &quot;community_id&quot;: &quot;1:UPodR2krvvXUGhc/NEL9kejd7FA=&quot;,
+  &quot;_write_ts&quot;: null
+}
+{
+  &quot;ts&quot;: &quot;2021-11-19T07:05:44.694927&quot;,
+  &quot;uid&quot;: &quot;ChnTjeQncxZrb0ZWg&quot;,
+  &quot;id&quot;: {
+    &quot;orig_h&quot;: &quot;10.10.5.101&quot;,
+    &quot;orig_p&quot;: 50127,
+    &quot;resp_h&quot;: &quot;87.120.8.190&quot;,
+    &quot;resp_p&quot;: 9090
+  },
+  &quot;proto&quot;: &quot;tcp&quot;,
+  &quot;service&quot;: null,
+  &quot;duration&quot;: &quot;54.81s&quot;,
+  &quot;orig_bytes&quot;: 1550710,
+  &quot;resp_bytes&quot;: 97122,
+  &quot;conn_state&quot;: &quot;S1&quot;,
+  &quot;local_orig&quot;: null,
+  &quot;local_resp&quot;: null,
+  &quot;missed_bytes&quot;: 0,
+  &quot;history&quot;: &quot;ShADadww&quot;,
+  &quot;orig_pkts&quot;: 5409,
+  &quot;orig_ip_bytes&quot;: 1767082,
+  &quot;resp_pkts&quot;: 5477,
+  &quot;resp_ip_bytes&quot;: 316206,
+  &quot;tunnel_parents&quot;: null,
+  &quot;community_id&quot;: &quot;1:aw0CtkT7YikUZWyqdHwgLhqJXxU=&quot;,
+  &quot;_write_ts&quot;: null
+}
+{
+  &quot;ts&quot;: &quot;2021-11-19T06:30:15.910850&quot;,
+  &quot;uid&quot;: &quot;CxuTEOgWv2Z74FCG6&quot;,
+  &quot;id&quot;: {
+    &quot;orig_h&quot;: &quot;10.10.5.101&quot;,
+    &quot;orig_p&quot;: 50041,
+    &quot;resp_h&quot;: &quot;87.120.8.190&quot;,
+    &quot;resp_p&quot;: 9090
+  },
+  &quot;proto&quot;: &quot;tcp&quot;,
+  &quot;service&quot;: null,
+  &quot;duration&quot;: &quot;36.48m&quot;,
+  &quot;orig_bytes&quot;: 565,
+  &quot;resp_bytes&quot;: 507,
+  &quot;conn_state&quot;: &quot;S1&quot;,
+  &quot;local_orig&quot;: null,
+  &quot;local_resp&quot;: null,
+  &quot;missed_bytes&quot;: 0,
+  &quot;history&quot;: &quot;ShADad&quot;,
+  &quot;orig_pkts&quot;: 78,
+  &quot;orig_ip_bytes&quot;: 3697,
+  &quot;resp_pkts&quot;: 77,
+  &quot;resp_ip_bytes&quot;: 3591,
+  &quot;tunnel_parents&quot;: null,
+  &quot;community_id&quot;: &quot;1:r337wYxbKPDv5Vkjoz3gGuld1bs=&quot;,
+  &quot;_write_ts&quot;: null
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><p>The above example extracts connections from the subnet 10.10.5.0/25 that either
 have sent more than 1 MiB or lasted longer than 30 minutes.</p><div class="theme-admonition theme-admonition-info alert alert--info admonition_LlT9"><div class="admonitionHeading_tbUL"><span class="admonitionIcon_kALy"><svg viewBox="0 0 14 16"><path fill-rule="evenodd" d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"></path></svg></span>Extractors</div><div class="admonitionContent_S0QG"><p>Tenzir&#x27;s expression language uses
 <a href="/v4.22/language/expressions#extractors">extractors</a> to locate fields of
 interest.</p><p>If you don&#x27;t know a field name but have concrete value, say an IP address,
@@ -183,7 +446,7 @@ expression <code>:ip in 10.10.5.0/25 || :subnet == 10.10.5.0/25</code>, meaning,
 looks for any IP address field and performs a top-k prefix search, or any subnet
 field where the value matches exactly.</p></div></div><h2 class="anchor anchorWithStickyNavbar_LWe7" id="limit-the-output-with-head-and-tail">Limit the output with <code>head</code> and <code>tail</code><a href="#limit-the-output-with-head-and-tail" class="hash-link" aria-label="Direct link to limit-the-output-with-head-and-tail" title="Direct link to limit-the-output-with-head-and-tail">​</a></h2><p>Use the <a href="/v4.22/operators/head"><code>head</code></a> and
 <a href="/v4.22/operators/tail"><code>tail</code></a> operators to get the first or
-last N records of the input.</p><p>The first 3 Zeek logs with IPs in 10.10.5.0/25:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == /zeek.*/ &amp;&amp; 10.10.5.0/25</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 3</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+last N records of the input.</p><p>The first 3 Zeek logs with IPs in 10.10.5.0/25:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == /zeek.*/ &amp;&amp; 10.10.5.0/25</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 3</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;ts&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;2021-11-19T04:28:06.186626&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;cause&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;violation&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;analyzer_kind&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;protocol&quot;</span><span style="color:#E6EDF3">,</span></span>
@@ -230,10 +493,119 @@ last N records of the input.</p><p>The first 3 Zeek logs with IPs in 10.10.5.0/2
 <span data-line=""><span style="color:#7EE787">  &quot;id.vlan_inner&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;failure_reason&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;Binpac exception: binpac exception: out_of_bound: ASN1EncodingMeta:more_len: 129 &gt; 74&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;failure_data&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><div class="theme-admonition theme-admonition-caution alert alert--warning admonition_LlT9"><div class="admonitionHeading_tbUL"><span class="admonitionIcon_kALy"><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8.893 1.5c-.183-.31-.52-.5-.887-.5s-.703.19-.886.5L.138 13.499a.98.98 0 0 0 0 1.001c.193.31.53.501.886.501h13.964c.367 0 .704-.19.877-.5a1.03 1.03 0 0 0 .01-1.002L8.893 1.5zm.133 11.497H6.987v-2.003h2.039v2.003zm0-3.004H6.987V5.987h2.039v4.006z"></path></svg></span><mdxadmonitiontitle><code>tail</code> is blocking</mdxadmonitiontitle></div><div class="admonitionContent_S0QG"><p>The <code>tail</code> operator must wait for its entire input, whereas <code>head N</code> terminates
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;ts&quot;: &quot;2021-11-19T04:28:06.186626&quot;,
+  &quot;cause&quot;: &quot;violation&quot;,
+  &quot;analyzer_kind&quot;: &quot;protocol&quot;,
+  &quot;analyzer_name&quot;: &quot;GSSAPI&quot;,
+  &quot;uid&quot;: &quot;CaHAWI2k6vB6BEOh65&quot;,
+  &quot;fuid&quot;: null,
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.orig_p&quot;: 49847,
+  &quot;id.resp_h&quot;: &quot;10.10.5.5&quot;,
+  &quot;id.resp_p&quot;: 49667,
+  &quot;id.vlan&quot;: null,
+  &quot;id.vlan_inner&quot;: null,
+  &quot;failure_reason&quot;: &quot;Binpac exception: binpac exception: out_of_bound: ASN1EncodingMeta:more_len: 129 &gt; 74&quot;,
+  &quot;failure_data&quot;: null
+}
+{
+  &quot;ts&quot;: &quot;2021-11-19T04:28:06.186853&quot;,
+  &quot;cause&quot;: &quot;violation&quot;,
+  &quot;analyzer_kind&quot;: &quot;protocol&quot;,
+  &quot;analyzer_name&quot;: &quot;GSSAPI&quot;,
+  &quot;uid&quot;: &quot;CaHAWI2k6vB6BEOh65&quot;,
+  &quot;fuid&quot;: null,
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.orig_p&quot;: 49847,
+  &quot;id.resp_h&quot;: &quot;10.10.5.5&quot;,
+  &quot;id.resp_p&quot;: 49667,
+  &quot;id.vlan&quot;: null,
+  &quot;id.vlan_inner&quot;: null,
+  &quot;failure_reason&quot;: &quot;Binpac exception: binpac exception: out_of_bound: ASN1EncodingMeta:more_len: 129 &gt; 74&quot;,
+  &quot;failure_data&quot;: null
+}
+{
+  &quot;ts&quot;: &quot;2021-11-19T04:28:06.187119&quot;,
+  &quot;cause&quot;: &quot;violation&quot;,
+  &quot;analyzer_kind&quot;: &quot;protocol&quot;,
+  &quot;analyzer_name&quot;: &quot;GSSAPI&quot;,
+  &quot;uid&quot;: &quot;CaHAWI2k6vB6BEOh65&quot;,
+  &quot;fuid&quot;: null,
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.orig_p&quot;: 49847,
+  &quot;id.resp_h&quot;: &quot;10.10.5.5&quot;,
+  &quot;id.resp_p&quot;: 49667,
+  &quot;id.vlan&quot;: null,
+  &quot;id.vlan_inner&quot;: null,
+  &quot;failure_reason&quot;: &quot;Binpac exception: binpac exception: out_of_bound: ASN1EncodingMeta:more_len: 129 &gt; 74&quot;,
+  &quot;failure_data&quot;: null
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><div class="theme-admonition theme-admonition-caution alert alert--warning admonition_LlT9"><div class="admonitionHeading_tbUL"><span class="admonitionIcon_kALy"><svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8.893 1.5c-.183-.31-.52-.5-.887-.5s-.703.19-.886.5L.138 13.499a.98.98 0 0 0 0 1.001c.193.31.53.501.886.501h13.964c.367 0 .704-.19.877-.5a1.03 1.03 0 0 0 .01-1.002L8.893 1.5zm.133 11.497H6.987v-2.003h2.039v2.003zm0-3.004H6.987V5.987h2.039v4.006z"></path></svg></span><mdxadmonitiontitle><code>tail</code> is blocking</mdxadmonitiontitle></div><div class="admonitionContent_S0QG"><p>The <code>tail</code> operator must wait for its entire input, whereas <code>head N</code> terminates
 immediately after the first <code>N</code> records have arrived. Use <code>head</code> for
 the majority of use cases and <code>tail</code> only when you have to.</p></div></div><h2 class="anchor anchorWithStickyNavbar_LWe7" id="pick-fields-with-select-and-drop">Pick fields with <code>select</code> and <code>drop</code><a href="#pick-fields-with-select-and-drop" class="hash-link" aria-label="Direct link to pick-fields-with-select-and-drop" title="Direct link to pick-fields-with-select-and-drop">​</a></h2><p>Use the <a href="/v4.22/operators/select"><code>select</code></a> operator to
-restrict the output to a list of fields.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;suricata.alert&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| select src_ip, dest_ip, severity, signature</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 3</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+restrict the output to a list of fields.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;suricata.alert&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| select src_ip, dest_ip, severity, signature</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 3</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;src_ip&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;8.218.64.104&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;dest_ip&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;alert&quot;</span><span style="color:#E6EDF3">: {</span></span>
@@ -256,10 +628,95 @@ restrict the output to a list of fields.</p><div class="codeBlockContainer_Ckt0 
 <span data-line=""><span style="color:#7EE787">    &quot;signature&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;SURICATA UDPv4 invalid checksum&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">    &quot;severity&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">3</span></span>
 <span data-line=""><span style="color:#E6EDF3">  }</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><p>Note that <code>select</code> does not reorder the input fields. Use
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;src_ip&quot;: &quot;8.218.64.104&quot;,
+  &quot;dest_ip&quot;: &quot;198.71.247.91&quot;,
+  &quot;alert&quot;: {
+    &quot;signature&quot;: &quot;SURICATA UDPv4 invalid checksum&quot;,
+    &quot;severity&quot;: 3
+  }
+}
+{
+  &quot;src_ip&quot;: &quot;14.1.112.177&quot;,
+  &quot;dest_ip&quot;: &quot;198.71.247.91&quot;,
+  &quot;alert&quot;: {
+    &quot;signature&quot;: &quot;ET DOS Possible NTP DDoS Inbound Frequent Un-Authed MON_LIST Requests IMPL 0x03&quot;,
+    &quot;severity&quot;: 2
+  }
+}
+{
+  &quot;src_ip&quot;: &quot;167.94.138.20&quot;,
+  &quot;dest_ip&quot;: &quot;198.71.247.91&quot;,
+  &quot;alert&quot;: {
+    &quot;signature&quot;: &quot;SURICATA UDPv4 invalid checksum&quot;,
+    &quot;severity&quot;: 3
+  }
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><p>Note that <code>select</code> does not reorder the input fields. Use
 <a href="/v4.22/operators/put"><code>put</code></a> for adjusting the field order.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="sample-schemas-with-taste">Sample schemas with <code>taste</code><a href="#sample-schemas-with-taste" class="hash-link" aria-label="Direct link to sample-schemas-with-taste" title="Direct link to sample-schemas-with-taste">​</a></h2><p>The <a href="/v4.22/operators/taste"><code>taste</code></a> operator provides a
 sample of the first N events of every unique schemas in the dataflow. For
-example, to get 5 unique samples:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| taste 1</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 5</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+example, to get 5 unique samples:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| taste 1</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 5</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;ts&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;2021-11-17T13:54:01.721755&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;cause&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;violation&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;analyzer_kind&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;protocol&quot;</span><span style="color:#E6EDF3">,</span></span>
@@ -349,11 +806,163 @@ example, to get 5 unique samples:</p><div class="codeBlockContainer_Ckt0 theme-c
 <span data-line=""><span style="color:#7EE787">  &quot;duration&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;163.82ms&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;trans_id&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;_write_ts&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">null</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="add-fields-with-put-and-extend">Add fields with <code>put</code> and <code>extend</code><a href="#add-fields-with-put-and-extend" class="hash-link" aria-label="Direct link to add-fields-with-put-and-extend" title="Direct link to add-fields-with-put-and-extend">​</a></h2><p>The <a href="/v4.22/operators/extend"><code>extend</code></a> operator appends new
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;ts&quot;: &quot;2021-11-17T13:54:01.721755&quot;,
+  &quot;cause&quot;: &quot;violation&quot;,
+  &quot;analyzer_kind&quot;: &quot;protocol&quot;,
+  &quot;analyzer_name&quot;: &quot;HTTP&quot;,
+  &quot;uid&quot;: &quot;Cqp7rtziLijlnrxYf&quot;,
+  &quot;fuid&quot;: null,
+  &quot;id.orig_h&quot;: &quot;87.251.64.137&quot;,
+  &quot;id.orig_p&quot;: 64078,
+  &quot;id.resp_h&quot;: &quot;198.71.247.91&quot;,
+  &quot;id.resp_p&quot;: 80,
+  &quot;id.vlan&quot;: null,
+  &quot;id.vlan_inner&quot;: null,
+  &quot;failure_reason&quot;: &quot;not a http request line&quot;,
+  &quot;failure_data&quot;: null
+}
+{
+  &quot;ts&quot;: &quot;2021-11-17T13:33:53.748229&quot;,
+  &quot;ts_delta&quot;: &quot;1.18m&quot;,
+  &quot;peer&quot;: &quot;zeek&quot;,
+  &quot;gaps&quot;: 0,
+  &quot;acks&quot;: 2,
+  &quot;percent_lost&quot;: 0.0,
+  &quot;_write_ts&quot;: null
+}
+{
+  &quot;ts&quot;: &quot;2021-11-17T13:32:46.565337&quot;,
+  &quot;uid&quot;: &quot;C5luJD1ATrGDOcouW2&quot;,
+  &quot;id&quot;: {
+    &quot;orig_h&quot;: &quot;89.248.165.145&quot;,
+    &quot;orig_p&quot;: 43831,
+    &quot;resp_h&quot;: &quot;198.71.247.91&quot;,
+    &quot;resp_p&quot;: 52806
+  },
+  &quot;proto&quot;: &quot;tcp&quot;,
+  &quot;service&quot;: null,
+  &quot;duration&quot;: null,
+  &quot;orig_bytes&quot;: null,
+  &quot;resp_bytes&quot;: null,
+  &quot;conn_state&quot;: &quot;S0&quot;,
+  &quot;local_orig&quot;: null,
+  &quot;local_resp&quot;: null,
+  &quot;missed_bytes&quot;: 0,
+  &quot;history&quot;: &quot;S&quot;,
+  &quot;orig_pkts&quot;: 1,
+  &quot;orig_ip_bytes&quot;: 40,
+  &quot;resp_pkts&quot;: 0,
+  &quot;resp_ip_bytes&quot;: 0,
+  &quot;tunnel_parents&quot;: null,
+  &quot;community_id&quot;: &quot;1:c/CLmyk4xRElyzleEMhJ4Baf4Gk=&quot;,
+  &quot;_write_ts&quot;: null
+}
+{
+  &quot;ts&quot;: &quot;2021-11-18T08:05:09.134638&quot;,
+  &quot;uid&quot;: &quot;Cwk5in34AvxJ8MurDh&quot;,
+  &quot;id&quot;: {
+    &quot;orig_h&quot;: &quot;10.2.9.133&quot;,
+    &quot;orig_p&quot;: 49768,
+    &quot;resp_h&quot;: &quot;10.2.9.9&quot;,
+    &quot;resp_p&quot;: 135
+  },
+  &quot;rtt&quot;: &quot;254.0us&quot;,
+  &quot;named_pipe&quot;: &quot;135&quot;,
+  &quot;endpoint&quot;: &quot;epmapper&quot;,
+  &quot;operation&quot;: &quot;ept_map&quot;,
+  &quot;_write_ts&quot;: null
+}
+{
+  &quot;ts&quot;: &quot;2021-11-18T08:00:21.486539&quot;,
+  &quot;uids&quot;: [
+    &quot;C4fKs01p1bdzLWvtQa&quot;
+  ],
+  &quot;client_addr&quot;: &quot;192.168.1.102&quot;,
+  &quot;server_addr&quot;: &quot;192.168.1.1&quot;,
+  &quot;mac&quot;: &quot;00:0b:db:63:58:a6&quot;,
+  &quot;host_name&quot;: &quot;m57-jo&quot;,
+  &quot;client_fqdn&quot;: &quot;m57-jo.&quot;,
+  &quot;domain&quot;: &quot;m57.biz&quot;,
+  &quot;requested_addr&quot;: null,
+  &quot;assigned_addr&quot;: &quot;192.168.1.102&quot;,
+  &quot;lease_time&quot;: &quot;59.4m&quot;,
+  &quot;client_message&quot;: null,
+  &quot;server_message&quot;: null,
+  &quot;msg_types&quot;: [
+    &quot;REQUEST&quot;,
+    &quot;ACK&quot;
+  ],
+  &quot;duration&quot;: &quot;163.82ms&quot;,
+  &quot;trans_id&quot;: null,
+  &quot;_write_ts&quot;: null
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="add-fields-with-put-and-extend">Add fields with <code>put</code> and <code>extend</code><a href="#add-fields-with-put-and-extend" class="hash-link" aria-label="Direct link to add-fields-with-put-and-extend" title="Direct link to add-fields-with-put-and-extend">​</a></h2><p>The <a href="/v4.22/operators/extend"><code>extend</code></a> operator appends new
 fields to the input. The <a href="/v4.22/operators/put"><code>put</code></a>
 operator does the same but drops all non-referenced fields.</p><p>Here is an example that generates host pairs plus service for Zeek connection
 records. Think of the output is a the edges in graph, with the last column being
-the edge type.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export </span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.conn&quot; &amp;&amp; 10.10.5.0/25</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| put id.orig_h, id.resp_h, service</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+the edge type.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export </span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.conn&quot; &amp;&amp; 10.10.5.0/25</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| put id.orig_h, id.resp_h, service</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;id.orig_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;10.10.5.101&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;id.resp_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;77.75.230.91&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;service&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;http&quot;</span></span>
@@ -402,10 +1011,185 @@ the edge type.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="-
 <span data-line=""><span style="color:#7EE787">  &quot;id.orig_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;10.10.5.101&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;id.resp_h&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;13.107.42.16&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;service&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;ssl&quot;</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="give-schemas-and-fields-new-names-with-rename">Give schemas and fields new names with <code>rename</code><a href="#give-schemas-and-fields-new-names-with-rename" class="hash-link" aria-label="Direct link to give-schemas-and-fields-new-names-with-rename" title="Direct link to give-schemas-and-fields-new-names-with-rename">​</a></h2><p>The <a href="/v4.22/operators/rename"><code>rename</code></a> operator changes field
-or schema names.</p><p>For example, rename the schema name and only print that afterwards:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.conn&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| rename flow=:zeek.conn</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| put schema=#schema</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 1</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;77.75.230.91&quot;,
+  &quot;service&quot;: &quot;http&quot;
+}
+{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;10.10.5.5&quot;,
+  &quot;service&quot;: &quot;dns&quot;
+}
+{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;10.10.5.5&quot;,
+  &quot;service&quot;: &quot;dns&quot;
+}
+{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;20.189.173.1&quot;,
+  &quot;service&quot;: null
+}
+{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;20.189.173.1&quot;,
+  &quot;service&quot;: &quot;ssl&quot;
+}
+{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;52.109.8.21&quot;,
+  &quot;service&quot;: &quot;ssl&quot;
+}
+{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;10.10.5.5&quot;,
+  &quot;service&quot;: &quot;dns&quot;
+}
+{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;10.10.5.5&quot;,
+  &quot;service&quot;: &quot;dns&quot;
+}
+{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;20.54.88.152&quot;,
+  &quot;service&quot;: &quot;ssl&quot;
+}
+{
+  &quot;id.orig_h&quot;: &quot;10.10.5.101&quot;,
+  &quot;id.resp_h&quot;: &quot;13.107.42.16&quot;,
+  &quot;service&quot;: &quot;ssl&quot;
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="give-schemas-and-fields-new-names-with-rename">Give schemas and fields new names with <code>rename</code><a href="#give-schemas-and-fields-new-names-with-rename" class="hash-link" aria-label="Direct link to give-schemas-and-fields-new-names-with-rename" title="Direct link to give-schemas-and-fields-new-names-with-rename">​</a></h2><p>The <a href="/v4.22/operators/rename"><code>rename</code></a> operator changes field
+or schema names.</p><p>For example, rename the schema name and only print that afterwards:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.conn&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| rename flow=:zeek.conn</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| put schema=#schema</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 1</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;schema&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;flow&quot;</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><p>Rename a field:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.conn&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| rename src=id.orig_h, dst=id.resp_h</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| put src, dst</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;89.248.165.145&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span>
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;schema&quot;: &quot;flow&quot;
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><p>Rename a field:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.conn&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| rename src=id.orig_h, dst=id.resp_h</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| put src, dst</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;89.248.165.145&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span>
 <span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;128.14.134.170&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span>
 <span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;60.205.181.213&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span>
 <span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;31.44.185.120&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span>
@@ -414,8 +1198,79 @@ or schema names.</p><p>For example, rename the schema name and only print that a
 <span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;183.136.225.42&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span>
 <span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;71.6.135.131&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span>
 <span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;172.104.138.223&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span>
-<span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;185.94.111.1&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="aggreate-records-with-summarize">Aggreate records with <code>summarize</code><a href="#aggreate-records-with-summarize" class="hash-link" aria-label="Direct link to aggreate-records-with-summarize" title="Direct link to aggreate-records-with-summarize">​</a></h2><p>Use <a href="/v4.22/operators/summarize"><code>summarize</code></a> to group and
-aggregate data.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| #schema == &quot;suricata.alert&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| summarize count=count(src_ip) by severity</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+<span data-line=""><span style="color:#E6EDF3">{</span><span style="color:#7EE787">&quot;src&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;185.94.111.1&quot;</span><span style="color:#E6EDF3">, </span><span style="color:#7EE787">&quot;dst&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;198.71.247.91&quot;</span><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{&quot;src&quot;: &quot;89.248.165.145&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}
+{&quot;src&quot;: &quot;128.14.134.170&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}
+{&quot;src&quot;: &quot;60.205.181.213&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}
+{&quot;src&quot;: &quot;31.44.185.120&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}
+{&quot;src&quot;: &quot;91.223.67.180&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}
+{&quot;src&quot;: &quot;185.73.126.70&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}
+{&quot;src&quot;: &quot;183.136.225.42&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}
+{&quot;src&quot;: &quot;71.6.135.131&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}
+{&quot;src&quot;: &quot;172.104.138.223&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}
+{&quot;src&quot;: &quot;185.94.111.1&quot;, &quot;dst&quot;: &quot;198.71.247.91&quot;}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="aggreate-records-with-summarize">Aggreate records with <code>summarize</code><a href="#aggreate-records-with-summarize" class="hash-link" aria-label="Direct link to aggreate-records-with-summarize" title="Direct link to aggreate-records-with-summarize">​</a></h2><p>Use <a href="/v4.22/operators/summarize"><code>summarize</code></a> to group and
+aggregate data.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| #schema == &quot;suricata.alert&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| summarize count=count(src_ip) by severity</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;alert.severity&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">1</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;count&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">134644</span></span>
 <span data-line=""><span style="color:#E6EDF3">}</span></span>
@@ -426,16 +1281,158 @@ aggregate data.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="
 <span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;alert.severity&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">3</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;count&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">179713</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><p>Suricata alerts with lower severity are more critical, with severity 1 being the
-highest. Let&#x27;s group by alert signature containing the substring <code>SHELLCODE</code>:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where severity == 1</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| summarize count=count(src_ip) by signature</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where /.*SHELLCODE.*/</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;alert.severity&quot;: 1,
+  &quot;count&quot;: 134644
+}
+{
+  &quot;alert.severity&quot;: 2,
+  &quot;count&quot;: 26780
+}
+{
+  &quot;alert.severity&quot;: 3,
+  &quot;count&quot;: 179713
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><p>Suricata alerts with lower severity are more critical, with severity 1 being the
+highest. Let&#x27;s group by alert signature containing the substring <code>SHELLCODE</code>:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where severity == 1</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| summarize count=count(src_ip) by signature</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where /.*SHELLCODE.*/</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;alert.signature&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;ET SHELLCODE Possible Call with No Offset TCP Shellcode&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;count&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">2</span></span>
 <span data-line=""><span style="color:#E6EDF3">}</span></span>
 <span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;alert.signature&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;ET SHELLCODE Possible %41%41%41%41 Heap Spray Attempt&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;count&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">32</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="reorder-records-with-sort">Reorder records with <code>sort</code><a href="#reorder-records-with-sort" class="hash-link" aria-label="Direct link to reorder-records-with-sort" title="Direct link to reorder-records-with-sort">​</a></h2><p>Use <a href="/v4.22/operators/sort"><code>sort</code></a> to arrange the output
-records according to the order of a specific field.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| #schema == &quot;suricata.alert&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| summarize count=count(src_ip) by severity</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| sort count desc</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;alert.signature&quot;: &quot;ET SHELLCODE Possible Call with No Offset TCP Shellcode&quot;,
+  &quot;count&quot;: 2
+}
+{
+  &quot;alert.signature&quot;: &quot;ET SHELLCODE Possible %41%41%41%41 Heap Spray Attempt&quot;,
+  &quot;count&quot;: 32
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="reorder-records-with-sort">Reorder records with <code>sort</code><a href="#reorder-records-with-sort" class="hash-link" aria-label="Direct link to reorder-records-with-sort" title="Direct link to reorder-records-with-sort">​</a></h2><p>Use <a href="/v4.22/operators/sort"><code>sort</code></a> to arrange the output
+records according to the order of a specific field.</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| #schema == &quot;suricata.alert&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| summarize count=count(src_ip) by severity</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| sort count desc</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;alert.severity&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">3</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;count&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">179713</span></span>
 <span data-line=""><span style="color:#E6EDF3">}</span></span>
@@ -446,10 +1443,83 @@ records according to the order of a specific field.</p><div class="codeBlockCont
 <span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;alert.severity&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">2</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;count&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#79C0FF">26780</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="deduplicate-with-unique">Deduplicate with <code>unique</code><a href="#deduplicate-with-unique" class="hash-link" aria-label="Direct link to deduplicate-with-unique" title="Direct link to deduplicate-with-unique">​</a></h2><p>Use <a href="/v4.22/operators/unique"><code>unique</code></a> to remove adjacent
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;alert.severity&quot;: 3,
+  &quot;count&quot;: 179713
+}
+{
+  &quot;alert.severity&quot;: 1,
+  &quot;count&quot;: 134644
+}
+{
+  &quot;alert.severity&quot;: 2,
+  &quot;count&quot;: 26780
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="deduplicate-with-unique">Deduplicate with <code>unique</code><a href="#deduplicate-with-unique" class="hash-link" aria-label="Direct link to deduplicate-with-unique" title="Direct link to deduplicate-with-unique">​</a></h2><p>Use <a href="/v4.22/operators/unique"><code>unique</code></a> to remove adjacent
 duplicates. This operator comes in handy after a
 <a href="/v4.22/operators/sort"><code>sort</code></a> that arranges the input so
-that duplicates lay next to each other:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.kerberos&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| put client</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| sort client</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| unique</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+that duplicates lay next to each other:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.kerberos&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| put client</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| sort client</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| unique</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;client&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;/NM&quot;</span></span>
 <span data-line=""><span style="color:#E6EDF3">}</span></span>
 <span data-line=""><span style="color:#E6EDF3">{</span></span>
@@ -478,8 +1548,99 @@ that duplicates lay next to each other:</p><div class="codeBlockContainer_Ckt0 t
 <span data-line=""><span style="color:#E6EDF3">}</span></span>
 <span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;client&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;DESKTOP-41SH6EJ$/DUCKKISSMIXER.COM&quot;</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><p>To compute a unique list of values per group, use the <code>distinct</code> aggregation
-function in <a href="/v4.22/operators/summarize"><code>summarize</code></a>:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.conn&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| summarize sources=distinct(id.orig_h) by id.resp_h</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| rename destination=id.resp_h</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 3</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;client&quot;: &quot;/NM&quot;
+}
+{
+  &quot;client&quot;: &quot;Administrator/EAGLEFREAKS&quot;
+}
+{
+  &quot;client&quot;: &quot;DEKSTOP-D9UMVWL$/SIMONSAYSGO.NET&quot;
+}
+{
+  &quot;client&quot;: &quot;DEKSTOP-VVCWQF5$/POLICYBARONS.COM&quot;
+}
+{
+  &quot;client&quot;: &quot;DESKTOP-1-PC$/MAXSUGER.COM&quot;
+}
+{
+  &quot;client&quot;: &quot;DESKTOP-1O7QAEA$/VICTORYPUNK.COM&quot;
+}
+{
+  &quot;client&quot;: &quot;DESKTOP-2P2S7WR$/VICTORYPUNK.COM&quot;
+}
+{
+  &quot;client&quot;: &quot;DESKTOP-30CQ14B$/FIRGREENTECH.COM&quot;
+}
+{
+  &quot;client&quot;: &quot;DESKTOP-3KI6Y6G$/JIGGEDYJACK.COM&quot;
+}
+{
+  &quot;client&quot;: &quot;DESKTOP-41SH6EJ$/DUCKKISSMIXER.COM&quot;
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><p>To compute a unique list of values per group, use the <code>distinct</code> aggregation
+function in <a href="/v4.22/operators/summarize"><code>summarize</code></a>:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where #schema == &quot;zeek.conn&quot;</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| summarize sources=distinct(id.orig_h) by id.resp_h</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| rename destination=id.resp_h</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| head 3</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><figure data-rehype-pretty-code-figure=""><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><pre tabindex="0" class="codeBlockStandalone_MEMb thin-scrollbar codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><code class="codeBlockLines_e6Vv"><span data-line=""><span style="color:#E6EDF3">{</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;destination&quot;</span><span style="color:#E6EDF3">: </span><span style="color:#A5D6FF">&quot;192.168.201.13&quot;</span><span style="color:#E6EDF3">,</span></span>
 <span data-line=""><span style="color:#7EE787">  &quot;sources&quot;</span><span style="color:#E6EDF3">: [</span></span>
 <span data-line=""><span style="color:#A5D6FF">    &quot;10.12.14.101&quot;</span><span style="color:#E6EDF3">,</span></span>
@@ -498,7 +1659,88 @@ function in <a href="/v4.22/operators/summarize"><code>summarize</code></a>:</p>
 <span data-line=""><span style="color:#7EE787">  &quot;sources&quot;</span><span style="color:#E6EDF3">: [</span></span>
 <span data-line=""><span style="color:#A5D6FF">    &quot;10.7.5.133&quot;</span></span>
 <span data-line=""><span style="color:#E6EDF3">  ]</span></span>
-<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="profile-the-pipeline-with-measure">Profile the pipeline with <code>measure</code><a href="#profile-the-pipeline-with-measure" class="hash-link" aria-label="Direct link to profile-the-pipeline-with-measure" title="Direct link to profile-the-pipeline-with-measure">​</a></h2><p>Use <a href="/v4.22/operators/measure"><code>measure</code></a> to profile the input
+<span data-line=""><span style="color:#E6EDF3">}</span></span></code></pre><button type="button" data="{
+  &quot;destination&quot;: &quot;192.168.201.13&quot;,
+  &quot;sources&quot;: [
+    &quot;10.12.14.101&quot;,
+    &quot;10.12.17.101&quot;
+  ]
+}
+{
+  &quot;destination&quot;: &quot;192.168.62.104&quot;,
+  &quot;sources&quot;: [
+    &quot;10.12.14.101&quot;,
+    &quot;10.12.17.101&quot;
+  ]
+}
+{
+  &quot;destination&quot;: &quot;10.0.177.137&quot;,
+  &quot;sources&quot;: [
+    &quot;10.7.5.133&quot;
+  ]
+}" title="Copy code" aria-label="Copy code" class="rehype-pretty-copy" data-feedback-duration="3000" data-name="rehype-pretty-copy-button"><span class="ready"></span><span class="success"></span></button><style>
+    :root {
+      --copy-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDM2IDM2Ij48cmVjdCB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjYmZjN2Q1IiBkPSJNMjkuNSA3aC0xOUExLjUgMS41IDAgMCAwIDkgOC41djI0YTEuNSAxLjUgMCAwIDAgMS41IDEuNWgxOWExLjUgMS41IDAgMCAwIDEuNS0xLjV2LTI0QTEuNSAxLjUgMCAwIDAgMjkuNSA3TTI5IDMySDExVjloMThaIiBjbGFzcz0iY2xyLWktb3V0bGluZSBjbHItaS1vdXRsaW5lLXBhdGgtMSIvPjxwYXRoIGZpbGw9IiNiZmM3ZDUiIGQ9Ik0yNiAzLjVBMS41IDEuNSAwIDAgMCAyNC41IDJoLTE5QTEuNSAxLjUgMCAwIDAgNCAzLjV2MjRBMS41IDEuNSAwIDAgMCA1LjUgMjlINlY0aDIwWiIgY2xhc3M9ImNsci1pLW91dGxpbmUgY2xyLWktb3V0bGluZS1wYXRoLTIiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDM2djM2SDB6Ii8+PC9zdmc+&quot;);
+      --success-icon: url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiLz48cGF0aCBmaWxsPSIjMDBkNjAwIiBkPSJNMjEgN0w5IDE5bC01LjUtNS41bDEuNDEtMS40MUw5IDE2LjE3TDE5LjU5IDUuNTl6Ii8+PC9zdmc+&quot;);
+    }
+
+    pre:has(code) {
+      position: relative;
+    }
+
+    button[data=&#x27;&lt;span&gt;&#x27;] {
+      width: 0;
+      height: 0;
+      display: none;
+      visibility: hidden;
+    }
+
+    pre button.rehype-pretty-copy {
+      top: 1px;
+      right: 1px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-right: 8px;
+      position: absolute;
+      border-radius: 25%;
+      &amp; span {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background-repeat: no-repeat;
+      }
+      &amp; .ready {
+        background-image: var(--copy-icon);
+      }
+      &amp; .success {
+        display: none;
+        background-image: var(--success-icon);
+      }
+    }
+
+    &amp;.rehype-pretty-copied { 
+      &amp; .success { 
+        display: block;
+      } &amp; .ready {
+        display: none;
+      }
+    }
+
+    pre button.rehype-pretty-copy.rehype-pretty-copied {
+      opacity: 1;
+      cursor: default;
+      &amp; .ready { display: none; }
+      &amp; .success { display: block; }
+    }
+
+      pre button.rehype-pretty-copy { opacity: 0; }
+      button[data-name=&quot;rehype-pretty-copy-button&quot;]:hover {
+        opacity: 1;
+      }
+    </style></code></pre></figure></div></div></details><h2 class="anchor anchorWithStickyNavbar_LWe7" id="profile-the-pipeline-with-measure">Profile the pipeline with <code>measure</code><a href="#profile-the-pipeline-with-measure" class="hash-link" aria-label="Direct link to profile-the-pipeline-with-measure" title="Direct link to profile-the-pipeline-with-measure">​</a></h2><p>Use <a href="/v4.22/operators/measure"><code>measure</code></a> to profile the input
 and replace it with runtime statistics.</p><p>For example, one way to compute a histogram over the entire persisted dataset is
 to perform a full scan, replace the input with statistics, and then aggregate
 them by schema:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| measure</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| summarize events=sum(events) by schema</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| sort events desc</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><details class="details_lb9f alert alert--info details_b_Ee" data-collapsed="true"><summary>Output</summary><div><div class="collapsibleContent_i85q"><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.flow&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 1129992</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.conn&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 583838</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.alert&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 341137</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.dns&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 289117</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.http&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 150736</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.dns&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 90013</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.tls&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 84608</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.http&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 75290</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.telemetry&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 72853</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.smb&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 67943</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.ssl&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 42389</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.fileinfo&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 35968</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.dcerpc&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 33055</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.files&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 21922</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.dce_rpc&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 19585</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.analyzer&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 14755</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.anomaly&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 8535</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.notice&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 5871</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.smtp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 5208</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.weird&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 4617</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.reporter&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 3528</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.krb5&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 3378</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.ocsp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 2874</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.kerberos&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 2708</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.x509&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 2379</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.smtp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 1967</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.smb_mapping&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 1584</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.stats&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 1409</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.ntp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 1224</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.smb_files&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 1140</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.ftp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 954</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.sip&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 936</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.dpd&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 926</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.dhcp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 648</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.tunnel&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 606</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.sip&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 565</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.loaded_scripts&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 512</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.capture_loss&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 476</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.ntlm&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 429</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.pe&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 315</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.snmp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 288</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.dhcp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 267</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.snmp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 132</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.tftp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 62</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.stats&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 12</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.traceroute&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 9</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.ftp&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 4</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.ikev2&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 2</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;suricata.ftp_data&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 1</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.packet_filter&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 1</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">{</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;schema&quot;: &quot;zeek.radius&quot;,</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">  &quot;events&quot;: 1</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">}</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div></div></div></details><p>The above pipeline performs a full scan over the data at the node. Tenzir&#x27;s
@@ -506,7 +1748,7 @@ pipeline optimizer pushes down predicates to avoid scans when possible. Consider
 this pipeline:</p><div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#bfc7d5;--prism-background-color:#292d3e"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#bfc7d5"><span class="token plain">export</span><br></span><span class="token-line" style="color:#bfc7d5"><span class="token plain">| where *.id.orig_h in 10.0.0.0/8</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>The optimizer coalesces the <code>export</code> and <code>where</code> operators such that
 <a href="/v4.22/language/expressions">expression</a> <code>*.id.orig_h in 10.0.0.0/8</code> gets
 pushed down to the index and storage layer.</p></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="theme-doc-footer-edit-meta-row row"><div class="col"><a href="https://github.com/tenzir/tenzir/tree/main/web/versioned_docs/version-v4.22/usage/shape-data/README.md" target="_blank" rel="noreferrer noopener" class="theme-edit-this-page"><svg fill="currentColor" height="20" width="20" viewBox="0 0 40 40" class="iconEdit_Z9Sw" aria-hidden="true"><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"></path></g></svg>Edit this page</a></div><div class="col lastUpdated_vwxv"></div></div></footer></article><nav class="pagination-nav docusaurus-mt-lg" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href="/v4.22/usage/manage-a-pipeline"><div class="pagination-nav__sublabel">Previous</div><div class="pagination-nav__label">Manage a pipeline</div></a><a class="pagination-nav__link pagination-nav__link--next" href="/v4.22/usage/import-into-a-node"><div class="pagination-nav__sublabel">Next</div><div class="pagination-nav__label">Import into a node</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#filter-rows-with-where" class="table-of-contents__link toc-highlight">Filter rows with <code>where</code></a></li><li><a href="#limit-the-output-with-head-and-tail" class="table-of-contents__link toc-highlight">Limit the output with <code>head</code> and <code>tail</code></a></li><li><a href="#pick-fields-with-select-and-drop" class="table-of-contents__link toc-highlight">Pick fields with <code>select</code> and <code>drop</code></a></li><li><a href="#sample-schemas-with-taste" class="table-of-contents__link toc-highlight">Sample schemas with <code>taste</code></a></li><li><a href="#add-fields-with-put-and-extend" class="table-of-contents__link toc-highlight">Add fields with <code>put</code> and <code>extend</code></a></li><li><a href="#give-schemas-and-fields-new-names-with-rename" class="table-of-contents__link toc-highlight">Give schemas and fields new names with <code>rename</code></a></li><li><a href="#aggreate-records-with-summarize" class="table-of-contents__link toc-highlight">Aggreate records with <code>summarize</code></a></li><li><a href="#reorder-records-with-sort" class="table-of-contents__link toc-highlight">Reorder records with <code>sort</code></a></li><li><a href="#deduplicate-with-unique" class="table-of-contents__link toc-highlight">Deduplicate with <code>unique</code></a></li><li><a href="#profile-the-pipeline-with-measure" class="table-of-contents__link toc-highlight">Profile the pipeline with <code>measure</code></a></li></ul></div></div></div></div></main></div></div><footer class="footer"><div class="container container-fluid"><div class="row footer__links"><div class="col footer__col"><div class="footer__title">Resources</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/">Docs</a></li><li class="footer__item"><a class="footer__link-item" href="/api">API</a></li><li class="footer__item"><a class="footer__link-item" href="/blog">Blog</a></li><li class="footer__item"><a class="footer__link-item" href="/changelog">Changelog</a></li><li class="footer__item"><a href="https://docs.google.com/presentation/d/1R59T2nuGJg43g6PVKogZbb6DjcJXRYBx3Bih8W-A-oM/present" target="_blank" rel="noopener noreferrer" class="footer__link-item">Release Notes<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Community</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/discord">Discord</a></li><li class="footer__item"><a href="https://github.com/tenzir/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">GitHub<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://twitter.com/tenzir_company" target="_blank" rel="noopener noreferrer" class="footer__link-item">Twitter<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a href="https://www.linkedin.com/company/tenzir" target="_blank" rel="noopener noreferrer" class="footer__link-item">LinkedIn<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li></ul></div><div class="col footer__col"><div class="footer__title">Tenzir</div><ul class="footer__items clean-list"><li class="footer__item"><a href="https://tenzir.com" target="_blank" rel="noopener noreferrer" class="footer__link-item">Website<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_nPIU"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a></li><li class="footer__item"><a class="footer__link-item" href="/newsletter">Newsletter</a></li><li class="footer__item"><a class="footer__link-item" href="/privacy-statement">Privacy Statement</a></li><li class="footer__item"><a class="footer__link-item" href="/next/tenzir-vs-cribl">Tenzir vs. Cribl</a></li></ul></div></div><div class="footer__bottom text--center"><div class="footer__copyright">Copyright © 2024 Tenzir GmbH.</div></div></div></footer></div>
-<script src="/assets/js/runtime~main.e5a858d8.js"></script>
-<script src="/assets/js/main.d1af25bc.js"></script>
+<script src="/assets/js/runtime~main.00a00843.js"></script>
+<script src="/assets/js/main.1ee832b2.js"></script>
 </body>
 </html>
