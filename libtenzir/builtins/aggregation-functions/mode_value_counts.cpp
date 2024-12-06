@@ -29,20 +29,22 @@ public:
 
   auto update(const table_slice& input, session ctx) -> void override {
     auto arg = eval(expr_, input, ctx);
-    if (is<null_type>(arg.type)) {
-      return;
-    }
-    for (int64_t i = 0; i < arg.array->length(); ++i) {
-      if (arg.array->IsValid(i)) {
-        const auto& view = value_at(arg.type, *arg.array, i);
-        auto it = counts_.find(view);
-        if (it == counts_.end()) {
-          counts_.emplace_hint(it, materialize(view), 1);
-          continue;
-        }
-        ++it.value();
+    iter_series(eval(expr_, input, ctx), [&](const series& arg) {
+      if (is<null_type>(arg.type)) {
+        return;
       }
-    }
+      for (int64_t i = 0; i < arg.array->length(); ++i) {
+        if (arg.array->IsValid(i)) {
+          const auto& view = value_at(arg.type, *arg.array, i);
+          auto it = counts_.find(view);
+          if (it == counts_.end()) {
+            counts_.emplace_hint(it, materialize(view), 1);
+            continue;
+          }
+          ++it.value();
+        }
+      }
+    });
   }
 
   auto get() const -> data override {
