@@ -2,7 +2,7 @@
 title: "Tenzir Platform v1.5: Revamped Dashboards"
 slug: tenzir-platform-v1.5
 authors: [dit7ya, gitryder]
-date: 2024-12-04
+date: 2024-12-06
 tags: [release, platform]
 comments: true
 ---
