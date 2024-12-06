@@ -11,6 +11,7 @@
 #include "tenzir/detail/pp.hpp"
 
 #include <filesystem>
+#include <string_view>
 
 namespace fixtures {
 

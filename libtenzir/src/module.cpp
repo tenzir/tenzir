@@ -30,6 +30,7 @@
 #include <caf/deserializer.hpp>
 
 #include <filesystem>
+#include <string_view>
 
 namespace tenzir {
 

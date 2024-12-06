@@ -16,6 +16,7 @@
 #include <boost/url/url.hpp>
 
 #include <ranges>
+#include <string_view>
 
 // TODO: This implementation is a rough sketch and needs some cleanup eventually.
 

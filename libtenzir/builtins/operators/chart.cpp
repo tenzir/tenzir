@@ -17,6 +17,7 @@
 #include <tenzir/variant.hpp>
 
 #include <ranges>
+#include <string_view>
 
 namespace tenzir::plugins::chart {
 namespace {

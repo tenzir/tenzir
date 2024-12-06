@@ -40,6 +40,7 @@
 
 #include <chrono>
 #include <simdjson.h>
+#include <string_view>
 
 namespace tenzir::plugins::json {
 

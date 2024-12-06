@@ -20,11 +20,11 @@ namespace tenzir {
 template <class Policy>
 terminator_actor::behavior_type
 terminator(terminator_actor::stateful_pointer<terminator_state> self) {
-  TENZIR_TRACE_SCOPE("terminator {}", TENZIR_ARG(self->id()));
+  TENZIR_TRACE("terminator {}", TENZIR_ARG(self->id()));
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
     TENZIR_DEBUG("{} received DOWN from actor {}", *self, msg.source);
-    auto& remaining = self->state.remaining_actors;
+    auto& remaining = self->state().remaining_actors;
     auto pred = [=](auto& actor) { return actor == msg.source; };
     auto i = std::find_if(remaining.begin(), remaining.end(), pred);
     TENZIR_ASSERT(i != remaining.end());
@@ -46,16 +46,16 @@ terminator(terminator_actor::stateful_pointer<terminator_state> self) {
     }
     if (remaining.empty()) {
       TENZIR_DEBUG("{} terminated all actors", *self);
-      self->state.promise.deliver(atom::done_v);
+      self->state().promise.deliver(atom::done_v);
       self->quit(caf::exit_reason::user_shutdown);
     }
   });
   return {
     [self](atom::shutdown, const std::vector<caf::actor>& xs) {
       TENZIR_DEBUG("{} got request to terminate {} actors", *self, xs.size());
-      TENZIR_ASSERT(!self->state.promise.pending());
-      self->state.promise = self->make_response_promise<atom::done>();
-      auto& remaining = self->state.remaining_actors;
+      TENZIR_ASSERT(!self->state().promise.pending());
+      self->state().promise = self->make_response_promise<atom::done>();
+      auto& remaining = self->state().remaining_actors;
       remaining.reserve(xs.size());
       for (auto i = xs.rbegin(); i != xs.rend(); ++i)
         if (!*i)
@@ -73,9 +73,9 @@ terminator(terminator_actor::stateful_pointer<terminator_state> self) {
         TENZIR_DEBUG("{} quits prematurely because all actors have "
                      "exited",
                      *self);
-        self->state.promise.deliver(atom::done_v);
+        self->state().promise.deliver(atom::done_v);
         self->send_exit(self, caf::exit_reason::user_shutdown);
-        return self->state.promise;
+        return self->state().promise;
       }
       if constexpr (std::is_same_v<Policy, policy::sequential>) {
         // Track actors in reverse order because the user provides the actors in
@@ -100,7 +100,7 @@ terminator(terminator_actor::stateful_pointer<terminator_state> self) {
       } else {
         static_assert(detail::always_false_v<Policy>, "unsupported policy");
       }
-      return self->state.promise;
+      return self->state().promise;
     },
   };
 }

@@ -26,8 +26,7 @@ auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
                       Function&& function) {
   return self->clock().schedule(
     self->clock().now() + delay,
-    caf::make_action(std::forward<Function>(function),
-                     caf::action::state::waiting),
+    caf::make_action(std::forward<Function>(function)),
     caf::weak_actor_ptr{self->ctrl()});
 }
 

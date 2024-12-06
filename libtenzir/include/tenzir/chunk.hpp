@@ -23,6 +23,7 @@
 #include <cstring>
 #include <filesystem>
 #include <span>
+#include <string_view>
 #include <utility>
 
 namespace tenzir {

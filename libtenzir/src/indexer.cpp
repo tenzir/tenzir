@@ -28,26 +28,26 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
   TENZIR_ASSERT(index);
   TENZIR_DEBUG("{} spawned as active indexer for type {}", *self,
                index->type());
-  self->state.column = column;
-  self->state.idx = std::move(index);
+  self->state().column = column;
+  self->state().idx = std::move(index);
   return {
     [self](atom::evaluate, const curried_predicate& pred) -> caf::result<ids> {
       TENZIR_DEBUG("{} got predicate: {}", *self, pred);
-      TENZIR_ASSERT(self->state.idx);
-      auto& idx = *self->state.idx;
+      TENZIR_ASSERT(self->state().idx);
+      auto& idx = *self->state().idx;
       auto rep = to_internal(idx.type(), make_view(pred.rhs));
       return idx.lookup(pred.op, rep);
     },
     [self](atom::snapshot) {
       // The partition is only allowed to send a single snapshot atom.
-      return chunkify(self->state.idx);
+      return chunkify(self->state().idx);
     },
     [self](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown);
     },
     [self](atom::status, status_verbosity v, duration /*d*/) {
       record result;
-      result["memory-usage"] = uint64_t{self->state.idx->memusage()};
+      result["memory-usage"] = uint64_t{self->state().idx->memusage()};
       if (v >= status_verbosity::debug)
         detail::fill_status_map(result, self);
       return result;
@@ -61,13 +61,13 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
   TENZIR_ASSERT(index);
   TENZIR_DEBUG("{} spawned as passive indexer for a column of type {}", *self,
                index->type());
-  self->state.partition_id = partition_id;
-  self->state.idx = std::move(index);
+  self->state().partition_id = partition_id;
+  self->state().idx = std::move(index);
   return {
     [self](atom::evaluate, const curried_predicate& pred) -> caf::result<ids> {
       TENZIR_DEBUG("{} got predicate: {}", *self, pred);
-      TENZIR_ASSERT(self->state.idx);
-      auto& idx = *self->state.idx;
+      TENZIR_ASSERT(self->state().idx);
+      auto& idx = *self->state().idx;
       auto rep = to_internal(idx.type(), make_view(pred.rhs));
       return idx.lookup(pred.op, rep);
     },

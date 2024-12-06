@@ -22,6 +22,8 @@
 #include <arrow/type.h>
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::drop {
 
 namespace {

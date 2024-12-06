@@ -10,6 +10,8 @@
 
 #include <tenzir/generator.hpp>
 
+#include <string_view>
+
 namespace tenzir::detail {
 
 auto strip_leading_indentation(std::string&& code) -> std::string {

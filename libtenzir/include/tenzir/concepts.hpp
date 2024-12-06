@@ -14,6 +14,7 @@
 #include <concepts>
 #include <cstddef>
 #include <iterator>
+#include <string_view>
 #include <type_traits>
 
 namespace tenzir::concepts {

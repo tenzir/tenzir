@@ -24,6 +24,7 @@
 #include <cstring>
 #include <queue>
 #include <stdexcept>
+#include <string_view>
 
 #include <fluent-bit/fluent-bit-minimal.h>
 

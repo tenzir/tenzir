@@ -14,10 +14,10 @@
 
 #include <caf/deep_to_string.hpp>
 #include <caf/detail/pretty_type_name.hpp>
-#include <caf/string_view.hpp>
 #include <spdlog/spdlog.h>
 
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace tenzir::detail {

@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <ranges>
 #include <string>
+#include <string_view>
 
 /// [Base64](https://en.wikipedia.org/wiki/Base64) coding.
 namespace tenzir::detail::base64 {

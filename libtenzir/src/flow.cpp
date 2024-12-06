@@ -12,6 +12,7 @@
 #include "tenzir/detail/assert.hpp"
 
 #include <optional>
+#include <string_view>
 
 namespace tenzir {
 

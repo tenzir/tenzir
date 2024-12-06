@@ -15,6 +15,7 @@
 #include <caf/test/dsl.hpp>
 
 #include <string>
+#include <string_view>
 
 using namespace tenzir;
 

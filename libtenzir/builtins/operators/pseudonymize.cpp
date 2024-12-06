@@ -23,6 +23,8 @@
 
 #include <arrow/table.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::pseudonymize {
 
 /// The configuration of the pseudonymize pipeline operator.

@@ -17,6 +17,8 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include <string_view>
+
 namespace tenzir {
 
 /// The type of a socket.

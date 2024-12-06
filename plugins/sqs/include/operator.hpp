@@ -21,6 +21,8 @@
 #include <aws/sqs/model/ReceiveMessageRequest.h>
 #include <aws/sqs/model/SendMessageRequest.h>
 
+#include <string_view>
+
 using namespace std::chrono_literals;
 
 namespace tenzir::plugins::sqs {

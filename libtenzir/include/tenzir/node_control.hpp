@@ -21,6 +21,7 @@
 #include <caf/typed_actor.hpp>
 
 #include <string>
+#include <string_view>
 
 namespace tenzir {
 
@@ -35,7 +36,7 @@ auto get_node_components(caf::scoped_actor& self, const node_actor& node)
   -> caf::expected<std::tuple<Actors...>> {
   using result_t = std::tuple<Actors...>;
   auto result = caf::expected{result_t{}};
-  auto normalize = [](caf::string_view in) {
+  auto normalize = [](std::string_view in) {
     // Remove the uninteresting parts of the name:
     //   tenzir::type_registry_actor -> type_registry
     auto str = std::string{in.data(), in.data() + in.size()};

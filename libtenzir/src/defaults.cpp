@@ -14,6 +14,7 @@
 
 #include <random>
 #include <string>
+#include <string_view>
 
 namespace tenzir::defaults::import {
 

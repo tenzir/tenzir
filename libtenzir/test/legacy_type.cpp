@@ -15,9 +15,10 @@
 #include "tenzir/concept/printable/tenzir/offset.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/variant_traits.hpp"
+
+#include <caf/test/dsl.hpp>
 
 #include <string_view>
 
@@ -194,63 +195,3 @@ TEST(parseable) {
   MESSAGE("invalid");
   { CHECK_ERROR(parsers::legacy_type(":bool")); }
 }
-
-namespace {
-
-struct fixture : public fixtures::deterministic_actor_system {
-  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
-  }
-};
-
-} // namespace
-
-FIXTURE_SCOPE(type_tests, fixture)
-
-TEST(serialization) {
-  CHECK_ROUNDTRIP(legacy_type{});
-  CHECK_ROUNDTRIP(legacy_none_type{});
-  CHECK_ROUNDTRIP(legacy_bool_type{});
-  CHECK_ROUNDTRIP(legacy_integer_type{});
-  CHECK_ROUNDTRIP(legacy_count_type{});
-  CHECK_ROUNDTRIP(legacy_real_type{});
-  CHECK_ROUNDTRIP(legacy_duration_type{});
-  CHECK_ROUNDTRIP(legacy_time_type{});
-  CHECK_ROUNDTRIP(legacy_string_type{});
-  CHECK_ROUNDTRIP(legacy_pattern_type{});
-  CHECK_ROUNDTRIP(legacy_address_type{});
-  CHECK_ROUNDTRIP(legacy_subnet_type{});
-  CHECK_ROUNDTRIP(legacy_enumeration_type{});
-  CHECK_ROUNDTRIP(legacy_list_type{});
-  CHECK_ROUNDTRIP(legacy_map_type{});
-  CHECK_ROUNDTRIP(legacy_record_type{});
-  CHECK_ROUNDTRIP(legacy_alias_type{});
-  CHECK_ROUNDTRIP(legacy_type{legacy_none_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_bool_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_integer_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_count_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_real_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_duration_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_time_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_string_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_pattern_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_address_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_subnet_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_enumeration_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_list_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_map_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_record_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_alias_type{}});
-  auto r
-    = legacy_record_type{{"x", legacy_integer_type{}},
-                         {"y", legacy_address_type{}},
-                         {"z", legacy_real_type{}.attributes({{"key", "valu"
-                                                                      "e"}})}};
-  // Make it recursive.
-  r = {{"a", legacy_map_type{legacy_string_type{}, legacy_count_type{}}},
-       {"b", legacy_list_type{legacy_bool_type{}}.name("foo")},
-       {"c", r}};
-  r.name("foo");
-  CHECK_ROUNDTRIP(r);
-}
-
-FIXTURE_SCOPE_END()

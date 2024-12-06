@@ -370,7 +370,7 @@ FROM plugins-source AS compaction-plugin
 COPY contrib/tenzir-plugins/compaction ./contrib/tenzir-plugins/compaction
 RUN cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-compaction --parallel && \
+      cmake --build build-compaction --parallel 1 && \
       cmake --build build-compaction --target integration && \
       DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
       rm -rf build-compaction

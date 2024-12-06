@@ -10,7 +10,6 @@
 
 #include "tenzir/bool_synopsis.hpp"
 #include "tenzir/synopsis_factory.hpp"
-#include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/synopsis.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/time_synopsis.hpp"
@@ -72,25 +71,3 @@ TEST(min - max synopsis) {
   auto heterogeneous_view = make_view(heterogeneous);
   verify(heterogeneous_view, {T, F, N, N, N, N, N, N, N, N});
 }
-
-namespace {
-
-struct fixture : public fixtures::deterministic_actor_system {
-  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
-  }
-};
-
-} // namespace
-
-FIXTURE_SCOPE(synopsis_tests, fixture)
-
-TEST(serialization) {
-  factory<synopsis>::initialize();
-  CHECK_ROUNDTRIP(synopsis_ptr{});
-  CHECK_ROUNDTRIP_DEREF(
-    factory<synopsis>::make(type{bool_type{}}, caf::settings{}));
-  CHECK_ROUNDTRIP_DEREF(
-    factory<synopsis>::make(type{time_type{}}, caf::settings{}));
-}
-
-FIXTURE_SCOPE_END()

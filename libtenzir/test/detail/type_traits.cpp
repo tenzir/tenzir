@@ -27,5 +27,4 @@ TEST(contains_type) {
   check<std::variant>();
   check<std::tuple>();
   check<fake_list>();
-  check<caf::variant>();
 }

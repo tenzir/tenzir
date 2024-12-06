@@ -139,11 +139,11 @@ auto make_buffer(typename buffer_actor<Elements>::template stateful_pointer<
                  metric_handler metrics_handler,
                  shared_diagnostic_handler diagnostics_handler)
   -> buffer_actor<Elements>::behavior_type {
-  self->state.self = self;
-  self->state.capacity = capacity;
-  self->state.policy = policy;
-  self->state.metrics_handler = std::move(metrics_handler);
-  self->state.diagnostics_handler = std::move(diagnostics_handler);
+  self->state().self = self;
+  self->state().capacity = capacity;
+  self->state().policy = policy;
+  self->state().metrics_handler = std::move(metrics_handler);
+  self->state().diagnostics_handler = std::move(diagnostics_handler);
   self->set_exit_handler([self](caf::exit_msg& msg) {
     // The buffer actor is linked to both internal operators. We want to
     // unconditionally shut down the buffer actor, even when the operator shuts
@@ -151,14 +151,14 @@ auto make_buffer(typename buffer_actor<Elements>::template stateful_pointer<
     self->quit(std::move(msg.reason));
   });
   detail::weak_run_delayed_loop(self, defaults::metrics_interval, [self] {
-    self->state.emit_metrics();
+    self->state().emit_metrics();
   });
   return {
     [self](atom::write, Elements& elements) -> caf::result<void> {
-      return self->state.write(std::move(elements));
+      return self->state().write(std::move(elements));
     },
     [self](atom::read) -> caf::result<Elements> {
-      return self->state.read();
+      return self->state().read();
     },
   };
 }

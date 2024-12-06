@@ -11,6 +11,8 @@
 
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir {
 
 auto to_xsv_sep(std::string_view x) -> caf::expected<char> {

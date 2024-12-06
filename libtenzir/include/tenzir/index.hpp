@@ -61,12 +61,6 @@ auto inspect(Inspector& f, send_initial_dbstate& x) {
   return detail::inspect_enum(f, x);
 }
 
-/// Helper class used to route table slice columns to the correct indexer
-/// in the CAF stream stage.
-struct i_partition_selector {
-  bool operator()(const type& filter, const table_slice& slice) const;
-};
-
 /// Extract a partition synopsis from the partition at `partition_path`
 /// and write it to `partition_synopsis_path`.
 //  TODO: Move into separate header.
@@ -86,9 +80,6 @@ struct active_partition_info {
   /// The partition actor.
   active_partition_actor actor = {};
 
-  /// The slot ID that identifies the partition in the stream.
-  caf::stream_slot stream_slot = {};
-
   /// The remaining free capacity of the partition.
   size_t capacity = {};
 
@@ -99,8 +90,8 @@ struct active_partition_info {
   friend auto inspect(Inspector& f, active_partition_info& x) {
     return f.object(x)
       .pretty_name("active_partition_info")
-      .fields(f.field("actor", x.actor), f.field("stream-slot", x.stream_slot),
-              f.field("capacity", x.capacity), f.field("id", x.id));
+      .fields(f.field("actor", x.actor), f.field("capacity", x.capacity),
+              f.field("id", x.id));
   }
 };
 

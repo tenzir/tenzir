@@ -17,6 +17,8 @@
 
 #include <caf/expected.hpp>
 
+#include <string_view>
+
 #if __has_include(<rabbitmq-c/amqp.h>)
 #  include <rabbitmq-c/amqp.h>
 #  include <rabbitmq-c/ssl_socket.h>

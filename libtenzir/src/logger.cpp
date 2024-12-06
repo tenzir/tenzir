@@ -28,6 +28,7 @@
 #include <spdlog/sinks/syslog_sink.h>
 
 #include <cctype>
+#include <iostream>
 
 #if TENZIR_ENABLE_JOURNALD_LOGGING
 #  include <spdlog/sinks/systemd_sink.h>

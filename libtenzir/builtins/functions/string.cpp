@@ -12,6 +12,8 @@
 
 #include <arrow/compute/api.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::string {
 
 namespace {

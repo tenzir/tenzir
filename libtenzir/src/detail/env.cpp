@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
+#include <string_view>
 
 extern char** environ;
 

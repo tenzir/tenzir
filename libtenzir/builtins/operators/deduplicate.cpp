@@ -14,6 +14,7 @@
 #include <tenzir/tql/parser.hpp>
 
 #include <ranges>
+#include <string_view>
 
 namespace tenzir::plugins::deduplicate {
 namespace {

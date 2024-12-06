@@ -33,6 +33,7 @@
 #include <optional>
 #include <simdjson.h>
 #include <stdexcept>
+#include <string_view>
 
 #include <yaml-cpp/yaml.h>
 

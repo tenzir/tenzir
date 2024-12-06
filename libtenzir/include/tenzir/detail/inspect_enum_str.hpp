@@ -14,6 +14,8 @@
 
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::detail {
 
 template <class Inspector, class Enum>

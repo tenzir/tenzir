@@ -25,6 +25,8 @@
 #include <arrow/util/utf8.h>
 #include <tsl/robin_set.h>
 
+#include <string_view>
+
 namespace tenzir {
 namespace {
 
