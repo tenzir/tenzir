@@ -36,7 +36,7 @@ pipeline, so stay tuned!
 ## Contexts Page
 
 The new Contexts page allows for managing contexts directly in the Tenzir
-Platform. Previoussly, creating a context required installing a package or
+Platform. Previously, creating a context required installing a package or
 running a pipeline. Now, a visual interface guides you through the process.
 
 The new interface makes context management faster, easier, and more intuitive,
