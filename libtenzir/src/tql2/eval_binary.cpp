@@ -516,6 +516,27 @@ struct EvalBinOp<ast::binary_op::in, ip_type, subnet_type> {
   }
 };
 
+template <>
+struct EvalBinOp<ast::binary_op::in, subnet_type, subnet_type> {
+  static auto eval(const subnet_type::array_type& l,
+                   const subnet_type::array_type& r, auto&&)
+    -> std::shared_ptr<arrow::BooleanArray> {
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (l.IsNull(i) || r.IsNull(i)) {
+        check(b.AppendNull());
+        continue;
+      }
+      auto left_subnet = value_at(subnet_type{}, l, i);
+      auto right_subnet = value_at(subnet_type{}, r, i);
+      auto result = right_subnet.contains(left_subnet);
+      check(b.Append(result));
+    }
+    return finish(b);
+  }
+};
+
 // TODO: We probably don't want this.
 template <ast::binary_op Op>
   requires(Op == ast::binary_op::and_ || Op == ast::binary_op::or_)
