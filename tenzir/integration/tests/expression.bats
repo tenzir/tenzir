@@ -149,6 +149,7 @@ EOF
   check tenzir --tql2 -f /dev/stdin <<EOF
   from "${INPUTSDIR}/json/lists.json"
   exists = x in y
+  not_exists = x not in y
 EOF
 }
 
