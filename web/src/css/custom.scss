@@ -232,6 +232,9 @@ pre button.rehype-pretty-copy {
   justify-content: center !important;
   align-items: center !important;
   background-color: transparent;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
 pre button.rehype-pretty-copy {
