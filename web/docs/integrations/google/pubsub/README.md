@@ -7,12 +7,14 @@ messages from a subscription.
 
 ![Google Cloud Pub/Sub](google-cloud-pubsub.svg)
 
-The operators
-[`save_google_cloud_pubsub`](../../../tql2/operators/save_google_cloud_pubsub.md) and
-and
+:::tip URL Support
+The URL scheme `gcps://` dispatches to
 [`load_google_cloud_pubsub`](../../../tql2/operators/load_google_cloud_pubsub.md)
-implement subscriber and publisher, respectively. A message does not have any
-structure and is just a block of bytes.
+and
+[`save_google_cloud_pubsub`](../../../tql2/operators/save_google_cloud_pubsub.md)
+for seamless URL-style use via [`from`](../../../tql2/operators/from.md) and
+[`to`](../../../tql2/operators/to.md).
+:::
 
 ## Examples
 
@@ -20,13 +22,15 @@ structure and is just a block of bytes.
 
 ```tql
 from {foo: 42}
-write_json
-save_google_cloud_pubsub project_id="amazing-project-123456", topic_id="alerts-topic"
+to "gcps://my-project/my-topic" {
+  write_json
+}
 ```
 
 ### Receive messages from a subscription
 
 ```tql
-load_google_cloud_pubsub project_id="amazing-project-123456", subscription_id="my-subscription"
-read_json
+from "gcps://my-project/my-topic" {
+  read_json
+}
 ```
