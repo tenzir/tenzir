@@ -9,10 +9,12 @@ The diagram below shows the key abstractions and how they relate to a pipeline:
 
 Tenzir supports sending and receiving messages via AMQP version 0-9-1.
 
+:::tip URL Support
 The URL scheme `amqp://` dispatches to
 [`load_amqp`](../../tql2/operators/load_amqp.md) and
 [`save_amqp`](../../tql2/operators/save_amqp.md) for seamless URL-style use via
-[`from`](../../tql2/operators/from.md) and [`to`](../../tql2/operators/to.md)
+[`from`](../../tql2/operators/from.md) and [`to`](../../tql2/operators/to.md).
+:::
 
 ## Send events to an AMQP exchange
 
