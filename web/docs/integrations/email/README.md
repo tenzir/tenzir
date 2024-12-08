@@ -7,7 +7,9 @@ behalf of Tenzir.
 
 ![Pipeline to email](email.svg)
 
-## Email the Tenzir version as CSV message
+## Examples
+
+### Email the Tenzir version as CSV message
 
 ```tql
 version
@@ -15,7 +17,7 @@ write_csv
 save_email "Example User <user@example.org>"
 ```
 
-## Send the email body as MIME part
+### Send the email body as MIME part
 
 ```tql
 version

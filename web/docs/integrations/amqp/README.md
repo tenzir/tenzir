@@ -16,7 +16,9 @@ The URL scheme `amqp://` dispatches to
 [`from`](../../tql2/operators/from.md) and [`to`](../../tql2/operators/to.md).
 :::
 
-## Send events to an AMQP exchange
+## Examples
+
+### Send events to an AMQP exchange
 
 ```tql
 from {
@@ -26,7 +28,7 @@ from {
 to "amqp://admin:pass@0.0.0.1:5672/vhost"
 ```
 
-## Receive events from an AMQP queue
+### Receive events from an AMQP queue
 
 ```tql
 from "amqp://admin:pass@0.0.0.1:5672/vhost"

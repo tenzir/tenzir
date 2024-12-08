@@ -36,7 +36,9 @@ Log Analytics workspace and DCR to forward data to that table, and to give the
 applciation the proper permissions to access the created DCE and DCR.
 :::
 
-## Send logs to custom table
+## Examples
+
+### Send logs to custom table
 
 Let's assume that you have the following CSV file that you want to send to a
 custom table:

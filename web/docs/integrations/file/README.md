@@ -16,7 +16,9 @@ The URL scheme `file://` dispatches to
 [`from`](../../tql2/operators/from.md) and [`to`](../../tql2/operators/to.md).
 :::
 
-## Read a file
+## Examples
+
+### Read a file
 
 Read from a file and parse it in the format applied by the file extension:
 
@@ -41,7 +43,7 @@ from "/sandbox/malware.gz", mmap=true
 yara "rule.yaml"
 ```
 
-## Follow a file
+### Follow a file
 
 A pipeline typically completes once it reads the end of a file. Pass
 `follow=true` to disable this behavior and instead wait for new data written to
@@ -51,7 +53,7 @@ it. This is similar to running `tail -f` on a file.
 from "/tmp/never-ending-stream.ndjson", follow=true
 ```
 
-## Write a file
+### Write a file
 
 Write to a file in the format implied by the file extension:
 
@@ -69,7 +71,7 @@ version
 to "/tmp/tenzir-version.json.bz2"
 ```
 
-## Append to a file
+### Append to a file
 
 In case the file exists and you do not want to overwrite it, pass `append=true`
 as option:
@@ -79,7 +81,7 @@ from {x: 42}
 to "/tmp/event.csv", append=true
 ```
 
-## Read/write a Unix domain socket
+### Read/write a Unix domain socket
 
 Pass `uds=true` to signal that the file is a Unix domain socket:
 

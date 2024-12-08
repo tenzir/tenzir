@@ -17,13 +17,15 @@ The URL schemes `ftp://` and `ftps://` dispatche to
 [`from`](../../tql2/operators/from.md) and [`to`](../../tql2/operators/to.md).
 :::
 
-## Download files from an FTP server
+## Examples
+
+### Download files from an FTP server
 
 ```tql
 from "amqp://user:pass@0.0.0.1:5672/vhost"
 ```
 
-## Upload events to an FTP server
+### Upload events to an FTP server
 
 ```tql
 from {

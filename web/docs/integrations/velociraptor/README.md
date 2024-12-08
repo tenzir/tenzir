@@ -45,7 +45,9 @@ as a static binary that we refer to as `velociraptor-binary` here.)
    velociraptor-binary -c server.yaml frontend
    ```
 
-## Run raw VQL
+## Examples
+
+### Run raw VQL
 
 After you have created a TLS certificate, you can use the
 [`from_velociraptor`](../../tql2/operators/from_velociraptor.md)
@@ -58,7 +60,7 @@ select Name, Pid, PPid, CommandLine
 where Name == "remotemanagement"
 ```
 
-## Subscribe to forensic artifacts
+### Subscribe to forensic artifacts
 
 You can also hunt for forensic artifacts, such as dropped files or specific
 entries in the Windows registry, on assets connected to your Velociraptor

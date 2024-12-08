@@ -5,7 +5,9 @@ to detect threats.
 
 Use Tenzir to acquire, process, and store Suricata logs.
 
-## Ingest EVE JSON logs into a node
+## Examples
+
+### Ingest EVE JSON logs into a node
 
 [EVE JSON](https://docs.suricata.io/en/latest/output/eve/eve-json-output.html)
 is the log format in which Suricata generates events.
@@ -23,8 +25,6 @@ outputs:
 
 The `filetype` setting determines how you'd process the log file.
 
-### Import from a file
-
 By default, Suricata uses the file type `regular`. Ingest into a node as
 follows:
 
@@ -33,8 +33,6 @@ load_file "/path/to/eve.json"
 read_suricata
 import
 ```
-
-### Import from a Unix domain socket
 
 If your `filetype` setting is `unix_stream`, you need to create a Unix domain
 socket first, e.g., like this:
