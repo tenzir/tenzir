@@ -9,10 +9,10 @@ costs and gaining additional flexibility of data processing and routing.
 ## Send data to an existing HEC endpoint
 
 To send data from a pipeline to a Splunk [HTTP Event Collector (HEC)][hec]
-endpoint, use the [`to_splunk`](../tql2/operators/to_splunk.md) operator.
+endpoint, use the [`to_splunk`](../../tql2/operators/to_splunk.md) operator.
 
 For example, deploy the following pipeline to forward all
-[Suricata](suricata.md) alerts arriving at a node to Splunk:
+[Suricata](../suricata/README.md) alerts arriving at a node to Splunk:
 
 ```tql
 export live=true
@@ -24,13 +24,13 @@ Replace `1.2.3.4` with the IP address of your Splunk host and `TOKEN` with your
 HEC token.
 
 For more details, see the documentation for the
-[`to_splunk`](../tql2/operators/to_splunk.md) operator.
+[`to_splunk`](../../tql2/operators/to_splunk.md) operator.
 
 ## Spawn a HEC endpoint as pipeline source
 
 To send data to a Tenzir pipeline instead of Splunk, you can open a Splunk [HTTP
 Event Collector (HEC)][hec] endpoint using the
-[`fluentbit`](../tql2/operators/fluentbit.md) source operator.
+[`fluentbit`](../../tql2/operators/fluentbit.md) source operator.
 
 For example, to ingest all data into a Tenzir node instead of Splunk, point your
 data source to the IP address of the Tenzir node at port 9880 by deploying this

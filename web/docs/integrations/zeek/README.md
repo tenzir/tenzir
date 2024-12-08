@@ -118,8 +118,8 @@ on this method.
 
 You can run Zeek on a pipeline of PCAP packets and continue processing the logs
 in the same pipeline. A stock Tenzir installation comes with a
-[user-defined](../language/user-defined-operators.md) `zeek` operator that looks
-as follows:
+[user-defined](../../language/user-defined-operators.md) `zeek` operator that
+looks as follows:
 
 ```yaml title=tenzir.yaml
 tenzir:
@@ -140,7 +140,7 @@ tenzir 'load_file "/path/to/trace.pcap" | zeek'
 ```
 
 You can also perform more elaborate packet filtering after light-weight
-[decapsulation](../tql2/functions/decapsulate.md):
+[decapsulation](../../tql2/functions/decapsulate.md):
 
 ```bash
 tenzir 'load_file "/path/to/trace.pcap"
@@ -153,7 +153,7 @@ tenzir 'load_file "/path/to/trace.pcap"
 
 Read the [in-depth blog
 post](/blog/shell-yeah-supercharging-zeek-and-suricata-with-tenzir) for more
-details about the inner workings of the [`shell`](../tql2/operators/shell.md)
+details about the inner workings of the [`shell`](../../tql2/operators/shell.md)
 operator.
 
 ## Process logs with a pipeline on the command line
@@ -166,7 +166,7 @@ zeek-cut id.orig_h id.resp_h < conn.log
 ```
 
 The list of arguments to `zeek-cut` are the column names of the log. The
-[`select`](../tql2/operators/select.md) operator performs the equivalent in
+[`select`](../../tql2/operators/select.md) operator performs the equivalent in
 Tenzir after we parse the logs as Zeek TSV:
 
 ```bash
@@ -183,7 +183,7 @@ cat *.log | tenzir 'read_zeek_tsv | select id.orig_h id.resp_h'
 ## Generate Zeek TSV from arbitrary data
 
 You can render any data as Zeek TSV log using
-[`write_zeek_tsv`](../tql2/operators/write_zeek_tsv.md):
+[`write_zeek_tsv`](../../tql2/operators/write_zeek_tsv.md):
 
 For example, this is how you create a filtered version of a Zeek conn.log:
 

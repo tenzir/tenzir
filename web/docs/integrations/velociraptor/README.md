@@ -8,7 +8,7 @@ API][api].
 
 [api]: https://docs.velociraptor.app/docs/server_automation/server_api/
 
-![Velociraptor](../operators/velociraptor.excalidraw.svg)
+![Velociraptor](velociraptor.svg)
 
 ## Create a TLS certificate to communicate with Velociraptor
 
@@ -29,7 +29,7 @@ as a static binary that we refer to as `velociraptor-binary` here.)
    ```
 
    Copy the generated `client.yaml` to your Tenzir [plugin
-   configuration](../configuration.md#plugins) directory as `velociraptor.yaml`
+   configuration](../../configuration.md#plugins) directory as `velociraptor.yaml`
    so that the operator can find it:
    ```bash
    cp client.yaml /etc/tenzir/plugin/velociraptor.yaml
@@ -48,7 +48,7 @@ as a static binary that we refer to as `velociraptor-binary` here.)
 ## Run raw VQL
 
 After you have created a TLS certificate, you can use the
-[`from_velociraptor`](../tql2/operators/from_velociraptor.md)
+[`from_velociraptor`](../../tql2/operators/from_velociraptor.md)
 operator to execute a [Velociraptor Query Language
 (VQL)](https://docs.velociraptor.app/docs/vql/) query:
 
