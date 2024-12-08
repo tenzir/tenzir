@@ -3,14 +3,12 @@
 [Graylog](https://graylog.org/) is a log management solution based on top of
 Elasticsearch.
 
-Use Tenzir to process data from Graylog.
-
 In Graylog, data goes through three key stages:
 
 1. **Inputs**: This stage involves data ingestion, where Graylog receives data
    from various sources. Inputs support multiple protocols like TCP, UDP, and
-   HTTP. They normalize incoming data into the unified [Graylog Extended Log
-   Format (GELF)][gelf].
+   HTTP. They normalize incoming data into the unified **Graylog Extended Log
+   Format (GELF)**.
 2. **Streams**: Once onboarded, streams route the data internally. Here,
    it can be filtered, parsed, and enriched. The stream processing stage
    leverages extractors and pipeline rules for data manipulation, before
@@ -18,8 +16,6 @@ In Graylog, data goes through three key stages:
 3. **Outputs**: For exporting data, Graylog utilizes alerts, dashboards, and its
    REST API. Additionally, Graylog can forward data to external systems or tools
    via streams.
-
-[gelf]: ../formats/gelf.md
 
 ## Receive data from Graylog
 
@@ -71,15 +67,15 @@ load_tcp "1.2.3.4:5678" {
 ```
 
 This pipelines opens a listening socket at IP address 1.2.3.4 at port 5678 via
-[`load_tcp`](../tql2/operators/load_tcp.md), and then spawns a nested pipeline
-per accepted connection, each of which reads a stream of GELF messages using
-[`read_gelf`](../tql2/operators/read_gelf.md). Graylog will connect to this
-socket, based on the reconnect interval that you configured in the output (by
-default 500ms).
+[`load_tcp`](../../tql2/operators/load_tcp.md), and then spawns a nested
+pipeline per accepted connection, each of which reads a stream of GELF messages
+using [`read_gelf`](../../tql2/operators/read_gelf.md). Graylog will connect to
+this socket, based on the reconnect interval that you configured in the output
+(by default 500ms).
 
 Now that data is flowing, you can decide what to do with the Graylog data, e.g.,
 ingest data into a running Tenzir node by appending
-[`import`](../tql2/operators/import.md):
+[`import`](../../tql2/operators/import.md):
 
 ```tql
 load_tcp "1.2.3.4:5678" {

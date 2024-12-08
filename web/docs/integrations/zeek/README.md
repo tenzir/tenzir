@@ -23,11 +23,13 @@ which Tenzir can parse natively:
 2. One NDJSON file for all log types combined (aka. *JSON Streaming*)
 3. One NDJSON file per log type.
 
-## Ingest logs into a node
+## Examples
+
+### Ingest logs into a node
 
 To ingest Zeek logs into a Tenzir node, you have multiple options.
 
-### Easy-button import with the official Zeek package
+#### Easy-button import with the official Zeek package
 
 Our official [Zeek package](https://github.com/tenzir/zeek-tenzir) makes it easy
 to ship your Zeek logs to a Tenzir node. Install the package first:
@@ -60,7 +62,7 @@ zeek -r trace.pcap tenzir/import Tenzir::delete_after_postprocesing=F
 For further details on how to use our Zeek package read our blog post [Native
 Zeek Log Rotation & Shipping](/blog/native-zeek-log-rotation-and-shipping).
 
-### Run an import pipeline when rotating logs
+#### Run an import pipeline when rotating logs
 
 If you cannot use our Zeek package, it is still possible to let Zeek trigger an
 import pipeline upon rotation. Zeek's [logging
@@ -114,12 +116,12 @@ Our blog post [Native Zeek Log Rotation &
 Shipping](/blog/native-zeek-log-rotation-and-shipping) provides further details
 on this method.
 
-## Run Zeek on a packet pipeline
+### Run Zeek on a packet pipeline
 
 You can run Zeek on a pipeline of PCAP packets and continue processing the logs
 in the same pipeline. A stock Tenzir installation comes with a
-[user-defined](../language/user-defined-operators.md) `zeek` operator that looks
-as follows:
+[user-defined](../../language/user-defined-operators.md) `zeek` operator that
+looks as follows:
 
 ```yaml title=tenzir.yaml
 tenzir:
@@ -140,7 +142,7 @@ tenzir 'load_file "/path/to/trace.pcap" | zeek'
 ```
 
 You can also perform more elaborate packet filtering after light-weight
-[decapsulation](../tql2/functions/decapsulate.md):
+[decapsulation](../../tql2/functions/decapsulate.md):
 
 ```bash
 tenzir 'load_file "/path/to/trace.pcap"
@@ -153,10 +155,10 @@ tenzir 'load_file "/path/to/trace.pcap"
 
 Read the [in-depth blog
 post](/blog/shell-yeah-supercharging-zeek-and-suricata-with-tenzir) for more
-details about the inner workings of the [`shell`](../tql2/operators/shell.md)
+details about the inner workings of the [`shell`](../../tql2/operators/shell.md)
 operator.
 
-## Process logs with a pipeline on the command line
+### Process logs with a pipeline on the command line
 
 Zeek ships with a helper utility `zeek-cut` that operators on Zeek's
 tab-separated logs. For example, to extract the host pairs from a conn log:
@@ -166,7 +168,7 @@ zeek-cut id.orig_h id.resp_h < conn.log
 ```
 
 The list of arguments to `zeek-cut` are the column names of the log. The
-[`select`](../tql2/operators/select.md) operator performs the equivalent in
+[`select`](../../tql2/operators/select.md) operator performs the equivalent in
 Tenzir after we parse the logs as Zeek TSV:
 
 ```bash
@@ -180,10 +182,10 @@ boundaries, you can also concatenate logs of various types:
 cat *.log | tenzir 'read_zeek_tsv | select id.orig_h id.resp_h'
 ```
 
-## Generate Zeek TSV from arbitrary data
+### Generate Zeek TSV from arbitrary data
 
 You can render any data as Zeek TSV log using
-[`write_zeek_tsv`](../tql2/operators/write_zeek_tsv.md):
+[`write_zeek_tsv`](../../tql2/operators/write_zeek_tsv.md):
 
 For example, this is how you create a filtered version of a Zeek conn.log:
 

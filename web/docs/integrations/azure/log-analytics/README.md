@@ -1,4 +1,4 @@
-# Azure Log Analytics
+# Log Analytics
 
 Azure Monitor is Microsoft's cloud solution for collecting and analyzing logs
 and system events. Azure Log Analytics is a part of Monitor and comes with an
@@ -36,7 +36,9 @@ Log Analytics workspace and DCR to forward data to that table, and to give the
 applciation the proper permissions to access the created DCE and DCR.
 :::
 
-## Send logs to custom table
+## Examples
+
+### Send logs to custom table
 
 Let's assume that you have the following CSV file that you want to send to a
 custom table:
@@ -51,7 +53,7 @@ Charlie,44
 Assuming you have already [created a custom
 table](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table#create-a-custom-table)
 called `Custom-Users`, you can send this file to the table using the
-[`to_azure_log_analytics`](../../tql2/operators/to_azure_log_analytics.md)
+[`to_azure_log_analytics`](../../../tql2/operators/to_azure_log_analytics.md)
 operator:
 
 ```tql
