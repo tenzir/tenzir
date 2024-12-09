@@ -1,6 +1,6 @@
 # load_azure_blob_storage
 
-Loads bytes from an Azure Blob Storage.
+Loads bytes from Azure Blob Storage.
 
 ```tql
 load_azure_blob_storage uri:string
@@ -22,7 +22,7 @@ may read from multiple environment variables, such as:
 
 ### `uri: string`
 
-A URI identifying the blob to load from
+A URI identifying the blob to load from.
 
 Supported URI formats:
 

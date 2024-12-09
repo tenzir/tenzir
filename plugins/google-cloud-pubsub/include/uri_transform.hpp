@@ -22,11 +22,13 @@ inline auto make_uri_transform(std::string_view argument_name) {
            diagnostic_handler& dh) -> failure_or<std::vector<ast::expression>> {
     auto res = std::vector<ast::expression>{};
     auto slash = uri.inner.find('/');
-    if (slash == uri.inner.npos) {
-      diagnostic::error("Failed to to parse google cloud Pub/Sub URI")
+    if (slash == uri.inner.npos
+        or uri.inner.find('/', slash + 1) != uri.inner.npos) {
+      diagnostic::error("failed to to parse Google Cloud Pub/Sub URI")
+        .hint("The expected format is `project_id/{}", argument)
         .primary(uri)
         .emit(dh);
-      return res;
+      return failure::promise();
     }
     auto make = [](std::string name, std::string text,
                    location loc) -> ast::assignment {

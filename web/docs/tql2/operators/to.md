@@ -7,7 +7,7 @@ sidebar_class_name: hidden
 Saves to an URI, inferring the destination, compression and format.
 
 ```tql
-to uri:str, [saver_args… { … }]
+to uri:string, [saver_args… { … }]
 ```
 
 :::tip Use `to` if you can
@@ -21,7 +21,7 @@ compression and writing.
 The `to` operator is an easy way to get data out of Tenzir into
 It will try to infer the connector, compression and format based on the given URI.
 
-### `uri: str`
+### `uri: string`
 
 The URI to load from.
 
@@ -36,8 +36,8 @@ to "https://example.org/file.json", headers={Token: "XYZ"}
 
 ### `{ … } (optional)`
 
-A pipeline that can be used if inference for the compression or format does not work
-or is not sufficient.
+A pipeline that can be used if inference for the compression or format does not
+work or is not sufficient.
 
 Providing this pipeline
 disables the inference for the decompression and writing format in order to avoid
@@ -47,8 +47,8 @@ confusion.
 The `{ … }` argument exists for data writing purposes. In most situations,
 inference should be sufficient and the pipeline should not be required.
 
-If you want to perform other operations on the data before saving, you should do that
-as part of the pipeline before the `to` operator.
+If you want to perform other operations on the data before saving, you should do
+that as part of the pipeline before the `to` operator.
 :::
 
 ## Explanation

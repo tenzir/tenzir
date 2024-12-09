@@ -26,7 +26,7 @@ fluent-bit -o plugin -p key1=value1 -p key2=value2 -p…
 translates to our `from_fluent_bit` operator as follows:
 
 ```tql
-from_fluent_bit "plugin", options{key1: value1, key2:value2, …}
+from_fluent_bit "plugin", options={key1: value1, key2: value2, …}
 ```
 
 :::tip Output to Fluent Bit

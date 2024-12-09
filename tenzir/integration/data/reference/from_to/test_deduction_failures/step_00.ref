@@ -1,0 +1,16 @@
+error: unsupported scheme `unknown`
+ --> <input>:1:7
+  |
+1 | from "unknown://failure"
+  |       ^^^^^^^ 
+  |
+  = note: supported schemes for deduction: `file`, `ftp`, `ftps`, `http`, `https`, `tcp`, `udp`
+  = docs: https://docs.tenzir.com/tql2/operators/from
+
+error: did not find extension in `failure`
+ --> <input>:1:17
+  |
+1 | from "unknown://failure"
+  |                 ^^^^^^^ 
+  |
+  = hint: you can pass a pipeline to handle compression and format
