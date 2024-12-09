@@ -79,7 +79,7 @@ load file --mmap evil.exe | yara rule.yara
 :::info Memory Mapping Optimization
 The `--mmap` flag is merely an optimization that constructs a single chunk of
 bytes instead of a contiguous stream. Without `--mmap`, the
-[`file`](../connectors/file.md) loader generates a stream of byte chunks and
+`file` loader generates a stream of byte chunks and
 feeds them incrementally to the `yara` operator. This also works, but
 performance is better due to memory locality when using `--mmap`.
 :::

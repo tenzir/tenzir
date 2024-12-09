@@ -44,7 +44,7 @@ cleanly model the data lifecycle as separate stages:
 ![Structuring](unstructured-to-structured.excalidraw.svg)
 
 Data acquisition typically begins with a source operator that uses a
-[loader](connectors.md), such as [`load`](operators/load.md), to acquire bytes
+**loader**, such as [`load`](operators/load.md), to acquire bytes
 as a side effect. Then an operator, such as [`read`](operators/read.md),
 transforms bytes into events with the help of a [parser](formats.md). This
 effectively turns unstructured data into structured data. There exist numerous
@@ -53,7 +53,7 @@ specific use case—a process we call *shaping*. After shaping yielded the desir
 form, the data leaves the pipeline in reverse order. A [printer](formats.md)
 creates bytes from events, e.g., using [`write`](operators/write.md). Finally, a
 sink operator, such as [`save`](operators/save.md), uses a
-[saver](connectors.md) to write the rendered bytes into a specific location.
+**saver** to write the rendered bytes into a specific location.
 
 ## Multi-Schema Dataflows
 
@@ -82,9 +82,8 @@ as Suricata's EVE JSON or Zeek's streaming JSON.
 
 You could call multi-schema dataflows *multiplexed* and there exist dedicated
 operators to demultiplex a stream. As of now, this is hard-coded per operator.
-For example, [`to directory /tmp/dir write parquet`](connectors/directory.md)
-demultiplexes a stream of events so that batches with the same schema go to the
-same Parquet file.
+For example, `to directory /tmp/dir write parquet` demultiplexes a stream of
+events so that batches with the same schema go to the same Parquet file.
 
 The diagram below illustrates the multi-schema aspect of dataflows for schemas
 A, B, and C:

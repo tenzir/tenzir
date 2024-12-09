@@ -81,14 +81,13 @@ The GELF parser supports the common [schema inference options](formats.md#parser
 
 ## Examples
 
-Accept GELF from a [TCP](../connectors/tcp.md) socket:
+Accept GELF from a TCP socket:
 
 ```
 from tcp://1.2.3.4 read gelf
 ```
 
-Read GELF messages from [Kafka](../connectors/kafka.md) from the `graylog`
-topic:
+Read GELF messages from Kafka from the `graylog` topic:
 
 ```
 from kafka --topic graylog read gelf
