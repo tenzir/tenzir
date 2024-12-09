@@ -25,10 +25,7 @@ Operator | Description | Example
 [`tail`](./operators/tail.md) | Keeps only the last N events | `tail 20`
 [`slice`](./operators/slice.md) | Keeps a range of events with an optional stride | `slice begin=10, end=30`
 [`sample`](./operators/sample.md) | Samples events based on load | `sample 30s, max_samples=2k`
-
-<!--
-[`deduplicate`]() | … | `…`
--->
+[`deduplicate`](./operators/deduplicate.md) | Removes duplicate events | `deduplicate src_ip`
 
 ## Analyze
 
