@@ -257,7 +257,6 @@ An acronym for *Tenzir Query Language*.
 TQL is the language in which users write [pipelines](#pipeline).
 
 - Learn more about the [language](./language.md)
-- Understand the [syntax](./language/syntax.md)
 
 ## Transformation
 
