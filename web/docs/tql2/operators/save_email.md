@@ -3,7 +3,7 @@
 Saves bytes through an SMTP server.
 
 ```tql
-save_email recipient:str, [endpoint:str, from=str, subject=str, username=str,
+save_email recipient:str, [endpoint=str, from=str, subject=str, username=str,
       password=str, authzid=str, authorization=str,
       skip_peer_verification=bool, skip_hostname_verification=bool,
       mime=bool, verbose=bool]
