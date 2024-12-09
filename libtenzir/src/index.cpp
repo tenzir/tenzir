@@ -1136,6 +1136,15 @@ index(index_actor::stateful_pointer<index_state> self,
            = detail::make_actor_metrics_builder()]() mutable {
       const auto importer
         = self->system().registry().get<importer_actor>("tenzir.importer");
+      // There exists a very unlikely scenario where the importer was not
+      // spawned within the metrics interval after the index was spawned. The
+      // importer requires a handle to the index on startup, and the index
+      // needs a handle to the index for forwarding metrics, so we cannot just
+      // reverse the startup order here. Instead, we just delay the first
+      // metrics until the importer is ready.
+      if (not importer) [[unlikely]] {
+        return;
+      }
       self->send(importer,
                  detail::generate_actor_metrics(actor_metrics_builder, self));
     });
