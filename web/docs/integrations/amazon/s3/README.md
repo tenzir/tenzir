@@ -16,7 +16,7 @@ The URL scheme `s3://` dispatches to
 
 ## Configuration
 
-Follow the [standard configuration instructions](..) to authenticate
+Follow the [standard configuration instructions](../README.md) to authenticate
 with your AWS credentials.
 
 ## Examples
