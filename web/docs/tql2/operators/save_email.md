@@ -4,7 +4,7 @@ Saves bytes through an SMTP server.
 
 ```tql
 save_email recipient:str, [endpoint=str, from=str, subject=str, username=str,
-      password=str, authzid=str, authorization=str,
+      password=str, authzid=str, authorization=str, tls=bool,
       skip_peer_verification=bool, skip_hostname_verification=bool,
       mime=bool, verbose=bool]
 ```
@@ -69,6 +69,13 @@ The authorization options for an authenticated SMTP connection.
 
 This login option defines the preferred authentication mechanism, e.g.,
 `AUTH=PLAIN`, `AUTH=LOGIN`, or `AUTH=*`.
+
+### `tls = bool (optional)`
+
+If to use TLS. If `true`, tries to use TLS and fails if a TLS connection
+cannot be establised.
+
+Defaults to trying TLS but falling back to unsecure version.
 
 ### `skip_peer_verification = bool (optional)`
 

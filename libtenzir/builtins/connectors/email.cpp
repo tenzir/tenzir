@@ -30,7 +30,7 @@ struct saver_args {
   std::optional<std::string> subject;
   transfer_options transfer_opts;
   bool mime;
-  std::optional<location> tls;
+  std::optional<located<bool>> tls;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
@@ -70,6 +70,12 @@ public:
       return err;
     }
     auto code = tx.handle().set(CURLOPT_URL, args_.endpoint);
+    if (args_.tls) {
+      tx.handle().set(CURLOPT_USE_SSL,
+                      args_.tls->inner ? CURLUSESSL_ALL : CURLUSESSL_NONE);
+    } else {
+      tx.handle().set(CURLOPT_USE_SSL, CURLUSESSL_TRY);
+    }
     if (code != curl::easy::code::ok) {
       auto err = to_error(code);
       diagnostic::error("failed to set SMTP server request")
@@ -261,6 +267,7 @@ class save_plugin final
     parser.named("password", args.transfer_opts.password);
     parser.named("authzid", args.transfer_opts.authzid);
     parser.named("authorization", args.transfer_opts.authorization);
+    parser.named("tls", args.tls);
     parser.named("skip_peer_verification",
                  args.transfer_opts.skip_peer_verification);
     parser.named("skip_hostname_verification",
@@ -279,6 +286,7 @@ class save_plugin final
       diagnostic::error("empty recipient specified").primary(to).emit(ctx);
       return failure::promise();
     }
+    args.to = std::move(to.inner);
     return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
   }
 };
