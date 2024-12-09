@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # to
 
-Consumes events by combining a [connector][connectors] and a [format][formats].
+Consumes events by combining a connector and a [format][formats].
 
 ## Synopsis
 
@@ -19,7 +19,7 @@ to <connector> [write <format>]
 ## Description
 
 The `to` operator consumes events at the end of a pipeline by bringing together
-a [connector][connectors] and a [format][formats].
+a connector and a [format][formats].
 
 If given something that looks like a path to a file, the connector can pick
 out a format automatically based on the file extension or the file name.
@@ -42,7 +42,7 @@ recommend always using `to ... write ...` over the [`write`](write.md) and
 
 ### `<connector>`
 
-The [connector][connectors] used to save bytes.
+The connector used to save bytes.
 
 Some connectors have connector-specific options. Please refer to the
 documentation of the individual connectors for more information.
@@ -69,5 +69,4 @@ to path/to/eve.json write json
 to file path/to/eve.json write json
 ```
 
-[connectors]: ../connectors.md
 [formats]: ../formats.md

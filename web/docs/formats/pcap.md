@@ -75,7 +75,7 @@ Read packets from a PCAP file:
 from file /tmp/trace.pcap read pcap
 ```
 
-Read packets from the [network interface](../connectors/nic.md) `eth0`:
+Read packets from the network interface `eth0`:
 
 ```
 from nic eth0 read pcap

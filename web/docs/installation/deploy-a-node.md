@@ -36,8 +36,8 @@ Install a node as follows:
 1. Enter a name for your node and click the download button to obtain a
    `platform.yaml` configuration file.
 2. Move the `platform.yaml` to `<sysconfdir>/tenzir/plugin/platform.yaml` so
-   that the node can find it during startup where `<sysconfdir>` might be
-   `/etc`. See the [configuration files
+   that the node can find it during startup; `<sysconfdir>` might be
+   `/opt/tenzir/etc` or just `/etc`. See the [configuration files
    documentation](../configuration.md#configuration-files) for more options.
 3. Run our installer to install a binary package on any Linux distribution:
    ```bash
@@ -61,16 +61,9 @@ Download the latest [Debian package][tenzir-debian-package] and install it via
 dpkg -i tenzir-static-amd64-linux.deb
 ```
 
-You can uninstall the Tenzir package as follows:
-```bash
-apt-get remove tenzir
-```
-
-Use purge instead of remove if you also want to delete the state directory and
-leave no trace:
-```bash
-apt-get purge tenzir
-```
+You can uninstall the Tenzir package via `apt-get remove tenzir`. Use `purge`
+instead of `remove` if you also want to delete the state directory and leave no
+trace.
 
 [tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-amd64-linux.deb
 

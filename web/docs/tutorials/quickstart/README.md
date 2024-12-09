@@ -45,11 +45,12 @@ node](installation/deploy-a-node.md) and dive deeper by
 
 - understanding [how Tenzir works](how-tenzir-works/README.md)
   other systems,
-- following the [user guides](installation.md) with step-by-step tutorials of
-  common use cases,
-- learning more about the [language](language.md), [operators](operators.md),
-  [connectors](connectors.md), [formats](formats.md), the [data
-  model](data-model.md).
+- following the [user guides](installation.md) with step-by-step tutorials
+  of common use cases,
+- learning more about the language, such as
+  [statements](tql2/language/statements.md),
+  [expressions](tql2/language/expressions.md), [operators](tql2/operators.md),
+  [functions](tql2/functions.md) the [data model](data-model.md).
 
 Don't forget that we're here to help! If you have any questions, swing by our
 friendly [community Discord](/discord) or open a [GitHub

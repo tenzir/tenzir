@@ -76,8 +76,8 @@ example of a connection log in TSV format:
 
 We first need to parse the log file into structured form that we can work with
 the individual fields. Thanks to Tenzir's [Zeek
-support](../../integrations/zeek.md), we can get quickly turn TSV logs into
-structured data using a single operator:
+support](../../integrations/zeek/README.md), we can get quickly turn TSV logs
+into structured data using a single operator:
 
 ```tql title="conn-to-ocsf.tql"
 read_zeek_tsv

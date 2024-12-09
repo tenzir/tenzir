@@ -1,6 +1,6 @@
 # User Guides
 
-The usage guides walk you through typical use cases that you perform..
+These usage guides walk you through typical Tenzir use cases.
 
 ## Datasets
 
@@ -23,25 +23,30 @@ The dataset includes the following files:
 - [README.md](https://storage.googleapis.com/tenzir-datasets/M57/README.md)
 - [zeek-all.log.zst](https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst) (41 MB)
 - [suricata.json.zst](https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst) (57 MB)
-- [data.pcap](https://storage.googleapis.com/tenzir-datasets/M57/PCAP/data.pcap) (3.8 GB)
 
-For following examples we assume that you have imported the demo data in your
-node with the following two pipelines:
+For the following examples we assume that you have imported the demo data in your
+node using the following two pipelines. First the Suricata logs:
 
-```
-from https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst 
-  read suricata --no-infer
-| where #schema != "suricata.stats"
-| import
-```
-
-```
-from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst
-  read zeek-tsv
-| import
+```tql
+load_http "https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst"
+decompress "zstd"
+read_suricata
+where @name != "suricata.stats"
+import
 ```
 
-Note that the demo node already comes with this demo data pre-populated for you.
+Then the Zeek logs:
+
+```tql
+load_http "https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst"
+decompress "zstd"
+read_zeek_tsv
+import
+```
+
+Note that the demo node already comes with an [installed package that ingests
+this data](https://github.com/tenzir/library/blob/main/demo-node/package.yaml)
+for you.
 
 import DocCardList from '@theme/DocCardList';
 
