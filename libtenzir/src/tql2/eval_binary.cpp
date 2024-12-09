@@ -729,35 +729,37 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
 
 } // namespace
 
-auto evaluator::eval(const ast::binary_expr& x) -> series {
+auto evaluator::eval(const ast::binary_expr& x) -> multi_series {
   auto eval_op
-    = [&]<ast::binary_op Op>(const series& l, const series& r) -> series {
+    = [&]<ast::binary_op Op>(multi_series l, multi_series r) -> multi_series {
     TENZIR_ASSERT(x.op.inner == Op);
     TENZIR_ASSERT(l.length() == r.length());
-    return match(
-      std::tie(l.type, r.type),
-      [&]<concrete_type L, concrete_type R>(const L&, const R&) -> series {
-        if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
-          using LA = type_to_arrow_array_t<L>;
-          using RA = type_to_arrow_array_t<R>;
-          auto& la = as<LA>(*l.array);
-          auto& ra = as<RA>(*r.array);
-          auto oa = EvalBinOp<Op, L, R>::eval(la, ra, [&](const char* w) {
-            diagnostic::warning("{}", w).primary(x).emit(ctx_);
-          });
-          auto ot = type::from_arrow(*oa->type());
-          return series{std::move(ot), std::move(oa)};
-        } else {
-          // TODO: Not possible?
-          // TODO: Where coercion? => coercion is done in kernel.
-          diagnostic::warning("binary operator `{}` not implemented for `{}` "
-                              "and `{}`",
-                              x.op.inner, l.type.kind(), r.type.kind())
-            .primary(x)
-            .emit(ctx_);
-          return null();
-        }
-      });
+    return map_series(std::move(l), std::move(r), [&](series l, series r) {
+      return match(
+        std::tie(l.type, r.type),
+        [&]<concrete_type L, concrete_type R>(const L&, const R&) -> series {
+          if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
+            using LA = type_to_arrow_array_t<L>;
+            using RA = type_to_arrow_array_t<R>;
+            auto& la = as<LA>(*l.array);
+            auto& ra = as<RA>(*r.array);
+            auto oa = EvalBinOp<Op, L, R>::eval(la, ra, [&](const char* w) {
+              diagnostic::warning("{}", w).primary(x).emit(ctx_);
+            });
+            auto ot = type::from_arrow(*oa->type());
+            return series{std::move(ot), std::move(oa)};
+          } else {
+            // TODO: Not possible?
+            // TODO: Where coercion? => coercion is done in kernel.
+            diagnostic::warning("binary operator `{}` not implemented for `{}` "
+                                "and `{}`",
+                                x.op.inner, l.type.kind(), r.type.kind())
+              .primary(x)
+              .emit(ctx_);
+            return null();
+          }
+        });
+    });
   };
   using enum ast::binary_op;
   switch (x.op.inner) {
