@@ -16,6 +16,7 @@
     curl,
     libpcap,
     arrow-cpp,
+    arrow-adbc-cpp,
     aws-sdk-cpp-tenzir,
     azure-sdk-for-cpp,
     fast_float,
@@ -138,6 +139,8 @@
           restinio
         ] ++ lib.optionals isStatic [
           azure-sdk-for-cpp
+        ] ++ lib.optionals (!isStatic) [
+          arrow-adbc-cpp
         ] ++ lib.optionals stdenv.isLinux [
           pfs
         ] ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
