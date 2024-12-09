@@ -1,6 +1,6 @@
 # save_zmq
 
-Saves bytes to ZeroMQ messages.
+Sends bytes as ZeroMQ messages.
 
 ```tql
 save_zmq [endpoint:str, listen=bool, connect=bool, monitor=bool]
@@ -45,11 +45,14 @@ Monitors a 0mq socket over TCP until the remote side establishes a connection.
 
 ## Examples
 
-Publish the list of plugins as [CSV](write_csv.md), also connect
-instead of listening on the ZeroMQ socket:
+### Publish events by connecting to a PUB socket
 
 ```tql
-plugins
+from {x: 42}
 write_csv
 save_zmq connect=true
 ```
+
+## See Also
+
+[`load_zmq`](load_zmq.md)
