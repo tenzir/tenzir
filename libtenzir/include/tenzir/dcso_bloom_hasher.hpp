@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string_view>
 #include <type_traits>
 
 namespace tenzir {
@@ -107,7 +108,7 @@ public:
                       "missing type dispatch");
       }
     };
-    caf::visit(f, x);
+    match(x, f);
   }
 
   template <class Ts>

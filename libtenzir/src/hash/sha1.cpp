@@ -19,41 +19,12 @@
 #include "tenzir/hash/sha1.hpp"
 
 #include "tenzir/detail/byteswap.hpp"
+#include "tenzir/hash/utils.hpp"
 
 #include <cstring>
 
 namespace tenzir {
 namespace {
-
-// Rotate 32-bit unsigned integer to the left.
-uint32_t rotate_left(uint32_t x, unsigned n) {
-  return (x << n) | (x >> (32 - n));
-}
-
-// Accumulate data and call the transformation function for full blocks.
-template <class T, class F>
-void absorb_bytes(const unsigned char* data, size_t len, size_t bs,
-                  size_t bschk, unsigned char* m, size_t& pos, T& total,
-                  F transform) {
-  if (pos && pos + len >= bschk) {
-    std::memcpy(m + pos, data, bs - pos);
-    transform(m, 1);
-    len -= bs - pos;
-    data += bs - pos;
-    total += bs * 8;
-    pos = 0;
-  }
-  if (len >= bschk) {
-    size_t blocks = (len + bs - bschk) / bs;
-    size_t bytes = blocks * bs;
-    transform(data, blocks);
-    len -= bytes;
-    data += bytes;
-    total += (bytes) *8;
-  }
-  std::memcpy(m + pos, data, len);
-  pos += len;
-}
 
 // -- SHA1 constants and functions --------------------------------------------
 
@@ -86,12 +57,12 @@ void sha1::add(std::span<const std::byte> bytes) noexcept {
     transform(data, len);
   };
   auto ptr = reinterpret_cast<const unsigned char*>(bytes.data());
-  absorb_bytes(ptr, bytes.size(), 64, 64, m_.data(), pos_, total_, f);
+  detail::absorb_bytes(ptr, bytes.size(), 64, 64, m_.data(), pos_, total_, f);
 }
 
-sha1::result_type sha1::finish() noexcept {
+auto sha1::finish() noexcept -> sha1::result_type {
   finalize();
-  return H_;
+  return std::bit_cast<result_type>(H_);
 }
 
 void sha1::finalize() {
@@ -115,13 +86,17 @@ void sha1::transform(const unsigned char* data, size_t num_blks) {
   for (uint64_t blk = 0; blk < num_blks; blk++) {
     uint32_t m[16];
     auto xs = reinterpret_cast<const uint32_t*>(data);
-    for (uint32_t i = 0; i < 64 / 4; i++)
+    for (uint32_t i = 0; i < 64 / 4; i++) {
       m[i] = detail::byteswap(xs[blk * 16 + i]);
+    }
     uint32_t w[80];
-    for (int t = 0; t <= 15; t++)
+    for (int t = 0; t <= 15; t++) {
       w[t] = m[t];
-    for (int t = 16; t <= 79; t++)
-      w[t] = rotate_left(w[t - 3] ^ w[t - 8] ^ w[t - 14] ^ w[t - 16], 1);
+    }
+    for (int t = 16; t <= 79; t++) {
+      w[t]
+        = detail::rotate_left(w[t - 3] ^ w[t - 8] ^ w[t - 14] ^ w[t - 16], 1);
+    }
     auto a = H_[0];
     auto b = H_[1];
     auto c = H_[2];
@@ -130,10 +105,10 @@ void sha1::transform(const unsigned char* data, size_t num_blks) {
     auto k = K[0];
     auto f = choice;
     for (int t = 0; t <= 79; t++) {
-      auto T = rotate_left(a, 5) + f(b, c, d) + e + k + w[t];
+      auto T = detail::rotate_left(a, 5) + f(b, c, d) + e + k + w[t];
       e = d;
       d = c;
-      c = rotate_left(b, 30);
+      c = detail::rotate_left(b, 30);
       b = a;
       a = T;
       if (t == 19) {

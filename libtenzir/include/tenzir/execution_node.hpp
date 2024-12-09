@@ -4,6 +4,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -46,6 +47,7 @@ namespace tenzir {
 /// @param metrices_receiver The handler asked to receive and forward metrics.
 /// @param has_terminal True if the operator shall have access to the terminal.
 /// @param is_hidden Whether the operator is run in the background.
+/// @param run_id A unique id for the current pipeline run.
 ///
 /// @returns The execution node actor and its output type, or an error.
 /// @pre op != nullptr
@@ -55,7 +57,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
-                     bool has_terminal, bool is_hidden)
+                     bool has_terminal, bool is_hidden, uuid run_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>>;
 
 } // namespace tenzir

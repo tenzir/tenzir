@@ -67,6 +67,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/record_batch.h>
+#include <caf/actor_registry.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -483,6 +484,9 @@ struct serve_manager_state {
                     "{} for serve id {}",
                     *self, request.continuation_token, request.serve_id));
     }
+    if (found->done) {
+      return std::make_tuple(std::string{}, std::vector<table_slice>{});
+    }
     auto rp = self->make_response_promise<
       std::tuple<std::string, std::vector<table_slice>>>();
     found->get_rps.push_back(rp);
@@ -505,10 +509,10 @@ struct serve_manager_state {
           TENZIR_DEBUG("unable to find serve request after timeout expired");
           return;
         }
-        if (found->done) {
+        // In case the client re-sent the request in the meantime we are done.
+        if (found->done or found->continuation_token != continuation_token) {
           return;
         }
-        TENZIR_ASSERT(found->continuation_token == continuation_token);
         TENZIR_ASSERT(not found->get_rps.empty());
         const auto delivered = found->try_deliver_results(true);
         TENZIR_ASSERT(delivered);
@@ -520,7 +524,7 @@ struct serve_manager_state {
     auto requests = list{};
     requests.reserve(ops.size());
     for (const auto& op : ops) {
-      auto& entry = caf::get<record>(requests.emplace_back(record{}));
+      auto& entry = as<record>(requests.emplace_back(record{}));
       entry.emplace("serve_id", op.serve_id);
       entry.emplace("continuation_token", op.continuation_token.empty()
                                             ? data{}
@@ -554,26 +558,26 @@ struct serve_manager_state {
 auto serve_manager(
   serve_manager_actor::stateful_pointer<serve_manager_state> self)
   -> serve_manager_actor::behavior_type {
-  self->state.self = self;
+  self->state().self = self;
   self->set_down_handler([self](const caf::down_msg& msg) {
-    self->state.handle_down_msg(msg);
+    self->state().handle_down_msg(msg);
   });
   return {
     [self](atom::start, std::string& serve_id,
            uint64_t buffer_size) -> caf::result<void> {
-      return self->state.start(std::move(serve_id), buffer_size);
+      return self->state().start(std::move(serve_id), buffer_size);
     },
     [self](atom::stop, std::string& serve_id) -> caf::result<void> {
-      return self->state.stop(std::move(serve_id));
+      return self->state().stop(std::move(serve_id));
     },
     [self](atom::put, std::string& serve_id,
            table_slice& slice) -> caf::result<void> {
-      return self->state.put(std::move(serve_id), std::move(slice));
+      return self->state().put(std::move(serve_id), std::move(slice));
     },
     [self](atom::get, std::string& serve_id, std::string& continuation_token,
            uint64_t min_events, duration timeout, uint64_t max_events)
       -> caf::result<std::tuple<std::string, std::vector<table_slice>>> {
-      return self->state.get(
+      return self->state().get(
         {.serve_id = std::move(serve_id),
          .continuation_token = std::move(continuation_token),
          .limits = {
@@ -584,7 +588,7 @@ auto serve_manager(
     },
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
-      return self->state.status(verbosity);
+      return self->state().status(verbosity);
     },
   };
 }
@@ -703,7 +707,7 @@ struct serve_handler_state {
       }
       seen_schemas.insert(slice.schema());
       auto resolved_slice = resolve_enumerations(slice);
-      auto type = caf::get<record_type>(resolved_slice.schema());
+      auto type = as<record_type>(resolved_slice.schema());
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       for (const auto& row : values(type, *array)) {
@@ -789,14 +793,14 @@ struct serve_handler_state {
 auto serve_handler(
   serve_handler_actor::stateful_pointer<serve_handler_state> self,
   const node_actor& node) -> serve_handler_actor::behavior_type {
-  self->state.self = self;
+  self->state().self = self;
   self
     ->request(node, caf::infinite, atom::get_v, atom::label_v,
               std::vector<std::string>{"serve-manager"})
     .await(
       [self](std::vector<caf::actor>& actors) {
         TENZIR_ASSERT(actors.size() == 1);
-        self->state.serve_manager
+        self->state().serve_manager
           = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
       },
       [self](const caf::error& err) { //
@@ -807,7 +811,7 @@ auto serve_handler(
   return {
     [self](atom::http_request, uint64_t endpoint_id,
            tenzir::record& params) -> caf::result<rest_response> {
-      return self->state.http_request(endpoint_id, std::move(params));
+      return self->state().http_request(endpoint_id, std::move(params));
     },
   };
 }
@@ -952,8 +956,8 @@ public:
         [&](record& response) {
           TENZIR_ASSERT(response.size() == 1);
           TENZIR_ASSERT(response.contains("requests"));
-          TENZIR_ASSERT(caf::holds_alternative<list>(response["requests"]));
-          serves = std::move(caf::get<list>(response["requests"]));
+          TENZIR_ASSERT(is<list>(response["requests"]));
+          serves = std::move(as<list>(response["requests"]));
         },
         [&](const caf::error& err) {
           diagnostic::error(err)
@@ -981,8 +985,8 @@ public:
     }
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
-    TENZIR_ASSERT(caf::holds_alternative<record>(*result));
-    return caf::get<record>(*result);
+    TENZIR_ASSERT(is<record>(*result));
+    return as<record>(*result);
   }
 
   auto rest_endpoints() const -> const std::vector<rest_endpoint>& override {
@@ -1042,8 +1046,8 @@ public:
     auto id = located<std::string>{};
     auto buffer_size = std::optional<located<uint64_t>>{};
     argument_parser2::operator_("serve")
-      .add(id, "<id>")
-      .add("buffer_size", buffer_size)
+      .positional("id", id)
+      .named("buffer_size", buffer_size)
       .parse(inv, ctx)
       .ignore();
     if (id.inner.empty()) {

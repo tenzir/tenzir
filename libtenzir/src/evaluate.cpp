@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <regex>
 #include <span>
+#include <string_view>
 
 namespace tenzir {
 
@@ -172,12 +173,10 @@ struct cell_evaluator<relational_operator::in> {
 
   static bool evaluate(auto lhs, const list& rhs) noexcept {
     return std::any_of(rhs.begin(), rhs.end(), [lhs](const data& element) {
-      return caf::visit(
-        [lhs](const auto& element) noexcept {
-          return cell_evaluator<relational_operator::equal>::evaluate(lhs,
-                                                                      element);
-        },
-        element);
+      return match(element, [lhs](const auto& element) noexcept {
+        return cell_evaluator<relational_operator::equal>::evaluate(lhs,
+                                                                    element);
+      });
     });
   }
 };
@@ -209,12 +208,10 @@ struct cell_evaluator<relational_operator::ni> {
 
   static bool evaluate(view<list> lhs, const auto& rhs) noexcept {
     return std::any_of(lhs.begin(), lhs.end(), [rhs](const auto& element) {
-      return caf::visit(
-        [rhs](const auto& element) noexcept {
-          return cell_evaluator<relational_operator::equal>::evaluate(element,
-                                                                      rhs);
-        },
-        element);
+      return match(element, [rhs](const auto& element) noexcept {
+        return cell_evaluator<relational_operator::equal>::evaluate(element,
+                                                                    rhs);
+      });
     });
   }
 };
@@ -339,7 +336,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
       return cell_evaluator<relational_operator::op>::evaluate(                \
         slice.schema().name(), rhs);                                           \
     };                                                                         \
-    return caf::visit(f, rhs);                                                 \
+    return match(rhs, f);                                                      \
   }
         TENZIR_EVAL_DISPATCH(equal);
         TENZIR_EVAL_DISPATCH(not_equal);
@@ -363,7 +360,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
       return cell_evaluator<relational_operator::op>::evaluate(                \
         slice.schema().make_fingerprint(), rhs);                               \
     };                                                                         \
-    return caf::visit(f, rhs);                                                 \
+    return match(rhs, f);                                                      \
   }
         TENZIR_EVAL_DISPATCH(equal);
         TENZIR_EVAL_DISPATCH(not_equal);
@@ -387,7 +384,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
       return cell_evaluator<relational_operator::op>::evaluate(                \
         slice.import_time(), rhs);                                             \
     };                                                                         \
-    return caf::visit(f, rhs);                                                 \
+    return match(rhs, f);                                                      \
   }
         TENZIR_EVAL_DISPATCH(equal);
         TENZIR_EVAL_DISPATCH(not_equal);
@@ -411,7 +408,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
       return cell_evaluator<relational_operator::op>::evaluate(                \
         slice.schema().attribute("internal").has_value(), rhs);                \
     };                                                                         \
-    return caf::visit(f, rhs);                                                 \
+    return match(rhs, f);                                                      \
   }
         TENZIR_EVAL_DISPATCH(equal);
         TENZIR_EVAL_DISPATCH(not_equal);
@@ -473,7 +470,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
       if (!any(selection))
         return ids{offset + num_rows, false};
       const auto index
-        = caf::get<record_type>(slice.schema()).resolve_flat_index(lhs.column);
+        = as<record_type>(slice.schema()).resolve_flat_index(lhs.column);
       const auto type_and_array = index.get(slice);
       TENZIR_ASSERT(type_and_array.second);
       switch (op) {
@@ -484,7 +481,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
       return column_evaluator<relational_operator::op, Type, Rhs>::evaluate(   \
         type, offset, *type_and_array.second, rhs, selection);                 \
     };                                                                         \
-    return caf::visit(f, type_and_array.first, rhs);                           \
+    return match(std::tie(type_and_array.first, rhs), f);                      \
   }
         TENZIR_EVAL_DISPATCH(equal);
         TENZIR_EVAL_DISPATCH(not_equal);
@@ -533,13 +530,14 @@ ids evaluate(const expression& expr, const table_slice& slice,
         return selection & ~mask;
       },
       [&](const predicate& predicate, const ids& selection) -> ids {
-        return caf::visit(evaluate_predicate, predicate.lhs,
-                          detail::passthrough(predicate.op), predicate.rhs,
-                          detail::passthrough(selection));
+        return match(
+          std::tuple(std::ref(predicate.lhs), detail::passthrough(predicate.op),
+                     std::ref(predicate.rhs), detail::passthrough(selection)),
+          evaluate_predicate);
       },
     };
-    return caf::visit(evaluate_expression_impl, expr,
-                      detail::passthrough(selection));
+    return match(std::tuple(std::ref(expr), detail::passthrough(selection)),
+                 evaluate_expression_impl);
   };
   auto selection = ids{};
   selection.append(false, offset);

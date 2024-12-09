@@ -1,0 +1,68 @@
+include "data.fbs";
+include "type.fbs";
+
+namespace tenzir.fbs.aggregation;
+
+table MinMaxSum {
+  result: Data (required);
+  type: [ubyte] (required, nested_flatbuffer: "tenzir.fbs.Type");
+}
+
+enum AnyAllState : short {
+  None,
+  Failed,
+  Nulled,
+}
+
+table AnyAll {
+  result: bool;
+  state: AnyAllState;
+}
+
+enum MeanState : short {
+  None,
+  Failed,
+  Duration,
+  Numeric,
+}
+
+table Mean {
+  result: double;
+  count: ulong;
+  state: MeanState;
+}
+
+enum StddevVarianceState : short {
+  None,
+  Failed,
+  Duration,
+  Numeric,
+}
+
+table StddevVariance {
+  result: double;
+  result_squared: double;
+  count: ulong;
+  state: StddevVarianceState;
+}
+
+table FirstLast {
+  result: Data (required);
+}
+
+table CollectDistinct {
+  result: [Data] (required);
+}
+
+table ValueCount {
+  value: Data (required);
+  count: long;
+}
+
+table ModeValueCounts {
+  result: [ValueCount] (required);
+}
+
+table Count {
+  result: long;
+}

@@ -11,6 +11,8 @@
 #include "tenzir/data.hpp"
 #include "tenzir/parser_interface.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 class prepend_token final : public parser_interface {

@@ -13,9 +13,9 @@
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/hash/uniquely_hashable.hpp"
+#include "tenzir/variant.hpp"
 
 #include <caf/detail/type_traits.hpp>
-#include <caf/variant.hpp>
 
 #include <array>
 #include <bit>
@@ -28,6 +28,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -294,13 +295,13 @@ void hash_append(HashAlgorithm& h, const std::tuple<T...>& t) noexcept {
 }
 
 template <class HashAlgorithm, class... Args>
-void hash_append(HashAlgorithm& h, const caf::variant<Args...>& x) {
+void hash_append(HashAlgorithm& h, const tenzir::variant<Args...>& x) {
   auto type_tag = static_cast<uint8_t>(x.index());
   hash_append(h, type_tag);
   auto f = [&](const auto& val) {
     hash_append(h, val);
   };
-  caf::visit(f, x);
+  match(x, f);
 }
 
 // -- variadic ----------------------------------------------------------------

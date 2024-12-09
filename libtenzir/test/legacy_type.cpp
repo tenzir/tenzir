@@ -15,13 +15,12 @@
 #include "tenzir/concept/printable/tenzir/offset.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/test.hpp"
+#include "tenzir/variant_traits.hpp"
+
+#include <caf/test/dsl.hpp>
 
 #include <string_view>
-
-using caf::get_if;
-using caf::holds_alternative;
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -30,36 +29,36 @@ using namespace tenzir;
 TEST(default construction) {
   legacy_type t;
   CHECK(!t);
-  CHECK(!holds_alternative<legacy_bool_type>(t));
+  CHECK(!is<legacy_bool_type>(t));
 }
 
 TEST(construction) {
   auto s = legacy_string_type{};
   auto t = legacy_type{s};
   CHECK(t);
-  CHECK(holds_alternative<legacy_string_type>(t));
-  CHECK(get_if<legacy_string_type>(&t) != nullptr);
+  CHECK(is<legacy_string_type>(t));
+  CHECK(try_as<legacy_string_type>(&t) != nullptr);
 }
 
 TEST(assignment) {
   auto t = legacy_type{legacy_string_type{}};
   CHECK(t);
-  CHECK(holds_alternative<legacy_string_type>(t));
+  CHECK(is<legacy_string_type>(t));
   t = legacy_real_type{};
   CHECK(t);
-  CHECK(holds_alternative<legacy_real_type>(t));
+  CHECK(is<legacy_real_type>(t));
   t = {};
   CHECK(!t);
-  CHECK(!holds_alternative<legacy_real_type>(t));
+  CHECK(!is<legacy_real_type>(t));
   auto u = legacy_type{legacy_none_type{}};
   CHECK(u);
-  CHECK(holds_alternative<legacy_none_type>(u));
+  CHECK(is<legacy_none_type>(u));
 }
 
 TEST(copying) {
   auto t = legacy_type{legacy_string_type{}};
   auto u = t;
-  CHECK(holds_alternative<legacy_string_type>(u));
+  CHECK(is<legacy_string_type>(u));
 }
 
 TEST(names) {
@@ -196,63 +195,3 @@ TEST(parseable) {
   MESSAGE("invalid");
   { CHECK_ERROR(parsers::legacy_type(":bool")); }
 }
-
-namespace {
-
-struct fixture : public fixtures::deterministic_actor_system {
-  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
-  }
-};
-
-} // namespace
-
-FIXTURE_SCOPE(type_tests, fixture)
-
-TEST(serialization) {
-  CHECK_ROUNDTRIP(legacy_type{});
-  CHECK_ROUNDTRIP(legacy_none_type{});
-  CHECK_ROUNDTRIP(legacy_bool_type{});
-  CHECK_ROUNDTRIP(legacy_integer_type{});
-  CHECK_ROUNDTRIP(legacy_count_type{});
-  CHECK_ROUNDTRIP(legacy_real_type{});
-  CHECK_ROUNDTRIP(legacy_duration_type{});
-  CHECK_ROUNDTRIP(legacy_time_type{});
-  CHECK_ROUNDTRIP(legacy_string_type{});
-  CHECK_ROUNDTRIP(legacy_pattern_type{});
-  CHECK_ROUNDTRIP(legacy_address_type{});
-  CHECK_ROUNDTRIP(legacy_subnet_type{});
-  CHECK_ROUNDTRIP(legacy_enumeration_type{});
-  CHECK_ROUNDTRIP(legacy_list_type{});
-  CHECK_ROUNDTRIP(legacy_map_type{});
-  CHECK_ROUNDTRIP(legacy_record_type{});
-  CHECK_ROUNDTRIP(legacy_alias_type{});
-  CHECK_ROUNDTRIP(legacy_type{legacy_none_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_bool_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_integer_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_count_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_real_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_duration_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_time_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_string_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_pattern_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_address_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_subnet_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_enumeration_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_list_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_map_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_record_type{}});
-  CHECK_ROUNDTRIP(legacy_type{legacy_alias_type{}});
-  auto r
-    = legacy_record_type{{"x", legacy_integer_type{}},
-                         {"y", legacy_address_type{}},
-                         {"z", legacy_real_type{}.attributes({{"key", "valu"
-                                                                      "e"}})}};
-  // Make it recursive.
-  r = {{"a", legacy_map_type{legacy_string_type{}, legacy_count_type{}}},
-       {"b", legacy_list_type{legacy_bool_type{}}.name("foo")},
-       {"c", r}};
-  r.name("foo");
-  CHECK_ROUNDTRIP(r);
-}
-
-FIXTURE_SCOPE_END()

@@ -16,6 +16,7 @@
 #include <tenzir/detail/fdoutbuf.hpp>
 #include <tenzir/detail/file_path_to_plugin_name.hpp>
 #include <tenzir/detail/posix.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/fwd.hpp>
@@ -24,7 +25,6 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <caf/detail/scope_guard.hpp>
 #include <caf/error.hpp>
 
 #include <chrono>
@@ -408,7 +408,7 @@ public:
       stream = std::make_shared<file_writer>(handle);
     }
     TENZIR_ASSERT(stream);
-    auto guard = caf::detail::make_scope_guard([&ctrl, stream] {
+    auto guard = detail::scope_guard([&ctrl, stream]() noexcept {
       if (auto error = stream->close()) {
         diagnostic::error(error)
           .note("failed to close stream")
@@ -461,7 +461,7 @@ public:
     -> caf::error override {
     auto timeout
       = try_get<tenzir::duration>(global_config, "tenzir.import.read-timeout");
-    if (!timeout.engaged()) {
+    if (!timeout.has_value()) {
       return std::move(timeout.error());
     }
     if (timeout->has_value()) {
@@ -584,10 +584,10 @@ public:
     auto args = loader_args{};
     auto timeout = std::optional<located<duration>>{};
     TRY(argument_parser2::operator_("load_file")
-          .add(args.path, "<path>")
-          .add("follow", args.follow)
-          .add("mmap", args.mmap)
-          .add("timeout", timeout)
+          .positional("path", args.path)
+          .named("follow", args.follow)
+          .named("mmap", args.mmap)
+          .named("timeout", timeout)
           .parse(inv, ctx));
     args.path.inner = expand_path(args.path.inner);
     if (timeout) {
@@ -648,10 +648,10 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     TRY(argument_parser2::operator_("save_file")
-          .add(args.path, "<path>")
-          .add("append", args.append)
-          .add("real_time", args.real_time)
-          .add("uds", args.uds)
+          .positional("path", args.path)
+          .named("append", args.append)
+          .named("real_time", args.real_time)
+          .named("uds", args.uds)
           .parse(inv, ctx));
     return std::make_unique<save_file_operator>(std::move(args));
   }

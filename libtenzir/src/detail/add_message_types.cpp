@@ -17,6 +17,7 @@
 #include "tenzir/component_registry.hpp"
 #include "tenzir/config.hpp"
 #include "tenzir/connect_request.hpp"
+#include "tenzir/context.hpp"
 #include "tenzir/detail/stable_map.hpp"
 #include "tenzir/die.hpp"
 #include "tenzir/expression.hpp"
@@ -49,8 +50,6 @@
 #include <caf/init_global_meta_objects.hpp>
 #include <caf/inspector_access.hpp>
 #include <caf/io/middleman.hpp>
-#include <caf/stream.hpp>
-#include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
@@ -70,9 +69,11 @@ void add_message_types() {
   // Check for type ID conflicts between dynamic plugins.
   for (const auto& [new_block, assigner] :
        plugins::get_static_type_id_blocks()) {
-    for (const auto& old_block : old_blocks)
-      if (new_block.begin < old_block.end && old_block.begin < new_block.end)
+    for (const auto& old_block : old_blocks) {
+      if (new_block.begin < old_block.end && old_block.begin < new_block.end) {
         die("cannot assign overlapping plugin type ID blocks");
+      }
+    }
     old_blocks.push_back(new_block);
     assigner();
   }

@@ -25,7 +25,7 @@ that abandons Slack. [Numerous][meilisearch] [open-source][appwrite]
 ![Slack-to-Discord](/img/blog/slack-to-discord.excalidraw.svg)
 
 :::info Discord Invite Link
-You can join our Discord community chat via <https://discord.tenzir.com>.
+You can join our Discord community chat via <https://docs.tenzir.com/discord>.
 :::
 
 Here are the top four reasons why we are switching:

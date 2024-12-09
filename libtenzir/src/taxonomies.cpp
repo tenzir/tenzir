@@ -96,7 +96,7 @@ resolve_concepts(const concepts_map& concepts,
 
 static bool contains(const type& schema, const std::string& x,
                      relational_operator op, const tenzir::data& data) {
-  const auto* rt = caf::get_if<record_type>(&schema);
+  const auto* rt = try_as<record_type>(&schema);
   TENZIR_ASSERT(rt);
   for (const auto& offset : rt->resolve_key_suffix(x, schema.name())) {
     if (compatible(rt->field(offset).type, op, data))
@@ -159,8 +159,8 @@ resolve(const taxonomies& ts, const expression& e, const type& schema) {
             return expression{d};
         }
       };
-      if (auto data = caf::get_if<tenzir::data>(&pred.rhs)) {
-        if (auto fe = caf::get_if<field_extractor>(&pred.lhs)) {
+      if (auto data = try_as<tenzir::data>(&pred.rhs)) {
+        if (auto fe = try_as<field_extractor>(&pred.lhs)) {
           return resolve_concepts(
             fe->field, pred.op, *data,
             [&](relational_operator op, const tenzir::data& o) {
@@ -170,8 +170,8 @@ resolve(const taxonomies& ts, const expression& e, const type& schema) {
             });
         }
       }
-      if (auto data = caf::get_if<tenzir::data>(&pred.lhs)) {
-        if (auto fe = caf::get_if<field_extractor>(&pred.rhs)) {
+      if (auto data = try_as<tenzir::data>(&pred.lhs)) {
+        if (auto fe = try_as<field_extractor>(&pred.rhs)) {
           return resolve_concepts(
             fe->field, pred.op, *data,
             [&](relational_operator op, const tenzir::data& o) {

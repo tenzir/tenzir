@@ -149,12 +149,12 @@ auto value_at([[maybe_unused]] const Type& type,
     return int64_t{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, duration_type>) {
     TENZIR_ASSERT_EXPENSIVE(
-      caf::get<type_to_arrow_type_t<duration_type>>(*arr.type()).unit()
+      as<type_to_arrow_type_t<duration_type>>(*arr.type()).unit()
       == arrow::TimeUnit::NANO);
     return duration{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, time_type>) {
     TENZIR_ASSERT_EXPENSIVE(
-      caf::get<type_to_arrow_type_t<time_type>>(*arr.type()).unit()
+      as<type_to_arrow_type_t<time_type>>(*arr.type()).unit()
       == arrow::TimeUnit::NANO);
     return time{} + duration{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, string_type>) {
@@ -170,9 +170,10 @@ auto value_at([[maybe_unused]] const Type& type,
     return ip::v6(std::span<const uint8_t, 16>{bytes, 16});
   } else if constexpr (std::is_same_v<Type, subnet_type>) {
     TENZIR_ASSERT_EXPENSIVE(arr.num_fields() == 2);
-    auto network = value_at(
-      ip_type{},
-      *caf::get<type_to_arrow_array_t<ip_type>>(*arr.field(0)).storage(), row);
+    auto network
+      = value_at(ip_type{},
+                 *as<type_to_arrow_array_t<ip_type>>(*arr.field(0)).storage(),
+                 row);
     auto length
       = static_cast<const arrow::UInt8Array&>(*arr.field(1)).GetView(row);
     return {network, length};
@@ -204,7 +205,7 @@ auto value_at([[maybe_unused]] const Type& type,
       return list_view_handle{list_view_ptr{
         caf::make_counted<list_view>(value_type, arr.value_slice(row))}};
     };
-    return caf::visit(f, type.value_type());
+    return match(type.value_type(), f);
   } else if constexpr (std::is_same_v<Type, map_type>) {
     auto f = [&]<concrete_type KeyType, concrete_type ItemType>(
                const KeyType& key_type,
@@ -248,7 +249,7 @@ auto value_at([[maybe_unused]] const Type& type,
         key_type, item_type, arr.keys(), arr.items(), arr.value_offset(row),
         arr.value_length(row))}};
     };
-    return caf::visit(f, type.key_type(), type.value_type());
+    return match(std::tuple{type.key_type(), type.value_type()}, f);
   } else if constexpr (std::is_same_v<Type, record_type>) {
     struct record_view final : record_view_handle::view_type {
       record_view(record_type type, arrow::ArrayVector fields, int64_t row)
@@ -288,10 +289,9 @@ auto value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
   TENZIR_ASSERT_EXPENSIVE(!arr.IsNull(row));
   if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value)
-    return value_at(type, *caf::get<type_to_arrow_array_t<Type>>(arr).storage(),
-                    row);
+    return value_at(type, *as<type_to_arrow_array_t<Type>>(arr).storage(), row);
   else
-    return value_at(type, caf::get<type_to_arrow_array_t<Type>>(arr), row);
+    return value_at(type, as<type_to_arrow_array_t<Type>>(arr), row);
 }
 
 auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
@@ -302,7 +302,7 @@ auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
   auto f = [&]<concrete_type Type>(const Type& type) noexcept -> data_view {
     return value_at(type, arr, row);
   };
-  return caf::visit(f, type);
+  return match(type, f);
 }
 
 /// Access Tenzir data views for all elements of an Arrow Array.
@@ -336,15 +336,14 @@ auto values(const type& type,
   const auto f
     = []<concrete_type Type>(
         const Type& type, const arrow::Array& array) -> generator<data_view> {
-    for (auto&& result :
-         values(type, caf::get<type_to_arrow_array_t<Type>>(array))) {
+    for (auto&& result : values(type, as<type_to_arrow_array_t<Type>>(array))) {
       if (!result)
         co_yield {};
       else
         co_yield std::move(*result);
     }
   };
-  return caf::visit(f, type, detail::passthrough(array));
+  return match(std::tuple(std::ref(type), detail::passthrough(array)), f);
 }
 
 struct indexed_transformation {

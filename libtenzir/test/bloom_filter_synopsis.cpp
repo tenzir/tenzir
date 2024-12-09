@@ -8,13 +8,10 @@
 
 #include "tenzir/bloom_filter_synopsis.hpp"
 
-#include "tenzir/hash/hash_append.hpp"
 #include "tenzir/hash/xxhash.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/test/synopsis.hpp"
 #include "tenzir/test/test.hpp"
-
-#include <caf/test/dsl.hpp>
 
 using namespace tenzir;
 using namespace si_literals;

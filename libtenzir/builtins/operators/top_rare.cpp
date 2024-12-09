@@ -15,15 +15,24 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/resolve.hpp>
 
 namespace tenzir::plugins::top_rare {
 
 namespace {
 
-template <detail::string_literal Name, detail::string_literal SortOrder>
-class top_rare_plugin final : public virtual operator_parser_plugin {
+enum class mode {
+  top,
+  rare,
+};
+
+template <mode Mode>
+class top_rare_plugin final : public virtual operator_parser_plugin,
+                              public virtual operator_factory_plugin {
   auto name() const -> std::string override {
-    return std::string{Name.str()};
+    return Mode == mode::top ? "top" : "rare";
   }
 
   auto signature() const -> operator_signature override {
@@ -31,10 +40,8 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{std::string{Name.str()},
-                                  fmt::format("https://docs.tenzir.com/"
-                                              "operators/{}",
-                                              Name.str())};
+    auto parser = argument_parser{
+      name(), fmt::format("https://docs.tenzir.com/operators/{}", name())};
     auto field = located<std::string>{};
     auto count_field = std::optional<located<std::string>>{};
     parser.add(field, "<str>");
@@ -66,11 +73,11 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
         count_field->inner = default_count_field;
       }
     }
-
     // TODO: Replace this textual parsing with a subpipeline to improve
     // diagnostics for this operator.
     auto repr = fmt::format("summarize {0}=count(.) by {1} | sort {0} {2}",
-                            count_field->inner, field.inner, SortOrder.str());
+                            count_field->inner, field.inner,
+                            Mode == mode::top ? "desc" : "asc");
     auto parsed = pipeline::internal_parse_as_operator(repr);
     if (not parsed) {
       // TODO: Improve error message.
@@ -79,12 +86,59 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
     return std::move(*parsed);
   }
 
+  auto make(operator_factory_plugin::invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto selector = ast::simple_selector{};
+    const auto loc = inv.self.get_location();
+    TRY(argument_parser2::operator_(name())
+          .positional("x", selector)
+          .parse(inv, ctx));
+    const auto* summarize
+      = plugins::find<operator_factory_plugin>("tql2.summarize");
+    const auto* sort = plugins::find<operator_factory_plugin>("tql2.sort");
+    TENZIR_ASSERT(summarize);
+    TENZIR_ASSERT(sort);
+    auto ident = ast::identifier{"count", loc};
+    auto call = ast::function_call{ast::entity{{ident}}, {}, loc, false};
+    auto out
+      = ast::simple_selector::try_from(ast::root_field{std::move(ident)});
+    TENZIR_ASSERT(out);
+    auto summarize_args = ast::assignment{out.value(), loc, call};
+    TENZIR_ASSERT(resolve_entities(summarize_args.right, ctx));
+    auto summarized = summarize->make(
+      {
+        inv.self,
+        {
+          std::move(selector).unwrap(),
+          summarize_args,
+        },
+      },
+      ctx);
+    const auto sort_args = [&]() {
+      if constexpr (Mode == mode::top) {
+        return ast::unary_expr{{ast::unary_op::neg, loc},
+                               std::move(out).value().unwrap()};
+      }
+      if constexpr (Mode == mode::rare) {
+        return std::move(out).value().unwrap();
+      }
+      TENZIR_UNREACHABLE();
+    };
+    auto sorted = sort->make({inv.self, {sort_args()}}, ctx);
+    TENZIR_ASSERT(summarized);
+    TENZIR_ASSERT(sorted);
+    auto p = std::make_unique<pipeline>();
+    p->append(std::move(summarized).unwrap());
+    p->append(std::move(sorted).unwrap());
+    return p;
+  }
+
 private:
   static constexpr auto default_count_field = "count";
 };
 
-using top_plugin = top_rare_plugin<"top", "desc">;
-using rare_plugin = top_rare_plugin<"rare", "asc">;
+using top_plugin = top_rare_plugin<mode::top>;
+using rare_plugin = top_rare_plugin<mode::rare>;
 
 } // namespace
 

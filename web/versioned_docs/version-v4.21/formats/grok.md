@@ -11,9 +11,10 @@ Parses a string using a `grok`-pattern, backed by regular expressions.
 ## Synopsis
 
 ```
-grok [--raw] [--include-unnamed] [--indexed-captures]
-     [--pattern-definitions <additional_patterns>]
-     <input_pattern>
+grok <input_pattern> [--pattern-definitions <additional_patterns>]
+     [--include-unnamed] [--indexed-captures]
+     [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+     [--schema-only] [--raw] [--unnest-separator <separator>]
 ```
 
 ## Description
@@ -38,13 +39,9 @@ which is effectively Perl-compatible.
 
 The `grok` pattern used for matching. Must match the input in its entirety.
 
-### `--raw`
+### Common Options (Parser)
 
-By default, `grok` attempts to do type inference to the parsed fields.
-This behavior can be accessed explicitly by setting the `CONVERSION` option
-in a replacement field to `infer`.
-
-To disable type inference, use `--raw`.
+The `grok` parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ### `--include-unnamed`
 

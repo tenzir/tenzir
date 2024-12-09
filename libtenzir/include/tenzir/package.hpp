@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/fwd.hpp>
-#include <tenzir/plugin.hpp>
 #include <tenzir/view.hpp>
 
 #include <string>
@@ -86,8 +86,8 @@ struct package_pipeline final {
 
   auto to_record() const -> record;
 
-  static auto
-  parse(const view<record>& data) -> caf::expected<package_pipeline>;
+  static auto parse(const view<record>& data)
+    -> caf::expected<package_pipeline>;
 
   friend auto inspect(auto& f, package_pipeline& x) -> bool {
     return f.object(x)
@@ -104,7 +104,7 @@ struct package_context final {
   std::string type
     = "string"; // A type hint for the frontend, ignored by the node.
   std::optional<std::string> description = {};
-  tenzir::context::parameter_map arguments = {};
+  context_parameter_map arguments = {};
   bool disabled = false;
 
   auto to_record() const -> record;

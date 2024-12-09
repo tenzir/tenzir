@@ -22,6 +22,8 @@
 #include <arrow/type.h>
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::drop {
 
 namespace {
@@ -194,7 +196,7 @@ public:
                   .emit(ctrl.diagnostics());
               },
               [&](resolve_error::field_of_non_record& reason) {
-                diagnostic::warning("type `{}` has no field field `{}`",
+                diagnostic::warning("type `{}` has no field `{}`",
                                     reason.type.kind(), err.ident.name)
                   .primary(err.ident)
                   .emit(ctrl.diagnostics());

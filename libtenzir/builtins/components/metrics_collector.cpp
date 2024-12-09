@@ -118,10 +118,12 @@ struct metrics_collector_state {
 auto metrics_collector(
   metrics_collector_actor::stateful_pointer<metrics_collector_state> self,
   importer_actor importer) -> metrics_collector_actor::behavior_type {
-  self->state.self = self;
-  self->state.importer = std::move(importer);
-  if (const auto ok = self->state.setup(); not ok) {
-    self->quit(add_context(ok.error(), "failed to create {}", *self));
+  self->state().self = self;
+  self->state().importer = std::move(importer);
+  if (const auto ok = self->state().setup(); not ok) {
+    self->quit(diagnostic::error(ok.error())
+                 .note("failed to create {}", *self)
+                 .to_error());
     return metrics_collector_actor::behavior_type::make_empty_behavior();
   }
   return {
@@ -141,7 +143,7 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
-    auto [importer] = node->state.registry.find<importer_actor>();
+    auto [importer] = node->state().registry.find<importer_actor>();
     return node->spawn<caf::linked>(metrics_collector, std::move(importer));
   }
 };

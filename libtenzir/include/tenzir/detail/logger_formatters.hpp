@@ -10,6 +10,8 @@
 
 #include "tenzir/fwd.hpp"
 
+#include <string_view>
+
 // clang-format off
 // We need to define SPDLOG_ACTIVE_LEVEL before we include spdlog.h,
 // so we have to include `logger.hpp` first in case someone else is
@@ -23,12 +25,12 @@
 #include "tenzir/detail/logger.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/optional.hpp"
 
 #include <boost/core/detail/string_view.hpp>
 #include <caf/deep_to_string.hpp>
 #include <caf/detail/pretty_type_name.hpp>
 #include <fmt/chrono.h>
-#include <fmt/ostream.h>
 #include <fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
@@ -197,40 +199,6 @@ struct formatter<caf::intrusive_cow_ptr<T>> {
 };
 
 template <class T>
-struct formatter<caf::optional<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::optional<T>& value, FormatContext& ctx) const {
-    if (!value)
-      return fmt::format_to(ctx.out(), "none");
-    return fmt::format_to(ctx.out(), "{}", *value);
-  }
-};
-
-#if FMT_VERSION / 10000 < 10
-
-template <class T>
-struct formatter<std::optional<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const std::optional<T>& value, FormatContext& ctx) const {
-    if (!value)
-      return fmt::format_to(ctx.out(), "nullopt");
-    return fmt::format_to(ctx.out(), "{}", *value);
-  }
-};
-
-#endif
-
-template <class T>
 struct formatter<caf::expected<T>> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) {
@@ -292,34 +260,6 @@ struct formatter<std::span<std::byte>> {
   auto format(const std::span<std::byte>&, FormatContext& ctx) const {
     // Inentioanlly unprintable.
     return fmt::format_to(ctx.out(), "tenzir.span(<bytes>)");
-  }
-};
-
-template <class T>
-struct formatter<caf::stream<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::stream<T>&, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "caf.stream<{}>",
-                          caf::detail::pretty_type_name(typeid(T)));
-  }
-};
-
-template <class T>
-struct formatter<caf::downstream<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const caf::downstream<T>&, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "caf.downstream<{}>",
-                          caf::detail::pretty_type_name(typeid(T)));
   }
 };
 

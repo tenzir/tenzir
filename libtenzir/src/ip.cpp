@@ -24,6 +24,7 @@
 #include <sys/socket.h>
 
 #include <cstdlib>
+#include <string_view>
 #include <utility>
 
 namespace tenzir {

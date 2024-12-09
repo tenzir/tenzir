@@ -10,19 +10,19 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/aliases.hpp"
-#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/flat_map.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tsl/robin_map.h"
 
-#include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 
 #include <cstddef>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -82,7 +82,7 @@ struct enriched_dummy {};
 // The indices in this MUST line up with the tenzir type indices, hence the
 // dummies
 // clang-format off
-using field_type_list = caf::detail::type_list<
+using field_type_list = detail::type_list<
   caf::none_t,
   bool,
   int64_t,
@@ -105,13 +105,13 @@ using field_type_list = caf::detail::type_list<
 
 template <typename T>
 concept non_structured_data_type
-  = caf::detail::tl_contains<field_type_list, T>::value
+  = detail::tl_contains<field_type_list, T>::value
     and not detail::is_any_v<T, node_record, node_list, pattern_dummy,
                              map_dummy, enriched_dummy>;
 
 template <typename T>
 concept non_structured_type_type
-  = caf::detail::tl_contains<concrete_types, T>::value
+  = detail::tl_contains<concrete_types, T>::value
     and not detail::is_any_v<record_type, list_type, legacy_pattern_type,
                              map_type>;
 
@@ -139,26 +139,26 @@ using schema_type_lookup_map
   = std::unordered_map<tenzir::record_type, field_type_lookup_map>;
 
 constexpr inline size_t type_index_empty
-  = caf::detail::tl_size<field_type_list>::value;
+  = detail::tl_size<field_type_list>::value;
 constexpr inline size_t type_index_generic_mismatch
-  = caf::detail::tl_size<field_type_list>::value + 1;
+  = detail::tl_size<field_type_list>::value + 1;
 constexpr inline size_t type_index_numeric_mismatch
-  = caf::detail::tl_size<field_type_list>::value + 2;
+  = detail::tl_size<field_type_list>::value + 2;
 constexpr inline size_t type_index_null
-  = caf::detail::tl_index_of<field_type_list, caf::none_t>::value;
+  = detail::tl_index_of<field_type_list, caf::none_t>::value;
 constexpr inline size_t type_index_string
-  = caf::detail::tl_index_of<field_type_list, std::string>::value;
+  = detail::tl_index_of<field_type_list, std::string>::value;
 constexpr inline size_t type_index_double
-  = caf::detail::tl_index_of<field_type_list, double>::value;
+  = detail::tl_index_of<field_type_list, double>::value;
 constexpr inline size_t type_index_list
-  = caf::detail::tl_index_of<field_type_list, node_list>::value;
+  = detail::tl_index_of<field_type_list, node_list>::value;
 constexpr inline size_t type_index_record
-  = caf::detail::tl_index_of<field_type_list, node_record>::value;
+  = detail::tl_index_of<field_type_list, node_record>::value;
 
 inline constexpr auto is_structural(size_t idx) -> bool {
   switch (idx) {
-    case caf::detail::tl_index_of<field_type_list, node_list>::value:
-    case caf::detail::tl_index_of<field_type_list, node_record>::value:
+    case detail::tl_index_of<field_type_list, node_list>::value:
+    case detail::tl_index_of<field_type_list, node_record>::value:
       return true;
     default:
       return false;
@@ -167,10 +167,10 @@ inline constexpr auto is_structural(size_t idx) -> bool {
 
 inline constexpr auto is_numeric(size_t idx) -> bool {
   switch (idx) {
-    case caf::detail::tl_index_of<field_type_list, int64_t>::value:
-    case caf::detail::tl_index_of<field_type_list, uint64_t>::value:
-    case caf::detail::tl_index_of<field_type_list, double>::value:
-    case caf::detail::tl_index_of<field_type_list, enumeration>::value:
+    case detail::tl_index_of<field_type_list, int64_t>::value:
+    case detail::tl_index_of<field_type_list, uint64_t>::value:
+    case detail::tl_index_of<field_type_list, double>::value:
+    case detail::tl_index_of<field_type_list, enumeration>::value:
       return true;
     default:
       return false;
@@ -178,7 +178,7 @@ inline constexpr auto is_numeric(size_t idx) -> bool {
 }
 
 inline auto is_null(size_t idx) -> bool {
-  return idx == caf::detail::tl_index_of<field_type_list, caf::none_t>::value;
+  return idx == detail::tl_index_of<field_type_list, caf::none_t>::value;
 }
 
 static inline auto
@@ -441,8 +441,8 @@ public:
   auto record() -> node_record*;
   auto list() -> node_list*;
 
-  node_object() : data_{std::in_place_type<caf::none_t>} {
-  }
+  node_object();
+
   template <non_structured_data_type T>
   node_object(T data) : data_{std::in_place_type<T>, data} {
   }
@@ -493,8 +493,7 @@ private:
   /// @brief marks the node and its contents as dead
   auto clear() -> void;
 
-  using object_variant_type
-    = caf::detail::tl_apply_t<field_type_list, std::variant>;
+  using object_variant_type = detail::tl_apply_t<field_type_list, std::variant>;
 
   object_variant_type data_;
 
@@ -521,6 +520,9 @@ struct node_record::entry_type {
   entry_type(std::string_view name) : key{name} {
   }
 };
+
+inline node_object::node_object() : data_{std::in_place_type<caf::none_t>} {
+}
 
 constexpr static std::byte record_start_marker{0xfa};
 constexpr static std::byte record_end_marker{0xfb};

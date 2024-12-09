@@ -1,8 +1,8 @@
-error: expected additional positional argument `<string>`
+error: expected additional positional argument `definition`
  --> <input>:1:1
   |
 1 | legacy
   | ^^^^^^ 
   |
-  = usage: legacy <string>
-  = docs: https://docs.tenzir.com/operators/legacy
+  = usage: legacy definition:string
+  = docs: https://docs.tenzir.com/tql2/operators/legacy

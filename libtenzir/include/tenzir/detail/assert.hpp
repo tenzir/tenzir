@@ -14,6 +14,7 @@
 
 #include <source_location>
 #include <string>
+#include <string_view>
 
 namespace tenzir::detail {
 

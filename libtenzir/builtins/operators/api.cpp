@@ -40,8 +40,12 @@ public:
         [&](rest_response& value) {
           response = std::move(value);
         },
-        [&](const caf::error& error) {
-          diagnostic::error("internal server error: {}", error)
+        [&](caf::error error) {
+          if (error == ec::no_error) {
+            error = ec::unspecified;
+          }
+          diagnostic::error(std::move(error))
+            .note("internal server error")
             .note("endpoint: {}", endpoint_)
             .note("request body: {}", request_body_)
             .docs("https://docs.tenzir.com/operators/api")
@@ -50,9 +54,13 @@ public:
     co_yield {};
     TENZIR_ASSERT(response.has_value());
     if (response->is_error()) {
-      diagnostic::error("request failed with code {}", response->code())
+      auto detail = response->error_detail();
+      if (detail == ec::no_error) {
+        detail = ec::unspecified;
+      }
+      diagnostic::error(std::move(detail))
+        .note("request failed with code {}", response->code())
         .note("body: {}", response->body())
-        .hint("{}", response->error_detail())
         .docs("https://docs.tenzir.com/operators/api")
         .emit(ctrl.diagnostics());
       co_return;
@@ -121,8 +129,8 @@ public:
     auto endpoint = located<std::string>{};
     auto request_body = std::optional<located<record>>{};
     argument_parser2::operator_("api")
-      .add(endpoint, "<endpoint>")
-      .add(request_body, "<request-body>")
+      .positional("endpoint", endpoint)
+      .positional("request_body", request_body)
       .parse(inv, ctx)
       .ignore();
     if (not request_body) {

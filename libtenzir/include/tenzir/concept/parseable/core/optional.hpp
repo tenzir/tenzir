@@ -11,8 +11,6 @@
 #include "tenzir/concept/parseable/core/parser.hpp"
 #include "tenzir/concept/support/detail/attr_fold.hpp"
 
-#include <caf/optional.hpp>
-
 namespace tenzir {
 
 template <class Parser>
@@ -20,12 +18,9 @@ class optional_parser : public parser_base<optional_parser<Parser>> {
 public:
   using inner_attribute = detail::attr_fold_t<typename Parser::attribute>;
 
-  using attribute =
-    std::conditional_t<
-      std::is_same_v<inner_attribute, unused_type>,
-      unused_type,
-      caf::optional<inner_attribute>
-    >;
+  using attribute
+    = std::conditional_t<std::is_same_v<inner_attribute, unused_type>,
+                         unused_type, std::optional<inner_attribute>>;
 
   constexpr explicit optional_parser(Parser p) : parser_{std::move(p)} {
     // nop

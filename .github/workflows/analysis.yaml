@@ -81,7 +81,7 @@ jobs:
           path: ${{ env.BUILD_DIR }}/ccov
           if-no-files-found: error
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.TENZIR_CODECOV_TOKEN }}
           files: ${{ env.BUILD_DIR }}/ccov/all-tests.info

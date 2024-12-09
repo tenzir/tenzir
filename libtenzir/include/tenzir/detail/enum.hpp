@@ -14,6 +14,8 @@
 
 #include <fmt/format.h>
 
+#include <string_view>
+
 #define TENZIR_ENUM_STR(x) #x,
 #define TENZIR_ENUM_CHECK(x)                                                   \
   if (str == #x) {                                                             \

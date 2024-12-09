@@ -20,13 +20,12 @@
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
-#include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
-#include <caf/variant.hpp>
 
 #include <array>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <typeindex>
 
@@ -140,7 +139,7 @@ struct view_trait<blob> {
 // clang-format off
 /// A type-erased view over various types of data.
 /// @relates view_trait
-using data_view = caf::variant<
+using data_view = tenzir::variant<
   view<caf::none_t>,
   view<bool>,
   view<int64_t>,
@@ -485,7 +484,7 @@ data_view make_data_view(const T& x) {
 
 /// @relates view_trait
 template <class T>
-data_view make_data_view(const caf::optional<T>& x) {
+data_view make_data_view(const std::optional<T>& x) {
   if (!x) {
     return make_view(caf::none);
   }

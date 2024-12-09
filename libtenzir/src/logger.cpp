@@ -13,6 +13,7 @@
 #include "tenzir/configuration.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/systemd.hpp"
@@ -27,6 +28,7 @@
 #include <spdlog/sinks/syslog_sink.h>
 
 #include <cctype>
+#include <iostream>
 
 #if TENZIR_ENABLE_JOURNALD_LOGGING
 #  include <spdlog/sinks/systemd_sink.h>
@@ -37,13 +39,12 @@
 
 namespace tenzir {
 
-caf::expected<caf::detail::scope_guard<void (*)()>>
+caf::expected<detail::scope_guard<void (*)() noexcept>>
 create_log_context(bool is_server, const tenzir::invocation& cmd_invocation,
                    const caf::settings& cfg_file) {
   if (!tenzir::detail::setup_spdlog(is_server, cmd_invocation, cfg_file))
     return caf::make_error(tenzir::ec::unspecified);
-  return {caf::detail::make_scope_guard(
-    std::addressof(tenzir::detail::shutdown_spdlog))};
+  return {detail::scope_guard(tenzir::detail::shutdown_spdlog)};
 }
 
 /// Convert a log level to an int.
@@ -288,7 +289,7 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
   return false;
 }
 
-void shutdown_spdlog() {
+void shutdown_spdlog() noexcept {
   TENZIR_DEBUG("shut down logging");
   spdlog::shutdown();
 }

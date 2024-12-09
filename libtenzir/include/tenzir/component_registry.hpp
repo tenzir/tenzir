@@ -16,10 +16,10 @@
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/expected.hpp>
-#include <caf/optional.hpp>
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 

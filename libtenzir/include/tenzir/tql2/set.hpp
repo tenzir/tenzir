@@ -14,11 +14,18 @@
 
 namespace tenzir {
 
+enum class assign_position {
+  front,
+  back,
+};
+
 auto assign(const ast::selector& left, series right, const table_slice& input,
-            diagnostic_handler& dh) -> table_slice;
+            diagnostic_handler& dh,
+            assign_position position = assign_position::back) -> table_slice;
 
 auto assign(const ast::simple_selector& left, series right,
-            const table_slice& input, diagnostic_handler& dh) -> table_slice;
+            const table_slice& input, diagnostic_handler& dh,
+            assign_position position = assign_position::back) -> table_slice;
 
 auto assign(const ast::meta& left, series right, const table_slice& input,
             diagnostic_handler& diag) -> table_slice;
@@ -26,7 +33,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
 class set_operator final : public crtp_operator<set_operator> {
 public:
   set_operator() = default;
-  ~set_operator() = default;
+  ~set_operator() override = default;
   set_operator(const set_operator&) = delete;
   set_operator(set_operator&&) = delete;
   auto operator=(const set_operator&) -> set_operator& = delete;
@@ -43,8 +50,8 @@ public:
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<table_slice>;
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }

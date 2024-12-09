@@ -19,6 +19,8 @@
 #include <arrow/api.h>
 #include <re2/re2.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::kv {
 
 namespace {
@@ -306,8 +308,8 @@ public:
       "=",
       location::unknown,
     };
-    parser.add(field_split, "<field_split>");
-    parser.add(value_split, "<value_split>");
+    parser.positional("field_split", field_split);
+    parser.positional("value_split", value_split);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx));

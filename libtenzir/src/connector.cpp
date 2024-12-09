@@ -16,6 +16,7 @@
 #include <caf/io/middleman.hpp>
 #include <caf/io/network/interfaces.hpp>
 #include <caf/openssl/all.hpp>
+#include <caf/sec.hpp>
 #include <fmt/format.h>
 
 #include <optional>
@@ -67,16 +68,9 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::no_proxy_registry:
     case caf::sec::runtime_error:
     case caf::sec::remote_linking_failed:
-    case caf::sec::cannot_add_upstream:
-    case caf::sec::upstream_already_exists:
-    case caf::sec::invalid_upstream:
-    case caf::sec::cannot_add_downstream:
-    case caf::sec::downstream_already_exists:
-    case caf::sec::invalid_downstream:
-    case caf::sec::no_downstream_stages_defined:
-    case caf::sec::stream_init_failed:
-    case caf::sec::invalid_stream_state:
-    case caf::sec::unhandled_stream_error:
+    case caf::sec::invalid_stream:
+    case caf::sec::cannot_resubscribe_stream:
+    case caf::sec::stream_aborted:
     case caf::sec::bad_function_call:
     case caf::sec::feature_disabled:
     case caf::sec::cannot_open_file:
@@ -84,7 +78,7 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::socket_disconnected:
     case caf::sec::socket_operation_failed:
     case caf::sec::unavailable_or_would_block:
-    case caf::sec::malformed_basp_message:
+    case caf::sec::malformed_message:
     case caf::sec::serializing_basp_payload_failed:
     case caf::sec::redundant_connection:
     case caf::sec::remote_lookup_failed:
@@ -104,6 +98,18 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::broken_promise:
     case caf::sec::connection_timeout:
     case caf::sec::action_reschedule_failed:
+    case caf::sec::invalid_observable:
+    case caf::sec::too_many_observers:
+    case caf::sec::disposed:
+    case caf::sec::cannot_open_resource:
+    case caf::sec::protocol_error:
+    case caf::sec::logic_error:
+    case caf::sec::invalid_delegate:
+    case caf::sec::invalid_request:
+    case caf::sec::future_timeout:
+    case caf::sec::invalid_utf8:
+    case caf::sec::backpressure_overflow:
+    case caf::sec::too_many_worker_failures:
       return true;
     case caf::sec::incompatible_versions:
     case caf::sec::incompatible_application_ids:
@@ -149,14 +155,14 @@ std::string format_time(caf::timespan timespan) {
   return fmt::to_string(data{timespan});
 }
 
-void log_connection_failed(connect_request request,
+void log_connection_failed(connect_request request, caf::error err,
                            caf::timespan remaining_time,
                            caf::timespan retry_delay) {
-  TENZIR_INFO("client failed to connect to remote node {}:{}{}; attempting to "
-              "reconnect in {} (remaining time: {})",
-              request.host, request.port,
-              formatted_resolved_host_suffix(request.host),
-              format_time(retry_delay), format_time(remaining_time));
+  TENZIR_WARN(
+    "client failed to connect to remote node {}:{}{}: {}; attempting to "
+    "reconnect in {} (remaining time: {})",
+    request.host, request.port, formatted_resolved_host_suffix(request.host),
+    err, format_time(retry_delay), format_time(remaining_time));
 }
 
 connector_actor::behavior_type make_no_retry_behavior(
@@ -173,7 +179,7 @@ connector_actor::behavior_type make_no_retry_behavior(
                                            *self));
       auto rp = self->make_response_promise<node_actor>();
       self
-        ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
+        ->request(self->state().middleman, *remaining_time, caf::connect_atom_v,
                   request.host, request.port)
         .then(
           [rp, request](const caf::node_id&, caf::strong_actor_ptr& node,
@@ -199,9 +205,9 @@ connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
           std::optional<std::chrono::steady_clock::time_point> deadline) {
-  self->state.middleman = self->system().has_openssl_manager()
-                            ? self->system().openssl_manager().actor_handle()
-                            : self->system().middleman().actor_handle();
+  self->state().middleman = self->system().has_openssl_manager()
+                              ? self->system().openssl_manager().actor_handle()
+                              : self->system().middleman().actor_handle();
   if (!retry_delay)
     return make_no_retry_behavior(std::move(self), deadline);
   return {
@@ -220,7 +226,7 @@ connector(connector_actor::stateful_pointer<connector_state> self,
         = [self, rp, request, delay, deadline](const caf::error& err) mutable {
             const auto remaining_time = calculate_remaining_time(deadline);
             if (should_retry(err, remaining_time, delay)) {
-              log_connection_failed(request, *remaining_time, delay);
+              log_connection_failed(request, err, *remaining_time, delay);
               detail::weak_run_delayed(
                 self, delay, [self, rp, request]() mutable {
                   rp.delegate(static_cast<connector_actor>(self),
@@ -234,7 +240,7 @@ connector(connector_actor::stateful_pointer<connector_state> self,
           };
 
       self
-        ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
+        ->request(self->state().middleman, *remaining_time, caf::connect_atom_v,
                   request.host, request.port)
         .then(
           [rp, request, handle_error](const caf::node_id&,

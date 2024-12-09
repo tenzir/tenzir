@@ -17,10 +17,12 @@
     libpcap,
     arrow-cpp,
     aws-sdk-cpp-tenzir,
+    azure-sdk-for-cpp,
     fast_float,
     flatbuffers,
     fluent-bit,
     protobuf,
+    google-cloud-cpp,
     grpc,
     spdlog,
     libyamlcpp,
@@ -57,13 +59,17 @@
     bundledPlugins =
       [
         "plugins/amqp"
-        "plugins/gcs"
+        "plugins/azure-blob-storage"
         "plugins/fluent-bit"
+        "plugins/from_velociraptor"
+        "plugins/gcs"
+        "plugins/google-cloud-pubsub"
         "plugins/kafka"
         "plugins/nic"
         "plugins/parquet"
+        "plugins/s3"
         "plugins/sigma"
-        "plugins/velociraptor"
+        "plugins/sqs"
         "plugins/web"
         "plugins/zmq"
       ]
@@ -119,6 +125,7 @@
           aws-sdk-cpp-tenzir
           fast_float
           fluent-bit
+          google-cloud-cpp
           grpc
           libpcap
           libunwind
@@ -129,6 +136,8 @@
           cppzmq
           re2
           restinio
+        ] ++ lib.optionals isStatic [
+          azure-sdk-for-cpp
         ] ++ lib.optionals stdenv.isLinux [
           pfs
         ] ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [

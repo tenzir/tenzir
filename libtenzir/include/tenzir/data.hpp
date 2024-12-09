@@ -16,6 +16,7 @@
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/die.hpp"
 #include "tenzir/ip.hpp"
@@ -23,19 +24,18 @@
 #include "tenzir/policy/merge_lists.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/time.hpp"
+#include "tenzir/variant.hpp"
+#include "tenzir/variant_traits.hpp"
 
-#include <caf/default_sum_type_access.hpp>
-#include <caf/detail/type_list.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/none.hpp>
-#include <caf/sum_type.hpp>
-#include <caf/variant.hpp>
 
 #include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 
@@ -92,7 +92,7 @@ using to_data_type = decltype(detail::to_data_type<std::decay_t<T>>());
 class data : detail::totally_ordered<data>, detail::addable<data> {
 public:
   // clang-format off
-  using types = caf::detail::type_list<
+  using types = detail::type_list<
     caf::none_t,
     bool,
     int64_t,
@@ -113,7 +113,7 @@ public:
   // clang-format on
 
   /// The sum type of all possible builtin types.
-  using variant = caf::detail::tl_apply_t<types, caf::variant>;
+  using variant = detail::tl_apply_t<types, tenzir::variant>;
 
   /// Default-constructs empty data.
   data() = default;
@@ -151,25 +151,25 @@ public:
 
   // These operators need to be templates so they're instantiated at a later
   // point in time, because there'd be a cyclic dependency otherwise.
-  // caf::variant<Ts...> is just a placeholder for tenzir::data_view here.
+  // tenzir::variant<Ts...> is just a placeholder for tenzir::data_view here.
 
   template <class... Ts>
-  friend bool operator==(const data& lhs, const caf::variant<Ts...>& rhs) {
+  friend bool operator==(const data& lhs, const tenzir::variant<Ts...>& rhs) {
     return is_equal(lhs, rhs);
   }
 
   template <class... Ts>
-  friend bool operator==(const caf::variant<Ts...>& lhs, const data& rhs) {
+  friend bool operator==(const tenzir::variant<Ts...>& lhs, const data& rhs) {
     return is_equal(lhs, rhs);
   }
 
   template <class... Ts>
-  friend bool operator!=(const data& lhs, const caf::variant<Ts...>& rhs) {
+  friend bool operator!=(const data& lhs, const tenzir::variant<Ts...>& rhs) {
     return !is_equal(lhs, rhs);
   }
 
   template <class... Ts>
-  friend bool operator!=(const caf::variant<Ts...>& lhs, const data& rhs) {
+  friend bool operator!=(const tenzir::variant<Ts...>& lhs, const data& rhs) {
     return !is_equal(lhs, rhs);
   }
 
@@ -199,16 +199,22 @@ private:
   variant data_;
 };
 
-} // namespace tenzir
-
-namespace caf {
-
 template <>
-struct sum_type_access<tenzir::data> : default_sum_type_access<tenzir::data> {};
+class variant_traits<data> {
+public:
+  using impl = variant_traits<data::variant>;
 
-} // namespace caf
+  static constexpr auto count = impl::count;
 
-namespace tenzir {
+  static auto index(const data& x) -> size_t {
+    return impl::index(x.get_data());
+  }
+
+  template <size_t I>
+  static auto get(const data& x) -> decltype(auto) {
+    return impl::get<I>(x.get_data());
+  }
+};
 
 // -- helpers -----------------------------------------------------------------
 
@@ -279,7 +285,7 @@ inline auto descend(const record* r, std::string_view path)
       // Path was completely processed.
       return &field;
     }
-    current = caf::get_if<record>(&field);
+    current = try_as<record>(&field);
     if (!current) {
       // This is not a record, but path continues.
       return caf::make_error(
@@ -307,21 +313,19 @@ auto try_get(const record& r, std::string_view path)
     return std::nullopt;
   }
   // Attempt conversion.
-  return caf::visit(
-    [&](auto& x) -> caf::expected<std::optional<T>> {
-      using U = std::remove_cvref_t<decltype(x)>;
-      if constexpr (std::is_same_v<U, T>) {
-        return x;
-      } else if constexpr (convertible<U, T>) {
-        return to<T>(x);
-      } else {
-        return caf::make_error(
-          ec::convert_error,
-          fmt::format("'{}' has type {}, which cannot be converted to {}", path,
-                      typeid(U).name(), typeid(T).name()));
-      }
-    },
-    **result);
+  return match(**result, [&](auto& x) -> caf::expected<std::optional<T>> {
+    using U = std::remove_cvref_t<decltype(x)>;
+    if constexpr (std::is_same_v<U, T>) {
+      return x;
+    } else if constexpr (convertible<U, T>) {
+      return to<T>(x);
+    } else {
+      return caf::make_error(
+        ec::convert_error,
+        fmt::format("'{}' has type {}, which cannot be converted to {}", path,
+                    typeid(U).name(), typeid(T).name()));
+    }
+  });
 }
 
 /// Tries to find the entry with the dot-sperated `path` with the given type.
@@ -337,25 +341,23 @@ auto try_get_only(const record& r, std::string_view path)
   if (!*result) {
     return nullptr;
   }
-  return caf::visit(
-    [&](auto& x) -> caf::expected<T const*> {
-      using U = std::remove_cvref_t<decltype(x)>;
-      if constexpr (std::is_same_v<U, T>) {
-        return &x;
-      } else {
-        return caf::make_error(
-          ec::type_clash, fmt::format("'{}' has type {} but expected {}", path,
-                                      typeid(U).name(), typeid(T).name()));
-      }
-    },
-    **result);
+  return match(**result, [&](auto& x) -> caf::expected<T const*> {
+    using U = std::remove_cvref_t<decltype(x)>;
+    if constexpr (std::is_same_v<U, T>) {
+      return &x;
+    } else {
+      return caf::make_error(
+        ec::type_clash, fmt::format("'{}' has type {} but expected {}", path,
+                                    typeid(U).name(), typeid(T).name()));
+    }
+  });
 }
 
 template <class T>
 auto try_get_or(const record& r, std::string_view path, const T& fallback)
   -> caf::expected<T> {
   auto result = try_get<T>(r, path);
-  if (!result.engaged()) {
+  if (!result.has_value()) {
     return std::move(result.error());
   }
   if (!result->has_value()) {
@@ -369,13 +371,13 @@ auto try_get_or(const record& r, std::string_view path, const T& fallback)
 /// does not exist.
 /// @pre `!path.empty()`
 template <typename T>
-  requires caf::detail::tl_contains<data::types, T>::value
+  requires detail::tl_contains<data::types, T>::value
 auto get_if(const record* r, std::string_view path) -> const T* {
   auto result = descend(r, path);
   if (not result || not *result) {
     return nullptr;
   }
-  if (auto ptr = caf::get_if<T>(*result)) {
+  if (auto ptr = try_as<T>(*result)) {
     return ptr;
   }
   return nullptr;

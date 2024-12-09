@@ -1,0 +1,92 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index fc484d8fd..dbbe623c8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -470,6 +470,8 @@ if(SANITIZE_ADDRESS)
+   FLB_DEFINITION(FLB_HAVE_SANITIZE_ADDRESS)
+ endif()
+ 
++find_package(PkgConfig)
++
+ # Record Accessor
+ if(FLB_RECORD_ACCESSOR)
+   if(NOT FLB_FLEX_BISON)
+@@ -566,26 +568,12 @@ add_subdirectory(${FLB_PATH_LIB_CMETRICS} EXCLUDE_FROM_ALL)
+ # CTraces
+ add_subdirectory(${FLB_PATH_LIB_CTRACES} EXCLUDE_FROM_ALL)
+ 
+-# Nghttp2 options
+-FLB_OPTION(ENABLE_LIB_ONLY   ON)
+-FLB_OPTION(ENABLE_STATIC_LIB ON)
+-FLB_OPTION(ENABLE_SHARED_LIB OFF)
+-
+-FLB_DEFINITION(NGHTTP2_STATICLIB)
+-
+-add_subdirectory(${FLB_PATH_LIB_NGHTTP2} EXCLUDE_FROM_ALL)
++# Nghttp2
++pkg_check_modules(nghttp2 REQUIRED IMPORTED_TARGET libnghttp2)
+ 
+ # C-Ares (DNS library)
+-FLB_OPTION(CARES_STATIC      ON)
+-FLB_OPTION(CARES_SHARED      OFF)
+-FLB_OPTION(CARES_INSTALL     OFF)
+-FLB_OPTION(CARES_BUILD_TESTS OFF)
+-FLB_OPTION(CARES_BUILD_TOOLS OFF)
+-if (FLB_SYSTEM_MACOS)
+-  # macOS SDK always has <arpa/nameser.h>.
+-  FLB_DEFINITION(CARES_HAVE_ARPA_NAMESER_H)
+-endif()
+-add_subdirectory(${FLB_PATH_LIB_CARES})# EXCLUDE_FROM_ALL)
++find_package(c-ares REQUIRED)
++include(CheckIncludeFiles)
+ 
+ # Chunk I/O
+ FLB_OPTION(CIO_LIB_STATIC  ON)
+@@ -990,19 +978,7 @@ if(FLB_BACKTRACE)
+   include_directories("${CMAKE_CURRENT_BINARY_DIR}/backtrace-prefix/include/")
+ endif()
+ 
+-if(FLB_IN_KAFKA OR FLB_OUT_KAFKA)
+-    FLB_OPTION(RDKAFKA_BUILD_STATIC    On)
+-    FLB_OPTION(RDKAFKA_BUILD_EXAMPLES Off)
+-    FLB_OPTION(RDKAFKA_BUILD_TESTS    Off)
+-    FLB_OPTION(ENABLE_LZ4_EXT         Off)
+-
+-    # disable Curl
+-    if (FLB_SYSTEM_MACOS)
+-      FLB_OPTION(WITH_CURL  Off)
+-    endif()
+-
+-    add_subdirectory(${FLB_PATH_LIB_RDKAFKA} EXCLUDE_FROM_ALL)
+-endif()
++find_package(RdKafka REQUIRED)
+ 
+ # Onigmo (Regex Engine) options
+ # =====================
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 4f64613ec..aecc5ce5f 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -193,6 +193,9 @@ if(FLB_IN_KAFKA OR FLB_OUT_KAFKA)
+     ${src}
+     "flb_kafka.c"
+     )
++  set(extra_libs
++    ${extra_libs}
++    RdKafka::rdkafka)
+ endif()
+ 
+ # Link to libco
+@@ -371,10 +374,10 @@ set(FLB_DEPS
+   ${FLB_PLUGINS}
+   ${FLB_PROXY_PLUGINS}
+   ${extra_libs}
+-  c-ares
++  c-ares::cares
+   snappy-c
+   lwrb
+-  nghttp2_static
++  PkgConfig::nghttp2
+   )
+ 
+ if(OPENSSL_FOUND)

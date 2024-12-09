@@ -32,6 +32,8 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::sigma {
 
 class sigma_operator final : public crtp_operator<sigma_operator> {
@@ -73,7 +75,7 @@ public:
           .emit(ctrl.diagnostics());
         return;
       }
-      if (not caf::holds_alternative<record>(*yaml)) {
+      if (not is<record>(*yaml)) {
         diagnostic::warning("sigma operator ignores rule '{}'", path.string())
           .note("rule is not a YAML dictionary")
           .emit(ctrl.diagnostics());
@@ -195,8 +197,8 @@ class plugin final : public virtual operator_plugin<sigma_operator>,
     auto refresh_interval = std::optional<located<duration>>{};
     auto path = std::string{};
     argument_parser2::operator_("sigma")
-      .add(path, "<rule-or-directory>")
-      .add("refresh_interval", refresh_interval)
+      .positional("path", path)
+      .named("refresh_interval", refresh_interval)
       .parse(inv, ctx)
       .ignore();
     if (not refresh_interval) {

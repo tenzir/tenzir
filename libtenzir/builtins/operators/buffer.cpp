@@ -13,6 +13,7 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>
 
+#include <caf/actor_registry.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <queue>
@@ -138,11 +139,11 @@ auto make_buffer(typename buffer_actor<Elements>::template stateful_pointer<
                  metric_handler metrics_handler,
                  shared_diagnostic_handler diagnostics_handler)
   -> buffer_actor<Elements>::behavior_type {
-  self->state.self = self;
-  self->state.capacity = capacity;
-  self->state.policy = policy;
-  self->state.metrics_handler = std::move(metrics_handler);
-  self->state.diagnostics_handler = std::move(diagnostics_handler);
+  self->state().self = self;
+  self->state().capacity = capacity;
+  self->state().policy = policy;
+  self->state().metrics_handler = std::move(metrics_handler);
+  self->state().diagnostics_handler = std::move(diagnostics_handler);
   self->set_exit_handler([self](caf::exit_msg& msg) {
     // The buffer actor is linked to both internal operators. We want to
     // unconditionally shut down the buffer actor, even when the operator shuts
@@ -150,14 +151,14 @@ auto make_buffer(typename buffer_actor<Elements>::template stateful_pointer<
     self->quit(std::move(msg.reason));
   });
   detail::weak_run_delayed_loop(self, defaults::metrics_interval, [self] {
-    self->state.emit_metrics();
+    self->state().emit_metrics();
   });
   return {
     [self](atom::write, Elements& elements) -> caf::result<void> {
-      return self->state.write(std::move(elements));
+      return self->state().write(std::move(elements));
     },
     [self](atom::read) -> caf::result<Elements> {
-      return self->state.read();
+      return self->state().read();
     },
   };
 }
@@ -172,14 +173,14 @@ public:
 
   template <class Elements>
     requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input,
-                  operator_control_plane& ctrl) const -> generator<Elements> {
+  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
+    -> generator<Elements> {
     // The internal-write-buffer operator is spawned after the
     // internal-read-buffer operator, so we can safely get the buffer actor here
     // after the first yield and then just remove it from the registry again.
     co_yield {};
     auto buffer = ctrl.self().system().registry().get<buffer_actor<Elements>>(
-      fmt::format("tenzir.buffer.{}", id_));
+      fmt::format("tenzir.buffer.{}.{}", id_, ctrl.run_id()));
     TENZIR_ASSERT(buffer);
     ctrl.self().link_to(buffer);
     ctrl.self().system().registry().erase(buffer->id());
@@ -261,7 +262,7 @@ public:
     return buffer_policy::block;
   }
 
-  auto metrics(operator_control_plane& ctrl) const -> metric_handler {
+  static auto metrics(operator_control_plane& ctrl) -> metric_handler {
     return ctrl.metrics(type{
       "tenzir.metrics.buffer",
       record_type{
@@ -274,8 +275,8 @@ public:
 
   template <class Elements>
     requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input,
-                  operator_control_plane& ctrl) const -> generator<Elements> {
+  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
+    -> generator<Elements> {
     // The internal-read-buffer operator is spawned before the
     // internal-write-buffer operator, so we spawn the buffer actor here and
     // move it into the registry before the first yield.
@@ -283,8 +284,8 @@ public:
       = ctrl.self().spawn<caf::linked>(make_buffer<Elements>, capacity_,
                                        policy<Elements>(ctrl), metrics(ctrl),
                                        ctrl.shared_diagnostics());
-    ctrl.self().system().registry().put(fmt::format("tenzir.buffer.{}", id_),
-                                        buffer);
+    ctrl.self().system().registry().put(
+      fmt::format("tenzir.buffer.{}.{}", id_, ctrl.run_id()), buffer);
     co_yield {};
     // Now, we can get batch by batch from the buffer.
     for (auto&& elements : input) {
@@ -402,8 +403,8 @@ public:
     auto capacity = located<uint64_t>{};
     auto policy_str = std::optional<located<std::string>>{};
     argument_parser2::operator_("buffer")
-      .add(capacity, "<capacity>")
-      .add("policy", policy_str)
+      .positional("capacity", capacity)
+      .named("policy", policy_str)
       .parse(inv, ctx)
       .ignore();
     auto failed = false;

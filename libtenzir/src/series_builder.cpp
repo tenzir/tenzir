@@ -22,7 +22,8 @@
 #include "tenzir/view.hpp"
 
 #include <arrow/api.h>
-#include <caf/sum_type.hpp>
+
+#include <string_view>
 
 /// The implementation of `series_builder` consists of the following components:
 ///
@@ -100,11 +101,11 @@ template <class T>
 concept atom_type = is_atom_type<T>::value;
 
 using atom_view_types
-  = caf::detail::tl_map_t<caf::detail::tl_filter_t<concrete_types, is_atom_type>,
-                          type_to_data, view_trait>;
+  = detail::tl_map_t<detail::tl_filter_t<concrete_types, is_atom_type>,
+                     type_to_data, view_trait>;
 
 template <class T>
-concept atom_view_type = caf::detail::tl_contains<atom_view_types, T>::value;
+concept atom_view_type = detail::tl_contains<atom_view_types, T>::value;
 
 template <class T>
 struct atom_view_to_type : data_to_type<T> {};
@@ -126,7 +127,7 @@ using atom_view_to_type_t = atom_view_to_type<T>::type;
 
 namespace detail {
 
-struct atom_view : caf::detail::tl_apply_t<atom_view_types, variant> {
+struct atom_view : detail::tl_apply_t<atom_view_types, variant> {
   using variant::variant;
 };
 
@@ -1020,7 +1021,6 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
                current, request);
   root_->finish_previous_events(this);
   if (length() > 0) {
-    TENZIR_VERBOSE("switching to conflict builder");
     builder_
       = std::make_unique<detail::conflict_builder>(root_, std::move(builder_));
     root_->set_conflict_flag();
@@ -1143,7 +1143,7 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
     static_assert(atom_type<ToType>);
     static_assert(atom_type<FromType>);
     auto full_ty = type();
-    auto ty = caf::get<ToType>(full_ty);
+    auto ty = as<ToType>(full_ty);
     // TODO: Refactor this logic.
     if constexpr (std::same_as<FromType, enumeration_type>) {
       // We have to special case this, because we cannot construct a proper
@@ -1350,7 +1350,7 @@ auto series_builder::finish_as_table_slice(std::string_view name)
   auto result = std::vector<table_slice>{};
   result.reserve(arrays.size());
   for (auto& array : arrays) {
-    TENZIR_ASSERT(caf::holds_alternative<record_type>(array.type));
+    TENZIR_ASSERT(is<record_type>(array.type));
     TENZIR_ASSERT(array.length() > 0);
     if (not name.empty()) {
       // The following check is not an optimization, but prevents
@@ -1417,7 +1417,8 @@ void detail::dynamic_builder::protect(const tenzir::type& ty) {
   TENZIR_ASSERT(length() == 0);
   metadata_ = ty;
   protected_ = true;
-  auto f = detail::overload{
+  match(
+    ty,
     [&](const null_type&) {
       // Do nothing, as we already are a null builder.
     },
@@ -1440,9 +1441,7 @@ void detail::dynamic_builder::protect(const tenzir::type& ty) {
     },
     [&](const map_type&) {
       TENZIR_UNREACHABLE();
-    },
-  };
-  caf::visit(f, ty);
+    });
 }
 
 } // namespace tenzir

@@ -35,6 +35,8 @@
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 auto catalog_lookup_result::size() const noexcept -> size_t {
@@ -170,7 +172,7 @@ auto catalog_state::lookup(expression expr) const
 auto catalog_state::lookup_impl(const expression& expr,
                                 const type& schema) const
   -> catalog_lookup_result::candidate_info {
-  TENZIR_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
+  TENZIR_ASSERT(!is<caf::none_t>(expr));
   auto synopsis_map_per_type_it = synopses_per_type.find(schema);
   TENZIR_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
   const auto& partition_synopses = synopsis_map_per_type_it->second;
@@ -239,8 +241,8 @@ auto catalog_state::lookup_impl(const expression& expr,
       // uses a qualified_record_field to determine whether the synopsis
       // should be queried.
       auto search = [&](auto match) {
-        TENZIR_ASSERT(caf::holds_alternative<data>(x.rhs));
-        const auto& rhs = caf::get<data>(x.rhs);
+        TENZIR_ASSERT(is<data>(x.rhs));
+        const auto& rhs = as<data>(x.rhs);
         catalog_lookup_result::candidate_info result;
         // dont iterate through all synopses, rewrite lookup_impl to use a
         // singular type all synopses loops -> relevant anymore? Use type as
@@ -254,7 +256,7 @@ auto catalog_state::lookup_impl(const expression& expr,
               auto prune = [&]<concrete_type T>(const T& x) {
                 return type{x};
               };
-              auto cleaned_type = caf::visit(prune, field.type());
+              auto cleaned_type = tenzir::match(field.type(), prune);
               // We rely on having a field -> nullptr mapping here for the
               // fields that don't have their own synopsis.
               if (syn) {
@@ -342,7 +344,7 @@ auto catalog_state::lookup_impl(const expression& expr,
                   part_syn->min_import_time,
                   part_syn->max_import_time,
                 };
-                auto add = ts.lookup(x.op, caf::get<tenzir::time>(d));
+                auto add = ts.lookup(x.op, as<tenzir::time>(d));
                 if (!add || *add) {
                   result.partition_infos.emplace_back(part_id, *part_syn);
                 }
@@ -428,7 +430,7 @@ auto catalog_state::lookup_impl(const expression& expr,
           return all_partitions();
         },
       };
-      return caf::visit(extract_expr, x.lhs, x.rhs);
+      return match(std::tie(x.lhs, x.rhs), extract_expr);
     },
     [&](caf::none_t) -> catalog_lookup_result::candidate_info {
       TENZIR_ERROR("{} received an empty expression",
@@ -437,7 +439,7 @@ auto catalog_state::lookup_impl(const expression& expr,
       return all_partitions();
     },
   };
-  auto result = caf::visit(f, expr);
+  auto result = match(expr, f);
   result.exp = expr;
   return result;
 }
@@ -454,9 +456,9 @@ auto catalog_state::memusage() const -> size_t {
 
 void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
   for (auto const& [field, synopsis] : ps.field_synopses_)
-    if (synopsis != nullptr
-        && caf::holds_alternative<string_type>(field.type()))
+    if (synopsis != nullptr && is<string_type>(field.type())) {
       unprunable_fields.insert(std::string{field.name()});
+    }
   // TODO/BUG: We also need to prevent pruning for enum types,
   // which also use string literals for lookup. We must be even
   // more strict here than with string fields, because incorrectly
@@ -473,24 +475,24 @@ void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
   -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag))
-    caf::detail::set_thread_name("tenzir.catalog");
-  self->state.self = self;
-  self->state.taxonomies.concepts = modules::concepts();
+    caf::detail::set_thread_name("tnz.catalog");
+  self->state().self = self;
+  self->state().taxonomies.concepts = modules::concepts();
   return {
     [self](
       atom::merge,
       std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps) {
-      return self->state.initialize(std::move(ps));
+      return self->state().initialize(std::move(ps));
     },
     [self](atom::merge,
            std::vector<partition_synopsis_pair>& partition_synopses) {
-      return self->state.merge(std::move(partition_synopses));
+      return self->state().merge(std::move(partition_synopses));
     },
     [self](atom::get) -> std::vector<partition_synopsis_pair> {
       std::vector<partition_synopsis_pair> result;
-      result.reserve(self->state.synopses_per_type.size());
+      result.reserve(self->state().synopses_per_type.size());
       for (const auto& [type, id_synopsis_map] :
-           self->state.synopses_per_type) {
+           self->state().synopses_per_type) {
         for (const auto& [id, synopsis] : id_synopsis_map) {
           result.push_back({id, synopsis});
         }
@@ -500,15 +502,15 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
     [self](atom::get, const expression& filter)
       -> caf::result<std::vector<partition_synopsis_pair>> {
       auto result = std::vector<partition_synopsis_pair>{};
-      const auto candidates = self->state.lookup(filter);
+      const auto candidates = self->state().lookup(filter);
       if (not candidates) {
         return candidates.error();
       }
       for (const auto& [schema, candidate] : candidates->candidate_infos) {
         const auto& partition_synopses
-          = self->state.synopses_per_type.find(schema);
+          = self->state().synopses_per_type.find(schema);
         TENZIR_ASSERT(partition_synopses
-                      != self->state.synopses_per_type.end());
+                      != self->state().synopses_per_type.end());
         for (const auto& partition : candidate.partition_infos) {
           const auto& synopsis
             = partition_synopses->second.find(partition.uuid);
@@ -521,26 +523,26 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
       return result;
     },
     [self](atom::erase, uuid partition) {
-      self->state.erase(partition);
+      self->state().erase(partition);
       return atom::ok_v;
     },
     [self](atom::replace, const std::vector<uuid>& old_uuids,
            std::vector<partition_synopsis_pair>& new_synopses) {
       for (auto const& uuid : old_uuids)
-        self->state.erase(uuid);
-      return self->state.merge(std::move(new_synopses));
+        self->state().erase(uuid);
+      return self->state().merge(std::move(new_synopses));
     },
     [self](atom::candidates, const tenzir::query_context& query_context)
       -> caf::result<catalog_lookup_result> {
-      TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(query_context));
+      TENZIR_TRACE("{} {}", *self, TENZIR_ARG(query_context));
       if (not query_context.ids.empty()) {
         return caf::make_error(ec::invalid_argument, "catalog expects queries "
                                                      "not to have ids");
       }
-      return self->state.lookup(query_context.expr);
+      return self->state().lookup(query_context.expr);
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
-      for (const auto& [type, synopses] : self->state.synopses_per_type) {
+      for (const auto& [type, synopses] : self->state().synopses_per_type) {
         if (auto it = synopses.find(uuid); it != synopses.end()) {
           return partition_info{uuid, *it->second};
         }

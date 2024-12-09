@@ -36,7 +36,7 @@ bool enumeration_index::inspect_impl(supported_inspectors& inspector) {
 }
 
 bool enumeration_index::append_impl(data_view x, id pos) {
-  if (auto e = caf::get_if<view<enumeration>>(&x)) {
+  if (auto e = try_as<view<enumeration>>(&x)) {
     index_.skip(pos - index_.size());
     index_.append(*e);
     return true;
@@ -59,7 +59,7 @@ enumeration_index::lookup_impl(relational_operator op, data_view d) const {
       return detail::container_lookup(*this, op, xs);
     },
   };
-  return caf::visit(f, d);
+  return match(d, f);
 }
 
 size_t enumeration_index::memusage_impl() const {

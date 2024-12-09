@@ -1,13 +1,26 @@
 include_guard(GLOBAL)
 
+find_package(Git)
+
 # Define a target for updating integration test references.
-macro (TenzirDefineUpdateIntegrationTarget _target)
+macro (TenzirDefineUpdateIntegrationTarget _target _references_dir)
   add_custom_target(
     update-${_target}
     COMMAND "${CMAKE_COMMAND}" -E env UPDATE=1 "${CMAKE_COMMAND}" --build
             "${CMAKE_BINARY_DIR}" --target ${_target}
     COMMENT "Updating ${_target} test references..."
     USES_TERMINAL)
+  if (NOT EXISTS "${_references_dir}")
+    message(STATUS "disabling diff-${_target}")
+  elseif (Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+    add_custom_target(
+      diff-${_target}
+      COMMAND "${GIT_EXECUTABLE}" "-C" "${_references_dir}" "diff" "--exit-code"
+              "--" "${_references_dir}/**/*.ref"
+      DEPENDS update-${_target}
+      COMMENT "Diffing integration test results for ${_target}"
+      USES_TERMINAL)
+  endif ()
 endmacro ()
 
 # Normalize the GNUInstallDirs to be relative paths, if possible.
@@ -803,7 +816,8 @@ function (TenzirRegisterPlugin)
   # define integration tests.
   if (NOT TARGET integration)
     add_custom_target(integration)
-    TenzirDefineUpdateIntegrationTarget(integration)
+    TenzirDefineUpdateIntegrationTarget(
+      integration "${CMAKE_CURRENT_SOURCE_DIR}/integration/data/reference")
   endif ()
 
   # Setup integration tests.
@@ -823,10 +837,12 @@ function (TenzirRegisterPlugin)
          "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests/*.bats")
     add_custom_target(integration-${PLUGIN_TARGET})
     add_dependencies(integration integration-${PLUGIN_TARGET})
-    TenzirDefineUpdateIntegrationTarget(integration-${PLUGIN_TARGET})
+    TenzirDefineUpdateIntegrationTarget(
+      integration-${PLUGIN_TARGET}
+      "${CMAKE_CURRENT_SOURCE_DIR}/integration/data/reference")
     foreach (suite IN LISTS _suites)
-      get_filename_component(suite_name "${suite}" NAME_WE)
-      string(REGEX REPLACE "_" "-" suite_name "${suite_name}")
+      get_filename_component(bats_suite_name "${suite}" NAME_WE)
+      string(REGEX REPLACE "_" "-" suite_name "${bats_suite_name}")
       add_custom_target(
         integration-${PLUGIN_TARGET}-${suite_name}
         COMMAND
@@ -841,7 +857,9 @@ function (TenzirRegisterPlugin)
       add_dependencies(integration-${PLUGIN_TARGET}
                        integration-${PLUGIN_TARGET}-${suite_name})
       TenzirDefineUpdateIntegrationTarget(
-        integration-${PLUGIN_TARGET}-${suite_name})
+        integration-${PLUGIN_TARGET}-${suite_name}
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/data/reference/${bats_suite_name}"
+      )
     endforeach ()
     unset(parallel_level)
     unset(TENZIR_PATH)

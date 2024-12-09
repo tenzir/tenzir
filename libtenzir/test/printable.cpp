@@ -20,8 +20,6 @@
 #include "tenzir/detail/escapers.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <caf/optional.hpp>
-
 #include <sstream>
 
 using namespace std::string_literals;
@@ -182,7 +180,7 @@ TEST(sequence pair) {
 
 TEST(choice) {
   using namespace printers;
-  auto x = caf::variant<char, bool, int64_t>{true};
+  auto x = variant<char, bool, int64_t>{true};
   auto p = any | tf | i64;
   std::string str;
   CHECK(p(str, x));
@@ -234,7 +232,7 @@ TEST(list) {
 }
 
 TEST(optional) {
-  caf::optional<int> x;
+  std::optional<int> x;
   auto p = -printers::integral<int>;
   std::string str;
   CHECK(p(str, x));

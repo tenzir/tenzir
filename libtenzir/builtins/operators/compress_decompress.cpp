@@ -55,10 +55,11 @@ public:
         return buffer->size();
       },
     };
-    return detail::narrow_cast<int64_t>(std::visit(f, buffer_));
+    return detail::narrow<int64_t>(std::visit(f, buffer_));
   }
 
   auto consume(chunk_ptr chunk) -> void {
+    TENZIR_ASSERT(chunk);
     auto f = detail::overload{
       [&](std::monostate) {
         buffer_ = std::move(chunk);
@@ -70,12 +71,13 @@ public:
       },
       [&](const chunk_ptr& buffer) {
         TENZIR_ASSERT(buffer);
-        auto& new_buffer = buffer_.emplace<std::vector<uint8_t>>();
+        auto new_buffer = std::vector<uint8_t>();
         new_buffer.reserve(buffer->size() + chunk->size());
         std::copy_n(reinterpret_cast<const uint8_t*>(buffer->data()),
                     buffer->size(), std::back_inserter(new_buffer));
         std::copy_n(reinterpret_cast<const uint8_t*>(chunk->data()),
                     chunk->size(), std::back_inserter(new_buffer));
+        buffer_ = std::move(new_buffer);
       },
     };
     std::visit(f, buffer_);
@@ -87,8 +89,8 @@ public:
         TENZIR_ASSERT(size == 0);
       },
       [&](std::vector<uint8_t>& buffer) {
-        TENZIR_ASSERT(size <= detail::narrow_cast<int64_t>(buffer.size()));
-        if (size == detail::narrow_cast<int64_t>(buffer.size())) {
+        TENZIR_ASSERT(size <= detail::narrow<int64_t>(buffer.size()));
+        if (size == detail::narrow<int64_t>(buffer.size())) {
           buffer_ = {};
           return;
         }
@@ -97,8 +99,8 @@ public:
       },
       [&](chunk_ptr& buffer) {
         TENZIR_ASSERT(buffer);
-        TENZIR_ASSERT(size <= detail::narrow_cast<int64_t>(buffer->size()));
-        if (size == detail::narrow_cast<int64_t>(buffer->size())) {
+        TENZIR_ASSERT(size <= detail::narrow<int64_t>(buffer->size()));
+        if (size == detail::narrow<int64_t>(buffer->size())) {
           buffer_ = {};
           return;
         }
@@ -179,7 +181,7 @@ public:
       while (in_buffer.size() > 0) {
         auto result = compressor.ValueUnsafe()->Compress(
           in_buffer.size(), in_buffer.data(),
-          detail::narrow_cast<int64_t>(out_buffer.size()), out_buffer.data());
+          detail::narrow<int64_t>(out_buffer.size()), out_buffer.data());
         if (not result.ok()) {
           diagnostic::error("failed to compress: {}",
                             result.status().ToString())
@@ -196,14 +198,17 @@ public:
               .emit(ctrl.diagnostics());
             co_return;
           }
-          out_buffer.resize(
-            std::max(out_buffer.max_size(), out_buffer.size() * 2));
+          if (out_buffer.size() < out_buffer.max_size() / 2) {
+            out_buffer.resize(out_buffer.size() * 2);
+          } else {
+            out_buffer.resize(out_buffer.max_size());
+          }
         } else {
           in_buffer.drop_front_n(result->bytes_read);
         }
         if (result->bytes_written > 0) {
           TENZIR_ASSERT(result->bytes_written
-                        <= detail::narrow_cast<int64_t>(out_buffer.size()));
+                        <= detail::narrow<int64_t>(out_buffer.size()));
           co_yield chunk::copy(
             as_bytes(out_buffer).subspan(0, result->bytes_written));
         } else {
@@ -215,15 +220,18 @@ public:
     // we gracefully reset the compressor.
     while (true) {
       auto result = compressor.ValueUnsafe()->End(
-        detail::narrow_cast<int64_t>(out_buffer.size()), out_buffer.data());
+        detail::narrow<int64_t>(out_buffer.size()), out_buffer.data());
       if (result->should_retry) {
         TENZIR_ASSERT(result->bytes_written == 0);
         if (out_buffer.size() == out_buffer.max_size()) [[unlikely]] {
           diagnostic::error("failed to resize buffer").emit(ctrl.diagnostics());
           co_return;
         }
-        out_buffer.resize(
-          std::max(out_buffer.max_size(), out_buffer.size() * 2));
+        if (out_buffer.size() < out_buffer.max_size() / 2) {
+          out_buffer.resize(out_buffer.size() * 2);
+        } else {
+          out_buffer.resize(out_buffer.max_size());
+        }
         continue;
       }
       if (result->bytes_written > 0) {
@@ -289,7 +297,7 @@ public:
       while (in_buffer.size() > 0) {
         auto result = decompressor.ValueUnsafe()->Decompress(
           in_buffer.size(), in_buffer.data(),
-          detail::narrow_cast<int64_t>(out_buffer.size()), out_buffer.data());
+          detail::narrow<int64_t>(out_buffer.size()), out_buffer.data());
         if (not result.ok()) {
           diagnostic::error("failed to decompress: {}",
                             result.status().ToString())
@@ -307,12 +315,15 @@ public:
               .emit(ctrl.diagnostics());
             co_return;
           }
-          out_buffer.resize(
-            std::max(out_buffer.max_size(), out_buffer.size() * 2));
+          if (out_buffer.size() < out_buffer.max_size() / 2) {
+            out_buffer.resize(out_buffer.size() * 2);
+          } else {
+            out_buffer.resize(out_buffer.max_size());
+          }
         }
         if (result->bytes_written > 0) {
           TENZIR_ASSERT(result->bytes_written
-                        <= detail::narrow_cast<int64_t>(out_buffer.size()));
+                        <= detail::narrow<int64_t>(out_buffer.size()));
           co_yield chunk::copy(
             as_bytes(out_buffer).subspan(0, result->bytes_written));
         } else {
@@ -378,8 +389,8 @@ public:
     auto args = operator_args{};
     auto level = std::optional<located<int64_t>>{};
     TRY(argument_parser2::operator_(name())
-          .add(args.type, "<type>")
-          .add("level", level)
+          .positional("type", args.type)
+          .named("level", level)
           .parse(inv, ctx));
     // TODO: Where is `try_narrow`?
     using T = decltype(args.level->inner);
@@ -418,7 +429,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = operator_args{};
     TRY(argument_parser2::operator_(name())
-          .add(args.type, "<type>")
+          .positional("type", args.type)
           .parse(inv, ctx));
     return std::make_unique<decompress_operator>(std::move(args));
   }

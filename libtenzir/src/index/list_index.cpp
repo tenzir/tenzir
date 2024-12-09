@@ -39,7 +39,7 @@ list_index::list_index(tenzir::type t, caf::settings opts)
       return x.value_type();
     },
   };
-  value_type_ = caf::visit(f, value_index::type());
+  value_type_ = match(value_index::type(), f);
   TENZIR_ASSERT(value_type_);
   size_t components = std::log10(max_size_);
   if (max_size_ % 10 != 0)
@@ -82,7 +82,7 @@ bool list_index::append_impl(data_view x, id pos) {
     }
     return false;
   };
-  return caf::visit(f, x);
+  return match(x, f);
 }
 
 caf::expected<ids>
@@ -146,7 +146,7 @@ caf::error list_index::unpack_impl(const fbs::ValueIndex& from) {
     return err;
   // The value type can simply be retreived from the base classes' type, not
   // sure why it is stored separately. — DL
-  value_type_ = caf::get<list_type>(type()).value_type();
+  value_type_ = as<list_type>(type()).value_type();
   return caf::none;
 }
 

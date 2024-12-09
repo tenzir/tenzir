@@ -62,7 +62,7 @@ struct data_view_printer : printer_base<data_view_printer> {
         return string_view_printer{}(out, x);
       },
     };
-    return caf::visit(f, d);
+    return match(d, f);
   }
 };
 

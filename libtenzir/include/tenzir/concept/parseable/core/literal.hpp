@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace tenzir::parser_literals {

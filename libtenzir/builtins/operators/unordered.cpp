@@ -9,6 +9,7 @@
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -75,7 +76,8 @@ private:
   operator_ptr op_;
 };
 
-class plugin final : public virtual operator_plugin<unordered_operator> {
+class plugin final : public virtual operator_plugin<unordered_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {
@@ -93,6 +95,18 @@ public:
         .throw_();
     }
     return std::make_unique<unordered_operator>(std::move(result.inner));
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto pipe = pipeline{};
+    auto parser = argument_parser2::operator_(name()).positional("{ … }", pipe);
+    TRY(parser.parse(inv, ctx));
+    auto ops = std::move(pipe).unwrap();
+    for (auto& op : ops) {
+      op = std::make_unique<unordered_operator>(std::move(op));
+    }
+    return std::make_unique<pipeline>(std::move(ops));
   }
 };
 

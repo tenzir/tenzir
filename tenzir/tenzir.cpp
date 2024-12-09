@@ -9,6 +9,8 @@
 #include "tenzir/application.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/default_configuration.hpp"
+#include "tenzir/detail/posix.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/logger.hpp"
@@ -20,8 +22,10 @@
 #include "tenzir/tql/parser.hpp"
 
 #include <arrow/util/compression.h>
+#include <caf/actor_registry.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/fwd.hpp>
+#include <sys/resource.h>
 
 #include <csignal>
 #include <cstdlib>
@@ -60,7 +64,7 @@ auto main(int argc, char** argv) -> int {
   // created before the call to `make_application`, as the return value of that
   // can reference dynamically loaded command plugins, which must not be
   // unloaded before the destructor of the return value.
-  auto plugin_guard = caf::detail::make_scope_guard([&]() noexcept {
+  auto plugin_guard = detail::scope_guard([&]() noexcept {
     plugins::get_mutable().clear();
   });
   // Application setup.
@@ -96,10 +100,46 @@ auto main(int argc, char** argv) -> int {
   if (!log_context) {
     return EXIT_FAILURE;
   }
-  // Print the configuration file(s) that were loaded.
-  if (!cfg.config_file_path.empty()) {
-    cfg.config_files.emplace_back(std::move(cfg.config_file_path));
+  if (!is_server) {
+    // Force the use of $TMPDIR as cache directory when running as a client.
+    auto ec = std::error_code{};
+    auto previous_value
+      = get_if<std::string>(&cfg.content, "tenzir.cache-directory");
+    auto tmp = std::filesystem::temp_directory_path(ec);
+    if (ec) {
+      TENZIR_ERROR("failed to determine location of temporary directory");
+      return EXIT_FAILURE;
+    }
+    auto path = tmp / fmt::format("tenzir-client-cache-{:}", getuid());
+    put(cfg.content, "tenzir.cache-directory", path.string());
+    if (previous_value) {
+      TENZIR_VERBOSE("using {} as cache directory instead of configured value "
+                     "{}",
+                     path, *previous_value);
+    }
   }
+#if TENZIR_POSIX
+  struct rlimit rlimit {};
+  if (::getrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
+    TENZIR_ERROR("failed to get RLIMIT_NOFILE: {}", detail::describe_errno());
+    return -errno;
+  }
+  TENZIR_DEBUG("raising soft limit of open file descriptors from {} to {}",
+               rlimit.rlim_cur, rlimit.rlim_max);
+  rlimit.rlim_cur = rlimit.rlim_max;
+  if (::setrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
+    TENZIR_ERROR("failed to raise soft limit of open file descriptors: {}",
+                 detail::describe_errno());
+    return -errno;
+  }
+#endif
+  // Copy CAF detected default config file paths.
+  for (const auto& path : cfg.config_file_paths()) {
+    cfg.config_files.emplace_back(path);
+  }
+  // Clear the CAF based default config file paths to avoid duplicates.
+  cfg.config_file_paths({});
+  // Print the configuration file(s) that were loaded.
   for (const auto& file : loaded_config_files()) {
     TENZIR_VERBOSE("loaded configuration file: {}", file.path);
   }
@@ -180,7 +220,7 @@ auto main(int argc, char** argv) -> int {
       return EXIT_FAILURE;
     }
     for (auto&& [name, value] : *r) {
-      auto* definition = caf::get_if<std::string>(&value);
+      auto* definition = try_as<std::string>(&value);
       if (!definition) {
         TENZIR_ERROR("could not load `tenzir.operators`: alias `{}` does not "
                      "resolve to a string",

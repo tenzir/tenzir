@@ -29,7 +29,7 @@ x12 = int("-9223372036854775808") + -1
 x13 = null + 1
 x14 = int(null) + 1
 
-write_json ndjson=false
+write_json
 EOF
 }
 
@@ -41,6 +41,29 @@ y = {y: 2, ...this}
 z = {...x, ...42, ...y}
 write_json
 EOF
+}
+
+@test "list spread" {
+  check tenzir -f '/dev/stdin' <<EOF
+from [
+  {x: []},
+  {x: [1]},
+  {x: [1, 2]},
+]
+y = [...x]
+z = [...x, 3, ...y, ...42]
+EOF
+}
+
+@test "record indexing" {
+  echo '
+  {"x": {"x": 1}, "y": "x"}
+  {"x": {"x": "1"}, "y": "x"}
+  {"x": {"x": 1}}
+  {"x": {}, "y": "x"}
+  {"y": "x"}
+  {}' |
+    check tenzir 'read_json | z = x[y]'
 }
 
 @test "list indexing" {
@@ -119,5 +142,61 @@ ya = y.length()
 yb = y.length_bytes()
 yc = y.length_chars()
 write_json
+EOF
+}
+
+@test "in list" {
+  check tenzir -f /dev/stdin <<EOF
+  from "${INPUTSDIR}/json/lists.json"
+  exists = x in y
+EOF
+}
+
+@test "ip in subnet" {
+  check tenzir -f /dev/stdin <<EOF
+from [
+  {x: 1.2.3.4, y: 1.2.3.4/16},
+  {x: 1.2.3.4, y: 4.5.6.7/16},
+  {x: 1.2.3.4, y: null},
+  {x: null, y: 4.5.6.7/16},
+  {x: null, y: null},
+]
+z = x in y
+EOF
+}
+
+@test "subnet in subnet" {
+  check tenzir -f /dev/stdin <<EOF
+from [
+  {x: 1.2.3.4/8, y: 1.2.3.4/16},
+  {x: 1.2.3.4/16, y: 1.2.3.4/16},
+  {x: 1.2.3.4/24, y: 1.2.3.4/16},
+  {x: 1.2.3.4/32, y: 1.2.3.4/0},
+  {x: 1.2.3.4/0, y: 1.2.3.4/32},
+  {x: 1.2.3.4/16, y: 4.5.6.7/16},
+  {x: 1.2.3.4/16, y: ::/0},
+  {x: 0.0.0.0/0, y: ::/0},
+  {x: ::/0, y: 0.0.0.0/0},
+]
+z = x in y
+EOF
+}
+
+@test "universal function call syntax" {
+  check tenzir -f '/dev/stdin' <<EOF
+from {
+  x: "abc".starts_with("ab"),
+  y: starts_with("abc", "ab"),
+}
+EOF
+  check tenzir -f '/dev/stdin' <<EOF
+from [{x: 1}, {x: 2}]
+summarize x.sum()
+EOF
+  check ! tenzir -f '/dev/stdin' <<EOF
+from { x: "abc".starts_with() }
+EOF
+  check ! tenzir -f '/dev/stdin' <<EOF
+from { x: starts_with("abc") }
 EOF
 }

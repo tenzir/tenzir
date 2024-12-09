@@ -120,21 +120,21 @@ TEST(strip) {
 }
 
 TEST(construction) {
-  CHECK(caf::holds_alternative<caf::none_t>(data{}));
-  CHECK(caf::holds_alternative<bool>(data{true}));
-  CHECK(caf::holds_alternative<bool>(data{false}));
-  CHECK(caf::holds_alternative<int64_t>(data{int64_t{0}}));
-  CHECK(caf::holds_alternative<int64_t>(data{int64_t{42}}));
-  CHECK(caf::holds_alternative<int64_t>(data{int64_t{-42}}));
-  CHECK(caf::holds_alternative<uint64_t>(data{42u}));
-  CHECK(caf::holds_alternative<double>(data{4.2}));
-  CHECK(caf::holds_alternative<std::string>(data{"foo"}));
-  CHECK(caf::holds_alternative<std::string>(data{std::string{"foo"}}));
-  CHECK(caf::holds_alternative<pattern>(data{pattern{}}));
-  CHECK(caf::holds_alternative<ip>(data{ip{}}));
-  CHECK(caf::holds_alternative<subnet>(data{subnet{}}));
-  CHECK(caf::holds_alternative<list>(data{list{}}));
-  CHECK(caf::holds_alternative<map>(data{map{}}));
+  CHECK(is<caf::none_t>(data{}));
+  CHECK(is<bool>(data{true}));
+  CHECK(is<bool>(data{false}));
+  CHECK(is<int64_t>(data{int64_t{0}}));
+  CHECK(is<int64_t>(data{int64_t{42}}));
+  CHECK(is<int64_t>(data{int64_t{-42}}));
+  CHECK(is<uint64_t>(data{42u}));
+  CHECK(is<double>(data{4.2}));
+  CHECK(is<std::string>(data{"foo"}));
+  CHECK(is<std::string>(data{std::string{"foo"}}));
+  CHECK(is<pattern>(data{pattern{}}));
+  CHECK(is<ip>(data{ip{}}));
+  CHECK(is<subnet>(data{subnet{}}));
+  CHECK(is<list>(data{list{}}));
+  CHECK(is<map>(data{map{}}));
 }
 
 TEST(relational_operators) {
@@ -346,14 +346,14 @@ TEST(convert - caf::config_value - null) {
   // clang-format on
   using namespace caf;
   auto y = to<dictionary<config_value>>(x);
-  REQUIRE(!y.engaged());
+  REQUIRE(!y.has_value());
   CHECK_EQUAL(y.error(), ec::type_clash);
   // If we flatten the record first and weed out null values, it'll work.
   auto flat = flatten(x);
   auto& [k, v] = as_vector(flat).back();
   flat.erase(k);
   y = to<dictionary<config_value>>(flat);
-  REQUIRE(y.engaged());
+  REQUIRE(y.has_value());
 }
 
 // We can't really test that a given call doesn't produce a stack overflow, so

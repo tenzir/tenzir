@@ -14,6 +14,8 @@
 
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::kafka {
 
 auto producer::make(configuration config) -> caf::expected<producer> {

@@ -20,6 +20,7 @@
 #include <arrow/util/uri.h>
 
 #include <netdb.h>
+#include <string_view>
 
 namespace tenzir {
 
@@ -220,7 +221,7 @@ auto convert(const sockaddr_in& in, ip& out) -> caf::error {
 }
 
 auto convert(const sockaddr_in6& in, ip& out) -> caf::error {
-  out = ip::v6(as_bytes<16>(&in.sin6_addr));
+  out = ip::v6(as_bytes<16>(&in.sin6_addr, 16));
   return {};
 }
 

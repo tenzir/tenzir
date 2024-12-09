@@ -14,6 +14,7 @@
 #include "tenzir/type.hpp"
 
 #include <string>
+#include <string_view>
 
 namespace tenzir {
 
@@ -26,7 +27,7 @@ struct qualified_record_field {
   /// Constructs a qualified record field by prepending the schema name to a
   /// record field.
   /// @pre `!schema.name().empty()`
-  /// @pre `caf::holds_alternative<record_type>(schema)`
+  /// @pre `is<record_type>(schema)`
   qualified_record_field(const class type& schema,
                          const offset& index) noexcept;
 

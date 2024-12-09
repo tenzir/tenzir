@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iterator>
+#include <string_view>
 
 namespace tenzir::plugins::xsv {
 namespace {
@@ -144,19 +145,19 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
   }
   auto add_to_parser(argument_parser2& parser) -> void {
     if (mode_ == mode::special_optional) {
-      parser.add("list_sep", list_sep_str_);
-      parser.add("null_value", null_value_);
+      parser.named("list_sep", list_sep_str_);
+      parser.named("null_value", null_value_);
     } else {
       field_sep_str_ = located{"REQUIRED", location::unknown};
       list_sep_str_ = located{"REQUIRED", location::unknown};
       null_value_ = located{"REQUIRED", location::unknown};
-      parser.add(*field_sep_str_, "<field-sep>");
-      parser.add(*list_sep_str_, "<list-sep>");
-      parser.add(*null_value_, "<null-value>");
+      parser.positional("field_sep", *field_sep_str_);
+      parser.positional("list_sep", *list_sep_str_);
+      parser.positional("null_value", *null_value_);
     }
-    parser.add("comments", allow_comments_);
-    parser.add("header", header_);
-    parser.add("auto_expand", auto_expand_);
+    parser.named("comments", allow_comments_);
+    parser.named("header", header_);
+    parser.named("auto_expand", auto_expand_);
     multi_series_builder_argument_parser::add_policy_to_parser(parser);
     multi_series_builder_argument_parser::add_settings_to_parser(parser, true,
                                                                  false);
@@ -258,7 +259,7 @@ struct xsv_printer_impl {
       } else {
         first = false;
       }
-      caf::visit(visitor{out, *this}, v);
+      match(v, visitor{out, *this});
     }
     return true;
   }
@@ -336,7 +337,7 @@ struct xsv_printer_impl {
         if (!sequence_empty) {
           ++out = printer.list_sep;
         }
-        if (!caf::visit(*this, v)) {
+        if (!match(v, *this)) {
           return false;
         }
       }
@@ -590,7 +591,7 @@ public:
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        const auto& input_type = caf::get<record_type>(input_schema);
+        const auto& input_type = as<record_type>(input_schema);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values(input_type, *array)) {
@@ -740,6 +741,67 @@ public:
   }
 };
 
+class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = xsv_options{};
+    auto field_sep_str = located<std::string>{};
+    auto list_sep_str = located<std::string>{};
+    auto null_value = located<std::string>{};
+    auto no_header = bool{};
+    TRY(argument_parser2::operator_(name())
+          .positional("field_sep", field_sep_str)
+          .positional("list_sep", list_sep_str)
+          .positional("null_value", null_value)
+          .named("no_header", args.no_header)
+          .parse(inv, ctx));
+    auto field_sep = to_xsv_sep(field_sep_str.inner);
+    if (!field_sep) {
+      diagnostic::error(field_sep.error())
+        .primary(field_sep_str.source)
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto list_sep = to_xsv_sep(list_sep_str.inner);
+    if (!list_sep) {
+      diagnostic::error(list_sep.error()).primary(list_sep_str.source).emit(ctx);
+      return failure::promise();
+    }
+    if (*field_sep == *list_sep) {
+      diagnostic::error("field separator and list separator must be "
+                        "different")
+        .primary(field_sep_str.source)
+        .primary(list_sep_str.source)
+        .emit(ctx);
+      return failure::promise();
+    }
+    for (auto ch : null_value.inner) {
+      if (ch == *field_sep) {
+        diagnostic::error("null value conflicts with field separator")
+          .primary(field_sep_str.source)
+          .primary(null_value.source)
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (ch == *list_sep) {
+        diagnostic::error("null value conflicts with list separator")
+          .primary(list_sep_str.source)
+          .primary(null_value.source)
+          .emit(ctx);
+        return failure::promise();
+      }
+    }
+    return std::make_unique<writer_adapter<xsv_printer>>(xsv_printer{{
+      .name = "xsv",
+      .field_sep = *field_sep,
+      .list_sep = *list_sep,
+      .null_value = std::move(null_value.inner),
+      .no_header = no_header,
+    }});
+  }
+};
+
 template <detail::string_literal Name, char Sep, char ListSep,
           detail::string_literal Null>
 class configured_read_xsv_plugin final
@@ -767,9 +829,39 @@ public:
   }
 };
 
+template <detail::string_literal Name, char Sep, char ListSep,
+          detail::string_literal Null>
+class configured_write_xsv_plugin final
+  : public operator_plugin2<writer_adapter<xsv_printer>> {
+public:
+  auto name() const -> std::string override {
+    return fmt::format("write_{}", Name);
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto no_header = bool{};
+    TRY(argument_parser2::operator_(name())
+          .named("no_header", no_header)
+          .parse(inv, ctx));
+    return std::make_unique<writer_adapter<xsv_printer>>(xsv_printer{{
+      .name = std::string{Name.str()},
+      .field_sep = Sep,
+      .list_sep = ListSep,
+      .null_value = std::string{Null.str()},
+      .no_header = no_header,
+      .auto_expand = false,
+      .allow_comments = false,
+    }});
+  }
+};
+
 using read_csv = configured_read_xsv_plugin<"csv", ',', ';', "">;
 using read_tsv = configured_read_xsv_plugin<"tsv", '\t', ',', "-">;
 using read_ssv = configured_read_xsv_plugin<"ssv", ' ', ',', "-">;
+using write_csv = configured_write_xsv_plugin<"csv", ',', ';', "">;
+using write_tsv = configured_write_xsv_plugin<"tsv", '\t', ',', "-">;
+using write_ssv = configured_write_xsv_plugin<"ssv", ' ', ',', "-">;
 
 } // namespace tenzir::plugins::xsv
 
@@ -781,3 +873,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_xsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_csv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_tsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_ssv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::write_xsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::write_csv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::write_tsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::write_ssv)

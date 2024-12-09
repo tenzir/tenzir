@@ -14,28 +14,29 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/range.hpp"
 #include "tenzir/detail/stack_vector.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/operator.hpp"
 #include "tenzir/time.hpp"
+#include "tenzir/variant.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
-#include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
 #include <caf/intrusive_cow_ptr.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/none.hpp>
-#include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
-#include <caf/sum_type.hpp>
 #include <fmt/core.h>
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -44,7 +45,7 @@ namespace tenzir {
 /// A qualifier in the form of a key and optional value.
 struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
   legacy_attribute(std::string key = {});
-  legacy_attribute(std::string key, caf::optional<std::string> value);
+  legacy_attribute(std::string key, std::optional<std::string> value);
 
   friend bool operator==(const legacy_attribute& x, const legacy_attribute& y);
 
@@ -56,14 +57,14 @@ struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
   }
 
   std::string key;
-  caf::optional<std::string> value;
+  std::optional<std::string> value;
 };
 
 // -- type hierarchy ----------------------------------------------------------
 
 // clang-format off
 /// @relates type
-using legacy_concrete_types = caf::detail::type_list<
+using legacy_concrete_types = detail::type_list<
   legacy_none_type,
   legacy_bool_type,
   legacy_integer_type,
@@ -91,7 +92,7 @@ template <class T>
 constexpr type_id_type type_id() {
   static_assert(detail::contains_type_v<legacy_concrete_types, T>,
                 "type IDs only available for concrete types");
-  return caf::detail::tl_index_of<legacy_concrete_types, T>::value;
+  return detail::tl_index_of<legacy_concrete_types, T>::value;
 }
 
 // -- type ------------------------------------------------------------------
@@ -707,77 +708,24 @@ remove_field(const legacy_record_type& r, std::vector<std::string_view> path);
 std::optional<legacy_record_type>
 remove_field(const legacy_record_type& r, offset o);
 
-// -- helpers ----------------------------------------------------------------
-
-} // namespace tenzir
-
-namespace caf {
-
-template <class Result, class Dispatcher, class T>
-auto make_dispatch_fun() {
-  using fun = Result (*)(Dispatcher*, const tenzir::legacy_abstract_type&);
-  auto lambda = [](Dispatcher* d, const tenzir::legacy_abstract_type& ref) {
-    return d->invoke(static_cast<const T&>(ref));
-  };
-  return static_cast<fun>(lambda);
-}
-
 template <>
-struct sum_type_access<tenzir::legacy_type> {
-  using types = tenzir::legacy_concrete_types;
+class variant_traits<legacy_type> {
+public:
+  static constexpr auto count = detail::tl_size<legacy_concrete_types>::value;
 
-  using type0 = tenzir::legacy_none_type;
-
-  static constexpr bool specialized = true;
-
-  template <class T, int Pos>
-  static bool is(const tenzir::legacy_type& x, sum_type_token<T, Pos>) {
-    return x->index() == Pos;
+  static auto index(const legacy_type& x) -> size_t {
+    return detail::narrow<size_t>(x->index());
   }
 
-  template <class T, int Pos>
-  static const T& get(const tenzir::legacy_type& x, sum_type_token<T, Pos>) {
-    return static_cast<const T&>(*x);
-  }
-
-  template <class T, int Pos>
-  static const T* get_if(const tenzir::legacy_type* x, sum_type_token<T, Pos>) {
-    auto ptr = x->raw_ptr();
-    return ptr->index() == Pos ? static_cast<const T*>(ptr) : nullptr;
-  }
-
-  template <class Result, class Visitor, class... Ts>
-  struct dispatcher {
-    using const_reference = const tenzir::legacy_abstract_type&;
-    template <class... Us>
-    Result dispatch(const_reference x, caf::detail::type_list<Us...>) {
-      using fun = Result (*)(dispatcher*, const_reference);
-      static fun tbl[] = {make_dispatch_fun<Result, dispatcher, Us>()...};
-      return tbl[x.index()](this, x);
-    }
-
-    template <class T>
-    Result invoke(const T& x) {
-      auto is = caf::detail::get_indices(xs_);
-      return caf::detail::apply_args_suffxied(v, is, xs_, x);
-    }
-
-    Visitor& v;
-    std::tuple<Ts&...> xs_;
-  };
-
-  template <class Result, class Visitor, class... Ts>
-  static Result apply(const tenzir::legacy_type& x, Visitor&& v, Ts&&... xs) {
-    dispatcher<Result, decltype(v), decltype(xs)...> d{
-      v, std::forward_as_tuple(xs...)};
-    types token;
-    return d.dispatch(*x, token);
+  template <size_t I>
+  static auto get(const legacy_type& x) -> decltype(auto) {
+    return static_cast<const detail::tl_at_t<legacy_concrete_types, I>&>(*x);
   }
 };
 
-} // namespace caf
+} // namespace tenzir
 
-// -- inspect (needs caf::visit first) -----------------------------------------
+// -- inspect ------------------------------------------------------------------
 
 namespace tenzir {
 
@@ -797,15 +745,13 @@ auto make_inspect_fun() {
 
 /// @private
 template <class Inspector, class... Ts>
-auto make_inspect(caf::detail::type_list<Ts...>) {
+auto make_inspect(detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> bool {
     if constexpr (!Inspector::is_loading) {
       if (x.type_tag != invalid_type_id) {
-        return caf::visit(
-          [&f](auto& v) -> bool {
+        return match(x.x, [&f](auto& v) -> bool {
             return f.apply(v);
-          },
-          x.x);
+          });
       }
       return true;
     } else {

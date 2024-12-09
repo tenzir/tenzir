@@ -10,6 +10,8 @@
 
 #include <fmt/ranges.h>
 
+#include <string_view>
+
 namespace tenzir {
 
 namespace {

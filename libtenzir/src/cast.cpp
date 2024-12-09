@@ -23,8 +23,8 @@ auto cast(table_slice from_slice, const type& to_schema) noexcept
   const auto from_struct_array = from_batch->ToStructArray().ValueOrDie();
   const auto to_struct_array
     = detail::cast_helper<record_type, record_type>::cast(
-      caf::get<record_type>(from_slice.schema()), from_struct_array,
-      caf::get<record_type>(to_schema));
+      as<record_type>(from_slice.schema()), from_struct_array,
+      as<record_type>(to_schema));
   const auto to_batch = arrow::RecordBatch::Make(to_schema.to_arrow_schema(),
                                                  to_struct_array->length(),
                                                  to_struct_array->fields());

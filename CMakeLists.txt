@@ -304,6 +304,9 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libtenzir_internal INTERFACE -Wno-unknown-warning)
 endif ()
 
+# FIXME: remove and fix warnings.
+target_compile_options(libtenzir_internal INTERFACE -Wno-deprecated-declarations)
+
 set(gcc12plus
     "$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,12>>"
 )

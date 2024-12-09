@@ -22,7 +22,7 @@ public:
   }
 
   void add(data_view x) override {
-    auto y = caf::get_if<view<T>>(&x);
+    auto y = try_as<view<T>>(&x);
     TENZIR_ASSERT(y != nullptr);
     if (*y < min_)
       min_ = *y;
@@ -34,13 +34,13 @@ public:
   lookup(relational_operator op, data_view rhs) const override {
     auto do_lookup
       = [this](relational_operator op, data_view xv) -> std::optional<bool> {
-      if (auto x = caf::get_if<view<T>>(&xv))
+      if (auto x = try_as<view<T>>(&xv)) {
         return {lookup_impl(op, *x)};
-      else
+      } else
         return {};
     };
     auto membership = [&]() -> std::optional<bool> {
-      if (auto xs = caf::get_if<view<list>>(&rhs)) {
+      if (auto xs = try_as<view<list>>(&rhs)) {
         for (auto x : **xs) {
           auto result = do_lookup(relational_operator::equal, x);
           if (result && *result)

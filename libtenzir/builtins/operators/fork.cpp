@@ -89,7 +89,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto pipe = located<pipeline>{};
     TRY(argument_parser2::operator_("fork")
-          .add(pipe, "<pipeline>")
+          .positional("{ … }", pipe)
           .parse(inv, ctx));
     auto loc = operator_location::anywhere;
     for (auto& op : pipe.inner.operators()) {

@@ -8,6 +8,7 @@
 
 #include "tenzir/configuration.hpp"
 #include "tenzir/detail/env.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/test/test.hpp"
@@ -18,12 +19,7 @@
 #include <iostream>
 #include <set>
 #include <string>
-
-namespace caf::test {
-
-int main(int, char**);
-
-} // namespace caf::test
+#include <string_view>
 
 namespace tenzir::test {
 
@@ -48,7 +44,10 @@ std::vector<std::string> get_test_args(int argc, const char* const* argv) {
 } // namespace
 
 int main(int argc, char** argv) {
-  (void)tenzir::detail::setenv("TENZIR_ABORT_ON_PANIC", "1");
+  TENZIR_ASSERT(tenzir::detail::setenv("TENZIR_ABORT_ON_PANIC", "1")
+                == caf::none);
+  TENZIR_ASSERT(tenzir::detail::setenv("TENZIR_BARE_MODE", "true")
+                == caf::none);
   std::string tenzir_loglevel = "quiet";
   auto test_args = get_test_args(argc, argv);
   if (!test_args.empty()) {
@@ -85,7 +84,7 @@ int main(int argc, char** argv) {
   }
 
   // Make sure to deinitialize all plugins at the end.
-  auto plugin_guard = caf::detail::make_scope_guard([]() noexcept {
+  auto plugin_guard = tenzir::detail::scope_guard([]() noexcept {
     tenzir::plugins::get_mutable().clear();
   });
   caf::settings log_settings;

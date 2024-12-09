@@ -8,12 +8,12 @@
 
 #include "tenzir/flatbuffer.hpp"
 
-#include "tenzir/data.hpp"
+#include "tenzir/detail/logger_formatters.hpp"
 #include "tenzir/fbs/type.hpp"
-#include "tenzir/flatbuffer.hpp"
-#include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/type.hpp"
+
+#include <caf/binary_serializer.hpp>
 
 namespace tenzir {
 
@@ -52,14 +52,31 @@ TEST(lifetime) {
 
 namespace {
 
-struct fixture : public fixtures::deterministic_actor_system {
-  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
+template <class... Ts>
+auto serialize(const Ts&... xs) {
+  caf::byte_buffer buf;
+  caf::binary_serializer bs{buf};
+  if (!tenzir::detail::apply_all(bs, xs...)) {
+    FAIL("error during serialization: ");
   }
-};
+  return buf;
+}
+
+template <class... Ts>
+void deserialize(const caf::byte_buffer& buf, Ts&... xs) {
+  if (!(tenzir::detail::legacy_deserialize(buf, xs) && ...)) {
+    FAIL("error during deserialization");
+  }
+}
+
+template <class T>
+T roundtrip(const T& x) {
+  T y;
+  deserialize(serialize(x), y);
+  return y;
+}
 
 } // namespace
-
-FIXTURE_SCOPE(flatbuffer_fixture, fixture)
 
 TEST(serialization) {
   auto fbt = flatbuffer<fbs::Type>{};
@@ -80,7 +97,5 @@ TEST(serialization) {
   auto fbrtft2 = roundtrip(fbrtft);
   CHECK_EQUAL(as_bytes(fbrtft.chunk()), as_bytes(fbrtft2.chunk()));
 }
-
-FIXTURE_SCOPE_END()
 
 } // namespace tenzir

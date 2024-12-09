@@ -17,14 +17,15 @@
 #include "tenzir/detail/serialize.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/test/test.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <caf/test/dsl.hpp>
 
+#include <string_view>
+#include <variant>
+
 using namespace tenzir;
 
-using caf::get;
-using caf::get_if;
-using caf::holds_alternative;
 using namespace std::string_literals;
 
 TEST(offset finding) {
@@ -38,15 +39,15 @@ TEST(offset finding) {
   auto mod = unbox(to<module>(str));
   auto* foo_type = mod.find("foo");
   REQUIRE_NOT_EQUAL(foo_type, nullptr);
-  REQUIRE(holds_alternative<record_type>(*foo_type));
-  const auto& foo_record = get<record_type>(*foo_type);
+  REQUIRE(is<record_type>(*foo_type));
+  const auto& foo_record = as<record_type>(*foo_type);
   CHECK_EQUAL(foo_record.num_fields(), 4u);
   CHECK_EQUAL(foo_record.field(offset{0}).type, int64_type{});
   CHECK_EQUAL(foo_record.field(offset{1}).type, double_type{});
   CHECK_EQUAL(foo_record.field(offset{2}).name, "c");
-  CHECK(caf::holds_alternative<record_type>(foo_record.field(offset{2}).type));
-  CHECK_EQUAL(
-    caf::get<record_type>(foo_record.field(offset{2}).type).num_fields(), 3u);
+  CHECK(is<record_type>(foo_record.field(offset{2}).type));
+  CHECK_EQUAL(as<record_type>(foo_record.field(offset{2}).type).num_fields(),
+              3u);
   CHECK_EQUAL(foo_record.field(offset{2, 0}).name, "a");
   CHECK_EQUAL(foo_record.field(offset{2, 1, 0}).type, string_type{});
   CHECK_EQUAL(foo_record.field(offset{2, 2}).type, int64_type{});
@@ -177,11 +178,11 @@ TEST(module : zeek - style) {
   CHECK(parsers::module(str, mod));
   auto ssl = mod.find("zeek.ssl");
   REQUIRE(ssl);
-  auto r = get_if<record_type>(ssl);
+  auto r = try_as<record_type>(ssl);
   REQUIRE(r);
   auto id = r->resolve_key("id");
   REQUIRE(id);
-  CHECK(holds_alternative<record_type>(r->field(*id).type));
+  CHECK(is<record_type>(r->field(*id).type));
 }
 
 TEST(schema : aliases) {
@@ -195,7 +196,7 @@ TEST(schema : aliases) {
   CHECK(parsers::module(std::string{str}, mod));
   auto foo = mod.find("foo");
   REQUIRE(foo);
-  CHECK(holds_alternative<ip_type>(*foo));
+  CHECK(is<ip_type>(*foo));
   CHECK(mod.find("bar"));
   CHECK(mod.find("baz"));
   CHECK(mod.find("x"));
@@ -232,11 +233,11 @@ TEST(parseable - basic types global) {
   CHECK(mod.find("t10"));
   auto foo = mod.find("foo");
   REQUIRE(foo);
-  auto r = get_if<record_type>(foo);
+  auto r = try_as<record_type>(foo);
   REQUIRE(r);
   auto t8 = r->resolve_key("a8");
   REQUIRE(t8);
-  CHECK(holds_alternative<string_type>(r->field(*t8).type));
+  CHECK(is<string_type>(r->field(*t8).type));
 }
 
 TEST(parseable - basic types local) {
@@ -258,11 +259,11 @@ TEST(parseable - basic types local) {
   CHECK(parsers::module(std::string{str}, mod));
   auto foo = mod.find("foo");
   REQUIRE(foo);
-  auto r = get_if<record_type>(foo);
+  auto r = try_as<record_type>(foo);
   REQUIRE(r);
   auto p = r->resolve_key("a10");
   REQUIRE(p);
-  CHECK(holds_alternative<subnet_type>(r->field(*p).type));
+  CHECK(is<subnet_type>(r->field(*p).type));
 }
 
 TEST(parseable - complex types global) {
@@ -281,7 +282,7 @@ TEST(parseable - complex types global) {
   CHECK(mod.find("list_t"));
   auto foo = mod.find("foo");
   REQUIRE(foo);
-  auto r = get_if<record_type>(foo);
+  auto r = try_as<record_type>(foo);
   REQUIRE(r);
   auto e = r->resolve_key("e");
   REQUIRE(e);
@@ -598,7 +599,7 @@ TEST(parseable - with context) {
     auto rename = [&]<concrete_type T>(const T& x) -> type {
       return type{"derived2", x};
     };
-    CHECK_EQUAL(caf::visit(rename, expected), derived2);
+    CHECK_EQUAL(tenzir::match(expected, rename), derived2);
   }
 }
 

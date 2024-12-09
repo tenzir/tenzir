@@ -18,6 +18,8 @@
 
 #include <fmt/color.h>
 
+#include <string_view>
+
 namespace tenzir {
 
 namespace {

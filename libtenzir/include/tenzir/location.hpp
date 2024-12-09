@@ -12,6 +12,7 @@
 
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/default_formatter.hpp"
+#include "tenzir/detail/type_traits.hpp"
 
 #include <fmt/format.h>
 
@@ -130,6 +131,9 @@ located(T, location) -> located<T>;
 template <class T>
 inline constexpr auto enable_default_formatter<located<T>> = true;
 
+template <class T>
+concept has_get_location = requires(const T& x) { x.get_location(); };
+
 /// Utility type that provides implicit conversions to `location`.
 struct into_location : location {
   using location::location;
@@ -142,9 +146,15 @@ struct into_location : location {
   }
 
   // TODO: Make this a customization point instead.
-  template <class T>
-    requires requires(const T& x) { x.get_location(); }
+  template <has_get_location T>
   explicit(false) into_location(const T& x) : location{x.get_location()} {
+  }
+
+  template <has_get_location... Ts>
+  explicit(false) into_location(const variant<Ts...>& x)
+    : location{x.match([](auto& y) {
+        return y.get_location();
+      })} {
   }
 };
 
@@ -166,6 +176,6 @@ struct as_located {
 };
 
 template <class T>
-struct is_located : caf::detail::is_specialization<located, T> {};
+struct is_located : detail::is_specialization_of<located, T> {};
 
 } // namespace tenzir

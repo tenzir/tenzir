@@ -11,6 +11,8 @@
 #include "tenzir/chunk.hpp"
 #include "tenzir/generator.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 /// Transforms a sequence of bytes into a sequence of lines. The returned

@@ -12,6 +12,8 @@
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <string_view>
+
 namespace tenzir::plugins::ocsf {
 
 namespace {
@@ -151,7 +153,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name_)
-          .add(expr, fmt::format("<{}>", input_meta_))
+          .positional("x", expr, input_meta_)
           .parse(inv, ctx));
     return function_use::make(
       [&, expr = std::move(expr)](evaluator eval, session ctx) -> series {
@@ -206,7 +208,7 @@ public:
             return series::null(OutTy{}, arg.length());
           },
         };
-        return caf::visit(f, *arg.array);
+        return match(*arg.array, f);
       });
   }
 
@@ -231,12 +233,11 @@ using id_to_name_plugin
 using tenzir::plugins::ocsf::category_map;
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
-  "ocsf_category_uid", "string", category_map, "OCSF category name"})
+  "ocsf::category_uid", "string", category_map, "OCSF category name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
-  "ocsf_category_name", "int", category_map, "OCSF category ID"})
+  "ocsf::category_name", "int", category_map, "OCSF category ID"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
-  "ocsf_class_uid", "string", tenzir::plugins::ocsf::class_map,
+  "ocsf::class_uid", "string", tenzir::plugins::ocsf::class_map,
   "OCSF class name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
-  "ocsf_class_name", "int", tenzir::plugins::ocsf::class_map,
-  "OCSF class ID"})
+  "ocsf::class_name", "int", tenzir::plugins::ocsf::class_map, "OCSF class ID"})

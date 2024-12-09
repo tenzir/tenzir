@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstddef>
 #include <optional>
+#include <string_view>
 
 namespace tenzir {
 

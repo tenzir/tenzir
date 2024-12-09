@@ -28,6 +28,8 @@
 #include <caf/expected.hpp>
 #include <fmt/format.h>
 
+#include <string_view>
+
 #include <yaml-cpp/yaml.h>
 
 namespace tenzir::plugins::yaml {
@@ -149,11 +151,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
 template <class View>
 auto print_node(auto& out, const View& value) -> void {
   if constexpr (std::is_same_v<View, data_view>) {
-    return caf::visit(
-      [&](const auto& value) {
+    return match(value, [&](const auto& value) {
         return print_node(out, value);
-      },
-      value);
+      });
   } else if constexpr (std::is_same_v<View, caf::none_t>) {
     out << YAML::Null;
   } else if constexpr (std::is_same_v<View, view<bool>>) {
@@ -238,7 +238,7 @@ public:
           co_yield {};
           co_return;
         }
-        auto input_type = caf::get<record_type>(slice.schema());
+        auto input_type = as<record_type>(slice.schema());
         auto resolved_slice = resolve_enumerations(slice);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
@@ -247,7 +247,7 @@ public:
         out->SetNullFormat(YAML::LowerNull);
         out->SetIndent(2);
         for (const auto& row :
-             values(caf::get<record_type>(resolved_slice.schema()), *array)) {
+             values(as<record_type>(resolved_slice.schema()), *array)) {
           TENZIR_ASSERT(row);
           print_document(*out, *row);
         }
@@ -333,8 +333,18 @@ class read_yaml final
   }
 };
 
+class write_yaml final
+  : public virtual operator_plugin2<writer_adapter<yaml_printer>> {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
+    return std::make_unique<writer_adapter<yaml_printer>>(yaml_printer{});
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::yaml
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::yaml_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::read_yaml)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::write_yaml)

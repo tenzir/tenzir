@@ -1,0 +1,21 @@
+{"x": "", "y": [], "exists": false}
+{"x": "", "y": ["Non-Empty", ""], "exists": true}
+{"x": "Different", "y": ["1.0ms", "10.0d", "40515.0d"], "exists": null}
+{"x": 1, "y": [1, 10, 111], "exists": true}
+{"x": 1.0, "y": [1, 10, 111], "exists": true}
+{"x": 1.0, "y": ["1", "10.0", "111"], "exists": null}
+{"x": null, "y": [null, 1, 2], "exists": true}
+{"x": null, "y": [1, 2, null], "exists": true}
+warning: got incompatible types for `in`: `string in list<duration>`
+ --> /dev/stdin:2:12
+  |
+2 |   exists = x in y
+  |            ~~~~~~ 
+  |
+
+warning: got incompatible types for `in`: `double in list<string>`
+ --> /dev/stdin:2:12
+  |
+2 |   exists = x in y
+  |            ~~~~~~ 
+  |

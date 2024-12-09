@@ -66,12 +66,12 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
     auto lrt = legacy_record_type{};
     if (auto error = fbs::deserialize_bytes(data, lrt))
       return error;
-    return caf::get<record_type>(type::from_legacy_type(lrt));
+    return as<record_type>(type::from_legacy_type(lrt));
   }
   if (auto const* data = partition.schema()) {
     auto chunk = chunk::copy(as_bytes(*data));
     auto t = type{std::move(chunk)};
-    auto* schema = caf::get_if<record_type>(&t);
+    auto* schema = try_as<record_type>(&t);
     if (!schema)
       return caf::make_error(ec::format_error, "schema field contained "
                                                "unexpected type");
@@ -150,7 +150,7 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
     indexer = self->spawn(passive_indexer, id, std::move(value_index));
     return indexer;
   }
-  TENZIR_DEBUG("passive-partition {} has no index or failed to index for field "
+  TENZIR_TRACE("passive-partition {} has no index or failed to index for field "
                "{}",
                id, qualified_index->field_name()->string_view());
   return {};
@@ -218,8 +218,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   // vector must be the same as in `combined_schema`. The actual indexers are
   // deserialized and spawned lazily on demand.
   state.indexers.resize(indexes->size());
-  TENZIR_DEBUG("{} found {} indexers for partition {}", state.name,
-               indexes->size(), state.id);
   auto const* type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
     auto const* type_ids_tuple = type_ids->Get(i);
@@ -229,8 +227,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
     if (auto error = fbs::deserialize_bytes(ids_data, ids))
       return error;
   }
-  TENZIR_DEBUG("{} restored {} type-to-ids mapping for partition {}",
-               state.name, state.type_ids_.size(), state.id);
   return caf::none;
 }
 
@@ -321,24 +317,24 @@ partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
   filesystem_actor filesystem, const std::filesystem::path& path) {
   auto id_string = fmt::to_string(id);
-  self->state.self = self;
-  self->state.path = path;
-  self->state.filesystem = std::move(filesystem);
+  self->state().self = self;
+  self->state().path = path;
+  self->state().filesystem = std::move(filesystem);
   TENZIR_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_down_handler([=](const caf::down_msg& msg) {
-    if (msg.source != self->state.store.address()) {
-      TENZIR_DEBUG("{} ignores DOWN from unexpected sender: {}", *self,
+    if (msg.source != self->state().store.address()) {
+      TENZIR_TRACE("{} ignores DOWN from unexpected sender: {}", *self,
                    msg.reason);
       return;
     }
     TENZIR_ERROR("{} shuts down after DOWN from {} store: {}", *self,
-                 self->state.store_id, msg.reason);
+                 self->state().store_id, msg.reason);
     self->quit(msg.reason);
   });
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
+    TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self, msg.source,
                  msg.reason);
-    self->demonitor(self->state.store->address());
+    self->demonitor(self->state().store->address());
     // Receiving an EXIT message does not need to coincide with the state
     // being destructed, so we explicitly clear the vector to release the
     // references.
@@ -346,9 +342,10 @@ partition_actor::behavior_type passive_partition(
     // operates on 'std::vector<caf::actor>' only. That should probably be
     // generalized in the future.
     auto indexers = std::vector<caf::actor>{};
-    indexers.reserve(self->state.indexers.size());
-    for (auto&& indexer : std::exchange(self->state.indexers, {}))
+    indexers.reserve(self->state().indexers.size());
+    for (auto&& indexer : std::exchange(self->state().indexers, {})) {
       indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
+    }
     if (msg.reason != caf::exit_reason::user_shutdown) {
       self->quit(msg.reason);
       return;
@@ -358,7 +355,7 @@ partition_actor::behavior_type passive_partition(
     terminate<policy::parallel>(self, std::move(indexers))
       .then(
         [=](atom::done) {
-          TENZIR_DEBUG("{} shut down all indexers successfully", *self);
+          TENZIR_TRACE("{} shut down all indexers successfully", *self);
           self->quit();
         },
         [=](const caf::error& err) {
@@ -369,18 +366,18 @@ partition_actor::behavior_type passive_partition(
   // We send a "read" to the fs actor and upon receiving the result deserialize
   // the flatbuffer and switch to the "normal" partition behavior for responding
   // to queries.
-  self->request(self->state.filesystem, caf::infinite, atom::mmap_v, path)
+  self->request(self->state().filesystem, caf::infinite, atom::mmap_v, path)
     .then(
       [=](chunk_ptr chunk) {
-        TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(chunk));
+        TENZIR_TRACE("{} {}", *self, TENZIR_ARG(chunk));
         TENZIR_TRACEPOINT(passive_partition_loaded, id_string.c_str());
-        TENZIR_ASSERT(!self->state.partition_chunk);
+        TENZIR_ASSERT(!self->state().partition_chunk);
         if (!chunk) {
           TENZIR_ERROR("{} got invalid chunk", *self);
           self->quit();
           return;
         }
-        if (auto err = self->state.initialize_from_chunk(chunk)) {
+        if (auto err = self->state().initialize_from_chunk(chunk)) {
           TENZIR_ERROR("{} failed to initialize passive partition from file "
                        "{}: "
                        "{}",
@@ -388,64 +385,62 @@ partition_actor::behavior_type passive_partition(
           self->quit();
           return;
         }
-        if (self->state.id != id) {
+        if (self->state().id != id) {
           TENZIR_ERROR("unexpected ID for passive partition: expected {}, got "
                        "{}",
-                       id, self->state.id);
+                       id, self->state().id);
           self->quit();
           return;
         }
         const auto* plugin
-          = plugins::find<store_actor_plugin>(self->state.store_id);
+          = plugins::find<store_actor_plugin>(self->state().store_id);
         if (!plugin) {
           auto error = caf::make_error(ec::format_error,
                                        "encountered unhandled store backend");
           TENZIR_ERROR("{} encountered unknown store backend '{}'", *self,
-                       self->state.store_id);
+                       self->state().store_id);
           self->quit(std::move(error));
           return;
         }
-        auto store = plugin->make_store(self->state.filesystem,
-                                        self->state.store_header);
+        auto store = plugin->make_store(self->state().filesystem,
+                                        self->state().store_header);
         if (!store) {
           TENZIR_ERROR("{} failed to spawn store: {}", *self, store.error());
           self->quit(caf::make_error(ec::system_error, "failed to spawn "
                                                        "store"));
           return;
         }
-        self->state.store = *store;
-        self->monitor(self->state.store);
+        self->state().store = *store;
+        self->monitor(self->state().store);
         // Delegate all deferred evaluations now that we have the partition chunk.
-        TENZIR_DEBUG("{} delegates {} deferred evaluations", *self,
-                     self->state.deferred_evaluations.size());
-        delegate_deferred_requests(self->state);
+        delegate_deferred_requests(self->state());
       },
       [=](caf::error err) {
         // This error is nicely printed at the export operator as a warning. No
         // need to print it as an error here already.
         TENZIR_WARN("{} failed to load partition: {}", *self, err);
-        deliver_error_to_deferred_requests(self->state, err);
+        deliver_error_to_deferred_requests(self->state(), err);
         // Quit the partition.
         self->quit(std::move(err));
       });
   return {
     [self](atom::query,
            tenzir::query_context query_context) -> caf::result<uint64_t> {
-      TENZIR_DEBUG("{} received query {}", *self, query_context);
-      if (!self->state.partition_chunk) {
-        TENZIR_DEBUG("{} waits for its state", *self);
-        return std::get<1>(self->state.deferred_evaluations.emplace_back(
+      TENZIR_TRACE("{} received query {}", *self, query_context);
+      if (!self->state().partition_chunk) {
+        return std::get<1>(self->state().deferred_evaluations.emplace_back(
           std::move(query_context), self->make_response_promise<uint64_t>()));
       }
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
-      TENZIR_ASSERT(self->state.deferred_evaluations.empty());
+      TENZIR_ASSERT(self->state().deferred_evaluations.empty());
       // Don't handle queries after we already received an exit message, while
       // the terminator is running. Since we require every partition to have at
       // least one indexer, we can use this to check.
-      if (self->state.indexers.empty())
+      if (self->state().indexers.empty()) {
         return caf::make_error(ec::system_error, "can not handle query because "
                                                  "shutdown was requested");
+      }
       auto rp = self->make_response_promise<uint64_t>();
       // Don't bother with the indexers etc. if we already know the ids
       // we want to retrieve.
@@ -454,23 +449,23 @@ partition_actor::behavior_type passive_partition(
           return caf::make_error(ec::invalid_argument, "query may only contain "
                                                        "either expression or "
                                                        "ids");
-        rp.delegate(self->state.store, atom::query_v, query_context);
+        rp.delegate(self->state().store, atom::query_v, query_context);
         return rp;
       }
-      auto triples = detail::evaluate(self->state, query_context.expr);
+      auto triples = detail::evaluate(self->state(), query_context.expr);
       if (triples.empty()) {
         rp.deliver(uint64_t{0});
         return rp;
       }
       auto ids_for_evaluation
-        = detail::get_ids_for_evaluation(self->state.type_ids(), triples);
+        = detail::get_ids_for_evaluation(self->state().type_ids(), triples);
       auto eval = self->spawn(evaluator, query_context.expr, std::move(triples),
                               std::move(ids_for_evaluation));
       self->request(eval, caf::infinite, atom::run_v)
         .then(
           [self, rp,
            query_context = std::move(query_context)](const ids& hits) mutable {
-            if (!hits.empty() && hits.size() != self->state.events) {
+            if (!hits.empty() && hits.size() != self->state().events) {
               // FIXME: We run into this for at least the IP index following the
               // quickstart guide in the documentation, indicating that the IP
               // index returns an undersized bitmap whose length does not match
@@ -478,15 +473,15 @@ partition_actor::behavior_type passive_partition(
               // issues downstream because you need to very carefully handle
               // this scenario, which is easy to overlook as a developer. We
               // should fix this issue.
-              TENZIR_DEBUG("{} received evaluator results with wrong length: "
+              TENZIR_TRACE("{} received evaluator results with wrong length: "
                            "expected {}, got {}",
-                           *self, self->state.events, hits.size());
+                           *self, self->state().events, hits.size());
             }
-            TENZIR_DEBUG("{} received results from the evaluator", *self);
+            TENZIR_TRACE("{} received results from the evaluator", *self);
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
             query_context.ids = hits;
-            rp.delegate(self->state.store, atom::query_v,
+            rp.delegate(self->state().store, atom::query_v,
                         std::move(query_context));
           },
           [rp](caf::error& err) mutable {
@@ -496,26 +491,26 @@ partition_actor::behavior_type passive_partition(
     },
     [self](atom::erase) -> caf::result<atom::done> {
       auto rp = self->make_response_promise<atom::done>();
-      if (!self->state.partition_chunk) {
-        TENZIR_DEBUG("{} skips an erase request", *self);
-        return self->state.deferred_erasures.emplace_back(std::move(rp));
+      if (!self->state().partition_chunk) {
+        TENZIR_TRACE("{} skips an erase request", *self);
+        return self->state().deferred_erasures.emplace_back(std::move(rp));
       }
-      TENZIR_DEBUG("{} received an erase message and deletes {}", *self,
-                   self->state.path);
+      TENZIR_TRACE("{} received an erase message and deletes {}", *self,
+                   self->state().path);
       self
-        ->request(self->state.filesystem, caf::infinite, atom::erase_v,
-                  self->state.path)
+        ->request(self->state().filesystem, caf::infinite, atom::erase_v,
+                  self->state().path)
         .then([](atom::done) {},
               [self](const caf::error& err) {
                 TENZIR_WARN("{} failed to delete {}: {}; try deleting manually",
-                            *self, self->state.path, err);
+                            *self, self->state().path, err);
               });
       tenzir::ids all_ids;
-      for (const auto& kv : self->state.type_ids_) {
+      for (const auto& kv : self->state().type_ids_) {
         all_ids |= kv.second;
       }
       self
-        ->request(self->state.store, caf::infinite, atom::erase_v,
+        ->request(self->state().store, caf::infinite, atom::erase_v,
                   std::move(all_ids))
         .then(
           [rp](uint64_t) mutable {
@@ -528,28 +523,31 @@ partition_actor::behavior_type passive_partition(
     },
     [self](atom::status, status_verbosity, duration) -> record {
       record result;
-      if (!self->state.partition_chunk) {
+      if (!self->state().partition_chunk) {
         result["state"] = "waiting for chunk";
         return result;
       }
-      result["size"] = self->state.partition_chunk->size();
+      result["size"] = self->state().partition_chunk->size();
       size_t mem_indexers = 0;
-      for (size_t i = 0; i < self->state.indexers.size(); ++i)
-        if (self->state.indexers[i])
+      for (size_t i = 0; i < self->state().indexers.size(); ++i) {
+        if (self->state().indexers[i]) {
           mem_indexers += sizeof(indexer_state)
-                          + self->state.flatbuffer->indexes()
+                          + self->state()
+                              .flatbuffer->indexes()
                               ->Get(i)
                               ->index()
                               ->decompressed_size();
+        }
+      }
       result["memory-usage-indexers"] = mem_indexers;
-      auto x = self->state.partition_chunk->incore();
+      auto x = self->state().partition_chunk->incore();
       if (!x) {
         result["memory-usage-incore"] = fmt::to_string(x.error());
-        result["memory-usage"] = self->state.partition_chunk->size()
-                                 + mem_indexers + sizeof(self->state);
+        result["memory-usage"] = self->state().partition_chunk->size()
+                                 + mem_indexers + sizeof(self->state());
       } else {
         result["memory-usage-incore"] = *x;
-        result["memory-usage"] = *x + mem_indexers + sizeof(self->state);
+        result["memory-usage"] = *x + mem_indexers + sizeof(self->state());
       }
       return result;
     },

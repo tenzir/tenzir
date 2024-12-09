@@ -333,11 +333,13 @@ struct connection_manager_state {
       caf::anon_send(metrics_receiver, operator_id, tcp_metrics_id,
                      std::move(metric));
       if (self) {
-        next_emit_metrics = detail::weak_run_delayed(
-          self, defaults::metrics_interval,
-          [self, connection = this->shared_from_this()] {
-            connection->emit_metrics(self);
-          });
+        next_emit_metrics
+          = detail::weak_run_delayed(self, defaults::metrics_interval,
+                                     [self, weak_ptr = this->weak_from_this()] {
+                                       if (auto connection = weak_ptr.lock()) {
+                                         connection->emit_metrics(self);
+                                       }
+                                     });
       }
     }
 
@@ -379,13 +381,15 @@ struct connection_manager_state {
           if (connection->rp.pending()) {
             caf::anon_send(caf::actor_cast<caf::actor>(self),
                            caf::make_action(
-                             [self, connection, chunk = std::move(chunk),
+                             [self, connection, ec, chunk = std::move(chunk),
                               diagnostics = std::move(diagnostics)]() mutable {
                                auto lock = std::unique_lock{connection->mutex};
                                TENZIR_ASSERT(connection->rp.pending());
                                connection->rp.deliver(std::move(chunk));
-                               connection->async_read(self,
-                                                      std::move(diagnostics));
+                               if (not ec) {
+                                 connection->async_read(self,
+                                                        std::move(diagnostics));
+                               }
                              }));
             TENZIR_ASSERT(connection->chunks.empty());
             return;
@@ -394,7 +398,7 @@ struct connection_manager_state {
           TENZIR_ASSERT(connection->chunks.size() <= max_queued_chunks);
           should_read = connection->chunks.size() < max_queued_chunks;
         }
-        if (should_read) {
+        if (not ec and should_read) {
           connection->async_read(self, std::move(diagnostics));
         }
       };
@@ -636,8 +640,10 @@ struct connection_manager_state {
   read_from_connection(boost::asio::ip::tcp::socket::native_handle_type handle)
     -> caf::result<chunk_ptr> {
     auto connection = connections.find(handle);
-    TENZIR_ASSERT(connection != connections.end());
     auto chunk = chunk_ptr{};
+    if (connection == connections.end()) {
+      return chunk;
+    }
     auto should_read = false;
     {
       auto lock = std::unique_lock{connection->second->mutex};
@@ -717,46 +723,46 @@ auto make_connection_manager(
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
   bool is_hidden, const node_actor& node)
   -> connection_manager_actor<Elements>::behavior_type {
-  self->state.self = self;
-  self->state.args = args;
-  self->state.diagnostics = diagnostics;
-  self->state.metrics_receiver = metrics_receiver;
-  self->state.operator_id = operator_id;
-  self->state.is_hidden = is_hidden;
-  self->state.node = node;
-  if (auto ok = self->state.start(); not ok) {
+  self->state().self = self;
+  self->state().args = args;
+  self->state().diagnostics = diagnostics;
+  self->state().metrics_receiver = metrics_receiver;
+  self->state().operator_id = operator_id;
+  self->state().is_hidden = is_hidden;
+  self->state().node = node;
+  if (auto ok = self->state().start(); not ok) {
     self->quit(std::move(ok.error()));
     return connection_manager_actor<
       Elements>::behavior_type::make_empty_behavior();
   }
   self->set_down_handler([self](const caf::down_msg& msg) {
-    self->state.handle_down_msg(msg);
+    self->state().handle_down_msg(msg);
   });
   return {
     [self](atom::read, boost::asio::ip::tcp::socket::native_handle_type handle)
       -> caf::result<chunk_ptr> {
-      return self->state.read_from_connection(handle);
+      return self->state().read_from_connection(handle);
     },
     [self](atom::write, Elements& elements) -> caf::result<void> {
-      return self->state.write_elements(std::move(elements));
+      return self->state().write_elements(std::move(elements));
     },
     [self](atom::read) -> caf::result<Elements> {
-      return self->state.read_elements();
+      return self->state().read_elements();
     },
     [self](uint64_t op_index, uint64_t metric_index,
            type& schema) -> caf::result<void> {
-      auto& id = self->state.metrics_id_map[op_index][metric_index];
+      auto& id = self->state().metrics_id_map[op_index][metric_index];
       if (id == 0) {
-        id = self->state.next_metrics_id++;
+        id = self->state().next_metrics_id++;
       }
-      return self->delegate(self->state.metrics_receiver,
-                            self->state.operator_id, id, std::move(schema));
+      return self->delegate(self->state().metrics_receiver,
+                            self->state().operator_id, id, std::move(schema));
     },
     [self](uint64_t op_index, uint64_t metric_index,
            record& metric) -> caf::result<void> {
-      const auto& id = self->state.metrics_id_map[op_index][metric_index];
-      return self->delegate(self->state.metrics_receiver,
-                            self->state.operator_id, id, std::move(metric));
+      const auto& id = self->state().metrics_id_map[op_index][metric_index];
+      return self->delegate(self->state().metrics_receiver,
+                            self->state().operator_id, id, std::move(metric));
     },
     [](const operator_metric& op_metric) -> caf::result<void> {
       // We have no mechanism for forwarding operator metrics. That's a bit
@@ -768,7 +774,7 @@ auto make_connection_manager(
       TENZIR_ASSERT(diagnostic.severity != severity::error);
       // TODO: The diagnostics and metrics come from the execution nodes
       // directly, so there's no way to enrich them with a native handle here.
-      self->state.diagnostics.emit(std::move(diagnostic));
+      self->state().diagnostics.emit(std::move(diagnostic));
       return {};
     },
   };
@@ -852,29 +858,28 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto url = located<std::string>{};
+    auto endpoint = located<std::string>{};
     auto parallel = std::optional<located<uint64_t>>{};
     auto tls = std::optional<located<bool>>{};
     auto args = load_tcp_args{};
-    auto parser = argument_parser2::operator_("load_tcp");
-    parser.add(url, "<url>");
-    parser.add("connect", args.connect);
-    parser.add("parallel", parallel);
-    parser.add("tls", tls);
-    parser.add("certfile", args.certfile);
-    parser.add("keyfile", args.keyfile);
-    parser.add(args.pipeline, "{ ... }");
-    parser.parse(inv, ctx).ignore();
+    auto parser = argument_parser2::operator_("load_tcp")
+                    .positional("endpoint", endpoint)
+                    .named("parallel", parallel)
+                    .named("tls", tls)
+                    .named("certfile", args.certfile)
+                    .named("keyfile", args.keyfile)
+                    .positional("{ … }", args.pipeline);
+    TRY(parser.parse(inv, ctx));
     auto failed = false;
-    if (url.inner.starts_with("tcp://")) {
-      url.inner = url.inner.substr(6);
-      url.source.begin += 6;
+    if (endpoint.inner.starts_with("tcp://")) {
+      endpoint.inner = endpoint.inner.substr(6);
+      endpoint.source.begin += 6;
     }
-    if (const auto splits = detail::split(url.inner, ":", 1);
+    if (const auto splits = detail::split(endpoint.inner, ":", 1);
         splits.size() != 2) {
-      diagnostic::error("malformed URL")
-        .primary(url.source)
-        .hint("syntax: tcp://<hostname>:<port>")
+      diagnostic::error("malformed endpoint")
+        .primary(endpoint.source)
+        .hint("syntax: [tcp://]<hostname>:<port>")
         .usage(parser.usage())
         .docs(parser.docs())
         .emit(ctx);
@@ -882,7 +887,7 @@ public:
     } else {
       args.endpoint.inner.hostname = std::string{splits[0]};
       args.endpoint.inner.port = std::string{splits[1]};
-      args.endpoint.source = url.source;
+      args.endpoint.source = endpoint.source;
     }
     if (parallel) {
       args.parallel = *parallel;

@@ -131,7 +131,7 @@ public:
       }
       auto mask = eval(condition_, slice, ctrl.diagnostics());
       // TODO: Null array should also work.
-      auto array = caf::get_if<arrow::BooleanArray>(&*mask.array);
+      auto array = try_as<arrow::BooleanArray>(&*mask.array);
       if (not array) {
         diagnostic::warning("condition must be `bool`, not `{}`",
                             mask.type.kind())

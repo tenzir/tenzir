@@ -401,6 +401,8 @@ EOF
   # Concatenate PCAPs and process them. The test ensures that we have the
   # right sequencing of file header and packet header events.
   check tenzir "shell \"cat ${INPUTSDIR}/pcap/vlan-*.pcap\" | read pcap -e | put schema=#schema | write json -c"
+  # Decapsulate an SLL2 frame.
+  check tenzir "from ${INPUTSDIR}/pcap/sll2.pcap | decapsulate | write json -c"
 }
 
 # bats test_tags=pipelines, compression
@@ -507,6 +509,16 @@ EOF
   check tenzir "from ${INPUTSDIR}/syslog/syslog-rfc3164.log read lines | parse line grok --include-unnamed \"(<%{NONNEGINT:priority}>\s*)?%{SYSLOGTIMESTAMP:timestamp} (%{HOSTNAME:hostname}/%{IPV4:hostip}|%{WORD:host}) %{SYSLOGPROG}:%{GREEDYDATA:message}\""
   check tenzir 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "%{TIMESTAMP_ISO8601}"'
   check tenzir 'show version | put line="55.3.244.1 GET /index.html 15824 0.043" | parse line grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"'
+}
+
+# bates test_tags=pipelines
+@test "Read Grok" {
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "%{GREEDYDATA:version}"'
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak:int}-%{DATA:ref}(-%{DATA:extra})?)?"'
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok --indexed-captures "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak}-%{DATA:ref}(-%{DATA:extra})?)?"'
+  echo "https://example.com/test.txt?foo=bar" | check tenzir 'read grok --include-unnamed "%{URI}"'
+  echo "55.3.244.1 GET /index.html 15824 0.043" | check tenzir 'read grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"'
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "%{TIMESTAMP_ISO8601}"'
 }
 
 # bats test_tags=pipelines
@@ -818,4 +830,33 @@ EOF
 @test "assert operator" {
   check tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 0'
   check ! tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 2'
+}
+
+@test "summarize an empty input" {
+  check tenzir --tql2 'from [] | summarize count(), sum(foo)'
+  check tenzir --tql2 'from [] | summarize count(), sum(foo), bar'
+}
+
+@test "map and where an empty list" {
+  check tenzir --tql2 'from {foo: []} | foo = foo.map(x, x + 1)'
+  check tenzir --tql2 'from {foo: []} | foo = foo.where(x, x > 3)'
+}
+
+@test "map and where a list of numbers" {
+  check tenzir --tql2 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.map(x, x + 1)'
+  check tenzir --tql2 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.where(x, x > 3)'
+}
+
+@test "map and where with records" {
+  check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.map(x, x.en)'
+  check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.where(x, x.de == "eins")'
+}
+
+@test "zip" {
+  check tenzir --tql2 'from {foo: [1, 2, 3], bar: [4, 5, 6]} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: [1, 2, 3], bar: [4, 5]} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: [], bar: [4, 5]} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: [], bar: []} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: null, bar: [1]} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: null, bar: null} | baz = zip(foo, bar)'
 }

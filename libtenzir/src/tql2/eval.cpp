@@ -41,7 +41,7 @@ auto resolve(const ast::simple_selector& sel, type ty)
   auto&& path = sel.path();
   result.reserve(path.size());
   while (sel_index < path.size()) {
-    auto rty = caf::get_if<record_type>(&ty);
+    auto rty = try_as<record_type>(ty);
     if (not rty) {
       return resolve_error{path[sel_index],
                            resolve_error::field_of_non_record{ty}};
@@ -68,15 +68,16 @@ auto resolve(const ast::simple_selector& sel, type ty)
 auto eval(const ast::expression& expr, const table_slice& input,
           diagnostic_handler& dh) -> series {
   // TODO: Do not create a new session here.
-  return evaluator{&input, session_provider::make(dh).as_session()}.eval(expr);
+  auto sp = session_provider::make(dh);
+  return evaluator{&input, sp.as_session()}.eval(expr);
 }
 
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   -> failure_or<data> {
   // TODO: Do not create a new session here.
   try {
-    auto result
-      = evaluator{nullptr, session_provider::make(dh).as_session()}.eval(expr);
+    auto sp = session_provider::make(dh);
+    auto result = evaluator{nullptr, sp.as_session()}.eval(expr);
     TENZIR_ASSERT(result.length() == 1);
     return materialize(value_at(result.type, *result.array, 0));
   } catch (failure fail) {

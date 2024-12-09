@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/concepts.hpp"
+#include "tenzir/detail/assert.hpp"
 
 #include <array>
 #include <cstddef>
@@ -16,25 +17,47 @@
 
 namespace tenzir {
 
-template <size_t Size>
-auto as_bytes(const void* data) noexcept {
-  return std::span<const std::byte, Size>{
-    reinterpret_cast<const std::byte*>(data), Size};
+template <size_t Extent>
+constexpr auto as_bytes(std::span<const std::byte, Extent> xs) noexcept {
+  return xs;
 }
 
-template <size_t Size>
-auto as_writeable_bytes(void* data) noexcept {
-  return std::span<std::byte, Size>{reinterpret_cast<std::byte*>(data), Size};
+template <size_t Extent>
+constexpr auto as_writeable_bytes(std::span<std::byte, Extent> xs) noexcept {
+  return xs;
 }
 
-inline auto
-as_bytes(const void* data, size_t size) noexcept -> std::span<const std::byte> {
-  return {reinterpret_cast<const std::byte*>(data), size};
+template <concepts::number Number>
+constexpr auto as_bytes(const Number& x) noexcept
+  -> std::span<const std::byte, sizeof(Number)> {
+  const auto* data = reinterpret_cast<const std::byte*>(&x);
+  return std::span<const std::byte, sizeof(Number)>{data, sizeof(Number)};
 }
 
-inline auto
-as_writeable_bytes(void* data, size_t size) noexcept -> std::span<std::byte> {
-  return {reinterpret_cast<std::byte*>(data), size};
+template <concepts::number Number>
+constexpr auto as_writeable_bytes(Number& x) noexcept
+  -> std::span<std::byte, sizeof(Number)> {
+  auto* data = reinterpret_cast<std::byte*>(&x);
+  return std::span<std::byte, sizeof(Number)>{data, sizeof(Number)};
+}
+
+template <size_t Extent = std::dynamic_extent>
+auto as_bytes(const void* data, size_t size) noexcept
+  -> std::span<const std::byte, Extent> {
+  if constexpr (Extent != std::dynamic_extent) {
+    TENZIR_ASSERT(size >= Extent);
+  }
+  return std::span<const std::byte, Extent>{
+    reinterpret_cast<const std::byte*>(data), size};
+}
+
+template <size_t Extent = std::dynamic_extent>
+auto as_writeable_bytes(void* data, size_t size) noexcept
+  -> std::span<std::byte, Extent> {
+  if constexpr (Extent != std::dynamic_extent) {
+    TENZIR_ASSERT(size >= Extent);
+  }
+  return std::span<std::byte, Extent>{reinterpret_cast<std::byte*>(data), size};
 }
 
 template <std::integral T, size_t N>

@@ -11,13 +11,13 @@
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/detail/byteswap.hpp"
 #include "tenzir/detail/inspection_common.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/error.hpp"
-#include "tenzir/logger.hpp"
+#include "tenzir/variant_traits.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/detail/ieee_754.hpp>
 #include <caf/detail/network_order.hpp>
-#include <caf/detail/select_integer_type.hpp>
 #include <caf/detail/type_traits.hpp>
 #include <caf/expected.hpp>
 
@@ -28,9 +28,57 @@
 #include <iterator>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <type_traits>
-#include <vector>
+
 namespace tenzir::detail {
+
+template <int, bool>
+struct select_integer_type;
+
+template <>
+struct select_integer_type<1, true> {
+  using type = int8_t;
+};
+
+template <>
+struct select_integer_type<1, false> {
+  using type = uint8_t;
+};
+
+template <>
+struct select_integer_type<2, true> {
+  using type = int16_t;
+};
+
+template <>
+struct select_integer_type<2, false> {
+  using type = uint16_t;
+};
+
+template <>
+struct select_integer_type<4, true> {
+  using type = int32_t;
+};
+
+template <>
+struct select_integer_type<4, false> {
+  using type = uint32_t;
+};
+
+template <>
+struct select_integer_type<8, true> {
+  using type = int64_t;
+};
+
+template <>
+struct select_integer_type<8, false> {
+  using type = uint64_t;
+};
+
+template <int Size, bool IsSigned>
+using select_integer_type_t =
+  typename select_integer_type<Size, IsSigned>::type;
 
 /// An inspector for CAF inspect
 class legacy_deserializer {
@@ -146,8 +194,7 @@ public:
   template <class T>
     requires(std::is_integral_v<T>)
   result_type apply(T& x) {
-    using type
-      = caf::detail::select_integer_type_t<sizeof(T), std::is_signed_v<T>>;
+    using type = select_integer_type_t<sizeof(T), std::is_signed_v<T>>;
     return apply(reinterpret_cast<type&>(x));
   }
 
@@ -234,8 +281,11 @@ public:
     return true;
   }
 
+  // TODO: Remove the `caf::variant` overloads when upgrading to
+  // CAF 1.0, until then they're still required for the variants
+  // inside `caf::uri` and `caf::config_option`.
   template <class... Ts>
-  result_type apply(caf::variant<Ts...>& x) {
+  result_type apply(std::variant<Ts...>& x) {
     uint8_t type_tag = 0;
     if (!apply(type_tag))
       return false;
@@ -243,9 +293,7 @@ public:
   }
 
   template <class... Ts>
-  result_type apply(uint8_t type_tag, caf::variant<Ts...>& x) {
-    using namespace caf;
-    using caf::detail::tl_at;
+  result_type apply(uint8_t type_tag, std::variant<Ts...>& x) {
     auto& f = *this;
     switch (type_tag) {
       default:
@@ -253,10 +301,10 @@ public:
 #define CAF_VARIANT_ASSIGN_CASE_IMPL(n)                                        \
   case n: {                                                                    \
     using tmp_t =                                                              \
-      typename caf::detail::tl_at<caf::detail::type_list<Ts...>,               \
-                                  ((n) < sizeof...(Ts) ? (n) : 0)>::type;      \
+      typename detail::tl_at<detail::type_list<Ts...>,                         \
+                             ((n) < sizeof...(Ts) ? (n) : 0)>::type;           \
     x = tmp_t{};                                                               \
-    return f(caf::get<tmp_t>(x));                                              \
+    return f(as<tmp_t>(x));                                                    \
   }
         CAF_VARIANT_ASSIGN_CASE_IMPL(0);
         CAF_VARIANT_ASSIGN_CASE_IMPL(1);
@@ -293,22 +341,62 @@ public:
     return false;
   }
 
-  template <class T>
-  result_type apply(caf::optional<T>& x) {
-    bool is_set = false;
-    if (!apply(is_set)) {
-      x = {};
+  template <class... Ts>
+  result_type apply(tenzir::variant<Ts...>& x) {
+    uint8_t type_tag = 0;
+    if (!apply(type_tag)) {
       return false;
     }
-    if (!is_set) {
-      x = {};
-      return true;
+    return apply(type_tag, x);
+  }
+
+  template <class... Ts>
+  result_type apply(uint8_t type_tag, tenzir::variant<Ts...>& x) {
+    auto& f = *this;
+    switch (type_tag) {
+      default:
+        CAF_RAISE_ERROR("invalid type found");
+#define TENZIR_VARIANT_ASSIGN_CASE_IMPL(n)                                     \
+  case n: {                                                                    \
+    using tmp_t =                                                              \
+      typename detail::tl_at<detail::type_list<Ts...>,                         \
+                             ((n) < sizeof...(Ts) ? (n) : 0)>::type;           \
+    x = tmp_t{};                                                               \
+    return f(as<tmp_t>(x));                                                    \
+  }
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(0);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(1);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(2);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(3);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(4);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(5);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(6);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(7);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(8);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(9);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(10);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(11);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(12);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(13);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(14);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(15);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(16);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(17);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(18);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(19);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(20);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(21);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(22);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(23);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(24);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(25);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(26);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(27);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(28);
+        TENZIR_VARIANT_ASSIGN_CASE_IMPL(29);
+#undef TENZIR_VARIANT_ASSIGN_CASE_IMPL
     }
-    T v;
-    if (!apply(v))
-      return false;
-    x = v;
-    return true;
+    return false;
   }
 
   template <class T>

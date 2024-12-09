@@ -11,11 +11,11 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_path.hpp"
 
 #include <caf/detail/is_one_of.hpp>
-#include <caf/detail/type_list.hpp>
 
 #include <type_traits>
 
@@ -94,8 +94,9 @@ struct null {};
 struct constant {
   // TODO: Consider moving the location into the variant inhabitants.
   // TODO: Consider representing integers differently.
-  using kind = caf::detail::tl_apply_t<
-    caf::detail::tl_filter_not_type_t<data::types, pattern>, variant>;
+  using kind
+    = detail::tl_apply_t<detail::tl_filter_not_type_t<data::types, pattern>,
+                         variant>;
 
   constant() = default;
 
@@ -147,19 +148,19 @@ struct root_field {
 };
 
 using expression_kinds
-  = caf::detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
-                           constant, field_access, index_expr, binary_expr,
-                           unary_expr, function_call, underscore, unpack,
-                           assignment, dollar_var>;
+  = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
+                      constant, field_access, index_expr, binary_expr,
+                      unary_expr, function_call, underscore, unpack, assignment,
+                      dollar_var>;
 
-using expression_kind = caf::detail::tl_apply_t<expression_kinds, variant>;
+using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
 struct expression {
   expression() = default;
 
   template <class T>
     requires(
-      caf::detail::tl_contains<expression_kinds, std::remove_cvref_t<T>>::value)
+      detail::tl_contains<expression_kinds, std::remove_cvref_t<T>>::value)
   explicit(false) expression(T&& x)
     : kind{std::make_unique<expression_kind>(std::forward<T>(x))} {
   }
@@ -251,7 +252,7 @@ private:
 ///
 /// Note that this is not an actual `expression`. Instead, expressions can be
 /// converted to `selector` on-demand. Currently, this is limited to meta
-/// selectors (e.g., `meta.tag`) and simple selectors (see `simple_selector`).
+/// selectors (e.g., `@tag`) and simple selectors (see `simple_selector`).
 struct selector : variant<meta, simple_selector> {
   using variant::variant;
 
@@ -375,29 +376,27 @@ struct entity {
 struct function_call {
   function_call() = default;
 
-  function_call(std::optional<expression> subject, entity fn,
-                std::vector<expression> args, location rpar)
-    : subject{std::move(subject)},
-      fn{std::move(fn)},
-      args(std::move(args)),
-      rpar{rpar} {
+  function_call(entity fn, std::vector<expression> args, location rpar,
+                bool method)
+    : fn{std::move(fn)}, args(std::move(args)), rpar{rpar}, method{method} {
   }
 
-  std::optional<expression> subject;
   entity fn;
   std::vector<expression> args;
   location rpar;
+  bool method{};
 
   friend auto inspect(auto& f, function_call& x) -> bool {
-    return f.object(x).fields(f.field("subject", x.subject),
-                              f.field("fn", x.fn), f.field("args", x.args),
-                              f.field("rpar", x.rpar));
+    return f.object(x).fields(f.field("fn", x.fn), f.field("args", x.args),
+                              f.field("rpar", x.rpar),
+                              f.field("method", x.method));
   }
 
   auto get_location() const -> location {
     auto left = location{};
-    if (subject) {
-      left = subject->get_location();
+    if (method) {
+      TENZIR_ASSERT(not args.empty());
+      left = args[0].get_location();
     } else {
       left = fn.get_location();
     }
@@ -454,15 +453,35 @@ struct index_expr {
   }
 };
 
+struct spread {
+  spread() = default;
+
+  spread(location dots, expression expr) : dots{dots}, expr{std::move(expr)} {
+  }
+
+  location dots;
+  expression expr;
+
+  friend auto inspect(auto& f, spread& x) -> bool {
+    return f.object(x).fields(f.field("dots", x.dots), f.field("expr", x.expr));
+  }
+
+  auto get_location() const -> location {
+    return dots.combine(expr);
+  }
+};
+
 struct list {
+  using item = variant<expression, spread>;
+
   list() = default;
 
-  list(location begin, std::vector<expression> items, location end)
-    : begin{begin}, items(std::move(items)), end{end} {
+  list(location begin, std::vector<item> items, location end)
+    : begin{begin}, items{std::move(items)}, end{end} {
   }
 
   location begin;
-  std::vector<expression> items;
+  std::vector<item> items;
   location end;
 
   friend auto inspect(auto& f, list& x) -> bool {
@@ -476,14 +495,6 @@ struct list {
 };
 
 struct record {
-  struct spread {
-    expression expr;
-
-    friend auto inspect(auto& f, spread& x) -> bool {
-      return f.object(x).fields(f.field("expr", x.expr));
-    }
-  };
-
   struct field {
     field() = default;
 
@@ -753,7 +764,6 @@ protected:
   }
 
   void enter(function_call& x) {
-    go(x.subject);
     go(x.fn);
     go(x.args);
   }
@@ -775,12 +785,16 @@ protected:
     go(x.expr);
   }
 
-  void enter(record::spread& x) {
+  void enter(spread& x) {
     go(x.expr);
   }
 
   void enter(list& x) {
     go(x.items);
+  }
+
+  void enter(list::item& x) {
+    match(x);
   }
 
   void enter(field_access& x) {
@@ -878,6 +892,22 @@ private:
 } // namespace tenzir::ast
 
 namespace tenzir {
+
+template <>
+class variant_traits<ast::expression> {
+public:
+  static constexpr auto count = detail::tl_size<ast::expression_kinds>::value;
+
+  static auto index(const ast::expression& x) -> size_t {
+    TENZIR_ASSERT(x.kind);
+    return x.kind->index();
+  }
+
+  template <size_t I>
+  static auto get(const ast::expression& x) -> decltype(auto) {
+    return *std::get_if<I>(&*x.kind);
+  }
+};
 
 auto is_true_literal(const ast::expression& y) -> bool;
 

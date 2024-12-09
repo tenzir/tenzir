@@ -14,6 +14,7 @@
 #include "tenzir/logger.hpp"
 
 #include <cstdlib>
+#include <string_view>
 
 namespace tenzir::detail {
 

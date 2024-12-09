@@ -18,6 +18,8 @@
 
 #include "tenzir/detail/base64.hpp"
 
+#include <string_view>
+
 namespace tenzir::detail::base64 {
 
 size_t encode(void* dst, const void* src, size_t len) {

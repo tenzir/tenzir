@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 
 # The AWS SDK Git version tag.
-TAG=1.11.261
+TAG=1.11.449
 
 # Where to install the SDK.
 INSTALL_PREFIX="/opt/aws-sdk-cpp"
@@ -35,5 +35,3 @@ cmake -B build \
 cmake --build build --parallel
 cmake --install build --strip
 rm -rf "${SOURCE_TREE}"
-echo "/opt/aws-sdk-cpp/lib" > /etc/ld.so.conf.d/aws-cpp-sdk.conf
-ldconfig

@@ -29,8 +29,9 @@ private:
   }
 
   void add(const data_view& view) override {
-    if (caf::holds_alternative<caf::none_t>(view))
+    if (is<caf::none_t>(view)) {
       return;
+    }
     count_ += 1;
   }
 

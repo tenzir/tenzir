@@ -32,7 +32,11 @@ public:
     // can offer a better mechanism here.
     auto self = caf::scoped_actor{ctrl.self().system()};
     auto components = get_node_components<importer_actor>(self, ctrl.node());
-    TENZIR_ASSERT(components);
+    if (!components) {
+      diagnostic::error(components.error())
+        .note("failed get a handle to the importer actor")
+        .throw_();
+    }
     auto [importer] = std::move(*components);
     auto metric_handler = ctrl.metrics({
       "tenzir.metrics.import",
@@ -52,7 +56,7 @@ public:
       // The current catalog assumes that all events have at least one field.
       // This check guards against that. We should remove it once we get to
       // rewriting our catalog.
-      if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+      if (as<record_type>(slice.schema()).num_fields() == 0) {
         continue;
       }
       if (not slice.schema().attribute("internal").has_value()) {

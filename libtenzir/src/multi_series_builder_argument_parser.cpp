@@ -11,6 +11,8 @@
 
 #include "tenzir/location.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 namespace {
 auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
@@ -72,20 +74,22 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser2& parser, bool add_unflatten_option,
   bool add_merge_option) -> void {
-  parser.add("schema_only", schema_only_);
+  parser.named("schema_only", schema_only_);
   if (add_merge_option) {
-    parser.add("merge", merge_);
+    parser.named("merge", merge_);
   }
-  parser.add("raw", raw_);
+  parser.named("raw", raw_);
   if (add_unflatten_option) {
-    parser.add("unflatten", unnest_);
+    parser.named("unflatten", unnest_);
   }
+  parser.named("_batch_timeout", timeout_);
+  parser.named("_batch_size", batch_size_);
 }
 
 auto multi_series_builder_argument_parser::add_policy_to_parser(
   argument_parser2& parser) -> void {
-  parser.add("schema", schema_);
-  parser.add("selector", selector_);
+  parser.named("schema", schema_);
+  parser.named("selector", selector_);
 }
 
 auto multi_series_builder_argument_parser::add_all_to_parser(
@@ -153,22 +157,13 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
     }
     settings_.unnest_separator = unnest_->inner;
   }
-  if (raw_ and schema_ and merge_) {
-    // In merging mode, we directly write into a series builder
-    // this means that data needs to be parsed to the correct type before
-    // writing to the builder however, when calling
-    // `field_generator::data_unparsed`, we dont know the schema
-    // TODO technically its only an issue with *known* schemas. For unknown
-    // schemas there is no type issue [ ] This could also be resolved by having
-    // the merging mode keep track of the type at non-trivial cost
-    diagnostic::error("`--merge --schema` and `--raw` are incompatible")
-      .primary(*raw_)
-      .primary(*schema_)
-      .primary(*merge_)
-      .emit(dh);
-    return false;
-  }
   settings_.raw = raw_.has_value();
+  if (timeout_.has_value()) {
+    settings_.timeout = *timeout_;
+  }
+  if (batch_size_.has_value()) {
+    settings_.desired_batch_size = *batch_size_;
+  }
   return true;
 }
 

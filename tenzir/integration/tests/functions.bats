@@ -55,6 +55,22 @@ EOF
   '
 }
 
+@test "otherwise" {
+  echo '
+  {"x":1, "y":-1}
+  {"x":2, "y":-2}
+  {}
+  {"x":4, "y":-4}
+  {"x":"5", "y":-5}
+  {"y":-6}
+  ' |
+    check tenzir 'read_json | z = x.otherwise(y)'
+  check tenzir 'from [{},{},{}] | z = x.otherwise(-1)'
+  check tenzir 'from [{x:1},{x:2},{x:3}] | z = x.otherwise(-1)'
+  check tenzir 'from [{},{x:1},{}] | z = x.otherwise(-1)'
+  check tenzir 'from [{x:1},{},{x:2}] | z = x.otherwise(-1)'
+}
+
 @test "select and drop matching" {
   check tenzir '
     from {
@@ -196,4 +212,46 @@ EOF
     }
     y = x.year()
   '
+}
+
+@test "format_time" {
+  skip "This fails in CI because the timezone DB is missing"
+  check tenzir '
+    from {
+      x: 2024-12-31+12:59:42,
+    }
+    x = x.format_time("%Y/%m/%d - %T")
+  '
+}
+
+@test "parse_time" {
+  check tenzir '
+    from {
+      x: "2024-12-31+12:59:42",
+    }
+    x = x.parse_time("%Y-%m-%d+%H:%M:%S")
+  '
+}
+
+@test "parse_time with bad format string" {
+  check tenzir '
+    from {
+      x: "2024-12-31",
+    }
+    x = x.parse_time("%d-%d-%d")
+  '
+}
+
+@test "parse_time with bad input string" {
+  check tenzir '
+    from {
+      x: "hello",
+    }
+    x = x.parse_time("%Y-%m-%d")
+  '
+}
+
+@test "hex" {
+  check tenzir 'from {bytes: "Tenzir"} | encoded = bytes.encode_hex()'
+  check tenzir 'from {bytes: "54656E7a6972"} | decoded = bytes.decode_hex()'
 }

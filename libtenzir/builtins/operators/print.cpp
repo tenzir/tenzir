@@ -23,7 +23,6 @@
 #include <arrow/compute/api.h>
 #include <arrow/extension_type.h>
 #include <arrow/util/utf8.h>
-#include <caf/sum_type.hpp>
 
 #include <cstddef>
 #include <iterator>
@@ -104,14 +103,14 @@ public:
                            std::shared_ptr<arrow::Array> array)
         -> std::vector<
           std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-        if (not caf::holds_alternative<record_type>(field.type)) {
+        if (not is<record_type>(field.type)) {
           diagnostic::error("field {} is not of type record", field.name)
             .primary(input_.source)
             .throw_();
         }
         field.type = type{
           fmt::format("{}.{}", slice.schema().name(),
-                      caf::get<record_type>(slice.schema()).key(*target_index)),
+                      as<record_type>(slice.schema()).key(*target_index)),
           field.type,
         };
         auto rb = arrow::RecordBatch::Make(

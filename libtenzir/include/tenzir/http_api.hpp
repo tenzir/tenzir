@@ -15,9 +15,9 @@
 
 #include <caf/actor_addr.hpp>
 #include <caf/expected.hpp>
-#include <caf/optional.hpp>
 
 #include <string>
+#include <string_view>
 
 namespace tenzir {
 
@@ -98,7 +98,7 @@ struct rest_endpoint {
     auto params = e.params ? type{*e.params} : type{};
     auto cb = [&] {
       e.params
-        = params ? caf::get<record_type>(params) : std::optional<record_type>{};
+        = params ? as<record_type>(params) : std::optional<record_type>{};
       return true;
     };
     return f.object(e)

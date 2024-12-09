@@ -159,8 +159,8 @@ public:
     bool real_time = false;
     bool cumulative = false;
     argument_parser2::operator_("measure")
-      .add("real_time", real_time)
-      .add("cumulative", cumulative)
+      .named("real_time", real_time)
+      .named("cumulative", cumulative)
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<measure_operator>(batch_size_, real_time,

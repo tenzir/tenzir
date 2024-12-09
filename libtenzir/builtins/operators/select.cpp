@@ -19,6 +19,7 @@
 #include <caf/expected.hpp>
 
 #include <algorithm>
+#include <string_view>
 #include <utility>
 
 namespace tenzir::plugins::select {

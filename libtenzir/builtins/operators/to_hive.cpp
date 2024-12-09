@@ -6,12 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/url.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
+#include <boost/url/parse.hpp>
+#include <boost/url/url.hpp>
+
 #include <ranges>
+#include <string_view>
 
 // TODO: This implementation is a rough sketch and needs some cleanup eventually.
 
@@ -136,7 +141,6 @@ private:
   generator<Output> gen_;
 };
 
-// TODO: Not funny enough.
 struct group_t {
   group_t(pipeline write, pipeline save, operator_control_plane& ctrl)
     : write{std::move(write), ctrl}, save{std::move(save), ctrl} {
@@ -183,6 +187,15 @@ auto remove_columns(const table_slice& slice,
   return transform_columns(slice, transformations);
 }
 
+auto extend_url_path(boost::urls::url url_view,
+                     std::string_view path) -> std::string {
+  auto extended_path
+    = std::filesystem::path{url_view.path()}.concat(path).lexically_normal();
+  auto url = boost::urls::url{url_view};
+  url.set_path(extended_path.string());
+  return fmt::to_string(url);
+}
+
 class to_hive final : public crtp_operator<to_hive> {
 public:
   to_hive() = default;
@@ -198,6 +211,8 @@ public:
     // TODO: Using `data` is not optimal, but okay for now.
     auto groups = std::unordered_map<data, group_t>{};
     auto next_id = size_t{0};
+    auto base_url = boost::urls::parse_uri_reference(args_.uri);
+    TENZIR_ASSERT(base_url);
     auto process = [&](table_slice slice) {
       auto by = std::vector<series>{};
       for (auto& sel : args_.by) {
@@ -214,20 +229,19 @@ public:
       auto find_or_create_group
         = [&](int64_t row) -> decltype(groups)::iterator {
         auto key = list{};
-        for (auto& wtf : by) {
-          TENZIR_ASSERT(row < wtf.length());
-          key.push_back(materialize(value_at(wtf.type, *wtf.array, row)));
+        for (auto& partition_point : by) {
+          TENZIR_ASSERT(row < partition_point.length());
+          key.push_back(materialize(
+            value_at(partition_point.type, *partition_point.array, row)));
         }
         auto key_data = data{std::move(key)};
         auto it = groups.find(key_data);
         if (it == groups.end()) {
           TENZIR_TRACE("creating group for: {}", key_data);
-          // TODO: Bad flow.
-          auto url = args_.uri;
+          auto relative_path = std::string{};
           for (auto [sel, data] :
-               detail::zip_equal(args_.by, caf::get<list>(key_data))) {
+               detail::zip_equal(args_.by, as<list>(key_data))) {
             auto f = detail::overload{
-              // TODO: What is this?
               [](int64_t x) {
                 return fmt::to_string(x);
               },
@@ -239,15 +253,17 @@ public:
                 return fmt::to_string(data);
               },
             };
-            url += fmt::format("/{}={}", selector_to_name(sel),
-                               caf::visit(f, data));
+            relative_path += fmt::format("/{}={}", selector_to_name(sel),
+                                         match(data, f));
           }
-          url += fmt::format("/{}.{}", next_id, args_.extension);
+          relative_path += fmt::format("/{}.{}", next_id, args_.extension);
           next_id += 1;
-          TENZIR_TRACE("creating saver with path {}", url);
+          auto partitioned_url = extend_url_path(*base_url, relative_path);
+          TENZIR_TRACE("creating saver with path {}", partitioned_url);
           // TODO: Even though we check this before with a test URL, this can
           // still fail afterwards in theory.
-          auto saver = pipeline::internal_parse(fmt::format("save {:?}", url));
+          auto saver = pipeline::internal_parse(
+            fmt::format("save {:?}", partitioned_url));
           TENZIR_ASSERT(saver);
           it = groups.emplace_hint(it, std::move(key_data),
                                    group_t{args_.writer, std::move(*saver),
@@ -326,6 +342,10 @@ public:
     return "to_hive";
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     TENZIR_UNUSED(filter, order);
@@ -351,11 +371,11 @@ public:
     auto max_size = std::optional<located<uint64_t>>{};
     auto format = located<std::string>{};
     TRY(argument_parser2::operator_(name())
-          .add(uri, "<uri>")
-          .add("partition_by", by_expr)
-          .add("format", format)
-          .add("timeout", timeout)
-          .add("max_size", max_size)
+          .positional("uri", uri)
+          .named("partition_by", by_expr, "list<field>")
+          .named("format", format)
+          .named("timeout", timeout)
+          .named("max_size", max_size)
           .parse(inv, ctx));
     auto by_list = std::get_if<ast::list>(&*by_expr.kind);
     if (not by_list) {
@@ -367,7 +387,14 @@ public:
     auto by = std::vector<ast::simple_selector>{};
     by.reserve(by_list->items.size());
     for (auto& item : by_list->items) {
-      auto sel = ast::simple_selector::try_from(item);
+      auto expr = std::get_if<ast::expression>(&item);
+      if (not expr) {
+        diagnostic::error("expected a selector")
+          .primary(into_location(item))
+          .emit(ctx);
+        return failure::promise();
+      }
+      auto sel = ast::simple_selector::try_from(*expr);
       if (not sel) {
         diagnostic::error("expected a selector").primary(item).emit(ctx);
         return failure::promise();
@@ -388,16 +415,20 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    auto actual_uri = uri.inner;
-    if (actual_uri.ends_with("/")) {
-      actual_uri.erase(actual_uri.size() - 1);
+    auto url_view = boost::urls::parse_uri_reference(uri.inner);
+    if (not url_view) {
+      diagnostic::error("invalid URL `{}`", uri.inner).primary(uri).emit(ctx);
+      return failure::promise();
     }
-    // TODO: This parsing check does not really suffice.
-    auto test_uri = fmt::format("{}/0.{}", actual_uri, format.inner);
+    auto test_uri
+      = extend_url_path(*url_view, fmt::format("/0.{}", format.inner));
     auto saver = pipeline::internal_parse(fmt::format("save {:?}", test_uri));
     if (not saver) {
-      // TODO: Not necessarily the cause, right?
-      diagnostic::error("invalid URL `{}`", actual_uri).primary(uri).emit(ctx);
+      // There might be some exotic URL format's that are recognized by Boost
+      // but not by our internal URL parser.
+      diagnostic::error("unsupported URL format `{}`", test_uri)
+        .primary(uri)
+        .emit(ctx);
       return failure::promise();
     }
     if (format.inner == "parquet" && max_size) {
@@ -410,7 +441,7 @@ public:
     }
     // TODO: Maybe add compression for non-parquet data.
     return std::make_unique<to_hive>(operator_args{
-      .uri = std::move(actual_uri),
+      .uri = fmt::to_string(*url_view),
       .by = std::move(by),
       // TODO: Not always right.
       .extension = std::move(format.inner),

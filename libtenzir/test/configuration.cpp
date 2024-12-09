@@ -17,6 +17,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/test/test.hpp"
 
+#include <string_view>
 #include <vector>
 
 using namespace tenzir;
@@ -31,8 +32,9 @@ struct fixture {
     std::vector<char*> cmd_line; // argv
     static std::string argv0 = "tenzir-ctl";
     cmd_line.emplace_back(argv0.data());
-    for (const auto& arg : args)
-      cmd_line.emplace_back(const_cast<char*>(arg.data()));
+    for (auto& arg : args) {
+      cmd_line.emplace_back(arg.data());
+    }
     auto argc = static_cast<int>(cmd_line.size());
     auto argv = cmd_line.data();
     REQUIRE_EQUAL(cfg.parse(argc, argv), caf::none);
@@ -97,8 +99,7 @@ struct fixture {
 FIXTURE_SCOPE(configuration_tests, fixture)
 
 TEST(environment key mangling and value parsing) {
-  env("TENZIR_ENDPOINT", "");      // empty values are not considered.
-  env("TENZIR_BARE_MODE", "true"); // bool parsed manually
+  env("TENZIR_ENDPOINT", ""); // empty values are not considered.
   env("TENZIR_NODE", "true"); // bool parsed late (via automatic conversion)
   env("TENZIR_IMPORT__BATCH_SIZE", "42"); // numbers should not be strings
   env("TENZIR_PLUGINS", "foo,bar");       // list parsed manually
@@ -114,7 +115,6 @@ TEST(environment key mangling and value parsing) {
 }
 
 TEST(environment only) {
-  env("TENZIR_BARE_MODE", "true");
   env("TENZIR_ENDPOINT", "1.2.3.4");
   parse();
   CHECK(get<bool>("tenzir.bare-mode"));
@@ -122,7 +122,6 @@ TEST(environment only) {
 }
 
 TEST(command line overrides environment) {
-  env("TENZIR_BARE_MODE", "true");
   env("TENZIR_ENDPOINT", "1.2.3.4");
   parse("--endpoint=5.6.7.8");
   CHECK(get<bool>("tenzir.bare-mode"));

@@ -14,6 +14,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/die.hpp"
 #include "tenzir/error.hpp"
@@ -26,10 +27,10 @@
 #include <arrow/array.h>
 #include <arrow/type_traits.h>
 #include <arrow/util/key_value_metadata.h>
-#include <caf/sum_type.hpp>
 #include <fmt/format.h>
 
 #include <simdjson.h>
+#include <string_view>
 
 // -- utility functions -------------------------------------------------------
 
@@ -539,7 +540,8 @@ std::optional<type> type::infer(const data& value) noexcept {
         return std::nullopt;
     return first_inferred;
   };
-  auto f = detail::overload{
+  return match(
+    value,
     [](caf::none_t) noexcept -> std::optional<type> {
       return type{};
     },
@@ -581,33 +583,36 @@ std::optional<type> type::infer(const data& value) noexcept {
       return std::nullopt;
     },
     [&](const list& list) noexcept -> std::optional<type> {
-      if (auto elem_type = infer_list_element_type(list); !elem_type)
+      if (auto elem_type = infer_list_element_type(list); !elem_type) {
         return std::nullopt;
-      else
+      } else {
         return type{list_type{*elem_type}};
+      }
     },
     [&](const map& map) noexcept -> std::optional<type> {
       auto key_type = infer_list_element_type(map | std::views::keys);
       auto value_type = infer_list_element_type(map | std::views::values);
-      if (!key_type || !value_type)
+      if (!key_type || !value_type) {
         return std::nullopt;
+      }
       return type{map_type{*key_type, *value_type}};
     },
     [](const record& record) noexcept -> std::optional<type> {
       // Record types cannot be inferred from empty records.
-      if (record.empty())
+      if (record.empty()) {
         return type{record_type{}};
+      }
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(record.size());
-      for (const auto& field : record)
-        if (auto inferred = infer(field.second); !inferred)
+      for (const auto& field : record) {
+        if (auto inferred = infer(field.second); !inferred) {
           return std::nullopt;
-        else
+        } else {
           fields.push_back({field.first, *inferred});
+        }
+      }
       return type{record_type{fields}};
-    },
-  };
-  return caf::visit(f, value);
+    });
 }
 
 type type::from_legacy_type(const legacy_type& other) noexcept {
@@ -619,7 +624,8 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
     else
       attributes.push_back({attribute.key});
   }
-  auto f = detail::overload{
+  return match(
+    other,
     [&](const legacy_none_type&) noexcept {
       return type{other.name(), null_type{}, std::move(attributes)};
     },
@@ -659,8 +665,9 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
     [&](const legacy_enumeration_type& enumeration) noexcept {
       auto fields = std::vector<struct enumeration_type::field>{};
       fields.reserve(enumeration.fields.size());
-      for (const auto& field : enumeration.fields)
+      for (const auto& field : enumeration.fields) {
         fields.push_back({field});
+      }
       return type{other.name(), enumeration_type{fields},
                   std::move(attributes)};
     },
@@ -681,16 +688,16 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
     [&](const legacy_record_type& record) noexcept {
       auto fields = std::vector<struct record_type::field_view>{};
       fields.reserve(record.fields.size());
-      for (const auto& field : record.fields)
+      for (const auto& field : record.fields) {
         fields.push_back({field.name, from_legacy_type(field.type)});
+      }
       return type{other.name(), record_type{fields}, std::move(attributes)};
-    },
-  };
-  return caf::visit(f, other);
+    });
 }
 
 legacy_type type::to_legacy_type() const noexcept {
-  auto f = detail::overload{
+  auto result = match(
+    *this,
     [&](const null_type&) noexcept -> legacy_type {
       return legacy_none_type{};
     },
@@ -744,15 +751,14 @@ legacy_type type::to_legacy_type() const noexcept {
     },
     [&](const record_type& record) noexcept -> legacy_type {
       auto result = legacy_record_type{};
-      for (const auto& field : record.fields())
+      for (const auto& field : record.fields()) {
         result.fields.push_back({
           std::string{field.name},
           field.type.to_legacy_type(),
         });
+      }
       return result;
-    },
-  };
-  auto result = caf::visit(f, *this);
+    });
   if (!name().empty())
     result = legacy_alias_type{std::move(result)}.name(std::string{name()});
   for (const auto& attribute : attributes()) {
@@ -823,11 +829,9 @@ uint8_t type::type_index() const noexcept {
 }
 
 auto type::kind() const noexcept -> type_kind {
-  return caf::visit(
-    []<class T>(const T&) -> type_kind {
-      return tag_v<T>;
-    },
-    *this);
+  return match(*this, []<class T>(const T&) -> type_kind {
+    return tag_v<T>;
+  });
 }
 
 std::span<const std::byte> as_bytes(const type& x) noexcept {
@@ -835,10 +839,9 @@ std::span<const std::byte> as_bytes(const type& x) noexcept {
 }
 
 data type::construct() const noexcept {
-  auto f = []<concrete_type T>(const T& x) noexcept -> data {
+  return match(*this, []<concrete_type T>(const T& x) noexcept -> data {
     return x.construct();
-  };
-  return caf::visit(f, *this);
+  });
 }
 
 auto type::to_definition(std::optional<std::string> field_name,
@@ -851,7 +854,8 @@ auto type::to_definition(std::optional<std::string> field_name,
   for (const auto& index : parent_path) {
     path.push_back(data{static_cast<int64_t>(index)});
   }
-  auto make_type_definition = detail::overload{
+  return match(
+    *this,
     [&](const auto&) noexcept -> record {
       auto result = record{};
       result.emplace("name", field_name.value_or(std::string{name()}));
@@ -867,16 +871,15 @@ auto type::to_definition(std::optional<std::string> field_name,
       // Recursively create the definition for the nested type, but add a -1 to
       // it for the values. We override the type to include the list, but leave
       // the kind as the nested value.
-      if (caf::holds_alternative<record_type>(self.value_type())) {
+      if (is<record_type>(self.value_type())) {
         parent_path.push_back(-1);
       }
       auto result = self.value_type().to_definition(
         field_name.value_or(std::string{name()}), parent_path);
-      result["kind"]
-        = fmt::format("list<{}>", caf::get<std::string>(result["kind"]));
+      result["kind"] = fmt::format("list<{}>", as<std::string>(result["kind"]));
       result["type"]
         = name().empty()
-            ? fmt::format("list<{}>", caf::get<std::string>(result["type"]))
+            ? fmt::format("list<{}>", as<std::string>(result["type"]))
             : std::string{name()};
       return result;
     },
@@ -896,13 +899,12 @@ auto type::to_definition(std::optional<std::string> field_name,
       result.emplace("path", std::move(path));
       result.emplace("fields", std::move(fields));
       return result;
-    },
-  };
-  return caf::visit(make_type_definition, *this);
+    });
 }
 
 type type::from_arrow(const arrow::DataType& other) noexcept {
-  auto f = detail::overload{
+  return match(
+    other,
     []<class T>(const T&) noexcept -> type {
       using tenzir_type = type_from_arrow_t<T>;
       static_assert(basic_type<tenzir_type>, "unhandled complex type");
@@ -939,9 +941,7 @@ type type::from_arrow(const arrow::DataType& other) noexcept {
         fields.emplace_back(field->name(), from_arrow(*field));
       }
       return type{record_type{fields}};
-    },
-  };
-  return caf::visit(f, other);
+    });
 }
 
 type type::from_arrow(const arrow::Field& field) noexcept {
@@ -966,11 +966,11 @@ type type::from_arrow(const arrow::Schema& schema) noexcept {
 }
 
 std::shared_ptr<arrow::DataType> type::to_arrow_type() const noexcept {
-  auto f = []<concrete_type T>(
-             const T& x) noexcept -> std::shared_ptr<arrow::DataType> {
-    return x.to_arrow_type();
-  };
-  return caf::visit(f, *this);
+  return match(*this,
+               []<concrete_type T>(
+                 const T& x) noexcept -> std::shared_ptr<arrow::DataType> {
+                 return x.to_arrow_type();
+               });
 }
 
 std::shared_ptr<arrow::Field>
@@ -981,22 +981,22 @@ type::to_arrow_field(std::string_view name, bool nullable) const noexcept {
 
 std::shared_ptr<arrow::Schema> type::to_arrow_schema() const noexcept {
   TENZIR_ASSERT(!name().empty());
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(*this));
-  return arrow::schema(caf::get<record_type>(*this).to_arrow_type()->fields(),
+  TENZIR_ASSERT(is<record_type>(*this));
+  return arrow::schema(as<record_type>(*this).to_arrow_type()->fields(),
                        make_arrow_metadata(*this));
 }
 
 std::shared_ptr<arrow::ArrayBuilder>
 type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
-  auto f = [&]<concrete_type T>(
-             const T& x) noexcept -> std::shared_ptr<arrow::ArrayBuilder> {
-    return x.make_arrow_builder(pool);
-  };
-  return caf::visit(f, *this);
+  return match(*this,
+               [&]<concrete_type T>(
+                 const T& x) noexcept -> std::shared_ptr<arrow::ArrayBuilder> {
+                 return x.make_arrow_builder(pool);
+               });
 }
 
 generator<offset> type::resolve(std::string_view key) const noexcept {
-  const auto* rt = caf::get_if<record_type>(this);
+  const auto* rt = try_as<record_type>(this);
   if (not rt) {
     return {};
   }
@@ -1008,7 +1008,7 @@ generator<offset> type::resolve(std::string_view key) const noexcept {
 
 generator<offset>
 type::resolve_key_or_concept(std::string_view key) const noexcept {
-  const auto* rt = caf::get_if<record_type>(this);
+  const auto* rt = try_as<record_type>(this);
   if (not rt) {
     return {};
   }
@@ -1017,7 +1017,7 @@ type::resolve_key_or_concept(std::string_view key) const noexcept {
 
 std::optional<offset>
 type::resolve_key_or_concept_once(std::string_view key) const noexcept {
-  const auto* rt = caf::get_if<record_type>(this);
+  const auto* rt = try_as<record_type>(this);
   if (not rt) {
     return {};
   }
@@ -1078,7 +1078,8 @@ void type::assign_metadata(const type& other) noexcept {
 }
 
 auto type::prune() const noexcept -> type {
-  auto f = detail::overload{
+  return match(
+    *this,
     [](const basic_type auto& bt) -> type {
       return type{bt};
     },
@@ -1098,9 +1099,7 @@ auto type::prune() const noexcept -> type {
         fields.emplace_back(field.name, field.type.prune());
       }
       return type{record_type{fields}};
-    },
-  };
-  return caf::visit(f, *this);
+    });
 }
 
 std::string_view type::name() const& noexcept {
@@ -1365,7 +1364,7 @@ bool is_container(const type& type) noexcept {
 }
 
 type flatten(const type& t) noexcept {
-  if (const auto* rt = caf::get_if<record_type>(&t)) {
+  if (const auto* rt = try_as<record_type>(t)) {
     auto result = type{flatten(*rt)};
     result.assign_metadata(t);
     return result;
@@ -1409,7 +1408,7 @@ bool congruent(const type& x, const type& y) noexcept {
              || std::is_same_v<U, null_type>;
     },
   }; // namespace tenzir
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 bool congruent(const type& x, const data& y) noexcept {
@@ -1478,7 +1477,7 @@ bool congruent(const type& x, const data& y) noexcept {
       return true;
     },
   };
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 bool congruent(const data& x, const type& y) noexcept {
@@ -1493,23 +1492,17 @@ bool compatible(const type& lhs, relational_operator op,
 bool compatible(const type& lhs, relational_operator op,
                 const data& rhs) noexcept {
   auto string_and_pattern = [](auto& x, auto& y) {
-    return caf::holds_alternative<string_type>(x)
-           && caf::holds_alternative<pattern>(y);
+    return is<string_type>(x) && is<pattern>(y);
   };
   auto numeric = [](auto& x, auto& y) {
-    return (caf::holds_alternative<int64_type>(x)
-            or caf::holds_alternative<uint64_type>(x)
-            or caf::holds_alternative<double_type>(x))
-           and (caf::holds_alternative<int64_t>(y)
-                or caf::holds_alternative<uint64_t>(y)
-                or caf::holds_alternative<double>(y));
+    return (is<int64_type>(x) or is<uint64_type>(x) or is<double_type>(x))
+           and (is<int64_t>(y) or is<uint64_t>(y) or is<double>(y));
   };
   switch (op) {
     case relational_operator::equal:
     case relational_operator::not_equal:
-      return !lhs || caf::holds_alternative<caf::none_t>(rhs)
-             || numeric(lhs, rhs) || string_and_pattern(lhs, rhs)
-             || congruent(lhs, rhs);
+      return !lhs || is<caf::none_t>(rhs) || numeric(lhs, rhs)
+             || string_and_pattern(lhs, rhs) || congruent(lhs, rhs);
     case relational_operator::less:
     case relational_operator::less_equal:
     case relational_operator::greater:
@@ -1517,21 +1510,19 @@ bool compatible(const type& lhs, relational_operator op,
       return congruent(lhs, rhs) or numeric(lhs, rhs);
     case relational_operator::in:
     case relational_operator::not_in:
-      if (caf::holds_alternative<string_type>(lhs))
-        return caf::holds_alternative<std::string>(rhs) || is_container(rhs);
-      else if (caf::holds_alternative<ip_type>(lhs)
-               || caf::holds_alternative<subnet_type>(lhs))
-        return caf::holds_alternative<subnet>(rhs) || is_container(rhs);
-      else
+      if (is<string_type>(lhs)) {
+        return is<std::string>(rhs) || is_container(rhs);
+      } else if (is<ip_type>(lhs) || is<subnet_type>(lhs)) {
+        return is<subnet>(rhs) || is_container(rhs);
+      } else
         return is_container(rhs);
     case relational_operator::ni:
     case relational_operator::not_ni:
-      if (caf::holds_alternative<std::string>(rhs))
-        return caf::holds_alternative<string_type>(lhs) || is_container(lhs);
-      else if (caf::holds_alternative<ip>(rhs)
-               || caf::holds_alternative<subnet>(rhs))
-        return caf::holds_alternative<subnet_type>(lhs) || is_container(lhs);
-      else
+      if (is<std::string>(rhs)) {
+        return is<string_type>(lhs) || is_container(lhs);
+      } else if (is<ip>(rhs) || is<subnet>(rhs)) {
+        return is<subnet_type>(lhs) || is_container(lhs);
+      } else
         return is_container(lhs);
   }
   __builtin_unreachable();
@@ -1543,8 +1534,8 @@ bool compatible(const data& lhs, relational_operator op,
 }
 
 bool is_subset(const type& x, const type& y) noexcept {
-  const auto* sub = caf::get_if<record_type>(&x);
-  const auto* super = caf::get_if<record_type>(&y);
+  const auto* sub = try_as<record_type>(x);
+  const auto* super = try_as<record_type>(y);
   // If either of the types is not a record type, check if they are
   // congruent instead.
   if (!sub || !super)
@@ -1638,7 +1629,7 @@ bool type_check(const type& x, const data& y) noexcept {
       return false;
     },
   };
-  return caf::visit(f, x, y);
+  return match(std::tie(x, y), f);
 }
 
 caf::error
@@ -2029,7 +2020,7 @@ ip_type::builder_type::FinishInternal(std::shared_ptr<arrow::ArrayData>* out) {
   if (auto status = arrow::FixedSizeBinaryBuilder::FinishInternal(out);
       !status.ok())
     return status;
-  auto result = caf::get<arrow_type>(*type()).MakeArray(*out);
+  auto result = as<arrow_type>(*type()).MakeArray(*out);
   *out = result->data();
   return arrow::Status::OK();
 }
@@ -2367,7 +2358,7 @@ arrow::Status enumeration_type::builder_type::Append(enumeration index) {
 enumeration_type::arrow_type::arrow_type(const enumeration_type& type) noexcept
   : arrow::ExtensionType(
     arrow::dictionary(arrow::uint8(), string_type::to_arrow_type())),
-    tenzir_type_{caf::get<enumeration_type>(tenzir::type{chunk::copy(type)})} {
+    tenzir_type_{as<enumeration_type>(tenzir::type{chunk::copy(type)})} {
   // nop
   static_assert(std::is_same_v<enumeration, arrow::UInt8Type::c_type>,
                 "mismatch between dictionary index and enumeration type");
@@ -3394,10 +3385,11 @@ std::optional<record_type> record_type::transform(
       } else if (is_prefix_match) {
         auto nested_layer = unpacked_layer{};
         nested_layer.reserve(
-          caf::get<record_type>(layer[index.back()].type).num_fields());
+          as<record_type>(layer[index.back()].type).num_fields());
         for (auto&& [name, type] :
-             caf::get<record_type>(layer[index.back()].type).fields())
+             as<record_type>(layer[index.back()].type).fields()) {
           nested_layer.push_back({std::string{name}, type});
+        }
         auto nested_index = index;
         nested_index.push_back(0);
         nested_layer = impl(impl, std::move(nested_layer),
@@ -3509,8 +3501,7 @@ merge(const record_type& lhs, const record_type& rhs,
         ([&, rfield = std::move(rfield)](
            const record_type::field_view& lfield) mutable noexcept
          -> std::vector<struct record_type::field> {
-          if (auto result = caf::visit(do_merge(lfield, rfield), lfield.type,
-                                       rfield.type)) {
+          if (auto result = match(std::tie(lfield.type, rfield.type), do_merge(lfield, rfield))) {
             return {{
               std::string{rfield.name},
               *result,
@@ -3597,109 +3588,65 @@ auto unify(const type& a, const type& b) -> std::optional<type> {
       return std::nullopt;
     },
   };
-  return caf::visit(f, a, b);
+  return match(std::tie(a, b), f);
+}
+
+auto variant_traits<type>::index(const type& x) -> size_t {
+  static constexpr auto table = std::invoke([] {
+    return std::invoke(
+      []<size_t... Is>(std::index_sequence<Is...>) {
+        constexpr auto max_index
+          = std::max({detail::tl_at_t<concrete_types, Is>::type_index...});
+        constexpr auto table_size = max_index + 1;
+        auto table = std::array<uint8_t, table_size>{};
+        std::ranges::fill(table, -1);
+        ((table[detail::tl_at_t<concrete_types, Is>::type_index] = Is), ...);
+        // TODO: Why doesn't this make it throw below?
+        static_assert(table_size == detail::tl_size<concrete_types>::value + 2);
+        for (auto value : table) {
+          if (value == -1) {
+            throw std::runtime_error("element not set");
+          }
+        }
+        return table;
+      },
+      std::make_index_sequence<count>());
+  });
+  auto idx = x.type_index();
+  TENZIR_ASSERT(idx < table.size());
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+  return table[idx];
+}
+
+auto variant_traits<arrow::DataType>::index(const arrow::DataType& x)
+  -> size_t {
+  auto type_id = x.id();
+  auto result = size_t{};
+  // This could also be a lookup table, but the performance of what's below is
+  // probably not worse (maybe even better).
+  auto found = std::invoke(
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+      return (
+        std::invoke([&] {
+          using Type = detail::tl_at_t<concrete_types, Is>;
+          // TODO: Extension!
+          if (Type::arrow_type::type_id != type_id) {
+            return false;
+          }
+          if constexpr (extension_type<Type>) {
+            if (static_cast<const arrow::ExtensionType&>(x).extension_name()
+                != Type::arrow_type::name) {
+              return false;
+            }
+          }
+          result = Is;
+          return true;
+        })
+        || ...);
+    },
+    std::make_index_sequence<detail::tl_size<concrete_types>::value>());
+  TENZIR_ASSERT(found);
+  return result;
 }
 
 } // namespace tenzir
-
-// -- sum_type_access ---------------------------------------------------------
-
-namespace caf {
-
-/// Sanity-check whether all the type lists are set up correctly.
-static_assert(
-  detail::tl_is_distinct<sum_type_access<tenzir::type>::types>::value);
-static_assert(
-  detail::tl_is_distinct<sum_type_access<arrow::DataType>::types>::value);
-static_assert(
-  detail::tl_is_distinct<sum_type_access<arrow::Array>::types>::value);
-static_assert(
-  detail::tl_is_distinct<sum_type_access<arrow::Scalar>::types>::value);
-static_assert(
-  detail::tl_is_distinct<sum_type_access<arrow::ArrayBuilder>::types>::value);
-
-uint8_t
-sum_type_access<tenzir::type>::index_from_type(const tenzir::type& x) noexcept {
-  static const auto table =
-    []<tenzir::concrete_type... Ts, uint8_t... Indices>(
-      caf::detail::type_list<Ts...>,
-      std::integer_sequence<uint8_t, Indices...>) noexcept {
-      std::array<uint8_t, std::numeric_limits<uint8_t>::max()> tbl{};
-      tbl.fill(std::numeric_limits<uint8_t>::max());
-      (static_cast<void>(tbl[Ts::type_index] = Indices), ...);
-      return tbl;
-    }(types{},
-      std::make_integer_sequence<uint8_t, caf::detail::tl_size<types>::value>());
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-  auto result = table[x.type_index()];
-  TENZIR_ASSERT(result != std::numeric_limits<uint8_t>::max());
-  return result;
-}
-
-int sum_type_access<arrow::DataType>::index_from_type(
-  const arrow::DataType& x) noexcept {
-  using extension_types = detail::tl_filter_t<types, arrow::is_extension_type>;
-  static constexpr int extension_id = -1;
-  static constexpr int unknown_id = -2;
-  // The first-stage O(1) lookup table from arrow::DataType id to the sum type
-  // variant index defined by the type list. Returns unknown_id if the DataType
-  // is not in the type list, and extension_id if the type is an extension type.
-  static const auto table =
-    []<class... Ts, int... Indices>(
-      caf::detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      std::array<int, arrow::Type::type::MAX_ID> tbl{};
-      tbl.fill(unknown_id);
-      (static_cast<void>(tbl[Ts::type_id] = arrow::is_extension_type<Ts>::value
-                                              ? extension_id
-                                              : Indices),
-       ...);
-      return tbl;
-    }(sum_type_access<arrow::DataType>::types{},
-      std::make_integer_sequence<int, caf::detail::tl_size<types>::value>());
-  // The second-stage O(n) lookup table for extension types that identifies the
-  // types by their unique identifier string.
-  static const auto extension_table =
-    []<class... Ts, int... Indices>(caf::detail::type_list<Ts...>,
-                                    std::integer_sequence<int, Indices...>) {
-      std::array<std::pair<std::string_view, int>,
-                 detail::tl_size<extension_types>::value>
-        tbl{};
-      (static_cast<void>(
-         tbl[Indices]
-         = {Ts::name,
-            detail::tl_index_of<sum_type_access<arrow::DataType>::types,
-                                Ts>::value}),
-       ...);
-      return tbl;
-    }(extension_types{},
-      std::make_integer_sequence<
-        int, caf::detail::tl_size<extension_types>::value>());
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-  auto result = table[x.id()];
-  TENZIR_ASSERT(result != unknown_id,
-                fmt::format(TENZIR_FMT_RUNTIME("unexpected Arrow type id '{}' "
-                                               "for type '{}' is not in "
-                                               "caf::sum_type_access<arrow::"
-                                               "DataType>::types"),
-                            static_cast<int>(x.id()), x.ToString())
-                  .c_str());
-  if (result == extension_id) {
-    for (const auto& [id, index] : extension_table) {
-      if (id == static_cast<const arrow::ExtensionType&>(x).extension_name())
-        return index;
-    }
-    tenzir::die("unexpected Arrow extension type");
-  }
-  return result;
-}
-
-/// Explicit template instantiations for all defined sum type access
-/// specializations.
-template struct sum_type_access<tenzir::type>;
-template struct sum_type_access<arrow::DataType>;
-template struct sum_type_access<arrow::Array>;
-template struct sum_type_access<arrow::Scalar>;
-template struct sum_type_access<arrow::ArrayBuilder>;
-
-} // namespace caf

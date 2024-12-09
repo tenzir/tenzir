@@ -21,6 +21,7 @@
 
 #include <cmath>
 #include <optional>
+#include <string_view>
 
 namespace tenzir {
 
@@ -139,7 +140,7 @@ struct json_printer : printer_base<json_printer> {
           separator();
           newline();
         }
-        if (!caf::visit(*this, element))
+        if (!match(element, *this))
           return false;
       }
       if (printed_once) {
@@ -168,12 +169,12 @@ struct json_printer : printer_base<json_printer> {
         indent();
         newline();
         out_ = fmt::format_to(out_, options_.style.field, "\"key\": ");
-        if (!caf::visit(*this, element.first))
+        if (!match(element.first, *this))
           return false;
         separator();
         newline();
         out_ = fmt::format_to(out_, options_.style.field, "\"value\": ");
-        if (!caf::visit(*this, element.second))
+        if (!match(element.second, *this))
           return false;
         dedent();
         newline();
@@ -211,14 +212,14 @@ struct json_printer : printer_base<json_printer> {
                                             std::string{element.first})
                               : fmt::format(options_.style.field, "{}.{}",
                                             prefix, element.first);
-          if (const auto* r = caf::get_if<view<record>>(&element.second)) {
+          if (const auto* r = try_as<view<record>>(&element.second)) {
             if (!(*this)(*r, name))
               return false;
           } else {
             if (!(*this)(name))
               return false;
             out_ = fmt::format_to(out_, options_.style.object, ": ");
-            if (!caf::visit(*this, element.second)) {
+            if (!match(element.second, *this)) {
               return false;
             }
           }
@@ -226,7 +227,7 @@ struct json_printer : printer_base<json_printer> {
           out_ = fmt::format_to(out_, options_.style.field, "{}",
                                 detail::json_escape(element.first));
           out_ = fmt::format_to(out_, options_.style.object, ": ");
-          if (!caf::visit(*this, element.second))
+          if (!match(element.second, *this))
             return false;
         }
       }
@@ -241,27 +242,26 @@ struct json_printer : printer_base<json_printer> {
 
   private:
     auto should_skip(view<data> x) noexcept -> bool {
-      if (options_.omit_nulls && caf::holds_alternative<caf::none_t>(x)) {
+      if (options_.omit_nulls && is<caf::none_t>(x)) {
         return true;
       }
-      if (options_.omit_empty_lists && caf::holds_alternative<view<list>>(x)) {
-        const auto& ys = caf::get<view<list>>(x);
+      if (options_.omit_empty_lists && is<view<list>>(x)) {
+        const auto& ys = as<view<list>>(x);
         return std::all_of(ys.begin(), ys.end(),
                            [this](const view<data>& y) noexcept {
                              return should_skip(y);
                            });
       }
-      if (options_.omit_empty_maps && caf::holds_alternative<view<map>>(x)) {
-        const auto& ys = caf::get<view<map>>(x);
+      if (options_.omit_empty_maps && is<view<map>>(x)) {
+        const auto& ys = as<view<map>>(x);
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<map>::view_type::value_type& y) noexcept {
             return should_skip(y.second);
           });
       }
-      if (options_.omit_empty_records
-          && caf::holds_alternative<view<record>>(x)) {
-        const auto& ys = caf::get<view<record>>(x);
+      if (options_.omit_empty_records && is<view<record>>(x)) {
+        const auto& ys = as<view<record>>(x);
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<record>::view_type::value_type& y) noexcept {
@@ -300,11 +300,11 @@ struct json_printer : printer_base<json_printer> {
 
   template <class Iterator>
   auto print(Iterator& out, const view<data>& d) const noexcept -> bool {
-    return caf::visit(print_visitor{out, options_}, d);
+    return match(d, print_visitor{out, options_});
   }
 
   template <class Iterator, class T>
-    requires caf::detail::tl_contains<view<data>::types, T>::value
+    requires detail::tl_contains<view<data>::types, T>::value
   auto print(Iterator& out, const T& d) const noexcept -> bool {
     return print_visitor{out, options_}(d);
   }
@@ -315,8 +315,8 @@ struct json_printer : printer_base<json_printer> {
   }
 
   template <class Iterator, class T>
-    requires(!caf::detail::tl_contains<view<data>::types, T>::value
-             && caf::detail::tl_contains<data::types, T>::value)
+    requires(!detail::tl_contains<view<data>::types, T>::value
+             && detail::tl_contains<data::types, T>::value)
   auto print(Iterator& out, const T& d) const noexcept -> bool {
     return print(out, make_view(d));
   }

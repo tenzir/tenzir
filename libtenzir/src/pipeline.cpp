@@ -13,15 +13,22 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
+#include "tenzir/uuid.hpp"
 
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
+
+#include <string_view>
 
 namespace tenzir {
 
 class local_control_plane final : public operator_control_plane {
 public:
   auto self() noexcept -> exec_node_actor::base& override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
+  auto run_id() const noexcept -> uuid override {
     TENZIR_UNIMPLEMENTED();
   }
 

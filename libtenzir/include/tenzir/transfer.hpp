@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <string>
+#include <string_view>
 
 namespace tenzir {
 
@@ -24,12 +25,12 @@ struct transfer_options {
   bool verbose = false;
   std::string default_protocol{};
   std::chrono::milliseconds poll_timeout{100};
-  std::optional<std::string> username;
-  std::optional<std::string> password;
-  std::optional<std::string> authzid;
-  std::optional<std::string> authorization;
-  bool skip_peer_verification;
-  bool skip_hostname_verification;
+  std::optional<std::string> username = {};
+  std::optional<std::string> password = {};
+  std::optional<std::string> authzid = {};
+  std::optional<std::string> authorization = {};
+  bool skip_peer_verification = false;
+  bool skip_hostname_verification = false;
 
   friend auto inspect(auto& f, transfer_options& x) -> bool {
     return f.object(x)
@@ -66,9 +67,6 @@ public:
   /// Runs until the current transfer completed.
   auto perform() -> caf::error;
 
-  /// Retrieves file single chunk.
-  auto download() -> caf::expected<chunk_ptr>;
-
   /// Retrieves the file in chunks.
   auto download_chunks() -> generator<caf::expected<chunk_ptr>>;
 
@@ -83,8 +81,5 @@ public:
 private:
   curl::easy easy_;
 };
-
-auto download(http::request req, transfer_options opts = {})
-  -> caf::expected<chunk_ptr>;
 
 } // namespace tenzir

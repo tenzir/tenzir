@@ -100,7 +100,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto count = std::optional<uint64_t>{};
     argument_parser2::operator_("repeat")
-      .add(count, "<count>")
+      .positional("count", count)
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<repeat_operator>(

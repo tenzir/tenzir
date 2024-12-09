@@ -115,7 +115,12 @@ auto check_outcome(const std::vector<series>& res,
 
 struct failing_diagnostic_handler : public diagnostic_handler {
   void emit(diagnostic d) override {
-    fmt::print("diagnostic {} : {}", d.severity, d.message);
+    fmt::print("diagnostic {} : {}\n", d.severity, d.message);
+    if (not d.notes.empty()) {
+      for (auto& n : d.notes) {
+        fmt::print("\t{} : {}\n", n.kind, n.message);
+      }
+    }
     CHECK(false);
   }
 };
@@ -185,7 +190,7 @@ TEST(merging records) {
   check_outcome(res2, expected_result2);
 }
 
-TEST(merging records with seed and reset) {
+TEST(merging records with seed) {
   const type seed_schema = {
     "seed",
     record_type{
@@ -231,6 +236,117 @@ TEST(merging records with seed and reset) {
         {"0", caf::none},
         {"1", caf::none},
         {"2", uint64_t{0}},
+      },
+    },
+  };
+  check_outcome(res, expected_result);
+
+  {
+    auto r = b.record();
+    r.exact_field("1").data(0.0);
+  }
+  const auto res2 = b.finalize();
+  CHECK_EQUAL(res2.front().type, seed_schema);
+
+  const vvr expected_result2 = {
+    {
+      {
+        {"0", caf::none},
+        {"1", 0.0},
+      },
+    },
+  };
+  check_outcome(res2, expected_result2);
+}
+
+TEST(merging records with seed and raw) {
+  const type seed_schema = {
+    "seed",
+    record_type{
+      {"0", int64_type{}},
+      {"1", double_type{}},
+    },
+  };
+  collecting_diagnostic_handler cdh;
+  multi_series_builder b{
+    multi_series_builder::policy_schema{
+      .seed_schema = "seed",
+    },
+    multi_series_builder::settings_type{
+      .merge = true,
+      .raw = true,
+    },
+    cdh,
+    {seed_schema},
+  };
+
+  {
+    auto r = b.record();
+    r.exact_field("0").data(int64_t{0});
+  }
+  {
+    auto r = b.record();
+    r.exact_field("1").data(1.0);
+  }
+  {
+    auto r = b.record();
+    r.exact_field("0").data_unparsed("-2"sv);
+    r.exact_field("1").data_unparsed("2.0"sv);
+  }
+  {
+    auto r = b.record();
+    r.exact_field("0").data(int64_t{-3});
+    r.exact_field("not_in_schema").data_unparsed("3.0"sv);
+  }
+
+  {
+    auto r = b.record();
+    r.exact_field("0").data_unparsed("this is not an integer"sv);
+  }
+
+  const auto res = b.finalize();
+  auto diags = std::move(cdh).collect();
+  CHECK_EQUAL(diags.size(), std::size_t{1});
+  CHECK_EQUAL(res.size(),
+              std::size_t{1}); // merging should produce exactly one series here
+
+  const type expected_type{
+    "seed",
+    record_type{
+      {"0", int64_type{}},
+      {"1", double_type{}},
+      {"not_in_schema", string_type{}},
+    },
+  };
+
+  CHECK_EQUAL(res.front().type, expected_type);
+
+  const vvr expected_result = {
+    {
+      {
+        {"0", int64_t{0}},
+        {"1", caf::none},
+        {"not_in_schema", caf::none},
+      },
+      {
+        {"0", caf::none},
+        {"1", 1.0},
+        {"not_in_schema", caf::none},
+      },
+      {
+        {"0", int64_t{-2}},
+        {"1", 2.0},
+        {"not_in_schema", caf::none},
+      },
+      {
+        {"0", int64_t{-3}},
+        {"1", caf::none},
+        {"not_in_schema", "3.0"},
+      },
+      {
+        {"0", caf::none},
+        {"1", caf::none},
+        {"not_in_schema", caf::none},
       },
     },
   };

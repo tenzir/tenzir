@@ -25,6 +25,7 @@
 #include <arrow/type.h>
 #include <arrow/type_fwd.h>
 
+#include <string_view>
 #include <unordered_set>
 
 namespace tenzir::plugins::enumerate {
@@ -44,8 +45,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto current_type = type{};
     std::unordered_map<type, uint64_t> offsets;
     std::unordered_set<type> skipped_schemas;
@@ -83,7 +84,7 @@ public:
         co_yield {};
       } else if (skipped_schemas.contains(slice.schema())) {
         co_yield slice;
-      } else if (caf::get<record_type>(slice.schema())
+      } else if (as<record_type>(slice.schema())
                    .resolve_key(field_)
                    .has_value()) {
         diagnostic::warning("ignores schema {} with already existing "
@@ -104,8 +105,8 @@ public:
     return "enumerate";
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return optimize_result{std::nullopt, event_order::ordered, copy()};
   }
 
@@ -126,8 +127,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto idx = int64_t{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -140,7 +141,7 @@ public:
         check(b->Append(idx++));
       }
       co_yield assign(selector_, series{int64_type{}, finish(*b)}, slice,
-                      ctrl.diagnostics());
+                      ctrl.diagnostics(), assign_position::front);
     }
   }
 
@@ -148,8 +149,8 @@ public:
     return "tql2.enumerate";
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return optimize_result{std::nullopt, event_order::ordered, copy()};
   }
 
@@ -194,13 +195,13 @@ public:
 
 class plugin2 final : public virtual operator_plugin2<enumerate_operator2> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto selector = ast::simple_selector::try_from(
       ast::root_field{ast::identifier{"#", inv.self.get_location()}});
     TENZIR_ASSERT(selector.has_value());
     TRY(argument_parser2::operator_("enumerate")
-          .add(selector, "<selector>")
+          .positional("out", selector)
           .parse(inv, ctx));
     return std::make_unique<enumerate_operator2>(std::move(selector.value()));
   }

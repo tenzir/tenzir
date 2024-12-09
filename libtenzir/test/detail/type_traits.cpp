@@ -10,8 +10,6 @@
 
 #include "tenzir/test/test.hpp"
 
-#include <caf/variant.hpp>
-
 #include <variant>
 
 namespace {
@@ -29,5 +27,4 @@ TEST(contains_type) {
   check<std::variant>();
   check<std::tuple>();
   check<fake_list>();
-  check<caf::variant>();
 }

@@ -16,7 +16,6 @@
 #include <tenzir/multi_series_builder.hpp>
 
 #include <caf/none.hpp>
-#include <caf/sum_type.hpp>
 #include <fmt/core.h>
 
 #include <optional>
@@ -31,10 +30,20 @@ void append_name_to_signature(std::string_view x, signature_type& out) {
   auto name_bytes = as_bytes(x);
   out.insert(out.end(), name_bytes.begin(), name_bytes.end());
 }
+/// Utility function used in the merging mode
+auto store_raw_or_null(builder_ref b, diagnostic_handler& dh,
+                       std::string_view v) -> void {
+  if (not b.try_data(v)) {
+    b.null();
+    TENZIR_ASSERT(b.is_protected());
+    diagnostic::warning("failed to parse a value as expected type")
+      .note("value `{}` failed to parse as `{}`", v, b.type().kind())
+      .emit(dh);
+  }
+}
 } // namespace
 
 namespace detail::multi_series_builder {
-
 auto record_generator::exact_field(std::string_view name) -> object_generator {
   if (not msb_) {
     return object_generator{};
@@ -118,12 +127,20 @@ auto object_generator::data_unparsed(std::string_view s) -> void {
       if (not writable()) {
         return;
       }
-      auto res = msb_->builder_raw_.parser_(s, nullptr);
-      auto& [value, diag] = res;
-      if (value) {
-        b.data(std::move(*value));
+      if (msb_->settings_.raw) {
+        store_raw_or_null(b, msb_->dh_, s);
       } else {
-        b.data(s);
+        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto& [value, diag] = res;
+        if (value) {
+          if (not b.try_data(*value)) {
+            /// corner case handling if the data_builders used parser disagrees
+            /// with the protected builder
+            store_raw_or_null(b, msb_->dh_, s);
+          }
+        } else {
+          store_raw_or_null(b, msb_->dh_, s);
+        }
       }
     },
     [&](raw_pointer raw) {
@@ -142,12 +159,20 @@ auto object_generator::data_unparsed(std::string s) -> void {
       if (not writable()) {
         return;
       }
-      auto res = msb_->builder_raw_.parser_(s, nullptr);
-      auto& [value, diag] = res;
-      if (value) {
-        b.data(std::move(*value));
+      if (msb_->settings_.raw) {
+        store_raw_or_null(b, msb_->dh_, s);
       } else {
-        b.data(s);
+        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto& [value, diag] = res;
+        if (value) {
+          if (not b.try_data(*value)) {
+            /// corner case handling if the data_builders used parser disagrees
+            /// with the protected builder
+            store_raw_or_null(b, msb_->dh_, s);
+          }
+        } else {
+          store_raw_or_null(b, msb_->dh_, s);
+        }
       }
     },
     [&](raw_pointer raw) {
@@ -247,12 +272,20 @@ auto list_generator::data_unparsed(std::string_view s) -> void {
       if (not writable()) {
         return;
       }
-      auto res = msb_->builder_raw_.parser_(s, nullptr);
-      auto& [value, diag] = res;
-      if (value) {
-        b.data(std::move(*value));
+      if (msb_->settings_.raw) {
+        store_raw_or_null(b, msb_->dh_, s);
       } else {
-        b.data(s);
+        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto& [value, diag] = res;
+        if (value) {
+          if (not b.try_data(*value)) {
+            /// corner case handling if the data_builders used parser disagrees
+            /// with the protected builder
+            store_raw_or_null(b, msb_->dh_, s);
+          }
+        } else {
+          store_raw_or_null(b, msb_->dh_, s);
+        }
       }
     },
     [&](raw_pointer raw) {
@@ -271,12 +304,20 @@ auto list_generator::data_unparsed(std::string s) -> void {
       if (not writable()) {
         return;
       }
-      auto res = msb_->builder_raw_.parser_(s, nullptr);
-      auto& [value, diag] = res;
-      if (value) {
-        b.data(std::move(*value));
+      if (msb_->settings_.raw) {
+        store_raw_or_null(b, msb_->dh_, s);
       } else {
-        b.data(s);
+        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto& [value, diag] = res;
+        if (value) {
+          if (not b.try_data(*value)) {
+            /// corner case handling if the data_builders used parser disagrees
+            /// with the protected builder
+            store_raw_or_null(b, msb_->dh_, s);
+          }
+        } else {
+          store_raw_or_null(b, msb_->dh_, s);
+        }
       }
     },
     [&](raw_pointer raw) {
@@ -328,7 +369,7 @@ auto list_generator::writable() -> bool {
 
 auto series_to_table_slice(series array,
                            std::string_view fallback_name) -> table_slice {
-  TENZIR_ASSERT(caf::holds_alternative<record_type>(array.type));
+  TENZIR_ASSERT(is<record_type>(array.type));
   TENZIR_ASSERT(array.length() > 0);
   if (array.type.name().empty()) {
     array.type = tenzir::type{fallback_name, array.type};
@@ -433,7 +474,7 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
     return {};
   }
   last_yield_time_ = now;
-  if (settings_.merge and not get_policy<policy_selector>()) {
+  if (uses_merging_builder()) {
     return merging_builder_.finish();
   }
   make_events_available_where(

@@ -172,24 +172,15 @@ private:
 /// TODO: Consider eventually retiring the current `data_view`, perhaps
 /// replacing it with an implementation that does not use ref-counts internally.
 struct data_view2
-  : caf::detail::tl_apply_t<caf::detail::tl_map_t<data::types, view_trait>,
-                            variant> {
+  : detail::tl_apply_t<detail::tl_map_t<data::types, view_trait>, variant> {
   using variant::variant;
 
   explicit(false) data_view2(const data& x) : data_view2(make_view(x)) {
   }
 
   explicit(false) data_view2(data_view x) {
-    caf::visit(
-      [&](auto x) {
-        emplace<decltype(x)>(x);
-      },
-      x);
-  }
-
-  explicit(false) operator data_view() const {
-    return match([](auto x) {
-      return data_view{x};
+    tenzir::match(std::move(x), [&](auto x) {
+      emplace<decltype(x)>(std::move(x));
     });
   }
 

@@ -9,11 +9,29 @@
 #pragma once
 
 #include "tenzir/detail/type_list.hpp"
+#include "tenzir/variant.hpp"
 
 #include <caf/detail/type_list.hpp>
-#include <caf/variant.hpp>
 
 namespace tenzir::detail {
+
+template <typename T>
+struct is_variant : std::false_type {};
+
+template <typename... Args>
+struct is_variant<std::variant<Args...>> : std::true_type {};
+
+template <typename... Args>
+struct is_variant<const std::variant<Args...>> : std::true_type {};
+
+template <typename... Args>
+struct is_variant<std::variant<Args...>&> : std::true_type {};
+
+template <typename... Args>
+struct is_variant<const std::variant<Args...>&> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_variant_v = is_variant<T>::value;
 
 template <class... Ts>
 struct lazy_type_list {
@@ -36,29 +54,28 @@ struct lazy_variant_push_back {
   >;
 };
 
+// clang-format off
 template <class T, class U>
 using variant_type_concat =
   tl_distinct_t<
     typename std::conditional_t<
-      caf::is_variant<T>{} && caf::is_variant<U>{},
+      is_variant<T>{} && is_variant<U>{},
       lazy_variant_concat<T, U>,
       std::conditional_t<
-        caf::is_variant<T>{},
+        is_variant<T>{},
         lazy_variant_push_back<T, U>,
         std::conditional_t<
-          caf::is_variant<U>{},
+          is_variant<U>{},
           lazy_variant_push_back<U, T>,
           lazy_type_list<T, U>
         >
       >
     >::type
   >;
-
+// clang-format on
 
 template <class T, class U>
-using flattened_variant = caf::detail::tl_apply_t<
-  variant_type_concat<T, U>,
-  caf::variant
->;
+using flattened_variant
+  = detail::tl_apply_t<variant_type_concat<T, U>, tenzir::variant>;
 
 } // namespace tenzir::detail

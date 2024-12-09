@@ -38,7 +38,7 @@ struct extract_query_context {
 /// A wrapper for an expression related command.
 struct query_context {
   /// The query command type.
-  using command = caf::variant<extract_query_context>;
+  using command = tenzir::variant<extract_query_context>;
 
   // -- constructor & destructor -----------------------------------------------
 
@@ -136,7 +136,7 @@ struct formatter<tenzir::query_context> {
         out = fmt::format_to(out, "extract(");
       },
     };
-    caf::visit(f, value.cmd);
+    match(value.cmd, f);
     return fmt::format_to(out, "{} (priority={}), ids={}, issuer={})",
                           value.expr, value.priority, value.ids, value.issuer);
   }

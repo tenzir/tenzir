@@ -19,8 +19,10 @@
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/installdirs.hpp"
 #include "tenzir/detail/load_contents.hpp"
+#include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/factory.hpp"
 #include "tenzir/synopsis_factory.hpp"
@@ -36,6 +38,7 @@
 #include <filesystem>
 #include <iterator>
 #include <optional>
+#include <string_view>
 
 namespace tenzir {
 
@@ -233,10 +236,10 @@ auto load_config_files(std::vector<config_file> config_files)
                                            config.path, yaml.error()));
       }
       // Skip empty config files.
-      if (caf::holds_alternative<caf::none_t>(*yaml)) {
+      if (is<caf::none_t>(*yaml)) {
         continue;
       }
-      auto* rec = caf::get_if<record>(&*yaml);
+      auto* rec = try_as<record>(&*yaml);
       if (not rec) {
         return caf::make_error(ec::parse_error,
                                fmt::format("failed to read config file {}: not "
@@ -300,7 +303,7 @@ auto to_settings(record config) -> caf::expected<caf::settings> {
   // Pre-process our configuration so that it can be properly parsed later.
   // Erase all null values because a caf::config_value has no such notion.
   for (auto i = config.begin(); i != config.end();) {
-    if (caf::holds_alternative<caf::none_t>(i->second)) {
+    if (is<caf::none_t>(i->second)) {
       i = config.erase(i);
     } else {
       ++i;
@@ -362,11 +365,11 @@ configuration::configuration() {
   factory<value_index>::initialize();
   // Register Arrow extension types.
   auto register_extension_types
-    = []<concrete_type... Ts>(caf::detail::type_list<Ts...>) {
+    = []<concrete_type... Ts>(detail::type_list<Ts...>) {
         (static_cast<void>(Ts::arrow_type::register_extension()), ...);
       };
   register_extension_types(
-    caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
+    detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
 auto configuration::parse(int argc, char** argv) -> caf::error {
@@ -520,7 +523,14 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
         return caf::make_error(ec::filesystem_error,
                                "failed to determine temp_directory_path");
       }
-      value = tmp / "tenzir" / "cache" / fmt::format("{:}", getuid());
+      auto path = tmp / fmt::format("tenzir-cache-{:}", getuid());
+      std::filesystem::create_directories(path, ec);
+      if (ec) {
+        return caf::make_error(
+          ec::filesystem_error,
+          fmt::format("failed to create cache directory {}: {}", path, ec));
+      }
+      value = path.string();
     }
   }
   // From here on, we go into CAF land with the goal to put the configuration
@@ -534,11 +544,12 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   }
   // Work around CAF quirk where options in the `openssl` group have no effect
   // if they are not seen by the native option or config file parsers.
-  openssl_certificate = caf::get_or(content, "caf.openssl.certificate", "");
-  openssl_key = caf::get_or(content, "caf.openssl.key", "");
-  openssl_passphrase = caf::get_or(content, "caf.openssl.passphrase", "");
-  openssl_capath = caf::get_or(content, "caf.openssl.capath", "");
-  openssl_cafile = caf::get_or(content, "caf.openssl.cafile", "");
+  // FIXME: Are these handled automatically now?
+  // openssl_certificate = caf::get_or(content, "caf.openssl.certificate", "");
+  // openssl_key = caf::get_or(content, "caf.openssl.key", "");
+  // openssl_passphrase = caf::get_or(content, "caf.openssl.passphrase", "");
+  // openssl_capath = caf::get_or(content, "caf.openssl.capath", "");
+  // openssl_cafile = caf::get_or(content, "caf.openssl.cafile", "");
   // Detect when plugins, plugin-dirs, or schema-dirs are specified on the
   // command line. This needs to happen before the regular parsing of the
   // command line since plugins may add additional commands and schemas.
@@ -592,15 +603,31 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   }
   TENZIR_ASSERT(it == plugin_args.end());
   // Now parse all CAF options from the command line. Prior to doing so, we
-  // clear the config_file_path first so it does not use caf-application.ini as
-  // fallback during actor_system_config::parse().
-  config_file_path.clear();
+  // set the `config-file` option to `/dev/null` so CAF does not try to read
+  // from caf-application.conf.
+  caf_args.erase(
+    std::remove_if(caf_args.begin(), caf_args.end(),
+                   [](const std::string& x) {
+                     return x.starts_with(
+                       "--config-file="); // put your condition here
+                   }),
+    caf_args.end());
+#if TENZIR_POSIX
+  caf_args.emplace_back("--config-file=/dev/null");
+#elif TENZIR_WINDOWS
+  caf_args.emplace_back("--config-file=NUL");
+#else
+#  error "unimplemented"
+#endif
   auto result = actor_system_config::parse(std::move(caf_args));
+  content.erase("config-file");
   // Load OpenSSL last because it uses the parsed configuration.
   const auto use_encryption
-    = !openssl_certificate.empty() || !openssl_key.empty()
-      || !openssl_passphrase.empty() || !openssl_capath.empty()
-      || !openssl_cafile.empty();
+    = caf::holds_alternative<std::string>(content, "caf.openssl.certificate")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.key")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.passphrase")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.capath")
+      || caf::holds_alternative<std::string>(content, "caf.openssl.cafile");
   if (use_encryption) {
     load<caf::openssl::manager>();
   }
@@ -611,8 +638,7 @@ auto configuration::embed_config(const caf::settings& settings) -> caf::error {
   for (const auto& [key, value] : settings) {
     // The configuration must have been fully flattened because we cannot
     // mangle dictionaries in here.
-    TENZIR_ASSERT(
-      !caf::holds_alternative<caf::config_value::dictionary>(value));
+    TENZIR_ASSERT(!is<caf::config_value::dictionary>(value));
     // The member custom_options_ (a config_option_set) is the only place that
     // contains the valid type information, as defined by the command
     // hierarchy. The passed in config (file and environment) must abide to it.

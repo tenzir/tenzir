@@ -14,12 +14,13 @@
 #include <concepts>
 #include <cstddef>
 #include <iterator>
+#include <string_view>
 #include <type_traits>
 
 namespace tenzir::concepts {
 
-template <class T, class U>
-concept sameish = std::same_as<std::decay_t<T>, std::decay_t<U>>;
+template <class T, class... Us>
+concept sameish = (std::same_as<std::decay_t<T>, std::decay_t<Us>> or ...);
 
 template <class T>
 concept transparent = requires { typename T::is_transparent; };
@@ -66,7 +67,7 @@ concept arithmetic = std::is_arithmetic_v<T>;
 
 template <class T>
 concept integer
-  = std::integral<T> and not sameish<T, char> and not sameish<T, bool>;
+  = std::integral<T> and not sameish<T, bool, char, signed char, unsigned char>;
 
 template <class T>
 concept number = integer<T> or std::floating_point<T>;
@@ -118,5 +119,8 @@ concept monoid = semigroup<T> && std::is_default_constructible_v<T>;
 
 template <class T, class... Ts>
 concept one_of = (std::same_as<T, Ts> or ...);
+
+template <class T>
+concept unqualified = std::same_as<T, std::remove_cvref_t<T>>;
 
 } // namespace tenzir::concepts

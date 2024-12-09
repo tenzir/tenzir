@@ -13,6 +13,8 @@
 #include "tenzir/config.hpp"
 #include "tenzir/series_builder.hpp"
 
+#include <string_view>
+
 #if TENZIR_LINUX
 #  include <pfs/procfs.hpp>
 
@@ -178,8 +180,9 @@ auto linux_os::fetch_processes(std::optional<int> pid_filter)
     auto tasks = state_->procfs.get_processes();
     result.reserve(tasks.size());
     for (const auto& task : tasks) {
-      if (pid_filter && task.id() != *pid_filter)
+      if (pid_filter && task.id() != *pid_filter) {
         continue;
+      }
       try {
         auto stat = task.get_stat();
         auto status = task.get_status();
@@ -252,16 +255,18 @@ auto to_string(pfs::net_socket::net_state state) -> std::string {
 }
 
 auto to_socket(const pfs::net_socket& s, uint32_t pid, std::string comm,
-               int protocol) -> socket {
-  auto result = socket{};
+               int protocol) -> net_socket {
+  auto result = net_socket{};
   result.pid = pid;
   result.process_name = std::move(comm);
   result.protocol = protocol;
-  if (auto addr = to<ip>(s.local_ip.to_string()))
+  if (auto addr = to<ip>(s.local_ip.to_string())) {
     result.local_addr = *addr;
+  }
   result.local_port = s.local_port;
-  if (auto addr = to<ip>(s.remote_ip.to_string()))
+  if (auto addr = to<ip>(s.remote_ip.to_string())) {
     result.remote_addr = *addr;
+  }
   result.remote_port = s.remote_port;
   result.state = to_string(s.socket_net_state);
   return result;
@@ -270,8 +275,8 @@ auto to_socket(const pfs::net_socket& s, uint32_t pid, std::string comm,
 } // namespace
 
 // TODO: Consider using the netlink API to list sockets instead.
-auto linux_os::fetch_sockets() -> std::vector<socket> {
-  auto result = std::vector<socket>{};
+auto linux_os::fetch_sockets() -> std::vector<net_socket> {
+  auto result = std::vector<net_socket>{};
   // First build up a global map inode -> pid.
   struct pid_name_pair {
     pid_t pid;
@@ -357,16 +362,19 @@ auto darwin_os::fetch_processes(std::optional<int> pid_filter)
   auto result = std::vector<process>{};
   result.reserve(pids.size());
   for (auto pid : pids) {
-    if (pid <= 0)
+    if (pid <= 0) {
       continue;
-    if (pid_filter && pid != *pid_filter)
+    }
+    if (pid_filter && pid != *pid_filter) {
       continue;
+    }
     errno = 0;
     proc_bsdinfo proc{};
     auto n = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &proc, sizeof(proc));
     if (n < detail::narrow_cast<int>(sizeof(proc)) || errno != 0) {
-      if (errno == ESRCH) // process is gone
+      if (errno == ESRCH) { // process is gone
         continue;
+      }
       TENZIR_DEBUG("could not get process info for PID {}", pid);
       continue;
     }
@@ -449,8 +457,8 @@ auto socket_state_to_string(auto proto, auto state) -> std::string_view {
 
 } // namespace
 
-auto darwin_os::fetch_sockets() -> std::vector<socket> {
-  auto result = std::vector<socket>{};
+auto darwin_os::fetch_sockets() -> std::vector<net_socket> {
+  auto result = std::vector<net_socket>{};
   for (const auto& proc : fetch_processes()) {
     auto pid = detail::narrow_cast<uint32_t>(proc.pid);
     auto sockets = sockets_for(pid);
@@ -460,7 +468,7 @@ auto darwin_os::fetch_sockets() -> std::vector<socket> {
   return result;
 }
 
-auto darwin_os::sockets_for(uint32_t pid) -> std::vector<socket> {
+auto darwin_os::sockets_for(uint32_t pid) -> std::vector<net_socket> {
   auto p = detail::narrow_cast<pid_t>(pid);
   auto n = proc_pidinfo(p, PROC_PIDLISTFDS, 0, nullptr, 0);
   auto fds = std::vector<proc_fdinfo>{};
@@ -470,19 +478,22 @@ auto darwin_os::sockets_for(uint32_t pid) -> std::vector<socket> {
     TENZIR_WARN("could not get file descriptors for process {}", p);
     return {};
   }
-  auto result = std::vector<socket>{};
+  auto result = std::vector<net_socket>{};
   for (auto& fd : fds) {
-    if (fd.proc_fdtype != PROX_FDTYPE_SOCKET)
+    if (fd.proc_fdtype != PROX_FDTYPE_SOCKET) {
       continue;
+    }
     auto info = socket_fdinfo{};
     errno = 0;
     n = proc_pidfdinfo(p, fd.proc_fd, PROC_PIDFDSOCKETINFO, &info,
                        sizeof(socket_fdinfo));
-    if (n < static_cast<int>(sizeof(socket_fdinfo)) or errno != 0)
+    if (n < static_cast<int>(sizeof(socket_fdinfo)) or errno != 0) {
       continue;
+    }
     // Only consider network connections.
-    if (info.psi.soi_family != AF_INET and info.psi.soi_family != AF_INET6)
+    if (info.psi.soi_family != AF_INET and info.psi.soi_family != AF_INET6) {
       continue;
+    }
     auto to_string = [](auto family, const auto& addr) -> std::string {
       auto buffer = std::array<char, INET6_ADDRSTRLEN>{};
       switch (family) {
@@ -499,17 +510,19 @@ auto darwin_os::sockets_for(uint32_t pid) -> std::vector<socket> {
       return std::string{buffer.data()};
     };
     // Populate socket.
-    auto s = socket{};
+    auto s = net_socket{};
     s.protocol = info.psi.soi_protocol;
     auto local_addr
       = to_string(info.psi.soi_family, info.psi.soi_proto.pri_in.insi_laddr);
     auto remote_addr
       = to_string(info.psi.soi_family, info.psi.soi_proto.pri_in.insi_faddr);
-    if (auto addr = to<ip>(local_addr))
+    if (auto addr = to<ip>(local_addr)) {
       s.local_addr = *addr;
+    }
     s.local_port = ntohs(info.psi.soi_proto.pri_in.insi_lport);
-    if (auto addr = to<ip>(remote_addr))
+    if (auto addr = to<ip>(remote_addr)) {
       s.remote_addr = *addr;
+    }
     s.remote_port = ntohs(info.psi.soi_proto.pri_in.insi_fport);
     s.state = socket_state_to_string(info.psi.soi_protocol,
                                      info.psi.soi_proto.pri_tcp.tcpsi_state);
