@@ -10,9 +10,13 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/null_bitmap.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
+#include <chrono>
 #include <ranges>
 #include <string_view>
 
@@ -597,6 +601,186 @@ public:
 
 } // namespace
 
+namespace {
+
+struct configuration2 {
+  ast::expression expr_ = {};
+  std::optional<located<int64_t>> distance_ = {};
+  std::optional<located<int64_t>> limit_ = {};
+  std::optional<located<duration>> create_timeout_ = {};
+  std::optional<located<duration>> write_timeout_ = {};
+  std::optional<located<duration>> read_timeout_ = {};
+
+  friend auto inspect(auto& f, configuration2& x) -> bool {
+    return f.object(x).fields(f.field("expr", x.expr_),
+                              f.field("distance", x.distance_),
+                              f.field("limit", x.limit_),
+                              f.field("create_timeout", x.create_timeout_),
+                              f.field("write_timeout", x.write_timeout_),
+                              f.field("read_timeout", x.read_timeout_));
+  }
+};
+
+struct state2 {
+  int64_t count = {};
+  int64_t last_row = {};
+  std::chrono::steady_clock::time_point created_at = {};
+  std::chrono::steady_clock::time_point written_at = {};
+  std::chrono::steady_clock::time_point read_at = {};
+
+  void reset(int64_t current_row, std::chrono::steady_clock::time_point now) {
+    count = 1;
+    last_row = current_row;
+    created_at = now;
+    written_at = now;
+    read_at = now;
+  }
+};
+
+class deduplicate_operator2 final
+  : public crtp_operator<deduplicate_operator2> {
+public:
+  deduplicate_operator2() = default;
+
+  explicit deduplicate_operator2(configuration2 cfg) : cfg_(std::move(cfg)) {
+  }
+
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    tsl::robin_map<data, state2> state = {};
+    auto row = int64_t{};
+    for (auto&& events : input) {
+      if (events.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto keys = eval(cfg_.expr_, events, ctrl.diagnostics());
+      auto offset = int64_t{};
+      const auto now = std::chrono::steady_clock::now();
+      auto ids = null_bitmap{};
+      for (auto&& key : keys.values()) {
+        const auto current_row = row + offset++;
+        auto it = state.find(key);
+        if (it == state.end()) {
+          state.emplace_hint(it, materialize(key), state2{})
+            .value()
+            .reset(current_row, now);
+          ids.append_bit(true);
+          continue;
+        }
+        // If there's a create timeout configured, and the timeout has expired,
+        // we reset the entry.
+        if (cfg_.create_timeout_
+            and now > it->second.created_at + cfg_.create_timeout_->inner) {
+          it.value().reset(current_row, now);
+          ids.append_bit(true);
+          continue;
+        }
+        if (cfg_.write_timeout_
+            and now > it->second.written_at + cfg_.write_timeout_->inner) {
+          it.value().reset(current_row, now);
+          ids.append_bit(true);
+          continue;
+        }
+        if (cfg_.read_timeout_
+            and now > it->second.read_at + cfg_.read_timeout_->inner) {
+          it.value().reset(current_row, now);
+          ids.append_bit(true);
+          continue;
+        }
+        // If there's a distance configured, and the distance has elapsed, we
+        // erase the entry.
+        if (cfg_.distance_
+            and current_row > it->second.last_row + cfg_.distance_->inner) {
+          it.value().reset(current_row, now);
+          ids.append_bit(true);
+          continue;
+        }
+        it.value().read_at = now;
+        it.value().last_row = current_row;
+        if (not cfg_.limit_) {
+          ids.append_bit(false);
+          continue;
+        }
+        if (it->second.count >= cfg_.limit_->inner) {
+          ids.append_bit(false);
+          continue;
+        }
+        it.value().count += 1;
+        it.value().written_at = now;
+        ids.append_bit(true);
+      }
+      row += keys.length();
+      for (auto [begin, end] : select_runs(ids)) {
+        co_yield subslice(events, begin, end);
+      }
+    }
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.deduplicate";
+  }
+
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
+    (void)order;
+    if (cfg_.distance_) {
+      // When the `distance` option is used, we're not allowed to optimize at
+      // all. Here's a simple example that proves this:
+      //   metrics "platform"
+      //   deduplicate connected, distance=1
+      //   where not connected
+      return do_not_optimize(*this);
+    }
+    return optimize_result{filter, event_order::ordered, copy()};
+  }
+
+  friend auto inspect(auto& f, deduplicate_operator2& x) -> bool {
+    return f.object(x).fields(f.field("configuration", x.cfg_));
+  }
+
+private:
+  configuration2 cfg_{};
+};
+
+class tql2_plugin final
+  : public virtual operator_plugin2<deduplicate_operator2> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto cfg = configuration2{};
+    auto parser = argument_parser2::operator_("deduplicate");
+    parser.positional("expr", cfg.expr_, "<expr>");
+    parser.named("distance", cfg.distance_);
+    parser.named("limit", cfg.limit_);
+    parser.named("create_timeout", cfg.create_timeout_);
+    parser.named("write_timeout", cfg.write_timeout_);
+    parser.named("read_timeout", cfg.read_timeout_);
+    TRY(parser.parse(inv, ctx));
+    if (cfg.limit_ and cfg.limit_->inner < 1) {
+      diagnostic::error("limit must be at least 1")
+        .primary(*cfg.limit_)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (cfg.create_timeout_ and cfg.write_timeout_
+        and cfg.create_timeout_->inner != cfg.write_timeout_->inner
+        and (not cfg.limit_ or cfg.limit_->inner == 1)) {
+      diagnostic::warning("separate create and read timeouts have no "
+                          "effect with a limit of 1")
+        .primary(*cfg.create_timeout_)
+        .primary(*cfg.write_timeout_)
+        .secondary(cfg.limit_ ? cfg.limit_->source : location::unknown)
+        .emit(ctx);
+    }
+    return std::make_unique<deduplicate_operator2>(std::move(cfg));
+  }
+};
+
+} // namespace
+
 } // namespace tenzir::plugins::deduplicate
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::deduplicate::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::deduplicate::tql2_plugin)
