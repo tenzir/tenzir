@@ -175,6 +175,8 @@ in {
       doInstallCheck = false;
       env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
     });
+  arrow-adbc-cpp = prev.callPackage ./arrow-adbc-cpp { };
+  arrow-adbc-go = prev.callPackage ./arrow-adbc-go { };
   zeromq =
     if !isStatic
     then prev.zeromq
@@ -509,6 +511,8 @@ in {
         ps.pipeline-manager
         ps.platform
         ps.vast
+      ] ++ lib.optionals (!isStatic) [
+        ps.snowflake
       ]);
   };
   toChecked =

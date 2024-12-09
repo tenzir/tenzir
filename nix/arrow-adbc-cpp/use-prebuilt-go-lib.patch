@@ -1,0 +1,58 @@
+diff --git a/cmake_modules/BuildUtils.cmake b/cmake_modules/BuildUtils.cmake
+index 88209ac5e..aefff1d5e 100644
+--- a/cmake_modules/BuildUtils.cmake
++++ b/cmake_modules/BuildUtils.cmake
+@@ -310,7 +310,7 @@ function(ADD_ARROW_LIB LIB_NAME)
+   if(BUILD_STATIC)
+     add_library(${LIB_NAME}_static STATIC ${LIB_DEPS})
+     target_compile_features(${LIB_NAME}_static PRIVATE cxx_std_11)
+-    set_property(TARGET ${LIB_NAME}_shared PROPERTY CXX_STANDARD_REQUIRED ON)
++    set_property(TARGET ${LIB_NAME}_static PROPERTY CXX_STANDARD_REQUIRED ON)
+     adbc_configure_target(${LIB_NAME}_static)
+     if(EXTRA_DEPS)
+       add_dependencies(${LIB_NAME}_static ${EXTRA_DEPS})
+diff --git a/cmake_modules/GoUtils.cmake b/cmake_modules/GoUtils.cmake
+index 085d46fef..5c0a043c5 100644
+--- a/cmake_modules/GoUtils.cmake
++++ b/cmake_modules/GoUtils.cmake
+@@ -15,8 +15,8 @@
+ # specific language governing permissions and limitations
+ # under the License.
+ 
+-find_program(GO_BIN "go" REQUIRED)
+-message(STATUS "Detecting Go executable: Found ${GO_BIN}")
++#find_program(GO_BIN "go" REQUIRED)
++#message(STATUS "Detecting Go executable: Found ${GO_BIN}")
+ 
+ function(add_go_lib GO_MOD_DIR GO_LIBNAME)
+   set(options)
+@@ -131,13 +131,8 @@ function(add_go_lib GO_MOD_DIR GO_LIBNAME)
+     add_custom_command(OUTPUT "${LIBOUT_SHARED}.${ADBC_FULL_SO_VERSION}"
+                        WORKING_DIRECTORY ${GO_MOD_DIR}
+                        DEPENDS ${ARG_SOURCES}
+-                       COMMAND ${CMAKE_COMMAND} -E env ${GO_ENV_VARS} ${GO_BIN} build
+-                               ${GO_BUILD_TAGS} "${GO_BUILD_FLAGS}" -o
+-                               ${LIBOUT_SHARED}.${ADBC_FULL_SO_VERSION}
+-                               -buildmode=c-shared ${GO_LDFLAGS} .
+-                       COMMAND ${CMAKE_COMMAND} -E remove -f
+-                               "${LIBOUT_SHARED}.${ADBC_SO_VERSION}.0.h"
+-                       COMMENT "Building Go Shared lib ${GO_LIBNAME}"
++                       COMMAND ${CMAKE_COMMAND} -E copy "${${GO_LIBNAME}_prebuilt}" "${LIBOUT_SHARED}.${ADBC_FULL_SO_VERSION}"
++                       COMMENT "Copying Go Shared lib ${GO_LIBNAME}"
+                        COMMAND_EXPAND_LISTS)
+ 
+     add_custom_command(OUTPUT "${LIBOUT_SHARED}.${ADBC_SO_VERSION}" "${LIBOUT_SHARED}"
+@@ -226,11 +221,8 @@ function(add_go_lib GO_MOD_DIR GO_LIBNAME)
+     add_custom_command(OUTPUT "${LIBOUT_STATIC}"
+                        WORKING_DIRECTORY ${GO_MOD_DIR}
+                        DEPENDS ${ARG_SOURCES}
+-                       COMMAND ${CMAKE_COMMAND} -E env "${GO_ENV_VARS}" ${GO_BIN} build
+-                               "${GO_BUILD_TAGS}" -o "${LIBOUT_STATIC}"
+-                               -buildmode=c-archive "${GO_BUILD_FLAGS}" .
+-                       COMMAND ${CMAKE_COMMAND} -E remove -f "${LIBOUT_HEADER}"
+-                       COMMENT "Building Go Static lib ${GO_LIBNAME}"
++                       COMMAND ${CMAKE_COMMAND} -E copy "${${GO_LIBNAME}_prebuilt}" "${LIBOUT_STATIC}"
++                       COMMENT "Copying Go Static lib ${GO_LIBNAME}"
+                        COMMAND_EXPAND_LISTS)
+ 
+     add_custom_target(${GO_LIBNAME}_static_target ALL DEPENDS "${LIBOUT_STATIC}")
