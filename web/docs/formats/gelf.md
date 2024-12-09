@@ -19,7 +19,7 @@ gelf [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
 
 The `gelf` parser reads events formatted in [Graylog Extended Log Format
 (GELF)][gelf-spec], a format that predominantly
-[Graylog](../integrations/graylog.md) uses for importing and exporting
+[Graylog](../integrations/graylog/README.md) uses for importing and exporting
 of structured data.
 
 Tenzir parses GELF as a stream of JSON records separated by a `\0` byte. GELF
