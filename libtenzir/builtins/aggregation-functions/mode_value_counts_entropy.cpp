@@ -12,14 +12,13 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-namespace tenzir::plugins::mode_value_counts {
+#include <numeric>
+
+namespace tenzir::plugins::mode_value_counts_entropy {
+
+TENZIR_ENUM(kind, mode, value_counts, entropy);
 
 namespace {
-
-enum class kind {
-  mode,
-  value_counts,
-};
 
 template <kind Kind>
 class instance final : public aggregation_instance {
@@ -46,29 +45,48 @@ public:
   }
 
   auto get() const -> data override {
-    if constexpr (Kind == kind::mode) {
-      const auto comp = [](const auto& lhs, const auto& rhs) {
-        return lhs.second < rhs.second;
-      };
-      const auto it = std::ranges::max_element(counts_, comp);
-      if (it == counts_.end()) {
-        return {};
+    switch (Kind) {
+      case kind::mode: {
+        const auto comp = [](const auto& lhs, const auto& rhs) {
+          return lhs.second < rhs.second;
+        };
+        const auto it = std::ranges::max_element(counts_, comp);
+        if (it == counts_.end()) {
+          return {};
+        }
+        return it->first;
       }
-      return it->first;
-    } else {
-      auto result = list{};
-      result.reserve(counts_.size());
-      for (const auto& [value, count] : counts_) {
-        result.emplace_back(record{
-          {"value", value},
-          {"count", count},
+      case kind::value_counts: {
+        auto result = list{};
+        result.reserve(counts_.size());
+        for (const auto& [value, count] : counts_) {
+          result.emplace_back(record{
+            {"value", value},
+            {"count", count},
+          });
+        }
+        std::ranges::sort(result, std::less<>{}, [](const auto& x) {
+          return as_vector(as<record>(x))[0].second;
         });
+        return result;
       }
-      std::ranges::sort(result, std::less<>{}, [](const auto& x) {
-        return as_vector(as<record>(x))[0].second;
-      });
-      return result;
+      case kind::entropy: {
+        auto result = 0.0;
+        const auto total
+          = std::transform_reduce(counts_.begin(), counts_.end(), size_t{},
+                                  std::plus<>{}, [](const auto& x) {
+                                    return x.second;
+                                  });
+        for (const auto& [_, count] : counts_) {
+          const auto p_x = detail::narrow<double>(count) / total;
+          if (p_x > 0.0) {
+            result -= p_x * std::log2(p_x);
+          }
+        }
+        return result;
+      }
     }
+    TENZIR_UNREACHABLE();
   }
 
   auto save() const -> chunk_ptr override {
@@ -82,25 +100,23 @@ public:
     }
     const auto fb_result = fbb.CreateVector(offsets);
     const auto fb_min_max
-      = fbs::aggregation::CreateModeValueCounts(fbb, fb_result);
+      = fbs::aggregation::CreateModeValueCountsEntropy(fbb, fb_result);
     fbb.Finish(fb_min_max);
     return chunk::make(fbb.Release());
   }
   auto restore(chunk_ptr chunk, session ctx) -> void override {
-    const auto fb
-      = flatbuffer<fbs::aggregation::ModeValueCounts>::make(std::move(chunk));
+    const auto fb = flatbuffer<fbs::aggregation::ModeValueCountsEntropy>::make(
+      std::move(chunk));
     if (not fb) {
       diagnostic::warning("invalid FlatBuffer")
-        .note("failed to restore `{}` aggregation instance",
-              Kind == kind::mode ? "mode" : "value_counts")
+        .note("failed to restore `{}` aggregation instance", Kind)
         .emit(ctx);
       return;
     }
     const auto* fb_result = (*fb)->result();
     if (not fb_result) {
       diagnostic::warning("missing field `result`")
-        .note("failed to restore `{}` aggregation instance",
-              Kind == kind::mode ? "mode" : "value_counts")
+        .note("failed to restore `{}` aggregation instance", Kind)
         .emit(ctx);
       return;
     }
@@ -109,24 +125,21 @@ public:
     for (const auto* fb_element : *fb_result) {
       if (not fb_element) {
         diagnostic::warning("missing element in field `result`")
-          .note("failed to restore `{}` aggregation instance",
-                Kind == kind::mode ? "mode" : "value_counts")
+          .note("failed to restore `{}` aggregation instance", Kind)
           .emit(ctx);
         return;
       }
       const auto* fb_element_value = fb_element->value();
       if (not fb_element_value) {
         diagnostic::warning("missing value for element in field `result`")
-          .note("failed to restore `{}` aggregation instance",
-                Kind == kind::mode ? "mode" : "value_counts")
+          .note("failed to restore `{}` aggregation instance", Kind)
           .emit(ctx);
         return;
       }
       auto value = data{};
       if (auto err = unpack(*fb_element_value, value)) {
         diagnostic::warning("{}", err)
-          .note("failed to restore `{}` aggregation instance",
-                Kind == kind::mode ? "mode" : "value_counts")
+          .note("failed to restore `{}` aggregation instance", Kind)
           .emit(ctx);
         return;
       }
@@ -146,25 +159,28 @@ private:
 template <kind Kind>
 class plugin : public virtual aggregation_plugin {
   auto name() const -> std::string override {
-    return Kind == kind::mode ? "mode" : "value_counts";
+    return fmt::to_string(Kind);
   };
 
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name())
-          .positional("x", expr, "any")
-          .parse(inv, ctx));
+    auto parser = argument_parser2::function(name());
+    parser.positional("x", expr, "any");
+    TRY(parser.parse(inv, ctx));
     return std::make_unique<instance<Kind>>(std::move(expr));
   }
 };
 
 using mode_plugin = plugin<kind::mode>;
 using value_counts_plugin = plugin<kind::value_counts>;
+using entropy_plugin = plugin<kind::entropy>;
 
 } // namespace
 
-} // namespace tenzir::plugins::mode_value_counts
+} // namespace tenzir::plugins::mode_value_counts_entropy
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::mode_value_counts::mode_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::mode_value_counts::value_counts_plugin)
+using namespace tenzir::plugins::mode_value_counts_entropy;
+TENZIR_REGISTER_PLUGIN(mode_plugin)
+TENZIR_REGISTER_PLUGIN(value_counts_plugin)
+TENZIR_REGISTER_PLUGIN(entropy_plugin)

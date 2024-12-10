@@ -59,7 +59,7 @@ table ValueCount {
   count: long;
 }
 
-table ModeValueCounts {
+table ModeValueCountsEntropy {
   result: [ValueCount] (required);
 }
 
