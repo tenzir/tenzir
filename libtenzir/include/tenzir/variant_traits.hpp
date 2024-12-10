@@ -201,15 +201,14 @@ constexpr auto variant_index = std::invoke(
   },
   std::make_index_sequence<variant_traits<V>::count>());
 
-// Ensures that `F` can be invoked with alternative `I` in `V`, yielding a type
-// that can be cast to `R`
+// Ensures that `F` can be invoked with alternative `I` in `V`, yielding type `R`
 template <class F, class V, class R, size_t I>
 concept variant_invocable_for_r = requires(F f, V v) {
-  static_cast<R>(std::invoke(f, variant_get<I>(std::forward<V>(v))));
+  { std::invoke(f, variant_get<I>(std::forward<V>(v))) } -> std::same_as<R>;
 };
 
 /// Ensures that `F` can be invoked with all alternatives `[0..Variant_Size)`
-/// in `V`, yielding a type that can be cast to `R`
+/// in `V`, yielding type `R`
 template <class F, class V, class R, size_t Variant_Size>
 concept variant_invocable_for_all
   // This is implemented as a hand rolled version, because recursive concepts
@@ -250,7 +249,7 @@ concept variant_invocable_for_all
           and (Variant_Size < 32 or variant_invocable_for_r<F, V, R, 31>)));
 
 // Ensures that the Functor `F` can be invoked with every alternative in `V`,
-// yielding convertible types.
+// yielding the same type for all alternatives
 template <class F, class V>
 concept variant_matcher_for
   = has_variant_traits<V>

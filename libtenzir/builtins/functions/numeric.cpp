@@ -57,10 +57,10 @@ public:
         return finish(b);
       };
       auto f = detail::overload{
-        [&](const arrow::DoubleArray& value) {
+        [&](const arrow::DoubleArray& value) -> std::shared_ptr<arrow::Array> {
           return compute(value);
         },
-        [&](const arrow::Int64Array& value) {
+        [&](const arrow::Int64Array& value) -> std::shared_ptr<arrow::Array> {
           // TODO: Conversation should be automatic (if not
           // part of the kernel).
           auto b = arrow::DoubleBuilder{};
@@ -74,10 +74,10 @@ public:
           }
           return compute(*finish(b));
         },
-        [&](const arrow::NullArray& value) {
+        [&](const arrow::NullArray& value) -> std::shared_ptr<arrow::Array> {
           return series::null(double_type{}, value.length()).array;
         },
-        [&](const auto&) {
+        [&](const auto&) -> std::shared_ptr<arrow::Array> {
           // TODO: Think about what we want and generalize this.
           diagnostic::warning("expected `number`, got `{}`", value.type.kind())
             .primary(expr)
