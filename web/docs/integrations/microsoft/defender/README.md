@@ -1,13 +1,20 @@
-# Microsoft Defender Event Streaming
+# Defender
 
-Microsoft Defender for Cloud provides security management and threat protection for various resources. For example, Microsoft Defender for Identity can be used to identify, detect, and investigate advanced threats, compromised identities, and malicious insider actions in Active Directory.
+Microsoft Defender for Cloud provides security management and threat protection
+for various resources. For example, Microsoft Defender for Identity can be used
+to identify, detect, and investigate advanced threats, compromised identities,
+and malicious insider actions in Active Directory.
 
-By integrating with Azure Event Hubs, Microsoft Defender can stream security events in real-time to various downstream systems for further analysis. With Tenzir, you can ingest these events, perform real-time analysis, and correlate them to gain comprehensive insights into potential threats and vulnerabilities.
+By integrating with Azure Event Hubs, Microsoft Defender can stream security
+events in real-time to various downstream systems for further analysis. With
+Tenzir, you can ingest these events, perform real-time analysis, and correlate
+them to gain comprehensive insights into potential threats and vulnerabilities.
 
 ![Event Streaming Architecture](architecture.excalidraw.svg)
 
 :::tip Microsoft Defender Setup
-The following example assumes that you have already set up Microsoft Defender and Microsoft Defender XDR, for example, by following the [official
+The following example assumes that you have already set up Microsoft Defender
+and Microsoft Defender XDR, for example, by following the [official
 documentation](https://learn.microsoft.com/en-us/azure/defender-for-cloud/connect-azure-subscription).
 :::
 
@@ -15,18 +22,26 @@ documentation](https://learn.microsoft.com/en-us/azure/defender-for-cloud/connec
 
 ### Azure
 
-To stream security events from Microsoft Defender, an Azure Event Hub is used. It doesn't require any special configuration, but needs to be at least `Standard` tier to provide a Kafka endpoint. To verify, check if `Kafka Surface` is enabled after setting it up.
+To stream security events from Microsoft Defender, an Azure Event Hub is used.
+It doesn't require any special configuration, but needs to be at least
+`Standard` tier to provide a Kafka endpoint. To verify, check if `Kafka Surface`
+is enabled after setting it up.
 
 ### Microsoft Security Center
 
-In Microsoft Security Center, Streaming can be configured under `System -> Settings -> Microsoft Defender XDR -> General -> Streaming API`. Add a new Streaming API for the target Event Hub and enable all event types that you want to collect.
+In Microsoft Security Center, Streaming can be configured under `System ->
+Settings -> Microsoft Defender XDR -> General -> Streaming API`. Add a new
+Streaming API for the target Event Hub and enable all event types that you want
+to collect.
 
 ## Read events with a Tenzir pipeline
 
-You can process the configured events with the following pipeline. Replace all strings starting with `YOUR_`. The configuration values can be found in Azure under `Event Hub Namespace -> Settings -> Shared access policies -> (Your policy)`.
+You can process the configured events with the following pipeline. Replace all
+strings starting with `YOUR_`. The configuration values can be found in Azure
+under `Event Hub Namespace -> Settings -> Shared access policies -> (Your
+policy)`.
 
 ```tql
-// tql2
 load_kafka topic="YOUR_EVENT_HUB_NAME", options = {
   "bootstrap.servers": "YOUR_EVENT_HUB_NAME.servicebus.windows.net:9093",
   "security.protocol": "SASL_SSL",
@@ -40,7 +55,6 @@ read_json
 Example pipeline:
 
 ```tql
-// tql2
 load_kafka topic="tenzir-defender-event-hub", options = {
   "bootstrap.servers": "tenzir-defender-event-hub.servicebus.windows.net:9093",
   "security.protocol": "SASL_SSL",
