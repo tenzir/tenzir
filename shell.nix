@@ -36,7 +36,7 @@ in
           pkgs.pandoc
         ];
       # To build libcaf_openssl with bundled CAF.
-      buildInputs = [pkgs.openssl];
+      buildInputs = [pkgs.openssl pkgs.arrow-adbc-go];
       shellHook = ''
         # Use editable mode for python code part of the python operator. This
         # makes changes to the python code observable in the python operator
