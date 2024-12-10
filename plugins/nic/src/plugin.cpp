@@ -31,8 +31,7 @@ namespace tenzir::plugins::nic {
 namespace {
 
 class plugin final : public virtual loader_plugin<nic_loader>,
-                     public virtual operator_plugin<nics_operator>,
-                     public virtual operator_factory_plugin {
+                     public virtual operator_plugin<nics_operator> {
 public:
   auto initialize(const record& config,
                   const record& /* global_config */) -> caf::error override {
@@ -50,12 +49,6 @@ public:
 
   auto signature() const -> operator_signature override {
     return {.source = true};
-  }
-
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("nics").parse(inv, ctx).ignore();
-    return std::make_unique<nics_operator>();
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

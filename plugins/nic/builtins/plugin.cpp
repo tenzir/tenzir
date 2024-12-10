@@ -30,7 +30,8 @@ namespace tenzir::plugins::nic {
 
 namespace {
 
-class plugin : public virtual operator_plugin2<loader_adapter<nic_loader>> {
+class load_plugin
+  : public virtual operator_plugin2<loader_adapter<nic_loader>> {
   auto make(invocation inv, session ctx) const -> failure_or<operator_ptr> {
     // FIXME: Arg parser doesn't support uint32_t
     auto snaplen = std::optional<located<uint64_t>>{};
@@ -49,8 +50,21 @@ class plugin : public virtual operator_plugin2<loader_adapter<nic_loader>> {
   }
 };
 
+class plugin : public virtual operator_plugin2<nics_operator> {
+  auto name() const -> std::string override {
+    return "tql2.nics";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
+    return std::make_unique<nics_operator>();
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::nic
 
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::nic::load_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::nic::plugin)
