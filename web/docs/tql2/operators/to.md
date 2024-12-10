@@ -95,11 +95,14 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | `file` | [`save_file`](save_file.md) | `to "file://path/to/file.json"` |
 | `fluentbit` | [`to_fluent_bit`](to_fluent_bit.md) | `to "fluentbit://elasticsearch"` |
 | `ftp`, `ftps` | [`save_ftp`](save_ftp.md) | `to "ftp://example.com/file.json"` |
-| `gcps` | [`save_google_cloud_pubsub`](save_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id"` |
+| `gcps` | [`save_google_cloud_pubsub`](save_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id" { … }` |
 | `http`, `https` | [`save_http`](save_http.md) | `to "http://example.com/file.json"` |
-| `kafka` | [`save_kafka`](save_kafka.md) | `to "kafka://topic"` |
+| `inproc` | [`save_zmq`](save_zmq.md) | `to "inproc://127.0.0.1:56789" { write_json }` |
+| `kafka` | [`save_kafka`](save_kafka.md) | `to "kafka://topic" { write_json }` |
 | `s3` | [`save_s3`](save_s3.md) | `to "s3://bucket/file.json"` |
-| `udp` | [`save_udp`](save_udp.md) | `to "udp://127.0.0.1:56789"` |
+| `sqs` | [`save_sqs`](save_sqs.md) | `to "sqs://my-queue" { write_json }` |
+| `udp` | [`save_udp`](save_udp.md) | `to "udp://127.0.0.1:56789" { write_json }` |
+| `zmq` | [`save_zmq`](save_zmq.md) | `to "zmq://127.0.0.1:56789" { write_json }` |
 
 Please see the respective operator pages for details on the URI's locator format.
 
