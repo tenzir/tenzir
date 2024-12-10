@@ -139,8 +139,6 @@
           restinio
         ] ++ lib.optionals isStatic [
           azure-sdk-for-cpp
-        ] ++ lib.optionals (!isStatic) [
-          arrow-adbc-cpp
         ] ++ lib.optionals stdenv.isLinux [
           pfs
         ] ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
@@ -157,6 +155,8 @@
           simdjson
           spdlog
           xxHash
+        ] ++ lib.optionals (!isStatic) [
+          arrow-adbc-cpp
         ] ++ lib.optionals isMusl [
           jemalloc
         ];
