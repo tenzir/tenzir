@@ -416,6 +416,16 @@ RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime && \
       rm -rf build-platform
 
+FROM plugins-source AS snowflake-plugin
+
+COPY contrib/tenzir-plugins/snowflake ./contrib/tenzir-plugins/snowflake
+RUN cmake -S contrib/tenzir-plugins/snowflake -B build-snowflake -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-snowflake --parallel && \
+      cmake --build build-snowflake --target integration && \
+      DESTDIR=/plugin/snowflake cmake --install build-snowflake --strip --component Runtime && \
+      rm -rf build-snowflake
+
 FROM plugins-source AS to_splunk-plugin
 
 COPY contrib/tenzir-plugins/to_splunk ./contrib/tenzir-plugins/to_splunk
@@ -440,14 +450,26 @@ RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
 
 FROM tenzir-de AS tenzir-ce
 
+USER root:root
+
+RUN wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
+    apt-get -y --no-install-recommends install \
+      ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+    apt-get update && \
+    apt-get -y --no-install-recommends install libadbc-driver-manager103 libadbc-driver-snowflake103 && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-analytics /
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
+COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
+
+USER tenzir:tenzir
 
 # -- tenzir-node-ce ------------------------------------------------------------
 
