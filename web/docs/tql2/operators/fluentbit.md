@@ -180,7 +180,7 @@ fluentbit "slack", options = { webhook: "https://hooks.slack.com/services/T00000
 fluentbit "splunk", options = { host=127.0.0.1, port: 8088, tls:"on", tls.verify=:off", splunk_token:"11111111-2222-3333-4444-555555555555" }
 ```
 
-### Send ElasticSearch
+### Send to ElasticSearch
 
 ```tql
 fluentbit "es", options = { host: 192.168.2.3, port: 9200, index: "my_index", type: "my_type" }
