@@ -54,11 +54,9 @@ offers a transactional interface for adding and removing partitions.
 Manages chunks of raw bytes by interacting with a resource.
 
 A connector is either a *loader* that acquires bytes from a resource, or a
-*saver* that sends bytes to a resource. Example connectors are
-[`file`](./connectors/file.md), [`kafka`](./connectors/kafka.md), and
-[`nic`](./connectors/nic.md).
-
-- See all available [connectors](./connectors.md)
+*saver* that sends bytes to a resource. Loaders are implemented as ordinary
+[operators](operators.md) prefixed with `load_*` while savers are prefixed with
+`save_*`.
 
 ## Context
 
@@ -112,14 +110,14 @@ GitHub](https://github.com/tenzir/library).
 
 ## Loader
 
-A [connector](#connector) that acquires bytes.
+A connector that acquires bytes.
 
 A loader is the dual to a [saver](#saver). It has a no input and only performs a
-side effect that acquires bytes. Use a loader in the
-[`from`](./operators/from.md) or [`load`](./operators/load.md) operators.
+side effect that acquires bytes. Use a loader implicitly with the
+[`from`](tql2/operators/from.md) operator or explicitly with the `load_*`
+operators.
 
 - Learn more about [pipelines](./pipelines.md)
-- See [all connectors](./connectors.md)
 
 ## Node
 
@@ -228,11 +226,11 @@ A printer is the dual to a [parser](#parser). Use a parser in the
 A [connector](#connector) that emits bytes.
 
 A saver is the dual to a [loader](#loader). It has a no output and only performs
-a side effect that emits bytes. Use a saver in the [`to`](./operators/to.md) or
-[`save`](./operators/save.md) operators.
+a side effect that emits bytes. Use a saver implicitly with the
+[`to`](tql2/operators/to.md) operator or explicitly with the `save_*`
+operators.
 
 - Learn more about [pipelines](./pipelines.md)
-- See [all connectors](./connectors.md)
 
 ## Schema
 
@@ -259,7 +257,6 @@ An acronym for *Tenzir Query Language*.
 TQL is the language in which users write [pipelines](#pipeline).
 
 - Learn more about the [language](./language.md)
-- Understand the [syntax](./language/syntax.md)
 
 ## Transformation
 

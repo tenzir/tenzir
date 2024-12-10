@@ -31,7 +31,7 @@ Describes the part of Tenzir to look at.
 Available aspects:
 
 - `config`: shows all current configuration options.
-- `connectors`: shows all available [connectors](../connectors.md).
+- `connectors`: shows all available connectors.
 - `contexts`: shows all available contexts.
 - `formats`: shows all available [formats](../formats.md).
 - `operators`: shows all available [operators](../operators.md).

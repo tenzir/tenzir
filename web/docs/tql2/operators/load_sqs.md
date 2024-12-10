@@ -45,3 +45,7 @@ Read JSON messages with a 20-second long poll timeout:
 ```tql
 load_sqs "sqs://tenzir", poll_time=20s
 ```
+
+## See Also
+
+[`save_sqs`](save_sqs.md)

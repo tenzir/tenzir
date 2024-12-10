@@ -2,6 +2,7 @@
 title: Tenzir Node v4.21
 authors: [raxyte, IyeOnline]
 date: 2024-10-04
+last_updated: 2024-12-10
 tags: [release, node]
 comments: true
 ---
@@ -71,11 +72,10 @@ documentation](/next/formats#parser-schema-inference).
 
 ## Azure Blob Storage Integration
 
-Tenzir now has an [integration with Azure Blob
-Storage](/next/connectors/azure-blob-storage)! This integration enables users to
-securely load log files and export processed data back to Azure Blob Storage,
-all while benefiting from both the flexibility and scalability of cloud storage
-and the efficiency of Tenzir's data pipelines.
+Tenzir now has an integration with Azure Blob Storage! This integration enables
+users to securely load log files and export processed data back to Azure Blob
+Storage, all while benefiting from both the flexibility and scalability of cloud
+storage and the efficiency of Tenzir's data pipelines.
 
 ```text {0} title="Load 'suricata.json', authorized as 'tenzirdev'"
 from "abfss://tenzirdev@container/suricata.json" read suricata

@@ -2,6 +2,7 @@
 title: Tenzir v4.8
 authors: [dominiklohmann, jachris]
 date: 2024-01-22
+last_updated: 2024-12-10
 tags: [release, fluent-bit, http, context, lookup, performance]
 comments: true
 ---
@@ -23,8 +24,8 @@ change in the enrichment context.
 
 ## Graylog Support
 
-The new [`gelf`](/next/formats/gelf) parser makes it possible to read a stream
-of [Graylog Extended Log Format
+The new `gelf` parser makes it possible to read a stream of [Graylog Extended
+Log Format
 (GELF)](https://go2docs.graylog.org/5-0/getting_in_log_data/gelf.html) messages.
 
 You can now point your GELF feed to a Tenzir pipeline. Read our [Graylog
@@ -66,8 +67,8 @@ Here is visual explanation of how `delay` works:
 
 ## HTTP Saver
 
-The [`http`](/next/connectors/http) connector now also has a saver in addition
-to the already existing loader. Here's how they work in a nutshell:
+The `http` connector now also has a saver in addition to the already existing
+loader. Here's how they work in a nutshell:
 
 ![HTTP Connector](http.excalidraw.svg)
 

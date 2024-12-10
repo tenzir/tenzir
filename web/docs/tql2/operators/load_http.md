@@ -35,3 +35,7 @@ The headers for the request.
 ```tql
 load_http "example.org/api", headers={"X-API-Token": "0000-0000-0000"}
 ```
+
+## See Also
+
+[`save_http`](save_http.md)

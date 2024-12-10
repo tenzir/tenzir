@@ -115,14 +115,14 @@ Cribl Stream has the following pipeline
 - Tenzir does not differentiate between streaming and historical search
   pipelines.
 - Tenzir operators can leverage other abstractions
-  - [Connectors](connectors.md): loads or saves bytes from a remote resource
-  - [Formats](formats.md): parse or print data
+  - **Connectors**: loads or saves bytes from a remote resource
+  - **Formats**: parse or print data
   - **Contexts**: stateful objects for
     [enrichment/contextualization](enrichment/README.md)
-- Tenzir [connectors](connectors.md) and [formats](formats.md) can be used from
-  various operators, such as [`load`](operators/load.md),
-  [`from`](operators/from.md), [`save`](operators/save.md),
-  [`to`](operators/to.md), [`parse`](operators/parse.md).
+- Tenzir connectors and formats can be used from various operators, such as
+  [`load`](operators/load.md), [`from`](operators/from.md),
+  [`save`](operators/save.md), [`to`](operators/to.md),
+  [`parse`](operators/parse.md).
 
 ### Routing
 
@@ -220,8 +220,8 @@ Bytes:
 
 - In addition to events, Tenzir pipelines can also transport raw **bytes**.
 - The operator decides whether it support bytes, events, or both.
-- All Tenzir [connectors](connectors.md) produce or consume byte streams;
-  [formats](formats.md) parse or print byte streams.
+- All Tenzir connectors produce or consume byte streams; formats parse or print
+  byte streams.
 
 See also the section on [dataflow](#dataflow) below.
 
@@ -261,12 +261,8 @@ See also the section on [dataflow](#dataflow) below.
 
 #### Tenzir
 
-- A **source** is an operator that only produces data. Source operators that use a
-  [loader](connectors.md), such as [`load`](operators/load.md) and
-  [`from`](operators/from.md), produce bytes.
-- A **sink** is an operator that only consumes data. Sink operators that use a
-  [saver](connectors.md), such as [`save`](operators/save.md) and
-  [`to`](operators/to.md), consume bytes.
+- A **source** is an operator that only produces data.
+- A **sink** is an operator that only consumes data.
 - A **transformation** is an operator that consumes and produces data. Numerous
   events-to-events transformations allow for [shaping the
   data](usage/shape-data/README.md).
@@ -383,8 +379,8 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 - Contexts are not static and limited to CSV or MMDB files; you can add data
   dynamically from any another pipeline, using the
   [`context`](operators/context.md) `update` operator. In other words, you can
-  use all existing [connectors](connectors.md) and [formats](formats.md) to feed
-  data into a context.
+  use all existing connectors and [formats](formats.md) to feed data into a
+  context.
 - When Tenzir lookup tables have CIDR subnets as key, you can perform an
   enrichment with single IP addresses (using a longest-prefix match). This comes
   in handy for [enriching with a network

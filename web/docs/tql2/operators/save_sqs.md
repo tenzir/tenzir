@@ -40,3 +40,7 @@ subscribe "to-sqs"
 write_json
 save_sqs "sqs://tenzir"
 ```
+
+## See Also
+
+[`load_sqs`](load_sqs.md)

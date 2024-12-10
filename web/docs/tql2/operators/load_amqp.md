@@ -10,15 +10,8 @@ load_amqp [url:str, channel=int, exchange=str, routing_key=str, queue=str,
 
 ## Description
 
-The `load_amqp` operator is an [AMQP](https://www.amqp.org/) 0-9-1 client that
-enables interacting with an AMQP server, as a *consumer*.
-
-The diagram below shows the key abstractions and how they relate to a pipeline:
-
-![AMQP](amqp.excalidraw.svg)
-
-The implementation of this connector relies on the [RabbitMQ C client
-library](https://github.com/alanxz/rabbitmq-c).
+The `load_amqp` operator is an [AMQP](https://www.amqp.org/) 0-9-1 client to
+receive messages from a queue.
 
 ### `url: str (optional)`
 
@@ -118,9 +111,9 @@ Defaults to `false`.
 
 ## Examples
 
-Consume [JSON](read_json.md) from a specific AMQP server:
+### Consume a message from a specified AMQP queue
 
 ```tql
-load_amqp "amqp://admin:pass@0.0.0.1:5672/vhost"
+load_amqp "amqp://admin:pass@0.0.0.1:5672/vhost", queue="foo"
 read_json
 ```
