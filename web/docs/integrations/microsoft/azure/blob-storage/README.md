@@ -1,4 +1,8 @@
-# Blob Storage
+---
+sidebar_label: Blob Storage
+---
+
+# Azure Blob Storage
 
 [Azure Blob Storage](https://azure.microsoft.com/en-us/products/storage/blobs)
 is Azure's object storage service. Tenzir can treat it like a local filesystem
