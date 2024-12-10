@@ -1,0 +1,35 @@
+// Test entropy with different data types
+from {x: 1}, {x: 2}, {x: 1.0}, {x: 2.0}
+summarize mixed_numeric=entropy(x)
+write_tql
+save_stdout
+
+from {x: true}, {x: false}, {x: true}
+summarize boolean_values=entropy(x)
+write_tql
+save_stdout
+
+from {x: 1s}, {x: 2s}, {x: 1s}
+summarize duration_values=entropy(x)
+write_tql
+save_stdout
+
+from {x: 2023-01-01}, {x: 2023-01-02}, {x: 2023-01-01}
+summarize time_values=entropy(x)
+write_tql
+save_stdout
+
+from {x: 192.168.1.1}, {x: 192.168.1.2}, {x: 192.168.1.1}
+summarize ip_values=entropy(x)
+write_tql
+save_stdout
+
+from {x: 192.168.1.0/24}, {x: 10.0.0.0/8}, {x: 192.168.1.0/24}
+summarize subnet_values=entropy(x)
+write_tql
+save_stdout
+
+from {x: b"hello"}, {x: b"world"}, {x: b"hello"}
+summarize blob_values=entropy(x)
+write_tql
+save_stdout

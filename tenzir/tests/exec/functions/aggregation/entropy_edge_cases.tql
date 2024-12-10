@@ -1,0 +1,50 @@
+// Test edge cases for entropy function
+from {x: 1}
+summarize single_value=entropy(x)
+write_tql
+save_stdout
+
+from {x: 1}, {x: 1}, {x: 1}
+summarize identical_values=entropy(x)
+write_tql
+save_stdout
+
+from {x: 1}, {x: 2}
+summarize two_values=entropy(x)
+write_tql
+save_stdout
+
+from {x: 1}, {x: 2}
+summarize two_values_normalized=entropy(x, normalize=true)
+write_tql
+save_stdout
+
+from {x: null}, {x: 1}, {x: 2}
+summarize with_null=entropy(x)
+write_tql
+save_stdout
+
+from {x: null}, {x: null}
+summarize only_nulls=entropy(x)
+write_tql
+save_stdout
+
+from {x: "a"}, {x: "b"}, {x: "a"}
+summarize string_values=entropy(x)
+write_tql
+save_stdout
+
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+summarize uniform_distribution=entropy(x)
+write_tql
+save_stdout
+
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+summarize uniform_normalized=entropy(x, normalize=true)
+write_tql
+save_stdout
+
+from {x: 1}, {x: 1}, {x: 1}, {x: 1}, {x: 2}
+summarize skewed_distribution=entropy(x)
+write_tql
+save_stdout
