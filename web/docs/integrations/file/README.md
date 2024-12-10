@@ -39,8 +39,10 @@ bytes, such as the [`yara`](../../tql2/operators/yara.md) operator. In this
 case, passing `mmap=true` runs more efficiently:
 
 ```tql
-from "/sandbox/malware.gz", mmap=true
-yara "rule.yaml"
+from "/sandbox/malware.gz", mmap=true {
+  decompress "gzip"
+  yara "rule.yaml"
+}
 ```
 
 ### Follow a file
@@ -86,7 +88,9 @@ to "/tmp/event.csv", append=true
 Pass `uds=true` to signal that the file is a Unix domain socket:
 
 ```tql
-to "/tmp/socket", uds=true
+to "/tmp/socket", uds=true {
+  write_ndjson
+}
 ```
 
 When reading from a Unix domain socket, Tenzir automatically figures out whether

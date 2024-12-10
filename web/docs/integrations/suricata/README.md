@@ -23,23 +23,22 @@ outputs:
       filename: eve.json
 ```
 
-The `filetype` setting determines how you'd process the log file.
+The `filetype` setting determines how you'd process the log file and defaults to
+`regular`.
 
-By default, Suricata uses the file type `regular`. Ingest into a node as
-follows:
+Onboard Suricata EVE JSON logs as follows:
 
 ```tql
 load_file "/path/to/eve.json"
 read_suricata
-import
+publish "suricata"
 ```
 
-If your `filetype` setting is `unix_stream`, you need to create a Unix domain
-socket first, e.g., like this:
+If your set `filetype` to `unix_stream`, you need to create a Unix domain socket
+first, e.g., like this:
 
 ```bash
 nc -U -l /tmp/eve.socket
 ```
 
-Then you can use the same pipeline as above, since Tenzir automatically detects
-the file type.
+Then use the same pipeline as above; Tenzir automatically detects the file type.

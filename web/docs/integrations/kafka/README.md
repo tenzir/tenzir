@@ -26,7 +26,9 @@ from {
   x: 42,
   y: "foo",
 }
-to "kafka://topic"
+to "kafka://topic" {
+  write_ndjson
+}
 ```
 
 ### Subscribe to a topic

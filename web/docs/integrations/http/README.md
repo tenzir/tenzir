@@ -16,10 +16,14 @@ you will get a warning.
 In both cases, you can only provide static header data.
 
 :::tip URL Support
-The URL schemes `http://` and `https://` dispatche to
+The URL schemes `http://` and `https://` dispatch to
 [`load_http`](../../tql2/operators/load_http.md) and
 [`save_http`](../../tql2/operators/save_http.md) for seamless URL-style use via
 [`from`](../../tql2/operators/from.md) and [`to`](../../tql2/operators/to.md).
+
+Since the majority of HTTP activity uses JSON-encoded request/response
+bodies, you do not need to provide a separate pipeline argument with
+`read_json`/`write_json`.
 :::
 
 ## Examples

@@ -19,10 +19,10 @@ The URL schemes `ftp://` and `ftps://` dispatche to
 
 ## Examples
 
-### Download files from an FTP server
+### Download a file from an FTP server
 
 ```tql
-from "amqp://user:pass@0.0.0.1:5672/vhost"
+from "ftp://user:pass@ftp.example.org/path/to/file.json"
 ```
 
 ### Upload events to an FTP server
