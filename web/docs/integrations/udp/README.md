@@ -22,7 +22,7 @@ The URL scheme `udp://` dispatches to
 ### Accept Syslog messages over UDP
 
 ```tql
-from "udp://127.0.0.1:541" {
+from "udp://127.0.0.1:541", insert_newlines=true {
   read_syslog
 }
 ```
