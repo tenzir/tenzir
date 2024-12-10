@@ -15,27 +15,14 @@ and process events with a Fluent Bit [output plugin][outputs].
 [inputs]: https://docs.fluentbit.io/manual/pipeline/inputs
 [outputs]: https://docs.fluentbit.io/manual/pipeline/outputs
 
-Syntactically, the `fluentbit` operator behaves similar to an invocation of the
-`fluent-bit` command line utility. For example, the invocation
-
-```bash
-fluent-bit -o plugin -p key1=value1 -p key2=value2 -p ...
-```
-
-translates to our `fluent-bit` operator as follows:
-
-```tql
-fluentbit "plugin", ...
-```
-
 ### `plugin: string`
 
 The name of the Fluent Bit plugin.
 
-Run `fluent-bit -h` cli  and look under the **Inputs** and **Outputs** section of the
-help text for available plugin names. The web documentation often comes with an
-example invocation near the bottom of the page, which also provides a good idea
-how you could use the operator.
+Run `fluent-bit -h` on the command line and look under the **Inputs** and
+**Outputs** section of the help text for available plugin names. The web
+documentation often comes with an example invocation near the bottom of the
+page, which also provides a good idea how you could use the operator.
 
 ### `fluent_bit_options = record (optional)`
 
@@ -56,26 +43,29 @@ property with `-p key=value` on the command line.
 
 ### `merge = bool (optional)`
 
-Merges all incoming events into a single schema\* that converges over time. This
-option is usually the fastest *for reading* highly heterogeneous data, but can lead
-to huge schemas filled with nulls and imprecise results. Use with caution.
+Merges all incoming events into a single schema[^1] that converges over time.
+This option is usually the fastest *for reading* highly heterogeneous data, but
+can lead to huge schemas filled with nulls and imprecise results. Use with
+caution.
 
-\*: In selector mode, only events with the same selector are merged.
+[^1]: In selector mode, only events with the same selector are merged.
 
-This option can not be combined with `raw=true, schema=<schema>`.
+This option cannot be combined with `raw=true, schema=<schema>`.
 
 ### `raw = bool (optional)`
 
-Use only the raw types that are native to the parsed format. Fields that have a type
-specified in the chosen schema will still be parsed according to the schema.
+Use only the raw types that are native to the parsed format. Fields that have a
+type specified in the chosen schema will still be parsed according to the
+schema.
 
-For example, the JSON format has no notion of an IP address, so this will cause all IP addresses
-to be parsed as strings, unless the field is specified to be an IP address by the schema.
-JSON however has numeric types, so those would be parsed.
+For example, the JSON format has no notion of an IP address, so this will cause
+all IP addresses to be parsed as strings, unless the field is specified to be an
+IP address by the schema. JSON however has numeric types, so those would be
+parsed.
 
 Use with caution.
 
-This option can not be combined with `merge=true, schema=<schema>`.
+This option cannot be combined with `merge=true, schema=<schema>`.
 
 ### `schema = string (optional)`
 
@@ -98,8 +88,8 @@ The `selector` option is incompatible with the `schema` option.
 ### `schema_only = bool (optional)`
 
 When working with an existing schema, this option will ensure that the output
-schema has *only* the fields from that schema. If the schema name is obtained via a `selector`
-and it does not exist, this has no effect.
+schema has *only* the fields from that schema. If the schema name is obtained
+via a `selector` and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
@@ -108,10 +98,10 @@ This option requires either `schema` or `selector` to be set.
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.
 
-A popular example of this is the [Zeek JSON](read_zeek_json.md) format. It includes
-the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
-top-level. The data is best modeled as an `id` record with four nested fields
-`orig_h`, `orig_p`, `resp_h`, and `resp_p`.
+A popular example of this is the [Zeek JSON](read_zeek_json.md) format. It
+includes the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at
+the top-level. The data is best modeled as an `id` record with four nested
+fields `orig_h`, `orig_p`, `resp_h`, and `resp_p`.
 
 Without an unflatten separator, the data looks like this:
 
