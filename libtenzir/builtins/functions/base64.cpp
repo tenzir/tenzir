@@ -32,46 +32,48 @@ class plugin final : public function_plugin {
     TRY(argument_parser2::function(name())
           .positional("value", expr, "blob|string")
           .parse(inv, ctx));
-    return function_use::make([expr = std::move(expr)](evaluator eval,
-                                                       session ctx) -> series {
-      const auto value = eval(expr);
-      const auto f = detail::overload{
-        [&](const arrow::NullArray& array) -> series {
-          return series::null(Type{}, array.length());
-        },
-        [&](const concepts::one_of<arrow::BinaryArray, arrow::StringArray> auto&
+    return function_use::make([expr
+                               = std::move(expr)](evaluator eval, session ctx) {
+      return map_series(eval(expr), [&](series value) {
+        const auto f = detail::overload{
+          [&](const arrow::NullArray& array) -> series {
+            return series::null(Type{}, array.length());
+          },
+          [&](
+            const concepts::one_of<arrow::BinaryArray, arrow::StringArray> auto&
               array) -> series {
-          auto b = Type::make_arrow_builder(arrow::default_memory_pool());
-          check(b->Reserve(array.length()));
-          for (auto i = int64_t{}; i < array.length(); ++i) {
-            if (array.IsNull(i)) {
-              check(b->AppendNull());
-              continue;
-            }
-            if constexpr (Mode == mode::encode) {
-              check(b->Append(detail::base64::encode(array.Value(i))));
-            } else {
-              const auto decoded = detail::base64::try_decode(array.Value(i));
-              if (not decoded) {
-                diagnostic::warning("invalid base64 encoding")
-                  .primary(expr)
-                  .emit(ctx);
+            auto b = Type::make_arrow_builder(arrow::default_memory_pool());
+            check(b->Reserve(array.length()));
+            for (auto i = int64_t{}; i < array.length(); ++i) {
+              if (array.IsNull(i)) {
                 check(b->AppendNull());
                 continue;
               }
-              check(b->Append(decoded.value()));
+              if constexpr (Mode == mode::encode) {
+                check(b->Append(detail::base64::encode(array.Value(i))));
+              } else {
+                const auto decoded = detail::base64::try_decode(array.Value(i));
+                if (not decoded) {
+                  diagnostic::warning("invalid base64 encoding")
+                    .primary(expr)
+                    .emit(ctx);
+                  check(b->AppendNull());
+                  continue;
+                }
+                check(b->Append(decoded.value()));
+              }
             }
-          }
-          return series{Type{}, finish(*b)};
-        },
-        [&](const auto&) -> series {
-          diagnostic::warning("expected `blob` or `string`, got `{}`",
-                              value.type.kind())
-            .primary(expr)
-            .emit(ctx);
-          return series::null(Type{}, value.length());
-        }};
-      return match(*value.array, f);
+            return series{Type{}, finish(*b)};
+          },
+          [&](const auto&) -> series {
+            diagnostic::warning("expected `blob` or `string`, got `{}`",
+                                value.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            return series::null(Type{}, value.length());
+          }};
+        return match(*value.array, f);
+      });
     });
   }
 };
