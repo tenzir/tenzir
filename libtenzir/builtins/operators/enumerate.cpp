@@ -25,6 +25,7 @@
 #include <arrow/type.h>
 #include <arrow/type_fwd.h>
 
+#include <string_view>
 #include <unordered_set>
 
 namespace tenzir::plugins::enumerate {

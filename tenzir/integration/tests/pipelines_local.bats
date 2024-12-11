@@ -851,3 +851,12 @@ EOF
   check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.map(x, x.en)'
   check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.where(x, x.de == "eins")'
 }
+
+@test "zip" {
+  check tenzir --tql2 'from {foo: [1, 2, 3], bar: [4, 5, 6]} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: [1, 2, 3], bar: [4, 5]} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: [], bar: [4, 5]} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: [], bar: []} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: null, bar: [1]} | baz = zip(foo, bar)'
+  check tenzir --tql2 'from {foo: null, bar: null} | baz = zip(foo, bar)'
+}

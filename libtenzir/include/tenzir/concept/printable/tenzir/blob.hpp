@@ -12,6 +12,8 @@
 #include "tenzir/concept/printable/string/escape.hpp"
 #include "tenzir/detail/escapers.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 template <class T>

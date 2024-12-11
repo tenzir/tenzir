@@ -210,28 +210,6 @@ LicenseComments: https://github.com/Stiffstream/restinio
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-plugins-web-include-web-mime-hpp
 
-FileName: ./libtenzir/include/tenzir/detail/streambuf.hpp
-SPDXID: SPDXRef-file-libtenzir-include-tenzir-detail-streambuf-hpp
-FileChecksum: SHA1: 4b7353d2cd131db7b25dd01b17a8582449b3c38c
-FileChecksum: SHA256: 2ae24006e57d1e061654bd552079f260c90a62f32b40d3444291d5ecd8059e48
-FileCopyrightText: Copyright 2011-2018 Dominik Charousset
-LicenseConcluded: BSD-3-Clause
-LicenseInfoInFile: BSD-3-Clause
-LicenseComments: Includes code from https://github.com/actor-framework/actor-framework
-
-Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-detail-streambuf-hpp
-
-FileName: ./libtenzir/test/detail/streambuf.cpp
-SPDXID: SPDXRef-file-libtenzir-test-detail-streambuf-cpp
-FileChecksum: SHA1: 790b6e9a05af9582bf3a26dc52c7d1674ba17cfd
-FileChecksum: SHA256: 396db3fa44cc2207ce2f3e3e654e013dde33900130b959d80838a548e856a4be
-FileCopyrightText: Copyright 2011-2018 Dominik Charousset
-LicenseConcluded: BSD-3-Clause
-LicenseInfoInFile: BSD-3-Clause
-LicenseComments: Includes code from https://github.com/actor-framework/actor-framework
-
-Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-test-detail-streambuf-cpp
-
 FileName: ./plugins/velociraptor/cmake/protobuf-generate.cmake
 SPDXID: SPDXRef-file-plugins-velociraptor-cmake-protobuf-generate-cmake
 FileChecksum: SHA1: 653e4eaf8fb14152c5bdee8246aac809b1a2d18e

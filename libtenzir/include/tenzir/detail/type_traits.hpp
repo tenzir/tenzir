@@ -77,6 +77,13 @@ using is_same_or_derived_t = typename is_same_or_derived<A, B>::type;
 template <class A, class B>
 inline constexpr bool is_same_or_derived_v = is_same_or_derived<A, B>::value;
 
+/// Checks whether `Tpl` is a specialization of `T` or not.
+template <template <class...> class Tpl, class T>
+struct is_specialization_of : std::false_type {};
+
+template <template <class...> class T, class... Ts>
+struct is_specialization_of<T, T<Ts...>> : std::true_type {};
+
 // -- traits -----------------------------------------------------------------
 
 template <class T, class... Ts>

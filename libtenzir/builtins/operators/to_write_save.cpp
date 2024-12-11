@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace tenzir::plugins::write_to_print_save {

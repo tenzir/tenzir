@@ -346,14 +346,14 @@ TEST(convert - caf::config_value - null) {
   // clang-format on
   using namespace caf;
   auto y = to<dictionary<config_value>>(x);
-  REQUIRE(!y.engaged());
+  REQUIRE(!y.has_value());
   CHECK_EQUAL(y.error(), ec::type_clash);
   // If we flatten the record first and weed out null values, it'll work.
   auto flat = flatten(x);
   auto& [k, v] = as_vector(flat).back();
   flat.erase(k);
   y = to<dictionary<config_value>>(flat);
-  REQUIRE(y.engaged());
+  REQUIRE(y.has_value());
 }
 
 // We can't really test that a given call doesn't produce a stack overflow, so

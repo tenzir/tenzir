@@ -22,6 +22,7 @@
 #include <boost/url/url.hpp>
 
 #include <ranges>
+#include <string_view>
 
 namespace tenzir::plugins::from {
 namespace {

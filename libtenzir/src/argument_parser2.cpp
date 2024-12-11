@@ -10,8 +10,13 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/type_traits.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
+
+#include <boost/algorithm/string.hpp>
+
+#include <string_view>
 
 namespace tenzir {
 
@@ -54,12 +59,12 @@ auto argument_parser2::parse(const ast::entity& self,
   auto kind = [](const data& x) -> std::string_view {
     // TODO: Refactor this.
     return match(x, []<class Data>(const Data&) -> std::string_view {
-        if constexpr (caf::detail::is_one_of<Data, pattern>::value) {
-          TENZIR_UNREACHABLE();
-        } else {
-          return to_string(type_kind::of<data_to_type_t<Data>>);
-        }
-      });
+      if constexpr (caf::detail::is_one_of<Data, pattern>::value) {
+        TENZIR_UNREACHABLE();
+      } else {
+        return to_string(type_kind::of<data_to_type_t<Data>>);
+      }
+    });
   };
   auto arg = args.begin();
   auto positional_idx = size_t{0};
@@ -372,22 +377,24 @@ auto argument_parser2::usage() const -> std::string {
 }
 
 auto argument_parser2::docs() const -> std::string {
+  auto name = name_;
   auto category = std::invoke([&] {
     switch (kind_) {
       case kind::op:
-        return "tql2/operators";
+        return "operators";
       case kind::fn:
         return "functions";
     }
     TENZIR_UNREACHABLE();
   });
-  return fmt::format("https://docs.tenzir.com/{}/{}", category, name_);
+  boost::replace_all(name, "::", "/");
+  return fmt::format("https://docs.tenzir.com/tql2/{}/{}", category, name);
 }
 
 template <class T>
 auto argument_parser2::make_setter(T& x) -> auto {
   using value_type = decltype(std::invoke([] {
-    if constexpr (caf::detail::is_specialization<std::optional, T>::value) {
+    if constexpr (detail::is_specialization_of<std::optional, T>::value) {
       return tag_v<typename T::value_type>;
     } else {
       return tag_v<T>;

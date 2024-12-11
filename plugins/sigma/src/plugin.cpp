@@ -32,6 +32,8 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::sigma {
 
 class sigma_operator final : public crtp_operator<sigma_operator> {

@@ -182,11 +182,11 @@ auto make_load_balancer(
   self->attach_functor([] {
     TENZIR_DEBUG("destroyed load balancer");
   });
-  self->state.self = self;
-  self->state.diagnostics = std::move(diagnostics);
-  self->state.metrics = std::move(metrics);
-  self->state.operator_index = operator_index;
-  self->state.executors.reserve(pipes.size());
+  self->state().self = self;
+  self->state().diagnostics = std::move(diagnostics);
+  self->state().metrics = std::move(metrics);
+  self->state().operator_index = operator_index;
+  self->state().executors.reserve(pipes.size());
   for (auto& pipe : pipes) {
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
@@ -204,9 +204,9 @@ auto make_load_balancer(
         [self](const caf::error& err) {
           // This error should be enough to cause the outer pipeline to get
           // cleaned up.
-          diagnostic::error(err).emit(self->state.diagnostics);
+          diagnostic::error(err).emit(self->state().diagnostics);
         });
-    self->state.executors.push_back(std::move(executor));
+    self->state().executors.push_back(std::move(executor));
   }
   self->set_exit_handler([self](caf::exit_msg& msg) {
     if (msg.reason != caf::exit_reason::user_shutdown) {
@@ -216,42 +216,42 @@ auto make_load_balancer(
       return;
     }
     // Let the sources know we are done and wait for their termination.
-    self->state.finish();
+    self->state().finish();
   });
   self->set_down_handler([self](const caf::down_msg& msg) {
-    auto it = std::ranges::find(self->state.executors, msg.source,
+    auto it = std::ranges::find(self->state().executors, msg.source,
                                 &pipeline_executor_actor::address);
-    TENZIR_ASSERT(it != self->state.executors.end());
-    self->state.executors.erase(it);
-    if (self->state.executors.empty()) {
-      // We are done, even if `not self->state.finished`.
+    TENZIR_ASSERT(it != self->state().executors.end());
+    self->state().executors.erase(it);
+    if (self->state().executors.empty()) {
+      // We are done, even if `not self->state().finished`.
       self->quit();
     }
   });
   return {
     [self](atom::write, table_slice& events) -> caf::result<void> {
-      return self->state.write(std::move(events));
+      return self->state().write(std::move(events));
     },
     [self](atom::read) -> caf::result<table_slice> {
-      return self->state.read();
+      return self->state().read();
     },
     [self](uint64_t op_index, uint64_t metric_index,
            type& schema) -> caf::result<void> {
-      auto id = get_or_compute(self->state.metrics_id_map,
+      auto id = get_or_compute(self->state().metrics_id_map,
                                std::pair{op_index, metric_index}, [&] {
-                                 auto id = self->state.next_metrics_id;
-                                 self->state.next_metrics_id += 1;
+                                 auto id = self->state().next_metrics_id;
+                                 self->state().next_metrics_id += 1;
                                  return id;
                                });
-      return self->delegate(self->state.metrics, self->state.operator_index, id,
-                            schema);
+      return self->delegate(self->state().metrics, self->state().operator_index,
+                            id, schema);
     },
     [self](uint64_t op_index, uint64_t metric_index,
            record& metric) -> caf::result<void> {
       auto id
-        = self->state.metrics_id_map.find(std::pair{op_index, metric_index});
-      TENZIR_ASSERT(id != self->state.metrics_id_map.end());
-      return self->delegate(self->state.metrics, self->state.operator_index,
+        = self->state().metrics_id_map.find(std::pair{op_index, metric_index});
+      TENZIR_ASSERT(id != self->state().metrics_id_map.end());
+      return self->delegate(self->state().metrics, self->state().operator_index,
                             id->second, std::move(metric));
     },
     [](const operator_metric& op_metric) -> caf::result<void> {
@@ -261,7 +261,7 @@ auto make_load_balancer(
     },
     [self](diagnostic& diagnostic) -> caf::result<void> {
       TENZIR_ASSERT(diagnostic.severity != severity::error);
-      self->state.diagnostics.emit(std::move(diagnostic));
+      self->state().diagnostics.emit(std::move(diagnostic));
       return {};
     },
   };

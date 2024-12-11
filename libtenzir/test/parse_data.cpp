@@ -12,6 +12,8 @@
 
 #include <caf/test/dsl.hpp>
 
+#include <string_view>
+
 using namespace tenzir;
 using namespace std::string_literals;
 

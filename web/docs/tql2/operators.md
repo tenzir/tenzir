@@ -104,6 +104,7 @@ Operator | Description | Example
 [`save_kafka`](./operators/save_kafka.md) | Saves incoming bytes to an Apache Kafka topic | `save_kafka topic="example"`
 [`save_s3`](./operators/save_s3.md) | Saves incoming bytes to an Amazon S3 object | `save_s3 "s3://my-bucket/obj.csv"`
 [`save_sqs`](./operators/save_sqs.md) | Saves incoming bytes to an Amazon SQS queue | `save_sqs "sqs://tenzir"`
+[`save_tcp`](./operators/save_tcp.md) | Saves incoming bytes to a TCP or TLS connection | `save_tcp "0.0.0.0:8090", tls=true`
 [`save_udp`](./operators/save_udp.md) | Saves incoming bytes to a UDP socket | `save_udp "0.0.0.0:8090"`
 [`save_zmq`](./operators/save_zmq.md) | Saves incoming bytes to ZeroMQ messages | `save_zmq`
 [`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
@@ -200,9 +201,14 @@ Operator | Description | Example
 :--------|:------------|:-------
 [`api`](./operators/api.md) | Calls Tenzir's REST API from a pipeline | `api "/pipeline/list"`
 [`batch`](./operators/batch.md) | Controls the batch size of events | `batch timeout=1s`
-[`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
+[`buffer`](./operators/buffer.md) | Adds additional buffering to handle spikes | `buffer 10M, policy="drop"`
 [`cache`](./operators/cache.md) | In-memory cache shared between pipelines | `cache "w01wyhTZm3", ttl=10min`
 [`legacy`](./operators/legacy.md) | Provides a compatibility fallback to TQL1 pipelines | `legacy "chart area"`
+[`local`](./operators/local.md) | Forces a pipeline to run locally | `local { sort foo }`
+[`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
+[`remote`](./operators/remote.md) | Forces a pipeline to run remotely at a node | `remote { version }`
+[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
+[`unordered`](./operators/unordered.md) | Remove ordering assumptions in a pipeline | `unordered { read_ndjson }`
 
 ## Encode & Decode
 

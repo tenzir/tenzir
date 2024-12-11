@@ -11,6 +11,8 @@
 #include "tenzir/concept/printable/core/printer.hpp"
 #include "tenzir/concept/printable/string/any.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 struct string_printer : printer_base<string_printer> {

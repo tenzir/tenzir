@@ -13,6 +13,8 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/tokens.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 auto parse(std::span<token> tokens, std::string_view source, session ctx)

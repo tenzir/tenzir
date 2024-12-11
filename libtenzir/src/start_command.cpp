@@ -32,6 +32,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <csignal>
+#include <iostream>
 
 namespace tenzir {
 
@@ -64,9 +65,8 @@ using namespace std::chrono_literals;
 
 auto start_command(const invocation& inv, caf::actor_system& sys)
   -> caf::message {
-  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(inv.options),
-                     TENZIR_ARG("args", inv.arguments.begin(),
-                                inv.arguments.end()));
+  TENZIR_TRACE("{} {}", TENZIR_ARG(inv.options),
+               TENZIR_ARG("args", inv.arguments.begin(), inv.arguments.end()));
   auto node_endpoint = std::optional<endpoint>{};
   auto listen_endpoint = std::optional<std::string>{};
   const auto* endpoint_enabled = get_if<bool>(&inv.options, "tenzir.endpoint");

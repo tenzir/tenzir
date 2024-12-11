@@ -10,6 +10,8 @@
 
 #include "tenzir/location.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 ///

@@ -27,6 +27,7 @@
 #include <iostream>
 #include <numeric>
 #include <string>
+#include <string_view>
 
 namespace tenzir {
 
@@ -284,8 +285,8 @@ caf::error parse_impl(invocation& result, const command& cmd,
                       command::argument_iterator first,
                       command::argument_iterator last, const command** target) {
   using caf::get_or;
-  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(std::string(cmd.name)),
-                     TENZIR_ARG("args", first, last));
+  TENZIR_TRACE("{} {}", TENZIR_ARG(std::string(cmd.name)),
+               TENZIR_ARG("args", first, last));
   // Parse arguments for this command.
   *target = &cmd;
   auto [state, position] = cmd.options.parse(result.options, first, last);

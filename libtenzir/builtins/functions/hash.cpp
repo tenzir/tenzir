@@ -31,6 +31,8 @@
 #include <arrow/scalar.h>
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::hash {
 
 namespace {

@@ -15,6 +15,7 @@
 #include <openssl/rand.h>
 
 #include <array>
+#include <string_view>
 
 namespace tenzir::plugins::web {
 
@@ -145,12 +146,12 @@ get_authenticator(caf::scoped_actor& self, node_actor node,
 authenticator_actor::behavior_type
 authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
               filesystem_actor fs) {
-  self->state.path_ = std::filesystem::path{"plugins/web/authenticator.svs"};
-  self->state.filesystem_ = fs;
-  self->request(fs, caf::infinite, atom::read_v, self->state.path_)
+  self->state().path_ = std::filesystem::path{"plugins/web/authenticator.svs"};
+  self->state().filesystem_ = fs;
+  self->request(fs, caf::infinite, atom::read_v, self->state().path_)
     .await(
       [self](chunk_ptr chunk) {
-        auto error = self->state.initialize_from(std::move(chunk));
+        auto error = self->state().initialize_from(std::move(chunk));
         if (error) {
           TENZIR_ERROR("{} encountered error while deserializing state: {}",
                        *self, error);
@@ -166,11 +167,11 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
       });
   return {
     [self](atom::generate) -> caf::result<token_t> {
-      auto result = self->state.generate();
+      auto result = self->state().generate();
       // We don't expect token generation to be very frequent and the total
       // number of tokens to be relatively small, so it should be fine to
       // re-write the complete file every time.
-      auto state = self->state.save();
+      auto state = self->state().save();
       if (not state) {
         return caf::make_error(ec::serialization_error,
                                fmt::format("{} failed to serialize state: {}",
@@ -178,8 +179,8 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
       }
       auto rp = self->make_response_promise<token_t>();
       self
-        ->request(self->state.filesystem_, caf::infinite, atom::write_v,
-                  self->state.path_, std::move(*state))
+        ->request(self->state().filesystem_, caf::infinite, atom::write_v,
+                  self->state().path_, std::move(*state))
         .then(
           [rp, result = std::move(result)](atom::ok) mutable {
             // We deliberately delay delivering the generated token until it is
@@ -195,7 +196,7 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
       return rp;
     },
     [self](atom::validate, const token_t& token) -> bool {
-      return self->state.authenticate(token);
+      return self->state().authenticate(token);
     },
     [](atom::status, status_verbosity, duration) -> tenzir::record {
       return record{};

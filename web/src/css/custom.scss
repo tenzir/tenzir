@@ -183,14 +183,68 @@ figure[data-rehype-pretty-code-figure]
   display: none;
 }
 
-figure[data-rehype-pretty-code-figure]:has(+figure[data-rehype-pretty-code-figure]):not(:has(+figure[data-rehype-pretty-code-figure]>figcaption))>pre {
+figure[data-rehype-pretty-code-figure]:has(
+    + figure[data-rehype-pretty-code-figure]
+  ):not(:has(+ figure[data-rehype-pretty-code-figure] > figcaption))
+  > pre {
   margin-bottom: 0;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   border-bottom: 2px solid #6a7195;
 }
 
-figure[data-rehype-pretty-code-figure]+figure[data-rehype-pretty-code-figure]:not(:has(>figcaption))>pre {
+figure[data-rehype-pretty-code-figure]
+  + figure[data-rehype-pretty-code-figure]:not(:has(> figcaption))
+  > pre {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
+}
+
+figure[data-rehype-pretty-code-figure] > pre > code {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+figure[data-rehype-pretty-code-figure] > pre > code > code {
+  margin: 0 4px !important;
+  padding: 8px !important;
+  min-height: 48px;
+  align-items: center;
+}
+
+figure[data-rehype-pretty-code-figure] > pre > code > pre {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+figure[data-rehype-pretty-code-figure] code {
+  font-size: 1rem;
+}
+
+pre button.rehype-pretty-copy {
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  position: absolute;
+  border-radius: 0px;
+  border: 1px solid #bfc7d5;
+  outline: inherit;
+  justify-content: center !important;
+  align-items: center !important;
+  background-color: transparent;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+pre button.rehype-pretty-copy {
+  & .ready {
+    padding-left: 8px !important;
+    background-position: center;
+  }
+
+  & .success {
+    padding-left: 8px !important;
+    background-position: center;
+  }
 }

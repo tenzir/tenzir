@@ -16,6 +16,7 @@
 #include <caf/expected.hpp>
 
 #include <dlfcn.h>
+#include <string_view>
 
 #if TENZIR_LINUX
 #  include "tenzir/concept/parseable/core/operators.hpp"

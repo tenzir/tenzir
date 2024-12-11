@@ -11,6 +11,8 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 #define TRY_CONVERT_TO_STRING(name, field)                                     \

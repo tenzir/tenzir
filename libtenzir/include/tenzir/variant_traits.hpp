@@ -12,8 +12,6 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/overload.hpp"
 
-#include <caf/variant.hpp>
-
 #include <variant>
 
 namespace tenzir {
@@ -142,23 +140,6 @@ public:
   template <size_t I>
   static constexpr auto get(const std::variant<Ts...>& x) -> decltype(auto) {
     return *std::get_if<I>(&x);
-  }
-};
-
-template <class... Ts>
-class variant_traits<caf::variant<Ts...>> {
-public:
-  static constexpr auto count = sizeof...(Ts);
-
-  static auto index(const caf::variant<Ts...>& x) -> size_t {
-    return x.index();
-  }
-
-  template <size_t I>
-  static auto get(const caf::variant<Ts...>& x) -> decltype(auto) {
-    using T = std::tuple_element_t<I, std::tuple<Ts...>>;
-    return *caf::sum_type_access<caf::variant<Ts...>>::get_if(
-      &x, caf::sum_type_token<T, I>{});
   }
 };
 

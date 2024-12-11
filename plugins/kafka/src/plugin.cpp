@@ -48,14 +48,16 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = loader_args{};
+    auto topic = std::optional<std::string>{"tenzir"};
     auto options = std::optional<located<std::string>>{};
-    parser.add("-t,--topic", args.topic, "<topic>");
+    parser.add("-t,--topic", topic, "<topic>");
     parser.add("-c,--count", args.count, "<n>");
     parser.add("-e,--exit", args.exit);
     parser.add("-o,--offset", args.offset, "<offset>");
     // We use -X because that's standard in Kafka applications, cf. kcat.
     parser.add("-X,--set", options, "<key=value>,...");
     parser.parse(p);
+    args.topic = topic.value();
     if (args.offset) {
       if (!offset_parser()(args.offset->inner)) {
         diagnostic::error("invalid `--offset` value")
@@ -83,12 +85,14 @@ public:
       name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = saver_args{};
     auto options = std::optional<located<std::string>>{};
-    parser.add("-t,--topic", args.topic, "<topic>");
+    auto topic = std::optional<std::string>{"tenzir"};
+    parser.add("-t,--topic", topic, "<topic>");
     parser.add("-k,--key", args.key, "<key>");
     parser.add("-T,--timestamp", args.timestamp, "<time>");
     // We use -X because that's standard in Kafka applications, cf. kcat.
     parser.add("-X,--set", options, "<key=value>,...");
     parser.parse(p);
+    args.topic = topic.value();
     if (args.timestamp) {
       if (!parsers::time(args.timestamp->inner)) {
         diagnostic::error("could not parse `--timestamp` as time")

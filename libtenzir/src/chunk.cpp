@@ -33,6 +33,7 @@
 #include <memory>
 #include <numeric>
 #include <span>
+#include <string_view>
 #include <tuple>
 #include <unistd.h>
 
@@ -57,8 +58,9 @@ private:
   /// Read data.
   arrow::Result<int64_t>
   ReadAt(int64_t position, int64_t nbytes, void* out) override {
-    if (detail::narrow_cast<size_t>(position) > chunk_->size())
+    if (detail::narrow_cast<size_t>(position) > chunk_->size()) {
       return arrow::Status::Invalid("index out of bounds");
+    }
     const auto clamped_size
       = std::min(chunk_->size() - detail::narrow_cast<size_t>(position),
                  detail::narrow_cast<size_t>(nbytes));
@@ -70,8 +72,9 @@ private:
   /// Read data.
   arrow::Result<std::shared_ptr<arrow::Buffer>>
   ReadAt(int64_t position, int64_t nbytes) override {
-    if (detail::narrow_cast<size_t>(position) > chunk_->size())
+    if (detail::narrow_cast<size_t>(position) > chunk_->size()) {
       return arrow::Status::Invalid("index out of bounds");
+    }
     const auto clamped_size
       = std::min(chunk_->size() - detail::narrow_cast<size_t>(position),
                  detail::narrow_cast<size_t>(nbytes));
@@ -93,8 +96,9 @@ private:
 
   /// Advance the stream position.
   arrow::Status Seek(int64_t position) override {
-    if (detail::narrow_cast<size_t>(position) > chunk_->size())
+    if (detail::narrow_cast<size_t>(position) > chunk_->size()) {
       return arrow::Status::Invalid("index out of bounds");
+    }
     position_ = position;
     return arrow::Status::OK();
   }
@@ -155,16 +159,18 @@ private:
   /// Read data from current file position.
   arrow::Result<int64_t> Read(int64_t nbytes, void* out) override {
     auto result = ReadAt(detail::narrow_cast<int64_t>(position_), nbytes, out);
-    if (result.ok())
+    if (result.ok()) {
       position_ += result.ValueUnsafe();
+    }
     return result;
   }
 
   /// Read data from current file position.
   arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override {
     auto result = ReadAt(detail::narrow_cast<int64_t>(position_), nbytes);
-    if (result.ok())
+    if (result.ok()) {
       position_ += result.ValueUnsafe()->size();
+    }
     return result;
   }
 
@@ -188,8 +194,9 @@ chunk::~chunk() noexcept {
   const auto* data = view_.data();
   const auto sz = view_.size();
   TENZIR_TRACEPOINT(chunk_delete, data, sz);
-  if (deleter_)
+  if (deleter_) {
     std::invoke(deleter_);
+  }
 }
 
 // -- factory functions ------------------------------------------------------
@@ -208,8 +215,9 @@ chunk_ptr chunk::make(view_type view, deleter_type&& deleter,
 
 chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer,
                       chunk_metadata metadata) noexcept {
-  if (!buffer)
+  if (!buffer) {
     return nullptr;
+  }
   const auto* data = buffer->data();
   const auto size = buffer->size();
   return make(
@@ -237,9 +245,10 @@ chunk::mmap(const std::filesystem::path& filename, size_type size,
             size_type offset, chunk_metadata metadata) {
   // Open and memory-map the file.
   const auto fd = ::open(filename.c_str(), O_RDONLY, 0644);
-  if (fd == -1)
+  if (fd == -1) {
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to open file {}", filename));
+  }
   // Figure out the file size if not provided.
   if (size == 0) {
     struct stat filestat {};
@@ -250,15 +259,19 @@ chunk::mmap(const std::filesystem::path& filename, size_type size,
                                          filename));
     }
     size = filestat.st_size;
+    if (size == 0) {
+      return chunk::make_empty();
+    }
   }
   auto* map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd,
                      detail::narrow_cast<::off_t>(offset));
   auto mmap_errno = errno;
   ::close(fd);
-  if (map == MAP_FAILED)
+  if (map == MAP_FAILED) {
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to mmap file {}: {}", filename,
                                        detail::describe_errno(mmap_errno)));
+  }
   auto deleter = [=]() noexcept {
     ::munmap(map, size);
   };
@@ -281,10 +294,11 @@ caf::expected<chunk_ptr> chunk::compress(view_type bytes) noexcept {
   buffer.resize(max_length);
   auto length
     = codec->Compress(bytes_size, bytes_data, max_length, buffer.data());
-  if (!length.ok())
+  if (!length.ok()) {
     return caf::make_error(ec::system_error,
                            fmt::format("failed to compress chunk: {}",
                                        length.status().ToString()));
+  }
   buffer.resize(length.MoveValueUnsafe());
   return chunk::make(std::move(buffer));
 }
@@ -306,10 +320,11 @@ chunk::decompress(view_type bytes, size_t decompressed_size) noexcept {
   auto length = codec->Decompress(bytes_size, bytes_data,
                                   detail::narrow_cast<int64_t>(buffer.size()),
                                   buffer.data());
-  if (!length.ok())
+  if (!length.ok()) {
     return caf::make_error(ec::system_error,
                            fmt::format("failed to decompress chunk: {}",
                                        length.status().ToString()));
+  }
   TENZIR_ASSERT(buffer.size()
                 == detail::narrow_cast<size_t>(length.ValueUnsafe()));
   return chunk::make(std::move(buffer));
@@ -338,9 +353,10 @@ caf::expected<chunk::size_type> chunk::incore() const noexcept {
 #  else
   auto buf = std::vector(pages, '\0');
 #  endif
-  if (mincore(const_cast<value_type*>(data()), size(), buf.data()))
+  if (mincore(const_cast<value_type*>(data()), size(), buf.data())) {
     return caf::make_error(ec::system_error,
                            "failed in mincore(2):", detail::describe_errno());
+  }
   auto in_memory = std::accumulate(buf.begin(), buf.end(), 0ul,
                                    [](auto acc, auto current) {
                                      return acc + (current & 0x1);
@@ -364,8 +380,9 @@ chunk::iterator chunk::end() const noexcept {
 
 chunk_ptr chunk::slice(size_type start, size_type length) const {
   TENZIR_ASSERT(start <= size());
-  if (length > size() - start)
+  if (length > size() - start) {
     length = size() - start;
+  }
   return slice(view_.subspan(start, length));
 }
 
@@ -409,8 +426,9 @@ as_arrow_file(chunk_ptr chunk) noexcept {
 // -- concepts -----------------------------------------------------------------
 
 std::span<const std::byte> as_bytes(const chunk_ptr& x) noexcept {
-  if (!x)
+  if (!x) {
     return {};
+  }
   return as_bytes(*x);
 }
 
@@ -456,10 +474,12 @@ chunk::chunk(view_type view, deleter_type&& deleter,
 
 auto split(const chunk_ptr& chunk, size_t partition_point)
   -> std::pair<chunk_ptr, chunk_ptr> {
-  if (partition_point == 0)
+  if (partition_point == 0) {
     return {{}, chunk};
-  if (partition_point >= chunk->size())
+  }
+  if (partition_point >= chunk->size()) {
     return {chunk, {}};
+  }
   return {
     chunk->slice(0, partition_point),
     chunk->slice(partition_point, chunk->size() - partition_point),

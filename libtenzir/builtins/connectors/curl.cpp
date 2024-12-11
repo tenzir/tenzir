@@ -18,6 +18,7 @@
 
 #include <filesystem>
 #include <regex>
+#include <string_view>
 #include <system_error>
 
 using namespace std::chrono_literals;
@@ -440,8 +441,10 @@ public:
       diagnostic::error(func.error()).emit(ctrl.diagnostics());
       co_return;
     }
+    co_yield {};
     for (auto chunk : input) {
       (*func)(std::move(chunk));
+      co_yield {};
     }
   }
 

@@ -13,6 +13,8 @@
 #include "tenzir/config.hpp"
 #include "tenzir/series_builder.hpp"
 
+#include <string_view>
+
 #if TENZIR_LINUX
 #  include <pfs/procfs.hpp>
 

@@ -12,6 +12,8 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/narrow.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 struct yaml_parser : parser_base<yaml_parser> {

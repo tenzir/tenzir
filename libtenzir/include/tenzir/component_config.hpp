@@ -14,6 +14,8 @@
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 /// Extracts a value from a settings object and assigns it to a variable.

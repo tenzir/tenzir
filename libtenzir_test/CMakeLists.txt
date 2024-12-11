@@ -2,7 +2,7 @@ if (NOT TENZIR_ENABLE_UNIT_TESTS)
   return()
 endif ()
 
-add_library(libtenzir_test STATIC src/actor_system.cpp src/symbols.cpp)
+add_library(libtenzir_test STATIC src/symbols.cpp)
 TenzirTargetEnableTooling(libtenzir_test)
 target_include_directories(
   libtenzir_test PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

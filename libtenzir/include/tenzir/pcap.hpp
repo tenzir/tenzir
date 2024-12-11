@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string_view>
 
 /// PCAP utilities and data structures as defined in the IETF draft at
 /// https://www.ietf.org/archive/id/draft-gharris-opsawg-pcap-01.html and

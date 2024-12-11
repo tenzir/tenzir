@@ -23,6 +23,8 @@
 
 #include <caf/scoped_actor.hpp>
 
+#include <string_view>
+
 namespace tenzir::plugins::partitions {
 
 namespace {

@@ -17,6 +17,8 @@
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 namespace {
@@ -216,12 +218,12 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
         }
         self->quit();
       });
-      self->state.executor = self->spawn<caf::monitored>(
+      self->state().executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),
         caf::actor_cast<receiver_actor<diagnostic>>(self),
         caf::actor_cast<metrics_receiver_actor>(self), node_actor{}, true,
         true);
-      self->request(self->state.executor, caf::infinite, atom::start_v)
+      self->request(self->state().executor, caf::infinite, atom::start_v)
         .then(
           []() {
             TENZIR_DEBUG("started pipeline successfully");
@@ -286,7 +288,7 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
                    caf::actor_system& sys) -> caf::expected<void> {
   if (cfg.tql2) {
     auto success = exec2(std::move(content), dh, cfg, sys);
-    return success ? ec::no_error : ec::silent;
+    return success ? caf::expected<void>{} : ec::silent;
   }
   auto parsed = tql::parse(std::move(content), dh);
   if (not parsed) {

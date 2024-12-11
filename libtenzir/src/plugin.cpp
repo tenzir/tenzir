@@ -34,6 +34,7 @@
 #include <algorithm>
 #include <dlfcn.h>
 #include <memory>
+#include <string_view>
 
 #ifndef __has_feature
 #  define __has_feature(x) 0

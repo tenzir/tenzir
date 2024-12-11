@@ -11,6 +11,8 @@
 #include "tenzir/chunk.hpp"
 #include "tenzir/generator.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 /// Converts a stream of chunks into a stream of strings by splitting the input

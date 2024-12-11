@@ -100,10 +100,10 @@ TEST(to_yaml - time types) {
 TEST(to_yaml - invalid data) {
   // We tried a lot of weird combinations of invalid data values, but none of
   // them triggered a failure in the emitter logic.
-  CHECK(to_yaml(caf::none).engaged());
-  CHECK(to_yaml(list{map{{"", ""}}}).engaged());
-  CHECK(to_yaml(map{{list{}, caf::none}}).engaged());
-  CHECK(to_yaml(record{{"", caf::none}}).engaged());
+  CHECK(to_yaml(caf::none).has_value());
+  CHECK(to_yaml(list{map{{"", ""}}}).has_value());
+  CHECK(to_yaml(map{{list{}, caf::none}}).has_value());
+  CHECK(to_yaml(record{{"", caf::none}}).has_value());
 }
 
 TEST(parseable) {
