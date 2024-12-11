@@ -16,6 +16,8 @@
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <string_view>
+
 namespace tenzir::plugins::bitz {
 namespace {
 

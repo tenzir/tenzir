@@ -15,6 +15,8 @@
 
 #include <arrow/api.h>
 
+#include <string_view>
+
 namespace tenzir {
 
 namespace {

@@ -10,10 +10,13 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/type_traits.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
 
 #include <boost/algorithm/string.hpp>
+
+#include <string_view>
 
 namespace tenzir {
 
@@ -36,15 +39,15 @@ auto argument_parser2::parse(const function_plugin::invocation& inv,
   return parse(inv.call.fn, inv.call.args, ctx);
 }
 
-auto argument_parser2::parse(const ast::function_call& call,
-                             session ctx) -> failure_or<void> {
+auto argument_parser2::parse(const ast::function_call& call, session ctx)
+  -> failure_or<void> {
   TENZIR_ASSERT(kind_ == kind::fn);
   return parse(call.fn, call.args, ctx);
 }
 
 auto argument_parser2::parse(const ast::entity& self,
-                             std::span<ast::expression const> args,
-                             session ctx) -> failure_or<void> {
+                             std::span<ast::expression const> args, session ctx)
+  -> failure_or<void> {
   // TODO: Simplify and deduplicate everything in this function.
   auto result = failure_or<void>{};
   auto emit = [&](diagnostic_builder d) {
@@ -391,7 +394,7 @@ auto argument_parser2::docs() const -> std::string {
 template <class T>
 auto argument_parser2::make_setter(T& x) -> auto {
   using value_type = decltype(std::invoke([] {
-    if constexpr (caf::detail::is_specialization<std::optional, T>::value) {
+    if constexpr (detail::is_specialization_of<std::optional, T>::value) {
       return tag_v<typename T::value_type>;
     } else {
       return tag_v<T>;
@@ -417,8 +420,8 @@ auto argument_parser2::make_setter(T& x) -> auto {
 }
 
 template <argument_parser_type T>
-auto argument_parser2::positional(std::string name, T& x,
-                                  std::string type) -> argument_parser2& {
+auto argument_parser2::positional(std::string name, T& x, std::string type)
+  -> argument_parser2& {
   TENZIR_ASSERT(not first_optional_, "encountered required positional after "
                                      "optional positional argument");
   positional_.emplace_back(std::move(name), std::move(type), make_setter(x));
@@ -436,8 +439,8 @@ auto argument_parser2::positional(std::string name, std::optional<T>& x,
 }
 
 template <argument_parser_type T>
-auto argument_parser2::named(std::string name, T& x,
-                             std::string type) -> argument_parser2& {
+auto argument_parser2::named(std::string name, T& x, std::string type)
+  -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), true);
   return *this;
 }
@@ -462,8 +465,8 @@ auto argument_parser2::named(std::string name, std::optional<location>& x,
   return *this;
 }
 
-auto argument_parser2::named(std::string name, bool& x,
-                             std::string type) -> argument_parser2& {
+auto argument_parser2::named(std::string name, bool& x, std::string type)
+  -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
@@ -471,8 +474,8 @@ auto argument_parser2::named(std::string name, bool& x,
 template <std::monostate>
 struct instantiate_argument_parser_methods {
   template <class T>
-  using func = auto (argument_parser2::*)(std::string, T&,
-                                          std::string) -> argument_parser2&;
+  using func = auto (argument_parser2::*)(std::string, T&, std::string)
+    -> argument_parser2&;
 
   template <class... T>
   struct inner {

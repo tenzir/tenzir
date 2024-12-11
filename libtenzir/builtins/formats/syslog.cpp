@@ -23,6 +23,7 @@
 #include <tenzir/to_lines.hpp>
 
 #include <ranges>
+#include <string_view>
 
 namespace tenzir::plugins::syslog {
 

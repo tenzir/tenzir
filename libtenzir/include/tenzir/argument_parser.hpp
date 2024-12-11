@@ -16,6 +16,8 @@
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/tql/expression.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 /// An argument parser for TQL.

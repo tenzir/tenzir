@@ -12,6 +12,7 @@
 #include "tenzir/detail/escapers.hpp"
 
 #include <cstring>
+#include <string_view>
 #include <vector>
 
 namespace tenzir {

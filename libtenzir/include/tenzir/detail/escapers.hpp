@@ -13,6 +13,7 @@
 #include <array>
 #include <cctype>
 #include <string>
+#include <string_view>
 
 namespace tenzir::detail {
 

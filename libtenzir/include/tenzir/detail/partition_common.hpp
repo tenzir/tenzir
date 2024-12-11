@@ -27,7 +27,7 @@ template <typename PartitionState>
 indexer_actor
 fetch_indexer(const PartitionState& state, const data_extractor& dx,
               relational_operator op, const data& x) {
-  TENZIR_TRACE_SCOPE("{} {} {}", TENZIR_ARG(dx), TENZIR_ARG(op), TENZIR_ARG(x));
+  TENZIR_TRACE("{} {} {}", TENZIR_ARG(dx), TENZIR_ARG(op), TENZIR_ARG(x));
   return state.indexer_at(dx.column);
 }
 
@@ -41,7 +41,7 @@ template <typename PartitionState>
 indexer_actor
 fetch_indexer(const PartitionState& state, const meta_extractor& ex,
               relational_operator op, const data& x) {
-  TENZIR_TRACE_SCOPE("{} {} {}", TENZIR_ARG(ex), TENZIR_ARG(op), TENZIR_ARG(x));
+  TENZIR_TRACE("{} {} {}", TENZIR_ARG(ex), TENZIR_ARG(op), TENZIR_ARG(x));
   ids row_ids;
   if (ex.kind == meta_extractor::schema) {
     // We know the answer immediately: all IDs that are part of the table.

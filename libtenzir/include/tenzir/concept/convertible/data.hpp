@@ -25,6 +25,8 @@
 #include <caf/error.hpp>
 #include <caf/message_handler.hpp>
 
+#include <string_view>
+
 /// As a convention, in this file `From` and `To` refer to the source
 /// and target types, and `src` and `dst` refer to their values
 ///

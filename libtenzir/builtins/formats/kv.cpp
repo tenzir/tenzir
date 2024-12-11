@@ -19,6 +19,8 @@
 #include <arrow/api.h>
 #include <re2/re2.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::kv {
 
 namespace {

@@ -13,7 +13,6 @@
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <fmt/format.h>
@@ -1018,49 +1017,5 @@ TEST(subset) {
   CHECK(!is_subset(r0, r3));
   CHECK(!is_subset(r0, r4));
 }
-
-namespace {
-
-class fixture : public fixtures::deterministic_actor_system {
-public:
-  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
-  }
-};
-
-} // namespace
-
-FIXTURE_SCOPE(type_fixture, fixture)
-
-TEST(serialization) {
-  CHECK_ROUNDTRIP(type{});
-  CHECK_ROUNDTRIP(type{bool_type{}});
-  CHECK_ROUNDTRIP(type{int64_type{}});
-  CHECK_ROUNDTRIP(type{uint64_type{}});
-  CHECK_ROUNDTRIP(type{double_type{}});
-  CHECK_ROUNDTRIP(type{duration_type{}});
-  CHECK_ROUNDTRIP(type{time_type{}});
-  CHECK_ROUNDTRIP(type{string_type{}});
-  CHECK_ROUNDTRIP(type{ip_type{}});
-  CHECK_ROUNDTRIP(type{subnet_type{}});
-  CHECK_ROUNDTRIP(type{enumeration_type{{"a"}, {"b"}, {"c"}}});
-  CHECK_ROUNDTRIP(type{list_type{int64_type{}}});
-  CHECK_ROUNDTRIP(type{map_type{ip_type{}, subnet_type{}}});
-  const auto rt = type{record_type{
-    {"i", int64_type{}},
-    {"r1",
-     record_type{
-       {"p", type{"port", int64_type{}}},
-       {"a", ip_type{}},
-     }},
-    {"b", bool_type{}},
-    {"r2",
-     record_type{
-       {"s", subnet_type{}},
-     }},
-  }};
-  CHECK_ROUNDTRIP(rt);
-}
-
-FIXTURE_SCOPE_END()
 
 } // namespace tenzir

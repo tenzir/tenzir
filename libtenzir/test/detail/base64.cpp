@@ -10,6 +10,8 @@
 
 #include "tenzir/test/test.hpp"
 
+#include <string_view>
+
 using namespace std::string_view_literals;
 using namespace tenzir::detail;
 

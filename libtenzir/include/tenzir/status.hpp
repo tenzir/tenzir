@@ -20,6 +20,8 @@
 #include <caf/timespan.hpp>
 #include <caf/typed_response_promise.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 /// The verbosity level of a status request.

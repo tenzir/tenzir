@@ -11,6 +11,8 @@
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
 
+#include <string_view>
+
 namespace tenzir::detail {
 
 template <typename Plugin>

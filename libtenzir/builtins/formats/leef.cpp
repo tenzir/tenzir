@@ -33,6 +33,7 @@
 #include <fmt/format.h>
 
 #include <memory>
+#include <string_view>
 
 // The Log Event Extended Format (LEEF) is an event representation that has been
 // popularized by IBM QRadar. The official documentation at

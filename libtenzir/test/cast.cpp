@@ -13,6 +13,8 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/type.hpp"
 
+#include <string_view>
+
 namespace {
 
 struct fixture {};

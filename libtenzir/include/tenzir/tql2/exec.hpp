@@ -12,6 +12,8 @@
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 auto exec2(std::string_view source, diagnostic_handler& dh,

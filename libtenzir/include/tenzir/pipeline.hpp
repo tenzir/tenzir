@@ -21,6 +21,7 @@
 #include <fmt/core.h>
 
 #include <memory>
+#include <string_view>
 #include <type_traits>
 #include <variant>
 

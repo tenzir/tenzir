@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iterator>
+#include <string_view>
 
 namespace tenzir::plugins::xsv {
 namespace {

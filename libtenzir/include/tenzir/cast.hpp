@@ -20,6 +20,8 @@
 
 #include <caf/expected.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 namespace detail {

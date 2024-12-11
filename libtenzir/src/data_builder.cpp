@@ -1027,13 +1027,14 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
     },
     [&builder, seed, &rb]<non_structured_data_type T>(T& v) {
       auto res = builder.try_data(v);
-      if (auto& e = res.error()) {
-        if (tenzir::ec{e.code()} == ec::type_clash) {
+      if (not res) {
+        const auto& err = res.error();
+        if (tenzir::ec{err.code()} == ec::type_clash) {
           rb.emit_mismatch_warning(type{data_to_type_t<T>{}}, *seed);
         } else {
           rb.emit_or_throw(
             diagnostic::warning("issue writing data into builder")
-              .note("{}", e));
+              .note("{}", err));
         }
       }
     },

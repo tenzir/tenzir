@@ -20,6 +20,7 @@
 #include <arrow/util/uri.h>
 
 #include <netdb.h>
+#include <string_view>
 
 namespace tenzir {
 

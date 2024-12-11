@@ -20,6 +20,8 @@
 
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::curl {
 
 using namespace binary_byte_literals;

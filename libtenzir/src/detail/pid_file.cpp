@@ -20,6 +20,7 @@
 #include <sys/file.h>
 
 #include <fcntl.h>
+#include <string_view>
 #include <system_error>
 #include <unistd.h>
 

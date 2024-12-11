@@ -19,12 +19,7 @@
 #include <iostream>
 #include <set>
 #include <string>
-
-namespace caf::test {
-
-int main(int, char**);
-
-} // namespace caf::test
+#include <string_view>
 
 namespace tenzir::test {
 

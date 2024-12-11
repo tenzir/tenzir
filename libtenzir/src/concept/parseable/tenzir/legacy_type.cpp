@@ -16,6 +16,8 @@
 #include "tenzir/concept/parseable/tenzir/identifier.hpp"
 #include "tenzir/detail/string_literal.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 
 template <class T>

@@ -33,6 +33,7 @@
 #include <memory>
 #include <numeric>
 #include <span>
+#include <string_view>
 #include <tuple>
 #include <unistd.h>
 

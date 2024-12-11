@@ -11,6 +11,8 @@
 
 #include "tenzir/location.hpp"
 
+#include <string_view>
+
 namespace tenzir {
 namespace {
 auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)

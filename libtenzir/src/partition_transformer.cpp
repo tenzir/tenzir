@@ -27,14 +27,14 @@ void store_or_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   partition_transformer_state::stream_data&& stream_data) {
-  if (std::holds_alternative<std::monostate>(self->state.persist)) {
+  if (std::holds_alternative<std::monostate>(self->state().persist)) {
     TENZIR_DEBUG("{} stores stream data in state.persist", *self);
-    self->state.persist = std::move(stream_data);
+    self->state().persist = std::move(stream_data);
   } else {
     auto* path_data = std::get_if<partition_transformer_state::path_data>(
-      &self->state.persist);
+      &self->state().persist);
     TENZIR_ASSERT(path_data != nullptr, "unexpected variant content");
-    self->state.fulfill(self, std::move(stream_data), std::move(*path_data));
+    self->state().fulfill(self, std::move(stream_data), std::move(*path_data));
   }
 }
 
@@ -42,14 +42,14 @@ void store_or_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   partition_transformer_state::path_data&& path_data) {
-  if (std::holds_alternative<std::monostate>(self->state.persist)) {
+  if (std::holds_alternative<std::monostate>(self->state().persist)) {
     TENZIR_DEBUG("{} stores path data in state.persist", *self);
-    self->state.persist = std::move(path_data);
+    self->state().persist = std::move(path_data);
   } else {
     auto* stream_data = std::get_if<partition_transformer_state::stream_data>(
-      &self->state.persist);
+      &self->state().persist);
     TENZIR_ASSERT(stream_data != nullptr, "unexpected variant content");
-    self->state.fulfill(self, std::move(*stream_data), std::move(path_data));
+    self->state().fulfill(self, std::move(*stream_data), std::move(path_data));
   }
 }
 
@@ -58,7 +58,7 @@ void quit_or_stall(
     self,
   partition_transformer_state::transformer_is_finished&& result) {
   using stores_are_finished = partition_transformer_state::stores_are_finished;
-  auto& shutdown_state = self->state.shutdown_state;
+  auto& shutdown_state = self->state().shutdown_state;
   if (std::holds_alternative<std::monostate>(shutdown_state)) {
     shutdown_state = std::move(result);
   } else {
@@ -75,7 +75,7 @@ void quit_or_stall(
   partition_transformer_state::stores_are_finished&& result) {
   using transformer_is_finished
     = partition_transformer_state::transformer_is_finished;
-  auto& shutdown_state = self->state.shutdown_state;
+  auto& shutdown_state = self->state().shutdown_state;
   if (std::holds_alternative<std::monostate>(shutdown_state)) {
     shutdown_state = std::move(result);
   } else {
@@ -202,19 +202,19 @@ void partition_transformer_state::fulfill(
   stream_data&& stream_data, path_data&& path_data) const {
   TENZIR_DEBUG("{} fulfills promise", *self);
   auto promise = path_data.promise;
-  if (self->state.stream_error) {
-    promise.deliver(self->state.stream_error);
+  if (self->state().stream_error) {
+    promise.deliver(self->state().stream_error);
     self->quit();
     return;
   }
-  if (self->state.transform_error) {
-    promise.deliver(self->state.transform_error);
+  if (self->state().transform_error) {
+    promise.deliver(self->state().transform_error);
     self->quit();
     return;
   }
   // Return early if no error occured and no new data was created,
   // ie. the input was erased completely.
-  if (self->state.events == 0) {
+  if (self->state().events == 0) {
     promise.deliver(std::vector<partition_synopsis_pair>{});
     self->quit();
     return;
@@ -235,8 +235,8 @@ void partition_transformer_state::fulfill(
   for (auto& [id, synopsis_chunk] : *stream_data.synopsis_chunks) {
     if (!synopsis_chunk)
       continue;
-    auto filename
-      = fmt::format(TENZIR_FMT_RUNTIME(self->state.synopsis_path_template), id);
+    auto filename = fmt::format(
+      TENZIR_FMT_RUNTIME(self->state().synopsis_path_template), id);
     auto synopsis_path = std::filesystem::path{filename};
     self
       ->request(fs, caf::infinite, atom::write_v, synopsis_path, synopsis_chunk)
@@ -266,7 +266,7 @@ void partition_transformer_state::fulfill(
         self->quit();
       });
   for (auto& [id, schema, partition_chunk] : *stream_data.partition_chunks) {
-    auto rng = self->state.data.equal_range(schema);
+    auto rng = self->state().data.equal_range(schema);
     auto it = std::find_if(rng.first, rng.second, [id = id](auto const& kv) {
       return kv.second.id == id;
     });
@@ -277,7 +277,7 @@ void partition_transformer_state::fulfill(
       .synopsis = std::move(synopsis),
     };
     auto filename = fmt::format(
-      TENZIR_FMT_RUNTIME(self->state.partition_path_template), id);
+      TENZIR_FMT_RUNTIME(self->state().partition_path_template), id);
     auto partition_path = std::filesystem::path{filename};
     self
       ->request(fs, caf::infinite, atom::write_v, partition_path,
@@ -301,49 +301,50 @@ auto partition_transformer(
   pipeline transform, std::string partition_path_template,
   std::string synopsis_path_template)
   -> partition_transformer_actor::behavior_type {
-  self->state.synopsis_opts = synopsis_opts;
-  self->state.partition_path_template = std::move(partition_path_template);
-  self->state.synopsis_path_template = std::move(synopsis_path_template);
+  self->state().synopsis_opts = synopsis_opts;
+  self->state().partition_path_template = std::move(partition_path_template);
+  self->state().synopsis_path_template = std::move(synopsis_path_template);
   // For historic reasons, the `tenzir.max-partition-size` is stored as the
   // `cardinality` in the value index options.
-  self->state.partition_capacity
+  self->state().partition_capacity
     = caf::get_or(index_opts, "cardinality", defaults::max_partition_size);
-  self->state.index_opts = index_opts;
-  self->state.fs = std::move(fs);
-  self->state.catalog = std::move(catalog);
-  self->state.transform = std::move(transform);
-  self->state.store_id = std::move(store_id);
+  self->state().index_opts = index_opts;
+  self->state().fs = std::move(fs);
+  self->state().catalog = std::move(catalog);
+  self->state().transform = std::move(transform);
+  self->state().store_id = std::move(store_id);
   self->set_down_handler([self](caf::down_msg& msg) {
     // This is currently safe because we do all increases to
     // `launched_stores` within the same continuation, but when
     // that changes we need to take a bit more care here to avoid
     // a race.
-    ++self->state.stores_finished;
+    ++self->state().stores_finished;
     TENZIR_DEBUG("{} sees {} finished for a total of {}/{} stores", *self,
-                 msg.source, self->state.stores_finished,
-                 self->state.stores_launched);
-    if (self->state.stores_finished >= self->state.stores_launched)
+                 msg.source, self->state().stores_finished,
+                 self->state().stores_launched);
+    if (self->state().stores_finished >= self->state().stores_launched) {
       quit_or_stall(self, partition_transformer_state::stores_are_finished{});
+    }
   });
   return {
     [self](tenzir::table_slice& slice) {
       // Adjust the import time range iff necessary.
       const auto old_import_time = slice.import_time();
-      self->state.min_import_time
-        = std::min(self->state.min_import_time, old_import_time);
-      self->state.max_import_time
-        = std::max(self->state.max_import_time, old_import_time);
-      self->state.input.push_back(std::move(slice));
+      self->state().min_import_time
+        = std::min(self->state().min_import_time, old_import_time);
+      self->state().max_import_time
+        = std::max(self->state().max_import_time, old_import_time);
+      self->state().input.push_back(std::move(slice));
     },
     [self](atom::done) -> caf::result<void> {
       // We copy the pipeline because we will modify it.
-      auto pipe = self->state.transform;
+      auto pipe = self->state().transform;
       auto open = pipe.check_type<table_slice, table_slice>();
       if (!open) {
         return open.error();
       }
       pipe.prepend(
-        std::make_unique<fixed_source>(std::move(self->state.input)));
+        std::make_unique<fixed_source>(std::move(self->state().input)));
       auto output = std::make_shared<std::vector<table_slice>>();
       pipe.append(std::make_unique<collecting_sink>(output));
       auto closed = pipe.check_type<void, void>();
@@ -356,28 +357,28 @@ auto partition_transformer(
         if (!result) {
           TENZIR_ERROR("{} failed pipeline execution: {}", *self,
                        result.error());
-          self->state.transform_error = result.error();
+          self->state().transform_error = result.error();
           return {};
         }
       }
       for (auto& slice : *output) {
-        auto& partition_data = self->state.create_or_get_partition(slice);
+        auto& partition_data = self->state().create_or_get_partition(slice);
         if (!partition_data.synopsis) {
           partition_data.id = tenzir::uuid::random();
-          partition_data.store_id = self->state.store_id;
+          partition_data.store_id = self->state().store_id;
           partition_data.events = 0ull;
           partition_data.synopsis
             = caf::make_copy_on_write<partition_synopsis>();
         }
         auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
         if (slice.import_time() == time{}) {
-          slice.import_time(self->state.min_import_time);
+          slice.import_time(self->state().min_import_time);
         }
-        unshared_synopsis->min_import_time = self->state.min_import_time;
-        unshared_synopsis->max_import_time = self->state.max_import_time;
+        unshared_synopsis->min_import_time = self->state().min_import_time;
+        unshared_synopsis->max_import_time = self->state().max_import_time;
         partition_data.events += slice.rows();
-        self->state.events += slice.rows();
-        self->state.partition_buildup[partition_data.id].slices.push_back(
+        self->state().events += slice.rows();
+        self->state().partition_buildup[partition_data.id].slices.push_back(
           std::move(slice));
       }
       auto stream_data = partition_transformer_state::stream_data{
@@ -386,29 +387,29 @@ auto partition_transformer(
         .synopsis_chunks = std::vector<std::tuple<tenzir::uuid, chunk_ptr>>{},
       };
       // We're already done if the whole partition got deleted
-      if (self->state.events == 0) {
+      if (self->state().events == 0) {
         store_or_fulfill(self, std::move(stream_data));
         return {};
       }
       // ...otherwise, prepare for writing out the transformed data by creating
       // new stores, sending out the slices and requesting new idspace.
-      auto store_id = self->state.store_id;
+      auto store_id = self->state().store_id;
       auto const* store_actor_plugin
         = plugins::find<tenzir::store_actor_plugin>(store_id);
       if (!store_actor_plugin) {
-        self->state.stream_error
+        self->state().stream_error
           = caf::make_error(ec::invalid_argument,
                             "could not find a store plugin named {}", store_id);
         store_or_fulfill(self, std::move(stream_data));
         return {};
       }
-      for (auto& [schema, partition_data] : self->state.data) {
+      for (auto& [schema, partition_data] : self->state().data) {
         if (partition_data.events == 0)
           continue;
         auto builder_and_header = store_actor_plugin->make_store_builder(
-          self->state.fs, partition_data.id);
+          self->state().fs, partition_data.id);
         if (!builder_and_header) {
-          self->state.stream_error
+          self->state().stream_error
             = caf::make_error(ec::invalid_argument,
                               "could not create store builder for backend {}",
                               store_id);
@@ -417,7 +418,7 @@ auto partition_transformer(
         }
         partition_data.builder = builder_and_header->store_builder;
         self->monitor(partition_data.builder);
-        ++self->state.stores_launched;
+        ++self->state().stores_launched;
         partition_data.store_header = builder_and_header->header;
       }
       TENZIR_DEBUG("{} received all table slices", *self);
@@ -426,19 +427,19 @@ auto partition_transformer(
     },
     [self](atom::internal, atom::resume, atom::done) {
       TENZIR_DEBUG("{} got resume", *self);
-      for (auto& [schema, data] : self->state.data) {
+      for (auto& [schema, data] : self->state().data) {
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
-        auto& buildup = self->state.partition_buildup.at(data.id);
+        auto& buildup = self->state().partition_buildup.at(data.id);
         auto offset = id{0};
         for (auto& slice : buildup.slices) {
           slice.offset(offset);
           offset += slice.rows();
           self->send(data.builder, slice);
-          self->state.update_type_ids_and_indexers(data.type_ids, data.id,
-                                                   slice);
-          mutable_synopsis.add(slice, self->state.partition_capacity,
-                               self->state.synopsis_opts);
+          self->state().update_type_ids_and_indexers(data.type_ids, data.id,
+                                                     slice);
+          mutable_synopsis.add(slice, self->state().partition_capacity,
+                               self->state().synopsis_opts);
         }
         // Update the synopsis
         // TODO: It would make more sense if the partition
@@ -446,7 +447,7 @@ auto partition_transformer(
         mutable_synopsis.shrink();
         mutable_synopsis.events = data.events;
         for (auto& [qf, idx] :
-             self->state.partition_buildup.at(data.id).indexers) {
+             self->state().partition_buildup.at(data.id).indexers) {
           auto chunk = chunk_ptr{};
           // Note that `chunkify(nullptr)` return a chunk of size > 0.
           if (idx)
@@ -457,7 +458,7 @@ auto partition_transformer(
           data.indexer_chunks.emplace_back(qf.name(), chunk);
         }
       }
-      for (auto& [_, partition_data] : self->state.data) {
+      for (auto& [_, partition_data] : self->state().data) {
         self->request(partition_data.builder, caf::infinite, atom::persist_v)
           .then(
             [](resource&) {
@@ -477,7 +478,7 @@ auto partition_transformer(
                              TENZIR_ERROR("{}", annotated_error);
                            },
                          },
-                         self->state.persist);
+                         self->state().persist);
               self->quit(annotated_error);
             });
       }
@@ -491,10 +492,10 @@ auto partition_transformer(
       // instead of `goto`.
       [&] {
         for (auto& [schema, partition_data] :
-             self->state.data) { // Pack partitions
+             self->state().data) { // Pack partitions
           auto indexers_it
-            = self->state.partition_buildup.find(partition_data.id);
-          if (indexers_it == self->state.partition_buildup.end()) {
+            = self->state().partition_buildup.find(partition_data.id);
+          if (indexers_it == self->state().partition_buildup.end()) {
             stream_data.partition_chunks
               = caf::make_error(ec::logic_error, "missing data for partition");
             return;
@@ -513,7 +514,7 @@ auto partition_transformer(
             std::make_tuple(partition_data.id, schema, *partition));
         }
         for (auto& [schema, partition_data] :
-             self->state.data) { // Pack partition synopsis
+             self->state().data) { // Pack partition synopsis
           flatbuffers::FlatBufferBuilder builder;
           auto synopsis = pack(builder, *partition_data.synopsis);
           if (!synopsis) {

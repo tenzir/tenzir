@@ -17,6 +17,8 @@
 
 #include <re2/re2.h>
 
+#include <string_view>
+
 namespace tenzir {
 
 struct regex_impl : re2::RE2 {

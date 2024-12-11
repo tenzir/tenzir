@@ -202,16 +202,16 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
     auto thread_name = fmt::format("tnz.tcp_fd{}", socket.native_handle());
     caf::detail::set_thread_name(thread_name.c_str());
   }
-  self->state.self = self;
-  self->state.io_context = std::move(io_context);
-  self->state.socket = std::move(socket);
-  self->state.bridge = std::move(bridge);
-  self->state.args = std::move(args);
-  self->state.ctrl = std::make_unique<tcp_listen_control_plane>(
-    std::move(diagnostics), self->state.args.metrics_receiver,
-    self->state.args.operator_index, self->state.args.no_location_overrides,
-    self->state.args.has_terminal, self->state.args.is_hidden);
-  self->state.metric_handler = self->state.ctrl->metrics({
+  self->state().self = self;
+  self->state().io_context = std::move(io_context);
+  self->state().socket = std::move(socket);
+  self->state().bridge = std::move(bridge);
+  self->state().args = std::move(args);
+  self->state().ctrl = std::make_unique<tcp_listen_control_plane>(
+    std::move(diagnostics), self->state().args.metrics_receiver,
+    self->state().args.operator_index, self->state().args.no_location_overrides,
+    self->state().args.has_terminal, self->state().args.is_hidden);
+  self->state().metric_handler = self->state().ctrl->metrics({
     "tenzir.metrics.tcp",
     record_type{
       {"handle", string_type{}},
@@ -226,53 +226,55 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
       try {
         std::rethrow_exception(exception);
       } catch (diagnostic diag) {
-        self->state.ctrl->diagnostics().emit(std::move(diag));
+        self->state().ctrl->diagnostics().emit(std::move(diag));
         return {};
       } catch (const std::exception& err) {
         diagnostic::error("{}", err.what())
           .note("unhandled exception in {}", *self)
-          .emit(self->state.ctrl->diagnostics());
+          .emit(self->state().ctrl->diagnostics());
         return {};
       }
       return diagnostic::error("unhandled exception in {}", *self).to_error();
     });
-  if (self->state.args.tls) {
-    self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
-    self->state.ssl_ctx->set_default_verify_paths();
-    self->state.ssl_ctx->set_verify_mode(
+  if (self->state().args.tls) {
+    self->state().ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
+    self->state().ssl_ctx->set_default_verify_paths();
+    self->state().ssl_ctx->set_verify_mode(
       boost::asio::ssl::verify_peer
       | boost::asio::ssl::verify_fail_if_no_peer_cert);
-    self->state.tls_socket.emplace(*self->state.socket, *self->state.ssl_ctx);
-    auto tls_handle = self->state.tls_socket->native_handle();
-    if (SSL_set1_host(tls_handle, self->state.args.hostname.c_str()) != 1) {
+    self->state().tls_socket.emplace(*self->state().socket,
+                                     *self->state().ssl_ctx);
+    auto tls_handle = self->state().tls_socket->native_handle();
+    if (SSL_set1_host(tls_handle, self->state().args.hostname.c_str()) != 1) {
       diagnostic::error("failed to enable host name verification")
-        .emit(self->state.ctrl->diagnostics());
+        .emit(self->state().ctrl->diagnostics());
       return connection_actor::behavior_type::make_empty_behavior();
     }
     if (not SSL_set_tlsext_host_name(tls_handle,
-                                     self->state.args.hostname.c_str())) {
+                                     self->state().args.hostname.c_str())) {
       diagnostic::error("failed to set SNI")
-        .emit(self->state.ctrl->diagnostics());
+        .emit(self->state().ctrl->diagnostics());
       return connection_actor::behavior_type::make_empty_behavior();
     }
-    if (self->state.args.tls_certfile) {
-      self->state.ssl_ctx->use_certificate_chain_file(
-        *self->state.args.tls_certfile);
+    if (self->state().args.tls_certfile) {
+      self->state().ssl_ctx->use_certificate_chain_file(
+        *self->state().args.tls_certfile);
     }
-    if (self->state.args.tls_keyfile) {
-      self->state.ssl_ctx->use_private_key_file(*self->state.args.tls_keyfile,
-                                                boost::asio::ssl::context::pem);
+    if (self->state().args.tls_keyfile) {
+      self->state().ssl_ctx->use_private_key_file(
+        *self->state().args.tls_keyfile, boost::asio::ssl::context::pem);
     }
-    self->state.ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
-    self->state.tls_socket.emplace(*self->state.socket, *self->state.ssl_ctx);
+    self->state().ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
+    self->state().tls_socket.emplace(*self->state().socket,
+                                     *self->state().ssl_ctx);
     auto server_context
       = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::server;
     auto ec = boost::system::error_code{};
-    self->state.tls_socket->handshake(server_context, ec);
+    self->state().tls_socket->handshake(server_context, ec);
     if (ec) {
       diagnostic::warning("{}", ec.message())
         .note("TLS handshake failed")
-        .emit(self->state.ctrl->diagnostics());
+        .emit(self->state().ctrl->diagnostics());
       return connection_actor::behavior_type::make_empty_behavior();
     }
   }
@@ -311,29 +313,29 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
       state.reads++;
       co_yield chunk::copy(as_bytes(buffer).subspan(0, length));
     }
-  }(self->state);
+  }(self->state());
   auto gen
-    = self->state.args.op->instantiate(std::move(input), *self->state.ctrl);
+    = self->state().args.op->instantiate(std::move(input), *self->state().ctrl);
   if (not gen) {
-    diagnostic::error(gen.error()).emit(self->state.ctrl->diagnostics());
+    diagnostic::error(gen.error()).emit(self->state().ctrl->diagnostics());
     return connection_actor::behavior_type::make_empty_behavior();
   }
   auto* typed_gen = std::get_if<generator<table_slice>>(&*gen);
   TENZIR_ASSERT(typed_gen);
-  self->state.gen = std::move(*typed_gen);
-  self->state.it = self->state.gen.begin();
+  self->state().gen = std::move(*typed_gen);
+  self->state().it = self->state().gen.begin();
   detail::weak_run_delayed_loop(self, std::chrono::seconds{1}, [self] {
-    self->state.emit_metrics();
+    self->state().emit_metrics();
   });
   detail::weak_run_delayed_loop(self, duration::zero(), [self] {
-    if (self->state.it == self->state.gen.end()) {
-      self->state.emit_metrics();
+    if (self->state().it == self->state().gen.end()) {
+      self->state().emit_metrics();
       self->quit();
       return;
     }
-    auto slice = std::move(*self->state.it);
+    auto slice = std::move(*self->state().it);
     {
-      auto handle = self->state.bridge.lock();
+      auto handle = self->state().bridge.lock();
       if (not handle) {
         self->quit();
         return;
@@ -346,7 +348,7 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
       // alive indefinitely.
       caf::anon_send(handle, std::move(slice));
     }
-    ++self->state.it;
+    ++self->state().it;
   });
   return {
     [](int) {
@@ -419,11 +421,11 @@ auto make_connection_manager(
   bridge_actor bridge, tcp_listen_args args,
   shared_diagnostic_handler diagnostics)
   -> connection_manager_actor::behavior_type {
-  self->state.self = self;
-  self->state.io_context = std::make_shared<boost::asio::io_context>();
-  self->state.bridge = std::move(bridge);
-  self->state.args = std::move(args);
-  self->state.diagnostics = std::move(diagnostics);
+  self->state().self = self;
+  self->state().io_context = std::make_shared<boost::asio::io_context>();
+  self->state().bridge = std::move(bridge);
+  self->state().args = std::move(args);
+  self->state().diagnostics = std::move(diagnostics);
   self->set_exception_handler(
     [self](std::exception_ptr exception) -> caf::error {
       try {
@@ -431,43 +433,44 @@ auto make_connection_manager(
       } catch (const std::exception& err) {
         diagnostic::error("{}", err.what())
           .note("unhandled exception in {}", *self)
-          .emit(self->state.diagnostics);
+          .emit(self->state().diagnostics);
         return {};
       }
       return diagnostic::error("unhandled exception in {}", *self).to_error();
     });
-  auto resolver = boost::asio::ip::tcp::resolver{*self->state.io_context};
+  auto resolver = boost::asio::ip::tcp::resolver{*self->state().io_context};
   auto endpoints
-    = resolver.resolve(self->state.args.hostname, self->state.args.port);
+    = resolver.resolve(self->state().args.hostname, self->state().args.port);
   if (endpoints.empty()) {
-    diagnostic::error("failed to resolve {}:{}", self->state.args.hostname,
-                      self->state.args.port)
-      .emit(self->state.diagnostics);
+    diagnostic::error("failed to resolve {}:{}", self->state().args.hostname,
+                      self->state().args.port)
+      .emit(self->state().diagnostics);
     return connection_manager_actor::behavior_type::make_empty_behavior();
   }
-  self->state.endpoint = endpoints.begin()->endpoint();
-  self->state.acceptor = boost::asio::ip::tcp::acceptor(*self->state.io_context,
-                                                        *self->state.endpoint);
+  self->state().endpoint = endpoints.begin()->endpoint();
+  self->state().acceptor = boost::asio::ip::tcp::acceptor(
+    *self->state().io_context, *self->state().endpoint);
   auto reuse_address = boost::asio::ip::tcp::acceptor::reuse_address{true};
-  self->state.acceptor->set_option(reuse_address);
-  self->state.acceptor->listen(boost::asio::socket_base::max_connections);
-  self->state.socket = boost::asio::ip::tcp::socket(*self->state.io_context);
+  self->state().acceptor->set_option(reuse_address);
+  self->state().acceptor->listen(boost::asio::socket_base::max_connections);
+  self->state().socket
+    = boost::asio::ip::tcp::socket(*self->state().io_context);
 #if TENZIR_LINUX
-  auto sfd = ::socket(self->state.endpoint->protocol().family(),
+  auto sfd = ::socket(self->state().endpoint->protocol().family(),
                       SOCK_STREAM | SOCK_CLOEXEC,
-                      self->state.endpoint->protocol().protocol());
+                      self->state().endpoint->protocol().protocol());
   TENZIR_ASSERT(sfd >= 0);
   int opt = 1;
   if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int)) < 0) {
     diagnostic::error("failed to configure socket {}:{}: {}",
-                      self->state.args.hostname, self->state.args.port,
+                      self->state().args.hostname, self->state().args.port,
                       detail::describe_errno())
-      .emit(self->state.diagnostics);
+      .emit(self->state().diagnostics);
     return connection_manager_actor::behavior_type::make_empty_behavior();
   }
-  self->state.socket->assign(self->state.endpoint->protocol(), sfd);
+  self->state().socket->assign(self->state().endpoint->protocol(), sfd);
 #endif
-  self->state.tcp_listen();
+  self->state().tcp_listen();
   return {
     [](int) {
       // dummy because no behavior means quitting
@@ -485,27 +488,27 @@ struct bridge_state {
 auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
                  tcp_listen_args args, shared_diagnostic_handler diagnostics)
   -> bridge_actor::behavior_type {
-  self->state.connection_manager = self->spawn<caf::linked + caf::detached>(
+  self->state().connection_manager = self->spawn<caf::linked + caf::detached>(
     make_connection_manager, bridge_actor{self}, std::move(args),
     std::move(diagnostics));
   return {
     [self](table_slice& slice) -> caf::result<void> {
-      if (self->state.buffer_rp.pending()) {
-        TENZIR_ASSERT(self->state.buffer.empty());
-        self->state.buffer_rp.deliver(std::move(slice));
+      if (self->state().buffer_rp.pending()) {
+        TENZIR_ASSERT(self->state().buffer.empty());
+        self->state().buffer_rp.deliver(std::move(slice));
         return {};
       }
-      self->state.buffer.push(std::move(slice));
+      self->state().buffer.push(std::move(slice));
       return {};
     },
     [self](atom::get) -> caf::result<table_slice> {
-      TENZIR_ASSERT(not self->state.buffer_rp.pending());
-      if (self->state.buffer.empty()) {
-        self->state.buffer_rp = self->make_response_promise<table_slice>();
-        return self->state.buffer_rp;
+      TENZIR_ASSERT(not self->state().buffer_rp.pending());
+      if (self->state().buffer.empty()) {
+        self->state().buffer_rp = self->make_response_promise<table_slice>();
+        return self->state().buffer_rp;
       }
-      auto ts = std::move(self->state.buffer.front());
-      self->state.buffer.pop();
+      auto ts = std::move(self->state().buffer.front());
+      self->state().buffer.pop();
       return ts;
     },
   };

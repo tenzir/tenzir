@@ -17,6 +17,8 @@
 
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::kafka {
 
 auto configuration::make(const record& options)

@@ -7,7 +7,7 @@
   source = builtins.fromJSON (builtins.readFile ./source.json);
 in
   stdenv.mkDerivation {
-    src = fetchFromGitHub {inherit (source) owner repo rev sha256;};
+    src = fetchFromGitHub {inherit (source) owner repo rev hash;};
     pname = "fast_float";
     inherit (source) version;
     nativeBuildInputs = [cmake];

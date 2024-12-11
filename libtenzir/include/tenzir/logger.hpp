@@ -19,7 +19,7 @@
 // TENZIR_INFO -> spdlog::info
 // TENZIR_VERBOSE -> spdlog::debug
 // TENZIR_DEBUG -> spdlog::trace
-// TENZIR_TRACE_SCOPE -> spdlog::trace
+// TENZIR_TRACE -> spdlog::trace
 
 #if TENZIR_LOG_LEVEL == TENZIR_LOG_LEVEL_TRACE
 #  define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
@@ -55,26 +55,10 @@
 
 #if TENZIR_LOG_LEVEL >= TENZIR_LOG_LEVEL_TRACE
 
-// A debugging macro that emits an additional log statement when leaving the
-// current scope.
-#  define TENZIR_TRACE_SCOPE(...)                                              \
-    /* NOLINTNEXTLINE */                                                       \
-    auto CAF_UNIFYN(tenzir_log_trace_guard_)                                   \
-      = [func_name_ = static_cast<const char*>(__func__)](                     \
-          const std::string& format, auto&&... args) {                         \
-          TENZIR_DEBUG(TENZIR_FMT_RUNTIME("ENTER {} " + format), __func__,     \
-                       std::forward<decltype(args)>(args)...);                 \
-          return ::tenzir::detail::scope_guard([func_name_]() noexcept {       \
-            TENZIR_DEBUG("EXIT {}", func_name_);                               \
-          });                                                                  \
-        }(__VA_ARGS__);
-
 #  define TENZIR_TRACE(...)                                                    \
     SPDLOG_LOGGER_TRACE(::tenzir::detail::logger(), __VA_ARGS__)
 
 #else // TENZIR_LOG_LEVEL < TENZIR_LOG_LEVEL_TRACE
-
-#  define TENZIR_TRACE_SCOPE(...) TENZIR_DISCARD_ARGS(__VA_ARGS__)
 
 #  define TENZIR_TRACE(...) TENZIR_DISCARD_ARGS(__VA_ARGS__)
 

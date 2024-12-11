@@ -461,7 +461,7 @@ public:
     -> caf::error override {
     auto timeout
       = try_get<tenzir::duration>(global_config, "tenzir.import.read-timeout");
-    if (!timeout.engaged()) {
+    if (!timeout.has_value()) {
       return std::move(timeout.error());
     }
     if (timeout->has_value()) {

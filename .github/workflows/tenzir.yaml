@@ -813,6 +813,7 @@ jobs:
           - name: Compaction
             target: compaction
             path: contrib/tenzir-plugins/compaction
+            parallel: 1
           - name: Context
             target: context
             path: contrib/tenzir-plugins/context
@@ -977,7 +978,7 @@ jobs:
           cmake -S '${{ matrix.plugin.path }}' -B "$BUILD_DIR"
       - name: Build
         run: |
-          cmake --build "$BUILD_DIR" --target all --parallel
+          cmake --build "$BUILD_DIR" --target all --parallel ${{ matrix.plugin.parallel }}
       - name: Run Unit Tests
         env:
           CTEST_OUTPUT_ON_FAILURE: 1

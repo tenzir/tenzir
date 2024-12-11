@@ -328,7 +328,9 @@ auto diagnostic::error(fmt::format_string<Ts...> str, Ts&&... xs)
 }
 
 inline auto diagnostic::error(caf::error err) -> diagnostic_builder {
-  TENZIR_ASSERT(err);
+  if (not err) {
+    return error("logic error: cannot create an error without error code");
+  }
   return builder(severity::error, std::move(err));
 }
 

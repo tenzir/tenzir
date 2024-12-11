@@ -26,6 +26,7 @@
 #include <arrow/ipc/writer.h>
 
 #include <simdjson.h>
+#include <string_view>
 
 namespace tenzir {
 

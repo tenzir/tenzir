@@ -20,6 +20,8 @@
 
 #include <arrow/table.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::rename {
 
 /// The configuration of the rename pipeline operator.
