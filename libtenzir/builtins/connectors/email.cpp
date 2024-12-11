@@ -66,28 +66,33 @@ public:
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto tx = transfer{args_.transfer_opts};
+    if (auto err = tx.prepare(std::move(args_.endpoint))) {
+      diagnostic::error("failed to prepare SMTP server request")
+        .note("{}", err)
+        .emit(ctrl.diagnostics());
+      return err;
+    }
     if (auto err = to_error(tx.handle().set(CURLOPT_UPLOAD, 1))) {
       return err;
     }
-    auto code = tx.handle().set(CURLOPT_URL, args_.endpoint);
-    if (args_.tls) {
-      tx.handle().set(CURLOPT_USE_SSL,
-                      args_.tls->inner ? CURLUSESSL_ALL : CURLUSESSL_NONE);
-    } else {
-      tx.handle().set(CURLOPT_USE_SSL, CURLUSESSL_TRY);
-    }
-    if (code != curl::easy::code::ok) {
-      auto err = to_error(code);
-      diagnostic::error("failed to set SMTP server request")
-        .note("server: {}", args_.endpoint)
+    const auto set_tls_opts = [&] {
+      if (args_.tls) {
+        return to_error(tx.handle().set(CURLOPT_USE_SSL, args_.tls->inner
+                                                           ? CURLUSESSL_ALL
+                                                           : CURLUSESSL_NONE));
+      } else {
+        return to_error(tx.handle().set(CURLOPT_USE_SSL, CURLUSESSL_TRY));
+      }
+    };
+    if (auto err = set_tls_opts()) {
+      diagnostic::error("failed to set TLS options")
         .note("{}", err)
         .emit(ctrl.diagnostics());
       return err;
     }
     if (args_.from) {
-      code = tx.handle().set(CURLOPT_MAIL_FROM, *args_.from);
-      if (code != curl::easy::code::ok) {
-        auto err = to_error(code);
+      if (auto err
+          = to_error(tx.handle().set(CURLOPT_MAIL_FROM, *args_.from))) {
         diagnostic::error("failed to set MAIL FROM")
           .note("from: {}", *args_.from)
           .note("{}", err)
@@ -101,17 +106,13 @@ public:
 #else
     auto allowfails = CURLOPT_MAIL_RCPT_ALLOWFAILS;
 #endif
-    code = tx.handle().set(allowfails, 1);
-    if (code != curl::easy::code::ok) {
-      auto err = to_error(code);
+    if (auto err = to_error(tx.handle().set(allowfails, 1))) {
       diagnostic::error("failed to adjust recipient failure mode")
         .note("{}", err)
         .emit(ctrl.diagnostics());
       return err;
     }
-    code = tx.handle().add_mail_recipient(args_.to);
-    if (code != curl::easy::code::ok) {
-      auto err = to_error(code);
+    if (auto err = to_error(tx.handle().add_mail_recipient(args_.to))) {
       diagnostic::error("failed to set To header")
         .note("to: {}", args_.to)
         .note("{}", err)
