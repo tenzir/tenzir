@@ -128,22 +128,6 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 ```
 ## Examples
 
-### Ingest OpenTelemetry logs, metrics, and traces
-
-```tql
-fluentbit "opentelemetry"
-```
-
-You can then send JSON-encoded log data to a freshly created API endpoint:
-
-```bash
-curl \
-  --header "Content-Type: application/json" \
-  --request POST \
-  --data '{"resourceLogs":[{"resource":{},"scopeLogs":[{"scope":{},"logRecords":[{"timeUnixNano":"1660296023390371588","body":{"stringValue":"{\"message\":\"dummy\"}"},"traceId":"","spanId":""}]}]}]}' \
-  http://0.0.0.0:4318/v1/logs
-```
-
 ### Imitate a Splunk HEC endpoint
 
 ```tql
@@ -156,18 +140,6 @@ This allows you to ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat).
 
 ```tql
 fluentbit "elasticsearch", options = { port: 9200 }
-```
-
-### Send to Slack
-
-```tql
-fluentbit "slack", options = { webhook: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX" }
-```
-
-### Send to Splunk
-
-```tql
-fluentbit "splunk", options = { host=127.0.0.1, port: 8088, tls:"on", tls.verify=:off", splunk_token:"11111111-2222-3333-4444-555555555555" }
 ```
 
 ### Send to ElasticSearch

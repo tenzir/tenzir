@@ -70,16 +70,10 @@ This allows you to ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat).
 fluentbit "elasticsearch", options = {port: 9200}
 ```
 
-### Send to Slack
+### Send to Datadog
 
 ```tql
-fluentbit "slack", options = {webhook: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"}
-```
-
-### Send to Splunk
-
-```tql
-fluentbit "splunk", options = {host=127.0.0.1, port: 8088, tls:"on", tls.verify=:off", splunk_token:"11111111-2222-3333-4444-555555555555"}
+fluentbit "datadog", options = {apikey: "XXX"}
 ```
 
 ### Send to ElasticSearch
