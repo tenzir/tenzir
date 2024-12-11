@@ -9,6 +9,7 @@
 #include "tenzir/sketch/bloom_filter.hpp"
 
 #include "tenzir/error.hpp"
+#include "tenzir/flatbuffer.hpp"
 
 #include <fmt/format.h>
 
@@ -18,7 +19,7 @@ frozen_bloom_filter::frozen_bloom_filter(chunk_ptr table) noexcept
   : table_{std::move(table)} {
   TENZIR_ASSERT(table_ != nullptr);
   TENZIR_ASSERT(table_->data() != nullptr);
-  auto root = fbs::GetBloomFilter(table_->data());
+  auto root = check(flatbuffer<fbs::BloomFilter>::make(chunk_ptr{table_}));
   auto err = unpack(*root, view_);
   TENZIR_ASSERT(!err);
 }
