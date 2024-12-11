@@ -112,9 +112,12 @@ auto transfer::prepare(http::request req) -> caf::error {
   return {};
 }
 
-auto transfer::prepare(std::string_view url) -> caf::error {
+auto transfer::prepare(std::string url) -> caf::error {
   TENZIR_DEBUG("setting URL: {}", url);
-  return to_error(easy_.set(CURLOPT_URL, url));
+  if (auto err = reset()) {
+    return err;
+  }
+  return to_error(easy_.set(CURLOPT_URL, url.c_str()));
 }
 
 auto transfer::prepare(chunk_ptr chunk) -> caf::error {
