@@ -97,5 +97,7 @@ When reading from a Unix domain socket, Tenzir automatically figures out whether
 the file is regular or a socket:
 
 ```tql
-from "/tmp/socket"
+from "/tmp/socket" {
+  read_ndjson
+}
 ```
