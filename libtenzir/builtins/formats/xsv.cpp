@@ -857,6 +857,10 @@ public:
       .allow_comments = false,
     }});
   }
+
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {std::string{Name}}};
+  }
 };
 
 using read_csv = configured_read_xsv_plugin<"csv", ',', ';', "">;

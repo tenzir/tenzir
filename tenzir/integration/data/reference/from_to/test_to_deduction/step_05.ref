@@ -1,0 +1,28 @@
+[
+  write_yaml {
+    
+  },
+  compress {
+    type: "bz2" @ 0..0
+  },
+  tql2.save_http {
+    url: "https://example.org/example.yaml.bz2",
+    transfer_opts: {
+      verbose: false,
+      default_protocol: "",
+      poll_timeout: "100ms",
+      skip_peer_verification: false,
+      skip_host_verification: false
+    },
+    http_opts: {
+      json: false,
+      form: false,
+      chunked: false,
+      multipart: false,
+      method: "",
+      items: [
+        
+      ]
+    }
+  }
+]

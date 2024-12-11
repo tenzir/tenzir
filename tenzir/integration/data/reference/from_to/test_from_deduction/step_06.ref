@@ -40,4 +40,9 @@
     mode: "none"
   }
 ]
-warning: the deduced load operator `load_http` suggests `read_json`, which will be used
+warning: no known extensions, but the deduced load operator `load_http` suggests `read_json`
+ --> <input>:1:6
+  |
+1 | from "https://example.org/api/json"
+  |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+  |

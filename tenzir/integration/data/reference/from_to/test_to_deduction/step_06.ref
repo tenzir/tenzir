@@ -1,0 +1,31 @@
+[
+  tql2.write_json {
+    compact_output: 0..0
+  },
+  tql2.save_http {
+    url: "https://example.org/api/json",
+    transfer_opts: {
+      verbose: false,
+      default_protocol: "",
+      poll_timeout: "100ms",
+      skip_peer_verification: false,
+      skip_host_verification: false
+    },
+    http_opts: {
+      json: false,
+      form: false,
+      chunked: false,
+      multipart: false,
+      method: "",
+      items: [
+        
+      ]
+    }
+  }
+]
+warning: no known extensions, but the deduced load operator `save_http` suggests `write_ndjson`
+ --> <input>:1:4
+  |
+1 | to "https://example.org/api/json"
+  |    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+  |
