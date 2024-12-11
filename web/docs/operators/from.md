@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # from
 
-Produces events by combining a [connector][connectors] and a [format][formats].
+Produces events by combining a connector and a [format][formats].
 
 ## Synopsis
 
@@ -19,7 +19,7 @@ from <connector> [read <format>]
 ## Description
 
 The `from` operator produces events at the beginning of a pipeline by bringing
-together a [connector][connectors] and a [format][formats].
+together a connector and a [format][formats].
 
 If given something that looks like a path to a file, the connector can pick
 out a format automatically based on the file extension or the file name.
@@ -42,7 +42,7 @@ recommend always using `from ... read ...` over the [`load`](load.md) and
 
 ### `<connector>`
 
-The [connector][connectors] used to load bytes.
+The connector used to load bytes.
 
 Some connectors have connector-specific options. Please refer to the
 documentation of the individual connectors for more information.
@@ -84,5 +84,4 @@ from https://example.com/data.json read json
 from https example.com/data.json read json
 ```
 
-[connectors]: ../connectors.md
 [formats]: ../formats.md

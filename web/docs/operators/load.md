@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # load
 
-The `load` operator acquires raw bytes from a [connector](../connectors.md).
+The `load` operator acquires raw bytes from a connector.
 
 ## Synopsis
 
@@ -26,7 +26,7 @@ but rather only with operators that expect bytes, e.g., [`read`](read.md) or
 
 ### `<connector>`
 
-The [connector](../connectors.md) used to load bytes.
+The connector used to load bytes.
 
 Some connectors have connector-specific options. Please refer to the
 documentation of the individual connectors for more information.
