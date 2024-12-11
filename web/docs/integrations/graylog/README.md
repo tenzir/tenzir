@@ -1,28 +1,19 @@
 # Graylog
 
 [Graylog](https://graylog.org/) is a log management solution based on top of
-Elasticsearch.
+OpenSearch. Tenzir can send data to and receive data from Graylog.[^1]
 
-In Graylog, data goes through three key stages:
+[^1]: This guide focuses currently focuses only on receiving data to Graylog,
+      although it's already possible to send data to Graylog.
 
-1. **Inputs**: This stage involves data ingestion, where Graylog receives data
-   from various sources. Inputs support multiple protocols like TCP, UDP, and
-   HTTP. They normalize incoming data into the unified **Graylog Extended Log
-   Format (GELF)**.
-2. **Streams**: Once onboarded, streams route the data internally. Here,
-   it can be filtered, parsed, and enriched. The stream processing stage
-   leverages extractors and pipeline rules for data manipulation, before
-   indexing the data in Elasticsearch for storage.
-3. **Outputs**: For exporting data, Graylog utilizes alerts, dashboards, and its
-   REST API. Additionally, Graylog can forward data to external systems or tools
-   via streams.
+![Graylog](graylog.svg)
 
 ## Receive data from Graylog
 
 To receive data from Graylog with a Tenzir pipeline, you need to configure a new
 output and setup a stream that sends data to that output. The example below
 assumes that Graylog sends data in GELF to a TCP endpoint that listens on
-1.2.3.4 at port 5678.
+IP address 1.2.3.4 at port 5678.
 
 ### Configure a GELF TCP output
 
@@ -30,8 +21,8 @@ assumes that Graylog sends data in GELF to a TCP endpoint that listens on
 2. Click *Manage Outputs*.
 3. Select `GELF TCP` as the output type.
 4. Configure the output settings:
-   - Specify the target server's address in the `host` field (e.g., 1.2.3.4).
-   - Enter the port number for the TCP connection (e.g., 5678).
+   - Specify the target server's address in the `host` field (e.g., `1.2.3.4`).
+   - Enter the port number for the TCP connection (e.g., `5678`).
    - Optionally adjust other settings like reconnect delay, queue size, and send
      buffer size.
 5. Save the configuration.
@@ -61,25 +52,25 @@ Now that Graylog is configured, you can test that data is flowing using the
 following Tenzir pipeline:
 
 ```tql
-load_tcp "1.2.3.4:5678" {
+from "tcp://1.2.3.4:5678" {
   read_gelf
 }
 ```
 
 This pipelines opens a listening socket at IP address 1.2.3.4 at port 5678 via
-[`load_tcp`](../../tql2/operators/load_tcp.md), and then spawns a nested
-pipeline per accepted connection, each of which reads a stream of GELF messages
-using [`read_gelf`](../../tql2/operators/read_gelf.md). Graylog will connect to
+[`from`](../../tql2/operators/from.md) and then spawns a nested pipeline per
+accepted connection, each of which reads a stream of GELF messages using
+[`read_gelf`](../../tql2/operators/read_gelf.md). Graylog will connect to
 this socket, based on the reconnect interval that you configured in the output
 (by default 500ms).
 
 Now that data is flowing, you can decide what to do with the Graylog data, e.g.,
-ingest data into a running Tenzir node by appending
-[`import`](../../tql2/operators/import.md):
+make available the data on an topic using
+[`publish`](../../tql2/operators/publish.md):
 
 ```tql
-load_tcp "1.2.3.4:5678" {
+from "tcp://1.2.3.4:5678" {
   read_gelf
 }
-import
+publish "graylog"
 ```
