@@ -1,10 +1,10 @@
 # Zeek
 
 The [Zeek](https://zeek.org) network monitor translates raw packets into
-structured logs.
+structured logs. Tenzir supports various Zeek use cases, such as continuous
+ingestion, ad-hoc log file processing, and even generating Zeek logs.
 
-Tenzir supports various Zeek use cases, such as continuous ingestion, ad-hoc log
-file processing, and even generating Zeek logs.
+![Zeek](zeek.svg)
 
 :::info Zeek Blog Post Series
 We wrote several Zeek blog posts in the past that cover various aspects of the

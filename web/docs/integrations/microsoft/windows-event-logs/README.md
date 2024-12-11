@@ -11,7 +11,7 @@ node](../../../usage/import-into-a-node/README.md).
 Installing a third-party agent to ship logs away from a Windows machine is
 common way to send events to a remote location.
 
-![Windows Events with Agent](windows-events-with-agent.excalidraw.svg)
+![Windows Events with Agent](windows-events-with-agent.svg)
 
 Regardless of the concrete agent you are using for shipping, the high-level
 setup is always the same: the agent sends events in a push-based to a Tenzir
@@ -275,7 +275,7 @@ levels.
 
 The diagram below illustrates a typical setup:
 
-![WEF & WEC](wef-wec.excalidraw.svg)
+![WEF & WEC](windows-events-wef-wec.svg)
 
 On the WEC, you typically ship the collected logs away using a third-party
 agent, as described above. Read below on using
@@ -455,7 +455,7 @@ events](#verify-the-subscription).
 Instead of natively running a WEC on a Windows machine, you can also run the
 third-party implementation [OpenWEC](https://github.com/cea-sec/openwec).
 
-![OpenWEC](openwec.excalidraw.svg)
+![OpenWEC](windows-events-openwec.svg)
 
 From a functional perspective, this setup is identical to running a native WEC,
 but it does not require an additional agent at the WEC. In addition, OpenWEC can

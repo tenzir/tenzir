@@ -1,9 +1,9 @@
 # Suricata
 
 [Suricata](https://suricata.io/) is network monitor with a rule matching engine
-to detect threats.
+to detect threats. Use Tenzir to acquire, process, and store Suricata logs.
 
-Use Tenzir to acquire, process, and store Suricata logs.
+![Suricata](suricata.svg)
 
 ## Examples
 

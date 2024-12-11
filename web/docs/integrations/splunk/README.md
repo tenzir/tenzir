@@ -1,12 +1,58 @@
 # Splunk
 
-[Splunk](https://splunk.com) is a log management and SIEM solution for storing
-and processing logs.
+[Splunk](https://splunk.com) is a SIEM solution for storing
+and processing logs. Tenzir can send data to Splunk via HEC.
 
-Deploy Tenzir between your data sources and existing Splunk for controlling
-costs and gaining additional flexibility of data processing and routing.
+![Splunk](splunk.svg)
 
-## Test Splunk and Tenzir together
+## Examples
+
+### Send data to an existing HEC endpoint
+
+To send data from a pipeline to a Splunk [HTTP Event Collector (HEC)][hec]
+endpoint, use the [`to_splunk`](../../tql2/operators/to_splunk.md) operator.
+
+For example, deploy the following pipeline to forward
+[Suricata](../suricata/README.md) alerts to Splunk:
+
+```tql
+subscribe "suricata"
+where @name == "suricata.alert"
+to_splunk "https://1.2.3.4:8088", hec_token="TOKEN", tls_no_verify=true
+```
+
+Replace `1.2.3.4` with the IP address of your Splunk host and `TOKEN` with your
+HEC token.
+
+For more details, see the documentation for the
+[`to_splunk`](../../tql2/operators/to_splunk.md) operator.
+
+### Spawn a HEC endpoint as pipeline source
+
+To send data to a Tenzir pipeline instead of Splunk, you can open a Splunk [HTTP
+Event Collector (HEC)][hec] endpoint using the
+[`fluentbit`](../../tql2/operators/fluentbit.md) source operator.
+
+For example, to onboard all data into a Tenzir node instead of Splunk, point
+your data source to the IP address of the Tenzir node at port 9880 by deploying
+this pipeline:
+
+```tql
+fluentbit "splunk", options={
+  splunk_token: "TOKEN",
+} 
+publish "splunk"
+```
+
+Replace `TOKEN` with the Splunk token configured at your data source.
+
+To listen on a different IP address, e.g., 1.2.3.4 add `listen: 1.2.3.4` to the
+`options` argument.
+
+For more details, read the official [Fluent Bit documentation of the Splunk
+input][fluentbit-splunk-input].
+
+## Example Co-Deployment
 
 To test Splunk and Tenzir together, use the following [Docker
 Compose](https://docs.docker.com/compose/) setup.
@@ -74,50 +120,3 @@ After you spun up the containers, configure Splunk as follows:
 [fluentbit-splunk-input]: https://docs.fluentbit.io/manual/pipeline/inputs/splunk
 [fluentbit-splunk-output]: https://docs.fluentbit.io/manual/pipeline/outputs/splunk
 [hec]: https://docs.splunk.com/Documentation/Splunk/latest/Data/UsetheHTTPEventCollector
-
-## Examples
-
-### Send data to an existing HEC endpoint
-
-To send data from a pipeline to a Splunk [HTTP Event Collector (HEC)][hec]
-endpoint, use the [`to_splunk`](../../tql2/operators/to_splunk.md) operator.
-
-For example, deploy the following pipeline to forward all
-[Suricata](../suricata/README.md) alerts arriving at a node to Splunk:
-
-```tql
-export live=true
-where @name == "suricata.alert"
-to_splunk "https://1.2.3.4:8088", hec_token="TOKEN", tls_no_verify=true
-```
-
-Replace `1.2.3.4` with the IP address of your Splunk host and `TOKEN` with your
-HEC token.
-
-For more details, see the documentation for the
-[`to_splunk`](../../tql2/operators/to_splunk.md) operator.
-
-### Spawn a HEC endpoint as pipeline source
-
-To send data to a Tenzir pipeline instead of Splunk, you can open a Splunk [HTTP
-Event Collector (HEC)][hec] endpoint using the
-[`fluentbit`](../../tql2/operators/fluentbit.md) source operator.
-
-For example, to ingest all data into a Tenzir node instead of Splunk, point your
-data source to the IP address of the Tenzir node at port 9880 by deploying this
-pipeline:
-
-```tql
-fluentbit "splunk", options={
-  splunk_token: "TOKEN",
-} 
-import
-```
-
-Replace `TOKEN` with the Splunk token configured at your data source.
-
-To listen on a different IP address, e.g., 1.2.3.4 add `listen: 1.2.3.4` to the
-`options` argument.
-
-For more details, read the official [Fluent Bit documentation of the Splunk
-input][fluentbit-splunk-input].
