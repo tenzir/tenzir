@@ -30,6 +30,7 @@ struct saver_args {
   std::optional<std::string> subject;
   transfer_options transfer_opts;
   bool mime;
+  std::optional<located<bool>> tls;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
@@ -69,6 +70,12 @@ public:
       return err;
     }
     auto code = tx.handle().set(CURLOPT_URL, args_.endpoint);
+    if (args_.tls) {
+      tx.handle().set(CURLOPT_USE_SSL,
+                      args_.tls->inner ? CURLUSESSL_ALL : CURLUSESSL_NONE);
+    } else {
+      tx.handle().set(CURLOPT_USE_SSL, CURLUSESSL_TRY);
+    }
     if (code != curl::easy::code::ok) {
       auto err = to_error(code);
       diagnostic::error("failed to set SMTP server request")
@@ -246,18 +253,21 @@ public:
 
 class save_plugin final
   : public virtual operator_plugin2<saver_adapter<saver>> {
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = saver_args{};
+    auto endpoint = std::optional<std::string>{default_smtp_server};
+    auto to = located<std::string>{};
     auto parser = argument_parser2::operator_(name());
-    parser.positional("email", args.to);
-    parser.named("endpoint", args.endpoint);
+    parser.positional("recipient", to);
+    parser.named("endpoint", endpoint);
     parser.named("from", args.from);
     parser.named("subject", args.subject);
     parser.named("username", args.transfer_opts.username);
     parser.named("password", args.transfer_opts.password);
     parser.named("authzid", args.transfer_opts.authzid);
     parser.named("authorization", args.transfer_opts.authorization);
+    parser.named("tls", args.tls);
     parser.named("skip_peer_verification",
                  args.transfer_opts.skip_peer_verification);
     parser.named("skip_hostname_verification",
@@ -265,20 +275,18 @@ class save_plugin final
     parser.named("mime", args.mime);
     parser.named("verbose", args.transfer_opts.verbose);
     TRY(parser.parse(inv, ctx));
-    if (args.endpoint.empty()) {
-      args.endpoint = default_smtp_server;
-    } else if (args.endpoint.find("://") == std::string_view::npos) {
+    args.endpoint = std::move(endpoint).value();
+    if (args.endpoint.find("://") == std::string_view::npos) {
       args.endpoint.insert(0, "smtps://");
     } else if (args.endpoint.starts_with("email://")) {
       args.endpoint.erase(0, 5);
       args.endpoint.insert(0, "smtp");
     }
-    if (args.to.empty()) {
-      diagnostic::error("no recipient specified")
-        .hint("add `to=<recipient>` to your invocation")
-        .emit(ctx);
+    if (to.inner.empty()) {
+      diagnostic::error("empty recipient specified").primary(to).emit(ctx);
       return failure::promise();
     }
+    args.to = std::move(to.inner);
     return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
   }
 };
