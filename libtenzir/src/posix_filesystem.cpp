@@ -160,11 +160,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
                                fmt::format("{} {}: {}", *self, path,
                                            err.message()));
       }
-      if (auto chk = chunk::mmap(path)) {
-        return chk;
-      } else {
-        return chk.error();
-      }
+      return chunk::mmap(path);
     },
     [self](atom::erase,
            const std::filesystem::path& filename) -> caf::result<atom::done> {

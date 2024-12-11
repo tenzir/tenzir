@@ -530,16 +530,15 @@ caf::error index_state::load_from_disk() {
         if (auto error = extract_partition_synopsis(part_path, synopsis_path))
           return error;
       }
-      auto chunk = chunk::mmap(synopsis_path);
-      if (!chunk)
-        return chunk.error();
-      const auto* ps_flatbuffer
-        = fbs::GetPartitionSynopsis(chunk->get()->data());
+      TRY(auto chunk, chunk::mmap(synopsis_path));
+      TRY(const auto ps_flatbuffer,
+          flatbuffer<fbs::PartitionSynopsis>::make(std::move(chunk)));
       partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
       if (ps_flatbuffer->partition_synopsis_type()
           != fbs::partition_synopsis::PartitionSynopsis::legacy)
         return caf::make_error(ec::format_error, "invalid partition synopsis "
                                                  "version");
+      TENZIR_ASSERT(ps_flatbuffer->partition_synopsis_as_legacy());
       const auto& synopsis_legacy
         = *ps_flatbuffer->partition_synopsis_as_legacy();
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
@@ -564,7 +563,7 @@ caf::error index_state::load_from_disk() {
             not err) {
           ps.unshared().sketches_file = {
             .url = fmt::format("file://{}", canonical_synopsis_path),
-            .size = chunk->get()->size(),
+            .size = ps_flatbuffer.chunk()->size(),
           };
         }
         auto f = store_map.find(partition_uuid);
@@ -1402,7 +1401,9 @@ index(index_actor::stateful_pointer<index_state> self,
                   TENZIR_DEBUG("{} mmapped partition {} to extract store path "
                                "for erasure",
                                *self, partition_id);
-                  if (!chunk) {
+                  using flatbuffers::uoffset_t;
+                  using flatbuffers::soffset_t;
+                  if (!chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
                     erase_dense_index_file();
                     rp.deliver(caf::make_error( //
                       ec::filesystem_error,
