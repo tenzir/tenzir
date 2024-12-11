@@ -22,7 +22,7 @@ tables](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom
 The diagram below illustrates the key components involved when sending data to a
 Log Analytics table:
 
-![Log Ingestion Workflow](azure-log-analytics.excalidraw.svg)
+![Log Ingestion Workflow](azure-log-analytics.svg)
 
 The [Data Collection Endpoint
 (DCE)](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/data-collection-endpoint-overview)
