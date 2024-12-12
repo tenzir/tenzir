@@ -19,11 +19,10 @@ The values to search.
 ### Get the last non-null value
 
 ```tql
-from [
+from \
   {x: 1},
   {x: 2},
-  {x: null},
-]
+  {x: null}
 summarize last_value=last(x)
 ```
 

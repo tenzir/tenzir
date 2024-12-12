@@ -19,11 +19,10 @@ The values to aggregate.
 ### Compute a sum over a group of events
 
 ```tql
-from [
+from \
   {x: 1},
   {x: 2},
-  {x: 3},
-]
+  {x: 3}
 summarize n=sum(x)
 ```
 

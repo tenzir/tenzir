@@ -23,11 +23,10 @@ Sets the name of the list field.
 ### Unroll a list
 
 ```tql
-from [
+from \
   {x: "a", y: [1, 2, 3]},
   {x: "b", y: []},
-  {x: "c", y: [4]},
-]
+  {x: "c", y: [4]}
 unroll y
 ```
 

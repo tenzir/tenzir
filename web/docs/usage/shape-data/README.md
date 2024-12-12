@@ -22,11 +22,10 @@ Use [`where`](../../tql2/operators/where.md) to filter events in the
 input with an [expression](../../tql2/language/expressions.md):
 
 ```tql
-from [
+from \
   {x: 1, y: "foo"},
   {x: 2, y: "bar"},
-  {x: 3, y: "baz"},
-]
+  {x: 3, y: "baz"}
 where x != 2 and y.starts_with("b")
 ```
 
@@ -43,11 +42,10 @@ last N records of the input.
 Get the first event:
 
 ```tql
-from [
+from \
   {x: 1, y: "foo"},
   {x: 2, y: "bar"},
-  {x: 3, y: "baz"},
-]
+  {x: 3, y: "baz"}
 head 1
 ```
 
@@ -58,11 +56,10 @@ head 1
 Get the last two events:
 
 ```tql
-from [
+from \
   {x: 1, y: "foo"},
   {x: 2, y: "bar"},
-  {x: 3, y: "baz"},
-]
+  {x: 3, y: "baz"}
 tail 2
 ```
 
@@ -81,14 +78,13 @@ The [`slice`](../../tql2/operators/slice.md) operator generalizes `head` and
 other event starting from the third:
 
 ```tql
-from [
+from \
   {x: 1, y: "foo"},
   {x: 2, y: "bar"},
   {x: 3, y: "baz"},
   {x: 4, y: "qux"},
   {x: 5, y: "corge"},
-  {x: 6, y: "grault"},
-]
+  {x: 6, y: "grault"}
 slice begin=3, stride=2
 ```
 
@@ -103,11 +99,10 @@ Use the [`select`](../../tql2/operators/select.md) operator to
 pick fields:
 
 ```tql
-from [
+from \
   {x: 1, y: "foo"},
   {x: 2, y: "bar"},
-  {x: 3, y: "baz"},
-]
+  {x: 3, y: "baz"}
 select x
 ```
 
@@ -121,11 +116,10 @@ The [`drop`](../../tql2/operators/drop.md) operator is the dual to `select` and
 removes the specified fields:
 
 ```tql
-from [
+from \
   {x: 1, y: "foo"},
   {x: 2, y: "bar"},
-  {x: 3, y: "baz"},
-]
+  {x: 3, y: "baz"}
 drop x
 ```
 
@@ -141,13 +135,12 @@ The [`taste`](../../tql2/operators/taste.md) operator provides a sample of the
 first N events of every unique schemas. For example, to get 3 unique samples:
 
 ```tql
-from [
+from \
   {x: 1, y: "foo"},
   {x: 2, y: "bar"},
   {x: 1},
   {x: 2},
-  {y: "foo"},
-]
+  {y: "foo"}
 taste 1
 ```
 
@@ -163,10 +156,9 @@ Use the [`set`](../../tql2/operators/set.md) operator to add new fields to the
 output.
 
 ```tql
-from [
+from \
   {x: 1},
-  {x: 2},
-]
+  {x: 2}
 set y = x + 1
 ```
 
@@ -179,10 +171,9 @@ Rename fields by combining [`set`](../../tql2/operators/set.md) with
 [`drop`](../../tql2/operators/set.md):
 
 ```tql
-from [
+from \
   {x: 1},
-  {x: 2},
-]
+  {x: 2}
 set y=x
 drop x
 ```
@@ -196,10 +187,9 @@ Similarly, you can rename and project at the same time with
 [`select`](../../tql2/operators/select.md):
 
 ```tql
-from [
+from \
   {x: 1, y: "foo"},
-  {x: 2, y: "bar"},
-]
+  {x: 2, y: "bar"}
 select y=x
 ```
 
@@ -214,11 +204,10 @@ Use [`summarize`](../../tql2/operators/summarize.md) to group and aggregate
 data.
 
 ```tql
-from [
+from \
   {x: 0, y: 0, z: 1},
   {x: 1, y: 1, z: 2},
-  {x: 1, y: 1, z: 3},
-]
+  {x: 1, y: 1, z: 3}
 summarize y, x=sum(x)
 ```
 
@@ -236,11 +225,10 @@ Use [`sort`](../../tql2/operators/sort.md) to arrange the output records
 according to the order of a specific field.
 
 ```tql
-from [
+from \
   {x: 2, y: "bar"},
   {x: 3, y: "baz"},
-  {x: 1, y: "foo"},
-]
+  {x: 1, y: "foo"}
 sort -x
 ```
 

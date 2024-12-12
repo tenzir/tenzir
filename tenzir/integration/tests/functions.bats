@@ -65,10 +65,10 @@ EOF
   {"y":-6}
   ' |
     check tenzir 'read_json | z = x.otherwise(y)'
-  check tenzir 'from [{},{},{}] | z = x.otherwise(-1)'
-  check tenzir 'from [{x:1},{x:2},{x:3}] | z = x.otherwise(-1)'
-  check tenzir 'from [{},{x:1},{}] | z = x.otherwise(-1)'
-  check tenzir 'from [{x:1},{},{x:2}] | z = x.otherwise(-1)'
+  check tenzir 'from {},{},{} | z = x.otherwise(-1)'
+  check tenzir 'from {x:1},{x:2},{x:3} | z = x.otherwise(-1)'
+  check tenzir 'from {},{x:1},{} | z = x.otherwise(-1)'
+  check tenzir 'from {x:1},{},{x:2} | z = x.otherwise(-1)'
 }
 
 @test "select and drop matching" {

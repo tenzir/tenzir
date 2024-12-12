@@ -20,11 +20,10 @@ The values to count.
 ### Count the number of non-null values
 
 ```tql
-from [
+from \
   {x: 1},
   {x: null},
-  {x: 2},
-]
+  {x: 2}
 summarize total=count(x)
 ```
 

@@ -42,7 +42,7 @@ to specify a custom name.
 ### Compute the sum of a field over all events
 
 ```tql
-from [{x: 1}, {x: 2}]
+from {x: 1}, {x: 2}
 summarize x=sum(x)
 ```
 
@@ -53,11 +53,10 @@ summarize x=sum(x)
 Group over `y` and compute the sum of `x` for each group:
 
 ```tql
-from [
+from \
   {x: 0, y: 0, z: 1},
   {x: 1, y: 1, z: 2},
-  {x: 1, y: 1, z: 3},
-]
+  {x: 1, y: 1, z: 3}
 summarize y, x=sum(x)
 ```
 

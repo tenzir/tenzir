@@ -20,12 +20,11 @@ The values to evaluate.
 ### Compute the median value
 
 ```tql
-from [
+from \
   {x: 1},
   {x: 2},
   {x: 3},
-  {x: 4},
-]
+  {x: 4}
 summarize median_value=median(x)
 ```
 

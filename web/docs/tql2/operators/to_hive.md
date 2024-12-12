@@ -45,7 +45,7 @@ because it opens a new file when only after it is exceeded. Defaults to `100M`.
 ### Partition by a single field into local JSON files
 
 ```tql
-from [{a: 0, b: 0}, {a: 0, b: 1}, {a: 1, b: 2}]
+from {a: 0, b: 0}, {a: 0, b: 1}, {a: 1, b: 2}
 to_hive "/tmp/out/", partition_by=[a], format="json"
 // This pipeline produces two files:
 // -> /tmp/out/a=0/1.json:

@@ -20,12 +20,11 @@ The values to collect.
 ### Collect values into a list
 
 ```tql
-from [
+from \
   {x: 1},
   {x: 2},
   {x: 2},
-  {x: 3},
-]
+  {x: 3}
 summarize values=collect(x)
 ```
 

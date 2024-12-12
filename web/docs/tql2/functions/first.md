@@ -19,11 +19,10 @@ The values to search.
 ### Get the first non-null value
 
 ```tql
-from [
+from \
   {x: null},
   {x: 2},
-  {x: 3},
-]
+  {x: 3}
 summarize first_value=first(x)
 ```
 

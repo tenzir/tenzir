@@ -62,10 +62,9 @@ context::create_lookup_table "ctx"
 Add data to the lookup table via `context::update`:
 
 ```tql
-from [
+from \
   {x:1, y:"a"},
-  {x:2, y:"b"},
-]
+  {x:2, y:"b"}
 context::update "ctx", key=x, value=y
 ```
 
@@ -83,10 +82,9 @@ context::inspect "ctx"
 ### Use a custom value as lookup table
 
 ```tql
-from [
+from \
   {x:1},
-  {x:2},
-]
+  {x:2}
 context::update "ctx", key=x, value=x*x
 ```
 

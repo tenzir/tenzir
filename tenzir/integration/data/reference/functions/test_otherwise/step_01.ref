@@ -2,8 +2,8 @@
 {"z": -1}
 {"z": -1}
 warning: field `x` not found
- --> <input>:1:23
+ --> <input>:1:21
   |
-1 | from [{},{},{}] | z = x.otherwise(-1)
-  |                       ~ 
+1 | from {},{},{} | z = x.otherwise(-1)
+  |                     ~ 
   |
