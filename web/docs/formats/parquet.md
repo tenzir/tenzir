@@ -33,7 +33,7 @@ The `parquet` format provides both a parser and a printer for Parquet files.
 tools support.
 
 :::tip MMAP Parsing
-When using the parser with the [`file`](../connectors/file.md) connector, we
+When using the parser with the `file` connector, we
 recommend passing the `--mmap` option to `file` to give the parser full control
 over the reads, which leads to better performance and memory usage.
 :::

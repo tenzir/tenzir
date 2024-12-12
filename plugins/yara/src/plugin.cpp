@@ -14,6 +14,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <deque>
+#include <string_view>
 #include <yara.h>
 
 namespace tenzir::plugins::yara {

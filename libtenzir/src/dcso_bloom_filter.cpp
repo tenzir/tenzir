@@ -14,6 +14,7 @@
 #include <bit>
 #include <cmath>
 #include <cstddef>
+#include <string_view>
 
 namespace tenzir {
 

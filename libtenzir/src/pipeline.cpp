@@ -18,6 +18,8 @@
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 class local_control_plane final : public operator_control_plane {

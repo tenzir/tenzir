@@ -78,12 +78,12 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
                  std::filesystem::path root) {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("tnz.posix-fs");
-  self->state.root = std::move(root);
+  self->state().root = std::move(root);
   return {
     [self](atom::write, const std::filesystem::path& filename,
            const chunk_ptr& chk) -> caf::result<atom::ok> {
       const auto path
-        = filename.is_absolute() ? filename : self->state.root / filename;
+        = filename.is_absolute() ? filename : self->state().root / filename;
       if (chk == nullptr)
         return caf::make_error(ec::invalid_argument,
                                fmt::format("{} tried to write a nullptr to {}",
@@ -96,7 +96,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
     [self](atom::read,
            const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
       const auto path
-        = filename.is_absolute() ? filename : self->state.root / filename;
+        = filename.is_absolute() ? filename : self->state().root / filename;
       std::error_code err;
       if (std::filesystem::exists(path, err)) {
       } else {
@@ -115,7 +115,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       auto result = std::vector<record>{};
       for (auto const& path : filenames) {
         const auto full_path
-          = path.is_absolute() ? path : self->state.root / path;
+          = path.is_absolute() ? path : self->state().root / path;
         auto err = std::error_code{};
         if (!std::filesystem::exists(full_path, err)) {
           result.emplace_back(record{});
@@ -135,7 +135,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
     },
     [self](atom::move, const std::filesystem::path& from,
            const std::filesystem::path& to) -> caf::result<atom::done> {
-      return self->state.rename_single_file(from, to);
+      return self->state().rename_single_file(from, to);
     },
     [self](
       atom::move,
@@ -143,7 +143,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         files) -> caf::result<atom::done> {
       std::error_code err;
       for (const auto& [from, to] : files) {
-        auto result = self->state.rename_single_file(from, to);
+        auto result = self->state().rename_single_file(from, to);
         if (!result)
           return result.error();
       }
@@ -152,7 +152,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
     [self](atom::mmap,
            const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
       const auto path
-        = filename.is_absolute() ? filename : self->state.root / filename;
+        = filename.is_absolute() ? filename : self->state().root / filename;
       std::error_code err;
       if (std::filesystem::exists(path, err)) {
       } else {
@@ -160,16 +160,12 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
                                fmt::format("{} {}: {}", *self, path,
                                            err.message()));
       }
-      if (auto chk = chunk::mmap(path)) {
-        return chk;
-      } else {
-        return chk.error();
-      }
+      return chunk::mmap(path);
     },
     [self](atom::erase,
            const std::filesystem::path& filename) -> caf::result<atom::done> {
       const auto path
-        = filename.is_absolute() ? filename : self->state.root / filename;
+        = filename.is_absolute() ? filename : self->state().root / filename;
       auto err = std::error_code{};
       if (err) {
         return caf::make_error(ec::no_such_file,

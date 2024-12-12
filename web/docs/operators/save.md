@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # save
 
-The `save` operator saves bytes to a [connector](../connectors.md).
+The `save` operator saves bytes to a connector.
 
 ## Synopsis
 
@@ -25,7 +25,7 @@ with operators that emit bytes, e.g., [`write`](write.md) or [`load`](load.md).
 
 ### `<connector>`
 
-The [connector](../connectors.md) used to save bytes.
+The connector used to save bytes.
 
 Some connectors have connector-specific options. Please refer to the
 documentation of the individual connectors for more information.

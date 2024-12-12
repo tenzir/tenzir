@@ -2,7 +2,7 @@
 title: Tenzir v4.4
 authors: [dominiklohmann]
 date: 2023-11-06
-last_updated: 2023-12-12
+last_updated: 2024-12-10
 tags: [release, operators, velociraptor, yara, amqp]
 comments: true
 ---
@@ -57,8 +57,8 @@ Pipelines](/blog/integrating-velociraptor-into-tenzir-pipelines)
 
 ## AMQP Connector
 
-The new [`amqp`](/next/connectors/amqp) connector brings a full-fledged AMQP
-0-9-1 client to the table. Relying on the battle-proven [RabbitMQ C client
+The new `amqp` connector brings a full-fledged AMQP 0-9-1 client to the table.
+Relying on the battle-proven [RabbitMQ C client
 library](https://github.com/alanxz/rabbitmq-c), the operator makes it possible
 you to interact with queues and exchanges as shown in the diagram below:
 

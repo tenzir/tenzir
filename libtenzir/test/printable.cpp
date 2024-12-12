@@ -180,7 +180,7 @@ TEST(sequence pair) {
 
 TEST(choice) {
   using namespace printers;
-  auto x = caf::variant<char, bool, int64_t>{true};
+  auto x = variant<char, bool, int64_t>{true};
   auto p = any | tf | i64;
   std::string str;
   CHECK(p(str, x));

@@ -22,6 +22,8 @@
 #include <arrow/array.h>
 #include <fmt/format.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::put_extend_replace {
 
 namespace {

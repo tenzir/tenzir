@@ -21,6 +21,7 @@
 
 #include <caf/test/dsl.hpp>
 
+#include <string_view>
 #include <variant>
 
 using namespace tenzir;

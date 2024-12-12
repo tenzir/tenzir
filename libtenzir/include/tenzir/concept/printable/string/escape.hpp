@@ -11,6 +11,7 @@
 #include "tenzir/concept/printable/core/printer.hpp"
 
 #include <string>
+#include <string_view>
 
 namespace tenzir {
 

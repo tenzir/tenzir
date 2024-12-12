@@ -19,6 +19,7 @@
 #include <arrow/util/utf8.h>
 
 #include <ranges>
+#include <string_view>
 
 namespace tenzir {
 
@@ -347,6 +348,11 @@ public:
           continue;
         }
       }
+      auto negate = std::optional<location>{};
+      if (silent_peek(tk::not_) and silent_peek_n(tk::in, 1)
+          and precedence(binary_op::in) >= min_prec) {
+        negate = advance();
+      }
       if (auto bin_op = peek_binary_op()) {
         auto new_prec = precedence(*bin_op);
         if (new_prec >= min_prec) {
@@ -358,6 +364,9 @@ public:
             located{*bin_op, location},
             std::move(right),
           };
+          if (negate) {
+            expr = unary_expr{{unary_op::not_, *negate}, std::move(expr)};
+          }
           continue;
         }
       }

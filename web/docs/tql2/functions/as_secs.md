@@ -24,5 +24,5 @@ from { x: as_secs(42ms) }
 
 ## See Also
 
-[`from_epoch_ms`](from_epoch_ms.md), [`now`](now.md),
+[`from_epoch`](from_epoch.md), [`now`](now.md),
 [`since_epoch`](since_epoch.md)

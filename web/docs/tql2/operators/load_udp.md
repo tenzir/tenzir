@@ -38,7 +38,7 @@ Defaults to `false`.
 
 ## Examples
 
-Import JSON via UDP by listenting on IP address `127.0.0.1` at port `56789`:
+### Import JSON via UDP by listenting
 
 ```tql
 load_udp "127.0.0.1:56789"

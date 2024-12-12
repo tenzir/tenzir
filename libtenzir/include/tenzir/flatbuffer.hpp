@@ -16,6 +16,7 @@
 #include <fmt/core.h>
 
 #include <compare>
+#include <string_view>
 
 namespace tenzir {
 
@@ -326,9 +327,8 @@ public:
       return true;
     };
     const auto name = qualified_name();
-    return f
-      .object(x)
-      .pretty_name(caf::string_view{name.data(), name.size()})
+    return f.object(x)
+      .pretty_name(std::string_view{name.data(), name.size()})
       .on_load(load_callback)
       .fields(f.field("chunk", x.chunk_),
               f.field("table-offset", table_offset));

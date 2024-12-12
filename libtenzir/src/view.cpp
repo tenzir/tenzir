@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <regex>
+#include <string_view>
 
 namespace tenzir {
 

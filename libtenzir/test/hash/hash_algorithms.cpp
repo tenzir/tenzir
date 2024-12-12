@@ -18,6 +18,8 @@
 #include "tenzir/hash/xxhash.hpp"
 #include "tenzir/test/test.hpp"
 
+#include <string_view>
+
 using namespace tenzir;
 using tenzir::detail::hexify;
 

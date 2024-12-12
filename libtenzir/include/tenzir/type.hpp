@@ -27,10 +27,12 @@
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <compare>
 #include <functional>
 #include <initializer_list>
+#include <string_view>
 
 namespace tenzir {
 

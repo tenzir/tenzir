@@ -19,7 +19,7 @@ gelf [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
 
 The `gelf` parser reads events formatted in [Graylog Extended Log Format
 (GELF)][gelf-spec], a format that predominantly
-[Graylog](../integrations/graylog.md) uses for importing and exporting
+[Graylog](../integrations/graylog/README.md) uses for importing and exporting
 of structured data.
 
 Tenzir parses GELF as a stream of JSON records separated by a `\0` byte. GELF
@@ -81,14 +81,13 @@ The GELF parser supports the common [schema inference options](formats.md#parser
 
 ## Examples
 
-Accept GELF from a [TCP](../connectors/tcp.md) socket:
+Accept GELF from a TCP socket:
 
 ```
 from tcp://1.2.3.4 read gelf
 ```
 
-Read GELF messages from [Kafka](../connectors/kafka.md) from the `graylog`
-topic:
+Read GELF messages from Kafka from the `graylog` topic:
 
 ```
 from kafka --topic graylog read gelf

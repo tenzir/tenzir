@@ -271,30 +271,30 @@ auto pipeline_executor(
   metrics_receiver_actor metrics, node_actor node, bool has_terminal,
   bool is_hidden) -> pipeline_executor_actor::behavior_type {
   TENZIR_TRACE("{} was created", *self);
-  self->state.self = self;
-  self->state.node = std::move(node);
-  self->state.pipe = std::move(pipe);
-  self->state.diagnostics = std::move(diagnostics);
-  self->state.metrics = std::move(metrics);
-  self->state.no_location_overrides = caf::get_or(
+  self->state().self = self;
+  self->state().node = std::move(node);
+  self->state().pipe = std::move(pipe);
+  self->state().diagnostics = std::move(diagnostics);
+  self->state().metrics = std::move(metrics);
+  self->state().no_location_overrides = caf::get_or(
     self->system().config(), "tenzir.no-location-overrides", false);
-  self->state.has_terminal = has_terminal;
-  self->state.is_hidden = is_hidden;
+  self->state().has_terminal = has_terminal;
+  self->state().is_hidden = is_hidden;
   self->set_down_handler([self](caf::down_msg& msg) {
-    const auto exec_node = std::ranges::find(self->state.exec_nodes, msg.source,
-                                             &exec_node_actor::address);
-    TENZIR_ASSERT(exec_node != self->state.exec_nodes.end());
-    self->state.exec_nodes.erase(exec_node);
+    const auto exec_node = std::ranges::find(
+      self->state().exec_nodes, msg.source, &exec_node_actor::address);
+    TENZIR_ASSERT(exec_node != self->state().exec_nodes.end());
+    self->state().exec_nodes.erase(exec_node);
   });
   return {
     [self](atom::start) -> caf::result<void> {
-      return self->state.start();
+      return self->state().start();
     },
     [self](atom::pause) -> caf::result<void> {
-      return self->state.pause();
+      return self->state().pause();
     },
     [self](atom::resume) -> caf::result<void> {
-      return self->state.resume();
+      return self->state().resume();
     },
   };
 }

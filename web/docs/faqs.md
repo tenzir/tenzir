@@ -193,33 +193,32 @@ to our [open source repository](https://github.com/tenzir/tenzir).
 
 ## Do you have an integration for *X*?
 
-Tenzir has several layers where integrations can occur. If *X* is not supported,
-then we need to find out at what level it should be.
+Tenzir has several layers where integrations can occur. If you cannot find an
+[existing integration](integrations.md) for *X*, then we need to find out at
+what level it should be.
 
 1. **Application**. If *X* is a specific tool and you'd like to get data in from
    *X* or send data to *X*, then the best place to start is our [Community
    Library](https://github.com/tenzir/library) where we package integrations for
    applications and use cases. Application-level integrations are often just a
-   composition of existing pipeline operators. Our [integrations
-   page](integrations.md) includes a few such examples.
+   composition of existing pipeline operators.
 
-2. **Format**. If you *X* is a wire encoding, either text-based like JSON or
-   binary like PCAP, then look for available [formats](formats.md).
+2. **Format**. If your *X* is a wire format, either text-based like JSON or
+   binary like PCAP, then look for `read_*` and `write_*`
+   [operators](tql2/operators.md)
 
-3. **Connector**. If you *X* is a way to send or receive data, like HTTP, Kafka,
-   or TCP, then look for available [connectors](connectors.md).
-
-4. **Fluent Bit**. Tenzir ships with all of Fluent Bit's
+3. **Fluent Bit**. Tenzir ships with all of Fluent Bit's
    [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs], since the Fluent
    Bit library is baked into every Tenzir binary. Use the
-   [`fluent-bit`](operators/fluent-bit.md) operator makes to access Fluent Bit
-   integrations.
+   [`fluentbit`](tql2/operators/fluentbit.md) operator makes to access Fluent
+   Bit integrations.
 
-5. **Escape Hatches**. As last resort, you can bring in Shell and Python scripts
-   to compensate for native support for *X*. The [`shell`](operators/shell.md)
-   operator brings byte streams via standard input and output into a pipeline,
-   and the [`python`](operators/python.md) operator allows you to perform
-   arbitrary event-to-event transformation using the full power of Python.
+4. **Escape Hatches**. As last resort, you can bring in Shell and Python scripts
+   to compensate for native support for *X*. The
+   [`shell`](tql2/operators/shell.md) operator brings byte streams via standard
+   input and output into a pipeline, and the
+   [`python`](tql2/operators/python.md) operator allows you to perform arbitrary
+   event-to-event transformation using the full power of Python.
 
 [fluentbit-inputs]: https://docs.fluentbit.io/manual/pipeline/inputs/
 [fluentbit-outputs]: https://docs.fluentbit.io/manual/pipeline/outputs/

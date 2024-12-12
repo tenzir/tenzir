@@ -35,6 +35,8 @@
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
 
+#include <string_view>
+
 namespace tenzir {
 
 auto catalog_lookup_result::size() const noexcept -> size_t {
@@ -474,23 +476,23 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
   -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("tnz.catalog");
-  self->state.self = self;
-  self->state.taxonomies.concepts = modules::concepts();
+  self->state().self = self;
+  self->state().taxonomies.concepts = modules::concepts();
   return {
     [self](
       atom::merge,
       std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps) {
-      return self->state.initialize(std::move(ps));
+      return self->state().initialize(std::move(ps));
     },
     [self](atom::merge,
            std::vector<partition_synopsis_pair>& partition_synopses) {
-      return self->state.merge(std::move(partition_synopses));
+      return self->state().merge(std::move(partition_synopses));
     },
     [self](atom::get) -> std::vector<partition_synopsis_pair> {
       std::vector<partition_synopsis_pair> result;
-      result.reserve(self->state.synopses_per_type.size());
+      result.reserve(self->state().synopses_per_type.size());
       for (const auto& [type, id_synopsis_map] :
-           self->state.synopses_per_type) {
+           self->state().synopses_per_type) {
         for (const auto& [id, synopsis] : id_synopsis_map) {
           result.push_back({id, synopsis});
         }
@@ -500,15 +502,15 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
     [self](atom::get, const expression& filter)
       -> caf::result<std::vector<partition_synopsis_pair>> {
       auto result = std::vector<partition_synopsis_pair>{};
-      const auto candidates = self->state.lookup(filter);
+      const auto candidates = self->state().lookup(filter);
       if (not candidates) {
         return candidates.error();
       }
       for (const auto& [schema, candidate] : candidates->candidate_infos) {
         const auto& partition_synopses
-          = self->state.synopses_per_type.find(schema);
+          = self->state().synopses_per_type.find(schema);
         TENZIR_ASSERT(partition_synopses
-                      != self->state.synopses_per_type.end());
+                      != self->state().synopses_per_type.end());
         for (const auto& partition : candidate.partition_infos) {
           const auto& synopsis
             = partition_synopses->second.find(partition.uuid);
@@ -521,26 +523,26 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
       return result;
     },
     [self](atom::erase, uuid partition) {
-      self->state.erase(partition);
+      self->state().erase(partition);
       return atom::ok_v;
     },
     [self](atom::replace, const std::vector<uuid>& old_uuids,
            std::vector<partition_synopsis_pair>& new_synopses) {
       for (auto const& uuid : old_uuids)
-        self->state.erase(uuid);
-      return self->state.merge(std::move(new_synopses));
+        self->state().erase(uuid);
+      return self->state().merge(std::move(new_synopses));
     },
     [self](atom::candidates, const tenzir::query_context& query_context)
       -> caf::result<catalog_lookup_result> {
-      TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(query_context));
+      TENZIR_TRACE("{} {}", *self, TENZIR_ARG(query_context));
       if (not query_context.ids.empty()) {
         return caf::make_error(ec::invalid_argument, "catalog expects queries "
                                                      "not to have ids");
       }
-      return self->state.lookup(query_context.expr);
+      return self->state().lookup(query_context.expr);
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
-      for (const auto& [type, synopses] : self->state.synopses_per_type) {
+      for (const auto& [type, synopses] : self->state().synopses_per_type) {
         if (auto it = synopses.find(uuid); it != synopses.end()) {
           return partition_info{uuid, *it->second};
         }

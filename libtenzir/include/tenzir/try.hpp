@@ -73,7 +73,7 @@ struct tenzir::tryable<std::optional<T>> {
 template <class T>
 struct tenzir::tryable<caf::expected<T>> {
   static auto is_success(const caf::expected<T>& x) -> bool {
-    return x.engaged();
+    return x.has_value();
   }
 
   static auto get_success(caf::expected<T>&& x) -> T {

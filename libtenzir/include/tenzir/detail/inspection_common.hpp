@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <caf/string_view.hpp>
-
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -43,7 +41,7 @@ public:
     return (fs(inspector_) && ...) && callback_();
   }
 
-  constexpr inspection_object& pretty_name(caf::string_view) noexcept {
+  constexpr inspection_object& pretty_name(std::string_view) noexcept {
     return *this;
   }
 

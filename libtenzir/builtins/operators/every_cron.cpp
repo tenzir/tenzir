@@ -21,6 +21,8 @@
 #include <arrow/type.h>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <string_view>
+
 namespace tenzir::plugins::every_cron {
 
 namespace {

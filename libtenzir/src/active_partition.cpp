@@ -63,33 +63,33 @@ chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
 /// Delivers persistance promise and calculates indexer_chunks
 void serialize(
   active_partition_actor::stateful_pointer<active_partition_state> self) {
-  auto& mutable_synopsis = self->state.data.synopsis.unshared();
+  auto& mutable_synopsis = self->state().data.synopsis.unshared();
   // Shrink synopses for addr fields to optimal size.
   mutable_synopsis.shrink();
   // TODO: It would probably make more sense if the partition
   // synopsis keeps track of offset/events internally.
-  mutable_synopsis.events = self->state.data.events;
-  const auto& schema = self->state.data.synopsis->schema;
+  mutable_synopsis.events = self->state().data.events;
+  const auto& schema = self->state().data.synopsis->schema;
   auto fields = std::vector<struct record_type::field>{};
   for (const auto& [field, offset] : as<record_type>(schema).leaves()) {
     const auto qf = qualified_record_field{schema, offset};
     // Backwards compat for to comply with the format that supports
     // value indexes.
-    self->state.data.indexer_chunks.emplace_back(qf.name(), nullptr);
+    self->state().data.indexer_chunks.emplace_back(qf.name(), nullptr);
     fields.emplace_back(std::string{qf.name()}, qf.type());
   }
   TENZIR_ASSERT(!fields.empty());
   auto combined_schema = record_type{fields};
   // Create the partition flatbuffer.
-  auto partition = pack_full(self->state.data, combined_schema);
+  auto partition = pack_full(self->state().data, combined_schema);
   if (!partition) {
     TENZIR_ERROR("{} failed to serialize {} with error: {}", *self, *self,
                  partition.error());
-    self->state.persistence_promise.deliver(partition.error());
+    self->state().persistence_promise.deliver(partition.error());
     return;
   }
-  TENZIR_ASSERT(self->state.persist_path);
-  TENZIR_ASSERT(self->state.synopsis_path);
+  TENZIR_ASSERT(self->state().persist_path);
+  TENZIR_ASSERT(self->state().synopsis_path);
   // Note that this is a performance optimization: We used to store
   // the partition synopsis inside the `Partition` flatbuffer, and
   // then on startup the index would mmap all partitions and read
@@ -107,14 +107,14 @@ void serialize(
   // need to handle errors here, since Tenzir can still start
   // correctly (if a bit slower) when the write fails.
   if (auto ps_chunk
-      = serialize_partition_synopsis(*self->state.data.synopsis)) {
-    self->state.data.synopsis.unshared().sketches_file = {
-      .url = fmt::format("file://{}", *self->state.synopsis_path),
+      = serialize_partition_synopsis(*self->state().data.synopsis)) {
+    self->state().data.synopsis.unshared().sketches_file = {
+      .url = fmt::format("file://{}", *self->state().synopsis_path),
       .size = ps_chunk->size(),
     };
     self
-      ->request(self->state.filesystem, caf::infinite, atom::write_v,
-                *self->state.synopsis_path, std::move(ps_chunk))
+      ->request(self->state().filesystem, caf::infinite, atom::write_v,
+                *self->state().synopsis_path, std::move(ps_chunk))
       .then(
         [=](atom::ok) {
           TENZIR_TRACE("{} persisted partition synopsis", *self);
@@ -122,7 +122,7 @@ void serialize(
         [=](const caf::error& err) {
           TENZIR_WARN("{} failed to persist partition synopsis to {} and will "
                       "attempt to restore it on the next start: {}",
-                      *self, *self->state.synopsis_path, err);
+                      *self, *self->state().synopsis_path, err);
         });
   } else {
     TENZIR_WARN("{} failed to serialize partition synopsis and will attempt to "
@@ -132,27 +132,27 @@ void serialize(
   TENZIR_TRACE("{} persists partition with a total size of "
                "{} bytes",
                *self, (*partition)->size());
-  self->state.data.synopsis.unshared().indexes_file = {
-    .url = fmt::format("file://{}", *self->state.persist_path),
+  self->state().data.synopsis.unshared().indexes_file = {
+    .url = fmt::format("file://{}", *self->state().persist_path),
     .size = (*partition)->size(),
   };
   // TODO: Add a proper timeout.
   self
-    ->request(self->state.filesystem, caf::infinite, atom::write_v,
-              *self->state.persist_path, std::move(*partition))
+    ->request(self->state().filesystem, caf::infinite, atom::write_v,
+              *self->state().persist_path, std::move(*partition))
     .then(
       [=](atom::ok) {
-        self->state.persistence_promise.deliver(self->state.data.synopsis);
+        self->state().persistence_promise.deliver(self->state().data.synopsis);
       },
       [=](caf::error e) {
-        self->state.persistence_promise.deliver(std::move(e));
+        self->state().persistence_promise.deliver(std::move(e));
       });
 }
 
 } // namespace
 
 void active_partition_state::handle_slice(table_slice x) {
-  TENZIR_TRACE_SCOPE("partition {} got table slice {}", data.id, TENZIR_ARG(x));
+  TENZIR_TRACE("partition {} got table slice {}", data.id, TENZIR_ARG(x));
   x.offset(data.events);
   // Adjust the import time range iff necessary.
   auto& mutable_synopsis = data.synopsis.unshared();
@@ -287,38 +287,38 @@ active_partition_actor::behavior_type active_partition(
   type schema, uuid id, filesystem_actor filesystem, caf::settings index_opts,
   const index_config& synopsis_opts, const store_actor_plugin* store_plugin,
   std::shared_ptr<tenzir::taxonomies> taxonomies) {
-  TENZIR_TRACE_SCOPE("active partition {} {}", TENZIR_ARG(self->id()),
-                     TENZIR_ARG(id));
-  self->state.self = self;
-  self->state.filesystem = std::move(filesystem);
-  self->state.data.id = id;
-  self->state.data.events = 0;
-  self->state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
-  self->state.data.synopsis.unshared().schema = std::move(schema);
-  self->state.partition_capacity
+  TENZIR_TRACE("active partition {} {}", TENZIR_ARG(self->id()),
+               TENZIR_ARG(id));
+  self->state().self = self;
+  self->state().filesystem = std::move(filesystem);
+  self->state().data.id = id;
+  self->state().data.events = 0;
+  self->state().data.synopsis = caf::make_copy_on_write<partition_synopsis>();
+  self->state().data.synopsis.unshared().schema = std::move(schema);
+  self->state().partition_capacity
     = get_or(index_opts, "cardinality", defaults::max_partition_size);
-  self->state.synopsis_index_config = synopsis_opts;
-  self->state.store_plugin = store_plugin;
-  self->state.taxonomies = taxonomies;
-  self->state.data.store_id = self->state.store_plugin->name();
-  auto builder_and_header = self->state.store_plugin->make_store_builder(
-    self->state.filesystem, self->state.data.id);
+  self->state().synopsis_index_config = synopsis_opts;
+  self->state().store_plugin = store_plugin;
+  self->state().taxonomies = taxonomies;
+  self->state().data.store_id = self->state().store_plugin->name();
+  auto builder_and_header = self->state().store_plugin->make_store_builder(
+    self->state().filesystem, self->state().data.id);
   if (!builder_and_header) {
     TENZIR_ERROR("{} failed to create a store builder: {}", *self,
                  builder_and_header.error());
     return active_partition_actor::behavior_type::make_empty_behavior();
   }
   auto& [builder, header] = *builder_and_header;
-  self->state.data.store_header = chunk::make_empty();
-  self->state.data.store_header = header;
-  self->state.store_builder = builder;
+  self->state().data.store_header = chunk::make_empty();
+  self->state().data.store_header = header;
+  self->state().store_builder = builder;
   TENZIR_TRACE("{} spawned new active store at {}", *self, builder);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self, msg.source,
                  msg.reason);
     // Delay shutdown if we're currently in the process of persisting.
-    if (self->state.persistence_promise.pending()) {
-      std::call_once(self->state.shutdown_once, [=] {
+    if (self->state().persistence_promise.pending()) {
+      std::call_once(self->state().shutdown_once, [=] {
         TENZIR_TRACE("{} delays partition shutdown because it is still "
                      "writing to disk",
                      *self);
@@ -351,44 +351,45 @@ active_partition_actor::behavior_type active_partition(
                                               "partition");
     },
     [self](table_slice& slice) {
-      self->state.handle_slice(std::move(slice));
+      self->state().handle_slice(std::move(slice));
     },
     [self](atom::persist, const std::filesystem::path& part_path,
            const std::filesystem::path& synopsis_path)
       -> caf::result<partition_synopsis_ptr> {
       TENZIR_TRACE("{} got persist atom", *self);
       // Ensure that the response promise has not already been initialized.
-      TENZIR_ASSERT(!self->state.persistence_promise.source());
-      self->state.persist_path = part_path;
-      self->state.synopsis_path = synopsis_path;
-      self->state.persistence_promise
+      TENZIR_ASSERT(!self->state().persistence_promise.source());
+      self->state().persist_path = part_path;
+      self->state().synopsis_path = synopsis_path;
+      self->state().persistence_promise
         = self->make_response_promise<partition_synopsis_ptr>();
-      self->request(self->state.store_builder, caf::infinite, atom::persist_v)
+      self->request(self->state().store_builder, caf::infinite, atom::persist_v)
         .then(
           [self](resource& store_file) {
-            self->state.data.synopsis.unshared().store_file
+            self->state().data.synopsis.unshared().store_file
               = std::move(store_file);
-            TENZIR_ASSERT(self->state.persistence_promise.pending());
+            TENZIR_ASSERT(self->state().persistence_promise.pending());
             serialize(self);
           },
           [self](caf::error err) {
             TENZIR_ERROR("{} failed to get the store info {}", *self, err);
-            if (self->state.persistence_promise.pending()) {
-              self->state.persistence_promise.deliver(std::move(err));
+            if (self->state().persistence_promise.pending()) {
+              self->state().persistence_promise.deliver(std::move(err));
             }
           });
-      return self->state.persistence_promise;
+      return self->state().persistence_promise;
     },
     [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
-      if (!self->state.data.synopsis->schema)
+      if (!self->state().data.synopsis->schema) {
         return caf::make_error(ec::logic_error,
                                "active partition must have a schema");
-      auto resolved = resolve(*self->state.taxonomies, query_context.expr,
-                              self->state.data.synopsis->schema);
+      }
+      auto resolved = resolve(*self->state().taxonomies, query_context.expr,
+                              self->state().data.synopsis->schema);
       if (!resolved)
         return std::move(resolved.error());
       query_context.expr = std::move(*resolved);
-      return self->delegate(self->state.store_builder, atom::query_v,
+      return self->delegate(self->state().store_builder, atom::query_v,
                             std::move(query_context));
     },
     [](atom::status, status_verbosity, duration) {

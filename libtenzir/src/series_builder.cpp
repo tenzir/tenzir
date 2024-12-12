@@ -23,6 +23,8 @@
 
 #include <arrow/api.h>
 
+#include <string_view>
+
 /// The implementation of `series_builder` consists of the following components:
 ///
 /// - `series_builder` is the entry point of the API. It can be moved freely and

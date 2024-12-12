@@ -19,6 +19,7 @@
 #include "tenzir/pattern.hpp"
 
 #include <optional>
+#include <string_view>
 #include <tuple>
 #include <typeindex>
 #include <utility>

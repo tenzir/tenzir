@@ -27,6 +27,7 @@
 
 #include <bit>
 #include <cmath>
+#include <string_view>
 
 using namespace std::string_view_literals;
 

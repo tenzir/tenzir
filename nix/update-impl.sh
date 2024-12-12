@@ -1,6 +1,6 @@
 #!/usr/bin/env nix-shell
 #!nix-shell -i bash -p coreutils git jq nix-prefetch-github
-#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/a592a97fcedae7a06b8506623b25fd38a032ad13.tar.gz
+#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/94035b482d181af0a0f8f77823a790b256b7c3cc.tar.gz
 
 set -euo pipefail
 
@@ -60,7 +60,5 @@ update-source() {
   fi
 }
 
-# CAF isn't tagged properly, so we pass in the version explictly to get a
-# correct derivation output path.
-update-source caf "libtenzir/aux/caf" "0.18.7"
+update-source caf "libtenzir/aux/caf"
 update-source fast_float "libtenzir/aux/fast_float"

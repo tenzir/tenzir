@@ -11,6 +11,7 @@
 #include "tenzir/test/test.hpp"
 
 #include <string>
+#include <string_view>
 
 using std::literals::operator""sv;
 

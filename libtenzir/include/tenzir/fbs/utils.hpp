@@ -13,6 +13,7 @@
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/logger.hpp"
 
 #include <caf/binary_serializer.hpp>
 #include <caf/error.hpp>

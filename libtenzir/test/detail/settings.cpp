@@ -8,7 +8,6 @@
 
 #include "tenzir/detail/settings.hpp"
 
-#include "tenzir/test/fixtures/actor_system.hpp"
 #include "tenzir/test/test.hpp"
 
 TEST(return error when passed config value is not a list type) {

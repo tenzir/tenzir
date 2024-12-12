@@ -17,6 +17,7 @@
 #include <chrono>
 #include <cstring>
 #include <ctime>
+#include <string_view>
 
 namespace tenzir {
 

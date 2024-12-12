@@ -120,30 +120,30 @@ struct tcp_bridge_state {
 auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                      metric_handler metric_handler)
   -> tcp_bridge_actor::behavior_type {
-  self->state.io_ctx = std::make_shared<boost::asio::io_context>();
-  self->state.socket.emplace(*self->state.io_ctx);
-  self->state.worker = std::thread([io_ctx = self->state.io_ctx]() {
+  self->state().io_ctx = std::make_shared<boost::asio::io_context>();
+  self->state().socket.emplace(*self->state().io_ctx);
+  self->state().worker = std::thread([io_ctx = self->state().io_ctx]() {
     auto guard = boost::asio::make_work_guard(*io_ctx);
     io_ctx->run();
   });
-  self->state.metrics.metric_handler = std::move(metric_handler);
+  self->state().metrics.metric_handler = std::move(metric_handler);
   detail::weak_run_delayed_loop(
     self, std::chrono::seconds{1},
     [self] {
-      self->state.metrics.emit();
+      self->state().metrics.emit();
     },
     /*run_immediately=*/false);
   return {
     [self](atom::connect, bool tls, bool skip_peer_verification,
            const std::string& hostname,
            const std::string& service) -> caf::result<void> {
-      if (self->state.connection_rp.pending()) {
+      if (self->state().connection_rp.pending()) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} cannot connect while a connect "
                                            "request is pending",
                                            *self));
       }
-      auto resolver = boost::asio::ip::tcp::resolver{*self->state.io_ctx};
+      auto resolver = boost::asio::ip::tcp::resolver{*self->state().io_ctx};
       auto ec = boost::system::error_code{};
       auto endpoints = resolver.resolve(hostname, service, ec);
       if (ec) {
@@ -157,21 +157,21 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
         = ::socket(endpoint.protocol().family(), SOCK_STREAM | SOCK_CLOEXEC,
                    endpoint.protocol().protocol());
       TENZIR_ASSERT(sfd >= 0);
-      self->state.socket->assign(endpoint.protocol(), sfd);
+      self->state().socket->assign(endpoint.protocol(), sfd);
 #endif
       if (tls) {
-        self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_client);
-        self->state.ssl_ctx->set_default_verify_paths();
+        self->state().ssl_ctx.emplace(boost::asio::ssl::context::tls_client);
+        self->state().ssl_ctx->set_default_verify_paths();
         if (skip_peer_verification) {
-          self->state.ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
+          self->state().ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
         } else {
-          self->state.ssl_ctx->set_verify_mode(
+          self->state().ssl_ctx->set_verify_mode(
             boost::asio::ssl::verify_peer
             | boost::asio::ssl::verify_fail_if_no_peer_cert);
         }
-        self->state.tls_socket.emplace(*self->state.socket,
-                                       *self->state.ssl_ctx);
-        auto tls_handle = self->state.tls_socket->native_handle();
+        self->state().tls_socket.emplace(*self->state().socket,
+                                         *self->state().ssl_ctx);
+        auto tls_handle = self->state().tls_socket->native_handle();
         if (SSL_set1_host(tls_handle, hostname.c_str()) != 1) {
           return caf::make_error(ec::system_error,
                                  "failed to enable host name verification");
@@ -180,15 +180,16 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
           return caf::make_error(ec::system_error, "failed to set SNI");
         }
       }
-      self->state.connection_rp = self->make_response_promise<void>();
+      self->state().connection_rp = self->make_response_promise<void>();
       boost::asio::async_connect(
-        *self->state.socket, endpoints,
+        *self->state().socket, endpoints,
         [self, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
           boost::system::error_code ec,
           const boost::asio::ip::tcp::endpoint& endpoint) {
 #if TENZIR_MACOS
           auto fcntl_error = std::optional<caf::error>{};
-          if (::fcntl(self->state.socket->native_handle(), F_SETFD, FD_CLOEXEC)
+          if (::fcntl(self->state().socket->native_handle(), F_SETFD,
+                      FD_CLOEXEC)
               != 0) {
             auto error = detail::describe_errno();
             fcntl_error = diagnostic::error("failed to configure TLS socket")
@@ -196,9 +197,9 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                             .to_error();
           }
 #endif
-          self->state.metrics.port = endpoint.port();
-          self->state.metrics.handle
-            = fmt::to_string(self->state.socket->native_handle());
+          self->state().metrics.port = endpoint.port();
+          self->state().metrics.handle
+            = fmt::to_string(self->state().socket->native_handle());
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
               caf::actor_cast<caf::actor>(hdl),
@@ -209,22 +210,22 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
 #endif
             ]() mutable {
                 if (ec) {
-                  return self->state.connection_rp.deliver(caf::make_error(
+                  return self->state().connection_rp.deliver(caf::make_error(
                     ec::system_error,
                     fmt::format("connection failed: {}", ec.message())));
                 }
 #if TENZIR_MACOS
                 if (fcntl_error) {
-                  return self->state.connection_rp.deliver(*fcntl_error);
+                  return self->state().connection_rp.deliver(*fcntl_error);
                 }
 #endif
-                if (self->state.tls_socket) {
-                  self->state.tls_socket->handshake(
+                if (self->state().tls_socket) {
+                  self->state().tls_socket->handshake(
                     boost::asio::ssl::stream<
                       boost::asio::ip::tcp::socket>::client,
                     ec);
                   if (ec) {
-                    return self->state.connection_rp.deliver(caf::make_error(
+                    return self->state().connection_rp.deliver(caf::make_error(
                       ec::system_error,
                       fmt::format("TLS client handshake failed: {}",
                                   ERR_get_error())));
@@ -232,17 +233,17 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                 }
                 TENZIR_VERBOSE("tcp connector connected to {}",
                                endpoint.address().to_string());
-                return self->state.connection_rp.deliver();
+                return self->state().connection_rp.deliver();
               }));
           }
         });
-      return self->state.connection_rp;
+      return self->state().connection_rp;
     },
     [self](atom::accept, const std::string& hostname,
            const std::string& service, const std::string& certfile,
            const std::string& keyfile) -> caf::result<void> {
       auto ec = boost::system::error_code{};
-      auto resolver = boost::asio::ip::tcp::resolver{*self->state.io_ctx};
+      auto resolver = boost::asio::ip::tcp::resolver{*self->state().io_ctx};
       auto endpoints = resolver.resolve(hostname, service, ec);
       if (ec || endpoints.empty()) {
         return caf::make_error(
@@ -251,15 +252,16 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
       }
       auto resolver_entry = *endpoints.begin();
       auto endpoint = resolver_entry.endpoint();
-      self->state.metrics.port = endpoint.port();
+      self->state().metrics.port = endpoint.port();
       // Create a new acceptor and bind to provided endpoint.
       try {
-        self->state.acceptor.emplace(*self->state.io_ctx);
-        self->state.acceptor->open(endpoint.protocol());
+        self->state().acceptor.emplace(*self->state().io_ctx);
+        self->state().acceptor->open(endpoint.protocol());
         auto reuse_address = boost::asio::socket_base::reuse_address(true);
-        self->state.acceptor->set_option(reuse_address);
-        self->state.acceptor->bind(endpoint);
-        if (::fcntl(self->state.acceptor->native_handle(), F_SETFD, FD_CLOEXEC)
+        self->state().acceptor->set_option(reuse_address);
+        self->state().acceptor->bind(endpoint);
+        if (::fcntl(self->state().acceptor->native_handle(), F_SETFD,
+                    FD_CLOEXEC)
             != 0) {
           auto error = detail::describe_errno();
           return diagnostic::error("failed to configure TLS socket")
@@ -267,9 +269,9 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
             .to_error();
         }
         auto backlog = boost::asio::socket_base::max_connections;
-        self->state.acceptor->listen(backlog);
-        self->state.metrics.handle
-          = fmt::to_string(self->state.acceptor->native_handle());
+        self->state().acceptor->listen(backlog);
+        self->state().metrics.handle
+          = fmt::to_string(self->state().acceptor->native_handle());
       } catch (std::exception& e) {
         return caf::make_error(ec::system_error,
                                fmt::format("failed to bind to endpoint: {}",
@@ -277,8 +279,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
       }
       TENZIR_VERBOSE("tcp connector listens on endpoint {}:{}",
                      endpoint.address().to_string(), endpoint.port());
-      self->state.connection_rp = self->make_response_promise<void>();
-      self->state.acceptor->async_accept(
+      self->state().connection_rp = self->make_response_promise<void>();
+      self->state().acceptor->async_accept(
         [self, certfile, keyfile,
          weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
           boost::system::error_code ec, boost::asio::ip::tcp::socket peer) {
@@ -297,54 +299,55 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                 [self, certfile, keyfile, ec, peer = std::move(peer),
                  fcntl_error = std::move(fcntl_error)]() mutable {
                   if (ec) {
-                    return self->state.connection_rp.deliver(caf::make_error(
+                    return self->state().connection_rp.deliver(caf::make_error(
                       ec::system_error,
                       fmt::format("failed to accept: {}", ec.message())));
                   }
                   if (fcntl_error) {
-                    return self->state.connection_rp.deliver(*fcntl_error);
+                    return self->state().connection_rp.deliver(*fcntl_error);
                   }
-                  self->state.socket.emplace(std::move(peer));
+                  self->state().socket.emplace(std::move(peer));
                   if (!certfile.empty()) {
-                    self->state.ssl_ctx.emplace(
+                    self->state().ssl_ctx.emplace(
                       boost::asio::ssl::context::tls_server);
-                    self->state.ssl_ctx->use_certificate_chain_file(certfile);
-                    self->state.ssl_ctx->use_private_key_file(
+                    self->state().ssl_ctx->use_certificate_chain_file(certfile);
+                    self->state().ssl_ctx->use_private_key_file(
                       keyfile, boost::asio::ssl::context::pem);
-                    self->state.ssl_ctx->set_verify_mode(
+                    self->state().ssl_ctx->set_verify_mode(
                       boost::asio::ssl::verify_none);
-                    self->state.tls_socket.emplace(*self->state.socket,
-                                                   *self->state.ssl_ctx);
+                    self->state().tls_socket.emplace(*self->state().socket,
+                                                     *self->state().ssl_ctx);
                     auto server_context = boost::asio::ssl::stream<
                       boost::asio::ip::tcp::socket>::server;
-                    self->state.tls_socket->handshake(server_context, ec);
+                    self->state().tls_socket->handshake(server_context, ec);
                     if (ec) {
-                      return self->state.connection_rp.deliver(caf::make_error(
-                        ec::system_error,
-                        fmt::format("TLS handshake failed: {}", ec.message())));
+                      return self->state().connection_rp.deliver(
+                        caf::make_error(ec::system_error,
+                                        fmt::format("TLS handshake failed: {}",
+                                                    ec.message())));
                     }
                   }
-                  return self->state.connection_rp.deliver();
+                  return self->state().connection_rp.deliver();
                 }));
           }
         });
-      return self->state.connection_rp;
+      return self->state().connection_rp;
     },
     [self](atom::read, uint64_t buffer_size) -> caf::result<chunk_ptr> {
-      if (self->state.connection_rp.pending()) {
+      if (self->state().connection_rp.pending()) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} cannot read while a connect "
                                            "request is pending",
                                            *self));
       }
-      if (self->state.read_rp.pending()) {
+      if (self->state().read_rp.pending()) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} cannot read while a read "
                                            "request is pending",
                                            *self));
       }
-      self->state.read_buffer.resize(buffer_size);
-      self->state.read_rp = self->make_response_promise<chunk_ptr>();
+      self->state().read_buffer.resize(buffer_size);
+      self->state().read_rp = self->make_response_promise<chunk_ptr>();
       auto on_read = [self, weak_hdl
                             = caf::actor_cast<caf::weak_actor_ptr>(self)](
                        boost::system::error_code ec, size_t length) {
@@ -354,43 +357,45 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
           caf::anon_send(caf::actor_cast<caf::actor>(hdl),
                          caf::make_action([self, ec, length] {
                            if (ec) {
-                             return self->state.read_rp.deliver(caf::make_error(
-                               ec::system_error,
-                               fmt::format("failed to read from TCP socket: {}",
-                                           ec.message())));
+                             return self->state().read_rp.deliver(
+                               caf::make_error(ec::system_error,
+                                               fmt::format("failed to read "
+                                                           "from TCP socket: "
+                                                           "{}",
+                                                           ec.message())));
                            }
-                           self->state.metrics.reads++;
-                           self->state.metrics.bytes_read += length;
-                           self->state.read_buffer.resize(length);
-                           self->state.read_buffer.shrink_to_fit();
-                           return self->state.read_rp.deliver(chunk::make(
-                             std::exchange(self->state.read_buffer, {})));
+                           self->state().metrics.reads++;
+                           self->state().metrics.bytes_read += length;
+                           self->state().read_buffer.resize(length);
+                           self->state().read_buffer.shrink_to_fit();
+                           return self->state().read_rp.deliver(chunk::make(
+                             std::exchange(self->state().read_buffer, {})));
                          }));
         }
       };
       auto asio_buffer
-        = boost::asio::buffer(self->state.read_buffer, buffer_size);
-      if (self->state.tls_socket) {
-        self->state.tls_socket->async_read_some(asio_buffer, on_read);
+        = boost::asio::buffer(self->state().read_buffer, buffer_size);
+      if (self->state().tls_socket) {
+        self->state().tls_socket->async_read_some(asio_buffer, on_read);
       } else {
-        self->state.socket->async_read_some(asio_buffer, on_read);
+        self->state().socket->async_read_some(asio_buffer, on_read);
       }
-      return self->state.read_rp;
+      return self->state().read_rp;
     },
     [self](atom::write, chunk_ptr chunk) -> caf::result<void> {
-      if (self->state.connection_rp.pending()) {
+      if (self->state().connection_rp.pending()) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} cannot write while a connect "
                                            "request is pending",
                                            *self));
       }
-      if (self->state.write_rp.pending()) {
+      if (self->state().write_rp.pending()) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} cannot write while a write "
                                            "request is pending",
                                            *self));
       }
-      self->state.write_rp = self->make_response_promise<void>();
+      self->state().write_rp = self->make_response_promise<void>();
       auto on_write = [self, chunk,
                        weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
                         boost::system::error_code ec, size_t length) {
@@ -398,33 +403,33 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
           caf::anon_send(caf::actor_cast<caf::actor>(hdl),
                          caf::make_action([self, chunk, ec, length] {
                            if (ec) {
-                             self->state.write_rp.deliver(caf::make_error(
+                             self->state().write_rp.deliver(caf::make_error(
                                ec::system_error,
                                fmt::format("failed to write to TCP socket: {}",
                                            ec.message())));
                              return;
                            }
-                           self->state.metrics.writes++;
-                           self->state.metrics.bytes_written += length;
+                           self->state().metrics.writes++;
+                           self->state().metrics.bytes_written += length;
                            if (length < chunk->size()) {
                              auto remainder = chunk->slice(length);
-                             self->state.write_rp.delegate(
+                             self->state().write_rp.delegate(
                                static_cast<tcp_bridge_actor>(self),
                                atom::write_v, std::move(remainder));
                              return;
                            }
                            TENZIR_ASSERT(length == chunk->size());
-                           self->state.write_rp.deliver();
+                           self->state().write_rp.deliver();
                          }));
         }
       };
       auto asio_buffer = boost::asio::buffer(chunk->data(), chunk->size());
-      if (self->state.tls_socket) {
-        self->state.tls_socket->async_write_some(asio_buffer, on_write);
+      if (self->state().tls_socket) {
+        self->state().tls_socket->async_write_some(asio_buffer, on_write);
       } else {
-        self->state.socket->async_write_some(asio_buffer, on_write);
+        self->state().socket->async_write_some(asio_buffer, on_write);
       }
-      return self->state.write_rp;
+      return self->state().write_rp;
     },
   };
 }

@@ -33,6 +33,7 @@
 
 #include <istream>
 #include <memory>
+#include <string_view>
 
 namespace tenzir::plugins::cef {
 

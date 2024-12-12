@@ -16,6 +16,7 @@
 #include <optional>
 #include <regex>
 #include <string>
+#include <string_view>
 #include <zmq.hpp>
 
 using namespace std::chrono_literals;

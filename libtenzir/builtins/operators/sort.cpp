@@ -24,6 +24,7 @@
 #include <arrow/record_batch.h>
 
 #include <ranges>
+#include <string_view>
 
 namespace tenzir::plugins::sort {
 

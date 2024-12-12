@@ -24,6 +24,7 @@
 #include "tenzir/type.hpp"
 
 #include <iterator>
+#include <string_view>
 
 namespace tenzir::tql {
 

@@ -13,6 +13,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
+#include <string_view>
 
 namespace tenzir::plugins::health_process {
 

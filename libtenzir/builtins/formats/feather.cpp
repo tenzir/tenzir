@@ -33,6 +33,7 @@
 #include <caf/expected.hpp>
 
 #include <queue>
+#include <string_view>
 
 namespace tenzir::plugins::feather {
 

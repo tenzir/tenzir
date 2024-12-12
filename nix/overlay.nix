@@ -388,7 +388,7 @@ in {
         # fetchFromGitHub uses ellipsis in the parameter set to be hash method
         # agnostic. Because of that, callPackageWith does not detect that sha256
         # is a required argument, and it has to be passed explicitly instead.
-        src = prev.fetchFromGitHub {inherit (source) owner repo rev sha256;};
+        src = prev.fetchFromGitHub {inherit (source) owner repo rev hash;};
         inherit (source) version;
         # The OpenSSL dependency appears in the interface of CAF, so it has to
         # be propagated downstream.
