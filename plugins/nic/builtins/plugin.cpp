@@ -55,8 +55,8 @@ class plugin : public virtual operator_plugin2<nics_operator> {
     return "tql2.nics";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<nics_operator>();
   }

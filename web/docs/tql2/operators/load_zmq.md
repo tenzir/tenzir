@@ -1,6 +1,6 @@
 # load_zmq
 
-Loads bytes from ZeroMQ messages.
+Receives ZeroMQ messages.
 
 ```tql
 load_zmq [endpoint:str, filter=str, listen=bool, connect=bool, monitor=bool]
@@ -8,8 +8,8 @@ load_zmq [endpoint:str, filter=str, listen=bool, connect=bool, monitor=bool]
 
 ## Description
 
-The `load_zmq` operator processes the bytes in a ZeroMQ message received by a `SUB`
-socket.
+The `load_zmq` operator processes the bytes in a ZeroMQ message received by a
+`SUB` socket.
 
 Indpendent of the socket type, the `load_zmq` operator supports specfiying the
 direction of connection establishment with `listen` and `connect`. This can be
@@ -53,9 +53,13 @@ Monitors a 0mq socket over TCP until the remote side establishes a connection.
 
 ## Examples
 
-Interpret ZeroMQ messages as [JSON](read_json.md):
+### Interpret ZeroMQ messages as JSON
 
-```
+```tql
 load_zmq "1.2.3.4:56789"
 read_json
 ```
+
+## See Also
+
+[`save_zmq`](save_zmq.md)

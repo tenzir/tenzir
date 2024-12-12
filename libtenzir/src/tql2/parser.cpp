@@ -69,10 +69,9 @@ public:
   using tk = token_kind;
 
   template <class F>
-  static auto
-  parse_with(std::span<token> tokens, std::string_view source,
-             diagnostic_handler& diag, bool anonymous,
-             F&& f) -> failure_or<std::invoke_result_t<F, parser&>> {
+  static auto parse_with(std::span<token> tokens, std::string_view source,
+                         diagnostic_handler& diag, bool anonymous, F&& f)
+    -> failure_or<std::invoke_result_t<F, parser&>> {
     try {
       auto self = parser{tokens, source, diag, anonymous};
       auto result = std::invoke(std::forward<F>(f), self);
@@ -1083,8 +1082,8 @@ public:
 };
 
 auto parse_pipeline(std::span<token> tokens, std::string_view source,
-                    diagnostic_handler& dh,
-                    bool anonymous) -> failure_or<ast::pipeline> {
+                    diagnostic_handler& dh, bool anonymous)
+  -> failure_or<ast::pipeline> {
   return parser::parse_with(tokens, source, dh, anonymous, [](parser& self) {
     return self.parse_pipeline();
   });
@@ -1092,8 +1091,8 @@ auto parse_pipeline(std::span<token> tokens, std::string_view source,
 
 } // namespace
 
-auto parse(std::span<token> tokens, std::string_view source,
-           session ctx) -> failure_or<ast::pipeline> {
+auto parse(std::span<token> tokens, std::string_view source, session ctx)
+  -> failure_or<ast::pipeline> {
   return parse_pipeline(tokens, source, ctx, false);
 }
 

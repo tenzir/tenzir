@@ -21,14 +21,8 @@ The shining star of Tenzir v4.17 is the new [`azure-log-analytics` sink
 operator][azure-log-analytics-operator], which sends events to [Log Analytics in
 Azure Monitor][log-analytics-overview].
 
-:::tip Want to Learn More?
-We wrote an [integration guide][azure-log-analytics-integration] showing how to
-send your events to Azure Log Analytics using Tenzir. Come check it out!
-:::
-
 [azure-log-analytics-operator]: /next/operators/azure-log-analytics
 [log-analytics-overview]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/log-analytics-overview
-[azure-log-analytics-integration]: /next/integrations/azure-log-analytics
 
 ## Lookup Table Timeouts
 

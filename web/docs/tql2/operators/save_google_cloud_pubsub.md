@@ -47,3 +47,7 @@ where @name = "suricata.alert"
 write_json
 save_google_cloud_pubsub project_id="amazing-project-123456", topic_id="alerts-topic"
 ```
+
+## See Also
+
+[`load_google_cloud_pubsub`](load_google_cloud_pubsub.md)

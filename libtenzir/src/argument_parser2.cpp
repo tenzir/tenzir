@@ -71,7 +71,8 @@ auto argument_parser2::parse(const ast::entity& self,
   for (auto it = positional_.begin(); it != positional_.end();
        ++it, ++positional_idx) {
     auto& positional = *it;
-    if (arg == args.end()) {
+    auto end_of_positional = arg == args.end() or is<ast::assignment>(*arg);
+    if (end_of_positional) {
       if (first_optional_ && positional_idx >= *first_optional_) {
         break;
       }
@@ -81,9 +82,6 @@ auto argument_parser2::parse(const ast::entity& self,
       break;
     }
     auto& expr = *arg;
-    if (std::holds_alternative<ast::assignment>(*expr.kind)) {
-      break;
-    }
     positional.set.match(
       [&]<data_type T>(setter<located<T>>& set) {
         auto value = const_eval(expr, ctx);
