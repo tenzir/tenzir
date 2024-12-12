@@ -15,9 +15,9 @@
 namespace tenzir {
 
 /// Puts the version information into a record.
-record retrieve_versions();
+auto retrieve_versions(const record& cfg) -> record;
 
 /// Returns a list of features supported by this build of the node.
-std::vector<std::string> tenzir_features();
+auto tenzir_features(const record& cfg) -> std::vector<std::string>;
 
 } // namespace tenzir

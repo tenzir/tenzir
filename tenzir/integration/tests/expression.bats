@@ -5,7 +5,7 @@ setup() {
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
-  export TENZIR_EXEC__TQL2=true
+  export TENZIR_TQL2=true
 }
 
 @test "add" {

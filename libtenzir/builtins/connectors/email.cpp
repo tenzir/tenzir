@@ -254,8 +254,8 @@ public:
 
 class save_plugin final
   : public virtual operator_plugin2<saver_adapter<saver>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto endpoint = std::optional<std::string>{default_smtp_server};
     auto to = located<std::string>{};

@@ -28,8 +28,8 @@ public:
     return "tql2.time";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("time")
           .positional("x", expr, "string")
@@ -83,8 +83,8 @@ public:
     return "since_epoch";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "time")
@@ -179,8 +179,8 @@ public:
     return std::string{to_string(ymd_subtype_)};
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "time")
@@ -243,8 +243,8 @@ public:
     return "as_secs";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "duration")
@@ -293,8 +293,8 @@ public:
     return "tql2.now";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     TRY(argument_parser2::function("now").parse(inv, ctx));
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -314,8 +314,8 @@ public:
     return "tql2.format_time";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};
@@ -367,8 +367,8 @@ public:
     return "tql2.parse_time";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
     auto locale = std::optional<located<std::string>>{};

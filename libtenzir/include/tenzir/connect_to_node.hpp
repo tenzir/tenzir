@@ -30,7 +30,8 @@ auto get_retry_delay(const caf::settings& settings)
 auto get_deadline(caf::timespan timeout)
   -> std::optional<std::chrono::steady_clock::time_point>;
 
-[[nodiscard]] auto check_version(const record& remote_version) -> bool;
+[[nodiscard]] auto
+check_version(const record& remote_version, const record& cfg) -> bool;
 
 } // namespace details
 
@@ -43,8 +44,9 @@ void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
   // Fetch values from config.
   const auto& opts = content(self->system().config());
   auto node_endpoint = details::get_node_endpoint(opts);
-  if (!node_endpoint)
+  if (!node_endpoint) {
     return callback(std::move(node_endpoint.error()));
+  }
   auto timeout = node_connection_timeout(opts);
   auto connector
     = self->spawn(tenzir::connector, details::get_retry_delay(opts),
@@ -59,9 +61,12 @@ void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
         (void)connector;
         self->request(node, timeout, atom::get_v, atom::version_v)
           .then(
-            [callback, node = std::move(node)](record& remote_version) mutable {
+            [self, callback,
+             node = std::move(node)](record& remote_version) mutable {
               // TODO: Refactor this (also in .cpp).
-              (void)details::check_version(remote_version);
+              (void)details::check_version(
+                remote_version,
+                check(to<record>(content(self->system().config()))));
               callback(std::move(node));
             },
             [=](caf::error& error) {
