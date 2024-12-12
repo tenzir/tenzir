@@ -457,6 +457,7 @@ RUN wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short |
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
     apt-get -y --no-install-recommends install libadbc-driver-manager103 libadbc-driver-snowflake103 && \
+    snowflake_sopath="$(ldconfig -p | grep snowflake | grep -o '[^ ]*$')"; echo ${snowflake_sopath}; ln -s ${snowflake_sopath} ${snowflake_sopath%.*} && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-analytics /
