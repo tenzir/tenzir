@@ -6,20 +6,20 @@
 }:
 buildGoModule ({
   pname = "arrow-adbc-go";
-  version = "1.2.0";
+  version = "1.3.0";
 
   src = fetchFromGitHub {
     owner = "apache";
     repo = "arrow-adbc";
-    rev = "apache-arrow-adbc-14";
-    hash = "sha256-cL7tGj4DWMicRs9fLrfcIuRqis3IOkecvyIWwft+VPg=";
+    rev = "apache-arrow-adbc-15";
+    hash = "sha256-QRWVmUYNdMxQqe9dIBxcY8pY8aAbKIh3dhX3rzCGYI4=";
   };
 
   sourceRoot = "source/go/adbc";
 
   proxyVendor = true;
 
-  vendorHash = "sha256-fapqEJBPGVgESVEaTBTlY8lmMKO3JecPXRnR7LR54+M=";
+  vendorHash = "sha256-+hUYaFvmySnz2rzDszejcwzoVoCe1lAoj8qNwfMEfp4=";
 
   postUnpack = ''
     rm -rf source/go/adbc/driver/flightsql/cmd
