@@ -126,7 +126,7 @@ Function | Description | Example
 Function | Description | Example
 :--------|:-------------|:-------
 [`as_secs`](functions/as_secs.md) | Converts a duration into seconds | `as_secs(42ms)`
-[`from_epoch_ms`](functions/from_epoch_ms.md) | Interprets a number as Unix time | `from_epoch_ms(1730234246123.456)`
+[`from_epoch`](functions/from_epoch.md) | Interprets a duration as Unix time | `from_epoch(time_ms * 1ms)`
 [`now`](functions/now.md) | Gets the current wallclock time | `now()`
 [`since_epoch`](functions/since_epoch.md) | Turns a time into a duration since the Unix epoch | `since_epoch(2021-02-24)`
 [`parse_time`](functions/parse_time.md) | Parses a timestamp following a given format | `"10/11/2012".parse_time("%d/%m/%Y")`
