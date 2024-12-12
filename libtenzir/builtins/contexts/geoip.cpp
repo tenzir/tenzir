@@ -597,13 +597,8 @@ struct v1_loader : public context_loader {
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
-    const auto* serialized_data
-      = fbs::context::geoip::GetGeoIPData(serialized->data());
-    if (not serialized_data) {
-      return caf::make_error(ec::serialization_error,
-                             fmt::format("failed to deserialize geoip "
-                                         "context: invalid file content"));
-    }
+    TRY(auto serialized_data, flatbuffer<fbs::context::geoip::GeoIPData>::make(
+                                std::move(serialized)));
     const auto* serialized_string = serialized_data->url();
     if (not serialized_string) {
       return caf::make_error(ec::serialization_error,
