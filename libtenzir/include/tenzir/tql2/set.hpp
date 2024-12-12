@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/multi_series.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -19,16 +20,19 @@ enum class assign_position {
   back,
 };
 
-auto assign(const ast::selector& left, series right, const table_slice& input,
-            diagnostic_handler& dh,
-            assign_position position = assign_position::back) -> table_slice;
+[[nodiscard]] auto
+assign(const ast::selector& left, series right, const table_slice& input,
+       diagnostic_handler& dh, assign_position position = assign_position::back)
+  -> std::vector<table_slice>;
 
-auto assign(const ast::simple_selector& left, series right,
-            const table_slice& input, diagnostic_handler& dh,
-            assign_position position = assign_position::back) -> table_slice;
+[[nodiscard]] auto
+assign(const ast::simple_selector& left, series right, const table_slice& input,
+       diagnostic_handler& dh, assign_position position = assign_position::back)
+  -> table_slice;
 
-auto assign(const ast::meta& left, series right, const table_slice& input,
-            diagnostic_handler& diag) -> table_slice;
+[[nodiscard]] auto assign(const ast::meta& left, series right,
+                          const table_slice& input, diagnostic_handler& diag)
+  -> std::vector<table_slice>;
 
 class set_operator final : public crtp_operator<set_operator> {
 public:

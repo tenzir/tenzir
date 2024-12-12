@@ -1,0 +1,6 @@
+{"x": null, "y": null, "z": {"x": [null], "y": null}}
+{"x": 1, "y": "test", "z": {"x": ["4.0s"], "y": "1.0s"}}
+{"x": 2, "y": "test", "z": {"x": ["4.0s"], "y": "2.0s"}}
+{"x": null, "y": null, "z": {"x": [null], "y": null}}
+{"x": null, "y": null, "z": {"x": [null], "y": null}}
+{"x": 3, "y": "test", "z": {"x": ["4.0s"], "y": "3.0s"}}

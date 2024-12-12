@@ -79,17 +79,6 @@ e = a[-3]
 EOF
 }
 
-@test "length method" {
-  check tenzir -f '/dev/stdin' <<EOF
-from [
-  { x: null },
-  { x: [] },
-  { x: [1, 2, 3] },
-]
-y = x.length()
-EOF
-}
-
 @test "list construction" {
   check tenzir -f '/dev/stdin' <<EOF
 from [{
@@ -125,22 +114,6 @@ from {
   x6: 17.5E,
   x7: 18.5E,
 }
-write_json
-EOF
-}
-
-@test "string length" {
-  check tenzir -f '/dev/stdin' <<EOF
-from {
-  x: "é",
-  y: "👩‍👩‍👦‍👦",
-}
-xa = x.length()
-xb = x.length_bytes()
-xc = x.length_chars()
-ya = y.length()
-yb = y.length_bytes()
-yc = y.length_chars()
 write_json
 EOF
 }

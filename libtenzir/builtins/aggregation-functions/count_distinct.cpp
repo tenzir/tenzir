@@ -96,18 +96,19 @@ public:
   }
 
   auto update(const table_slice& input, session ctx) -> void override {
-    auto arg = eval(expr_, input, ctx);
-    if (is<null_type>(arg.type)) {
-      return;
-    }
-    for (auto i = int64_t{}; i < arg.array->length(); ++i) {
-      if (arg.array->IsValid(i)) {
-        const auto& view = value_at(arg.type, *arg.array, i);
-        const auto it = distinct_.find(view);
-        if (it != distinct_.end()) {
-          continue;
+    for (auto& arg : eval(expr_, input, ctx)) {
+      if (is<null_type>(arg.type)) {
+        continue;
+      }
+      for (auto i = int64_t{}; i < arg.array->length(); ++i) {
+        if (arg.array->IsValid(i)) {
+          const auto& view = value_at(arg.type, *arg.array, i);
+          const auto it = distinct_.find(view);
+          if (it != distinct_.end()) {
+            continue;
+          }
+          distinct_.emplace_hint(it, materialize(view));
         }
-        distinct_.emplace_hint(it, materialize(view));
       }
     }
   }

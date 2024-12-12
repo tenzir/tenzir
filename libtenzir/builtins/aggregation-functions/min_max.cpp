@@ -73,89 +73,92 @@ public:
     if (result_ and std::holds_alternative<caf::none_t>(result_.value())) {
       return;
     }
-    auto arg = eval(expr_, input, ctx);
-    if (not type_) {
-      type_ = arg.type;
-    }
-    const auto warn = [&](const auto&) -> result_t {
-      diagnostic::warning("got incompatible types `{}` and `{}`", type_.kind(),
-                          arg.type.kind())
-        .primary(expr_)
-        .emit(ctx);
-      return caf::none;
-    };
-    // TODO: Matching on type of max_ might be better to reduce function calls
-    auto f = detail::overload{
-      [](const arrow::NullArray&) {},
-      [&]<class T>(const T& array)
-        requires numeric_type<type_from_arrow_t<T>>
-                 {
-                   for (auto i = int64_t{}; i < array.length(); ++i) {
-                     if (array.IsValid(i)) {
-                       const auto val = array.Value(i);
-                       if (not result_) {
-                         result_ = val;
-                         continue;
-                       }
-                       result_ = result_->match(
-                         warn,
-                         [&](std::integral auto& self) -> result_t {
-                           if constexpr (std::same_as<T, arrow::DoubleArray>) {
-                             return Mode == mode::min
-                                      ? std::min(static_cast<double>(self), val)
-                                      : std::max(static_cast<double>(self),
-                                                 val);
-                           } else {
-                             if (Mode == mode::min
-                                   ? std::cmp_less(val, self)
-                                   : std::cmp_greater(val, self)) {
-                               return val;
+    for (auto& arg : eval(expr_, input, ctx)) {
+      if (not type_) {
+        type_ = arg.type;
+      }
+      const auto warn = [&](const auto&) -> result_t {
+        diagnostic::warning("got incompatible types `{}` and `{}`",
+                            type_.kind(), arg.type.kind())
+          .primary(expr_)
+          .emit(ctx);
+        return caf::none;
+      };
+      // TODO: Matching on type of max_ might be better to reduce function calls
+      auto f = detail::overload{
+        [](const arrow::NullArray&) {},
+        [&]<class T>(const T& array)
+          requires numeric_type<type_from_arrow_t<T>>
+                   {
+                     for (auto i = int64_t{}; i < array.length(); ++i) {
+                       if (array.IsValid(i)) {
+                         const auto val = array.Value(i);
+                         if (not result_) {
+                           result_ = val;
+                           continue;
+                         }
+                         result_ = result_->match(
+                           warn,
+                           [&](std::integral auto& self) -> result_t {
+                             if constexpr (std::same_as<T, arrow::DoubleArray>) {
+                               return Mode == mode::min
+                                        ? std::min(static_cast<double>(self),
+                                                   val)
+                                        : std::max(static_cast<double>(self),
+                                                   val);
+                             } else {
+                               if (Mode == mode::min
+                                     ? std::cmp_less(val, self)
+                                     : std::cmp_greater(val, self)) {
+                                 return val;
+                               }
+                               return self;
                              }
-                             return self;
-                           }
-                         },
-                         [&](double self) -> result_t {
-                           return Mode == mode::min
-                                    ? std::min(self, static_cast<double>(val))
-                                    : std::max(self, static_cast<double>(val));
-                         });
-                       if (std::holds_alternative<caf::none_t>(
-                             result_.value())) {
-                         return;
+                           },
+                           [&](double self) -> result_t {
+                             return Mode == mode::min
+                                      ? std::min(self, static_cast<double>(val))
+                                      : std::max(self,
+                                                 static_cast<double>(val));
+                           });
+                         if (std::holds_alternative<caf::none_t>(
+                               result_.value())) {
+                           return;
+                         }
                        }
                      }
-                   }
-                 },
-                 [&]<class T>(const T& array)
-                   requires concepts::one_of<type_from_arrow_t<T>,
-                                             duration_type, time_type>
-      {
-        using Ty = type_from_arrow_t<T>;
-        for (const auto& val : values(Ty{}, array)) {
-          if (val) {
-            if (not result_) {
-              result_ = val;
-            }
-            result_
-              = result_->match(warn, [&](type_to_data_t<Ty> self) -> result_t {
+                   },
+                   [&]<class T>(const T& array)
+                     requires concepts::one_of<type_from_arrow_t<T>,
+                                               duration_type, time_type>
+        {
+          using Ty = type_from_arrow_t<T>;
+          for (const auto& val : values(Ty{}, array)) {
+            if (val) {
+              if (not result_) {
+                result_ = val;
+              }
+              result_ = result_->match(
+                warn, [&](type_to_data_t<Ty> self) -> result_t {
                   return Mode == mode::min ? std::min(self, val.value())
                                            : std::max(self, val.value());
                 });
-            if (std::holds_alternative<caf::none_t>(result_.value())) {
-              return;
+              if (std::holds_alternative<caf::none_t>(result_.value())) {
+                return;
+              }
             }
           }
-        }
-      },
-      [&](const auto&) {
-        diagnostic::warning("expected types `int`, `uint`, `double`, "
-                            "`duration`, or `time`, but got `{}`",
-                            arg.type.kind())
-          .primary(expr_)
-          .emit(ctx);
-        result_ = caf::none;
-      }};
-    match(*arg.array, f);
+        },
+        [&](const auto&) {
+          diagnostic::warning("expected types `int`, `uint`, `double`, "
+                              "`duration`, or `time`, but got `{}`",
+                              arg.type.kind())
+            .primary(expr_)
+            .emit(ctx);
+          result_ = caf::none;
+        }};
+      match(*arg.array, f);
+    }
   }
 
   auto get() const -> data override {
