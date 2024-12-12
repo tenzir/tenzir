@@ -41,7 +41,7 @@ if [[ "${new_version}" == *"-rc"* ]]; then
   new_version_major_minor="${new_version%.*}-${new_version##*-}"
 fi
 
-base_ref="${$2:-origin/main}"
+base_ref="${2:-origin/main}"
 
 # Determine the build directory.
 build_dir=$(mktemp -d 2>/dev/null || mktemp -d -t "build-${new_version}")
