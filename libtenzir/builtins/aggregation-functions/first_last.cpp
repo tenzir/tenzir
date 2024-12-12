@@ -28,7 +28,7 @@ public:
   }
 
   auto update(const table_slice& input, session ctx) -> void override {
-    if (not is<caf::none_t>(result_)) {
+    if (Mode == mode::first and not is<caf::none_t>(result_)) {
       return;
     }
     auto arg = eval(expr_, input, ctx);
