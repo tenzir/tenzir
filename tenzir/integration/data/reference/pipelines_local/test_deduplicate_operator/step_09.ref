@@ -1,2 +1,25 @@
 {"foo": {"bar": 123}, "tag": 1}
 {"foo": {"bar": null}, "tag": 2}
+warning: cannot access field of non-record type
+ --> <input>:1:17
+  |
+1 | deduplicate foo.bar, limit=1
+  |                 ~~~ 
+  ⋮
+1 | deduplicate foo.bar, limit=1
+  |             --- type `int64`
+  |
+
+warning: record does not have this field
+ --> <input>:1:17
+  |
+1 | deduplicate foo.bar, limit=1
+  |                 ~~~ 
+  |
+
+warning: field `foo` not found
+ --> <input>:1:13
+  |
+1 | deduplicate foo.bar, limit=1
+  |             ~~~ 
+  |
