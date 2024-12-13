@@ -82,7 +82,7 @@ from [
   {x: 3},
 ]
 y = x.otherwise("test")
-z = {x: [4 * x.otherwise(1s)], y: x.otherwise(x * 1s)}
+z = {x: [4 * x.otherwise(1s)], y: (x * 1s).otherwise(x * 1d)}
 EOF
 }
 

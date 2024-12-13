@@ -65,22 +65,22 @@ public:
           TENZIR_ASSERT(length > 0);
           auto parts = std::vector<series>{};
           auto begin = int64_t{0};
-          auto last_valid = ps.array->IsValid(0);
+          auto current_valid = ps.array->IsValid(0);
           // We add an artificial index at the end that always causes a split.
           for (auto i = int64_t{0}; i < length + 1; ++i) {
             auto valid = std::invoke([&] {
               if (i < length) {
                 return ps.array->IsValid(i);
               }
-              return not last_valid;
+              return not current_valid;
             });
-            if (last_valid != valid) {
-              if (valid) {
+            if (current_valid != valid) {
+              if (current_valid) {
                 parts.push_back(ps.slice(begin, i));
               } else {
                 parts.push_back(fs.slice(begin, i));
               }
-              last_valid = valid;
+              current_valid = valid;
               begin = i;
             }
           }
