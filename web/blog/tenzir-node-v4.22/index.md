@@ -2,6 +2,7 @@
 title: Tenzir Node v4.22
 authors: [jachris, raxyte]
 date: 2024-10-18
+last_updated: 2024-12-10
 tags: [release, node]
 comments: true
 ---
@@ -33,9 +34,8 @@ updates!
 
 ## Google Cloud Pub/Sub Integration
 
-Introducing our latest connector: Google Cloud Pub/Sub! The new
-[`google-cloud-pubsub` connector](../next/connectors/google_cloud_pubsub) allows
-users to seamlessly subscribe and publish to Google Cloud Pub/Sub.
+Introducing our latest connector: Google Cloud Pub/Sub! The new integration
+allows users to seamlessly subscribe and publish to Google Cloud Pub/Sub.
 
 ```text{0} title="Subscribe to 'my-subscription'"
 load google-cloud-pubsub "amazing-project-123456" "my-subscription"

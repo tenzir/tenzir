@@ -2,7 +2,7 @@
 title: Mobilizing Zeek Logs
 authors: mavam
 date: 2023-07-06
-last_updated: 2023-12-17
+last_updated: 2024-12-10
 tags: [tenzir, zeek, logs, json, kafka]
 comments: true
 ---
@@ -216,7 +216,7 @@ still write a C++ *writer plugin* to produce any output of your choice.
 
 For example, the [zeek-kafka](https://github.com/SeisoLLC/zeek-kafka) plugin
 writes incoming Zeek data to Kafka topics. For this use case, you can also
-leverage Tenzir's [`kafka`](/next/connectors/kafka) connector and write:
+leverage Tenzir's `kafka` connector and write:
 
 ```bash
 cat *.log | tenzir '

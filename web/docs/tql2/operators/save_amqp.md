@@ -9,15 +9,8 @@ save_amqp [url:str, channel=int, exchange=str, routing_key=str,
 
 ## Description
 
-The `save_amqp` operator is an [AMQP](https://www.amqp.org/) 0-9-1 client that
-enables interacting with an AMQP server, as a *producer*.
-
-The diagram below shows the key abstractions and how they relate to a pipeline:
-
-![AMQP](amqp.excalidraw.svg)
-
-The implementation of this connector relies on the [RabbitMQ C client
-library](https://github.com/alanxz/rabbitmq-c).
+The `save_amqp` operator is an [AMQP](https://www.amqp.org/) 0-9-1 client to
+send messages to an exchange.
 
 ### `url: str (optional)`
 
@@ -81,7 +74,7 @@ Defaults to `false`.
 
 ## Examples
 
-Send the list of plugins as [JSON](write_json.md):
+### Send the list of plugins as [JSON](write_json.md)
 
 ```tql
 plugins

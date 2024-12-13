@@ -5,7 +5,7 @@ setup() {
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
-  export TENZIR_EXEC__TQL2=true
+  export TENZIR_TQL2=true
 }
 
 @test "add" {
@@ -149,6 +149,15 @@ EOF
   check tenzir -f /dev/stdin <<EOF
   from "${INPUTSDIR}/json/lists.json"
   exists = x in y
+  not_exists = x not in y
+EOF
+
+  check tenzir -f /dev/stdin <<EOF
+  from {}
+  yf = 1 * 2 in [1]
+  yt = 1 * 2 in [2]
+  xt = 1 * 2 not in [1]
+  xf = 1 * 2 not in [2]
 EOF
 }
 

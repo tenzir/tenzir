@@ -126,74 +126,43 @@ public:
   }
 };
 
-class from_epoch_ms final : public function_plugin {
+class from_epoch final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "from_epoch_ms";
+    return "from_epoch";
   }
 
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .positional("x", expr, "number")
+          .positional("x", expr, "duration")
           .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](evaluator eval, session ctx) -> series {
-      auto arg = eval(expr);
-      auto f = detail::overload{
+      const auto arg = eval(expr);
+      const auto f = detail::overload{
         [](const arrow::NullArray& arg) {
           return series::null(time_type{}, arg.length());
         },
-        [&](const arrow::Int64Array& arg) {
+        [](const arrow::DurationArray& arg) {
           auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
           check(b->Reserve(arg.length()));
-          for (auto i = 0; i < arg.length(); ++i) {
+          for (auto i = int64_t{}; i < arg.length(); ++i) {
             if (arg.IsNull(i)) {
               check(b->AppendNull());
               continue;
             }
-            check(append_builder(
-              time_type{}, *b,
-              time{duration{value_at(int64_type{}, arg, i) * 1'000'000}}));
-          }
-          return series{time_type{}, finish(*b)};
-        },
-        [&](const arrow::UInt64Array& arg) {
-          auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
-          check(b->Reserve(arg.length()));
-          for (auto i = 0; i < arg.length(); ++i) {
-            if (arg.IsNull(i)) {
-              check(b->AppendNull());
-              continue;
-            }
-            check(append_builder(
-              time_type{}, *b,
-              time{duration{value_at(uint64_type{}, arg, i) * 1'000'000}}));
-          }
-          return series{time_type{}, finish(*b)};
-        },
-        [&](const arrow::DoubleArray& arg) {
-          auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
-          check(b->Reserve(arg.length()));
-          for (auto i = 0; i < arg.length(); ++i) {
-            if (arg.IsNull(i)) {
-              check(b->AppendNull());
-              continue;
-            }
-            check(
-              append_builder(time_type{}, *b,
-                             time{duration{int64_t(
-                               value_at(double_type{}, arg, i) * 1'000'000)}}));
+            check(b->Append(arg.Value(i)));
           }
           return series{time_type{}, finish(*b)};
         },
         [&](const auto&) {
-          diagnostic::warning("`{}` expected number, but got `{}`", name(),
+          diagnostic::warning("`{}` expected `duration`, but got `{}`", name(),
                               arg.type.kind())
             .primary(expr)
             .emit(ctx);
-          return series::null(duration_type{}, arg.length());
+          return series::null(time_type{}, arg.length());
         },
       };
       return match(*arg.array, f);
@@ -367,10 +336,9 @@ public:
           *subject.array,
           [&](const arrow::TimestampArray& array) {
             auto options = arrow::compute::StrftimeOptions(
-              format.inner,
-              locale ? locale->inner : "C");
-            auto result = arrow::compute::CallFunction("strftime",
-                                                       {array}, &options);
+              format.inner, locale ? locale->inner : "C");
+            auto result
+              = arrow::compute::CallFunction("strftime", {array}, &options);
             if (not result.ok()) {
               diagnostic::warning("{}", result.status().ToString())
                 .primary(fn)
@@ -422,8 +390,8 @@ public:
             constexpr auto error_is_null = true;
             auto options = arrow::compute::StrptimeOptions(
               format.inner, arrow::TimeUnit::NANO, error_is_null);
-            auto result = arrow::compute::CallFunction("strptime",
-                                                       {array}, &options);
+            auto result
+              = arrow::compute::CallFunction("strptime", {array}, &options);
             if (not result.ok()) {
               diagnostic::warning("{}", result.status().ToString())
                 .primary(fn)
@@ -461,7 +429,7 @@ using namespace tenzir::plugins::time_;
 
 TENZIR_REGISTER_PLUGIN(time_)
 TENZIR_REGISTER_PLUGIN(since_epoch)
-TENZIR_REGISTER_PLUGIN(from_epoch_ms)
+TENZIR_REGISTER_PLUGIN(from_epoch)
 TENZIR_REGISTER_PLUGIN(as_secs)
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::year});
 TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::month});

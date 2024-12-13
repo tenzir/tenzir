@@ -2,6 +2,7 @@
 title: Tenzir v4.12
 authors: [jachris]
 date: 2024-04-24
+last_updated: 2024-12-10
 tags: [release, tcp, udp, publish, subscribe, deduplicate, unroll, syslog, every]
 comments: true
 ---
@@ -164,19 +165,19 @@ Just select one of the available formats and you're good to go!
 
 ## Other Changes
 
-- There's a new [`udp`](/next/connectors/udp) connector for sending and receiving
-  UDP datagrams. Finally, you can now receive Syslog natively.
+- There's a new `udp` connector for sending and receiving UDP datagrams.
+  Finally, you can now receive Syslog natively.
 - Speaking of Syslog: we've enhanced our parser to be *multi-line*. In case the
   next line isn't a valid Syslog message by itself, we interpret it as the
   continuation of the previous message.
-- The [`tcp`](/next/connectors/tcp) loader now accepts multiple connections in
-  parallel, e.g., when used as `from tcp://127.0.0.1:8000 read json`.
-- We've massively improved performance of our [Parquet](/next/formats/parquet)
-  and [Feather](/next/formats/feather) formats for large files. For writing,
-  they now both support streaming row groups and record batches, respectively,
-  and for reading Feather now supports streaming via the Arrow IPC format as
-  well. This comes in handy for those of you working in the Apache Arrow
-  ecosystem and seeking seamless interoperability without loss of rich typing.
+- The `tcp` loader now accepts multiple connections in parallel, e.g., when used
+  as `from tcp://127.0.0.1:8000 read json`.
+- We've massively improved performance of our Parquet and Feather formats for
+  large files. For writing, they now both support streaming row groups and
+  record batches, respectively, and for reading Feather now supports streaming
+  via the Arrow IPC format as well. This comes in handy for those of you working
+  in the Apache Arrow ecosystem and seeking seamless interoperability without
+  loss of rich typing.
 
 As usual, the complete list of bug fixes, adjustments, and enhancements
 delivered with this version can be found in our [changelog](/changelog#v4120).

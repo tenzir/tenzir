@@ -365,8 +365,10 @@ type::~type() noexcept = default;
 
 type::type(chunk_ptr&& table) noexcept {
 #if TENZIR_ENABLE_ASSERTIONS
+  using flatbuffers::soffset_t;
+  using flatbuffers::uoffset_t;
   TENZIR_ASSERT(table);
-  TENZIR_ASSERT(table->size() > 0);
+  TENZIR_ASSERT(table->size() >= FLATBUFFERS_MIN_BUFFER_SIZE);
   const auto* const data = reinterpret_cast<const uint8_t*>(table->data());
   auto verifier = flatbuffers::Verifier{data, table->size()};
   TENZIR_ASSERT_EXPENSIVE(fbs::GetType(data)->Verify(verifier),

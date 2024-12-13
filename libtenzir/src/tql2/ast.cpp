@@ -311,9 +311,15 @@ auto split_legacy_expression(const ast::expression& x)
         if (not left || not right) {
           return std::pair{trivially_true_expression(), x};
         }
+        auto result
+          = expression{predicate{std::move(*left), *rel_op, std::move(*right)}};
+        if (not normalize_and_validate(result)) {
+          return std::pair{trivially_true_expression(), x};
+        }
         return std::pair{
-          expression{predicate{std::move(*left), *rel_op, std::move(*right)}},
-          ast::expression{ast::constant{true, location::unknown}}};
+          std::move(result),
+          ast::expression{ast::constant{true, location::unknown}},
+        };
       }
       if (y.op.inner == ast::binary_op::and_) {
         auto [lo, ln] = split_legacy_expression(y.left);

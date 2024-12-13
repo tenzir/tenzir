@@ -26,4 +26,4 @@ from { x: since_epoch(2021-02-24) }
 
 ## See Also
 
-[`as_secs`](as_secs.md), [`from_epoch_ms`](from_epoch_ms.md), [`now`](now.md)
+[`as_secs`](as_secs.md), [`from_epoch`](from_epoch.md), [`now`](now.md)

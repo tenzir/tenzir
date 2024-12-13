@@ -75,7 +75,9 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
 /// Get a pointer to the `tenzir.fbs.TableSlice` inside the chunk.
 /// @param chunk The chunk to look at.
 const fbs::TableSlice* as_flatbuffer(const chunk_ptr& chunk) noexcept {
-  if (!chunk) {
+  using flatbuffers::soffset_t;
+  using flatbuffers::uoffset_t;
+  if (!chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
     return nullptr;
   }
   return fbs::GetTableSlice(chunk->data());
