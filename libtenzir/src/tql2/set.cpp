@@ -15,7 +15,6 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/expression.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/type.hpp"
@@ -151,13 +150,16 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
     result.push_back(input);
     return result;
   };
+  // TODO: The locations used in the warnings below point to the value. Maybe
+  // they should point to the metadata selector, or the equal token instead?
   switch (left.kind) {
     case ast::meta::name: {
-      // If not a string: Just warn, no effect? Or make empty?
-      // If null, warn and … use empty string? Name should be optional.
+      // TODO: We considered to make the schema name optional at some point.
+      // This would help here, as we could set the name to `null` if we get a
+      // non-string type or a null string. Instead, we keep the original schema
+      // name in both cases for now.
       auto array = dynamic_cast<arrow::StringArray*>(right.array.get());
       if (not array) {
-        // TODO: Inaccurate location.
         diagnostic::warning("expected string but got {}", right.type.kind())
           .primary(left)
           .emit(diag);
@@ -166,8 +168,6 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       return transform(*array, [&](table_slice slice,
                                    std::optional<std::string_view> value) {
         if (not value) {
-          // TODO: We considered to make the schema name optional at some point.
-          // This would help here.
           diagnostic::warning("schema name must not be `null`")
             .primary(left)
             .emit(diag);
@@ -184,21 +184,24 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       });
     }
     case ast::meta::import_time: {
-      // If not a timestamp: Nullify?
-      // If null: Assign default-constructed time, no warning.
-      // If default-constructed time: Warn and nullify? But it's an edge case.
+      // If the right side is not a timestamp, we do the same as if the value is
+      // null. On an implementation level, the import time is not nullable, but
+      // we use the default-constructed time as a marker for `null`. This is
+      // translated back to `null` when it is read by the evaluator.
       auto array = dynamic_cast<arrow::TimestampArray*>(right.array.get());
       if (not array) {
-        // TODO: Inaccurate location.
-        diagnostic::warning("expected `time` but got `{}`", right.type.kind())
-          .primary(left)
-          .emit(diag);
-        return original();
+        if (not right.type.kind().is<null_type>()) {
+          diagnostic::warning("expected `time` but got `{}`", right.type.kind())
+            .primary(left)
+            .emit(diag);
+        }
+        auto copy = input;
+        copy.import_time(time{});
+        return {std::move(copy)};
       }
       return transform(*array, [&](table_slice slice,
                                    std::optional<time> value) {
         if (not value) {
-          // The default-constructed time means `null`.
           value = time{};
         } else if (value == time{}) {
           // This means that we are trying to set a non-null
@@ -213,10 +216,11 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       });
     }
     case ast::meta::internal: {
-      // If null: Warn and set to false?
+      // TODO: If this is set to null, we keep the original setting for now. We
+      // could instead also set it to `false`, as `null` is also treated as
+      // `false` in contexts such as `where` or `if`.
       auto values = dynamic_cast<arrow::BooleanArray*>(right.array.get());
       if (not values) {
-        // TODO: Inaccurate location.
         diagnostic::warning("expected bool but got {}", right.type.kind())
           .primary(left)
           .emit(diag);
@@ -266,8 +270,7 @@ auto assign(const ast::simple_selector& left, series right,
     = assign(left.path(), std::move(right), series{input}, dh, position);
   auto* rec_ty = try_as<record_type>(result.type);
   if (not rec_ty) {
-    diagnostic::warning("assignment to `this` requires `record`, but got "
-                        "`{}`",
+    diagnostic::warning("assignment to `this` requires `record`, but got `{}`",
                         result.type.kind())
       .primary(left)
       .emit(dh);
