@@ -35,21 +35,14 @@
 namespace tenzir::plugins::xsv {
 namespace {
 
-struct xsv_options {
-  std::string name = {};
+struct xsv_printer_options {
   char field_sep = {};
   char list_sep = {};
   std::string null_value = {};
-  std::string quotes = "\"\'";
-  bool doubled_quotes_escape = {};
   bool no_header = {};
-  bool auto_expand = {};
-  bool allow_comments = {};
-  std::optional<std::string> header = {};
-  multi_series_builder::options builder_options = {};
 
-  static auto try_parse_printer_options(parser_interface& p,
-                                        std::string name) -> xsv_options {
+  static auto
+  try_parse_printer_options(parser_interface& p) -> xsv_printer_options {
     auto parser = argument_parser{"xsv", "https://docs.tenzir.com/formats/xsv"};
     auto field_sep_str = located<std::string>{};
     auto list_sep_str = located<std::string>{};
@@ -91,8 +84,7 @@ struct xsv_options {
           .throw_();
       }
     }
-    return xsv_options{
-      .name = std::move(name),
+    return xsv_printer_options{
       .field_sep = *field_sep,
       .list_sep = *list_sep,
       .null_value = std::move(null_value.inner),
@@ -100,24 +92,44 @@ struct xsv_options {
     };
   }
 
-  friend auto inspect(auto& f, xsv_options& x) -> bool {
+  friend auto inspect(auto& f, xsv_printer_options& x) -> bool {
+    return f.object(x).fields(f.field("field_sep", x.field_sep),
+                              f.field("list_sep", x.list_sep),
+                              f.field("null_value", x.null_value),
+                              f.field("no_header", x.no_header));
+  }
+};
+
+struct xsv_parser_options {
+  std::string name = {};
+  std::string field_sep = {};
+  std::string list_sep = {};
+  std::string null_value = {};
+  std::string quotes = "\"\'";
+  bool doubled_quotes_escape = {};
+  bool auto_expand = {};
+  bool allow_comments = {};
+  std::optional<std::string> header = {};
+  multi_series_builder::options builder_options = {};
+
+  friend auto inspect(auto& f, xsv_parser_options& x) -> bool {
     return f.object(x).fields(
       f.field("name", x.name), f.field("field_sep", x.field_sep),
       f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
       f.field("allow_comments", x.allow_comments), f.field("header", x.header),
-      f.field("no_header", x.no_header), f.field("auto_expand", x.auto_expand),
+      f.field("auto_expand", x.auto_expand),
       f.field("builder_options", x.builder_options));
   }
 };
 
 struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
-  xsv_common_parser_options_parser(std::string name, char field_sep_default,
-                                   char list_sep_default,
+  xsv_common_parser_options_parser(std::string name,
+                                   std::string field_sep_default,
+                                   std::string list_sep_default,
                                    std::string null_value_default)
     : name_{std::move(name)},
-      field_sep_str_{
-        located{std::string{field_sep_default}, location::unknown}},
-      list_sep_str_{located{std::string{list_sep_default}, location::unknown}},
+      field_sep_{located{std::string{field_sep_default}, location::unknown}},
+      list_sep_{located{std::string{list_sep_default}, location::unknown}},
       null_value_{located{std::move(null_value_default), location::unknown}},
       mode_{mode::special_optional} {
     settings_.merge = true;
@@ -129,14 +141,14 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
 
   auto add_to_parser(argument_parser& parser) -> void {
     if (mode_ == mode::special_optional) {
-      parser.add("--list-sep", list_sep_str_, "<list-sep>");
+      parser.add("--list-sep", list_sep_, "<list-sep>");
       parser.add("--null-value", null_value_, "<null-value>");
     } else {
-      field_sep_str_ = located{"REQUIRED", location::unknown};
-      list_sep_str_ = located{"REQUIRED", location::unknown};
+      field_sep_ = located{"REQUIRED", location::unknown};
+      list_sep_ = located{"REQUIRED", location::unknown};
       null_value_ = located{"REQUIRED", location::unknown};
-      parser.add(*field_sep_str_, "<field-sep>");
-      parser.add(*list_sep_str_, "<list-sep>");
+      parser.add(*field_sep_, "<field-sep>");
+      parser.add(*list_sep_, "<list-sep>");
       parser.add(*null_value_, "<null-value>");
     }
     parser.add("--allow-comments", allow_comments_);
@@ -149,14 +161,14 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
 
   auto add_to_parser(argument_parser2& parser) -> void {
     if (mode_ == mode::special_optional) {
-      parser.named("list_sep", list_sep_str_);
+      parser.named("list_sep", list_sep_);
       parser.named("null_value", null_value_);
     } else {
-      field_sep_str_ = located{"REQUIRED", location::unknown};
-      list_sep_str_ = located{"REQUIRED", location::unknown};
+      field_sep_ = located{"REQUIRED", location::unknown};
+      list_sep_ = located{"REQUIRED", location::unknown};
       null_value_ = located{"REQUIRED", location::unknown};
-      parser.positional("field_sep", *field_sep_str_);
-      parser.positional("list_sep", *list_sep_str_);
+      parser.positional("field_sep", *field_sep_);
+      parser.positional("list_sep", *list_sep_);
       parser.positional("null_value", *null_value_);
     }
     parser.named("quotes", quotes_);
@@ -169,79 +181,66 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
                                                                  false);
   }
 
-  auto get_options(diagnostic_handler& dh) -> failure_or<xsv_options> {
-    auto field_sep = to_xsv_sep(field_sep_str_->inner);
-    if (!field_sep) {
-      diagnostic::error(field_sep.error())
-        .primary(field_sep_str_->source)
+  auto get_options(diagnostic_handler& dh) -> failure_or<xsv_parser_options> {
+    constexpr static auto npos = std::string::npos;
+    constexpr static auto overlap
+      = [](const std::optional<located<std::string>>& lhs,
+           const std::optional<located<std::string>>& rhs) {
+          return lhs->inner.find(rhs->inner) != npos
+                 or rhs->inner.find(lhs->inner) != npos;
+        };
+    if (list_sep_ and overlap(field_sep_, list_sep_)) {
+      diagnostic::error("`field_sep` and `list_sep` must not overlap")
+        .primary(field_sep_->source)
+        .primary(list_sep_->source)
         .emit(dh);
       return failure::promise();
     }
-    auto list_sep = to_xsv_sep(list_sep_str_->inner);
-    if (!list_sep) {
-      diagnostic::error(list_sep.error())
-        .primary(list_sep_str_->source)
+    if (overlap(field_sep_, null_value_)) {
+      diagnostic::error("`field_sep` and `null_value` must not overlap")
+        .primary(field_sep_->source)
+        .primary(null_value_->source)
         .emit(dh);
       return failure::promise();
     }
-    if (*field_sep == *list_sep) {
-      diagnostic::error("field separator and list separator must be "
-                        "different")
-        .primary(field_sep_str_->source)
-        .primary(list_sep_str_->source)
+    if (list_sep_ and overlap(list_sep_, null_value_)) {
+      diagnostic::error("`list_sep` and `null_value` must not overlap")
+        .primary(null_value_->source)
+        .primary(list_sep_->source)
         .emit(dh);
       return failure::promise();
     }
-    for (auto ch : null_value_->inner) {
-      if (ch == *field_sep) {
-        diagnostic::error("null value conflicts with field separator")
-          .primary(field_sep_str_->source)
+    for (const auto q : quotes_->inner) {
+      if (field_sep_->inner.find(q) != npos) {
+        diagnostic::error("quote character `{}`conflicts with `field_sep`", q)
+          .primary(quotes_->source)
           .primary(null_value_->source)
           .emit(dh);
         return failure::promise();
       }
-      if (ch == *list_sep) {
-        diagnostic::error("null value conflicts with list separator")
-          .primary(field_sep_str_->source)
-          .primary(null_value_->source)
+      if (list_sep_->inner.find(q) != npos) {
+        diagnostic::error("quote character `{}` conflicts with `list_sep`", q)
+          .primary(quotes_->source)
+          .primary(list_sep_->source)
           .emit(dh);
         return failure::promise();
       }
-    }
-    for (auto ch : quotes_->inner) {
-      if (ch == *field_sep) {
-        diagnostic::error("quote character conflicts with field separator")
-          .primary(field_sep_str_->source)
+      if (null_value_->inner.find(q) != npos) {
+        diagnostic::error("quote character `{}` conflicts with `null_value`", q)
+          .primary(quotes_->source)
           .primary(null_value_->source)
           .emit(dh);
         return failure::promise();
-      }
-      if (ch == *list_sep) {
-        diagnostic::error("quote character conflicts with list separator")
-          .primary(field_sep_str_->source)
-          .primary(null_value_->source)
-          .emit(dh);
-        return failure::promise();
-      }
-      for (auto ch2 : null_value_->inner) {
-        if (ch == ch2) {
-          diagnostic::error("quote character conflicts with null value")
-            .primary(field_sep_str_->source)
-            .primary(null_value_->source)
-            .emit(dh);
-          return failure::promise();
-        }
       }
     }
     TRY(auto opts, multi_series_builder_argument_parser::get_options(dh));
-    return xsv_options{
+    return xsv_parser_options{
       .name = "xsv",
-      .field_sep = *field_sep,
-      .list_sep = *list_sep,
+      .field_sep = field_sep_->inner,
+      .list_sep = list_sep_->inner,
       .null_value = null_value_->inner,
       .quotes = quotes_->inner,
       .doubled_quotes_escape = doubled_quotes_escape_,
-      .no_header = false,
       .auto_expand = auto_expand_,
       .allow_comments = allow_comments_,
       .header = header_ ? std::optional{header_->inner} : std::nullopt,
@@ -257,11 +256,11 @@ protected:
   std::string name_;
   bool allow_comments_{};
   std::optional<located<std::string>> header_{};
-  std::optional<located<std::string>> field_sep_str_{};
-  std::optional<located<std::string>> list_sep_str_{};
+  std::optional<located<std::string>> field_sep_{};
+  std::optional<located<std::string>> list_sep_{};
   std::optional<located<std::string>> null_value_{};
   std::optional<located<std::string>> quotes_
-    = located{xsv_options{}.quotes, location::unknown};
+    = located{xsv_parser_options{}.quotes, location::unknown};
   bool doubled_quotes_escape_{};
   bool auto_expand_{};
   mode mode_ = mode::all_required;
@@ -392,7 +391,7 @@ struct xsv_printer_impl {
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 operator_control_plane& ctrl,
-                xsv_options args) -> generator<table_slice> {
+                xsv_parser_options args) -> generator<table_slice> {
   // Parse header.
   auto it = lines.begin();
   auto line = std::optional<std::string_view>{};
@@ -518,8 +517,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       auto list_element_text = std::string_view{};
       std::tie(list_element_text, field_text)
         = quoting_options.split_at_unquoted(field_text, args.list_sep);
-      // If it is a list, then there remains text in `field_text` (because it is
-      // after the list separator)
+      // If it is a list, then there remains text in `field_text` (because it
+      // is after the list separator)
       if (not field_text.empty()) {
         auto l = field.list();
         while (true) {
@@ -559,7 +558,7 @@ class xsv_parser final : public plugin_parser {
 public:
   xsv_parser() = default;
 
-  explicit xsv_parser(xsv_options args) : args_{std::move(args)} {
+  explicit xsv_parser(xsv_parser_options args) : args_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
@@ -583,14 +582,14 @@ public:
   }
 
 private:
-  xsv_options args_{};
+  xsv_parser_options args_{};
 };
 
 class xsv_printer final : public plugin_printer {
 public:
   xsv_printer() = default;
 
-  explicit xsv_printer(xsv_options args) : args_{std::move(args)} {
+  explicit xsv_printer(xsv_printer_options args) : args_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
@@ -657,7 +656,7 @@ private:
     }
   }
 
-  xsv_options args_;
+  xsv_printer_options args_;
 };
 
 class xsv_plugin : public virtual parser_plugin<xsv_parser>,
@@ -690,7 +689,7 @@ public:
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    auto options = xsv_options::try_parse_printer_options(p, "xsv");
+    auto options = xsv_printer_options::try_parse_printer_options(p);
     return std::make_unique<xsv_printer>(std::move(options));
   }
 };
@@ -726,14 +725,11 @@ public:
     bool no_header = {};
     parser.add("--no-header", no_header);
     parser.parse(p);
-    return std::make_unique<xsv_printer>(xsv_options{
-      .name = std::string{Name.str()},
+    return std::make_unique<xsv_printer>(xsv_printer_options{
       .field_sep = Sep,
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
       .no_header = no_header,
-      .auto_expand = false,
-      .allow_comments = false,
     });
   }
 
@@ -768,7 +764,7 @@ class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto args = xsv_options{};
+    auto args = xsv_printer_options{};
     auto field_sep_str = located<std::string>{};
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
@@ -816,7 +812,6 @@ public:
       }
     }
     return std::make_unique<writer_adapter<xsv_printer>>(xsv_printer{{
-      .name = "xsv",
       .field_sep = *field_sep,
       .list_sep = *list_sep,
       .null_value = std::move(null_value.inner),
@@ -867,15 +862,13 @@ public:
     TRY(argument_parser2::operator_(name())
           .named("no_header", no_header)
           .parse(inv, ctx));
-    return std::make_unique<writer_adapter<xsv_printer>>(xsv_printer{{
-      .name = std::string{Name.str()},
-      .field_sep = Sep,
-      .list_sep = ListSep,
-      .null_value = std::string{Null.str()},
-      .no_header = no_header,
-      .auto_expand = false,
-      .allow_comments = false,
-    }});
+    return std::make_unique<writer_adapter<xsv_printer>>(
+      xsv_printer{xsv_printer_options{
+        .field_sep = Sep,
+        .list_sep = ListSep,
+        .null_value = std::string{Null.str()},
+        .no_header = no_header,
+      }});
   }
 };
 
