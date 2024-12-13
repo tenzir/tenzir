@@ -9,7 +9,7 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'faqs',
+      id: 'faqs/README',
     },
     {
       type: 'category',
