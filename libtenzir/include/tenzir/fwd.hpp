@@ -192,6 +192,7 @@ struct component_state_map;
 struct concept_;
 struct conjunction;
 struct connect_request;
+struct context_erase_args;
 struct context_parameter_map;
 struct context_save_result;
 struct context_update_args;
@@ -445,6 +446,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::chunk_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::conjunction))
   TENZIR_ADD_TYPE_ID((tenzir::context_parameter_map))
+  TENZIR_ADD_TYPE_ID((tenzir::context_erase_args))
   TENZIR_ADD_TYPE_ID((tenzir::context_save_result))
   TENZIR_ADD_TYPE_ID((tenzir::context_update_args))
   TENZIR_ADD_TYPE_ID((tenzir::curried_predicate))

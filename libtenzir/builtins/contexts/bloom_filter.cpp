@@ -231,6 +231,14 @@ public:
     };
   }
 
+  auto erase(const table_slice& events, const context_erase_args& args,
+             session ctx) -> failure_or<void> override {
+    TENZIR_UNUSED(events, args);
+    diagnostic::error("bloom-filter context does not support erasing entries")
+      .emit(ctx);
+    return failure::promise();
+  }
+
   auto reset() -> caf::expected<void> override {
     auto params = bloom_filter_.parameters();
     TENZIR_ASSERT(params.n && params.p);
