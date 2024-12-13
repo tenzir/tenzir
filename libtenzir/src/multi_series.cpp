@@ -27,12 +27,16 @@ auto split_multi_series(std::span<const multi_series> input,
   positions.resize(input.size());
   while (true) {
     // Find the shortest remaining length.
-    // TODO: min_element.
     auto shortest_length = std::numeric_limits<int64_t>::max();
     for (auto i = size_t{0}; i < input.size(); ++i) {
       auto [part, start] = positions[i];
       if (part >= input[i].parts().size()) {
-        // TODO: Assert that everything is done.
+        // We assert that everything else is done as well.
+        for (auto j = size_t{0}; j < input.size(); ++j) {
+          std::tie(part, start) = positions[j];
+          TENZIR_ASSERT(part == input[i].parts().size());
+          TENZIR_ASSERT(start == 0);
+        }
         co_return;
       }
       auto length = input[i].part(part).length() - start;
@@ -68,11 +72,11 @@ auto split_multi_series(std::span<const multi_series> input)
   }
 }
 
-auto map_series(std::span<const multi_series> input,
+auto map_series(std::span<const multi_series> args,
                 detail::function_view<auto(std::span<series>)->multi_series> f)
   -> multi_series {
   auto result = std::vector<series>{};
-  for (auto x : split_multi_series(input)) {
+  for (auto x : split_multi_series(args)) {
     auto y = f(x);
     result.insert(result.end(), std::move_iterator{y.begin()},
                   std::move_iterator{y.end()});

@@ -108,7 +108,13 @@ private:
   std::vector<series> parts_;
 };
 
-// TODO: Lifetime??
+/// Splits any number of multi-series a sequence of the same number of series.
+///
+/// Given a single multi-series, this functions just yields the series that make
+/// up the multi-series. For more than one series, the individual parts of the
+/// multiple series are sliced such that we get equally-typed windows.
+///
+/// There is also an overload for a static number of arguments below.
 auto split_multi_series(std::span<const multi_series> input)
   -> generator<std::span<series>>;
 
@@ -125,7 +131,15 @@ auto split_multi_series(Ts... xs)
   }
 }
 
-auto map_series(std::span<const multi_series> input,
+/// Applies a function that takes series to a multi-series.
+///
+/// This overload accepts a dynamic number of arguments. The function is called
+/// potentially multiple times with equally-typed slices of the given arguments.
+/// Thus, the number of series passed to the function is always the same as the
+/// number of given multi-series.
+///
+/// See below for overloads that accept a static number of arguments.
+auto map_series(std::span<const multi_series> args,
                 detail::function_view<auto(std::span<series>)->multi_series> f)
   -> multi_series;
 

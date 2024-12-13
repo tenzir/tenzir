@@ -20,9 +20,9 @@
 namespace tenzir {
 
 auto evaluator::eval(const ast::record& x) -> multi_series {
-  auto items = std::vector<multi_series>{};
+  auto arrays = std::vector<multi_series>{};
   for (auto& item : x.items) {
-    items.push_back(eval(item.match(
+    arrays.push_back(eval(item.match(
       [&](const ast::record::field& field) {
         return field.expr;
       },
@@ -30,25 +30,26 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
         return spread.expr;
       })));
   }
-  return map_series(items, [&](std::span<series> items) {
+  return map_series(arrays, [&](std::span<series> arrays) {
     auto fields = detail::stable_map<std::string, series>{};
-    for (auto [item, desc] : detail::zip_equal(items, x.items)) {
+    for (auto [array, item] : detail::zip_equal(arrays, x.items)) {
       match(
-        desc,
+        item,
         [&](const ast::record::field& field) {
-          fields[field.name.name] = std::move(item);
+          fields[field.name.name] = std::move(array);
         },
         [&](const ast::spread& spread) {
-          auto records = item.as<record_type>();
+          auto records = array.as<record_type>();
           if (not records) {
-            diagnostic::warning("expected record, got {}", item.type.kind())
+            diagnostic::warning("expected record, got {}", array.type.kind())
               .primary(spread.expr)
               .emit(ctx_);
             return;
           }
-          for (auto [i, array] : detail::enumerate(records->array->fields())) {
+          for (auto [i, field_array] :
+               detail::enumerate(records->array->fields())) {
             auto field = records->type.field(i);
-            fields[field.name] = series{field.type, array};
+            fields[field.name] = series{field.type, field_array};
           }
         });
     }
@@ -72,9 +73,9 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
 }
 
 auto evaluator::eval(const ast::list& x) -> multi_series {
-  auto items = std::vector<multi_series>{};
+  auto arrays = std::vector<multi_series>{};
   for (auto& item : x.items) {
-    items.push_back(match(
+    arrays.push_back(match(
       item,
       [&](const ast::expression& expr) {
         return eval(expr);
@@ -83,35 +84,34 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
         return eval(spread.expr);
       }));
   }
-  return map_series(items, [&](std::span<series> items) -> series {
+  return map_series(arrays, [&](std::span<series> arrays) -> series {
     using result_t = variant<series, basic_series<list_type>>;
     auto results = std::vector<result_t>{};
     auto value_type = type{null_type{}};
-    for (auto [item, desc] : detail::zip_equal(items, x.items)) {
-      desc.match(
+    for (auto [array, item] : detail::zip_equal(arrays, x.items)) {
+      item.match(
         [&](const ast::expression& expr) {
-          auto unified = unify(value_type, item.type);
+          auto unified = unify(value_type, array.type);
           if (unified) {
             value_type = std::move(*unified);
-            results.emplace_back(std::move(item));
+            results.emplace_back(std::move(array));
           } else {
             auto diag
               = diagnostic::warning("type clash in list, using `null` instead")
                   .primary(expr);
-            if (value_type.kind() != item.type.kind()) {
+            if (value_type.kind() != array.type.kind()) {
               diag = std::move(diag).note("expected `{}` but got `{}`",
-                                          value_type.kind(), item.type.kind());
+                                          value_type.kind(), array.type.kind());
             }
             std::move(diag).emit(ctx_);
             results.emplace_back(series::null(null_type{}, length_));
           }
         },
         [&](const ast::spread& spread) {
-          auto array = eval(spread.expr);
-          auto list = item.as<list_type>();
+          auto list = array.as<list_type>();
           if (not list) {
             diagnostic::warning("expected list, got `{}` instead",
-                                item.type.kind())
+                                array.type.kind())
               .primary(spread.expr)
               .emit(ctx_);
             return;

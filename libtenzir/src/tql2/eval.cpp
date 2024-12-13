@@ -89,6 +89,7 @@ auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
     auto sp = session_provider::make(dh);
     auto result = evaluator{nullptr, sp.as_session()}.eval(expr);
     TENZIR_ASSERT(result.length() == 1);
+    TENZIR_ASSERT(result.parts().size() == 1);
     auto& part = result.part(0);
     return materialize(value_at(part.type, *part.array, 0));
   } catch (failure fail) {
