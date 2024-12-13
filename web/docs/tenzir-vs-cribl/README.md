@@ -357,7 +357,7 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
   - **Distance**: The number of events in sequence since the last occurrence of
     a unique event.
 
-![Deduplicate Controls](operators/deduplicate.excalidraw.svg)
+![Deduplicate Controls](deduplicate.excalidraw.svg)
 
 ### Enrichment
 
