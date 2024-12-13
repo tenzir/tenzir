@@ -33,12 +33,12 @@ public:
   }
 
   auto value_at(int64_t row) const -> data_view {
-    auto [part, part_row] = get_index(row);
+    auto [part, part_row] = resolve(row);
     return tenzir::value_at(part.get().type, *part.get().array, part_row);
   }
 
   auto is_null(int64_t row) const -> bool {
-    auto [part, part_row] = get_index(row);
+    auto [part, part_row] = resolve(row);
     return part.get().array->IsNull(part_row);
   }
 
@@ -76,7 +76,6 @@ public:
     return parts_;
   }
 
-  // TODO: Lifetime?
   auto values() const -> generator<data_view> {
     for (auto& part : parts_) {
       for (auto value : part.values()) {
@@ -94,7 +93,7 @@ public:
   }
 
 private:
-  auto get_index(int64_t row) const
+  auto resolve(int64_t row) const
     -> std::pair<std::reference_wrapper<const series>, int64_t> {
     for (auto& part : parts_) {
       if (row < part.length()) {

@@ -257,7 +257,7 @@ public:
                                                        session ctx) -> series {
       TENZIR_UNUSED(ctx);
       auto value = eval(expr);
-      if (value.length() == 1) {
+      if (value.parts().size() == 1) {
         if (auto subnets = value.part(0).as<subnet_type>()) {
           return series{
             ip_type{},
