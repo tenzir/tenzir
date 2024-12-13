@@ -12,6 +12,7 @@ Operator | Description | Example
 [`select`](./operators/select.md) | Selects some values and discard the rest | `select name, id=metadata.id`
 [`drop`](./operators/drop.md) | Removes fields from the event | `drop name, metadata.id`
 [`enumerate`](./operators/enumerate.md) | Adds a field with the number of the event | `enumerate num`
+[`timeshift`](./operators/timeshift.md) | Adjusts timestamps relative to a given start time | `timeshift ts, start=2020-01-01`
 [`unroll`](./operators/unroll.md) | Unrolls a field of type list, duplicating the surrounding event | `unroll names` |
 
 ## Filter
@@ -44,10 +45,14 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
+[`delay`](./operators/delay.md) | Delays events relative to a start time | `delay ts, speed=2.5`
+[`discard`](./operators/discard.md) | Discards incoming bytes or events | `discard`
 [`every`](./operators/every.md) | Restarts a pipeline periodically | `every 10s { summarize sum(amount) }`
 [`fork`](./operators/fork.md) | Forwards a copy of the events to another pipeline | `fork { to "copy.json" }`
-[`if`](language/statements.md#if) | Splits the flow based on a predicate | `if transaction > 0 { … } else { … }`
 [`load_balance`](./operators/load_balance.md) | Routes the data to one of multiple subpipelines | `load_balance $over { publish $over }`
+[`pass`](./operators/pass.md) | Does nothing with the input | `pass`
+[`repeat`](./operators/repeat.md) | Repeats the input after it has finished | `repeat 100`
+[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
 
 <!--
 [`group`]() | Starts a new pipeline for each group | `group path { to $path }`
@@ -55,13 +60,12 @@ Operator | Description | Example
 [`match`]() | Splits the flow with pattern matching | `match name { "Tenzir" => {…}, _ => {…} }`
 -->
 
-## Input
+## Inputs
+
+#### Bytes
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`diagnostics`](./operators/diagnostics.md) | Returns diagnostic events of managed pipelines | `diagnostics`
-[`export`](./operators/export.md) | Retrieves events from the node | `export`
-[`from_velocira…`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
 [`load_amqp`](./operators/load_amqp.md) | Loads bytes from an AMQP server | `load_amqp`
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
 [`load_ftp`](./operators/load_ftp.md) | Loads bytes via FTP | `load_ftp "ftp.example.org"`
@@ -74,21 +78,19 @@ Operator | Description | Example
 [`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
 [`load_udp`](./operators/load_udp.md) | Loads bytes from a UDP socket | `load_udp "0.0.0.0:8090"`
 [`load_zmq`](./operators/load_zmq.md) | Receives bytes from ZeroMQ messages | `load_zmq`
-[`metrics`](./operators/metrics.md) | Retrieves metrics events from a Tenzir node | `metrics "cpu"`
-[`subscribe`](./operators/subscribe.md) | Subscribes to events of a certain topic | `subscribe "topic"`
 
-<!--
-[`load`](./operators/load.md) | Load bytes according to a URL | `load "https://example.org/api/list"`
-[`from`](./operators/from.md) | | `from "/tmp/data.json"`
--->
-
-## Output
+#### Events
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`publish`](./operators/publish.md) | Publishes events to a certain topic | `publish "topic"`
-[`import`](./operators/import.md) | Stores events at the node | `import`
-[`discard`](./operators/discard.md) | Discards incoming bytes or events | `discard`
+[`from_velocira…`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
+
+## Outputs
+
+#### Bytes
+
+Operator | Description | Example
+:--------|:------------|:-------
 [`save_amqp`](./operators/save_amqp.md) | Saves incoming bytes to an AMQP server | `save_amqp`
 [`save_email`](./operators/save_email.md) | Saves incoming bytes through an SMTP server | `save_email "user@example.org"`
 [`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`
@@ -102,10 +104,14 @@ Operator | Description | Example
 [`save_udp`](./operators/save_udp.md) | Saves incoming bytes to a UDP socket | `save_udp "0.0.0.0:8090"`
 [`save_zmq`](./operators/save_zmq.md) | Saves incoming bytes to ZeroMQ messages | `save_zmq`
 [`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
+
+#### Events
+
+Operator | Description | Example
+:--------|:------------|:-------
 [`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
 [`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
-
 <!---
 [`save`](./operators/save.md) | Save incoming bytes according to a URL | `save "https://example.org/api"`
 -->
@@ -164,17 +170,35 @@ Operator | Description | Example
 [`line_chart`]() | |
 -->
 
-## Node Inspection
+## Connecting Pipelines
+
+Operator | Description | Example
+:--------|:------------|:-------
+[`publish`](./operators/publish.md) | Publishes events to a certain topic | `publish "topic"`
+[`subscribe`](./operators/subscribe.md) | Subscribes to events of a certain topic | `subscribe "topic"`
+
+## Node
+
+### Inspection
 
 Operator | Description | Example
 :--------|:------------|:-------
 [`config`](./operators/config.md) | Returns the node's configuration | `config`
-[`fields`](./operators/fields.md) | Lists all fields stored at the node | `fields`
+[`diagnostics`](./operators/diagnostics.md) | Returns diagnostic events of managed pipelines | `diagnostics`
 [`openapi`](./operators/openapi.md) | Returns the OpenAPI specification | `openapi`
-[`partitions`](./operators/partitions.md) | Retrieves metadata about events stored at the node | `partitions src_ip == 1.2.3.4`
+[`metrics`](./operators/metrics.md) | Retrieves metrics events from a Tenzir node | `metrics "cpu"`
 [`plugins`](./operators/plugins.md) | Lists available plugins | `plugins`
-[`schemas`](./operators/schemas.md) | Lists schemas for events stored at the node | `schemas`
 [`version`](./operators/version.md) | Shows the current version | `version`
+
+### Storage Engine
+
+Operator | Description | Example
+:--------|:------------|:-------
+[`export`](./operators/export.md) | Retrieves events from the node | `export`
+[`fields`](./operators/fields.md) | Lists all fields stored at the node | `fields`
+[`import`](./operators/import.md) | Stores events at the node | `import`
+[`partitions`](./operators/partitions.md) | Retrieves metadata about events stored at the node | `partitions src_ip == 1.2.3.4`
+[`schemas`](./operators/schemas.md) | Lists schemas for events stored at the node | `schemas`
 
 ## Host Inspection
 
@@ -204,7 +228,6 @@ Operator | Description | Example
 [`local`](./operators/local.md) | Forces a pipeline to run locally | `local { sort foo }`
 [`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
 [`remote`](./operators/remote.md) | Forces a pipeline to run remotely at a node | `remote { version }`
-[`throttle`](./operators/throttle.md) | Limits the amount of data flowing through | `throttle 100M, within=1min`
 [`unordered`](./operators/unordered.md) | Remove ordering assumptions in a pipeline | `unordered { read_ndjson }`
 
 ## Encode & Decode
@@ -243,13 +266,9 @@ Operator | Description | Example
 [`package::list`](./operators/package/list.md) | Shows installed packages | `package::list`
 [`package::remove`](./operators/package/add.md) | Uninstalls a package | `package::remove "suricata-ocsf"`
 
-## Uncategorized
+## Escape Hatches
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`delay`](./operators/delay.md) | Delays events relative to a start time | `delay ts, speed=2.5`
-[`pass`](./operators/pass.md) | Does nothing with the input | `pass`
-[`repeat`](./operators/repeat.md) | Repeats the input after it has finished | `repeat 100`
-[`timeshift`](./operators/timeshift.md) | Adjusts timestamps relative to a given start time | `timeshift ts, start=2020-01-01`
 [`python`](./operators/python.md) | Executes a Python snippet for each event | `python "self.x = self.y"`
 [`shell`](./operators/shell.md) | Runs a shell command within the pipeline | <code>shell "./process.sh \| tee copy.txt"</code>

@@ -169,7 +169,7 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'pipelines',
+      id: 'pipelines/README',
     },
     {
       type: 'doc',

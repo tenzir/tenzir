@@ -1,8 +1,13 @@
 # Tenzir vs. Cribl
 
-We get a lot of questions about [Cribl](https://cribl.io) from our users: How do
-Tenzir pipelines differ? What is the equivalent of a Cribl source and a sink?
-Does Tenzir have routes? How does Tenzir break events? Does Tenzir have packs?
+We get a lot of questions about [Cribl](https://cribl.io) from our users:
+
+- How do Tenzir pipelines differ?
+- What is the equivalent of a Cribl source and destination?
+- Does Tenzir have routes?
+- How does Tenzir break events?
+- Does Tenzir have packs?
+
 To answer all these questions and quench the thirst of your inquisitive minds,
 we put together this side-by-side comparison of Cribl and Tenzir.
 
@@ -69,7 +74,7 @@ we put together this side-by-side comparison of Cribl and Tenzir.
 
 ### Pipelines
 
-![Cribl vs. Tenzir — Pipelines](cribl-vs-tenzir-pipelines.excalidraw.svg)
+![Cribl vs. Tenzir — Pipelines](cribl-vs-tenzir-pipelines.svg)
 
 #### Cribl
 
@@ -92,11 +97,11 @@ Cribl Stream has the following pipeline
 
 #### Tenzir
 
-- Everything in Tenzir is a [pipeline](pipelines.md) that consist of one or more
-  [operators](operators.md).
-- Tenzir does not have separate abstractions for *Sources* and *Destinations*.
-  Rather, operators can be a *source* (no input, only output), a
-  *transformation* (input and output), or a *sink* (only input, no output).
+- Everything in Tenzir is a [pipeline](pipelines/README.md) that consist of one
+  or more [operators](operators.md).
+- Pipeline operators can be a *input*, a *transformation*, or an *output*.
+- Tenzir will soon feature *Sources* and *Destinations* as concepts on top of
+  pipeline operators.
 
 ### Functions vs. Operators
 
@@ -227,7 +232,7 @@ See also the section on [dataflow](#dataflow) below.
 
 ## Dataflow
 
-![Cribl vs. Tenzir — Dataflow](cribl-vs-tenzir-dataflow.excalidraw.svg)
+![Cribl vs. Tenzir — Dataflow](cribl-vs-tenzir-dataflow.svg)
 
 #### Cribl
 
@@ -261,8 +266,8 @@ See also the section on [dataflow](#dataflow) below.
 
 #### Tenzir
 
-- A **source** is an operator that only produces data.
-- A **sink** is an operator that only consumes data.
+- An **input** is an operator that only produces data.
+- A **output** is an operator that only consumes data.
 - A **transformation** is an operator that consumes and produces data. Numerous
   events-to-events transformations allow for [shaping the
   data](usage/shape-data/README.md).
@@ -291,9 +296,8 @@ See also the section on [dataflow](#dataflow) below.
   an event and is equivalent to the Cribl [parser
   function](https://docs.cribl.io/stream/parser-function/).
 - Parse errors generate a diagnostic that can be processed separately with the
-  [`diagnostics`](operators/diagnostics.md) source operator.
-- There is not special `_time` field in Tenzir. TODO: discuss `extend
-  _time=now()` and the `timestamp` alias.
+  [`diagnostics`](operators/diagnostics.md) input operator.
+- There is not special `_time` field in Tenzir.
 
 ## Use Cases
 
@@ -405,7 +409,8 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 
 - A [library](https://app.tenzir.com/library) is a set of
   [packages](packages.md).
-- Packages can include [pipelines](pipelines.md) and contexts.
+- Packages can include [pipelines](pipelines/README.md) and
+  [contexts](enrichment/README.md).
 - Tenzir maintains an open source [Community
   Library](https://github.com/tenzir/library) on GitHub.
 - The Professional Edition and Enterprise Edition support managing custom
