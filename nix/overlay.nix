@@ -18,62 +18,11 @@ in {
       })
     ];
   });
-  cmakeWithPatch = final.cmake.overrideAttrs (orig: {
-    patches = (orig.patches or []) ++ [
-      (prev.buildPackages.fetchpatch {
-        name = "cmake-fix-findcurl-link-libraries.patch";
-        url = "https://gitlab.kitware.com/cmake/cmake/-/commit/76c2d7781eb37acd6731bcd8ea9a25ad03b01021.patch";
-        hash = "sha256-ZIvRkfmdkhNCf2qu0t6HgMPCindDIbMkMzI2WtI20Ds=";
-      })
-    ];
-  });
   crc32c = overrideAttrsIf (isDarwin && isStatic) prev.crc32c (orig: {
     env = orig.env // {
       NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
     };
   });
-  google-cloud-cpp =
-    let
-      google-cloud-cpp' = prev.google-cloud-cpp.overrideAttrs (orig: {
-        installCheckPhase = let
-          disabledTests = lib.optionalString stdenv.hostPlatform.isDarwin ''
-            common_internal_async_connection_ready_test
-            bigtable_async_read_stream_test
-            bigtable_metadata_update_policy_test
-            bigtable_bigtable_benchmark_test
-            bigtable_embedded_server_test
-          '';
-        in ''
-          runHook preInstallCheck
-
-          # Disable any integration tests, which need to contact the internet.
-          ctest \
-            --label-exclude integration-test \
-            --exclude-from-file <(echo '${disabledTests}')
-
-          runHook postInstallCheck
-        '';
-
-        meta = orig.meta // {
-          platforms = lib.platforms.linux ++ lib.platforms.darwin;
-        };
-      });
-    in
-    if !isStatic
-    then google-cloud-cpp'
-    else
-      google-cloud-cpp'.overrideAttrs (orig: {
-        propagatedNativeBuildInputs = (orig.propagatedNativeBuildInputs or [])
-        ++ [prev.pkgsBuildBuild.pkg-config];
-        patches =
-          (orig.patches or [])
-          ++ [
-            ./google-cloud-cpp/0001-Use-pkg-config-to-find-CURL.patch
-          ];
-        cmakeFlags = (orig.cmakeFlags or []) ++ [
-          "-DBUILD_TESTING=OFF"
-        ];
-      });
   aws-sdk-cpp-tenzir = overrideAttrsIf isDarwin (overrideAttrsIf isStatic (final.aws-sdk-cpp.override {
     apis = [
       # arrow-cpp apis; must be kept in sync with nixpkgs.
@@ -152,7 +101,6 @@ in {
           google-cloud-cpp = final.google-cloud-cpp.override {
             apis = ["pubsub" "storage"];
           };
-          cmake = final.buildPackages.cmakeWithPatch;
         }
     )
     (orig: {
@@ -285,7 +233,7 @@ in {
       cmakeFlags =
         (orig.cmakeFlags or [])
         ++ [
-          "-DFLB_PROFILES=OFF"
+          "-DFLB_PREFER_SYSTEM_LIBS=ON"
       ];
     });
     fluent-bit' =
@@ -306,9 +254,6 @@ in {
     overrideAttrsIf isStatic fluent-bit'
     (orig: {
       outputs = ["out"];
-      patches = (orig.patches or []) ++ [
-        ./fluent-bit-devendor.patch
-      ];
       nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")
       prev.pkgsBuildBuild.pkg-config];
       # Neither systemd nor postgresql have a working static build.
