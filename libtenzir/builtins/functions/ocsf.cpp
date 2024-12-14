@@ -157,58 +157,59 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [&, expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto arg = eval(expr);
-        auto f = detail::overload{
-          [&](const arrow::NullArray& arg) {
-            return series::null(OutTy{}, arg.length());
-          },
-          [&](const type_to_arrow_array_t<InTys>& arg) {
-            using input_data_type = type_to_data_t<InTys>;
-            std::optional<input_data_type> warn_value;
-            auto b = type_to_arrow_builder_t<OutTy>{};
-            check(b.Reserve(arg.length()));
-            for (auto i = int64_t{0}; i < arg.length(); ++i) {
-              if (arg.IsNull(i)) {
-                check(b.AppendNull());
-                continue;
-              }
-              auto in = arg.GetView(i);
-              // handle numeric bounds for uint inputs
-              if constexpr (std::same_as<input_data_type, uint64_type>) {
-                if (in > static_cast<uint64_t>(
-                      std::numeric_limits<int64_t>::max())) {
-                  warn_value = in;
+        auto b = type_to_arrow_builder_t<OutTy>{};
+        check(b.Reserve(eval.length()));
+        for (auto& arg : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray& arg) {
+              check(b.AppendNulls(arg.length()));
+            },
+            [&](const type_to_arrow_array_t<InTys>& arg) {
+              using input_data_type = type_to_data_t<InTys>;
+              std::optional<input_data_type> warn_value;
+              for (auto i = int64_t{0}; i < arg.length(); ++i) {
+                if (arg.IsNull(i)) {
                   check(b.AppendNull());
                   continue;
                 }
-              }
-              auto out = Operation(map_, in);
-              if (out) {
-                check(b.Append(*out));
-              } else {
-                if (not warn_value) {
-                  warn_value = in;
+                auto in = arg.GetView(i);
+                // handle numeric bounds for uint inputs
+                if constexpr (std::same_as<input_data_type, uint64_type>) {
+                  if (in > static_cast<uint64_t>(
+                        std::numeric_limits<int64_t>::max())) {
+                    warn_value = in;
+                    check(b.AppendNull());
+                    continue;
+                  }
                 }
-                check(b.AppendNull());
+                auto out = Operation(map_, in);
+                if (out) {
+                  check(b.Append(*out));
+                } else {
+                  if (not warn_value) {
+                    warn_value = in;
+                  }
+                  check(b.AppendNull());
+                }
               }
-            }
-            if (warn_value) {
-              diagnostic::warning("invalid {}", warning_text_)
-                .note("got `{}`", *warn_value)
+              if (warn_value) {
+                diagnostic::warning("invalid {}", warning_text_)
+                  .note("got `{}`", *warn_value)
+                  .primary(expr)
+                  .emit(ctx);
+              }
+            }...,
+            [&](const auto&) {
+              diagnostic::warning("expected `{}`, but got `{}`", input_meta_,
+                                  arg.type.kind())
                 .primary(expr)
                 .emit(ctx);
-            }
-            return series{OutTy{}, finish(b)};
-          }...,
-          [&](const auto&) {
-            diagnostic::warning("expected `{}`, but got `{}`", input_meta_,
-                                arg.type.kind())
-              .primary(expr)
-              .emit(ctx);
-            return series::null(OutTy{}, arg.length());
-          },
-        };
-        return match(*arg.array, f);
+              check(b.AppendNulls(arg.length()));
+            },
+          };
+          match(*arg.array, f);
+        }
+        return series{OutTy{}, finish(b)};
       });
   }
 

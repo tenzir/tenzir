@@ -81,55 +81,56 @@ public:
     if (state_ == state::failed) {
       return;
     }
-    auto arg = eval(expr_, input, ctx);
-    auto f = detail::overload{
-      [](const arrow::NullArray&) {},
-      [&]<class T>(const T& array)
-        requires numeric_type<type_from_arrow_t<T>>
-                   or std::same_as<T, arrow::DurationArray>
-      {
-        if constexpr (std::same_as<T, arrow::DurationArray>) {
-          if (state_ != state::dur and state_ != state::none) {
-            diagnostic::warning("expected `int`, `uint` or `double`, got `{}`",
-                                arg.type.kind())
-              .primary(expr_)
-              .emit(ctx);
-            state_ = state::failed;
-            return;
-          }
-          state_ = state::dur;
-        } else {
-          if (state_ != state::numeric and state_ != state::none) {
-            diagnostic::warning("got incompatible types `duration` and `{}`",
-                                arg.type.kind())
-              .primary(expr_)
-              .emit(ctx);
-            state_ = state::failed;
-            return;
-          }
-          state_ = state::numeric;
-        }
-        for (auto i = int64_t{}; i < array.length(); ++i) {
-          if (array.IsValid(i)) {
-            if constexpr (std::same_as<T, arrow::DoubleArray>) {
-              if (std::isnan(array.Value(i))) {
-                continue;
-              }
+    for (auto& arg : eval(expr_, input, ctx)) {
+      auto f = detail::overload{
+        [](const arrow::NullArray&) {},
+        [&]<class T>(const T& array)
+          requires numeric_type<type_from_arrow_t<T>>
+                     or std::same_as<T, arrow::DurationArray>
+        {
+          if constexpr (std::same_as<T, arrow::DurationArray>) {
+            if (state_ != state::dur and state_ != state::none) {
+              diagnostic::warning(
+                "expected `int`, `uint` or `double`, got `{}`", arg.type.kind())
+                .primary(expr_)
+                .emit(ctx);
+              state_ = state::failed;
+              return;
             }
-            count_ += 1;
-            mean_ += (static_cast<double>(array.Value(i)) - mean_) / count_;
+            state_ = state::dur;
+          } else {
+            if (state_ != state::numeric and state_ != state::none) {
+              diagnostic::warning("got incompatible types `duration` and `{}`",
+                                  arg.type.kind())
+                .primary(expr_)
+                .emit(ctx);
+              state_ = state::failed;
+              return;
+            }
+            state_ = state::numeric;
           }
-        }
-      },
-      [&](const auto&) {
-        diagnostic::warning("expected types `int`, `uint`, "
-                            "`double` or `duration`, got `{}`",
-                            arg.type.kind())
-          .primary(expr_)
-          .emit(ctx);
-        state_ = state::failed;
-      }};
-    match(*arg.array, f);
+          for (auto i = int64_t{}; i < array.length(); ++i) {
+            if (array.IsValid(i)) {
+              if constexpr (std::same_as<T, arrow::DoubleArray>) {
+                if (std::isnan(array.Value(i))) {
+                  continue;
+                }
+              }
+              count_ += 1;
+              mean_ += (static_cast<double>(array.Value(i)) - mean_) / count_;
+            }
+          }
+        },
+        [&](const auto&) {
+          diagnostic::warning("expected types `int`, `uint`, "
+                              "`double` or `duration`, got `{}`",
+                              arg.type.kind())
+            .primary(expr_)
+            .emit(ctx);
+          state_ = state::failed;
+        }};
+      match(*arg.array, f);
+    }
   }
 
   auto get() const -> data override {

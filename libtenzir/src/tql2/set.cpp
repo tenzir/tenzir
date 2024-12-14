@@ -9,11 +9,12 @@
 #include "tenzir/tql2/set.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/expression.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/type.hpp"
@@ -27,6 +28,7 @@
 namespace tenzir {
 
 namespace {
+
 /// Creates a record that maps `path` to `value`.
 ///
 /// # Examples
@@ -118,79 +120,143 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
 } // namespace
 
 auto assign(const ast::meta& left, series right, const table_slice& input,
-            diagnostic_handler& diag) -> table_slice {
+            diagnostic_handler& diag) -> std::vector<table_slice> {
+  auto transform = [&input]<std::derived_from<arrow::Array> Array>(
+                     const Array& array, auto&& f) {
+    using ty = type_from_arrow_t<Array>;
+    static_assert(basic_type<ty>);
+    TENZIR_ASSERT(array.length() > 0);
+    auto get_value = [&](int64_t i) {
+      return array.IsValid(i) ? std::optional{value_at(ty{}, array, i)}
+                              : std::nullopt;
+    };
+    auto result = std::vector<table_slice>{};
+    auto begin = int64_t{0};
+    auto begin_value = get_value(begin);
+    for (auto i = int64_t{0}; i < array.length() + 1; ++i) {
+      auto emit = i == array.length() || get_value(i) != begin_value;
+      if (emit) {
+        result.emplace_back(f(subslice(input, begin, i), begin_value));
+        begin = i;
+        if (i != array.length()) {
+          begin_value = get_value(begin);
+        }
+      }
+    }
+    return result;
+  };
+  auto original = [&input] {
+    auto result = std::vector<table_slice>{};
+    result.push_back(input);
+    return result;
+  };
+  // TODO: The locations used in the warnings below point to the value. Maybe
+  // they should point to the metadata selector, or the equal token instead?
   switch (left.kind) {
     case ast::meta::name: {
-      auto values = dynamic_cast<arrow::StringArray*>(right.array.get());
-      if (not values) {
-        // TODO: Inaccurate location.
+      // TODO: We considered to make the schema name optional at some point.
+      // This would help here, as we could set the name to `null` if we get a
+      // non-string type or a null string. Instead, we keep the original schema
+      // name in both cases for now.
+      auto array = dynamic_cast<arrow::StringArray*>(right.array.get());
+      if (not array) {
         diagnostic::warning("expected string but got {}", right.type.kind())
           .primary(left)
           .emit(diag);
-        return input;
+        return original();
       }
-      // TODO: We actually have to split the batch sometimes.
-      auto new_name = values->GetView(0);
-      // TODO: Is this correct?
-      auto new_type = type{
-        new_name,
-        input.schema(),
-        collect(input.schema().attributes()),
-      };
-      auto new_batch
-        = to_record_batch(input)->ReplaceSchema(new_type.to_arrow_schema());
-      TENZIR_ASSERT(new_batch.ok());
-      return table_slice{new_batch.MoveValueUnsafe(), new_type};
+      return transform(*array, [&](table_slice slice,
+                                   std::optional<std::string_view> value) {
+        if (not value) {
+          diagnostic::warning("schema name must not be `null`")
+            .primary(left)
+            .emit(diag);
+          return slice;
+        }
+        auto new_type = type{
+          *value,
+          slice.schema(),
+          collect(slice.schema().attributes()),
+        };
+        auto new_batch = check(
+          to_record_batch(slice)->ReplaceSchema(new_type.to_arrow_schema()));
+        return table_slice{new_batch, std::move(new_type)};
+      });
     }
     case ast::meta::import_time: {
-      auto values = dynamic_cast<arrow::TimestampArray*>(right.array.get());
-      if (not values) {
-        // TODO: Inaccurate location.
-        diagnostic::warning("expected time but got {}", right.type.kind())
-          .primary(left)
-          .emit(diag);
-        return input;
+      // If the right side is not a timestamp, we do the same as if the value is
+      // null. On an implementation level, the import time is not nullable, but
+      // we use the default-constructed time as a marker for `null`. This is
+      // translated back to `null` when it is read by the evaluator.
+      auto array = dynamic_cast<arrow::TimestampArray*>(right.array.get());
+      if (not array) {
+        if (not right.type.kind().is<null_type>()) {
+          diagnostic::warning("expected `time` but got `{}`", right.type.kind())
+            .primary(left)
+            .emit(diag);
+        }
+        auto copy = input;
+        copy.import_time(time{});
+        return {std::move(copy)};
       }
-      // Have to potentially split, again.
-      auto new_time = value_at(time_type{}, *values, 0);
-      auto copy = table_slice{input};
-      copy.import_time(new_time);
-      return copy;
+      return transform(*array, [&](table_slice slice,
+                                   std::optional<time> value) {
+        if (not value) {
+          value = time{};
+        } else if (value == time{}) {
+          // This means that we are trying to set a non-null
+          // time which would be interpreted as null later.
+          diagnostic::warning("import time cannot be `{}`", time{})
+            .primary(left)
+            .hint("consider using `null` instead")
+            .emit(diag);
+        }
+        slice.import_time(*value);
+        return slice;
+      });
     }
     case ast::meta::internal: {
+      // TODO: If this is set to null, we keep the original setting for now. We
+      // could instead also set it to `false`, as `null` is also treated as
+      // `false` in contexts such as `where` or `if`.
       auto values = dynamic_cast<arrow::BooleanArray*>(right.array.get());
       if (not values) {
-        // TODO: Inaccurate location.
         diagnostic::warning("expected bool but got {}", right.type.kind())
           .primary(left)
           .emit(diag);
-        return input;
+        return original();
       }
-      // TODO: Have to potentially split, again.
-      auto new_value = values->Value(0);
-      auto old_value = input.schema().attribute("internal").has_value();
-      if (new_value == old_value) {
-        return input;
-      }
-      auto new_attributes = std::vector<type::attribute_view>{};
-      for (auto [key, value] : input.schema().attributes()) {
-        if (key == "internal") {
-          continue;
+      return transform(*values, [&](table_slice slice,
+                                    std::optional<bool> value) {
+        if (not value) {
+          diagnostic::warning("cannot set `@internal` to `null`")
+            .primary(left)
+            .emit(diag);
+          return slice;
         }
-        new_attributes.emplace_back(key, value);
-      }
-      if (new_value) {
-        new_attributes.emplace_back("internal", "");
-      }
-      auto new_type = type{
-        input.schema().name(),
-        as<record_type>(input.schema()),
-        std::move(new_attributes),
-      };
-      auto new_batch
-        = to_record_batch(input)->ReplaceSchema(new_type.to_arrow_schema());
-      TENZIR_ASSERT(new_batch.ok());
-      return table_slice{new_batch.MoveValueUnsafe(), new_type};
+        auto previous = slice.schema().attribute("internal").has_value();
+        if (*value == previous) {
+          return slice;
+        }
+        auto new_attributes = std::vector<type::attribute_view>{};
+        for (auto [key, value] : input.schema().attributes()) {
+          if (key == "internal") {
+            continue;
+          }
+          new_attributes.emplace_back(key, value);
+        }
+        if (*value) {
+          new_attributes.emplace_back("internal", "");
+        }
+        auto new_type = type{
+          input.schema().name(),
+          as<record_type>(input.schema()),
+          std::move(new_attributes),
+        };
+        auto new_batch = check(
+          to_record_batch(input)->ReplaceSchema(new_type.to_arrow_schema()));
+        return table_slice{new_batch, std::move(new_type)};
+      });
     }
   }
   TENZIR_UNREACHABLE();
@@ -204,8 +270,7 @@ auto assign(const ast::simple_selector& left, series right,
     = assign(left.path(), std::move(right), series{input}, dh, position);
   auto* rec_ty = try_as<record_type>(result.type);
   if (not rec_ty) {
-    diagnostic::warning("assignment to `this` requires `record`, but got "
-                        "`{}`",
+    diagnostic::warning("assignment to `this` requires `record`, but got `{}`",
                         result.type.kind())
       .primary(left)
       .emit(dh);
@@ -222,13 +287,16 @@ auto assign(const ast::simple_selector& left, series right,
 }
 
 auto assign(const ast::selector& left, series right, const table_slice& input,
-            diagnostic_handler& dh, assign_position position) -> table_slice {
+            diagnostic_handler& dh, assign_position position)
+  -> std::vector<table_slice> {
   return left.match(
     [&](const ast::meta& left) {
       return assign(left, std::move(right), input, dh);
     },
     [&](const ast::simple_selector& left) {
-      return assign(left, std::move(right), input, dh, position);
+      auto result = std::vector<table_slice>{};
+      result.push_back(assign(left, std::move(right), input, dh, position));
+      return result;
     });
 }
 
@@ -240,16 +308,48 @@ auto set_operator::operator()(generator<table_slice> input,
       co_yield {};
       continue;
     }
-    // 1. Evaluate every right-hand side with the original input.
-    // 2. Evaluate every left-hand side as l-value and then assign.
-    // => Left side is evaluated after side effects, in order!
-    // set foo={bar: 42}, foo.bar=foo.bar+42
-    auto result = slice;
-    for (auto& assignment : assignments_) {
-      auto right = eval(assignment.right, slice, ctrl.diagnostics());
-      result = assign(assignment.left, right, result, ctrl.diagnostics());
+    if (assignments_.empty()) {
+      co_yield std::move(slice);
+      continue;
     }
-    co_yield result;
+    // The right-hand side is always evaluated with the original input, because
+    // side-effects from preceding assignments shall not be reflected when
+    // calculating the value of the left-hand side.
+    auto values = std::vector<multi_series>{};
+    for (auto& assignment : assignments_) {
+      values.push_back(eval(assignment.right, slice, ctrl.diagnostics()));
+    }
+    // After we know all the multi series values on the right, we can split the
+    // input table slice and perform the actual assignment.
+    auto begin = int64_t{0};
+    for (auto values_slice : split_multi_series(values)) {
+      TENZIR_ASSERT(not values_slice.empty());
+      auto end = begin + values_slice[0].length();
+      // We could still perform further splits if metadata is assigned.
+      auto state = std::vector<table_slice>{};
+      state.push_back(subslice(slice, begin, end));
+      begin = end;
+      auto new_state = std::vector<table_slice>{};
+      for (auto [assignment, value] :
+           detail::zip_equal(assignments_, values_slice)) {
+        auto begin = int64_t{0};
+        for (auto& entry : state) {
+          auto entry_rows = detail::narrow<int64_t>(entry.rows());
+          auto assigned
+            = assign(assignment.left, value.slice(begin, entry_rows), entry,
+                     ctrl.diagnostics());
+          begin += entry_rows;
+          new_state.insert(new_state.end(),
+                           std::move_iterator{assigned.begin()},
+                           std::move_iterator{assigned.end()});
+        }
+        std::swap(state, new_state);
+        new_state.clear();
+      }
+      for (auto& output : state) {
+        co_yield std::move(output);
+      }
+    }
   }
 }
 
