@@ -276,6 +276,16 @@ in {
     fluent-bit'' = prev.fluent-bit.overrideAttrs (orig: {
       patches = (orig.patches or []) ++ [
         ./fix-fluent-bit-install.patch
+        (prev.buildPackages.fetchpatch2 {
+          name = "fluent-bit-fix-cprofiles-build.patch";
+          url = "https://github.com/fluent/fluent-bit/commit/16a9cf3c7dbd128ee8aa3d067b4fcba4f7051ae8.patch";
+          hash = "sha256-c6uBazyJ7I7I3mwh4spGrCPQCLijlLBGSciQVT+dpaM=";
+        })
+      ];
+      cmakeFlags =
+        (orig.cmakeFlags or [])
+        ++ [
+          "-DFLB_PROFILES=OFF"
       ];
     });
     fluent-bit' =
