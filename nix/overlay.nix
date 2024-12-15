@@ -18,12 +18,7 @@ in {
       })
     ];
   });
-  crc32c = overrideAttrsIf (isDarwin && isStatic) prev.crc32c (orig: {
-    env = orig.env // {
-      NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
-    };
-  });
-  aws-sdk-cpp-tenzir = overrideAttrsIf isDarwin (overrideAttrsIf isStatic (final.aws-sdk-cpp.override {
+  aws-sdk-cpp-tenzir = final.aws-sdk-cpp.override {
     apis = [
       # arrow-cpp apis; must be kept in sync with nixpkgs.
       "cognito-identity"
@@ -35,27 +30,17 @@ in {
       # Additional apis used by tenzir.
       "sqs"
     ];
-  })
-  (orig: {
+  };
+  rabbitmq-c = prev.rabbitmq-c.overrideAttrs (orig: {
     patches = (orig.patches or []) ++ [
-      ./aws-sdk-cpp-findcurl.patch
-    ];
-    cmakeFlags = (orig.cmakeFlags or []) ++ [
-    ];
-  })
-  )
-    (orig: {
-      doCheck = false;
-      cmakeFlags = orig.cmakeFlags ++ [
-        "-DENABLE_TESTING=OFF"
-      ];
-    });
-  azure-sdk-for-cpp = prev.callPackage ./azure-sdk-for-cpp { };
-  glog = overrideAttrsIf (isDarwin && isStatic) prev.glog (orig: {
-    cmakeFlags = orig.cmakeFlags ++ [
-      "-DBUILD_TESTING=OFF"
+      (prev.fetchpatch2 {
+        name = "rabbitmq-c-fix-include-path.patch";
+        url = "https://github.com/alanxz/rabbitmq-c/commit/819e18271105f95faba99c3b2ae4c791eb16a664.patch";
+        hash = "sha256-/c4y+CvtdyXgfgHExOY8h2q9cJNhTUupsa22tE3a1YI=";
+      })
     ];
   });
+  azure-sdk-for-cpp = prev.callPackage ./azure-sdk-for-cpp { };
   arrow-cpp = let
     arrow-cpp' = prev.arrow-cpp.override {
       aws-sdk-cpp-arrow = final.aws-sdk-cpp-tenzir;
@@ -136,59 +121,6 @@ in {
             "-DBUILD_TESTS=OFF"
           ];
       });
-  grpc =
-    if !isStatic
-    then prev.grpc
-    else
-      prev.grpc.overrideAttrs (orig: {
-        patches =
-          orig.patches
-          ++ [
-            ./grpc/drop-broken-cross-check.patch
-          ];
-        cmakeFlags = (orig.cmakeFlags or []) ++ [
-        ];
-        env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
-      });
-  http-parser =
-    if !isStatic
-    then prev.http-parser
-    else
-      prev.http-parser.overrideAttrs (_: {
-        postPatch = let
-          cMakeLists = prev.writeTextFile {
-            name = "http-parser-cmake";
-            text = ''
-              cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
-              project(http_parser)
-              include(GNUInstallDirs)
-              add_library(http_parser http_parser.c)
-              target_compile_options(http_parser PRIVATE -Wall -Wextra)
-              target_include_directories(http_parser PUBLIC .)
-              set_target_properties(http_parser PROPERTIES PUBLIC_HEADER http_parser.h)
-              install(
-                TARGETS http_parser
-                ARCHIVE DESTINATION "''${CMAKE_INSTALL_LIBDIR}"
-                LIBRARY DESTINATION "''${CMAKE_INSTALL_LIBDIR}"
-                RUNTIME DESTINATION "''${CMAKE_INSTALL_BINDIR}"
-                PUBLIC_HEADER DESTINATION "''${CMAKE_INSTALL_INCLUDEDIR}")
-            '';
-          };
-        in ''
-          cp ${cMakeLists} CMakeLists.txt
-        '';
-        nativeBuildInputs = [prev.buildPackages.cmake];
-        makeFlags = [];
-        buildFlags = [];
-        doCheck = false;
-      });
-  libbacktrace =
-    if !isStatic
-    then prev.libbacktrace
-    else
-      prev.libbacktrace.overrideAttrs (old: {
-        doCheck = false;
-      });
   rdkafka =
     let
       # The FindZLIB.cmake module from CMake breaks when multiple outputs are
@@ -224,15 +156,12 @@ in {
     fluent-bit'' = prev.fluent-bit.overrideAttrs (orig: {
       patches = (orig.patches or []) ++ [
         ./fix-fluent-bit-install.patch
-        (prev.buildPackages.fetchpatch2 {
-          name = "fluent-bit-fix-cprofiles-build.patch";
-          url = "https://github.com/fluent/fluent-bit/commit/16a9cf3c7dbd128ee8aa3d067b4fcba4f7051ae8.patch";
-          hash = "sha256-c6uBazyJ7I7I3mwh4spGrCPQCLijlLBGSciQVT+dpaM=";
-        })
       ];
       cmakeFlags =
         (orig.cmakeFlags or [])
         ++ [
+          "-DFLB_DEBUG=OFF"
+          "-DFLB_RELEASE=ON"
           "-DFLB_PREFER_SYSTEM_LIBS=ON"
       ];
     });
@@ -295,36 +224,6 @@ in {
         set +x
       '';
     });
-  asio = overrideAttrsIf (isDarwin && isStatic) prev.asio (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  catch2_3 = overrideAttrsIf (isDarwin && isStatic) prev.catch2_3 (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  flatbuffers = overrideAttrsIf (isDarwin && isStatic) prev.flatbuffers (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  fmt = overrideAttrsIf (isDarwin && isStatic) prev.fmt (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  libyaml = overrideAttrsIf (isDarwin && isStatic) prev.libyaml (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  lz4 = overrideAttrsIf (isDarwin && isStatic) prev.lz4 (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  protobuf = overrideAttrsIf (isDarwin && isStatic) prev.protobuf (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  rapidjson = overrideAttrsIf (isDarwin && isStatic) prev.rapidjson (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  spdlog = overrideAttrsIf (isDarwin && isStatic) prev.spdlog (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  thrift = overrideAttrsIf (isDarwin && isStatic) prev.thrift (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
   yara =
     if !isStatic
     then prev.yara
@@ -388,7 +287,6 @@ in {
         dontStrip = true;
         doCheck = false;
       });
-  fast_float = final.callPackage ./fast_float {};
   jemalloc =
     if !isStatic
     then prev.jemalloc
@@ -398,13 +296,6 @@ in {
         configureFlags = old.configureFlags ++ ["--enable-prof" "--enable-stats"];
         doCheck = !isStatic;
       });
-  rabbitmq-c =
-    if !isStatic
-    then prev.rabbitmq-c
-    else
-      prev.rabbitmq-c.override {
-        xmlto = null;
-      };
   bats-tenzir = prev.stdenv.mkDerivation {
     pname = "bats-tenzir";
     version = "0.1";

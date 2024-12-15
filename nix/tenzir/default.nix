@@ -18,7 +18,7 @@
     arrow-cpp,
     aws-sdk-cpp-tenzir,
     azure-sdk-for-cpp,
-    fast_float,
+    fast-float,
     flatbuffers,
     fluent-bit,
     protobuf,
@@ -124,7 +124,7 @@
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           aws-sdk-cpp-tenzir
-          fast_float
+          fast-float
           fluent-bit
           google-cloud-cpp
           grpc
@@ -183,10 +183,11 @@
             # reasonable coverage.
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
             "-DTENZIR_ENABLE_BATS_TENZIR_INSTALLATION=OFF"
+            "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
           ] ++ lib.optionals isStatic [
             #"-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB;RPM"}"
-            "-DTENZIR_UV_PATH:STRING=${lib.getBin uv}/bin/uv"
+            "-DTENZIR_UV_PATH:STRING=${lib.getExe uv}"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
             "-DTENZIR_ENABLE_BACKTRACE=${lib.boolToString (!stdenv.isDarwin)}"

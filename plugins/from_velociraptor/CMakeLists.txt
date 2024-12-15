@@ -48,6 +48,14 @@ protobuf_generate(
 set_source_files_properties(${PROTO_GENERATED_FILES}
                             PROPERTIES SKIP_UNITY_BUILD_INCLUSION on)
 
+if (TENZIR_GRPC_CPP_PLUGIN)
+  if (NOT TARGET gRPC::grpc_cpp_plugin)
+    add_executable(gRPC::grpc_cpp_plugin IMPORTED)
+  endif ()
+  set_target_properties(gRPC::grpc_cpp_plugin
+                        PROPERTIES IMPORTED_LOCATION ${TENZIR_GRPC_CPP_PLUGIN})
+endif ()
+
 # Generate the gRPC code.
 protobuf_generate(
   TARGET velociraptor-proto
