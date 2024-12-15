@@ -332,7 +332,15 @@ in {
       prev.yara.overrideAttrs (orig: {
         NIX_CFLAGS_LINK = "-lz";
       });
-  restinio = final.callPackage ./restinio {};
+  llhttp = prev.llhttp.overrideAttrs (orig: {
+    patches = [ 
+      (prev.buildPackages.fetchpatch2 {
+        name = "llhttp-fix-cmake-pkgconfig-paths.patch";
+        url = "https://github.com/nodejs/llhttp/pull/560/commits/9d37252aa424eb9af1d2a83dfa83153bcc0cc27f.patch";
+        hash = "sha256-8KsrJsD9orLjZv8mefCMuu8kftKisQ/57lCPK0eiX30=";
+      })
+    ];
+  });
   pfs = final.callPackage ./pfs {};
   uv = final.callPackage ./uv-binary {};
   caf = let

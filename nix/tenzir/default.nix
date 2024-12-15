@@ -40,6 +40,7 @@
     dpkg,
     rpm,
     restinio,
+    llhttp,
     pfs,
     extraPlugins ? [],
     symlinkJoin,
@@ -135,7 +136,10 @@
           rdkafka
           cppzmq
           re2
-          restinio
+          (restinio.override {
+            with_boost_asio = true;
+          })
+          llhttp
         ] ++ lib.optionals isStatic [
           azure-sdk-for-cpp
         ] ++ lib.optionals stdenv.isLinux [

@@ -327,6 +327,11 @@ public:
 
   ~engine() {
     if (ctx_ != nullptr) {
+      // Workaround an uninitialized thread-local pointer that causes a bad
+      // `free`.
+      if (not started_) {
+        start();
+      }
       stop();
       flb_destroy(ctx_);
     }
