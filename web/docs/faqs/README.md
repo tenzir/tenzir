@@ -205,7 +205,7 @@ what level it should be.
 
 2. **Format**. If your *X* is a wire format, either text-based like JSON or
    binary like PCAP, then look for `read_*` and `write_*`
-   [operators](tql2/operators.md)
+   [operators](tql2/operators.md).
 
 3. **Fluent Bit**. Tenzir ships with all of Fluent Bit's
    [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs], since the Fluent
