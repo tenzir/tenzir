@@ -579,7 +579,7 @@ jobs:
             cc: clang
             cxx: clang++
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
-            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
+            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST=snowflake
             bundled-plugins:
               # macOS runners in GitHub Actions CI are very limited, so we
               # prefer to have fewer jobs running and build the proprietary
