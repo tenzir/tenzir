@@ -83,25 +83,26 @@ public:
           .named("sep", sep)
           .parse(inv, ctx));
     return function_use::make(
-      [expr = std::move(expr),
-       sep = std::move(sep.value())](evaluator eval, session ctx) -> series {
-        auto s = eval(expr);
-        auto ptr = std::dynamic_pointer_cast<arrow::StructArray>(s.array);
-        if (not ptr) {
-          diagnostic::warning("expected `record`, got `{}`", s.type.kind())
-            .primary(expr)
-            .emit(ctx);
-          return series::null(null_type{}, s.length());
-        }
-        auto flattened = tenzir::flatten(s.type, ptr, sep);
-        if (not flattened.renamed_fields.empty()) {
-          diagnostic::warning("renamed fields with conflicting names after "
-                              "flattening: {}",
-                              fmt::join(flattened.renamed_fields, ", "))
-            .primary(expr)
-            .emit(ctx);
-        }
-        return {flattened.schema, flattened.array};
+      [expr = std::move(expr), sep = std::move(sep.value())](
+        evaluator eval, session ctx) -> multi_series {
+        return map_series(eval(expr), [&](series s) {
+          auto ptr = std::dynamic_pointer_cast<arrow::StructArray>(s.array);
+          if (not ptr) {
+            diagnostic::warning("expected `record`, got `{}`", s.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            return series::null(null_type{}, s.length());
+          }
+          auto flattened = tenzir::flatten(s.type, ptr, sep);
+          if (not flattened.renamed_fields.empty()) {
+            diagnostic::warning("renamed fields with conflicting names after "
+                                "flattening: {}",
+                                fmt::join(flattened.renamed_fields, ", "))
+              .primary(expr)
+              .emit(ctx);
+          }
+          return series{flattened.schema, flattened.array};
+        });
       });
   }
 

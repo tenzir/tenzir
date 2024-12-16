@@ -72,6 +72,13 @@ enrichment.
 - [Manage](./operators/context.md) a context
 - [Enrich](./operators/enrich.md) with a context
 
+## Destination
+
+An pipeline ending with an [output](#output) operator preceded by a
+[`subscribe`](tql2/operators/subscribe.md) input operator.
+
+- Learn more about [pipelines](pipelines/README.md)
+
 ## Format
 
 Translates between bytes and events.
@@ -90,6 +97,12 @@ Tenzir has *sparse* indexes. Sparse indexes live in memory and point to
 [partitions](#partition).
 
 - [Configure the catalog](./installation/tune-performance/README.md#configure-the-catalog)
+
+## Input
+
+An [operator](#operator) that only producing data, without consuming anything.
+
+- Learn more about [pipelines](pipelines/README.md)
 
 ## Integration
 
@@ -117,7 +130,7 @@ side effect that acquires bytes. Use a loader implicitly with the
 [`from`](tql2/operators/from.md) operator or explicitly with the `load_*`
 operators.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)
 
 ## Node
 
@@ -149,10 +162,16 @@ contains packages that map data sources to OCSF.
 
 The building block of a [pipeline](#pipeline).
 
-An operator is a [source](#source), [transformation](#transformation), or
-[sink](#sink).
+An operator is a [input](#input), [transformation](#transformation), or
+[output](#output).
 
-- See all available [operators](./operators.md)
+- See all available [operators](./tql2/operators.md)
+
+## Output
+
+An [operator](#operator) consuming data, without producing anything.
+
+- Learn more about [pipelines](pipelines/README.md)
 
 ## PaC
 
@@ -180,7 +199,7 @@ A parser is the dual to a [printer](#printer). Use a parser in the
 can use the [`parse`](./operators/parse.md) operator to parse a single field
 with a parser.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)
 - See [all formats](./formats.md)
 
 ## Partition
@@ -202,7 +221,7 @@ formats are [Parquet](https://parquet.apache.org) or
 
 Combines a set of [operators](#operator) into a dataflow graph.
 
-- Understand [how pipelines work](./pipelines.md)
+- Understand [how pipelines work](pipelines/README.md)
 - Understand the [pipeline language](./language.md)
 - [Run a pipeline](./usage/run-pipelines/README.md)
 
@@ -218,7 +237,7 @@ A [format](#format) that translates events into bytes.
 A printer is the dual to a [parser](#parser). Use a parser in the
 [`to`](./operators/to.md) or [`write`](./operators/write.md) operators.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)
 - See [all formats](./formats.md)
 
 ## Saver
@@ -230,7 +249,7 @@ a side effect that emits bytes. Use a saver implicitly with the
 [`to`](tql2/operators/to.md) operator or explicitly with the `save_*`
 operators.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)
 
 ## Schema
 
@@ -238,17 +257,12 @@ A top-level record type of an event.
 
 - [Show available schemas](./usage/show-available-schemas.md)
 
-## Sink
-
-An [operator](#operator) consuming input, without producing any output.
-
-- Learn more about [pipelines](./pipelines.md)
-
 ## Source
 
-An [operator](#operator) producing output, without consuming any input.
+An pipeline starting with an [input](#input) operator followed by a
+[`publish`](tql2/operators/publish.md) output operator.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)
 
 ## TQL
 
@@ -262,4 +276,4 @@ TQL is the language in which users write [pipelines](#pipeline).
 
 An [operator](#operator) consuming both input and producing output.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)

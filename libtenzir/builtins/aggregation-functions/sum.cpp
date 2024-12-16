@@ -61,104 +61,106 @@ public:
     if (sum_ and std::holds_alternative<caf::none_t>(sum_.value())) {
       return;
     }
-    auto s = eval(expr_, input, ctx);
-    if (not type_) {
-      type_ = s.type;
-    }
-    const auto warn = [&](const auto&) -> sum_t {
-      diagnostic::warning("got incompatible types `{}` and `{}`", type_.kind(),
-                          s.type.kind())
-        .primary(expr_)
-        .emit(ctx);
-      return caf::none;
-    };
-    auto f = detail::overload{
-      [](const arrow::NullArray&) {},
-      [&]<class T>(const T& array)
-        requires integral_type<type_from_arrow_t<T>>
-      {
-        using Type = T::value_type;
-        // Int64 + UInt64 => UInt64
-        // * + Double => Double
-        if (not sum_) {
-          sum_ = Type{};
-        }
-        sum_ = sum_->match(
-          warn,
-          [&](std::integral auto& self) -> sum_t {
-            auto array_sum = Type{};
+    for (auto& s : eval(expr_, input, ctx)) {
+      if (not type_) {
+        type_ = s.type;
+      }
+      const auto warn = [&](const auto&) -> sum_t {
+        diagnostic::warning("got incompatible types `{}` and `{}`",
+                            type_.kind(), s.type.kind())
+          .primary(expr_)
+          .emit(ctx);
+        return caf::none;
+      };
+      auto f = detail::overload{
+        [](const arrow::NullArray&) {},
+        [&]<class T>(const T& array)
+          requires integral_type<type_from_arrow_t<T>>
+        {
+          using Type = T::value_type;
+          // Int64 + UInt64 => UInt64
+          // * + Double => Double
+          if (not sum_) {
+            sum_ = Type{};
+          }
+          sum_ = sum_->match(
+            warn,
+            [&](std::integral auto& self) -> sum_t {
+              auto array_sum = Type{};
+              for (auto i = int64_t{}; i < array.length(); ++i) {
+                if (array.IsValid(i)) {
+                  auto checked = checked_add(array_sum, array.Value(i));
+                  if (not checked) {
+                    diagnostic::warning("integer overflow")
+                      .primary(expr_)
+                      .emit(ctx);
+                    return caf::none;
+                  }
+                  array_sum = checked.value();
+                }
+              }
+              auto checked = checked_add(self, array_sum);
+              if (not checked) {
+                diagnostic::warning("integer overflow").primary(expr_).emit(ctx);
+                return caf::none;
+              }
+              return checked.value();
+            },
+            [&](double self) -> sum_t {
+              for (auto i = int64_t{}; i < array.length(); ++i) {
+                if (array.IsValid(i)) {
+                  self += static_cast<double>(array.Value(i));
+                }
+              }
+              return self;
+            });
+        },
+        [&](const arrow::DoubleArray& array) {
+          // * => Double
+          if (not sum_) {
+            sum_ = double{};
+          }
+          sum_
+            = sum_->match(warn, [&](concepts::arithmetic auto& self) -> sum_t {
+                auto result = static_cast<double>(self);
+                for (auto i = int64_t{}; i < array.length(); ++i) {
+                  if (array.IsValid(i)) {
+                    result += array.Value(i);
+                  }
+                }
+                return result;
+              });
+        },
+        [&](const arrow::DurationArray& array) {
+          if (not sum_) {
+            sum_ = duration{};
+          }
+          sum_ = sum_->match(warn, [&](duration self) -> sum_t {
             for (auto i = int64_t{}; i < array.length(); ++i) {
               if (array.IsValid(i)) {
-                auto checked = checked_add(array_sum, array.Value(i));
+                auto checked = checked_add(self.count(), array.Value(i));
                 if (not checked) {
-                  diagnostic::warning("integer overflow")
+                  diagnostic::warning("duration overflow")
                     .primary(expr_)
                     .emit(ctx);
                   return caf::none;
                 }
-                array_sum = checked.value();
-              }
-            }
-            auto checked = checked_add(self, array_sum);
-            if (not checked) {
-              diagnostic::warning("integer overflow").primary(expr_).emit(ctx);
-              return caf::none;
-            }
-            return checked.value();
-          },
-          [&](double self) -> sum_t {
-            for (auto i = int64_t{}; i < array.length(); ++i) {
-              if (array.IsValid(i)) {
-                self += static_cast<double>(array.Value(i));
+                self += duration{array.Value(i)};
               }
             }
             return self;
           });
-      },
-      [&](const arrow::DoubleArray& array) {
-        // * => Double
-        if (not sum_) {
-          sum_ = double{};
-        }
-        sum_ = sum_->match(warn, [&](concepts::arithmetic auto& self) -> sum_t {
-          auto result = static_cast<double>(self);
-          for (auto i = int64_t{}; i < array.length(); ++i) {
-            if (array.IsValid(i)) {
-              result += array.Value(i);
-            }
-          }
-          return result;
-        });
-      },
-      [&](const arrow::DurationArray& array) {
-        if (not sum_) {
-          sum_ = duration{};
-        }
-        sum_ = sum_->match(warn, [&](duration self) -> sum_t {
-          for (auto i = int64_t{}; i < array.length(); ++i) {
-            if (array.IsValid(i)) {
-              auto checked = checked_add(self.count(), array.Value(i));
-              if (not checked) {
-                diagnostic::warning("duration overflow")
-                  .primary(expr_)
-                  .emit(ctx);
-                return caf::none;
-              }
-              self += duration{array.Value(i)};
-            }
-          }
-          return self;
-        });
-      },
-      [&](const auto&) {
-        diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
-                            "got `{}`",
-                            s.type.kind())
-          .primary(expr_)
-          .emit(ctx);
-        sum_ = caf::none;
-      }};
-    match(*s.array, f);
+        },
+        [&](const auto&) {
+          diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
+                              "got `{}`",
+                              s.type.kind())
+            .primary(expr_)
+            .emit(ctx);
+          sum_ = caf::none;
+        }};
+      match(*s.array, f);
+    }
   }
 
   auto get() const -> data override {

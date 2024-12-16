@@ -969,7 +969,7 @@ public:
   }
 
   void add(const table_slice& slice) {
-    auto group_values = std::vector<series>{};
+    auto group_values = std::vector<multi_series>{};
     for (auto& group : cfg_.groups) {
       group_values.push_back(eval(group.expr.inner(), slice, ctx_));
     }
@@ -982,7 +982,7 @@ public:
     };
     auto find_or_create_group = [&](int64_t row) -> bucket2* {
       for (auto&& [key_value, group] : detail::zip_equal(key, group_values)) {
-        key_value = value_at(group.type, *group.array, row);
+        key_value = group.value_at(row);
       }
       auto it = groups_.find(key);
       if (it == groups_.end()) {

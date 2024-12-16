@@ -6,9 +6,9 @@ sidebar_position: 3
 
 Importing (or *ingesting*) data can be done by [running a
 pipeline](../run-pipelines/README.md) that ends with the
-[`import`](../../tql2/operators/import.md) sink operator. When managing a pipeline
-through the app or the API, all pipeline operators run within the node. When
-using the CLI, at least the `import` operator runs within the node.
+[`import`](../../tql2/operators/import.md) output operator. When managing a
+pipeline through the app or the API, all pipeline operators run within the node.
+When using the CLI, at least the `import` operator runs within the node.
 
 ![Import](import.excalidraw.svg)
 

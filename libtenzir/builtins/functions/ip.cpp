@@ -31,9 +31,9 @@ public:
     TRY(argument_parser2::function("ip")
           .positional("x", expr, "string")
           .parse(inv, ctx));
-    return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto arg = eval(expr);
+    return function_use::make([expr
+                               = std::move(expr)](evaluator eval, session ctx) {
+      return map_series(eval(expr), [&](series arg) {
         auto f = detail::overload{
           [](const arrow::NullArray& arg) {
             return series::null(ip_type{}, arg.length());
@@ -69,6 +69,7 @@ public:
         };
         return match(*arg.array, f);
       });
+    });
   }
 };
 
@@ -89,32 +90,33 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
-        auto arg = eval(expr);
-        auto f = detail::overload{
-          [](const arrow::NullArray& arg) {
-            return series::null(bool_type{}, arg.length());
-          },
-          [&](const ip_type::array_type& arg) {
-            auto b = arrow::BooleanBuilder{};
-            check(b.Reserve(arg.length()));
-            for (const auto& value : values(ip_type{}, arg)) {
-              if (not value) {
-                check(b.AppendNull());
-                continue;
+        auto b = arrow::BooleanBuilder{};
+        check(b.Reserve(eval.length()));
+        for (auto& arg : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray& arg) {
+              check(b.AppendNulls(arg.length()));
+            },
+            [&](const ip_type::array_type& arg) {
+              for (const auto& value : values(ip_type{}, arg)) {
+                if (not value) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                check(b.Append(value->is_v4() == v4_));
               }
-              check(b.Append(value->is_v4() == v4_));
-            }
-            return series{bool_type{}, finish(b)};
-          },
-          [&](const auto&) {
-            diagnostic::warning("`{}` expected `ip`, but got `{}`", name(),
-                                arg.type.kind())
-              .primary(expr)
-              .emit(ctx);
-            return series::null(bool_type{}, arg.length());
-          },
-        };
-        return match(*arg.array, f);
+            },
+            [&](const auto&) {
+              diagnostic::warning("`{}` expected `ip`, but got `{}`", name(),
+                                  arg.type.kind())
+                .primary(expr)
+                .emit(ctx);
+              check(b.AppendNulls(arg.length()));
+            },
+          };
+          match(*arg.array, f);
+        }
+        return series{bool_type{}, finish(b)};
       });
   }
 

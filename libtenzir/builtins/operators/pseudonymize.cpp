@@ -235,10 +235,10 @@ class plugin2 : public virtual function_plugin {
         seed_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
       }
     }
-    return function_use::make(
-      [expr = std::move(expr),
-       seed = std::move(seed_bytes)](evaluator eval, session ctx) -> series {
-        auto s = eval(expr);
+    return function_use::make([expr = std::move(expr),
+                               seed = std::move(seed_bytes)](evaluator eval,
+                                                             session ctx) {
+      return map_series(eval(expr), [&](series s) {
         if (is<null_type>(s.type)) {
           return series::null(ip_type{}, s.length());
         }
@@ -258,8 +258,9 @@ class plugin2 : public virtual function_plugin {
           check(append_builder(ip_type{}, *b,
                                tenzir::ip::pseudonymize(value.value(), seed)));
         }
-        return {ip_type{}, finish(*b)};
+        return series{ip_type{}, finish(*b)};
       });
+    });
   }
 };
 

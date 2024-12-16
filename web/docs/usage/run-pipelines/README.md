@@ -4,7 +4,7 @@ sidebar_position: 0
 
 # Run pipelines
 
-You can run a [pipeline](../../pipelines.md) in the
+You can run a [pipeline](../../pipelines/README.md) in the
 [app](https://app.tenzir.com) or on the command line using the `tenzir` binary.
 
 ## In the app
@@ -13,12 +13,12 @@ Run a pipeline by writing typing it in the editor and hitting the *Run* button.
 
 The following invariants apply:
 
-1. You must start with a source
-2. The browser is always the sink
+1. You must start with an input operator
+2. The browser is always the output operator
 
 The diagram below illustrates these mechanics:
 
-![Pipeline in the Browser](pipeline-browser.excalidraw.svg)
+![Pipeline in the Browser](pipeline-browser.svg)
 
 For example, write [`version`](../../tql2/operators/version.md) and click *Run*
 to see a single event arrive.

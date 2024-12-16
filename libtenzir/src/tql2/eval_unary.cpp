@@ -120,26 +120,26 @@ struct EvalUnOp<ast::unary_op::neg, duration_type> {
 
 } // namespace
 
-auto evaluator::eval(const ast::unary_expr& x) -> series {
-  auto v = eval(x.expr);
-  auto eval_op = [&]<ast::unary_op Op>() -> series {
-    // auto v = to_series(eval(x.expr));
+auto evaluator::eval(const ast::unary_expr& x) -> multi_series {
+  auto eval_op = [&]<ast::unary_op Op>() -> multi_series {
     TENZIR_ASSERT(x.op.inner == Op);
-    return match(v.type, [&]<concrete_type T>(const T&) -> series {
-      if constexpr (caf::detail::is_complete<EvalUnOp<Op, T>>) {
-        auto& a = as<type_to_arrow_array_t<T>>(*v.array);
-        auto oa = EvalUnOp<Op, T>::eval(a, [&](std::string_view msg) {
-          diagnostic::warning("{}", msg).primary(x).emit(ctx_);
-        });
-        auto ot = type::from_arrow(*oa->type());
-        return series{std::move(ot), std::move(oa)};
-      } else {
-        diagnostic::warning("unary operator `{}` not implemented for `{}`",
-                            x.op.inner, v.type.kind())
-          .primary(x)
-          .emit(ctx_);
-        return null();
-      }
+    return map_series(eval(x.expr), [&](series v) {
+      return match(v.type, [&]<concrete_type T>(const T&) -> series {
+        if constexpr (caf::detail::is_complete<EvalUnOp<Op, T>>) {
+          auto& a = as<type_to_arrow_array_t<T>>(*v.array);
+          auto oa = EvalUnOp<Op, T>::eval(a, [&](std::string_view msg) {
+            diagnostic::warning("{}", msg).primary(x).emit(ctx_);
+          });
+          auto ot = type::from_arrow(*oa->type());
+          return series{std::move(ot), std::move(oa)};
+        } else {
+          diagnostic::warning("unary operator `{}` not implemented for `{}`",
+                              x.op.inner, v.type.kind())
+            .primary(x)
+            .emit(ctx_);
+          return null();
+        }
+      });
     });
   };
   using enum ast::unary_op;

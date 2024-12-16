@@ -34,8 +34,8 @@ public:
           .positional("x", element, "any")
           .parse(inv, ctx));
     return function_use::make(
-      [list = std::move(list),
-       element = std::move(element)](evaluator eval, session) -> series {
+      [list = std::move(list), element
+                               = std::move(element)](evaluator eval, session) {
         return eval(ast::list{
           location::unknown,
           {
@@ -66,8 +66,8 @@ public:
           .positional("x", element, "any")
           .parse(inv, ctx));
     return function_use::make(
-      [list = std::move(list),
-       element = std::move(element)](evaluator eval, session) -> series {
+      [list = std::move(list), element
+                               = std::move(element)](evaluator eval, session) {
         return eval(ast::list{
           location::unknown,
           {
@@ -98,8 +98,8 @@ public:
           .positional("ys", list2, "list")
           .parse(inv, ctx));
     return function_use::make(
-      [list1 = std::move(list1), list2 = std::move(list2)](evaluator eval,
-                                                           session) -> series {
+      [list1 = std::move(list1), list2
+                                 = std::move(list2)](evaluator eval, session) {
         return eval(ast::list{
           location::unknown,
           {
@@ -138,78 +138,81 @@ public:
           .parse(inv, ctx));
     return function_use::make([args = std::move(args)](
                                 function_plugin::evaluator eval,
-                                session ctx) -> series {
-      auto left = eval(args.left);
-      auto right = eval(args.right);
-      const auto left_null = is<null_type>(left.type);
-      const auto right_null = is<null_type>(right.type);
-      if (left_null and right_null) {
-        return series::null(list_type{null_type{}}, left.length());
-      }
-      auto left_list = left.as<list_type>();
-      auto right_list = right.as<list_type>();
-      if ((not left_list and not left_null)
-          or (not right_list and not right_null)) {
-        if (not left_list and not left_null) {
-          diagnostic::warning("expected `list`, but got `{}`", left.type.kind())
-            .primary(args.left)
-            .emit(ctx);
-        }
-        if (not right_list and not right_null) {
-          diagnostic::warning("expected `list`, but got `{}`",
-                              right.type.kind())
-            .primary(args.right)
-            .emit(ctx);
-        }
-        return series::null(list_type{null_type{}}, left.length());
-      }
-      auto builder = series_builder{type{list_type{record_type{
-        {"left", left_null ? type{} : left_list->type.value_type()},
-        {"right", right_null ? type{} : right_list->type.value_type()},
-      }}}};
-      const auto make_nulls
-        = [](int64_t count) -> generator<std::optional<view<tenzir::list>>> {
-        for (auto i = int64_t{0}; i < count; ++i) {
-          co_yield {};
-        }
-      };
-      auto left_values
-        = left_null ? make_nulls(right_list->length()) : left_list->values();
-      auto right_values
-        = right_null ? make_nulls(left_list->length()) : right_list->values();
-      bool warn = false;
-      for (auto i = int64_t{0}; i < left.length(); ++i) {
-        auto left_value = check(left_values.next());
-        auto right_value = check(right_values.next());
-        if (not left_value and not right_value) {
-          builder.null();
-          continue;
-        }
-        auto list_builder = builder.list();
-        warn = warn or not left_value or not right_value
-               or left_value->size() != right_value->size();
-        const auto max_length = std::max(left_value ? left_value->size() : 0,
-                                         right_value ? right_value->size() : 0);
-        for (auto i = size_t{0}; i < max_length; ++i) {
-          auto record_builder = list_builder.record();
-          if (left_value and i < left_value->size()) {
-            record_builder.field("left").data((*left_value)->at(i));
+                                session ctx) -> multi_series {
+      return map_series(
+        eval(args.left), eval(args.right), [&](series left, series right) {
+          const auto left_null = is<null_type>(left.type);
+          const auto right_null = is<null_type>(right.type);
+          if (left_null and right_null) {
+            return series::null(list_type{null_type{}}, left.length());
           }
-          if (right_value and i < right_value->size()) {
-            record_builder.field("right").data((*right_value)->at(i));
+          auto left_list = left.as<list_type>();
+          auto right_list = right.as<list_type>();
+          if ((not left_list and not left_null)
+              or (not right_list and not right_null)) {
+            if (not left_list and not left_null) {
+              diagnostic::warning("expected `list`, but got `{}`",
+                                  left.type.kind())
+                .primary(args.left)
+                .emit(ctx);
+            }
+            if (not right_list and not right_null) {
+              diagnostic::warning("expected `list`, but got `{}`",
+                                  right.type.kind())
+                .primary(args.right)
+                .emit(ctx);
+            }
+            return series::null(list_type{null_type{}}, left.length());
           }
-        }
-      }
-      TENZIR_ASSERT(not left_values.next());
-      TENZIR_ASSERT(not right_values.next());
-      if (warn) {
-        diagnostic::warning("lists have different lengths")
-          .note("filling missing values with `null`")
-          .primary(args.left)
-          .primary(args.right)
-          .emit(ctx);
-      }
-      return builder.finish_assert_one_array();
+          auto builder = series_builder{type{list_type{record_type{
+            {"left", left_null ? type{} : left_list->type.value_type()},
+            {"right", right_null ? type{} : right_list->type.value_type()},
+          }}}};
+          const auto make_nulls =
+            [](int64_t count) -> generator<std::optional<view<tenzir::list>>> {
+            for (auto i = int64_t{0}; i < count; ++i) {
+              co_yield {};
+            }
+          };
+          auto left_values = left_null ? make_nulls(right_list->length())
+                                       : left_list->values();
+          auto right_values = right_null ? make_nulls(left_list->length())
+                                         : right_list->values();
+          bool warn = false;
+          for (auto i = int64_t{0}; i < left.length(); ++i) {
+            auto left_value = check(left_values.next());
+            auto right_value = check(right_values.next());
+            if (not left_value and not right_value) {
+              builder.null();
+              continue;
+            }
+            auto list_builder = builder.list();
+            warn = warn or not left_value or not right_value
+                   or left_value->size() != right_value->size();
+            const auto max_length
+              = std::max(left_value ? left_value->size() : 0,
+                         right_value ? right_value->size() : 0);
+            for (auto i = size_t{0}; i < max_length; ++i) {
+              auto record_builder = list_builder.record();
+              if (left_value and i < left_value->size()) {
+                record_builder.field("left").data((*left_value)->at(i));
+              }
+              if (right_value and i < right_value->size()) {
+                record_builder.field("right").data((*right_value)->at(i));
+              }
+            }
+          }
+          TENZIR_ASSERT(not left_values.next());
+          TENZIR_ASSERT(not right_values.next());
+          if (warn) {
+            diagnostic::warning("lists have different lengths")
+              .note("filling missing values with `null`")
+              .primary(args.left)
+              .primary(args.right)
+              .emit(ctx);
+          }
+          return builder.finish_assert_one_array();
+        });
     });
   }
 };
