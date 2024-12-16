@@ -194,10 +194,11 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
               return caf::make_error(ec::invalid_argument,
                                      "expected a string or record");
             }
-            auto const& x_as_string = as<std::string>(x);
-            auto parsed = match(lt.value_type(), detail::overload{
+            auto parsed = match(
+              lt.value_type(),
+              detail::overload{
                 [&](const string_type&) -> caf::expected<data> {
-                  return x_as_string;
+                  return as<std::string>(x);
                 },
                 [&](const blob_type&) -> caf::expected<data> {
                   return caf::make_error(ec::invalid_argument,
@@ -205,9 +206,10 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                 },
                 [&]<basic_type Type>(const Type&) -> caf::expected<data> {
                   using data_t = type_to_data_t<Type>;
-                  auto result = to<data_t>(x_as_string);
-                  if (!result)
+                  auto result = to<data_t>(as<std::string>(x));
+                  if (!result) {
                     return std::move(result.error());
+                  }
                   return std::move(*result);
                 },
                 [&](const record_type&) -> caf::expected<data> {
