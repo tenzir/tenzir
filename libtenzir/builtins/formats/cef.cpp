@@ -76,7 +76,7 @@ auto parse_extension(std::string_view extension, auto builder,
     return {};
   }
   // Find the first not quoted, not escaped kv separator.
-  auto kv_sep = quoting.find_first_not_in_quotes(extension, '=');
+  auto kv_sep = quoting.find_not_in_quotes(extension, '=');
   if (kv_sep == extension.npos) {
     return diagnostic::warning(
              "extension field did not contain a key-value separator")
@@ -86,7 +86,7 @@ auto parse_extension(std::string_view extension, auto builder,
     auto key = unescape(detail::trim(extension.substr(0, kv_sep)));
     extension.remove_prefix(kv_sep + 1);
     // Find the next not quoted, not escaped kv separator.
-    kv_sep = quoting.find_first_not_in_quotes(extension, '=');
+    kv_sep = quoting.find_not_in_quotes(extension, '=');
     // Find the last whitespace before the key, determining the end of the value
     // text.
     auto value_end = kv_sep == extension.npos

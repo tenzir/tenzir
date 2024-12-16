@@ -137,14 +137,28 @@ struct quoting_escaping_policy {
   /// quoting anything
   /// @param s the string to search
   /// @param target a character to search for
-  /// @param start index to start the serach at
+  /// @param start index to start the search at
   /// @param quotes list of characters to consider as "quotes"
   /// @pre there must not be any intersection between `quotes` and `target`
   /// @returns index of the first occurrence of character `find` that is`not
   /// enclosed by matching `quotes`; `npos` otherwise
-  auto find_first_not_in_quotes(std::string_view text, char target,
-                                size_t start
-                                = 0) const -> std::string_view::size_type;
+  auto
+  find_not_in_quotes(std::string_view text, char target,
+                     size_t start = 0) const -> std::string_view::size_type;
+
+  /// finds the index of the first occurrence of a character that is not
+  /// enclosed my matching quotes quotes that are not closed are not considered
+  /// quoting anything
+  /// @param s the string to search
+  /// @param target a string to search for
+  /// @param start index to start the search at
+  /// @param quotes list of characters to consider as "quotes"
+  /// @pre there must not be any intersection between `quotes` and `target`
+  /// @returns index of the first occurrence of character `find` that is`not
+  /// enclosed by matching `quotes`; `npos` otherwise
+  auto
+  find_not_in_quotes(std::string_view text, std::string_view target,
+                     size_t start = 0) const -> std::string_view::size_type;
 
   /// Check whether `text` is quoted, that is it starts with a quote character
   /// and the quote is by the final character
@@ -162,6 +176,10 @@ struct quoting_escaping_policy {
 
   /// Splits a string at the first `target`, that is not enclosed in quote
   auto split_at_unquoted(std::string_view text, char target) const
+    -> std::pair<std::string_view, std::string_view>;
+
+  /// Splits a string at the first `target`, that is not enclosed in quote
+  auto split_at_unquoted(std::string_view text, std::string_view target) const
     -> std::pair<std::string_view, std::string_view>;
 
   friend auto inspect(auto& f, quoting_escaping_policy& x) -> bool {

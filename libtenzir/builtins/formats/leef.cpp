@@ -134,17 +134,16 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
                       const detail::quoting_escaping_policy& quoting)
   -> std::optional<diagnostic> {
   while (not attributes.empty()) {
-    const auto attr_end
-      = quoting.find_first_not_in_quotes(attributes, delimiter);
+    const auto attr_end = quoting.find_not_in_quotes(attributes, delimiter);
     const auto attribute = attributes.substr(0, attr_end);
-    auto sep_pos = quoting.find_first_not_in_quotes(attribute, '=');
+    auto sep_pos = quoting.find_not_in_quotes(attribute, '=');
     if (sep_pos == 0) {
       return diagnostic::warning("missing key before separator in attributes")
         .note("attribute was `{}`", attribute)
         .done();
     }
     while (detail::is_escaped_at(attribute, sep_pos)) {
-      sep_pos = quoting.find_first_not_in_quotes(attribute, '=', sep_pos + 1);
+      sep_pos = quoting.find_not_in_quotes(attribute, '=', sep_pos + 1);
     }
     if (sep_pos == attribute.npos) {
       return diagnostic::warning("missing key-value separator in attribute")

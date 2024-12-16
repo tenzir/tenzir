@@ -161,8 +161,11 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
 
   auto add_to_parser(argument_parser2& parser) -> void {
     if (mode_ == mode::special_optional) {
-      parser.named("list_sep", list_sep_);
-      parser.named("null_value", null_value_);
+      TENZIR_ASSERT(list_sep_);
+      TENZIR_ASSERT(null_value_);
+      parser.named_optional("list_sep", *list_sep_);
+
+      parser.named_optional("null_value", *null_value_);
     } else {
       field_sep_ = located{"REQUIRED", location::unknown};
       list_sep_ = located{"REQUIRED", location::unknown};
@@ -186,11 +189,14 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     constexpr static auto overlap
       = [](const std::optional<located<std::string>>& lhs,
            const std::optional<located<std::string>>& rhs) {
-          return lhs->inner.find(rhs->inner) != npos
-                 or rhs->inner.find(lhs->inner) != npos;
+          return not lhs->inner.empty() and not rhs->inner.empty()
+                 and (lhs->inner.find(rhs->inner) != npos
+                      or rhs->inner.find(lhs->inner) != npos);
         };
     if (list_sep_ and overlap(field_sep_, list_sep_)) {
       diagnostic::error("`field_sep` and `list_sep` must not overlap")
+        .note("field_sep=`{}`, list_sep=`{}`", field_sep_->inner,
+              list_sep_->inner)
         .primary(field_sep_->source)
         .primary(list_sep_->source)
         .emit(dh);
@@ -198,6 +204,8 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     }
     if (overlap(field_sep_, null_value_)) {
       diagnostic::error("`field_sep` and `null_value` must not overlap")
+        .note("field_sep=`{}`, null_value=`{}`", field_sep_->inner,
+              null_value_->inner)
         .primary(field_sep_->source)
         .primary(null_value_->source)
         .emit(dh);
@@ -205,6 +213,8 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     }
     if (list_sep_ and overlap(list_sep_, null_value_)) {
       diagnostic::error("`list_sep` and `null_value` must not overlap")
+        .note("list_sep=`{}`, null_value=`{}`", list_sep_->inner,
+              null_value_->inner)
         .primary(null_value_->source)
         .primary(list_sep_->source)
         .emit(dh);
@@ -212,21 +222,27 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     }
     for (const auto q : quotes_->inner) {
       if (field_sep_->inner.find(q) != npos) {
-        diagnostic::error("quote character `{}`conflicts with `field_sep`", q)
+        diagnostic::error("quote character `{}`conflicts with "
+                          "`field_sep=\"{}\"`",
+                          q, field_sep_->inner)
           .primary(quotes_->source)
           .primary(null_value_->source)
           .emit(dh);
         return failure::promise();
       }
-      if (list_sep_->inner.find(q) != npos) {
-        diagnostic::error("quote character `{}` conflicts with `list_sep`", q)
+      if (list_sep_ and list_sep_->inner.find(q) != npos) {
+        diagnostic::error("quote character `{}` conflicts with "
+                          "`list_sep=\"{}\"`",
+                          q, list_sep_->inner)
           .primary(quotes_->source)
           .primary(list_sep_->source)
           .emit(dh);
         return failure::promise();
       }
       if (null_value_->inner.find(q) != npos) {
-        diagnostic::error("quote character `{}` conflicts with `null_value`", q)
+        diagnostic::error("quote character `{}` conflicts with "
+                          "`null_value=\"{}\"`",
+                          q, null_value_->inner)
           .primary(quotes_->source)
           .primary(null_value_->source)
           .emit(dh);
@@ -500,8 +516,15 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
             }
           }
         } else {
-          const auto excess_values
-            = 1 + std::ranges::count(*line, args.field_sep);
+          // const auto excess_values
+          //   = 1 + std::ranges::count(*line, args.field_sep);
+          auto excess_values = 0;
+          auto it = size_t{0};
+          while (
+            (it = quoting_options.find_not_in_quotes(*line, args.field_sep, it))
+            != line->npos) {
+            ++excess_values;
+          }
           diagnostic::warning("{} parser skipped excess values in a line",
                               args.name)
             .note("line {}: {} extra values were skipped", line_counter,
@@ -515,8 +538,13 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       std::tie(field_text, line)
         = quoting_options.split_at_unquoted(*line, args.field_sep);
       auto list_element_text = std::string_view{};
-      std::tie(list_element_text, field_text)
-        = quoting_options.split_at_unquoted(field_text, args.list_sep);
+      if (args.list_sep.empty()) {
+        list_element_text = field_text;
+        field_text = {};
+      } else {
+        std::tie(list_element_text, field_text)
+          = quoting_options.split_at_unquoted(field_text, args.list_sep);
+      }
       // If it is a list, then there remains text in `field_text` (because it
       // is after the list separator)
       if (not field_text.empty()) {
@@ -703,8 +731,8 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
-    auto opt_parser = xsv_common_parser_options_parser{name(), Sep, ListSep,
-                                                       std::string{Null.str()}};
+    auto opt_parser = xsv_common_parser_options_parser{
+      name(), std::string{Sep}, std::string{ListSep}, std::string{Null}};
     opt_parser.add_to_parser(parser);
     parser.parse(p);
     auto dh = collecting_diagnostic_handler{};
@@ -820,8 +848,8 @@ public:
   }
 };
 
-template <detail::string_literal Name, char Sep, char ListSep,
-          detail::string_literal Null>
+template <detail::string_literal Name, detail::string_literal Sep,
+          detail::string_literal ListSep, detail::string_literal Null>
 class configured_read_xsv_plugin final
   : public operator_plugin2<parser_adapter<xsv_parser>> {
 public:
@@ -833,8 +861,8 @@ public:
     auto parser = argument_parser2::operator_(name());
     auto opt_parser = xsv_common_parser_options_parser{
       name(),
-      Sep,
-      ListSep,
+      std::string{Sep},
+      std::string{ListSep},
       std::string{Null.str()},
     };
     opt_parser.add_to_parser(parser);
@@ -872,9 +900,9 @@ public:
   }
 };
 
-using read_csv = configured_read_xsv_plugin<"csv", ',', ';', "">;
-using read_tsv = configured_read_xsv_plugin<"tsv", '\t', ',', "-">;
-using read_ssv = configured_read_xsv_plugin<"ssv", ' ', ',', "-">;
+using read_csv = configured_read_xsv_plugin<"csv", ",", ";", "">;
+using read_tsv = configured_read_xsv_plugin<"tsv", "\t", ",", "-">;
+using read_ssv = configured_read_xsv_plugin<"ssv", " ", ",", "-">;
 using write_csv = configured_write_xsv_plugin<"csv", ',', ';', "">;
 using write_tsv = configured_write_xsv_plugin<"tsv", '\t', ',', "-">;
 using write_ssv = configured_write_xsv_plugin<"ssv", ' ', ',', "-">;

@@ -123,11 +123,54 @@ auto quoting_escaping_policy::find_first_of_not_in_quotes(
   return text.npos;
 };
 
-auto quoting_escaping_policy::find_first_not_in_quotes(
+auto quoting_escaping_policy::find_not_in_quotes(
   std::string_view text, char target,
   size_t start) const -> std::string_view::size_type {
-  return find_first_of_not_in_quotes(text, std::string_view{&target, 1}, start);
+  return find_not_in_quotes(text, std::string_view{&target, 1}, start);
 }
+
+auto quoting_escaping_policy::find_not_in_quotes(
+  std::string_view text, std::string_view target,
+  size_t start) const -> std::string_view::size_type {
+  auto quote_start = text.npos;
+  auto active_escape = false;
+  for (size_t i = start; i < text.size(); ++i) {
+    const auto character = text[i];
+    const auto maybe_closing = quote_start != text.npos
+                               and character == text[quote_start]
+                               and not active_escape;
+    if (maybe_closing) {
+      if (doubled_quotes_escape and i < text.size() - 1
+          and text[i + 1] == character) {
+        ++i;
+      } else {
+        quote_start = text.npos;
+      }
+      continue;
+    }
+    const bool is_quote = is_quote_character(character);
+    if (is_quote) {
+      quote_start = i;
+      continue;
+    }
+    /// TODO this is not the most efficient.
+    /// Alternatively
+    const auto is_target = text.substr(i, target.size()) == target;
+    if (is_target) {
+      if (quote_start == text.npos) {
+        return i;
+      }
+      auto end_of_quote = find_closing_quote(text, quote_start);
+      if (end_of_quote == text.npos) {
+        return i;
+      } else {
+        i = end_of_quote;
+        quote_start = text.npos;
+      }
+    }
+  }
+  return text.npos;
+};
 
 auto quoting_escaping_policy::is_quoted(std::string_view text) const noexcept
   -> bool {
@@ -175,9 +218,18 @@ auto quoting_escaping_policy::unquote_unescape(std::string_view text) const
 auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
                                                 char target) const
   -> std::pair<std::string_view, std::string_view> {
-  const auto field_end = find_first_not_in_quotes(text, target, 0);
+  const auto field_end = find_not_in_quotes(text, target, 0);
   auto first = text.substr(0, field_end);
   text.remove_prefix(std::min(first.size() + 1, text.size()));
+  return {first, text};
+}
+
+auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
+                                                std::string_view target) const
+  -> std::pair<std::string_view, std::string_view> {
+  const auto field_end = find_not_in_quotes(text, target, 0);
+  auto first = text.substr(0, field_end);
+  text.remove_prefix(std::min(first.size() + target.size(), text.size()));
   return {first, text};
 }
 
