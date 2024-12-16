@@ -31,9 +31,9 @@ we put together this side-by-side comparison of Cribl and Tenzir.
 
 #### Tenzir
 
-- Tenzir has a single, unified product. The [Tenzir Query Language
-  (TQL)](language.md) is a unified language to process historical and streaming
-  data. Users deploy *nodes* in that can be managed through the *platform* at
+- Tenzir has a single, unified product. **The Tenzir Query Language (TQL)** is a
+  unified language to process historical and streaming data. Users deploy
+  *nodes* in that can be managed through the *platform* at
   [app.tenzir.com](https://app.tenzir.com).
 - Tenzir is an open-core product, with an [open-source
   project](https://github.com/tenzir/tenzir) and a [commercial
@@ -98,7 +98,7 @@ Cribl Stream has the following pipeline
 #### Tenzir
 
 - Everything in Tenzir is a [pipeline](pipelines/README.md) that consist of one
-  or more [operators](operators.md).
+  or more [operators](tql2/operators.md).
 - Pipeline operators can be a *input*, a *transformation*, or an *output*.
 - Tenzir will soon feature *Sources* and *Destinations* as concepts on top of
   pipeline operators.
@@ -118,16 +118,9 @@ Cribl Stream has the following pipeline
 #### Tenzir
 
 - Tenzir does not differentiate between streaming and historical search
-  pipelines.
-- Tenzir operators can leverage other abstractions
-  - **Connectors**: loads or saves bytes from a remote resource
-  - **Formats**: parse or print data
-  - **Contexts**: stateful objects for
-    [enrichment/contextualization](enrichment/README.md)
-- Tenzir connectors and formats can be used from various operators, such as
-  [`load`](operators/load.md), [`from`](operators/from.md),
-  [`save`](operators/save.md), [`to`](operators/to.md),
-  [`parse`](operators/parse.md).
+  pipelines. To run a historical query, simply use the `export` input operator.
+- Tenzir operators are typed, supporting both unstructured data (bytes) and
+  structured data (events), as well as conversions betwen the two types.
 
 ### Routing
 
@@ -143,8 +136,9 @@ Cribl Stream has the following pipeline
 - Tenzir uses a publish/subscribe model to support various event forwarding
   patterns.
 - You can re-implement Cribl Stream Routes using a combination of the
-  [`publish`](operators/publish.md), [`subscribe`](operators/subscribe.md) and
-  [`where`](operators/where.md) operators.
+  [`publish`](tql2/operators/publish.md),
+  [`subscribe`](tql2/operators/subscribe.md) and
+  [`where`](tql2/operators/where.md) operators.
 
 ## Installation
 
@@ -214,8 +208,8 @@ Events:
 
 - An **event** is a semi-structured record, similar to a JSON object but with
   additional data types.
-- Tenzir's [type system](data-model/type-system.md) is a superset of JSON,
-  providing additional first-class types, such as `ip`,  `subnet`, `time`, or
+- Tenzir's [type system](tql2/language/types/README.md) is a superset of JSON,
+  providing additional first-class types, such as `ip`,  `subnet`, `time`, and
   `duration`.
 - Events have a **schema** that includes the field names and types
 - Internally, Tenzir represents events as Apache Arrow *record batches*, which
@@ -266,37 +260,26 @@ See also the section on [dataflow](#dataflow) below.
 
 #### Tenzir
 
-- An **input** is an operator that only produces data.
-- A **output** is an operator that only consumes data.
-- A **transformation** is an operator that consumes and produces data. Numerous
-  events-to-events transformations allow for [shaping the
-  data](usage/shape-data/README.md).
-- A **parser** converts bytes to events and is used in the
-  [`read`](operators/read.md) and [`parse`](operators/parse.md) operators.
-  Parsers are equivalent to event breakers. For example, breaking at a newline
-  is equivalent to applying the [`lines`](formats/lines.md) parser. Another
-  event breaker is [JSON
-  Array](https://docs.cribl.io/stream/event-breakers/#array), which lifts every
-  single array element into a dedicated event. In Tenzir, this is a
-  transformation of a list field, since an array (`list` in Tenzir) is already
-  structured data. The [`yield`](operators/yield.md) operator implements this
-  lifting, e.g., `yield xs[]` pulls the elements of array `xs` out as top-level
-  events.
-- A **printer** converts events to bytes and is used in the
-  [`write`](operators/write.md) operator.
-- The [`shell`](operators/shell.md) is a bytes-to-bytes transformation that can
-  be placed freely in a pipeline where the operator types match. Unlike Cribl's
-  custom commands, there are no restrictions where to place this operator in a
-  pipeline.
-- Similarly, the [`python`](operators/python.md) is an events-to-events
+- An **input operator** produces data.
+- A **output operator** consumes data.
+- A **transformation operator** consumes and produces data. Events-to-events
+  transformations make it easy to [shape data](usage/shape-data/README.md).
+- A **parser** is a bytes-to-events operator. Parsers are equivalent to event
+  breakers. For example, breaking at a newline
+  is equivalent to applying the [`read_lines`](tql2/operators/read_lines.md)
+  parser.
+- A **printer** is an events-to-bytes operator.
+- The [`shell`](tql2/operators/shell.md) is a bytes-to-bytes transformation that
+  can be placed freely in a pipeline where the operator types match. Unlike
+  Cribl's custom commands, there are no restrictions where to place this
+  operator in a pipeline.
+- Similarly, the [`python`](tql2/operators/python.md) is an events-to-events
   transformation that can be placed freely in a pipeline where the operator
-  types match. The operator takes inline Python or a path to a file as argument,
-  with the current event being represented by the variable `self`.
-- The [`parse`](operators/parse.md) operator applies a parser to single field an
-  an event and is equivalent to the Cribl [parser
-  function](https://docs.cribl.io/stream/parser-function/).
+  upstream/downstream types match. The operator takes inline Python or a path to
+  a file as argument, with the current event being represented by the variable
+  `self`.
 - Parse errors generate a diagnostic that can be processed separately with the
-  [`diagnostics`](operators/diagnostics.md) input operator.
+  [`diagnostics`](tql2/operators/diagnostics.md) input operator.
 - There is not special `_time` field in Tenzir.
 
 ## Use Cases
@@ -315,12 +298,9 @@ encounter.
 
 #### Tenzir
 
-- The [`unroll`](operators/unroll.md) operator performs the same operation as
-  Cribl's `unroll` function.
+- The [`unroll`](tql2/operators/unroll.md) operator performs the same operation
+  as Cribl's `unroll` function.
 - The `unroll` operator can operate on any array in an event.
-- [`yield`](operators/yield.md) performs as similar operation: `unroll xs` and
-  `yield xs[]` differ in that the `yield` operator strips all outer fields and
-  makes the array elements the new top-level event.
 
 ### Deduplication
 
@@ -346,7 +326,7 @@ Cribl Search has a [`dedup`](https://docs.cribl.io/search/dedup/) operator.
 
 #### Tenzir
 
-Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
+Tenzir has a [`deduplicate`](tql2/operators/deduplicate.md) operator.
 
 - Controls:
   - **Extractors**: a list of field names that uniquely identify the event
@@ -377,23 +357,23 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 #### Tenzir
 
 - Contexts are stateful objects usable for [enrichment](enrichment/README.md)
-  with the [`enrich`](operators/enrich.md) operator.
+  with the [`context::enrich`](tql2/operators/context/enrich.md) operator.
 - There exist several context types, such as lookup tables, Bloom filters, GeoIP
   databases, or user-written C++ plugins.
 - Contexts are not static and limited to CSV or MMDB files; you can add data
   dynamically from any another pipeline, using the
-  [`context`](operators/context.md) `update` operator. In other words, you can
-  use all existing connectors and [formats](formats.md) to feed data into a
-  context.
+  `context::*` management operators. That is, you can use all existing
+  operators to get data in and then use it to update a context.
 - When Tenzir lookup tables have CIDR subnets as key, you can perform an
   enrichment with single IP addresses (using a longest-prefix match). This comes
   in handy for [enriching with a network
   inventory](usage/enrich-with-network-inventory/README.md).
 - Tenzir lookup tables support expiration of entries with per-key timeouts. This
   makes it possible to automatically expire no-longer-relevant entries, e.g.,
-  stale observables. There are two types of timeouts: a *create timeout* that
-  counts down after an entry is inserted into the table and an *update timeout*
-  that resets when an entry gets accessed.
+  stale observables.
+- Tenzir lookup tables support aggregation functions as values so that you can
+  easily build passive DNS or an asset inventory by extracting suitable
+  information from events.
 
 ## Packs vs. Packages
 

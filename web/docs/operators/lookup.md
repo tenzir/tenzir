@@ -71,7 +71,7 @@ or `--live` explicitly disables the other.
 ### `--retro`
 
 Enables retrospective lookups for previously imported events. The `lookup`
-operator will then apply a context [after a context update](context.md).
+operator will then apply a context after a context update.
 
 By default, both retro and live lookups are enabled.
 Specifying either `--retro` or `--live` explicitly disables

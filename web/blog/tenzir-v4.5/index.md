@@ -46,11 +46,10 @@ export
 
 ## The Rest API as an Operator
 
-We exposed [the Rest API](/api) as a new operator called
-[`api`](/next/operators/api). The benefit primarily materializes for
-developers, who can now rapidly prototype integrations by using the app or
-`tenzir` command line tool, without having to spin up the integrated web
-server and do gymnastics with `curl` and `jq`.
+We exposed [the Rest API](/api) as a new operator called `api`. The benefit
+primarily materializes for developers, who can now rapidly prototype
+integrations by using the app or `tenzir` command line tool, without having to
+spin up the integrated web server and do gymnastics with `curl` and `jq`.
 
 For example, to list all pipelines that were created through the API:
 
@@ -74,10 +73,10 @@ run historical queries. This method allows for a more fine-grained control than
 the coarse `tenzir.allow-unsafe-pipelines` option.
 
 Why does it matter? Well, when running pipelines in a node, some operators allow
-you to fully interact with the system through a pipeline. The
-[`shell`](/next/operators/shell) operator is the best example, which allows for
-arbitrary command execution. This can be both a huge relief and serve as escape
-hatch to integrate third-party tools, but it is equally a security risk.
+you to fully interact with the system through a pipeline. The `shell` operator
+is the best example, which allows for arbitrary command execution. This can be
+both a huge relief and serve as escape hatch to integrate third-party tools, but
+it is equally a security risk.
 
 ## This & That
 

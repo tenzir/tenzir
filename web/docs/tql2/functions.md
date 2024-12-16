@@ -17,7 +17,7 @@ TODO: the following functions still need to be documented:
 
 -->
 
-Functions appear in [expressions](../language/expressions.md) and take
+Functions appear in [expressions](../tql2/language/expressions.md) and take
 positional and/or named arguments, producing a value as a result of their
 computation.
 

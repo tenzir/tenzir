@@ -17,11 +17,10 @@ Analytics and adds support for expiring entries in lookup tables.
 
 ## Send Events to Azure Log Analytics
 
-The shining star of Tenzir v4.17 is the new [`azure-log-analytics` sink
-operator][azure-log-analytics-operator], which sends events to [Log Analytics in
-Azure Monitor][log-analytics-overview].
+The shining star of Tenzir v4.17 is the new `azure-log-analytics` sink
+operator, which sends events to [Log Analytics in Azure
+Monitor][log-analytics-overview].
 
-[azure-log-analytics-operator]: /next/operators/azure-log-analytics
 [log-analytics-overview]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/log-analytics-overview
 
 ## Lookup Table Timeouts
@@ -45,10 +44,10 @@ latest, or when they were not accessed for a day, whichever comes first:
 
 ## Print Individual Fields in Events
 
-The [`print <field> <format>` operator][print-operator-docs] is the counterpart
-to the [`parse` operator][parse-operator-docs]. Given a field of type record
-within an event, it replaces it with a string containing the formatted
-representation. This is best explained on an example:
+The `print <field> <format>` operator is the counterpart to the `parse`
+operator. Given a field of type record within an event, it replaces it with a
+string containing the formatted representation. This is best explained on an
+example:
 
 ```json {0} title="Input"
 {
@@ -76,9 +75,6 @@ from input.json
 
 The `print` operator is especially useful when working with third-party APIs
 that often do not support deeply nested data structures in their data model.
-
-[print-operator-docs]: /next/operators/print
-[parse-operator-docs]: /next/operators/parse
 
 ## Changes to Built-in Type Aliases
 
