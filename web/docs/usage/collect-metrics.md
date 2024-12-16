@@ -38,7 +38,7 @@ reporting or dashboarding:
 
 ```tql
 metrics "operator"
-where output == true
+where sink == true
 summarize runtime=sum(duration), pipeline_id
 sort -runtime
 ```
