@@ -448,17 +448,7 @@ RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
 
 # -- tenzir-ce -------------------------------------------------------------------
 
-FROM tenzir-de AS tenzir-ce
-
-USER root:root
-
-RUN wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-    apt-get -y --no-install-recommends install \
-      ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install libadbc-driver-manager103 libadbc-driver-snowflake103 && \
-    snowflake_sopath="$(ldconfig -p | grep snowflake | grep -o '[^ ]*$')"; echo ${snowflake_sopath}; ln -s ${snowflake_sopath} ${snowflake_sopath%.*} && \
-    rm -rf /var/lib/apt/lists/*
+FROM tenzir-de AS tenzir-ce-arm64
 
 COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-analytics /
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
@@ -466,11 +456,28 @@ COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
-COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
+FROM tenzir-ce-arm64 AS tenzir-ce-amd64
+
+USER root:root
+
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+      wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
+      apt-get -y --no-install-recommends install \
+        ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+      apt-get update && \
+      apt-get -y --no-install-recommends install libadbc-driver-manager103 libadbc-driver-snowflake103 && \
+      snowflake_sopath="$(ldconfig -p | grep snowflake | grep -o '[^ ]*$')"; echo ${snowflake_sopath}; ln -s ${snowflake_sopath} ${snowflake_sopath%.*} && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
+
+COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
+
 USER tenzir:tenzir
+
+FROM tenzir-ce-${TARGETARCH} AS tenzir-ce
 
 # -- tenzir-node-ce ------------------------------------------------------------
 
