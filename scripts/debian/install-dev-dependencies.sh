@@ -61,10 +61,6 @@ apt-get -y --no-install-recommends install \
     wget \
     yara
 
-# Apache Arrow
-dir=$(dirname "$(readlink -f "$0")")
-"${dir}"/build-arrow.sh
-
 # Node 18.x and Yarn
 NODE_MAJOR=18
 mkdir -p /etc/apt/keyrings
