@@ -297,11 +297,15 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
         auto remote_endpoint
           = state.socket->remote_endpoint(remote_endpoint_ec);
         if (!remote_endpoint_ec) {
+#if BOOST_VERSION >= 108700
+          remote_ip = remote_endpoint.address().to_string();
+#else
           auto remote_ip_string
             = remote_endpoint.address().to_string(remote_endpoint_ec);
           if (!remote_endpoint_ec) {
             remote_ip = remote_ip_string;
           }
+#endif
         }
         diagnostic::warning("{}", ec.message())
           .note("failed to read from socket")
@@ -452,7 +456,12 @@ auto make_connection_manager(
     *self->state().io_context, *self->state().endpoint);
   auto reuse_address = boost::asio::ip::tcp::acceptor::reuse_address{true};
   self->state().acceptor->set_option(reuse_address);
-  self->state().acceptor->listen(boost::asio::socket_base::max_connections);
+#if BOOST_VERSION >= 108700
+  const auto max_connections = boost::asio::socket_base::max_listen_connections;
+#else
+  const auto max_connections = boost::asio::socket_base::max_connections;
+#endif
+  self->state().acceptor->listen(max_connections);
   self->state().socket
     = boost::asio::ip::tcp::socket(*self->state().io_context);
 #if TENZIR_LINUX

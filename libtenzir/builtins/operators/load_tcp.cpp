@@ -500,7 +500,13 @@ struct connection_manager_state {
         .primary(args.endpoint.source)
         .to_error();
     }
-    if (acceptor->listen(boost::asio::socket_base::max_connections, ec)) {
+#if BOOST_VERSION >= 108700
+    const auto max_connections
+      = boost::asio::socket_base::max_listen_connections;
+#else
+    const auto max_connections = boost::asio::socket_base::max_connections;
+#endif
+    if (acceptor->listen(max_connections, ec)) {
       return diagnostic::error("{}", ec.message())
         .note("failed to start listening")
         .primary(args.endpoint.source)
