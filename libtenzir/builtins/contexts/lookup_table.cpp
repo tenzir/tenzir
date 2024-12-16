@@ -616,23 +616,25 @@ public:
   auto erase(const table_slice& events, const context_erase_args& args,
              session ctx) -> failure_or<void> override {
     auto keys = eval(args.key, events, ctx);
-    if (is<null_type>(keys.type)) {
-      return {};
-    }
-    if (is<subnet_type>(keys.type)) {
-      for (const auto& key : keys.values<subnet_type>()) {
-        if (not key) {
-          continue;
-        }
-        subnet_entries.erase(*key);
-      }
-      return {};
-    }
-    for (const auto& key : keys.values()) {
-      if (is<caf::none_t>(key)) {
+    for (auto&& key : keys) {
+      if (is<null_type>(key.type)) {
         continue;
       }
-      context_entries.erase(materialize(key));
+      if (is<subnet_type>(key.type)) {
+        for (const auto& key : key.values<subnet_type>()) {
+          if (not key) {
+            continue;
+          }
+          subnet_entries.erase(*key);
+        }
+        return {};
+      }
+      for (const auto& x : key.values()) {
+        if (is<caf::none_t>(x)) {
+          continue;
+        }
+        context_entries.erase(materialize(x));
+      }
     }
     return {};
   }
