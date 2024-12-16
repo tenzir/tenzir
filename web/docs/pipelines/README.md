@@ -19,20 +19,26 @@ Our pipelines have 3 types of operators: **inputs** that produce data,
 ## Structured and Unstructured Dataflow
 
 Tenzir pipelines make one more distinction: the elements that the operators push
-through the pipeline are *typed*. An operator has an upstream and downstream
-type:
+through the pipeline are *typed*. An operator has an **upstream** and
+**downstream** type:
 
 ![Upstream and Downstream Types](operator-table.svg)
 
-When composing pipelines out of operators, the upstream/downstream type of
-adjacent operators have to match. Otherwise the pipeline is malformed. We call
-any void-to-void operator sequence a **closed pipeline**. Only closed pipelines
-can execute. If a pipeline does not have a input and output operator, it would
-"leak" data.
+When composing pipelines out of operators, upstream/downstream types of adjacent
+operators have to match. Otherwise the pipeline is malformed. We call any
+void-to-void operator sequence a **closed pipeline**. Only closed pipelines
+can execute.
+
+If a pipeline is not closed, Tenzir attempts to auto-complete missing input and
+output operators. When you [run a pipeline](../usage/run-pipelines/README.md) on
+the command line, we implicitly read JSON from stdin and write JSON to stdout.
+When you run a pipeline in the app and do not provide a sink, we only append
+[`serve`](tql2/operators/serve.md) to make the pipeline a REST API and extract
+data piecemeal through your browser.
 
 Operators can be *polymorphic* in that they can have more than a single upstream
-and downstream type. For example, [`head`](../tql2/operators/head.md) accepts
-both bytes and events, filtering either the first N bytes or events.
+and downstream type. For example, [`buffer`](../tql2/operators/buffer.md) accepts
+both bytes and events.
 
 Many Tenzir pipelines use the [`from`](../tql2/operators/from.md) and
 [`to`](../tql2/operators/to.md) operators to get data in and out, respectively.
@@ -75,27 +81,12 @@ types match. Here is an example of other valid pipeline instances:
 
 ![Operator Composition Examples](operator-composition-variations.svg)
 
-:::note Auto-Completing Input and Output Operators
-If a pipeline is open, Tenzir attempts to auto-complete an input and output
-operators and rejects the pipeline otherwise. Auto-completion is context
-dependent:
-
-- **CLI**: On the command line we read JSON from stdin and write it to stdout.
-  This means you could only write transformations on the command line, but we
-  recommand making the parsing explicit.
-- **App**: In the app we only auto-complete a missing output via the
-  [`serve`](tql2/operators/serve.md) operator to display the result in the
-  browser.
-:::
-
 ## Multi-Schema Dataflows
 
 Every event that flows through a pipeline is part of a *data frame* with a
-schema. You expresses transformations on events by thinking
-one-event-at-at-time, whereas the implementation internally works on data frames
-(internally represented as Apache Arrow record batch), potentially of tens of
-thousands of events at once. This batching is the reason why the pipelines
-can achieve a high throughput.
+schema. Internally, these data frames are represented as Apache Arrow record
+batch, encoding potentially of tens of thousands of events at once. This
+innate batching is the reason why the pipelines can achieve a high throughput.
 
 Unique about Tenzir is that a single pipeline can run with *multiple schemas*,
 even though the events are data frames internally. Tenzir parsers
@@ -113,9 +104,9 @@ batches when the inter-event order does not matter. Similar to predicate
 pushdown, Tenzir operators support "ordering pushdown" to signal to upstream
 operators that the event order only matters intra-schema but not inter-schema.
 In this case the operator transparently "demultiplex" a heterogeneous event
-stream into N homogeneous streams. The [`import`](tql2/operators/import.md)
-operator is an example of such an operator; it pushes its ordering upstream,
-allowing parsers to efficiently create multiple streams events.
+stream into N homogeneous streams. The [`sort`](tql2/operators/sort.md) operator
+is an example of such an operator; it pushes its ordering requirements upstream,
+allowing parsers to efficiently create multiple streams events in parallel.
 
 ![Multi-schema Example](multi-schema-example.svg)
 
@@ -165,11 +156,11 @@ The key insight here is to realize that optimizations like predicate pushdown
 extend to the storage engine and do not only apply to the streaming executor.
 
 The Tenzir native storage engine is not a full-fledged database, but rather a
-catalog a thin indexing layer over a set of Parquet/Feather files. The sparse
-indexes (sketch data structures, such as min-max synopses, Bloom filters, etc.)
-avoid full scans for every query. The catalog tracks evolving schemas, performs
-expression binding, and provides a transactional interface to add and replace
-partitions during compaction.
+catalog with a thin indexing layer over a set of Parquet/Feather files. These
+sparse indexes (sketch data structures, such as min-max synopses, Bloom filters,
+etc.) avoid full scans for every query. The catalog tracks evolving schemas,
+performs expression binding, and provides a transactional interface to add and
+replace partitions during compaction.
 
 The diagram below shows the main components of the storage engine:
 
