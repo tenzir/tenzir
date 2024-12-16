@@ -61,9 +61,20 @@ apt-get -y --no-install-recommends install \
     wget \
     yara
 
-# Apache Arrow
-dir=$(dirname "$(readlink -f "$0")")
-"${dir}"/build-arrow.sh
+codename="$(lsb_release --codename --short)"
+
+# Arrow ADBC
+wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-${codename}.deb"
+apt-get -y --no-install-recommends install ./"apache-arrow-apt-source-latest-${codename}.deb"
+apt-get update
+# The apt download sometimes fails with a 403. We employ a similar workaround as
+# arrow itself: https://github.com/apache/arrow/pull/36836.
+if [ "$(uname -m)" == "x86_64" ]; then
+  apt-get -y --no-install-recommends install -o 'Acquire::Retries=3' \
+    libadbc-driver-snowflake-dev \
+    libadbc-driver-manager-dev
+fi
+rm ./"apache-arrow-apt-source-latest-${codename}.deb"
 
 # Node 18.x and Yarn
 NODE_MAJOR=18
