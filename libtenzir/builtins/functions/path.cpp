@@ -27,41 +27,42 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto arg = eval(expr);
-        auto f = detail::overload{
-          [&](const arrow::NullArray& arg) {
-            return series::null(string_type{}, arg.length());
-          },
-          [](const arrow::StringArray& arg) {
-            auto b = arrow::StringBuilder{};
-            check(b.Reserve(arg.length()));
-            for (auto row = int64_t{0}; row < arg.length(); ++row) {
-              if (arg.IsNull(row)) {
-                check(b.AppendNull());
-                continue;
+        auto b = arrow::StringBuilder{};
+        check(b.Reserve(eval.length()));
+        for (auto& arg : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray& arg) {
+              check(b.AppendNulls(arg.length()));
+            },
+            [&](const arrow::StringArray& arg) {
+              for (auto row = int64_t{0}; row < arg.length(); ++row) {
+                if (arg.IsNull(row)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                auto path = arg.GetView(row);
+                // TODO: We don't know whether this is a windows/posix path.
+                // TODO: Also, btw, string might not be a good type for paths.
+                auto pos = path.find_last_of("/\\");
+                // TODO: Trailing sep.
+                if (pos == std::string::npos) {
+                  check(b.Append(path));
+                } else {
+                  check(b.Append(path.substr(pos + 1)));
+                }
               }
-              auto path = arg.GetView(row);
-              // TODO: We don't know whether this is a windows/posix path.
-              // TODO: Also, btw, string might not be a good type for paths.
-              auto pos = path.find_last_of("/\\");
-              // TODO: Trailing sep.
-              if (pos == std::string::npos) {
-                check(b.Append(path));
-              } else {
-                check(b.Append(path.substr(pos + 1)));
-              }
-            }
-            return series{string_type{}, finish(b)};
-          },
-          [&](const auto&) {
-            diagnostic::warning("`file_name` expected `string`, but got `{}`",
-                                arg.type.kind())
-              .primary(expr)
-              .emit(ctx);
-            return series::null(string_type{}, arg.length());
-          },
-        };
-        return match(*arg.array, f);
+            },
+            [&](const auto&) {
+              diagnostic::warning("`file_name` expected `string`, but got `{}`",
+                                  arg.type.kind())
+                .primary(expr)
+                .emit(ctx);
+              check(b.AppendNulls(arg.length()));
+            },
+          };
+          match(*arg.array, f);
+        }
+        return series{string_type{}, finish(b)};
       });
   }
 };
@@ -80,43 +81,46 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto arg = eval(expr);
-        auto f = detail::overload{
-          [&](const arrow::NullArray& arg) {
-            return series::null(string_type{}, arg.length());
-          },
-          [](const arrow::StringArray& arg) {
-            auto b = arrow::StringBuilder{};
-            check(b.Reserve(arg.length()));
-            for (auto row = int64_t{0}; row < arg.length(); ++row) {
-              if (arg.IsNull(row)) {
-                check(b.AppendNull());
-                continue;
+        auto b = arrow::StringBuilder{};
+        check(b.Reserve(eval.length()));
+        for (auto& arg : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray& arg) {
+              check(b.AppendNulls(arg.length()));
+            },
+            [](const arrow::StringArray& arg) {
+              auto b = arrow::StringBuilder{};
+              check(b.Reserve(arg.length()));
+              for (auto row = int64_t{0}; row < arg.length(); ++row) {
+                if (arg.IsNull(row)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                auto path = arg.GetView(row);
+                // TODO: We don't know whether this is a windows/posix path.
+                // TODO: Also, string might not be a good type for paths because
+                // of invalid UTF-8.
+                auto pos = path.find_last_of("/\\");
+                // TODO: Trailing separator.
+                if (pos == std::string::npos) {
+                  // TODO: What should we do here?
+                  check(b.Append(path));
+                } else {
+                  check(b.Append(path.substr(0, pos)));
+                }
               }
-              auto path = arg.GetView(row);
-              // TODO: We don't know whether this is a windows/posix path.
-              // TODO: Also, string might not be a good type for paths because
-              // of invalid UTF-8.
-              auto pos = path.find_last_of("/\\");
-              // TODO: Trailing separator.
-              if (pos == std::string::npos) {
-                // TODO: What should we do here?
-                check(b.Append(path));
-              } else {
-                check(b.Append(path.substr(0, pos)));
-              }
-            }
-            return series{string_type{}, finish(b)};
-          },
-          [&](const auto&) {
-            diagnostic::warning("`file_name` expected `string`, but got `{}`",
-                                arg.type.kind())
-              .primary(expr)
-              .emit(ctx);
-            return series::null(string_type{}, arg.length());
-          },
-        };
-        return match(*arg.array, f);
+            },
+            [&](const auto&) {
+              diagnostic::warning("`file_name` expected `string`, but got `{}`",
+                                  arg.type.kind())
+                .primary(expr)
+                .emit(ctx);
+              check(b.AppendNulls(arg.length()));
+            },
+          };
+          match(*arg.array, f);
+        }
+        return series{string_type{}, finish(b)};
       });
   }
 };

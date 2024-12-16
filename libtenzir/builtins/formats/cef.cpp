@@ -283,44 +283,37 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
-        auto arg = eval(expr);
-        auto f = detail::overload{
-          [&](const arrow::NullArray&) {
-            return arg;
-          },
-          [&](const arrow::StringArray& arg) {
-            auto b = series_builder{};
-            for (auto string : arg) {
-              if (not string) {
-                b.null();
-                continue;
+        return map_series(eval(expr), [&](series arg) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray&) {
+              return multi_series{arg};
+            },
+            [&](const arrow::StringArray& arg) {
+              // TODO: Use multi-series builder here.
+              auto b = series_builder{};
+              for (auto string : arg) {
+                if (not string) {
+                  b.null();
+                  continue;
+                }
+                auto diag = parse_line(*string, b);
+                if (diag) {
+                  ctx.dh().emit(std::move(*diag));
+                  b.null();
+                }
               }
-              auto diag = parse_line(*string, b);
-              if (diag) {
-                ctx.dh().emit(std::move(*diag));
-                b.null();
-              }
-            }
-            auto result = b.finish();
-            // TODO: Consider whether we need heterogeneous for this. If so,
-            // then we must extend the evaluator accordingly.
-            if (result.size() != 1) {
-              diagnostic::warning("got incompatible CEF messages")
+              return multi_series{b.finish()};
+            },
+            [&](const auto&) {
+              diagnostic::warning("`parse_cef` expected `string`, got `{}`",
+                                  arg.type.kind())
                 .primary(call)
                 .emit(ctx);
               return series::null(null_type{}, arg.length());
-            }
-            return std::move(result[0]);
-          },
-          [&](const auto&) {
-            diagnostic::warning("`parse_cef` expected `string`, got `{}`",
-                                arg.type.kind())
-              .primary(call)
-              .emit(ctx);
-            return series::null(null_type{}, arg.length());
-          },
-        };
-        return match(*arg.array, f);
+            },
+          };
+          return match(*arg.array, f);
+        });
       });
   }
 };

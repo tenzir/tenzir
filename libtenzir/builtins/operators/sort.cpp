@@ -378,7 +378,7 @@ struct sort_expression {
 };
 
 struct sort_key {
-  std::vector<series> chunks = {};
+  std::vector<multi_series> chunks = {};
   bool reverse = {};
 };
 
@@ -439,8 +439,8 @@ public:
       for (const auto& sort_key : sort_keys) {
         const auto& lhs_key = sort_key.chunks[lhs.slice];
         const auto& rhs_key = sort_key.chunks[rhs.slice];
-        const auto lhs_null = lhs_key.array->IsNull(lhs.event);
-        const auto rhs_null = rhs_key.array->IsNull(rhs.event);
+        const auto lhs_null = lhs_key.is_null(lhs.event);
+        const auto rhs_null = rhs_key.is_null(rhs.event);
         if (lhs_null and rhs_null) {
           continue;
         }
@@ -448,10 +448,8 @@ public:
           // Nulls last, independent of sort order.
           return rhs_null;
         }
-        const auto& lhs_value
-          = value_at(lhs_key.type, *lhs_key.array, lhs.event);
-        const auto& rhs_value
-          = value_at(rhs_key.type, *rhs_key.array, rhs.event);
+        const auto& lhs_value = lhs_key.value_at(lhs.event);
+        const auto& rhs_value = rhs_key.value_at(rhs.event);
         // TODO: Implement this directly on data and data_view. That is
         // non-trivial however.
         // TODO: This does not do the correct recursive application of the
@@ -565,9 +563,9 @@ public:
     TRY(argument_parser2::function(name())
           .positional("x", expr, "list|record")
           .parse(inv, ctx));
-    return function_use::make(
-      [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
-        auto arg = eval(expr);
+    return function_use::make([call = inv.call,
+                               expr = std::move(expr)](auto eval, session ctx) {
+      return map_series(eval(expr), [&](series arg) {
         auto f = detail::overload{
           [&](const arrow::NullArray&) {
             return arg;
@@ -588,6 +586,7 @@ public:
         };
         return match(*arg.array, f);
       });
+    });
   }
 };
 

@@ -81,13 +81,14 @@ public:
           .positional("x", expr, "any")
           .named("sep", sep)
           .parse(inv, ctx));
-    return function_use::make([expr = std::move(expr), sep = std::move(sep)](
-                                evaluator eval, session) -> series {
-      auto s = eval(expr);
-      auto unflattened = tenzir::unflatten(s.array, sep.value_or("."));
-      auto schema = type::from_arrow(*unflattened->type());
-      return {type{s.type.name(), schema}, unflattened};
-    });
+    return function_use::make(
+      [expr = std::move(expr), sep = std::move(sep)](evaluator eval, session) {
+        return map_series(eval(expr), [&](series s) {
+          auto unflattened = tenzir::unflatten(s.array, sep.value_or("."));
+          auto schema = type::from_arrow(*unflattened->type());
+          return series{type{s.type.name(), schema}, unflattened};
+        });
+      });
   }
 };
 

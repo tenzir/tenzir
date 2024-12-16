@@ -150,37 +150,41 @@ public:
     auto start = start_;
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
-        co_yield std::move(slice);
+        co_yield {};
         continue;
       }
-      auto s = eval(selector_.inner(), slice, ctrl.diagnostics());
-      if (s.type.kind().is_not<time_type>()) {
-        if (s.type.kind().is_not<null_type>()) {
-          diagnostic::warning("expected `time`, got `{}`", s.type.kind())
-            .primary(selector_)
-            .emit(ctrl.diagnostics());
-        }
-        co_yield std::move(slice);
-        continue;
-      }
-      const auto& array = as<arrow::TimestampArray>(*s.array);
-      auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
-      for (const auto& value : values(time_type{}, array)) {
-        if (not value) {
-          check(b->AppendNull());
+      for (auto& s : eval(selector_.inner(), slice, ctrl.diagnostics())) {
+        if (s.type.kind().is_not<time_type>()) {
+          if (s.type.kind().is_not<null_type>()) {
+            diagnostic::warning("expected `time`, got `{}`", s.type.kind())
+              .primary(selector_)
+              .emit(ctrl.diagnostics());
+          }
+          co_yield std::move(slice);
           continue;
         }
-        if (not first_time) [[unlikely]] {
-          first_time = value;
+        const auto& array = as<arrow::TimestampArray>(*s.array);
+        auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
+        auto offset = int64_t{0};
+        for (const auto& value : values(time_type{}, array)) {
+          if (not value) {
+            check(b->AppendNull());
+            continue;
+          }
+          if (not first_time) [[unlikely]] {
+            first_time = value;
+          }
+          if (not start) [[unlikely]] {
+            start = value;
+          }
+          const auto shifted = *start + (*value - *first_time) / speed_;
+          check(b->Append(shifted.time_since_epoch().count()));
         }
-        if (not start) [[unlikely]] {
-          start = value;
-        }
-        const auto shifted = *start + (*value - *first_time) / speed_;
-        check(b->Append(shifted.time_since_epoch().count()));
+        auto times = series{time_type{}, finish(*b)};
+        auto sliced = subslice(slice, offset, offset + times.length());
+        co_yield assign(selector_, std::move(times), sliced,
+                        ctrl.diagnostics());
       }
-      co_yield assign(selector_, {time_type{}, finish(*b)}, slice,
-                      ctrl.diagnostics());
     }
   }
 

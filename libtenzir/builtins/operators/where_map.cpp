@@ -163,41 +163,47 @@ public:
         co_yield {};
         continue;
       }
-      auto filter = eval(expr_, slice, ctrl.diagnostics());
-      auto array = try_as<arrow::BooleanArray>(&*filter.array);
-      if (not array) {
-        diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
-          .primary(expr_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      if (array->true_count() == array->length()) {
-        co_yield std::move(slice);
-        continue;
-      }
-      if (warn_) {
-        diagnostic::warning("assertion failure")
-          .primary(expr_)
-          .emit(ctrl.diagnostics());
-      }
-      auto length = array->length();
-      auto current_value = array->Value(0);
-      auto current_begin = int64_t{0};
-      // We add an artificial `false` at index `length` to flush.
-      auto results = std::vector<table_slice>{};
-      for (auto i = int64_t{1}; i < length + 1; ++i) {
-        const auto next = i != length && array->IsValid(i) && array->Value(i);
-        if (current_value == next) {
+      auto offset = int64_t{0};
+      for (auto& filter : eval(expr_, slice, ctrl.diagnostics())) {
+        auto array = try_as<arrow::BooleanArray>(&*filter.array);
+        if (not array) {
+          diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
+            .primary(expr_)
+            .emit(ctrl.diagnostics());
+          offset += filter.array->length();
+          co_yield {};
           continue;
         }
-        if (current_value) {
-          results.push_back(subslice(slice, current_begin, i));
+        if (array->true_count() == array->length()) {
+          co_yield subslice(slice, offset, offset + array->length());
+          offset += array->length();
+          continue;
         }
-        current_value = next;
-        current_begin = i;
+        if (warn_) {
+          diagnostic::warning("assertion failure")
+            .primary(expr_)
+            .emit(ctrl.diagnostics());
+        }
+        auto length = array->length();
+        auto current_value = array->Value(0);
+        auto current_begin = int64_t{0};
+        // We add an artificial `false` at index `length` to flush.
+        auto results = std::vector<table_slice>{};
+        for (auto i = int64_t{1}; i < length + 1; ++i) {
+          const auto next = i != length && array->IsValid(i) && array->Value(i);
+          if (current_value == next) {
+            continue;
+          }
+          if (current_value) {
+            results.push_back(
+              subslice(slice, offset + current_begin, offset + i));
+          }
+          current_value = next;
+          current_begin = i;
+        }
+        co_yield concatenate(std::move(results));
+        offset += length;
       }
-      co_yield concatenate(std::move(results));
     }
   }
 
@@ -207,6 +213,8 @@ public:
       return optimize_result::order_invariant(*this, order);
     }
     auto [legacy, remainder] = split_legacy_expression(expr_);
+    TENZIR_WARN("\nINPUT: {:?}\nLEGACY: {}\nREMAINDER: {:?}", expr_, legacy,
+                remainder);
     auto remainder_op = is_true_literal(remainder)
                           ? nullptr
                           : std::make_unique<tql2_where_assert_operator>(
@@ -245,10 +253,9 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
         .positional("capture", args.capture)
         .positional("expression", args.expr, "any")
         .parse(inv, ctx));
-  return function_use::make(
-    [mode, args = std::move(args)](function_plugin::evaluator eval,
-                                   session ctx) -> series {
-      auto field = eval(args.field);
+  return function_use::make([mode, args = std::move(args)](
+                              function_plugin::evaluator eval, session ctx) {
+    return map_series(eval(args.field), [&](series field) -> multi_series {
       if (field.as<null_type>()) {
         return field;
       }
@@ -262,27 +269,34 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
       // We get the field's inner values array and create a dummy table slice
       // with a single field to evaluate the mapped expression on. TODO: We
       // should consider unrolling the surrounding event to make more than just
-      // the capture evailable. This may be rather expensive, though, so we
+      // the capture available. This may be rather expensive, though, so we
       // should consider doing some static analysis to only unroll the fields
       // actually used.
-      auto values
+      auto list_values
         = series{field_list->type.value_type(), field_list->array->values()};
-      if (values.length() == 0) {
+      if (list_values.length() == 0) {
         return field;
       }
-      const auto name
-        = eval(ast::meta{ast::meta::name, location::unknown}).as<string_type>();
-      TENZIR_ASSERT(name);
-      TENZIR_ASSERT(name->length() > 0);
-      TENZIR_ASSERT(name->array->IsValid(0));
-      const auto empty_type = type{name->array->GetView(0), record_type{}};
+      // TODO: The name here is somewhat arbitrary. It could be accessed if
+      // `@name` where to be used inside the inner expression.
+      const auto empty_type = type{fmt::to_string(mode), record_type{}};
       auto slice = table_slice{
-        arrow::RecordBatch::Make(empty_type.to_arrow_schema(), values.length(),
-                                 arrow::ArrayVector{}),
+        arrow::RecordBatch::Make(empty_type.to_arrow_schema(),
+                                 list_values.length(), arrow::ArrayVector{}),
         empty_type,
       };
-      slice = assign(args.capture, values, slice, ctx);
-      values = tenzir::eval(args.expr, slice, ctx);
+      slice = assign(args.capture, list_values, slice, ctx);
+      auto result = tenzir::eval(args.expr, slice, ctx);
+      TENZIR_ASSERT(not result.parts().empty());
+      if (result.parts().size() > 1) {
+        // TODO: We could do some attempt of unification here.
+        // TODO: The error message is bad. It's difficult to explain.
+        diagnostic::warning("expression type must not depend on the argument")
+          .primary(args.expr)
+          .emit(ctx);
+        return series::null(null_type{}, eval.length());
+      }
+      auto values = result.part(0);
       switch (mode) {
         case mode::map: {
           // Lastly, we create a new series with the value offsets from the
@@ -340,6 +354,7 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
       }
       TENZIR_UNREACHABLE();
     });
+  });
 }
 
 class assert_plugin final

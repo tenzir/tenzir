@@ -17,13 +17,3 @@ warning: field `y` not found
 1 | read_json | z = x.otherwise(y)
   |                             ~ 
   |
-
-warning: cannot fallback to a different type
- --> <input>:1:29
-  |
-1 | read_json | z = x.otherwise(y)
-  |                             ~ expected `string`, got `int64`
-  ⋮
-1 | read_json | z = x.otherwise(y)
-  |                 -------------- evaluating to primary expression
-  |

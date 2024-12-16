@@ -9,8 +9,8 @@
 #pragma once
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/multi_series.hpp"
 #include "tenzir/series.hpp"
-#include "tenzir/series_builder.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -27,35 +27,35 @@ public:
       ctx_{ctx} {
   }
 
-  auto eval(const ast::expression& x) -> series;
+  auto eval(const ast::expression& x) -> multi_series;
 
-  auto eval(const ast::constant& x) -> series;
+  auto eval(const ast::constant& x) -> multi_series;
 
-  auto eval(const ast::record& x) -> series;
+  auto eval(const ast::record& x) -> multi_series;
 
-  auto eval(const ast::list& x) -> series;
+  auto eval(const ast::list& x) -> multi_series;
 
-  auto eval(const ast::this_& x) -> series;
+  auto eval(const ast::this_& x) -> multi_series;
 
-  auto eval(const ast::root_field& x) -> series;
+  auto eval(const ast::root_field& x) -> multi_series;
 
-  auto eval(const ast::function_call& x) -> series;
+  auto eval(const ast::function_call& x) -> multi_series;
 
-  auto eval(const ast::unary_expr& x) -> series;
+  auto eval(const ast::unary_expr& x) -> multi_series;
 
-  auto eval(const ast::binary_expr& x) -> series;
+  auto eval(const ast::binary_expr& x) -> multi_series;
 
-  auto eval(const ast::field_access& x) -> series;
+  auto eval(const ast::field_access& x) -> multi_series;
 
-  auto eval(const ast::assignment& x) -> series;
+  auto eval(const ast::assignment& x) -> multi_series;
 
-  auto eval(const ast::meta& x) -> series;
+  auto eval(const ast::meta& x) -> multi_series;
 
-  auto eval(const ast::index_expr& x) -> series;
+  auto eval(const ast::index_expr& x) -> multi_series;
 
   template <class T>
     requires(detail::tl_contains<ast::expression_kinds, T>::value)
-  auto eval(const T& x) -> series {
+  auto eval(const T& x) -> multi_series {
     return not_implemented(x);
   }
 
@@ -78,6 +78,10 @@ public:
 
   auto length() const -> int64_t {
     return length_;
+  }
+
+  auto get_input() const -> const table_slice* {
+    return input_;
   }
 
 private:
