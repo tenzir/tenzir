@@ -28,6 +28,7 @@ context::delete "ctx"
 [`context::create_geoip`](create_geoip.md),
 [`context::create_lookup_table`](create_lookup_table.md),
 [`context::enrich`](enrich.md),
+[`context::erase`](erase.md),
 [`context::inspect`](inspect.md),
 [`context::list`](list.md),
 [`context::load`](load.md),
