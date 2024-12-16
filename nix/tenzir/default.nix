@@ -16,6 +16,7 @@
     curl,
     libpcap,
     arrow-cpp,
+    arrow-adbc-cpp,
     aws-sdk-cpp-tenzir,
     azure-sdk-for-cpp,
     fast_float,
@@ -154,6 +155,8 @@
           simdjson
           spdlog
           xxHash
+        ] ++ lib.optionals (!isStatic) [
+          arrow-adbc-cpp
         ] ++ lib.optionals isMusl [
           jemalloc
         ];
