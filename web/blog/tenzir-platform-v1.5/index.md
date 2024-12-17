@@ -14,6 +14,8 @@ richer dashboarding experience and adds a new contexts page.
 
 [github-release]: https://github.com/tenzir/platform/releases/tag/v1.5.0
 
+<!-- truncate -->
+
 ## Multi-Node Dashboards
 
 Dashboards received a major upgrade in this release.

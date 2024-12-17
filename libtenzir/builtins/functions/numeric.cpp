@@ -39,7 +39,7 @@ public:
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto b = arrow::DoubleBuilder{};
         check(b.Reserve(eval.length()));
-        auto append_sqrt = [&](const arrow::DoubleArray& x) -> std::shared_ptr<arrow::Array> {
+        auto append_sqrt = [&](const arrow::DoubleArray& x) {
           for (auto y : x) {
             if (not y) {
               check(b.AppendNull());
@@ -56,10 +56,10 @@ public:
         };
         for (auto value : eval(expr)) {
           auto f = detail::overload{
-            [&](const arrow::DoubleArray& value) -> std::shared_ptr<arrow::Array> {
+            [&](const arrow::DoubleArray& value) {
               append_sqrt(value);
             },
-            [&](const arrow::Int64Array& value) -> std::shared_ptr<arrow::Array> {
+            [&](const arrow::Int64Array& value) {
               // TODO: Conversation should be automatic (if not
               // part of the kernel).
               auto b = arrow::DoubleBuilder{};
@@ -73,10 +73,10 @@ public:
               }
               append_sqrt(*finish(b));
             },
-            [&](const arrow::NullArray& value) -> std::shared_ptr<arrow::Array> {
+            [&](const arrow::NullArray& value) {
               check(b.AppendNulls(value.length()));
             },
-            [&](const auto&) -> std::shared_ptr<arrow::Array> {
+            [&](const auto&) {
               // TODO: Think about what we want and generalize this.
               diagnostic::warning("expected `number`, got `{}`",
                                   value.type.kind())
