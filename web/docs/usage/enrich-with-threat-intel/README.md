@@ -28,7 +28,8 @@ data from the [ThreatFox](https://threatfox.abuse.ch/) API:
 
 ```tql
 load_http "https://threatfox-api.abuse.ch/api/v1/",
-  body={query: "get_iocs", days: 1}
+  data={query: "get_iocs", days: 1}
+read_json
 unroll data
 where data.ioc_type == "domain"
 context::update "threatfox", key="ioc", value=data
