@@ -21,6 +21,7 @@
 #include <arrow/type.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
+#include <boost/version.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
