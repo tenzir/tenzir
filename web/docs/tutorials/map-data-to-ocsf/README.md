@@ -699,9 +699,9 @@ types, and we need to write one mapping pipeline for each. But how do we combine
 the individual pipelines?
 
 Tenzir's answer for this is topic-based publish-subscribe. The
-[`publish`](../../operators/publish.md) and
-[`subscribe`](../../operators/subscribe.md) operators send events to, and read
-events from a topic, respectively. Here's an illustration of the conceptual
+[`publish`](../../tql2/operators/publish.md) and
+[`subscribe`](../../tql2/operators/subscribe.md) operators send events to, and
+read events from a topic, respectively. Here's an illustration of the conceptual
 approach we are going to use:
 
 ![Pub/Sub Appraoch](ocsf-pub-sub.svg)

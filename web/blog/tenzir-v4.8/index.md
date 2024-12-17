@@ -17,10 +17,10 @@ filled with goodness.
 
 ## Lookup Operator
 
-The new [`lookup`](/next/operators/lookup) operator is a unique vehicle to
-perform live- and retro-matching simultaneously. Think of it as enrichment of
-all data that gets ingested into a node, plus a historical query for every
-change in the enrichment context.
+The new `lookup` operator is a unique vehicle to perform live- and
+retro-matching simultaneously. Think of it as enrichment of all data that gets
+ingested into a node, plus a historical query for every change in the enrichment
+context.
 
 ## Graylog Support
 
@@ -38,9 +38,8 @@ from tcp://0.0.0.0:12201 read gelf
 
 ## Shift Timestamps and Delay Events
 
-The new [`timeshift`](/next/operators/timeshift) and
-[`delay`](/next/operators/timeshift) operators make it possible to rewrite
-timestamps and act on them to replay data flexibly.
+The new `timeshift` and `delay` operators make it possible to rewrite timestamps
+and act on them to replay data flexibly.
 
 The `timeshift` operator adjusts a series of time values by anchoring them
 around a given start time. You can rewrite and scale timestamps:
@@ -78,9 +77,8 @@ and the response body isn't processed.
 
 ## Fluent Bit Performance
 
-The [`fluent-bit`](/operators/fluent-bit) source operator got a significant
-performance boost as a byproduct of changing the Fluent Bit data exchange format
-from JSON to MsgPack:
+The `fluent-bit` source operator got a significant performance boost as a
+byproduct of changing the Fluent Bit data exchange format from JSON to MsgPack:
 
 ![Fluent Bit Performance](fluent-bit-speedup.svg)
 

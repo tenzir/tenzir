@@ -75,10 +75,9 @@ Read more about contexts in our blog post series:
 
 ## Grok and KV Parsers
 
-The [`kv`](/next/formats/kv) and [`grok`](/next/formats/grok) parsers combine
-well with the [`parse`](/next/operators/parse) operator introduced with Tenzir
-v4.6. The former reads key-value pairs by splitting strings based on regular
-expressions, and the latter uses a parser modeled after the [Logstash
+The `kv` and `grok` parsers combine well with the `parse` operator introduced
+with Tenzir v4.6. The former reads key-value pairs by splitting strings based on
+regular expressions, and the latter uses a parser modeled after the [Logstash
 `grok` plugin][logstash-grok] in Elasticsearch.
 
 [logstash-grok]: https://www.elastic.co/guide/en/logstash/current/plugins-filters-grok.html
@@ -132,9 +131,9 @@ parse message kv "\s+" "="
 
 ## Slice and Dice Events
 
-The [`slice`](/next/operators/slice) operator is a more powerful version of the
-`head` and `tail` operators. It allows for selecting a contiguous range of
-events given a half-closed interval.
+The `slice` operator is a more powerful version of the `head` and `tail`
+operators. It allows for selecting a contiguous range of events given a
+half-closed interval.
 
 ```text {0} title="Get the second 100 events"
 slice --begin 100 --end 200
@@ -154,10 +153,8 @@ slice --begin 10 --end -10
 
 ## Lightweight Endpoint Snapshot
 
-Use the [`processes`](/next/operators/processes),
-[`sockets`](/next/operators/sockets), and [`nics`](/next/operators/nics) sources
-to get a snapshot of running processes, sockets, and available network
-interfaces, respectively.
+Use the `processes` `sockets`, and `nics` sources to get a snapshot of running
+processes, sockets, and available network interfaces, respectively.
 
 ```text {0} title="Top three running processes by name"
 processes

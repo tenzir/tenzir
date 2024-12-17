@@ -7,12 +7,12 @@ authors:
      image_url: https://github.com/lo-chr.png
    - mavam
 date: 2023-10-19
-last_updated: 2023-12-12
+last_updated: 2024-12-16
 tags: [velociraptor, operator, dfir]
 comments: true
 ---
 
-The new [`velociraptor`][velociraptor-operator] operator allows you to run
+The new `velociraptor` operator allows you to run
 [Velociraptor Query Language (VQL)][vql] expressions against a
 [Velociraptor][velociraptor] server and process the results in a Tenzir
 pipeline. You can also subscribe to matching artifacts in hunt flows over a
@@ -20,7 +20,6 @@ large fleet of assets, making endpoint telemetry collection and processing a
 breeze.
 
 [velociraptor]: https://docs.velociraptor.app/
-[velociraptor-operator]: /next/operators/velociraptor
 [vql]: https://docs.velociraptor.app/docs/vql
 
 ![Velociraptor and Tenzir](velociraptor-and-tenzir.excalidraw.svg)
@@ -66,9 +65,9 @@ velociraptor --query "select * from pslist()"
 | import
 ```
 
-Storing it via [`import`](/next/operators/import) is just one of many options.
-For ad-hoc investigations, you often just want to analyze the result, for which
-a variety of transformations come in handy. For example:
+Storing it via `import` is just one of many options. For ad-hoc investigations,
+you often just want to analyze the result, for which a variety of
+transformations come in handy. For example:
 
 ```bash
 velociraptor --query "select * from pslist()"

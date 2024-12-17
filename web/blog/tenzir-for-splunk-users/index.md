@@ -7,13 +7,13 @@ tags: [zeek, threat hunting, pipelines, tql, splunk, spl]
 comments: true
 ---
 
-Our [Tenzir Query Language (TQL)](/language) is a pipeline language that works
-by chaining operators into data flows. When we designed TQL, we specifically
-studied Splunk's [Search Processing Language (SPL)][spl], as it generally leaves
-a positive impression for security analysts that are not data engineers. Our
-goal was to take all the good things of SPL, but provide a more powerful
-language without compromising simplicity. In this blog post, we explain how the
-two languages differ using concrete threat hunting examples.
+Our Tenzir Query Language (TQL) is a pipeline language that works by chaining
+operators into data flows. When we designed TQL, we specifically studied
+Splunk's [Search Processing Language (SPL)][spl], as it generally leaves a
+positive impression for security analysts that are not data engineers. Our goal
+was to take all the good things of SPL, but provide a more powerful language
+without compromising simplicity. In this blog post, we explain how the two
+languages differ using concrete threat hunting examples.
 
 [spl]: https://docs.splunk.com/Documentation/SplunkCloud/latest/Search/Aboutthesearchlanguage
 
@@ -93,20 +93,18 @@ Analysis:
 
 - In SPL, you typically start with an `index=X` to specify your dataset. In
   TQL, you start with a source operator. To run a query over historical data, we
-  use the [`export`](/next/operators/export) operator.
+  use the `export` operator.
 
-- The subsequent [`where`](/next/operators/where) operator is a
-  transformation to filter the stream of events with the
-  [expression](/language/expressions) `#schema == "zeek.conn" && id.resp_p >
-  1024`. In SPL, you write that expression directly into `index`. In TQL, we
-  logically separate this because one operator should have exactly one purpose.
-  Under the hood, the TQL optimizer does predicate pushdown to avoid first
-  exporting the entire database and only then applying the filter.
+- The subsequent `where` operator is a transformation to filter the stream of
+  events with the expression `#schema == "zeek.conn" && id.resp_p > 1024`. In
+  SPL, you write that expression directly into `index`. In TQL, we logically
+  separate this because one operator should have exactly one purpose. Under the
+  hood, the TQL optimizer does predicate pushdown to avoid first exporting the
+  entire database and only then applying the filter.
 
   Why does this single responsibility principle matter? Because it's critical
   for *composition*: we can now replace `export` with another data source, like
-  [`from`](/next/operators/from) [`kafka`](/connectors/kafka), and the rest
-  of the pipeline stays the same.
+  `from`, `kafka`, and the rest of the pipeline stays the same.
 
 - TQL's `#schema` is an expression that is responsible for filtering the data
   sources. This is because all TQL pipelines are *multi-schema*, i.e., they can
@@ -141,8 +139,8 @@ export
 | head 10
 ```
 
-Note the similarity. We opted to add [`top`](/next/operators/top) and
-[`rare`](/next/operators/rare) to make SPL users feel at home.
+Note the similarity. We opted to add `top` and `rare` to make SPL users feel at
+home.
 
 ### Top 10 sources by bytes sent
 
@@ -179,11 +177,11 @@ Analysis:
   `sort B desc`, whereas `sort B` into `sort B asc`. However, we want to adopt
   the SPL syntax in the future.
 
-- SPL's `eval` maps to [`extend`](/next/operators/extend).
+- SPL's `eval` maps to `extend`.
 
-- The difference between `extend` and [`put`](/next/operators/put) is
-  that `extend` keeps all fields as is, whereas `put` reorders fields and
-  performs an explicit projection with the provided fields.
+- The difference between `extend` and `put` is that `extend` keeps all fields as
+  is, whereas `put` reorders fields and performs an explicit projection with the
+  provided fields.
 
 - We don't have functions in TQL. *Yet*. It's one of our most important roadmap
   items at the time of writing, so stay tuned.
@@ -248,8 +246,7 @@ Analysis:
   "stack counting". Unlike SPL, our version of `rare` does not limit the output
   to 10 events by default, which is why add `head 10`. This goes back to the
   single responsibility principle: one operator should do exactly one thing. The
-  act of limiting the output should always be associated with
-  [`head`](/next/operators/head).
+  act of limiting the output should always be associated with `head`.
 
 ### Expired certificates
 
@@ -274,11 +271,10 @@ Analysis:
 - This example shows the benefit of native time types (and Tenzir's rich type
   system in general).
 
-- TQL's [type system](/data-model/type-system) has first-class support for times
-  and durations.
+- TQL's type system has first-class support for times and durations.
 
-- TQL's [`zeek-tsv`](/formats/zeek-tsv) parser preserves `time` types natively,
-  so you don't have to massage strings at query-time.
+- TQL's `zeek-tsv` parser preserves `time` types natively, so you don't have to
+  massage strings at query-time.
 
 ### Large DNS queries
 
@@ -345,6 +341,6 @@ was not our only inspiration, we also drew inspiration from Kusto and others.
 As we created TQL, we wanted to learn from missed opportunities while doubling
 down on SPL's great user experience.
 
-If you'd like to give Tenzir a spin, [try our community edition](/overview)
-for free. A demo node with example pipelines is waiting for you. For more
-details about TQL, head over to the [language documentation](/pipelines).
+If you'd like to give Tenzir a spin, [try our community
+edition](https://app.tenzir.com) for free. A demo node with example pipelines is
+waiting for you.

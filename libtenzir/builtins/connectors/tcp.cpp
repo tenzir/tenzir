@@ -18,6 +18,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
+#include <boost/version.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
@@ -268,8 +269,13 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
             .hint("{}", error)
             .to_error();
         }
-        auto backlog = boost::asio::socket_base::max_connections;
-        self->state().acceptor->listen(backlog);
+#if BOOST_VERSION >= 108700
+        const auto max_connections
+          = boost::asio::socket_base::max_listen_connections;
+#else
+        const auto max_connections = boost::asio::socket_base::max_connections;
+#endif
+        self->state().acceptor->listen(max_connections);
         self->state().metrics.handle
           = fmt::to_string(self->state().acceptor->native_handle());
       } catch (std::exception& e) {
@@ -348,31 +354,31 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
       }
       self->state().read_buffer.resize(buffer_size);
       self->state().read_rp = self->make_response_promise<chunk_ptr>();
-      auto on_read = [self, weak_hdl
-                            = caf::actor_cast<caf::weak_actor_ptr>(self)](
-                       boost::system::error_code ec, size_t length) {
-        if (auto hdl = weak_hdl.lock()) {
-          // TODO: Potential optimization: We could at this point already
-          // eagerly start the next read.
-          caf::anon_send(caf::actor_cast<caf::actor>(hdl),
-                         caf::make_action([self, ec, length] {
-                           if (ec) {
-                             return self->state().read_rp.deliver(
-                               caf::make_error(ec::system_error,
-                                               fmt::format("failed to read "
-                                                           "from TCP socket: "
-                                                           "{}",
-                                                           ec.message())));
-                           }
-                           self->state().metrics.reads++;
-                           self->state().metrics.bytes_read += length;
-                           self->state().read_buffer.resize(length);
-                           self->state().read_buffer.shrink_to_fit();
-                           return self->state().read_rp.deliver(chunk::make(
-                             std::exchange(self->state().read_buffer, {})));
-                         }));
-        }
-      };
+      auto on_read
+        = [self, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
+            boost::system::error_code ec, size_t length) {
+            if (auto hdl = weak_hdl.lock()) {
+              // TODO: Potential optimization: We could at this point already
+              // eagerly start the next read.
+              caf::anon_send(
+                caf::actor_cast<caf::actor>(hdl),
+                caf::make_action([self, ec, length] {
+                  if (ec) {
+                    return self->state().read_rp.deliver(caf::make_error(
+                      ec::system_error, fmt::format("failed to read "
+                                                    "from TCP socket: "
+                                                    "{}",
+                                                    ec.message())));
+                  }
+                  self->state().metrics.reads++;
+                  self->state().metrics.bytes_read += length;
+                  self->state().read_buffer.resize(length);
+                  self->state().read_buffer.shrink_to_fit();
+                  return self->state().read_rp.deliver(
+                    chunk::make(std::exchange(self->state().read_buffer, {})));
+                }));
+            }
+          };
       auto asio_buffer
         = boost::asio::buffer(self->state().read_buffer, buffer_size);
       if (self->state().tls_socket) {
@@ -796,8 +802,8 @@ public:
 };
 
 class save_tcp final : public virtual operator_plugin2<saver_adapter<saver>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto parser = argument_parser2::operator_(name());
     auto uri = located<std::string>{};

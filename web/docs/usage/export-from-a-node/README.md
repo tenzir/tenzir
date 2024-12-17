@@ -6,9 +6,9 @@ sidebar_position: 4
 
 Exporting (or *querying*) data can be done by [running a
 pipeline](../run-pipelines/README.md) that begins with the
-[`export`](../../tql2/operators/export.md) source. When managing a pipeline through
-the app or the API, all pipeline operators run within the node. When using the
-CLI, at least the `export` operator runs within the node.
+[`export`](../../tql2/operators/export.md) input operator. When managing a
+pipeline through the app or the API, all pipeline operators run within the node.
+When using the CLI, at least the `export` operator runs within the node.
 
 ![Export](export.excalidraw.svg)
 

@@ -428,12 +428,13 @@ public:
           .positional("packet", expr, "record")
           .parse(inv, ctx));
     return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto series = eval(expr);
-        if (auto op = decapsulate(series, ctx.dh(), false)) {
-          return op.value();
-        }
-        return series::null(null_type{}, series.length());
+      [expr = std::move(expr)](evaluator eval, session ctx) {
+        return map_series(eval(expr), [&](series series) {
+          if (auto op = decapsulate(series, ctx.dh(), false)) {
+            return op.value();
+          }
+          return series::null(null_type{}, series.length());
+        });
       });
   }
 

@@ -4,7 +4,8 @@ A **package** is a set of pipelines and contexts that are thematically related
 and deployed together as a single unit.
 
 :::tip Use packages
-Start using packages by [installing one](installation/install-a-package.md).
+Get instant gratification by [installing a
+package](installation/install-a-package.md).
 :::
 
 ## Anatomy of a Package

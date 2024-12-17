@@ -28,24 +28,19 @@ on the VAST Language.
 
 We introduced several new operators:
 
-- [`tail`](/next/operators/tail): limits the input to the last N events.
-- [`unique`](/next/operators/unique): removes adjacent duplicates
-- [`measure`](/next/operators/measure): replaces the input with incremental
-  metrics describing the input.
+- `tail`: limits the input to the last N events.
+- `unique`: removes adjacent duplicates
+- `measure`: replaces the input with incremental metrics describing the input.
 - `version`: returns a single event displaying version information of VAST. (Now
-  [`show`](/next/operators/show).)
-- [`from`](/next/operators/from): produces events by combining a connector and a
-  format.
-- [`read`](/next/operators/read): a short form of `from` that allows for
-  omitting the connector.
-- [`to`](/next/operators/to): consumes events by combining a connector and
-  format.
-- [`write`](/next/operators/write): a short form of `to` that allows for
+  `show`.)
+- `from`: produces events by combining a connector and a format.
+- `read`: a short form of `from` that allows for omitting the connector.
+- `to`: consumes events by combining a connector and format.
+- `write`: a short form of `to` that allows for
   omitting the connector.
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to
-work with selectors and extractors. Check out the [growing list of
-operators](/next/operators/).
+work with selectors and extractors.
 
 ## Operator Aliases
 

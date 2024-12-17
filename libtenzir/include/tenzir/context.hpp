@@ -46,6 +46,13 @@ struct context_update_args {
                               f.field("read_timeout", x.read_timeout));
   }
 };
+struct context_erase_args {
+  ast::expression key = {};
+
+  friend auto inspect(auto& f, context_erase_args& x) -> bool {
+    return f.object(x).fields(f.field("key", x.key));
+  }
+};
 
 /// Information about a context update that gets propagated to live lookups.
 struct context_update_result {
@@ -100,6 +107,12 @@ public:
   virtual auto update(const table_slice& events,
                       const context_update_args& args, session ctx)
     -> failure_or<context_update_result>
+    = 0;
+
+  /// Removes events from the context.
+  virtual auto
+  erase(const table_slice& events, const context_erase_args& args, session ctx)
+    -> failure_or<void>
     = 0;
 
   /// Clears the context state, with optional parameters.

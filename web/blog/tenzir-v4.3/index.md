@@ -7,13 +7,11 @@ tags: [release, operators, observability, fluent-bit, json, yaml, labels]
 ---
 
 Exciting times, Tenzir v4.3 is out! The headlining feature is [Fluent
-Bit][fluentbit] support with the `fluent-bit` [source][fluentbit-source] and
-[sink][fluentbit-sink] operators. Imagine you can use all Fluent Bit connectors
-*plus* what Tenzir already offers. What a treat!
+Bit][fluentbit] support with the `fluent-bit` source and sink operators. Imagine
+you can use all Fluent Bit connectors *plus* what Tenzir already offers. What a
+treat!
 
 [fluentbit]: https://fluentbit.io/
-[fluentbit-source]: /next/operators/fluent-bit
-[fluentbit-sink]: /next/operators/fluent-bit
 
 ![Tenzir v4.3](tenzir-v4.3.excalidraw.svg)
 
@@ -29,12 +27,11 @@ the intersection of the security and data.
 By bringing the two ecosystems together, you, dear user, benefit from the union
 of features. Before diving into some examples, let's briefly compare the tech.
 Fluent Bit features [inputs][inputs] and [outputs][outputs] to get data in and
-out of the ecosystem. These are equivalent to Tenzir's
-[connectors](/connectors). Fluent Bit also has [parsers][parsers] that map to
-the equally named concept of Tenzir [parsers](/formats). Fluent Bit's
-[filters][filters] would be implemented as *transformations* in Tenzir, i.e.,
-operators that have a non-void input and output. The diagram illustrates these
-relationships:
+out of the ecosystem. These are equivalent to Tenzir's connectors. Fluent Bit
+also has [parsers][parsers] that map to the equally named concept of Tenzir
+parsers. Fluent Bit's [filters][filters] would be implemented as
+*transformations* in Tenzir, i.e., operators that have a non-void input and
+output. The diagram illustrates these relationships:
 
 [inputs]: https://docs.fluentbit.io/manual/pipeline/inputs
 [outputs]: https://docs.fluentbit.io/manual/pipeline/outputs
@@ -56,8 +53,8 @@ Bit's filters, as we have a variety of transformation operators for that.
 
 ### How do I use it?
 
-The `fluent-bit` [source][fluentbit-source] and [sink][fluentbit-sink] operator
-is where the action happens. They have the following syntax:
+The `fluent-bit` source and sink operators are where the action happens. They
+have the following syntax:
 
 ```
 fluent-bit <plugin> [<key=value>..]
@@ -133,8 +130,8 @@ tenzir 'fluent-bit opentelemetry'
 ```
 
 This opens a socket on port 4318 that you can send now telemetry to. Instead of
-`curl`, we're using our own HTTPie-like [`http`](/connectors/http) connector to
-issue a POST request:
+`curl`, we're using our own HTTPie-like `http` connector to issue a POST
+request:
 
 ```bash
 tenzir 'from http POST 127.0.0.1:4318/v1/logs resourceLogs:=[{"resource":{},"scopeLogs":[{"scope":{},"logRecords":[{"timeUnixNano":"1660296023390371588","body":{"stringValue":"{\"message\":\"dummy\"}"},"traceId":"","spanId":""}]}]}]'
@@ -276,8 +273,8 @@ baz of type `ip` for the first two events, and of type `string` for the third.
 
 ### YAML Format
 
-The new [`yaml`](/next/formats/yaml) format supports reading and writing YAML
-documents and document streams.
+The new `yaml` format supports reading and writing YAML documents and document
+streams.
 
 For example, you can now render the configuration of the current node as valid
 YAML:

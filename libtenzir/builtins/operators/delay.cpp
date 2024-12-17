@@ -164,57 +164,60 @@ public:
         co_yield {};
         continue;
       }
-      auto ser = eval(expr_, slice, ctrl.diagnostics());
-      auto* ptr = try_as<arrow::TimestampArray>(ser.array.get());
-      if (not ptr) {
-        if (ser.type.kind().is_not<null_type>()) {
-          diagnostic::warning("expected `time`, got `{}`", ser.type.kind())
-            .primary(expr_)
-            .emit(ctrl.diagnostics());
-        }
-        co_yield std::move(slice);
-        continue;
-      }
-      size_t begin = 0;
-      size_t end = 0;
-      const auto& array = *ptr;
-      for (const auto&& element : values(time_type{}, array)) {
-        if (not element) {
-          ++end;
+      auto sers = eval(expr_, slice, ctrl.diagnostics());
+      for (auto& ser : sers.parts()) {
+        auto* ptr = try_as<arrow::TimestampArray>(ser.array.get());
+        if (not ptr) {
+          if (ser.type.kind().is_not<null_type>()) {
+            diagnostic::warning("expected `time`, got `{}`", ser.type.kind())
+              .primary(expr_)
+              .emit(ctrl.diagnostics());
+          }
+          co_yield std::move(slice);
           continue;
         }
-        if (not start) [[unlikely]] {
-          start = *element;
+        size_t begin = 0;
+        size_t end = 0;
+        const auto& array = *ptr;
+        for (const auto&& element : values(time_type{}, array)) {
+          if (not element) {
+            ++end;
+            continue;
+          }
+          if (not start) [[unlikely]] {
+            start = *element;
+          }
+          const auto anchor
+            = *start
+              + std::chrono::duration_cast<duration>(
+                std::chrono::duration_cast<
+                  std::chrono::duration<double, duration::period>>(
+                  std::chrono::steady_clock::now() - start_time)
+                * speed_);
+          const auto delay = std::chrono::duration_cast<duration>(
+            std::chrono::duration_cast<
+              std::chrono::duration<double, duration::period>>(*element
+                                                               - anchor)
+            / speed_);
+          if (delay > duration::zero()) {
+            co_yield subslice(slice, begin, end);
+            ctrl.self()
+              .request(alarm_clock, caf::infinite, delay)
+              .await(
+                [&]() {
+                  begin = end;
+                },
+                [&ctrl, deadline = *element](const caf::error& err) {
+                  diagnostic::error("failed to delay until `{}`: {}", deadline,
+                                    err)
+                    .emit(ctrl.diagnostics());
+                });
+            co_yield {};
+          }
+          ++end;
         }
-        const auto anchor
-          = *start
-            + std::chrono::duration_cast<duration>(
-              std::chrono::duration_cast<
-                std::chrono::duration<double, duration::period>>(
-                std::chrono::steady_clock::now() - start_time)
-              * speed_);
-        const auto delay = std::chrono::duration_cast<duration>(
-          std::chrono::duration_cast<
-            std::chrono::duration<double, duration::period>>(*element - anchor)
-          / speed_);
-        if (delay > duration::zero()) {
-          co_yield subslice(slice, begin, end);
-          ctrl.self()
-            .request(alarm_clock, caf::infinite, delay)
-            .await(
-              [&]() {
-                begin = end;
-              },
-              [&ctrl, deadline = *element](const caf::error& err) {
-                diagnostic::error("failed to delay until `{}`: {}", deadline,
-                                  err)
-                  .emit(ctrl.diagnostics());
-              });
-          co_yield {};
-        }
-        ++end;
+        co_yield subslice(slice, begin, end);
       }
-      co_yield subslice(slice, begin, end);
     }
   }
 

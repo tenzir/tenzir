@@ -1266,66 +1266,67 @@ public:
           .positional("x", expr, "string")
           .parse(inv, ctx));
     return function_use::make(
-      [call = inv.call.get_location(),
-       expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto arg = eval(expr);
-        auto f = detail::overload{
-          [&](const arrow::NullArray&) {
-            return arg;
-          },
-          [&](const arrow::StringArray& arg) {
-            auto parser = simdjson::ondemand::parser{};
-            auto b = series_builder{};
-            for (auto i = int64_t{0}; i < arg.length(); ++i) {
-              if (arg.IsNull(i)) {
-                b.null();
-                continue;
-              }
-              auto str = std::string{arg.Value(i)};
-              doc_parser doc_p = doc_parser(str, ctx);
-              auto doc = parser.iterate(str);
-              if (doc.error()) {
-                diagnostic::warning("{}", error_message(doc.error()))
-                  .primary(call)
-                  .emit(ctx);
-                b.null();
-                continue;
-              }
-              const auto result
-                = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
-              switch (result) {
-                case doc_parser::result::failure_with_write:
-                  b.remove_last();
-                  [[fallthrough]];
-                case doc_parser::result::failure_no_change:
-                  diagnostic::warning("could not parse json")
+      [call = inv.call.get_location(), expr = std::move(expr)](evaluator eval,
+                                                               session ctx) {
+        return map_series(eval(expr), [&](series arg) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray&) {
+              return arg;
+            },
+            [&](const arrow::StringArray& arg) {
+              auto parser = simdjson::ondemand::parser{};
+              auto b = series_builder{};
+              for (auto i = int64_t{0}; i < arg.length(); ++i) {
+                if (arg.IsNull(i)) {
+                  b.null();
+                  continue;
+                }
+                auto str = std::string{arg.Value(i)};
+                doc_parser doc_p = doc_parser(str, ctx);
+                auto doc = parser.iterate(str);
+                if (doc.error()) {
+                  diagnostic::warning("{}", error_message(doc.error()))
                     .primary(call)
                     .emit(ctx);
                   b.null();
-                  break;
-                case doc_parser::result::success: /*no op*/;
+                  continue;
+                }
+                const auto result
+                  = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
+                switch (result) {
+                  case doc_parser::result::failure_with_write:
+                    b.remove_last();
+                    [[fallthrough]];
+                  case doc_parser::result::failure_no_change:
+                    diagnostic::warning("could not parse json")
+                      .primary(call)
+                      .emit(ctx);
+                    b.null();
+                    break;
+                  case doc_parser::result::success: /*no op*/;
+                }
               }
-            }
-            auto result = b.finish();
-            // TODO: Consider whether we need heterogeneous for this. If so,
-            // then we must extend the evaluator accordingly.
-            if (result.size() != 1) {
-              diagnostic::warning("got incompatible JSON values")
+              auto result = b.finish();
+              // TODO: Consider whether we need heterogeneous for this. If so,
+              // then we must extend the evaluator accordingly.
+              if (result.size() != 1) {
+                diagnostic::warning("got incompatible JSON values")
+                  .primary(call)
+                  .emit(ctx);
+                return series::null(null_type{}, arg.length());
+              }
+              return std::move(result[0]);
+            },
+            [&](const auto&) {
+              diagnostic::warning("`parse_json` expected `string`, got `{}`",
+                                  arg.type.kind())
                 .primary(call)
                 .emit(ctx);
               return series::null(null_type{}, arg.length());
-            }
-            return std::move(result[0]);
-          },
-          [&](const auto&) {
-            diagnostic::warning("`parse_json` expected `string`, got `{}`",
-                                arg.type.kind())
-              .primary(call)
-              .emit(ctx);
-            return series::null(null_type{}, arg.length());
-          },
-        };
-        return match(*arg.array, f);
+            },
+          };
+          return match(*arg.array, f);
+        });
       });
   }
 };

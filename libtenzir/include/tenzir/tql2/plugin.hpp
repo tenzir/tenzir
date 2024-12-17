@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/string_literal.hpp"
+#include "tenzir/multi_series.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -108,7 +109,7 @@ public:
     explicit evaluator(void* self) : self_{self} {
     }
 
-    auto operator()(const ast::expression& expr) const -> series;
+    auto operator()(const ast::expression& expr) const -> multi_series;
 
     auto length() const -> int64_t;
 
@@ -116,12 +117,18 @@ public:
     void* self_;
   };
 
-  virtual auto run(evaluator eval, session ctx) -> series = 0;
+  virtual auto run(evaluator eval, session ctx) -> multi_series = 0;
 
-  static auto
-  make(detail::unique_function<auto(evaluator eval, session ctx)->series> f)
+  // TODO: Remove?
+  // static auto
+  // make(detail::unique_function<auto(evaluator eval, session ctx)->series> f)
+  //   -> function_ptr;
+
+  static auto make(
+    detail::unique_function<auto(evaluator eval, session ctx)->multi_series> f)
     -> function_ptr;
 };
+
 class function_plugin : public virtual plugin {
 public:
   using evaluator = function_use::evaluator;

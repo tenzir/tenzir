@@ -214,15 +214,9 @@ public:
     auto base_url = boost::urls::parse_uri_reference(args_.uri);
     TENZIR_ASSERT(base_url);
     auto process = [&](table_slice slice) {
-      auto by = std::vector<series>{};
+      auto by = std::vector<multi_series>{};
       for (auto& sel : args_.by) {
         auto values = eval(sel.inner(), slice, ctrl.diagnostics());
-        if (values.type.kind().is<null_type>()) {
-          diagnostic::warning("TODO: dropping data")
-            .primary(sel)
-            .emit(ctrl.diagnostics());
-          return;
-        }
         by.push_back(std::move(values));
       }
       slice = remove_columns(slice, args_.by);
@@ -231,8 +225,7 @@ public:
         auto key = list{};
         for (auto& partition_point : by) {
           TENZIR_ASSERT(row < partition_point.length());
-          key.push_back(materialize(
-            value_at(partition_point.type, *partition_point.array, row)));
+          key.push_back(materialize(partition_point.value_at(row)));
         }
         auto key_data = data{std::move(key)};
         auto it = groups.find(key_data);

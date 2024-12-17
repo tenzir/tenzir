@@ -46,7 +46,8 @@ public:
     const auto non_const_eval = [&](const ast::expression& expr) {
       auto value = evaluator{nullptr, sp.as_session()}.eval(expr);
       TENZIR_ASSERT(value.length() == 1);
-      return value;
+      TENZIR_ASSERT(value.parts().size() == 1);
+      return value.part(0);
     };
     for (auto& expr : events_) {
       auto slice = non_const_eval(expr);

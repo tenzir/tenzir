@@ -16,18 +16,10 @@ Parsers and printers interact with their corresponding dual from a connector:
 
 ![Format](formats/format.excalidraw.svg)
 
-Formats appear as an argument to the [`read`](operators/read.md),
-[`write`](operators/write.md), [`from`](operators/from.md),
-[`to`](operators/to.md), [`parse`](operators/parse.md), and
+Formats appear as an argument to the [`parse`](operators/parse.md), and
 [`print`](operators/print.md) operators:
 
 ```
-read <format>
-write <format>
-
-from <connector> [read <format>]
-to <connector> [write <format>]
-
 parse <field> <format>
 print <field> <format>
 ```

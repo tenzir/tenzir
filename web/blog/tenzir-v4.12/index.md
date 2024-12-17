@@ -46,8 +46,8 @@ take the example of a connection summary stream in JSON format:
 ```
 
 To overcome the hurdles of JSON list manipulation, we introduce the new
-[`unroll`](/next/operators/unroll) operator, allowing the creation of an event
-for each item in the list. Let's `unroll dst`:
+`unroll` operator, allowing the creation of an event for each item in the list.
+Let's `unroll dst`:
 
 ```json
 {"src": "192.0.2.1", "dst": "192.0.2.143"}
@@ -61,8 +61,8 @@ for each item in the list. Let's `unroll dst`:
 The data is now significantly easier to work with.
 
 Do you see the duplicate host pairs? Let's remove them with the new
-[`deduplicate`](/next/operators/deduplicate) operator. Run `deduplicate src, dst
---timeout 24h` to condense the above output to:
+`deduplicate` operator. Run `deduplicate src, dst --timeout 24h` to condense the
+above output to:
 
 ```json
 {"src": "192.0.2.1", "dst": "192.0.2.143"}
@@ -78,9 +78,7 @@ corresponding entry is removed from the operator's internal state.
 We delved deeper into the power of the `deduplicate` operator in a [previous
 blog post](reduce-cost-and-noise-with-deduplication).
 
-Building on this, the
-[`every`](/language/operator-modifiers#scheduled-executions) operator
-(prominently featured in the [previous
+Building on this, the `every` operator (prominently featured in the [previous
 release](tenzir-v4.11#execute-sources-on-a-schedule)) can now also accompany
 transformations and sinks. To illustrate, let's answer this question: "With how
 many new destinations did each device communicate in the last minute?"
@@ -99,9 +97,8 @@ more efficient.
 
 ## Publish and Subscribe
 
-Exciting are also the new [`publish`](/next/operators/publish) and
-[`subscribe`](/next/operators/publish) operators, which open up endless
-possibilities for creating arbitrary dataflow topologies. For instance,
+Exciting are also the new `publish` and `subscribe` operators, which open up
+endless possibilities for creating arbitrary dataflow topologies. For instance,
 you can set a publishing point within your data stream. It's as simple as `from
 tcp://0.0.0.0:8000 | publish input`. This defines a channel `input` that you can
 now subscribe to with `subscribe`.

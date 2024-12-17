@@ -31,11 +31,10 @@ public:
     TRY(argument_parser2::function("subnet")
           .positional("x", expr, "string")
           .parse(inv, ctx));
-    return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto arg = eval(expr);
-        return match(
-          *arg.array,
+    return function_use::make([expr
+                               = std::move(expr)](evaluator eval, session ctx) {
+      return map_series(eval(expr), [&](series arg) {
+        auto f = detail::overload{
           [](const arrow::NullArray& arg) {
             return series::null(subnet_type{}, arg.length());
           },
@@ -67,8 +66,11 @@ public:
               .primary(expr)
               .emit(ctx);
             return series::null(subnet_type{}, arg.length());
-          });
+          },
+        };
+        return match(*arg.array, f);
       });
+    });
   }
 };
 

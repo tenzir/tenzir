@@ -1,2 +1,8 @@
-error: failed to deduplicate due to unmatched type extractor
- = note: `:ip` matched no fields in schema `tenzir.json`
+{"a": 1, "b": 2, "tag": 1}
+{"b": "reset", "tag": 2}
+warning: field `a` not found
+ --> <input>:1:17
+  |
+1 | deduplicate {a: a, b: b}, limit=1
+  |                 ~ 
+  |

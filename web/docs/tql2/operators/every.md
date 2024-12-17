@@ -8,7 +8,12 @@ every interval:duration { … }
 
 ## Description
 
-The `every` operator repeats running a pipeline indefinitely at a fixed interval. The first run is starts directly when the outer pipeline itself starts. After every interval, the previous run is finished by stopping its input, and a new run is started.
+The `every` operator repeats running a pipeline indefinitely at a fixed
+interval. The first run is starts directly when the outer pipeline itself
+starts.
+
+Every `interval`, the executor spawns a new pipeline that runs to completion. If
+the pipeline runs longer than `interval`, the next run immediately starts.
 
 ## Examples
 
@@ -38,3 +43,7 @@ every 10min {
 }
 publish "threat-feed"
 ```
+
+## See Also
+
+[`cron`](cron.md)

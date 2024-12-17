@@ -240,7 +240,7 @@ class fun : public virtual function_plugin {
           return std::move(hasher).finish();
         };
         auto b = string_type::make_arrow_builder(arrow::default_memory_pool());
-        for (const auto& value : values(s.type, *s.array)) {
+        for (const auto& value : s.values()) {
           auto digest = hash(value);
           if constexpr (concepts::integer<typename HashAlgorithm::result_type>
                         and HashAlgorithm::endian == std::endian::little) {

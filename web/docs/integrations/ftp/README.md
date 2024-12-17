@@ -11,7 +11,7 @@ connection. This can be tricky for some firewalls and may require special
 attention.
 
 :::tip URL Support
-The URL schemes `ftp://` and `ftps://` dispatche to
+The URL schemes `ftp://` and `ftps://` dispatch to
 [`load_ftp`](../../tql2/operators/load_ftp.md) and
 [`save_ftp`](../../tql2/operators/save_ftp.md) for seamless URL-style use via
 [`from`](../../tql2/operators/from.md) and [`to`](../../tql2/operators/to.md).

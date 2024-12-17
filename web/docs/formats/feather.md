@@ -48,7 +48,7 @@ compression.
 
 :::info Why would I use this over the `compress` operator?
 The Feather format offers more efficient compression compared to the
-[`compress`](../operators/compress.md) operator. This is because it compresses
+`compress` operator. This is because it compresses
 the data column-by-column, leaving metadata that needs to be accessed frequently
 uncompressed.
 :::
@@ -74,13 +74,13 @@ be compressed if its expected compressed size exceeds 90 bytes.
 
 ## Examples
 
-Read a Feather file via the [`from`](../operators/from.md) operator:
+Read a Feather file via the `from` operator:
 
 ```
 from /tmp/data.feather --mmap read feather
 ```
 
-Write a Zstd-compressed Feather file via [`to`](../operators/to.md) operator:
+Write a Zstd-compressed Feather file via `to` operator:
 
 ```
 to /tmp/suricata.feather write feather --compression-type zstd

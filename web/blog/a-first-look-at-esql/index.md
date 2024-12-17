@@ -67,10 +67,10 @@ through each pipeline operator individually:
   unbounded streams but also follow the single responsibility principle: one
   operator has exactly one job.
 - [`EVAL`][esql-eval] appends new or replaces existing columns. We named this
-  operator [`extend`](/next/operators/extend) because we found the
+  operator `extend` because we found the
   Splunk-inspired command name "eval" too generic for this use case.[^1]
 - [`WHERE`][esql-where] filters the input with an expression. We have the same
-  [`where`](/next/operators/where) in TQL.
+  `where` in TQL.
 - [`STATS`][esql-stats] groups its input via `BY` and applies aggregation
   functions on select fields of each group.  Elastic went with Splunk
   nomenclature for this central operation, perhaps also to make the transition
@@ -82,17 +82,15 @@ through each pipeline operator individually:
   intimidating for beginning and intermediate users.
 - [`KEEP`][esql-keep] selects a set of columns from the input and drops all
   others. It is the inverse of [`DROP`][esql-drop]. In TQL, we call these
-  projection operators [`select`](/next/operators/select) and also
-  [`drop`](/next/operators/drop).
+  projection operators `select` and also `drop`.
 - [`SORT`][esql-sort]
   sorts rows by one or more fields. `SORT height DESC, first_name ASC` sorts the
   field `height` in descending order and the field `first_name` in ascending
-  order. The syntax of our [`sort`](/next/operators/sort) is identical.
+  order. The syntax of our `sort` is identical.
   Controlling the position of null values works with `NULLS FIRST` and `NULLS
   LAST`. In TQL, we went Kusto-like with `nulls-first` and `nulls-last`.
 - [`LIMIT`][esql-limit] restricts the number of output rows. In TQL, we have
-  [`head`](/next/operators/head) and [`tail`](/next/operators/tail) for this
-  purpose.
+  `head` and `tail` for this purpose.
 
 [esql-from]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-from.html
 [esql-eval]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-eval.html
@@ -115,7 +113,7 @@ ES|QL differentiates two types of commands (which we call *operators* in TQL):
 2. [Processing commands](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-processing-commands.html)
 
 In TQL, an operator is a *source*, a *transformation*, or a *sink*. Some
-operators can be of multiple categories, like [`shell`](/next/operators/shell).
+operators can be of multiple categories, like `shell`.
 
 Maybe this is still coming, but ES|QL doesn't appear to offer sinks. We
 hypothesize that users should consume pipeline output uniformly as JSON through
