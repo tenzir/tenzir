@@ -75,18 +75,11 @@ plan to extend our support for Arrow-native types and also offer conversion
 options for seamless data handover.
 
 Tenzir has a few domain-specific types that map to Arrow [extension
-types][extension-types]. These are currently:
-
-- `enum`
-- `ip`
-- `subnet`
+types][extension-types]. These are currently `enum`, `ip`, and `subnet`. Tenzir
+and Arrow attach type metadata to different entities: Tenzir attaches metadata
+to a type instance, whereas Arrow attaches metadata to a schema or record field.
 
 [extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
-
-Tenzir and Arrow attach type metadata to different entities:
-
-- **Tenzir**: attached to a type instance
-- **Arrow**: attached to a schema or record field
 
 :::tip More on Arrow & Tenzir
 If you want to learn more about why Tenzir uses Apache Arrow, read our
