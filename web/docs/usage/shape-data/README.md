@@ -14,7 +14,7 @@ We'll walk through examples for each depicted operator, using the
 [M57](../../installation.md) dataset. All examples assume that you have imported
 the M57 sample data into a node, as explained in the
 [quickstart](../../tutorials/quickstart/README.md). We therefore start every pipeline with
-[`export`](../../operators/export.md).
+[`export`](../../tql2/operators/export.md).
 
 ## Filter events with `where`
 

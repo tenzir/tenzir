@@ -21,12 +21,12 @@ forensics and incident response (DFIR) ecosystem: [YARA][yara] and
 
 ## YARA Operator
 
-The star feature of this release is the new [`yara`](/next/operators/yara)
-operator. You can now match [YARA][yara] rules directly within byte pipelines.
-This is a game-changer for threat intelligence and cybersecurity workflows, as
-it brings together all of Tenzir's connectors with the community's rich
-ecosystem of YARA rules for efficient malware detection and analysis. Evaluating
-a set of rules on a file located in an S3 bucket has never been easier:
+The star feature of this release is the new `yara` operator. You can now match
+[YARA][yara] rules directly within byte pipelines. This is a game-changer for
+threat intelligence and cybersecurity workflows, as it brings together all of
+Tenzir's connectors with the community's rich ecosystem of YARA rules for
+efficient malware detection and analysis. Evaluating a set of rules on a file
+located in an S3 bucket has never been easier:
 
 ```
 load s3 bucket/file.exe
@@ -42,12 +42,12 @@ Pipelines](/blog/matching-yara-rules-in-byte-pipelines)
 ## Velociraptor Operator
 
 [Velociraptor][velociraptor] is an advanced DFIR tool that enhances your
-visibility into your endpoints. Not unlike [our own TQL](/language),
-Velociraptor comes with its own language for interacting with it
-programmatically: VQL. The `velociraptor` operator makes it possible to submit
-VQL queries to a Velociraptor server, as well as subscribe to artifacts
-in hunt flows over a large fleet of assets, making endpoint telemetry
-collection and processing a breeze.
+visibility into your endpoints. Not unlike our own TQL, Velociraptor comes with
+its own language for interacting with it programmatically: VQL. The
+`velociraptor` operator makes it possible to submit VQL queries to a
+Velociraptor server, as well as subscribe to artifacts in hunt flows over a
+large fleet of assets, making endpoint telemetry collection and processing a
+breeze.
 
 :::info
 Read our blog post on how we built this integration and how you can utilize it:

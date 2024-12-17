@@ -8,12 +8,11 @@ tags: [yara, operator, dfir, detection engineering]
 comments: true
 ---
 
-The new [`yara`][yara-operator] operator matches [YARA][yara] rules on bytes,
-producing a structured match output to conveniently integrate alerting tools or
-trigger next processing steps in your detection workflows.
+The new `yara` operator matches [YARA][yara] rules on bytes, producing a
+structured match output to conveniently integrate alerting tools or trigger next
+processing steps in your detection workflows.
 
 [yara]: https://virustotal.github.io/yara/
-[yara-operator]: /next/operators/yara
 
 ![YARA Operator](yara-operator.excalidraw.svg)
 
@@ -156,9 +155,9 @@ e.g., when getting memory chunks from a message broker.
 
 ## Mix and match loaders
 
-The [`stdin`](/connectors/stdin) loader in the above example produces chunks of
-bytes. But you can use any connector of your choice that yields bytes. In
-particular, you can use the [`file`](/connectors/file) loader:
+The `stdin` loader in the above example produces chunks of bytes. But you can
+use any connector of your choice that yields bytes. In particular, you can use
+the `file` loader:
 
 ```bash
 tenzir 'load file --mmap /tmp/test.txt | yara /tmp/test.yara'
@@ -172,8 +171,8 @@ which may be beneficial for intricate rules that require random access into the
 file.
 :::
 
-If you have a [ZeroMQ socket](/connectors/zmq) where you publish malware samples
-to be scanned, then you only need to change the pipeline source:
+If you have a ZeroMQ socket where you publish malware samples to be scanned,
+then you only need to change the pipeline source:
 
 ```bash
 tenzir 'load zmq | yara /tmp/test.yara'
@@ -189,7 +188,7 @@ while leaving the remainder of `yara` pipeline in place.
 
 Because the matches are structured events, you can use all existing operators to
 post-process them. For example, send them to a Slack channel via
-[`fluent-bit`](/next/operators/fluent-bit):
+`fluent-bit`:
 
 ```
 load file --mmap /tmp/test.txt
@@ -197,8 +196,8 @@ load file --mmap /tmp/test.txt
 | fluent-bit slack webhook=URL
 ```
 
-Or store them with [`import`](/next/operators/import) at a Tenzir node to
-generate match statistics later on:
+Or store them with `import` at a Tenzir node to generate match statistics later
+on:
 
 ```
 load file --mmap /tmp/test.txt
@@ -210,8 +209,8 @@ load file --mmap /tmp/test.txt
 
 Using just a few pipelines, you can quickly deploy a YARA rule scanning service
 that sends the matches to a Slack webhook. Let's that you want to scan malware
-sample that you receive over a [Kafka](../../connectors/kafka) topic
-`malware`. Launch the processing pipeline as follows:
+sample that you receive over a Kafka topic `malware`. Launch the processing
+pipeline as follows:
 
 ```
 load kafka --topic malware
@@ -236,11 +235,11 @@ with the webhook.
 
 ## Summary
 
-We've introduced the [`yara`][yara-operator] operator as a byte-to-events
-transformation that exposes YARA rule matches as structured events, making them
-easy to post-process with the existing collection of Tenzir operators. We also
-explained how you can create a simple YARA rule scanning service that accepts
-malware samples via Kafka and sends the matches to a Slack channel.
+We've introduced the `yara` operator as a byte-to-events transformation that
+exposes YARA rule matches as structured events, making them easy to post-process
+with the existing collection of Tenzir operators. We also explained how you can
+create a simple YARA rule scanning service that accepts malware samples via
+Kafka and sends the matches to a Slack channel.
 
 Try it yourself. Deploy detection pipelines with the `yara` operator for free
 with our Community Edition at [app.tenzir.com](https://app.tenzir.com). Missing

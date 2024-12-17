@@ -108,20 +108,15 @@ from file /path/to/conn.log read zeek-tsv | import
 from file /path/to/conn.log read json --schema zeek.conn | import
 ```
 
-This pipeline reads the Zeek log and pipes it to the
-[`import`](/next/operators/import) operator, which stores all your logs at a
-running Tenzir node. You could also use the
-[`extend`](/next/operators/extend) operator to include the filename in the data:
+This pipeline reads the Zeek log and pipes it to the `import` operator, which
+stores all your logs at a running Tenzir node. You could also use the `extend`
+operator to include the filename in the data:
 
 ```bash
 pipeline="from file $file_name read $format \
           | extend filename=$file_name \
           | import"
 ```
-
-Take a look at the [list of operators](/operators) for further inspiration
-on things you can do, or check out the [user guides](/usage) for concrete
-ideas.
 
 ### Zeek package
 
@@ -162,9 +157,8 @@ Zeek logs:
 
    The above Zeek script hooks up two pipelines via the function
    `Tenzir::postprocess`. Each pipeline executes upon log rotation and receives
-   the Zeek log file as input. The first imports all data via
-   [`import`](/next/operators/import) and the second writes the logs as
-   [`parquet`](/formats/parquet) files using [`to`](/next/operators/to).
+   the Zeek log file as input. The first imports all data via `import` and the
+   second writes the logs as `parquet` files using `to`.
 
 ## Reliability
 

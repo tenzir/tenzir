@@ -43,8 +43,9 @@ Operator | Description | Example
 Operator | Description | Example
 :--------|:------------|:-------
 [`delay`](./operators/delay.md) | Delays events relative to a start time | `delay ts, speed=2.5`
+[`cron`](./operators/cron.md) | Runs a pipeline periodically with a cron expression | `cron "* */10 * * * MON-FRI" { from "https://example.org" }`
 [`discard`](./operators/discard.md) | Discards incoming bytes or events | `discard`
-[`every`](./operators/every.md) | Restarts a pipeline periodically | `every 10s { summarize sum(amount) }`
+[`every`](./operators/every.md) | Runs a pipeline periodically at a fixed interval | `every 10s { summarize sum(amount) }`
 [`fork`](./operators/fork.md) | Forwards a copy of the events to another pipeline | `fork { to "copy.json" }`
 [`load_balance`](./operators/load_balance.md) | Routes the data to one of multiple subpipelines | `load_balance $over { publish $over }`
 [`pass`](./operators/pass.md) | Does nothing with the input | `pass`

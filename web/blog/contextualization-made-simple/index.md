@@ -165,9 +165,9 @@ The response looks as follows:
 
 Unfortunately the data is not yet in right shape yet. We need one IOC event per
 lookup table entry, but the above is one giant event with all IOCs in the nested
-`data` array. We can get to the desired shape with the
-[`yield`](/next/operators/yield) operator hoists the array elements
-into top-level events. Let's take a look at one of the events:
+`data` array. We can get to the desired shape with the `yield` operator hoists
+the array elements into top-level events. Let's take a look at one of the
+events:
 
 ```
 from https://threatfox-api.abuse.ch/api/v1/ query=get_iocs days:=1
@@ -231,7 +231,7 @@ from file --follow /suricata/eve.json read suricata
 ```
 
 Now we hook into the DNS live feed for enrichment, keep only the matches, and
-forward them to a Slack channel via [`fluent-bit`](/next/operators/fluent-bit):
+forward them to a Slack channel via `fluent-bit`:
 
 ```
 export --live

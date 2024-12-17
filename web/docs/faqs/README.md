@@ -173,8 +173,8 @@ data analysis.
 Tenzir does not rely on a third-party database.
 
 Tenzir nodes include a light-weight storage engine on top of Feather or Parquet
-files, accessible via the [`import`](operators/import.md) and
-[`export`](operators/export.md) operators.
+files, accessible via the [`import`](tql2/operators/import.md) and
+[`export`](tql2/operators/export.md) operators.
 
 The storage engine comes with a catalog that tracks schema meta data and a thin
 layer of indexing to accelerate queries.

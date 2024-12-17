@@ -54,9 +54,8 @@ Let's break this down:
 ## User-defined Operators
 
 Now that we have both Zeek and Suricata at our fingertips, how can we work with
-their output more easily? This is where Tenzir comes into play—easy
-[pipelines](/pipelines) for security teams to acquire,
-[shape](/next/usage/shape-data), and route event data.
+their output more easily? This is where Tenzir comes into play—easy pipelines
+for security teams to acquire, shape, and route event data.
 
 Here are two examples that count the number of unique source IP addresses per
 destination IP address, on both Zeek and Suricata data:
@@ -77,10 +76,9 @@ zcat pcap.gz | suricatify | tenzir \
 ```
 
 It's a bit unwieldy to write such a command line that requires an external shell
-script to work. This is where [user-defined
-operators](/next/language/user-defined-operators) come into play. In combination
-with the [`shell`](/next/operators/shell) operator, you can write a custom
-`zeek` and `suricata` operator and ditch the shell script:
+script to work. This is where user-defined operators come into play. In
+combination with the `shell` operator, you can write a custom `zeek` and
+`suricata` operator and ditch the shell script:
 
 ```yaml title="tenzir.yaml"
 tenzir:
@@ -129,16 +127,15 @@ output into the next:
 When using the `shell` operator, the `tenzir` process spawns `zeek` or
 `suricata` as child process. The operator then forwards the bytes from stdin of
 the `tenzir` process to the child's stdin, and uses the child's stdout as input
-to the subsequent [`read`](/next/operators/read) operator.
+to the subsequent `read` operator.
 
 ![Shelling out to Zeek](zeek-to-tenzir-shell.excalidraw.svg)
 
 In the above example, `shell` acts as a *source* operator, i.e., it does not
 consume input and only produces output. The `shell` operator can also act as
 *transformation*, i.e., additionally accept input. This makes it possible to use
-it more flexibly in combination with other operators, e.g., the
-[`load`](/next/operators/load) operator emitting bytes from a
-[loader](/connectors):
+it more flexibly in combination with other operators, e.g., the `load` operator
+emitting bytes from a loader:
 
 ```
 load file trace.pcap
@@ -147,8 +144,8 @@ load file trace.pcap
 | write json
 ```
 
-Got a PCAP trace via Kafka? Just exchange the `file` loader with the
-[`kafka`](/connectors/kafka) loader:
+Got a PCAP trace via Kafka? Just exchange the `file` loader with the `kafka`
+loader:
 
 ```
 load kafka -t artifact
@@ -167,10 +164,9 @@ shell.
 
 ## Conclusion
 
-In this blog post we showed you the [`shell`](/next/operators/shell) operator
-and how you can use it to integrate third-party tooling into a Tenzir pipeline
-when coupled with [user-defined
-operators](/next/language/user-defined-operators).
+In this blog post we showed you the `shell` operator and how you can use it to
+integrate third-party tooling into a Tenzir pipeline when coupled with
+user-defined operators.
 
 Using Zeek or Suricata? Tenzir makes 'em fun to work with. Check out our other
 blogs tagged with [`#zeek`](/blog/tags/zeek) and
