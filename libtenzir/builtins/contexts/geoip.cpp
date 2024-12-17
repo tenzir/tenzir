@@ -573,6 +573,14 @@ public:
     return failure::promise();
   }
 
+  auto erase(const table_slice& events, const context_erase_args& args,
+             session ctx) -> failure_or<void> override {
+    TENZIR_UNUSED(events, args);
+    diagnostic::error("geoip context does not support erasing entries")
+      .emit(ctx);
+    return failure::promise();
+  }
+
   auto reset() -> caf::expected<void> override {
     return {};
   }

@@ -241,47 +241,47 @@ public:
           .emit(ctx);
       }
     }
-    return function_use::make(
-      [this, subject_expr = std::move(subject_expr),
-       pattern = std::move(pattern), replacement = std::move(replacement),
-       max_replacements](evaluator eval, session ctx) {
-        auto result_type = string_type{};
-        auto result_arrow_type
-          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
-        return map_series(eval(subject_expr), [&](series subject) {
-          auto f = detail::overload{
-            [&](const arrow::StringArray& array) {
-              auto max = max_replacements ? max_replacements->inner : -1;
-              auto options = arrow::compute::ReplaceSubstringOptions(
-                pattern.inner, replacement, max);
-              auto result = arrow::compute::CallFunction(
-                regex_ ? "replace_substring_regex" : "replace_substring",
-                {array}, &options);
-              if (not result.ok()) {
-                diagnostic::warning(
-                  "{}", result.status().ToStringWithoutContextLines())
-                  .severity(result.status().IsInvalid() ? severity::error
-                                                        : severity::warning)
-                  .primary(pattern.source)
-                  .emit(ctx);
-                return series::null(result_type, subject.length());
-              }
-              return series{result_type, result.MoveValueUnsafe().make_array()};
-            },
-            [&](const arrow::NullArray& array) {
-              return series::null(result_type, array.length());
-            },
-            [&](const auto&) {
-              diagnostic::warning("`{}` expected `string`, but got `{}`",
-                                  name(), subject.type.kind())
-                .primary(subject_expr)
+    return function_use::make([this, subject_expr = std::move(subject_expr),
+                               pattern = std::move(pattern),
+                               replacement = std::move(replacement),
+                               max_replacements](evaluator eval, session ctx) {
+      auto result_type = string_type{};
+      auto result_arrow_type
+        = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+      return map_series(eval(subject_expr), [&](series subject) {
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            auto max = max_replacements ? max_replacements->inner : -1;
+            auto options = arrow::compute::ReplaceSubstringOptions(
+              pattern.inner, replacement, max);
+            auto result = arrow::compute::CallFunction(
+              regex_ ? "replace_substring_regex" : "replace_substring", {array},
+              &options);
+            if (not result.ok()) {
+              diagnostic::warning("{}",
+                                  result.status().ToStringWithoutContextLines())
+                .severity(result.status().IsInvalid() ? severity::error
+                                                      : severity::warning)
+                .primary(pattern.source)
                 .emit(ctx);
               return series::null(result_type, subject.length());
-            },
-          };
-          return match(*subject.array, f);
-        });
+            }
+            return series{result_type, result.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(result_type, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name(),
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          },
+        };
+        return match(*subject.array, f);
       });
+    });
   }
 
 private:

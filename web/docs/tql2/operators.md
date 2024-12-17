@@ -243,6 +243,7 @@ Function | Description | Example
 [`context::create_lookup_table`](./operators/context/create_lookup_table.md) | Creates a lookup table context | `context::create_lookup_table "ctx"`
 [`context::create_geoip`](./operators/context/create_geoip.md) | Creates a GeoIP context for IP-based geolocation | `context::create_geoip "ctx", db_path="GeoLite2-City.mmdb"`
 [`context::enrich`](./operators/context/enrich.md) | Enriches with a context | `context::enrich "ctx", key=x`
+[`context::erase`](./operators/context/erase.md) | Removes entries from a context | `context::erase "ctx", key=x`
 [`context::inspect`](./operators/context/inspect.md) | Inspects the details of a specified context | `context::inspect "ctx"`
 [`context::list`](./operators/context/list.md) | Lists all contexts | `context::list`
 [`context::remove`](./operators/context/remove.md) | Deletes a context | `context::remove "ctx"`

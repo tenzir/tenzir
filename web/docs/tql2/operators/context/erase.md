@@ -1,27 +1,25 @@
-# reset
+# erase
 
-Resets a context.
+Removes entries from a context.
 
 ```tql
-context::reset name:string
+context::update name:string, key=any
 ```
 
 ## Description
 
-The `context::reset` operator erases all data that has been added with
-`context::update`.
+The `context::erase` operator removes data from a context.
+
+Use the `key` argument to specify the field in the input that should be
+deleted from the context.
 
 ### `name: string`
 
-The name of the context to reset.
+The name of the context to remove entries from.
 
-## Examples
+### `key = any`
 
-### Reset a context
-
-```tql
-context::reset "ctx"
-```
+The field that represents the enrichment key in the data.
 
 ## See Also
 
@@ -29,10 +27,10 @@ context::reset "ctx"
 [`context::create_geoip`](create_geoip.md),
 [`context::create_lookup_table`](create_lookup_table.md),
 [`context::enrich`](enrich.md),
-[`context::erase`](erase.md),
 [`context::inspect`](inspect.md),
 [`context::list`](list.md),
 [`context::load`](load.md),
 [`context::remove`](remove.md),
+[`context::reset`](reset.md),
 [`context::save`](save.md),
 [`context::update`](update.md)

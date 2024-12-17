@@ -23,12 +23,14 @@ The name of the context whose state to save.
 context::save "ctx"
 save_file "snapshot.mmdb"
 ```
+
 ## See Also
 
 [`context::create_bloom_filter`](create_bloom_filter.md),
 [`context::create_geoip`](create_geoip.md),
 [`context::create_lookup_table`](create_lookup_table.md),
 [`context::enrich`](enrich.md),
+[`context::erase`](erase.md),
 [`context::inspect`](inspect.md),
 [`context::list`](list.md),
 [`context::load`](load.md),

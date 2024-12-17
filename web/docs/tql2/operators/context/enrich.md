@@ -128,6 +128,7 @@ context::enrich "ctx", key=x, into=enrichments, mode="append"
 [`context::create_bloom_filter`](create_bloom_filter.md),
 [`context::create_geoip`](create_geoip.md),
 [`context::create_lookup_table`](create_lookup_table.md),
+[`context::erase`](erase.md),
 [`context::inspect`](inspect.md),
 [`context::list`](list.md),
 [`context::load`](load.md),

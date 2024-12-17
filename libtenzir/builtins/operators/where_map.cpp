@@ -213,8 +213,6 @@ public:
       return optimize_result::order_invariant(*this, order);
     }
     auto [legacy, remainder] = split_legacy_expression(expr_);
-    TENZIR_WARN("\nINPUT: {:?}\nLEGACY: {}\nREMAINDER: {:?}", expr_, legacy,
-                remainder);
     auto remainder_op = is_true_literal(remainder)
                           ? nullptr
                           : std::make_unique<tql2_where_assert_operator>(
