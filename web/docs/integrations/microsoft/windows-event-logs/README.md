@@ -47,7 +47,7 @@ winlogbeat.event_logs:
 output.elasticsearch:
   hosts: ["https://10.0.0.1:9200"]
   username: "$USER"
-  password: "$PASSWORD" 
+  password: "$PASSWORD"
   ssl:
     enabled: true
     certificate_authorities: [C:\Program Files\Winlogbeat\ca.crt]
@@ -67,11 +67,11 @@ C:\Program Files\Winlogbeat> Start-Service winlogbeat
 #### Run a Tenzir pipeline
 
 Now consume the data via a Tenzir pipeline using the
-[`fluentbit`](../../../tql2/operators/fluentbit.md) operator that mimics an
+[`from_fluent_bit`](../../../tql2/operators/from_fluent_bit.md) operator that mimics an
 ElasticSearch bulk ingest endpoint:
 
 ```tql
-fluentbit "elasticsearch", options={
+from_fluent_bit "elasticsearch", options={
   port: 9200,
   tls: "on",
   tls.key_file: "/opt/tenzir/elk.key",
@@ -114,11 +114,11 @@ Bit to monitor.
 
 #### Run a Tenzir pipeline
 
-Use the [`fluentbit`](../../../tql2/operators/fluentbit.md) source operator with
+Use the [`from_fluent_bit`](../../../tql2/operators/from_fluent_bit.md) source operator with
 the [Forward input](https://docs.fluentbit.io/manual/pipeline/inputs/forward):
 
 ```tql
-fluentbit "forward", options={
+from_fluent_bit "forward", options={
   listen: 10.0.0.1,
 }
 import

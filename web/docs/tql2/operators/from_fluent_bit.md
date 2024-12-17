@@ -159,7 +159,7 @@ curl \
 
 ### Splunk
 
-Handle [Splunk](https://docs.fluentbit.io/manual/pipeline/inputs/splunk) HTTP HEC requests:
+Handle [Splunk](https://docs.fluentbit.io/manual/pipeline/inputs/splunk) HEC requests:
 
 ```tql
 from_fluent_bit "splunk", options={port: 8088}

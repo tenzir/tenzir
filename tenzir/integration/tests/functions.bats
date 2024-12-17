@@ -73,14 +73,13 @@ EOF
 
 @test "heterogeneous otherwise" {
   check tenzir -f /dev/stdin <<EOF
-from [
-  {x: null},
+from \
+  {x: int(null)},
   {x: 1},
   {x: 2},
-  {x: null},
-  {x: null},
-  {x: 3},
-]
+  {x: int(null)},
+  {x: int(null)},
+  {x: 3}
 y = x.otherwise("test")
 z = {x: [4 * x.otherwise(1s)], y: (x * 1s).otherwise(x * 1d)}
 EOF
@@ -289,11 +288,10 @@ EOF
 
 @test "list length" {
   check tenzir -f /dev/stdin <<EOF
-from [
+from \
   { x: null },
   { x: [] },
-  { x: [1, 2, 3] },
-]
+  { x: [1, 2, 3] }
 y = x.length()
 EOF
 }
