@@ -23,9 +23,3 @@
     }
   }
 ]
-warning: no known extensions, but the deduced load operator `save_http` suggests `write_ndjson`
- --> <input>:1:4
-  |
-1 | to "https://example.org/api/json"
-  |    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-  |

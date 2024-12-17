@@ -20,11 +20,7 @@ The values to deduplicate.
 ### Get distinct values in a list
 
 ```tql
-from \
-  {x: 1},
-  {x: 2},
-  {x: 2},
-  {x: 3}
+from {x: 1}, {x: 2}, {x: 2}, {x: 3}
 summarize unique=distinct(x)
 ```
 

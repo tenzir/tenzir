@@ -238,8 +238,8 @@ concept variant_matcher_for
     /// The return type of invoking the functor with the first alternative
     /// determines the final return type
     and requires(F f, V v) { f(variant_get<0>(v)); }
-    /// Invoking the functor with all of the alternatives must yield a type that
-    /// is convertible to the return type of the first alternative.
+    /// Invoking the functor with all of the alternatives must yield the same
+    /// type
     and variant_invocable_for_all<
       F, V, std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>,
       variant_traits<std::remove_cvref_t<V>>::count>;
@@ -260,11 +260,8 @@ constexpr auto match_one(V&& v, F&& f) -> decltype(auto) {
           // where `void` is returned separately.
           using local_return_type = decltype(std::invoke(
             std::forward<F>(f), variant_get<Is>(std::forward<V>(v))));
-          // static_assert(std::same_as<local_return_type, return_type>,
-          //               "all cases must have the same return type");
-          static_assert(std::convertible_to<local_return_type, return_type>,
-                        "all cases must return a type convertible to the "
-                        "return type of the first alternative");
+          static_assert(std::same_as<local_return_type, return_type>,
+                        "all cases must have the same return type");
           return static_cast<return_type>(std::invoke(
             std::forward<F>(f), variant_get<Is>(std::forward<V>(v))));
         }...,

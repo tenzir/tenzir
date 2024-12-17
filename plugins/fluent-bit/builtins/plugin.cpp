@@ -15,15 +15,11 @@ namespace {
 class from_fluent_bit_plugin final
   : public operator_plugin2<fluent_bit_source_operator> {
 public:
-  auto name() const -> std::string override {
-    return "from_fluent_bit";
-  }
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
     if (not unused_plugin_config.empty()) {
-      return diagnostic::error("`{}.yaml` is unused; Use `fluent-bit.yaml` "
-                               "instead",
-                               this->name())
+      return diagnostic::error("`{}.yaml` is unused", this->name())
+        .hint("Use `fluent-bit.yaml` instead")
         .to_error();
     }
     auto c = try_get_only<tenzir::record>(global_config, "plugins.fluent-bit");
@@ -63,7 +59,7 @@ public:
 
   virtual auto load_properties() const -> load_properties_t override {
     return {
-      .schemes = {"fluentbit"},
+      .schemes = {"fluent-bit"},
       .accepts_pipeline = false,
       .strip_scheme = true,
       .events = true,
@@ -78,16 +74,11 @@ private:
 class to_fluent_bit_plugin final
   : public operator_plugin2<fluent_bit_sink_operator> {
 public:
-  auto name() const -> std::string override {
-    return "to_fluent_bit";
-  }
-
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
     if (not unused_plugin_config.empty()) {
-      return diagnostic::error("`{}.yaml` is unused; Use `fluent-bit.yaml` "
-                               "instead",
-                               this->name())
+      return diagnostic::error("`{}.yaml` is unused", this->name())
+        .hint("Use `fluent-bit.yaml` instead")
         .to_error();
     }
     auto c = try_get_only<tenzir::record>(global_config, "plugins.fluent-bit");
@@ -121,7 +112,7 @@ public:
 
   virtual auto save_properties() const -> save_properties_t override {
     return {
-      .schemes = {"fluentbit"},
+      .schemes = {"fluent-bit"},
       .accepts_pipeline = false,
       .strip_scheme = true,
       .events = true,

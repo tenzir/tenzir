@@ -25,10 +25,7 @@ type as `primary`.
 ### Set a default value for a key
 
 ```tql
-from \
-  {x: 1},
-  {x: 2},
-  {}
+from {x: 1}, {x: 2}, {}
 x = x.otherwise(-1)
 ```
 

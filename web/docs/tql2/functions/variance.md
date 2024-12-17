@@ -19,10 +19,7 @@ The values to evaluate.
 ### Compute the variance of values
 
 ```tql
-from \
-  {x: 1},
-  {x: 2},
-  {x: 3}
+from {x: 1}, {x: 2}, {x: 3}
 summarize variance_value=variance(x)
 ```
 

@@ -38,19 +38,12 @@ from "https://example.org/file.json", headers={Token: "XYZ"}
 
 ### `{ … } (optional)`
 
-A pipeline that can be used if inference for the compression or format does not
-work or is not sufficient.
+The optional pipeline argument allows for explicitly specifying how `from`
+decompresses and parses data. By default, the pipeline is inferred based on a set
+of [rules](#explanation).
 
-Providing this pipeline disables the inference for the decompression and parsing
-format in order to avoid confusion.
-
-:::tip Only specify `{ … }` if you need it for data ingestion
-The `{ … }` argument exists for data ingestion purposes. In most situations,
-inference should be sufficient and the pipeline should not be required.
-
-If you want to perform other operations on the data afterwards, continue the
-pipeline after this operator instead of doing it in the sub-pipeline.
-:::
+If inference is not possible, or not sufficient, this argument can be used to
+control the decompression and parsing. Providing this pipeline disables the inference. [Examples](#load-a-file-with-parser-arguments)
 
 ### `events…`
 
@@ -135,7 +128,7 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 | `abfs`,`abfss` | [`load_azure_blob_storage`](load_azure_blob_storage.md) | `from "abfs://path/to/file.json"` |
 | `amqp` | [`load_amqp`](load_amqp.md) | `from "amqp://…` |
 | `file` | [`load_file`](load_file.md) | `from "file://path/to/file.json"` |
-| `fluentbit` | [`from_fluent_bit`](from_fluent_bit.md) | `from "fluentbit://elasticsearch"` |
+| `fluent-bit` | [`from_fluent_bit`](from_fluent_bit.md) | `from "fluent-bit://elasticsearch"` |
 | `ftp`, `ftps` | [`load_ftp`](load_ftp.md) | `from "ftp://example.com/file.json"` |
 | `gcps` | [`load_google_cloud_pubsub`](load_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id" { … }` |
 | `http`, `https` | [`load_http`](load_http.md) | `from "http://example.com/file.json"` |
@@ -158,10 +151,8 @@ The `from` operator can deduce the file format based on these file-endings:
 | Format | File Endings | Operator  |
 |:------ |:------------ |:--------- |
 |  CSV  | `.csv` | [`read_csv`](read_csv.md) |
-|  CEF  | `.cef` | [`read_cef`](read_cef.md) |
 |  Feather  | `.feather`, `.arrow` | [`read_feather`](read_feather.md) |
 |  JSON  | `.json` | [`read_json`](read_json.md) |
-|  LEEF  | `.leef` | [`read_leef`](read_leef.md) |
 |  NDJSON  | `.ndjson`, `.jsonl` | [`read_ndjson`](read_ndjson.md) |
 |  Parquet  | `.parquet` | [`read_parquet`](read_parquet.md) |
 |  Pcap  | `.pcap` | [`read_pcap`](read_pcap.md) |
@@ -202,14 +193,14 @@ Provide an explicit header to the CSV parser:
 
 ```tql
 from "path/to/my/load/file.csv.bz2" {
-  decompress "brotoli" // this is now necessary due to the pipeline argument
+  decompress "brotli" // this is now necessary due to the pipeline argument
   read_csv header="col1,col2,col3"
 }
 ```
 
 ### Pick a more suitable parser
 
-The file `eve.json` contains suricata data, but the `from` operator does not
+The file `eve.json` contains Suricata logs, but the `from` operator does not
 know this. We provide an explicit `read_suricata` instead:
 
 ```tql
@@ -221,15 +212,14 @@ from "path/to/my/load/eve.json" {
 ### Load from HTTP with a header
 
 ```tql
-from "https://example.org/file.json", header={Token: 0}
+from "https://example.org/file.json", headers={Token: "1234"}
 ```
 ### Create events from records
 
 ```tql
-from \
-  {message: "Value", endpoint: {ip: 127.0.0.1, port: 42}},
-  {message: "Value", endpoint: {ip: 127.0.0.1, port: 42}, raw: "text"},
-  {message: "Value", endpoint: null}
+from {message: "Value", endpoint: {ip: 127.0.0.1, port: 42}},
+     {message: "Value", endpoint: {ip: 127.0.0.1, port: 42}, raw: "text"},
+     {message: "Value", endpoint: null}
 ```
 ```tql
 {
@@ -245,10 +235,14 @@ from \
     ip: 127.0.0.1,
     port: 42
   },
-  raw: "text
+  raw: "text"
 }
 {
   message: "Value",
   endpoint: null
 }
 ```
+
+## See Also
+
+[`to`](to.md)

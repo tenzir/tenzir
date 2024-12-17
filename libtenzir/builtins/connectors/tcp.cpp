@@ -823,6 +823,12 @@ class save_tcp final : public virtual operator_plugin2<saver_adapter<saver>> {
     }
     return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
   }
+
+  auto save_properties() const -> save_properties_t override {
+    return {
+      .schemes = {"tcp"},
+    };
+  }
 };
 
 } // namespace

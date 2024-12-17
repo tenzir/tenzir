@@ -345,10 +345,6 @@ public:
     return std::make_unique<parser_adapter<leef_parser>>(
       leef_parser{std::move(opts)});
   }
-
-  auto read_properties() const -> read_properties_t override {
-    return {.extensions = {"leef"}};
-  }
 };
 
 class parse_leef final : public virtual function_plugin {

@@ -22,10 +22,7 @@ Defaults to `"#"`.
 ### Enumerate the input by prepending row numbers
 
 ```tql
-from \
-  {x: "a"},
-  {x: "b"},
-  {x: "c"}
+from {x: "a"}, {x: "b"}, {x: "c"}
 enumerate
 ```
 
@@ -38,9 +35,7 @@ enumerate
 ### Use a custom field for the row numbers
 
 ```tql
-from \
-  {x: true},
-  {x: false}
+from {x: true}, {x: false}
 enumerate index
 ```
 

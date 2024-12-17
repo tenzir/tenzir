@@ -1,11 +1,5 @@
 : "${BATS_TEST_TIMEOUT:=120}"
 
-# BATS ports of our old integration test suite.
-
-# This file contains the subset of tests that are
-# executing pipelines which don't need a running
-# `tenzir-node`.
-
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
@@ -27,7 +21,7 @@ setup() {
 
 # bats test_tags=to
 @test "from failure" {
-  check ! tenzir --dump-pipeline --tql2 "from \"unknown://failure\""
+  check ! tenzir --dump-pipeline --tql2 "from \"unknown://example.org\""
   check ! tenzir --dump-pipeline --tql2 "from \"failure.extension\""
   check ! tenzir --dump-pipeline --tql2 "from \"failure.extension.bz2\""
 }
@@ -45,7 +39,7 @@ setup() {
 
 # bats test_tags=to
 @test "to failure" {
-  check ! tenzir --dump-pipeline --tql2 "to \"unknown://failure\""
+  check ! tenzir --dump-pipeline --tql2 "to \"unknown://example.org\""
   check ! tenzir --dump-pipeline --tql2 "to \"failure.extension\""
   check ! tenzir --dump-pipeline --tql2 "to \"failure.extension.bz2\""
 }

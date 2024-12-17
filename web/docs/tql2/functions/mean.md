@@ -19,10 +19,7 @@ The values to average.
 ### Compute the mean value
 
 ```tql
-from \
-  {x: 1},
-  {x: 2},
-  {x: 3}
+from {x: 1}, {x: 2}, {x: 3}
 summarize avg=mean(x)
 ```
 

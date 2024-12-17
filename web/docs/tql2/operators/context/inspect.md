@@ -21,9 +21,8 @@ The name of the context to inspect.
 Add data to the lookup table:
 
 ```tql
-from \
-  {x:1, y:"a"},
-  {x:2, y:"b"}
+from {x:1, y:"a"},
+     {x:2, y:"b"}
 context::update "ctx", key=x, value=y
 ```
 

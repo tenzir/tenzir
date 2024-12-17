@@ -21,10 +21,10 @@ An invocation of the `fluent-bit` commandline utility
 fluent-bit -o plugin -p key1=value1 -p key2=value2 -p…
 ```
 
-translates to our `from_fluent_bit` operator as follows:
+translates to our `to_fluent_bit` operator as follows:
 
 ```tql
-to_fluent_bit "plugin", options{key1: value1, key2:value2, …}
+to_fluent_bit "plugin", options={key1: value1, key2:value2, …}
 ```
 
 :::tip Read from Fluent Bit
@@ -61,7 +61,7 @@ so that they are independent of the `fluent-bit` operator arguments.
 
 ## URI support & integration with `from`
 
-The `from_fluent_bit` operator can also be used from the [`from`](from.md)
+The `to_fluent_bit` operator can also be used from the [`to`](to.md)
 operator. For this, the `fluentbit://` scheme can be used. The URI is then translated:
 
 ```tql

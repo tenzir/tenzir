@@ -20,11 +20,7 @@ The values to evaluate.
 ### Find the mode of values
 
 ```tql
-from \
-  {x: 1},
-  {x: 1},
-  {x: 2},
-  {x: 3}
+from {x: 1}, {x: 1}, {x: 2}, {x: 3}
 summarize mode_value=mode(x)
 ```
 

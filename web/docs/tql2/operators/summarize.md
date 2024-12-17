@@ -53,10 +53,9 @@ summarize x=sum(x)
 Group over `y` and compute the sum of `x` for each group:
 
 ```tql
-from \
-  {x: 0, y: 0, z: 1},
-  {x: 1, y: 1, z: 2},
-  {x: 1, y: 1, z: 3}
+from {x: 0, y: 0, z: 1},
+     {x: 1, y: 1, z: 2},
+     {x: 1, y: 1, z: 3}
 summarize y, x=sum(x)
 ```
 

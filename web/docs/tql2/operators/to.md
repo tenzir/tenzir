@@ -36,20 +36,12 @@ to "https://example.org/file.json", headers={Token: "XYZ"}
 
 ### `{ … } (optional)`
 
-A pipeline that can be used if inference for the compression or format does not
-work or is not sufficient.
+The optional pipeline argument allows for explicitly specifying how `to`
+compresses and writes data. By default, the pipeline is inferred based on a set
+of [rules](#explanation).
 
-Providing this pipeline
-disables the inference for the decompression and writing format in order to avoid
-confusion.
-
-:::tip Only specify `{ … }` if you need it for data writing
-The `{ … }` argument exists for data writing purposes. In most situations,
-inference should be sufficient and the pipeline should not be required.
-
-If you want to perform other operations on the data before saving, you should do
-that as part of the pipeline before the `to` operator.
-:::
+If inference is not possible, or not sufficient, this argument can be used to
+control compression and writing. Providing this pipeline disables the inference.
 
 ## Explanation
 
@@ -93,7 +85,7 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | `abfs`,`abfss` | [`save_azure_blob_storage`](save_azure_blob_storage.md) | `to "abfs://path/to/file.json"` |
 | `amqp` | [`save_amqp`](save_amqp.md) | `to "amqp://…` |
 | `file` | [`save_file`](save_file.md) | `to "file://path/to/file.json"` |
-| `fluentbit` | [`to_fluent_bit`](to_fluent_bit.md) | `to "fluentbit://elasticsearch"` |
+| `fluent-bit` | [`to_fluent_bit`](to_fluent_bit.md) | `to "fluent-bit://elasticsearch"` |
 | `ftp`, `ftps` | [`save_ftp`](save_ftp.md) | `to "ftp://example.com/file.json"` |
 | `gcps` | [`save_google_cloud_pubsub`](save_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id" { … }` |
 | `http`, `https` | [`save_http`](save_http.md) | `to "http://example.com/file.json"` |
@@ -101,6 +93,7 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | `kafka` | [`save_kafka`](save_kafka.md) | `to "kafka://topic" { write_json }` |
 | `s3` | [`save_s3`](save_s3.md) | `to "s3://bucket/file.json"` |
 | `sqs` | [`save_sqs`](save_sqs.md) | `to "sqs://my-queue" { write_json }` |
+| `tcp` | [`save_tcp`](save_tcp.md) | `to "tcp://127.0.0.1:56789" { write_json }` |
 | `udp` | [`save_udp`](save_udp.md) | `to "udp://127.0.0.1:56789" { write_json }` |
 | `zmq` | [`save_zmq`](save_zmq.md) | `to "zmq://127.0.0.1:56789" { write_json }` |
 
@@ -121,7 +114,7 @@ The `from` operator can deduce the file format based on these file-endings:
 |  Parquet  | `.parquet` | [`write_parquet`](write_parquet.md) |
 |  Pcap  | `.pcap` | [`write_pcap`](write_pcap.md) |
 |  SSV  | `.ssv` | [`write_ssv`](write_ssv.md) |
-|  TSV  | `.tsv` | [`write_tsv`](read_tsv.md) |
+|  TSV  | `.tsv` | [`write_tsv`](write_tsv.md) |
 |  YAML  | `.yaml` | [`write_yaml`](write_yaml.md) |
 
 #### Compression
@@ -161,3 +154,7 @@ to "path/to/my/output.csv"
 ```tql
 to "path/to/my/output.csv.bz2"
 ```
+
+## See Also
+
+[from](from.md)

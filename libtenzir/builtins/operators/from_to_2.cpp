@@ -13,6 +13,7 @@
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/eval_impl.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/resolve.hpp>
@@ -30,7 +31,8 @@ class from_events final : public crtp_operator<from_events> {
 public:
   from_events() = default;
 
-  explicit from_events(std::vector<record> events)
+  series s;
+  explicit from_events(std::vector<ast::expression> events)
     : events_{std::move(events)} {
   }
 
@@ -40,18 +42,21 @@ public:
 
   auto
   operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
-    auto msb = multi_series_builder{
-      multi_series_builder::policy_default{},
-      multi_series_builder::settings_type{
-        .default_schema_name = "tenzir.from",
-      },
-      ctrl.diagnostics(),
+    auto sp = session_provider::make(ctrl.diagnostics());
+    const auto non_const_eval = [&](const ast::expression& expr) {
+      auto value = evaluator{nullptr, sp.as_session()}.eval(expr);
+      TENZIR_ASSERT(value.length() == 1);
+      return value;
     };
-    for (auto& event : events_) {
-      msb.data(event);
-    }
-    for (auto& slice : msb.finalize_as_table_slice()) {
-      co_yield std::move(slice);
+    for (auto& expr : events_) {
+      auto slice = non_const_eval(expr);
+      auto cast = slice.as<record_type>();
+      TENZIR_ASSERT(cast);
+      auto schema = tenzir::type{"tenzir.from", cast->type};
+      co_yield table_slice{arrow::RecordBatch::Make(schema.to_arrow_schema(),
+                                                    cast->length(),
+                                                    cast->array->fields()),
+                           schema};
     }
   }
 
@@ -66,7 +71,7 @@ public:
   }
 
 private:
-  std::vector<record> events_;
+  std::vector<ast::expression> events_;
 };
 
 using from_events_plugin = operator_inspection_plugin<from_events>;
@@ -285,6 +290,7 @@ auto create_pipeline_from_uri(std::string path,
   if (pipeline_count > 1) {
     diagnostic::error("`{}` accepts at most one pipeline",
                       traits::operator_name)
+      .primary(inv.self)
       .emit(ctx);
     return failure::promise();
   }
@@ -330,6 +336,8 @@ auto create_pipeline_from_uri(std::string path,
           pipeline_argument = try_as<ast::pipeline_expr>(inv.args.back());
         }
       }
+    } else {
+      return failure::promise();
     }
   } else {
     io_plugin
@@ -369,14 +377,8 @@ auto create_pipeline_from_uri(std::string path,
     std::tie(compression_extension, compression_name)
       = determine_compression(file_ending);
     if (not compression_name.empty()) {
-      for (const auto& p : plugins::get<operator_factory_plugin>()) {
-        const auto name = p->name();
-        // TODO These should ultimately be different operators
-        if (name == traits::compression_operator_name) {
-          compression_plugin = p;
-          break;
-        }
-      }
+      compression_plugin = plugins::find<operator_factory_plugin>(
+        traits::compression_operator_name);
       TENZIR_ASSERT(compression_plugin);
     }
     // determine read operator based on file ending
@@ -405,11 +407,6 @@ post_deduction_reporting:
     rw_plugin = io_properties.default_format;
     TENZIR_TRACE("{} operator: fallback read         : {}",
                  traits::operator_name, rw_plugin->name());
-    diagnostic::warning(
-      "no known extensions, but the deduced load operator `{}` suggests `{}`",
-      strip_prefix(io_plugin->name()), strip_prefix(rw_plugin->name()))
-      .primary(inv.args.front().get_location())
-      .emit(ctx);
   }
   if (not io_plugin) {
     return failure::promise();
@@ -476,30 +473,28 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     if (inv.args.empty()) {
-      diagnostic::error("expected positional argument `<path/url/events>`")
+      diagnostic::error("expected positional argument `uri|events`")
         .primary(inv.self)
         .docs(docs)
         .emit(ctx);
       return failure::promise();
     }
     auto& expr = inv.args[0];
+    auto events = std::vector<ast::expression>{};
     TRY(auto value, const_eval(expr, ctx));
-    auto events = std::vector<record>{};
     using ret = std::variant<bool, failure_or<operator_ptr>>;
-    const auto extract_single_event = [&](record& event) -> ret {
-      events.push_back(std::move(event));
-      return true;
-    };
     auto result = match(
-      value, extract_single_event,
-      [&](std::string& path) -> ret {
+      value,
+      [&](const record&) -> ret {
+        events.push_back(expr);
+        return true;
+      },
+      [&](const std::string& path) -> ret {
         return create_pipeline_from_uri<true>(path, std::move(inv), ctx, docs);
       },
-      [&]<typename T>(T& value) -> ret
-      // requires(not std::same_as<T, record>)
-      {
-        auto t = type::infer(value);
-        diagnostic::error("expected a URI, or a record")
+      [&](const auto&) -> ret {
+        const auto t = type::infer(value);
+        diagnostic::error("expected `string`, or `record`")
           .primary(expr, "got `{}`", t ? t->kind() : type_kind{})
           .docs(docs)
           .emit(ctx);
@@ -513,15 +508,20 @@ public:
     }
     for (auto& expr : inv.args | std::views::drop(1)) {
       TRY(value, const_eval(expr, ctx));
-      result = match(value, extract_single_event,
-                     [&](const auto&) -> ret {
-                       const auto t = type::infer(value);
-                       diagnostic::error("expected further records")
-                         .primary(expr, "got `{}`", t ? t->kind() : type_kind{})
-                         .docs(docs)
-                         .emit(ctx);
-                       return failure::promise();
-                     });
+      result = match(
+        value,
+        [&](const record&) -> ret {
+          events.push_back(expr);
+          return true;
+        },
+        [&](const auto&) -> ret {
+          const auto t = type::infer(value);
+          diagnostic::error("expected `string`, or `record`")
+            .primary(expr, "got `{}`", t ? t->kind() : type_kind{})
+            .docs(docs)
+            .emit(ctx);
+          return failure::promise();
+        });
       if (auto* op = try_as<failure_or<operator_ptr>>(result)) {
         return std::move(*op);
       }
@@ -540,7 +540,7 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     if (inv.args.empty()) {
-      diagnostic::error("expected positional argument `<path>`")
+      diagnostic::error("expected positional argument `uri`")
         .primary(inv.self)
         .docs(docs)
         .emit(ctx);
@@ -555,8 +555,9 @@ public:
                                                std::move(ctx), docs);
       },
       [&](auto&) -> failure_or<operator_ptr> {
-        diagnostic::error("expected a URI")
-          .primary(inv.args[0])
+        auto t = type::infer(value);
+        diagnostic::error("expected `string`")
+          .primary(inv.args[0], "got `{}`", t ? t->kind() : type_kind{})
           .docs(docs)
           .emit(ctx);
         return failure::promise();

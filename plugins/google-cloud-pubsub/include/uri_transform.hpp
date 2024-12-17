@@ -25,7 +25,7 @@ inline auto make_uri_transform(std::string_view argument_name) {
     if (slash == uri.inner.npos
         or uri.inner.find('/', slash + 1) != uri.inner.npos) {
       diagnostic::error("failed to to parse Google Cloud Pub/Sub URI")
-        .hint("The expected format is `project_id/{}", argument)
+        .hint("the expected format is `project_id/{}`", argument)
         .primary(uri)
         .emit(dh);
       return failure::promise();

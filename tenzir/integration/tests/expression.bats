@@ -163,9 +163,9 @@ EOF
 from \
   {x: 1.2.3.4, y: 1.2.3.4/16},
   {x: 1.2.3.4, y: 4.5.6.7/16},
-  {x: 1.2.3.4, y: null},
-  {x: null, y: 4.5.6.7/16},
-  {x: null, y: null}
+  {x: 1.2.3.4, y: subnet(null)},
+  {x: ip(null), y: 4.5.6.7/16},
+  {x: ip(null), y: subnet(null)}
 z = x in y
 EOF
 }

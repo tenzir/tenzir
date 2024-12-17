@@ -817,7 +817,7 @@ public:
     } else if constexpr (enable_source) {
       return "from_fluent_bit";
     } else {
-      return "to_fluen_bit";
+      return "to_fluent_bit";
     }
   }
 

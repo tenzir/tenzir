@@ -30,15 +30,7 @@ The name of the field to find the least common values for.
 ### Find the least common values
 
 ```tql
-from \
-  {x: "B"},
-  {x: "A"},
-  {x: "A"},
-  {x: "B"},
-  {x: "A"},
-  {x: "D"},
-  {x: "C"},
-  {x: "C"}
+from {x: "B"}, {x: "A"}, {x: "A"}, {x: "B"}, {x: "A"}, {x: "D"}, {x: "C"}, {x: "C"}
 rare x
 ```
 

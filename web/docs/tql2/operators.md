@@ -109,7 +109,7 @@ Operator | Description | Example
 [`save_zmq`](./operators/save_zmq.md) | Saves incoming bytes to ZeroMQ messages | `save_zmq`
 [`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
 [`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
-[`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent Bit| `to_fluent_bit fluent-bit "elasticsearch", options=…`
+[`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent Bit| `to_fluent_bit "elasticsearch" …`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
 [`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
 
