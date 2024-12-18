@@ -81,7 +81,7 @@ Spin up a Tenzir pipeline that accepts [TCP](../tcp/README.md) connection and
 parses Syslog:
 
 ```tql
-from "tcp://0.0.0.0:514", options={
+from "tcp://0.0.0.0:514" {
   read_syslog
 }
 publish "zscaler"
