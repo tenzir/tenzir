@@ -2,7 +2,7 @@
 
 Zscaler's [Nanolog Streaming Service (NSS)][nss] is a family of products that
 enable Zscaler cloud communication with third-party security solution devices
-for exchanging event logs. You can either user Zscaler's Cloud NSS or deploy an
+for exchanging event logs. You can either use Zscaler's Cloud NSS or deploy an
 on-prem NSS server to obtain the logs. Tenzir can receive Zscaler logs in either
 case.
 
