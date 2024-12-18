@@ -10,7 +10,7 @@ case.
 
 ![Zscaler NSS](zscaler-nss.svg)
 
-## Configure Cloud NSS to send events to Tenzir
+## Use a Cloud NSS Feed to send events to Tenzir
 
 ### Configure Tenzir
 
@@ -64,7 +64,7 @@ needed and test the feed. To test the connection:
 1. Go to *Administration* → *Nanolog Streaming Service* → *Cloud NSS Feeds*.
 2. Click the *Cloud icon*. This sends a test message to the Cribl receiver.
 
-## Configure an NSS Feed to send events to Tenzir
+## Use an NSS Feed to send events to Tenzir
 
 The on-prem NSS server VM pulls logs from the Zscaler cloud and pushes them to
 Tenzir via Syslog over TCP. The NSS server also buffers logs if the TCP
