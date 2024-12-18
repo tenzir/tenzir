@@ -83,7 +83,7 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     // renamed, e.g., `package_add` was renamed to `package::add`.
     "modules",
     // The node supports the TQL2 `from` and `to` operators.
-    "tql2_from_to",
+    "tql2_from",
   };
   if (auto fallback = false; get_or(cfg, "tenzir.tql2", fallback)) {
     // The experimental TQL2-only mode is enabled.
