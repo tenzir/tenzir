@@ -552,7 +552,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         while (true) {
           if (list_element_text.empty() and field_text.empty()) {
             break;
-          } else if (list_element_text.empty()) {
+          } else if (list_element_text == args.null_value) {
             l.null();
           } else {
             l.data_unparsed(
@@ -564,7 +564,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       }
       // If it is NOT a list, then all text was moved into `list_element_text`
       else {
-        if (list_element_text.empty()) {
+        if (list_element_text == args.null_value) {
           field.null();
         } else {
           field.data_unparsed(
@@ -873,6 +873,10 @@ public:
     return std::make_unique<parser_adapter<xsv_parser>>(
       xsv_parser{std::move(opts)});
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {std::string{Name}}};
+  }
 };
 
 template <detail::string_literal Name, char Sep, char ListSep,
@@ -897,6 +901,10 @@ public:
         .null_value = std::string{Null.str()},
         .no_header = no_header,
       }});
+  }
+
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {std::string{Name}}};
   }
 };
 

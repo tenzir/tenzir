@@ -182,27 +182,67 @@ constexpr auto variant_index = std::invoke(
   },
   std::make_index_sequence<variant_traits<V>::count>());
 
-// Ensures that `F` can be invoked with alternative `I` in `V`, yielding result
-// type `R`
+// Ensures that `F` can be invoked with alternative `I` in `V`, yielding type `R`
 template <class F, class V, class R, size_t I>
 concept variant_invocable_for_r = requires(F f, V v) {
-  static_cast<R>(std::invoke(f, variant_get<I>(std::forward<V>(v))));
+  { std::invoke(f, variant_get<I>(std::forward<V>(v))) } -> std::same_as<R>;
 };
 
-template <class F, class V, class R, size_t... Is>
-consteval auto check_matcher(std::index_sequence<Is...>) {
-  return (variant_invocable_for_r<F, V, R, Is> && ...);
-}
+/// Ensures that `F` can be invoked with all alternatives `[0..Variant_Size)`
+/// in `V`, yielding type `R`
+template <class F, class V, class R, size_t Variant_Size>
+concept variant_invocable_for_all
+  // This is implemented as a hand rolled version, because recursive concepts
+  // are illegal and an implementation via fold expressions does not allow the
+  // compiler to point at the alternative that failed.
+  = (Variant_Size < 33 // Concept is only implemented up to 32 alternatives. If
+                       // you ever need more, just add cases at the bottom
+     and ((Variant_Size < 1 or variant_invocable_for_r<F, V, R, 0>)
+          and (Variant_Size < 2 or variant_invocable_for_r<F, V, R, 1>)
+          and (Variant_Size < 3 or variant_invocable_for_r<F, V, R, 2>)
+          and (Variant_Size < 4 or variant_invocable_for_r<F, V, R, 3>)
+          and (Variant_Size < 5 or variant_invocable_for_r<F, V, R, 4>)
+          and (Variant_Size < 6 or variant_invocable_for_r<F, V, R, 5>)
+          and (Variant_Size < 7 or variant_invocable_for_r<F, V, R, 6>)
+          and (Variant_Size < 8 or variant_invocable_for_r<F, V, R, 7>)
+          and (Variant_Size < 9 or variant_invocable_for_r<F, V, R, 8>)
+          and (Variant_Size < 10 or variant_invocable_for_r<F, V, R, 9>)
+          and (Variant_Size < 11 or variant_invocable_for_r<F, V, R, 10>)
+          and (Variant_Size < 12 or variant_invocable_for_r<F, V, R, 11>)
+          and (Variant_Size < 13 or variant_invocable_for_r<F, V, R, 12>)
+          and (Variant_Size < 14 or variant_invocable_for_r<F, V, R, 13>)
+          and (Variant_Size < 15 or variant_invocable_for_r<F, V, R, 14>)
+          and (Variant_Size < 16 or variant_invocable_for_r<F, V, R, 15>)
+          and (Variant_Size < 17 or variant_invocable_for_r<F, V, R, 16>)
+          and (Variant_Size < 18 or variant_invocable_for_r<F, V, R, 17>)
+          and (Variant_Size < 19 or variant_invocable_for_r<F, V, R, 18>)
+          and (Variant_Size < 20 or variant_invocable_for_r<F, V, R, 19>)
+          and (Variant_Size < 21 or variant_invocable_for_r<F, V, R, 20>)
+          and (Variant_Size < 22 or variant_invocable_for_r<F, V, R, 21>)
+          and (Variant_Size < 24 or variant_invocable_for_r<F, V, R, 22>)
+          and (Variant_Size < 25 or variant_invocable_for_r<F, V, R, 23>)
+          and (Variant_Size < 26 or variant_invocable_for_r<F, V, R, 24>)
+          and (Variant_Size < 27 or variant_invocable_for_r<F, V, R, 25>)
+          and (Variant_Size < 28 or variant_invocable_for_r<F, V, R, 26>)
+          and (Variant_Size < 29 or variant_invocable_for_r<F, V, R, 27>)
+          and (Variant_Size < 30 or variant_invocable_for_r<F, V, R, 29>)
+          and (Variant_Size < 31 or variant_invocable_for_r<F, V, R, 30>)
+          and (Variant_Size < 32 or variant_invocable_for_r<F, V, R, 31>)));
 
 // Ensures that the Functor `F` can be invoked with every alternative in `V`,
-// respecting value categories
+// yielding the same type for all alternatives
 template <class F, class V>
-concept variant_matcher_for = has_variant_traits<V> and requires {
-  typename std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>;
-  requires check_matcher<
-    F, V, std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>>(
-    std::make_index_sequence<variant_traits<std::remove_cvref_t<V>>::count>{});
-};
+concept variant_matcher_for
+  = has_variant_traits<V>
+    and requires(F f, V v) { variant_get<0>(v); }
+    /// The return type of invoking the functor with the first alternative
+    /// determines the final return type
+    and requires(F f, V v) { f(variant_get<0>(v)); }
+    /// Invoking the functor with all of the alternatives must yield the same
+    /// type
+    and variant_invocable_for_all<
+      F, V, std::invoke_result_t<F, decltype(variant_get<0>(std::declval<V>()))>,
+      variant_traits<std::remove_cvref_t<V>>::count>;
 
 template <class V, variant_matcher_for<V> F>
 constexpr auto match_one(V&& v, F&& f) -> decltype(auto) {
@@ -220,11 +260,8 @@ constexpr auto match_one(V&& v, F&& f) -> decltype(auto) {
           // where `void` is returned separately.
           using local_return_type = decltype(std::invoke(
             std::forward<F>(f), variant_get<Is>(std::forward<V>(v))));
-          // static_assert(std::same_as<local_return_type, return_type>,
-          //               "all cases must have the same return type");
-          static_assert(std::convertible_to<local_return_type, return_type>,
-                        "all cases must return a type convertible to the "
-                        "return type of the first alternative");
+          static_assert(std::same_as<local_return_type, return_type>,
+                        "all cases must have the same return type");
           return static_cast<return_type>(std::invoke(
             std::forward<F>(f), variant_get<Is>(std::forward<V>(v))));
         }...,
@@ -261,35 +298,32 @@ constexpr auto match_tuple(std::tuple<Xs...> xs, F&& f) -> decltype(auto) {
                      });
   }
 }
-
-template <class T>
-using wrap_lvalue_ref
-  = std::conditional_t<std::is_lvalue_reference_v<T>,
-                       std::reference_wrapper<std::remove_reference_t<T>>,
-                       std::remove_cvref_t<T>>;
 } // namespace detail
 
-/// Calls one of the given functions with the current variant inhabitant.
+/// Calls one of the given functions with the current variant alternative.
+/// This overload takes by value, as it makes a copy internally.
+/// If you need your matcher to be a reference, you can pass it as a `std::ref`.
 template <has_variant_traits V, class... Fs>
-constexpr auto match(V&& v, Fs&&... fs) -> decltype(auto) {
-  return detail::match_one(
-    std::forward<V>(v),
-    detail::overload<detail::wrap_lvalue_ref<Fs>...>{std::forward<Fs>(fs)...});
+constexpr auto match(V&& v, Fs... fs) -> decltype(auto) {
+  return detail::match_one(std::forward<V>(v),
+                           detail::overload{std::move(fs)...});
 }
 
+/// Calls the given functions with the current variant alternative.
 template <has_variant_traits V, class F>
 constexpr auto match(V&& v, F&& f) -> decltype(auto) {
   return detail::match_one(std::forward<V>(v), std::forward<F>(f));
 }
 
-/// Calls one of the given functions with the current variant inhabitants.
+/// Calls one of the given functions with the current variant alternatives.
+/// This overload takes by value, as it makes a copy internally.
+/// If you need your matcher to be a reference, you can pass it as a `std::ref`.
 template <has_variant_traits... Ts, class... Fs>
-constexpr auto match(std::tuple<Ts...> v, Fs&&... fs) -> decltype(auto) {
-  return detail::match_tuple(
-    std::move(v),
-    detail::overload<detail::wrap_lvalue_ref<Fs>...>{std::forward<Fs>(fs)...});
+constexpr auto match(std::tuple<Ts...> v, Fs... fs) -> decltype(auto) {
+  return detail::match_tuple(std::move(v), detail::overload{std::move(fs)...});
 }
 
+/// Calls the given function with the current variant alternatives
 template <has_variant_traits... Ts, class F>
 constexpr auto match(std::tuple<Ts...> v, F&& f) -> decltype(auto) {
   return detail::match_tuple(std::move(v), std::forward<F>(f));

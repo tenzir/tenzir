@@ -35,61 +35,61 @@ public:
     TRY(argument_parser2::function("sqrt")
           .positional("x", expr, "number")
           .parse(inv, ctx));
-    return function_use::make([expr = std::move(expr)](evaluator eval,
-                                                       session ctx) -> series {
-      auto value = eval(expr);
-      auto compute = [&](const arrow::DoubleArray& x) {
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto b = arrow::DoubleBuilder{};
-        check(b.Reserve(x.length()));
-        for (auto y : x) {
-          if (not y) {
-            check(b.AppendNull());
-            continue;
-          }
-          auto z = *y;
-          if (z < 0.0) {
-            // TODO: Warning?
-            check(b.AppendNull());
-            continue;
-          }
-          check(b.Append(std::sqrt(z)));
-        }
-        return finish(b);
-      };
-      auto f = detail::overload{
-        [&](const arrow::DoubleArray& value) {
-          return compute(value);
-        },
-        [&](const arrow::Int64Array& value) {
-          // TODO: Conversation should be automatic (if not
-          // part of the kernel).
-          auto b = arrow::DoubleBuilder{};
-          check(b.Reserve(value.length()));
-          for (auto y : value) {
-            if (y) {
-              check(b.Append(static_cast<double>(*y)));
-            } else {
+        check(b.Reserve(eval.length()));
+        auto append_sqrt = [&](const arrow::DoubleArray& x) {
+          for (auto y : x) {
+            if (not y) {
               check(b.AppendNull());
+              continue;
             }
+            auto z = *y;
+            if (z < 0.0) {
+              // TODO: Warning?
+              check(b.AppendNull());
+              continue;
+            }
+            check(b.Append(std::sqrt(z)));
           }
-          return compute(*finish(b));
-        },
-        [&](const arrow::NullArray& value) {
-          return series::null(double_type{}, value.length()).array;
-        },
-        [&](const auto&) {
-          // TODO: Think about what we want and generalize this.
-          diagnostic::warning("expected `number`, got `{}`", value.type.kind())
-            .primary(expr)
-            .docs("https://docs.tenzir.com/functions/sqrt")
-            .emit(ctx);
-          auto b = arrow::DoubleBuilder{};
-          check(b.AppendNulls(value.length()));
-          return finish(b);
-        },
-      };
-      return {double_type{}, match(*value.array, f)};
-    });
+        };
+        for (auto value : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::DoubleArray& value) {
+              append_sqrt(value);
+            },
+            [&](const arrow::Int64Array& value) {
+              // TODO: Conversation should be automatic (if not
+              // part of the kernel).
+              auto b = arrow::DoubleBuilder{};
+              check(b.Reserve(value.length()));
+              for (auto y : value) {
+                if (y) {
+                  check(b.Append(static_cast<double>(*y)));
+                } else {
+                  check(b.AppendNull());
+                }
+              }
+              append_sqrt(*finish(b));
+            },
+            [&](const arrow::NullArray& value) {
+              check(b.AppendNulls(value.length()));
+            },
+            [&](const auto&) {
+              // TODO: Think about what we want and generalize this.
+              diagnostic::warning("expected `number`, got `{}`",
+                                  value.type.kind())
+                .primary(expr)
+                .docs("https://docs.tenzir.com/functions/sqrt")
+                .emit(ctx);
+              check(b.AppendNulls(value.length()));
+            },
+          };
+          match(*value.array, f);
+        }
+        return series{double_type{}, finish(b)};
+      });
   }
 };
 
@@ -128,7 +128,7 @@ public:
       return;
     }
     auto arg = eval(*expr_, input, ctx);
-    count_ += arg.array->length() - arg.array->null_count();
+    count_ += arg.length() - arg.null_count();
   }
 
   auto get() const -> data override {
@@ -189,55 +189,56 @@ public:
     if (state_ == state::failed) {
       return;
     }
-    auto arg = eval(expr_, input, ctx);
-    auto f = detail::overload{
-      [&]<concepts::one_of<double_type, int64_type, uint64_type> Type>(
-        const Type& ty) {
-        if (state_ != state::numeric and state_ != state::none) {
-          diagnostic::warning("got incompatible types `number` and `{}`",
+    for (auto& arg : eval(expr_, input, ctx)) {
+      auto f = detail::overload{
+        [&]<concepts::one_of<double_type, int64_type, uint64_type> Type>(
+          const Type& ty) {
+          if (state_ != state::numeric and state_ != state::none) {
+            diagnostic::warning("got incompatible types `number` and `{}`",
+                                arg.type.kind())
+              .primary(expr_)
+              .emit(ctx);
+            state_ = state::failed;
+            return;
+          }
+          state_ = state::numeric;
+          auto& array = as<type_to_arrow_array_t<Type>>(*arg.array);
+          for (auto value : values(ty, array)) {
+            if (value) {
+              digest_.NanAdd(*value);
+            }
+          }
+        },
+        [&](const duration_type& ty) {
+          if (state_ != state::dur and state_ != state::none) {
+            diagnostic::warning("got incompatible types `duration` and `{}`",
+                                arg.type.kind())
+              .primary(expr_)
+              .emit(ctx);
+            state_ = state::failed;
+            return;
+          }
+          state_ = state::dur;
+          for (auto value : values(ty, as<arrow::DurationArray>(*arg.array))) {
+            if (value) {
+              digest_.Add(value->count());
+            }
+          }
+        },
+        [&](const null_type&) {
+          // Silently ignore nulls, like we do above.
+        },
+        [&](const auto&) {
+          diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
+                              "got `{}`",
                               arg.type.kind())
             .primary(expr_)
             .emit(ctx);
           state_ = state::failed;
-          return;
-        }
-        state_ = state::numeric;
-        auto& array = as<type_to_arrow_array_t<Type>>(*arg.array);
-        for (auto value : values(ty, array)) {
-          if (value) {
-            digest_.NanAdd(*value);
-          }
-        }
-      },
-      [&](const duration_type& ty) {
-        if (state_ != state::dur and state_ != state::none) {
-          diagnostic::warning("got incompatible types `duration` and `{}`",
-                              arg.type.kind())
-            .primary(expr_)
-            .emit(ctx);
-          state_ = state::failed;
-          return;
-        }
-        state_ = state::dur;
-        for (auto value : values(ty, as<arrow::DurationArray>(*arg.array))) {
-          if (value) {
-            digest_.Add(value->count());
-          }
-        }
-      },
-      [&](const null_type&) {
-        // Silently ignore nulls, like we do above.
-      },
-      [&](const auto&) {
-        diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
-                            "got `{}`",
-                            arg.type.kind())
-          .primary(expr_)
-          .emit(ctx);
-        state_ = state::failed;
-      },
-    };
-    match(arg.type, f);
+        },
+      };
+      match(arg.type, f);
+    }
   }
 
   auto get() const -> data override {

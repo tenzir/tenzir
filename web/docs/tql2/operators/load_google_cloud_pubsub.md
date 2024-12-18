@@ -13,7 +13,7 @@ The connector tries to retrieve the appropriate credentials using Google's
 
 ## Description
 
-The `google_cloud_pubsub` loader acquires raw bytes from a Google Cloud Pub/Sub subscription.
+The operator acquires raw bytes from a Google Cloud Pub/Sub subscription.
 
 ### `project_id = string`
 
@@ -25,9 +25,22 @@ The subscription to subscribe to.
 
 ### `timeout = duration (optional)`
 
-How long to wait for messages before ending the connection. A duration of zero means the operator will run forever.
+How long to wait for messages before ending the connection. A duration of zero
+means the operator will run forever.
 
 The default value is `0s`.
+
+## URI support & integration with `from`
+
+The `load_google_cloud_pubsub` operator can also be used from the [`from`](from.md)
+operator. For this, the `gcps://` scheme can be used. The URI is then translated:
+
+```tql
+from "gcps://my_project/my_subscription"
+```
+```tql
+load_google_cloud_pubsub project_id="my_project", subscription_id="my_subscription"
+```
 
 ## Examples
 
@@ -40,3 +53,7 @@ the messages as JSON:
 load_google_cloud_pubsub project_id="amazing-project-123456", subscription_id="my-subscription"
 read_json
 ```
+
+## See Also
+
+[`save_google_cloud_pubsub`](save_google_cloud_pubsub.md)

@@ -2,6 +2,7 @@
 title: Tenzir v4.11
 authors: [dominiklohmann]
 date: 2024-03-22
+last_updated: 2024-12-10
 tags: [release, contexts, every, set, email, sqs]
 comments: true
 ---
@@ -16,22 +17,19 @@ given time interval and sending pipeline data as emails.
 
 ## Execute Sources on a Schedule
 
-One feedback we've heard often from users is that the
-[`from <url>`](/connectors) invocation is indeed handy, but it's more practical
-when it's not a one-time gig. Users expressed a need to retrieve data from
-various sources more than just once, indicating a requirement for a more
-cyclical or scheduled approach.
+One feedback we've heard often from users is that the `from <url>` invocation is
+indeed handy, but it's more practical when it's not a one-time gig. Users
+expressed a need to retrieve data from various sources more than just once,
+indicating a requirement for a more cyclical or scheduled approach.
 
 Given these requirements, we initially considered adding options for continuous
-data retrieval or polling for specific connectors, such as
-[`http`](/connectors/http). However, we realized that the need for such
-functionality ranged beyond a limited number of connectors. Hence, any solution
-we developed would ideally adapt to any source operator, providing wider
-functionality.
+data retrieval or polling for specific connectors, such as `http`. However, we
+realized that the need for such functionality ranged beyond a limited number of
+connectors. Hence, any solution we developed would ideally adapt to any source
+operator, providing wider functionality.
 
-In response to these needs, we developed a new [operator
-modifier](/next/language/operator-modifiers) that empowers any source operator
-to execute at regular intervals: `every <interval>`.
+In response to these needs, we developed a new operator modifier that empowers
+any source operator to execute at regular intervals: `every <interval>`.
 
 For instance, the operator `every 1s from <url>` will enable the system to poll
 the specified URL every single second. The capability delivers continuous,
@@ -68,12 +66,11 @@ context that contains entries in the form `{"key": "DE", "context": {"flag":
 flag as an emoji, how can I do that?
 
 If you're just replacing the value of a single field then it's easy—you can just
-use [`put`](/operators/put) to replace the input value with its context after
-the enrichment. But this user wanted to look into every single string in every
-event, and replace all country short codes that it contained.
+use `put` to replace the input value with its context after the enrichment. But
+this user wanted to look into every single string in every event, and replace
+all country short codes that it contained.
 
-Two newly added options for the [`enrich`](/next/operators/enrich) operator make
-this easily possible:
+Two newly added options for the `enrich` operator make this easily possible:
 
 ```
 …
@@ -83,7 +80,7 @@ this easily possible:
 The `--replace` flag causes `enrich` to replace fields with their context, if
 they exists. The option `--yield <field>` trims down the enrichment to just a
 specific field within the context. The `--yield` option is also available for
-the [`lookup`](/operators/lookup) operator.
+the `lookup` operator.
 
 ```json title="Before"
 {
@@ -171,10 +168,8 @@ of IOCs to create separate alerts per IOC even within a single event.
 
 ## The Sweet Spot Between Extend and Replace
 
-The [`set`](/next/operators/set) operator "upserts" into events. Its syntax
-exactly matches the syntax of the existing [`extend`](/next/operators/extend),
-[`replace`](/next/operators/replace), and [`put`](/next/operators/put)
-operators.
+The `set` operator "upserts" into events. Its syntax exactly matches the syntax
+of the existing `extend`, `replace`, and `put` operators.
 
 If a specified field already exists, the `set` operator replaces its value. If
 it does not, the `set` operator extends the event with new field. We found this
@@ -189,9 +184,9 @@ the category `foo` in the Explorer on [app.tenzir.com](https://app.tenzir.com).
 
 ## Send Emails from a Pipeline
 
-The new [`email`](/next/connectors/email) saver sends away pipeline contents as
-mails. This is especially handy for integrating with traditional escalation
-pathways that rely on email-based dispatching methods.
+The new `email` saver sends away pipeline contents as mails. This is especially
+handy for integrating with traditional escalation pathways that rely on
+email-based dispatching methods.
 
 For example, to send all Suricata alerts arriving at a node via email, use:
 
@@ -210,9 +205,9 @@ format you provided.
 
 ## Working with Amazon SQS Queues
 
-The new [`sqs`](/next/connectors/sqs) enables reading from and writing to Amazon
-SQS queues. For example, importing JSON from an SQS queue named `tenzir` into a
-node looks like this:
+The new `sqs` enables reading from and writing to Amazon SQS queues. For
+example, importing JSON from an SQS queue named `tenzir` into a node looks like
+this:
 
 ```
 from sqs://tenzir | import

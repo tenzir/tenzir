@@ -54,25 +54,26 @@ offers a transactional interface for adding and removing partitions.
 Manages chunks of raw bytes by interacting with a resource.
 
 A connector is either a *loader* that acquires bytes from a resource, or a
-*saver* that sends bytes to a resource. Example connectors are
-[`file`](./connectors/file.md), [`kafka`](./connectors/kafka.md), and
-[`nic`](./connectors/nic.md).
-
-- See all available [connectors](./connectors.md)
+*saver* that sends bytes to a resource. Loaders are implemented as ordinary
+[operators](tql2/operators.md) prefixed with `load_*` while savers are prefixed with
+`save_*`.
 
 ## Context
 
 A stateful object used for in-band enrichment.
 
-Contexts live inside a node and you can manage them with the
-[`context`](./operators/context.md) operator. A context has pluggable type, such
-as a lookup table, GeoIP database, or a custom plugin. The
-[`enrich`](./operators/enrich.md) places a context into a pipeline for
-enrichment.
+Contexts come in various types, such as a lookup table, Bloom filter, and GeoIP
+database. They live inside a node and you can enrich with them in other
+pipelines.
 
 - Read more about [enrichment](./enrichment/README.md)
-- [Manage](./operators/context.md) a context
-- [Enrich](./operators/enrich.md) with a context
+
+## Destination
+
+An pipeline ending with an [output](#output) operator preceded by a
+[`subscribe`](tql2/operators/subscribe.md) input operator.
+
+- Learn more about [pipelines](pipelines/README.md)
 
 ## Format
 
@@ -93,6 +94,12 @@ Tenzir has *sparse* indexes. Sparse indexes live in memory and point to
 
 - [Configure the catalog](./installation/tune-performance/README.md#configure-the-catalog)
 
+## Input
+
+An [operator](#operator) that only producing data, without consuming anything.
+
+- Learn more about [pipelines](pipelines/README.md)
+
 ## Integration
 
 A set of pipelines to integrate with a third-party product.
@@ -112,14 +119,14 @@ GitHub](https://github.com/tenzir/library).
 
 ## Loader
 
-A [connector](#connector) that acquires bytes.
+A connector that acquires bytes.
 
 A loader is the dual to a [saver](#saver). It has a no input and only performs a
-side effect that acquires bytes. Use a loader in the
-[`from`](./operators/from.md) or [`load`](./operators/load.md) operators.
+side effect that acquires bytes. Use a loader implicitly with the
+[`from`](tql2/operators/from.md) operator or explicitly with the `load_*`
+operators.
 
-- Learn more about [pipelines](./pipelines.md)
-- See [all connectors](./connectors.md)
+- Learn more about [pipelines](pipelines/README.md)
 
 ## Node
 
@@ -151,10 +158,16 @@ contains packages that map data sources to OCSF.
 
 The building block of a [pipeline](#pipeline).
 
-An operator is a [source](#source), [transformation](#transformation), or
-[sink](#sink).
+An operator is a [input](#input), [transformation](#transformation), or
+[output](#output).
 
-- See all available [operators](./operators.md)
+- See all available [operators](./tql2/operators.md)
+
+## Output
+
+An [operator](#operator) consuming data, without producing anything.
+
+- Learn more about [pipelines](pipelines/README.md)
 
 ## PaC
 
@@ -175,14 +188,12 @@ A collection of [pipelines](#pipeline) and [contexts](#context).
 
 ## Parser
 
-A [format](#format) that translates bytes into events.
+A bytes-to-events operator.
 
-A parser is the dual to a [printer](#printer). Use a parser in the
-[`from`](./operators/from.md) or [`read`](./operators/read.md) operators. You
-can use the [`parse`](./operators/parse.md) operator to parse a single field
-with a parser.
+A parser is the dual to a [printer](#printer). Use a parser implicitly in the
+[`from`](./tql2/operators/from.md) operator.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)
 - See [all formats](./formats.md)
 
 ## Partition
@@ -204,8 +215,7 @@ formats are [Parquet](https://parquet.apache.org) or
 
 Combines a set of [operators](#operator) into a dataflow graph.
 
-- Understand [how pipelines work](./pipelines.md)
-- Understand the [pipeline language](./language.md)
+- Understand [how pipelines work](pipelines/README.md)
 - [Run a pipeline](./usage/run-pipelines/README.md)
 
 ## Platform
@@ -215,12 +225,14 @@ Control plane for nodes and pipelines, accessible through [app](#app) at
 
 ## Printer
 
+An events-to-bytes operator.
+
 A [format](#format) that translates events into bytes.
 
-A printer is the dual to a [parser](#parser). Use a parser in the
-[`to`](./operators/to.md) or [`write`](./operators/write.md) operators.
+A printer is the dual to a [parser](#parser). Use a parser implicitly in the
+[`to`](./tql2/operators/to.md) operator.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)
 - See [all formats](./formats.md)
 
 ## Saver
@@ -228,11 +240,11 @@ A printer is the dual to a [parser](#parser). Use a parser in the
 A [connector](#connector) that emits bytes.
 
 A saver is the dual to a [loader](#loader). It has a no output and only performs
-a side effect that emits bytes. Use a saver in the [`to`](./operators/to.md) or
-[`save`](./operators/save.md) operators.
+a side effect that emits bytes. Use a saver implicitly with the
+[`to`](tql2/operators/to.md) operator or explicitly with the `save_*`
+operators.
 
-- Learn more about [pipelines](./pipelines.md)
-- See [all connectors](./connectors.md)
+- Learn more about [pipelines](pipelines/README.md)
 
 ## Schema
 
@@ -240,17 +252,12 @@ A top-level record type of an event.
 
 - [Show available schemas](./usage/show-available-schemas.md)
 
-## Sink
-
-An [operator](#operator) consuming input, without producing any output.
-
-- Learn more about [pipelines](./pipelines.md)
-
 ## Source
 
-An [operator](#operator) producing output, without consuming any input.
+An pipeline starting with an [input](#input) operator followed by a
+[`publish`](tql2/operators/publish.md) output operator.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)
 
 ## TQL
 
@@ -258,11 +265,10 @@ An acronym for *Tenzir Query Language*.
 
 TQL is the language in which users write [pipelines](#pipeline).
 
-- Learn more about the [language](./language.md)
-- Understand the [syntax](./language/syntax.md)
+- Learn more about the [language](./tql2/language/statements.md)
 
 ## Transformation
 
 An [operator](#operator) consuming both input and producing output.
 
-- Learn more about [pipelines](./pipelines.md)
+- Learn more about [pipelines](pipelines/README.md)

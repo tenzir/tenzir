@@ -94,72 +94,74 @@ public:
     if (state_ == state::failed) {
       return;
     }
-    auto arg = eval(expr_, input, ctx);
-    auto f = detail::overload{
-      [](const arrow::NullArray&) {},
-      [&]<class T>(const T& array)
-        requires numeric_type<type_from_arrow_t<T>>
-                   or std::same_as<T, arrow::DurationArray>
-      {
-        if constexpr (std::same_as<T, arrow::DurationArray>) {
-          if (state_ != state::dur and state_ != state::none) {
-            diagnostic::warning("got incompatible types `number` and `{}`",
-                                arg.type.kind())
-              .primary(expr_)
-              .emit(ctx);
-            state_ = state::failed;
-            return;
+    for (auto& arg : eval(expr_, input, ctx)) {
+      auto f = detail::overload{
+        [](const arrow::NullArray&) {},
+        [&]<class T>(const T& array)
+          requires numeric_type<type_from_arrow_t<T>>
+                     or std::same_as<T, arrow::DurationArray>
+        {
+          if constexpr (std::same_as<T, arrow::DurationArray>) {
+            if (state_ != state::dur and state_ != state::none) {
+              diagnostic::warning("got incompatible types `number` and `{}`",
+                                  arg.type.kind())
+                .primary(expr_)
+                .emit(ctx);
+              state_ = state::failed;
+              return;
+            }
+            if (mode_ == mode::variance) {
+              diagnostic::warning("expected `int`, `uint` or `double` got `{}`",
+                                  arg.type.kind())
+                .primary(expr_)
+                .emit(ctx);
+              state_ = state::failed;
+              return;
+            }
+            state_ = state::dur;
+          } else {
+            if (state_ != state::numeric and state_ != state::none) {
+              diagnostic::warning("got incompatible types `duration` and `{}`",
+                                  arg.type.kind())
+                .primary(expr_)
+                .emit(ctx);
+              state_ = state::failed;
+              return;
+            }
+            state_ = state::numeric;
           }
+          for (auto i = int64_t{}; i < array.length(); ++i) {
+            if (array.IsValid(i)) {
+              const auto x = static_cast<double>(array.Value(i));
+              if constexpr (std::is_same_v<type_from_arrow_t<T>, double_type>) {
+                if (std::isnan(x)) {
+                  continue;
+                }
+              }
+              count_ += 1;
+              mean_ += (x - mean_) / count_;
+              mean_squared_ += ((x * x) - mean_squared_) / count_;
+            }
+          }
+        },
+        [&](const auto&) {
           if (mode_ == mode::variance) {
             diagnostic::warning("expected `int`, `uint` or `double` got `{}`",
                                 arg.type.kind())
               .primary(expr_)
               .emit(ctx);
-            state_ = state::failed;
-            return;
-          }
-          state_ = state::dur;
-        } else {
-          if (state_ != state::numeric and state_ != state::none) {
-            diagnostic::warning("got incompatible types `duration` and `{}`",
+          } else {
+            diagnostic::warning("expected `int`, `uint`, `double` or "
+                                "`duration`, "
+                                "got `{}`",
                                 arg.type.kind())
               .primary(expr_)
               .emit(ctx);
-            state_ = state::failed;
-            return;
           }
-          state_ = state::numeric;
-        }
-        for (auto i = int64_t{}; i < array.length(); ++i) {
-          if (array.IsValid(i)) {
-            const auto x = static_cast<double>(array.Value(i));
-            if constexpr (std::is_same_v<type_from_arrow_t<T>, double_type>) {
-              if (std::isnan(x)) {
-                continue;
-              }
-            }
-            count_ += 1;
-            mean_ += (x - mean_) / count_;
-            mean_squared_ += ((x * x) - mean_squared_) / count_;
-          }
-        }
-      },
-      [&](const auto&) {
-        if (mode_ == mode::variance) {
-          diagnostic::warning("expected `int`, `uint` or `double` got `{}`",
-                              arg.type.kind())
-            .primary(expr_)
-            .emit(ctx);
-        } else {
-          diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
-                              "got `{}`",
-                              arg.type.kind())
-            .primary(expr_)
-            .emit(ctx);
-        }
-        state_ = state::failed;
-      }};
-    match(*arg.array, f);
+          state_ = state::failed;
+        }};
+      match(*arg.array, f);
+    }
   }
 
   auto get() const -> data override {

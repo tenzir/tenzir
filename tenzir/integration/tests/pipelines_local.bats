@@ -630,14 +630,14 @@ EOF
 
 # bats test_tags=pipelines, deduplicate
 @test "Deduplicate operator" {
-  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate --limit 1"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate e --limit 1"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate b --limit 1"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json | batch 1 | deduplicate b --limit 1"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate b --limit 1 --distance 1"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate b,e --limit 1"
+  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate limit=1"
+  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate e, limit=1"
+  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate b, limit=1"
+  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | batch 1 | deduplicate b, limit=1"
+  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate b, limit=1, distance=1"
+  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate {b: b, e: e}, limit=1"
 
-  check tenzir "from stdin read json | deduplicate :ip --limit 2" <<EOF
+  check tenzir --tql2 "deduplicate value, limit=2" <<EOF
 {"value": "192.168.1.1", "tag": 1}
 {"value": "192.168.1.2", "tag": 2}
 {"value": "192.168.1.3", "tag": 3}
@@ -649,7 +649,7 @@ EOF
 {"value": "192.168.1.1", "tag": 9}
 EOF
 
-  check tenzir "from stdin read json | deduplicate :ip --distance 3 --limit 1" <<EOF
+  check tenzir --tql2 "deduplicate value, distance=3, limit=1" <<EOF
 {"value": "192.168.1.1", "tag": 1}
 {"value": "192.168.1.2", "tag": 2}
 {"value": "192.168.1.3", "tag": 3}
@@ -661,14 +661,14 @@ EOF
 {"value": "192.168.1.1", "tag": 9}
 EOF
 
-  check tenzir "from stdin read json | deduplicate value --limit 1" <<EOF
+  check tenzir --tql2 "deduplicate value, limit=1" <<EOF
 {"value": 123, "tag": 1}
 {"value": null, "tag": 2}
 {"value": 123, "tag": 3}
 {"tag": 4}
 EOF
 
-  check tenzir "from stdin read json | deduplicate foo.bar --limit 1" <<EOF
+  check tenzir --tql2 "deduplicate foo.bar, limit=1" <<EOF
 {"foo": {"bar": 123}, "tag": 1}
 {"foo": {"bar": null}, "tag": 2}
 {"foo": 123, "tag": 3}
@@ -679,31 +679,17 @@ EOF
 {"foo": {"bar": 123}, "tag": 8}
 EOF
 
-  check ! tenzir "from stdin read json | deduplicate :ip --limit 1" <<EOF
-{"value": 123, "tag": 1}
-{"value": null, "tag": 2}
-{"value": 123, "tag": 3}
-{"tag": 4}
-EOF
-
-  check tenzir "from stdin read json | deduplicate a, b --limit 1" <<EOF
+  check tenzir --tql2 "deduplicate {a: a, b: b}, limit=1" <<EOF
 {"a": 1, "b": 2, "tag": 1}
 {"b": "reset", "tag": 2}
 {"b": 2, "a": 1, "tag": 3}
 EOF
 
-  check tenzir "from stdin read json | deduplicate --limit 1" <<EOF
+  check tenzir --tql2 "deduplicate limit=1" <<EOF
 {"a": 1, "b": 2}
 {"b": "reset"}
 {"b": 2, "a": 1}
 EOF
-
-  # Potentially flaky, if `tenzir` takes more than (8s - 100ms) to start up:
-  # (
-  #   echo "{\"value\": \"A\", \"tag\": 1}"
-  #   sleep 8s
-  #   echo "{\"value\": \"A\", \"tag\": 2}"
-  # ) | check tenzir "from stdin read json | deduplicate value --limit 1 --timeout 100ms"
 }
 
 # bats test_tags=pipelines
@@ -828,13 +814,13 @@ EOF
 }
 
 @test "assert operator" {
-  check tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 0'
-  check ! tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 2'
+  check tenzir --strict --tql2 'from {x: 1}, {x: 2}, {x: 3} | assert x != 0'
+  check ! tenzir --strict --tql2 'from {x: 1}, {x: 2}, {x: 3} | assert x != 2'
 }
 
 @test "summarize an empty input" {
-  check tenzir --tql2 'from [] | summarize count(), sum(foo)'
-  check tenzir --tql2 'from [] | summarize count(), sum(foo), bar'
+  check tenzir --tql2 'from {} | head 0 | summarize count(), sum(foo)'
+  check tenzir --tql2 'from {} | head 0| summarize count(), sum(foo), bar'
 }
 
 @test "map and where an empty list" {

@@ -2,6 +2,7 @@
 title: Tenzir v4.8
 authors: [dominiklohmann, jachris]
 date: 2024-01-22
+last_updated: 2024-12-10
 tags: [release, fluent-bit, http, context, lookup, performance]
 comments: true
 ---
@@ -16,15 +17,15 @@ filled with goodness.
 
 ## Lookup Operator
 
-The new [`lookup`](/next/operators/lookup) operator is a unique vehicle to
-perform live- and retro-matching simultaneously. Think of it as enrichment of
-all data that gets ingested into a node, plus a historical query for every
-change in the enrichment context.
+The new `lookup` operator is a unique vehicle to perform live- and
+retro-matching simultaneously. Think of it as enrichment of all data that gets
+ingested into a node, plus a historical query for every change in the enrichment
+context.
 
 ## Graylog Support
 
-The new [`gelf`](/next/formats/gelf) parser makes it possible to read a stream
-of [Graylog Extended Log Format
+The new `gelf` parser makes it possible to read a stream of [Graylog Extended
+Log Format
 (GELF)](https://go2docs.graylog.org/5-0/getting_in_log_data/gelf.html) messages.
 
 You can now point your GELF feed to a Tenzir pipeline. Read our [Graylog
@@ -37,9 +38,8 @@ from tcp://0.0.0.0:12201 read gelf
 
 ## Shift Timestamps and Delay Events
 
-The new [`timeshift`](/next/operators/timeshift) and
-[`delay`](/next/operators/timeshift) operators make it possible to rewrite
-timestamps and act on them to replay data flexibly.
+The new `timeshift` and `delay` operators make it possible to rewrite timestamps
+and act on them to replay data flexibly.
 
 The `timeshift` operator adjusts a series of time values by anchoring them
 around a given start time. You can rewrite and scale timestamps:
@@ -66,8 +66,8 @@ Here is visual explanation of how `delay` works:
 
 ## HTTP Saver
 
-The [`http`](/next/connectors/http) connector now also has a saver in addition
-to the already existing loader. Here's how they work in a nutshell:
+The `http` connector now also has a saver in addition to the already existing
+loader. Here's how they work in a nutshell:
 
 ![HTTP Connector](http.excalidraw.svg)
 
@@ -77,9 +77,8 @@ and the response body isn't processed.
 
 ## Fluent Bit Performance
 
-The [`fluent-bit`](/operators/fluent-bit) source operator got a significant
-performance boost as a byproduct of changing the Fluent Bit data exchange format
-from JSON to MsgPack:
+The `fluent-bit` source operator got a significant performance boost as a
+byproduct of changing the Fluent Bit data exchange format from JSON to MsgPack:
 
 ![Fluent Bit Performance](fluent-bit-speedup.svg)
 

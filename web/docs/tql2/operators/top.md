@@ -29,16 +29,7 @@ The field to find the most common values for.
 ### Find the most common values
 
 ```tql
-from [
-  {x: "B"},
-  {x: "A"},
-  {x: "A"},
-  {x: "B"},
-  {x: "A"},
-  {x: "D"},
-  {x: "C"},
-  {x: "C"},
-]
+from {x: "B"}, {x: "A"}, {x: "A"}, {x: "B"}, {x: "A"}, {x: "D"}, {x: "C"}, {x: "C"}
 top x
 ```
 

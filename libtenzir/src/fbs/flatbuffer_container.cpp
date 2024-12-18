@@ -6,8 +6,11 @@
 namespace tenzir::fbs {
 
 flatbuffer_container::flatbuffer_container(tenzir::chunk_ptr chunk) {
-  if (!chunk || chunk->size() < 4)
+  using flatbuffers::soffset_t;
+  using flatbuffers::uoffset_t;
+  if (!chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
     return;
+  }
   auto const* header = tenzir::fbs::GetSegmentedFileHeader(chunk->data());
   if (header->header_type()
       != tenzir::fbs::segmented_file::SegmentedFileHeader::v0)

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/string_literal.hpp"
+#include "tenzir/multi_series.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -26,13 +27,66 @@ public:
     -> failure_or<operator_ptr>
     = 0;
 
-  /// Returns the URI schemes from which the operator can load (e.g., `http`).
-  virtual auto load_schemes() const -> std::vector<std::string> {
+  struct load_properties_t {
+    /// URI schemes the connector supports
+    std::vector<std::string> schemes = {};
+    /// A default `load_*` operator to be used if it couldnt be deduced.
+    const operator_factory_plugin* default_format = nullptr;
+    /// Whether the connector accepts a pipeline as the final argument
+    bool accepts_pipeline = false;
+    /// Whether to strip the scheme before passing the URI to the transformer
+    /// or the operator itself.
+    bool strip_scheme = false;
+    /// Whether the connector produces/consumes events
+    bool events = false;
+    /// A function that can be used to transform a URI into ast arguments.
+    /// This function may be empty, in which case the URI is just directly
+    /// passed as the first argument to the operator.
+    /// The location will refer to the URIs location, with the scheme stripped
+    /// if requested.
+    std::function<failure_or<std::vector<ast::expression>>(located<std::string>,
+                                                           diagnostic_handler&)>
+      transform_uri = {};
+  };
+
+  struct save_properties_t {
+    /// URI schemes the connector supports
+    std::vector<std::string> schemes = {};
+    /// A default `load_*` operator to be used if it couldnt be deduced.
+    const operator_factory_plugin* default_format = nullptr;
+    /// Whether the connector accepts a pipeline as the final argument
+    bool accepts_pipeline = false;
+    /// Whether to strip the scheme before passing the URI to the transformer
+    /// or the operator itself.
+    bool strip_scheme = false;
+    /// Whether the connector produces/consumes events
+    bool events = false;
+    /// A function that can be used to transform a URI into ast arguments.
+    /// This function may be empty, in which case the URI is just directly
+    /// passed as the first argument to the operator.
+    /// The location will refer to the URIs location, with the scheme stripped
+    /// if requested.
+    std::function<failure_or<std::vector<ast::expression>>(located<std::string>,
+                                                           diagnostic_handler&)>
+      transform_uri = {};
+  };
+
+  virtual auto load_properties() const -> load_properties_t {
+    return {};
+  }
+  virtual auto save_properties() const -> save_properties_t {
     return {};
   }
 
-  /// Returns the URI schemes to which the operator can save (e.g., `s3`).
-  virtual auto save_schemes() const -> std::vector<std::string> {
+  struct format_properties_t {
+    std::vector<std::string> extensions = {};
+  };
+  using read_properties_t = format_properties_t;
+  using write_properties_t = format_properties_t;
+  virtual auto read_properties() const -> read_properties_t {
+    return {};
+  }
+  virtual auto write_properties() const -> write_properties_t {
     return {};
   }
 };
@@ -55,7 +109,7 @@ public:
     explicit evaluator(void* self) : self_{self} {
     }
 
-    auto operator()(const ast::expression& expr) const -> series;
+    auto operator()(const ast::expression& expr) const -> multi_series;
 
     auto length() const -> int64_t;
 
@@ -63,12 +117,18 @@ public:
     void* self_;
   };
 
-  virtual auto run(evaluator eval, session ctx) -> series = 0;
+  virtual auto run(evaluator eval, session ctx) -> multi_series = 0;
 
-  static auto
-  make(detail::unique_function<auto(evaluator eval, session ctx)->series> f)
+  // TODO: Remove?
+  // static auto
+  // make(detail::unique_function<auto(evaluator eval, session ctx)->series> f)
+  //   -> function_ptr;
+
+  static auto make(
+    detail::unique_function<auto(evaluator eval, session ctx)->multi_series> f)
     -> function_ptr;
 };
+
 class function_plugin : public virtual plugin {
 public:
   using evaluator = function_use::evaluator;

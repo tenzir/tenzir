@@ -9,8 +9,8 @@ to_velociraptor [request_name=string, org_id=string, max_rows=int,
 
 ## Description
 
-The `from_velociraptor` source operator provides a request-response interface to a
-[Velociraptor](https://docs.velociraptor.app) server:
+The `from_velociraptor` input operator provides a request-response interface to
+a [Velociraptor](https://docs.velociraptor.app) server:
 
 ![Velociraptor](velociraptor.excalidraw.svg)
 

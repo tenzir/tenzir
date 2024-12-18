@@ -63,16 +63,17 @@ public:
   }
 
   auto update(const table_slice& input, session ctx) -> void override {
-    auto arg = eval(expr_, input, ctx);
-    if (is<null_type>(arg.type)) {
-      return;
-    }
-    // NOTE: Currently, different types end up coerced to strings.
-    for (auto i = int64_t{}; i < arg.array->length(); ++i) {
-      if (arg.array->IsNull(i)) {
+    for (auto& arg : eval(expr_, input, ctx)) {
+      if (is<null_type>(arg.type)) {
         continue;
       }
-      result_.push_back(materialize(value_at(arg.type, *arg.array, i)));
+      // NOTE: Currently, different types end up coerced to strings.
+      for (auto i = int64_t{}; i < arg.array->length(); ++i) {
+        if (arg.array->IsNull(i)) {
+          continue;
+        }
+        result_.push_back(materialize(value_at(arg.type, *arg.array, i)));
+      }
     }
   }
 

@@ -1,0 +1,8 @@
+error: unsupported scheme `unknown`
+ --> <input>:1:7
+  |
+1 | from "unknown://example.org"
+  |       ^^^^^^^ 
+  |
+  = note: supported schemes for deduction: `file`, `ftp`, `ftps`, `http`, `https`, `tcp`, `udp`
+  = docs: https://docs.tenzir.com/tql2/operators/from

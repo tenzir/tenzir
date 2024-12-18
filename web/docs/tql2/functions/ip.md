@@ -24,4 +24,4 @@ from {x: ip("1.2.3.4")}
 
 ## See Also
 
-[int](int.md), [uint](uint.md), [float](float.md), [time](time.md), [string](string.md)
+[subnet](subnet.md), [int](int.md), [uint](uint.md), [float](float.md), [time](time.md), [string](string.md)

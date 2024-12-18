@@ -2,6 +2,7 @@
 title: Tenzir v4.12
 authors: [jachris]
 date: 2024-04-24
+last_updated: 2024-12-10
 tags: [release, tcp, udp, publish, subscribe, deduplicate, unroll, syslog, every]
 comments: true
 ---
@@ -45,8 +46,8 @@ take the example of a connection summary stream in JSON format:
 ```
 
 To overcome the hurdles of JSON list manipulation, we introduce the new
-[`unroll`](/next/operators/unroll) operator, allowing the creation of an event
-for each item in the list. Let's `unroll dst`:
+`unroll` operator, allowing the creation of an event for each item in the list.
+Let's `unroll dst`:
 
 ```json
 {"src": "192.0.2.1", "dst": "192.0.2.143"}
@@ -60,8 +61,8 @@ for each item in the list. Let's `unroll dst`:
 The data is now significantly easier to work with.
 
 Do you see the duplicate host pairs? Let's remove them with the new
-[`deduplicate`](/next/operators/deduplicate) operator. Run `deduplicate src, dst
---timeout 24h` to condense the above output to:
+`deduplicate` operator. Run `deduplicate src, dst --timeout 24h` to condense the
+above output to:
 
 ```json
 {"src": "192.0.2.1", "dst": "192.0.2.143"}
@@ -77,9 +78,7 @@ corresponding entry is removed from the operator's internal state.
 We delved deeper into the power of the `deduplicate` operator in a [previous
 blog post](reduce-cost-and-noise-with-deduplication).
 
-Building on this, the
-[`every`](/language/operator-modifiers#scheduled-executions) operator
-(prominently featured in the [previous
+Building on this, the `every` operator (prominently featured in the [previous
 release](tenzir-v4.11#execute-sources-on-a-schedule)) can now also accompany
 transformations and sinks. To illustrate, let's answer this question: "With how
 many new destinations did each device communicate in the last minute?"
@@ -98,9 +97,8 @@ more efficient.
 
 ## Publish and Subscribe
 
-Exciting are also the new [`publish`](/next/operators/publish) and
-[`subscribe`](/next/operators/publish) operators, which open up endless
-possibilities for creating arbitrary dataflow topologies. For instance,
+Exciting are also the new `publish` and `subscribe` operators, which open up
+endless possibilities for creating arbitrary dataflow topologies. For instance,
 you can set a publishing point within your data stream. It's as simple as `from
 tcp://0.0.0.0:8000 | publish input`. This defines a channel `input` that you can
 now subscribe to with `subscribe`.
@@ -164,19 +162,19 @@ Just select one of the available formats and you're good to go!
 
 ## Other Changes
 
-- There's a new [`udp`](/next/connectors/udp) connector for sending and receiving
-  UDP datagrams. Finally, you can now receive Syslog natively.
+- There's a new `udp` connector for sending and receiving UDP datagrams.
+  Finally, you can now receive Syslog natively.
 - Speaking of Syslog: we've enhanced our parser to be *multi-line*. In case the
   next line isn't a valid Syslog message by itself, we interpret it as the
   continuation of the previous message.
-- The [`tcp`](/next/connectors/tcp) loader now accepts multiple connections in
-  parallel, e.g., when used as `from tcp://127.0.0.1:8000 read json`.
-- We've massively improved performance of our [Parquet](/next/formats/parquet)
-  and [Feather](/next/formats/feather) formats for large files. For writing,
-  they now both support streaming row groups and record batches, respectively,
-  and for reading Feather now supports streaming via the Arrow IPC format as
-  well. This comes in handy for those of you working in the Apache Arrow
-  ecosystem and seeking seamless interoperability without loss of rich typing.
+- The `tcp` loader now accepts multiple connections in parallel, e.g., when used
+  as `from tcp://127.0.0.1:8000 read json`.
+- We've massively improved performance of our Parquet and Feather formats for
+  large files. For writing, they now both support streaming row groups and
+  record batches, respectively, and for reading Feather now supports streaming
+  via the Arrow IPC format as well. This comes in handy for those of you working
+  in the Apache Arrow ecosystem and seeking seamless interoperability without
+  loss of rich typing.
 
 As usual, the complete list of bug fixes, adjustments, and enhancements
 delivered with this version can be found in our [changelog](/changelog#v4120).

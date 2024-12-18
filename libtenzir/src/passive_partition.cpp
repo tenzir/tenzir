@@ -241,11 +241,16 @@ unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& ps) {
 
 caf::expected<const tenzir::fbs::Partition*>
 partition_chunk::get_flatbuffer(tenzir::chunk_ptr chunk) {
+  // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t'
+  // over 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
+  using ::flatbuffers::soffset_t;
+  using ::flatbuffers::uoffset_t;
+  if (chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
+    return caf::make_error(ec::format_error, "partition was smaller than the "
+                                             "minimum flatbuffer size");
+  }
   if (flatbuffers::BufferHasIdentifier(chunk->data(),
                                        fbs::PartitionIdentifier())) {
-    // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t'
-    // over 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
-    using ::flatbuffers::soffset_t;
     if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
       return caf::make_error(ec::format_error, "partition exceeds the maximum "
                                                "flatbuffer size");
@@ -265,7 +270,13 @@ partition_chunk::get_flatbuffer(tenzir::chunk_ptr chunk) {
 
 caf::error
 passive_partition_state::initialize_from_chunk(const tenzir::chunk_ptr& chunk) {
-  // For partitions written prior to Tenzir 2.3, the chunk contains the
+  using flatbuffers::soffset_t;
+  using flatbuffers::uoffset_t;
+  if (!chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
+    return caf::make_error(ec::format_error, "flatbuffer failed to load or was "
+                                             "smaller than the mininum size");
+  }
+  // For partitions written prior to VAST 2.3, the chunk contains the
   // partition as top-level flatbuffer.
   if (flatbuffers::BufferHasIdentifier(chunk->data(),
                                        fbs::PartitionIdentifier())) {
@@ -372,11 +383,6 @@ partition_actor::behavior_type passive_partition(
         TENZIR_TRACE("{} {}", *self, TENZIR_ARG(chunk));
         TENZIR_TRACEPOINT(passive_partition_loaded, id_string.c_str());
         TENZIR_ASSERT(!self->state().partition_chunk);
-        if (!chunk) {
-          TENZIR_ERROR("{} got invalid chunk", *self);
-          self->quit();
-          return;
-        }
         if (auto err = self->state().initialize_from_chunk(chunk)) {
           TENZIR_ERROR("{} failed to initialize passive partition from file "
                        "{}: "

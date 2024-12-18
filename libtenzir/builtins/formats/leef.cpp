@@ -134,7 +134,12 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
                       const detail::quoting_escaping_policy& quoting)
   -> std::optional<diagnostic> {
   while (not attributes.empty()) {
-    const auto attr_end = quoting.find_not_in_quotes(attributes, delimiter);
+    auto attr_end = quoting.find_not_in_quotes(attributes, delimiter);
+    /// We greedily accept more than one consecutive separator
+    while (attr_end < attributes.size()
+           and attributes[attr_end + 1] == delimiter) {
+      ++attr_end;
+    }
     const auto attribute = attributes.substr(0, attr_end);
     auto sep_pos = quoting.find_not_in_quotes(attribute, '=');
     if (sep_pos == 0) {
@@ -363,45 +368,46 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
-        auto arg = eval(expr);
-        auto f = detail::overload{
-          [&](const arrow::NullArray&) {
-            return arg;
-          },
-          [&](const arrow::StringArray& arg) {
-            auto b = series_builder{};
-            auto quoting = detail::quoting_escaping_policy{};
-            for (auto string : arg) {
-              if (not string) {
-                b.null();
-                continue;
+        return map_series(eval(expr), [&](series arg) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray&) {
+              return arg;
+            },
+            [&](const arrow::StringArray& arg) {
+              auto b = series_builder{};
+              auto quoting = detail::quoting_escaping_policy{};
+              for (auto string : arg) {
+                if (not string) {
+                  b.null();
+                  continue;
+                }
+                auto diag = parse_line(*string, b, quoting);
+                if (diag) {
+                  ctx.dh().emit(std::move(*diag));
+                  b.null();
+                }
               }
-              auto diag = parse_line(*string, b, quoting);
-              if (diag) {
-                ctx.dh().emit(std::move(*diag));
-                b.null();
+              auto result = b.finish();
+              // TODO: Consider whether we need heterogeneous for this. If so,
+              // then we must extend the evaluator accordingly.
+              if (result.size() != 1) {
+                diagnostic::warning("got incompatible CEF messages")
+                  .primary(call)
+                  .emit(ctx);
+                return series::null(null_type{}, arg.length());
               }
-            }
-            auto result = b.finish();
-            // TODO: Consider whether we need heterogeneous for this. If so,
-            // then we must extend the evaluator accordingly.
-            if (result.size() != 1) {
-              diagnostic::warning("got incompatible CEF messages")
+              return std::move(result[0]);
+            },
+            [&](const auto&) {
+              diagnostic::warning("`parse_leef` expected `string`, got `{}`",
+                                  arg.type.kind())
                 .primary(call)
                 .emit(ctx);
               return series::null(null_type{}, arg.length());
-            }
-            return std::move(result[0]);
-          },
-          [&](const auto&) {
-            diagnostic::warning("`parse_cef` expected `string`, got `{}`",
-                                arg.type.kind())
-              .primary(call)
-              .emit(ctx);
-            return series::null(null_type{}, arg.length());
-          },
-        };
-        return match(*arg.array, f);
+            },
+          };
+          return match(*arg.array, f);
+        });
       });
   }
 };
@@ -411,3 +417,4 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::leef_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::read_leef)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::parse_leef)

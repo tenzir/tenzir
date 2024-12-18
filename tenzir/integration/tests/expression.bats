@@ -5,12 +5,12 @@ setup() {
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
-  export TENZIR_EXEC__TQL2=true
+  export TENZIR_TQL2=true
 }
 
 @test "add" {
   check tenzir -f /dev/stdin <<EOF
-from [{}]
+from {}
 
 x0 = 1 + 2
 x1 = uint("1") + 2
@@ -35,7 +35,7 @@ EOF
 
 @test "record spread" {
   check tenzir -f '/dev/stdin' <<EOF
-from [{}]
+from {}
 x = {...this, x: 1}
 y = {y: 2, ...this}
 z = {...x, ...42, ...y}
@@ -45,11 +45,10 @@ EOF
 
 @test "list spread" {
   check tenzir -f '/dev/stdin' <<EOF
-from [
+from \
   {x: []},
   {x: [1]},
-  {x: [1, 2]},
-]
+  {x: [1, 2]}
 y = [...x]
 z = [...x, 3, ...y, ...42]
 EOF
@@ -68,10 +67,9 @@ EOF
 
 @test "list indexing" {
   check tenzir -f '/dev/stdin' <<EOF
-from [
+from \
   { a: [1, 2, 3] },
-  { a: [4, 5] },
-]
+  { a: [4, 5] }
 b = a[0]
 c = a[2]
 d = a[-1]
@@ -79,20 +77,9 @@ e = a[-3]
 EOF
 }
 
-@test "length method" {
-  check tenzir -f '/dev/stdin' <<EOF
-from [
-  { x: null },
-  { x: [] },
-  { x: [1, 2, 3] },
-]
-y = x.length()
-EOF
-}
-
 @test "list construction" {
   check tenzir -f '/dev/stdin' <<EOF
-from [{
+from {
   x0: [],
   x1: [null],
   x2: [null, null],
@@ -108,7 +95,7 @@ from [{
   x12: [{}, []],
   x13: [123, "abc"],
   x14: [[{x: 123}], [{x: "abc"}]],
-}]
+}
 write_json
 EOF
 }
@@ -125,22 +112,6 @@ from {
   x6: 17.5E,
   x7: 18.5E,
 }
-write_json
-EOF
-}
-
-@test "string length" {
-  check tenzir -f '/dev/stdin' <<EOF
-from {
-  x: "é",
-  y: "👩‍👩‍👦‍👦",
-}
-xa = x.length()
-xb = x.length_bytes()
-xc = x.length_chars()
-ya = y.length()
-yb = y.length_bytes()
-yc = y.length_chars()
 write_json
 EOF
 }
@@ -163,20 +134,19 @@ EOF
 
 @test "ip in subnet" {
   check tenzir -f /dev/stdin <<EOF
-from [
+from \
   {x: 1.2.3.4, y: 1.2.3.4/16},
   {x: 1.2.3.4, y: 4.5.6.7/16},
-  {x: 1.2.3.4, y: null},
-  {x: null, y: 4.5.6.7/16},
-  {x: null, y: null},
-]
+  {x: 1.2.3.4, y: subnet(null)},
+  {x: ip(null), y: 4.5.6.7/16},
+  {x: ip(null), y: subnet(null)}
 z = x in y
 EOF
 }
 
 @test "subnet in subnet" {
   check tenzir -f /dev/stdin <<EOF
-from [
+from \
   {x: 1.2.3.4/8, y: 1.2.3.4/16},
   {x: 1.2.3.4/16, y: 1.2.3.4/16},
   {x: 1.2.3.4/24, y: 1.2.3.4/16},
@@ -185,8 +155,7 @@ from [
   {x: 1.2.3.4/16, y: 4.5.6.7/16},
   {x: 1.2.3.4/16, y: ::/0},
   {x: 0.0.0.0/0, y: ::/0},
-  {x: ::/0, y: 0.0.0.0/0},
-]
+  {x: ::/0, y: 0.0.0.0/0}
 z = x in y
 EOF
 }
@@ -199,7 +168,7 @@ from {
 }
 EOF
   check tenzir -f '/dev/stdin' <<EOF
-from [{x: 1}, {x: 2}]
+from {x: 1}, {x: 2}
 summarize x.sum()
 EOF
   check ! tenzir -f '/dev/stdin' <<EOF

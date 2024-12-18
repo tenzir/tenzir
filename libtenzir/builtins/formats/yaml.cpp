@@ -331,14 +331,22 @@ class read_yaml final
     return std::make_unique<parser_adapter<yaml_parser>>(
       yaml_parser{std::move(opts)});
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"yaml"}};
+  }
 };
 
 class write_yaml final
   : public virtual operator_plugin2<writer_adapter<yaml_printer>> {
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<yaml_printer>>(yaml_printer{});
+  }
+
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {"yaml"}};
   }
 };
 

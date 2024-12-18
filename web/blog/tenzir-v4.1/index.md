@@ -52,11 +52,11 @@ The `start` action resumes a pipeline that is currently paused.
 
 ## Sigma Operator
 
-The experimental [`sigma` operator](/next/operators/sigma) executes [Sigma
-rules][sigma-github] on its input and outputs matching events. The operator can
-work both on files and on directories of rules. Rule directories may be updated
-while the operator is running, so that adding a new rule to an already deployed
-pipeline is as simple as dropping a Sigma rule into the configured directory.
+The experimental `sigma` operator executes [Sigma rules][sigma-github] on its
+input and outputs matching events. The operator can work both on files and on
+directories of rules. Rule directories may be updated while the operator is
+running, so that adding a new rule to an already deployed pipeline is as simple
+as dropping a Sigma rule into the configured directory.
 
 Consider the `sigma` operator as one concrete instance of security content
 execution that we enable live and retrospectively. For example, you can perform
@@ -68,17 +68,17 @@ in place, we are working on a unified interface to live and retro matching.
 
 ## Show Operator
 
-The experimental [`show` operator](/next/operators/show) supersedes the
-`version` operator. Use `show <aspect>` to show various aspects of a Tenzir
-node. The following aspects are currently available:
+The experimental `show` operator supersedes the `version` operator. Use
+`show <aspect>` to show various aspects of a Tenzir node. The following aspects
+are currently available:
 
 - `build`: shows compile-time build information.
 - `config`: shows all current configuration options.
-- `connectors`: shows all available [connectors][connectors-docs].
+- `connectors`: shows all available connectors.
 - `dependencies`: shows information about build-time dependencies.
 - `fields`: shows all fields of existing tables at a remote node.
-- `formats`: shows all available [formats][formats-docs].
-- `operators`: shows all available [operators][operators-docs].
+- `formats`: shows all available formats.
+- `operators`: shows all available operators.
 - `partitions`: shows all table partitions of a remote node.
 - `pipelines`: shows all managed pipelines of a remote node.
 - `plugins`: shows all loaded plugins.
@@ -112,11 +112,11 @@ show config
 
 ## Compress and Decompress Operators
 
-The [`compress`][compress-docs] and [`decompress`][decompress-docs] operators
-make it easy to read and write compressed data. The operator uses Apache Arrow's
-compression utilities under the hood, and transparently supports all options
-that Apache Arrow supports for streaming compression. The currently supported
-codecs are `brotli`, `bz2`, `gzip`, `lz4`, and `zstd`.
+The `compress` and `decompress` operators make it easy to read and write
+compressed data. The operator uses Apache Arrow's compression utilities under
+the hood, and transparently supports all options that Apache Arrow supports for
+streaming compression. The currently supported codecs are `brotli`, `bz2`,
+`gzip`, `lz4`, and `zstd`.
 
 For example, the following pipeline creates a Gzip-compressed NDJSON file that
 contains all events that were previously imported at the node:
@@ -127,9 +127,6 @@ export
 | compress gzip
 | save file /tmp/backup.json.gz
 ```
-
-[compress-docs]: /next/operators/compress
-[decompress-docs]: /next/operators/decompress
 
 ## Small Things
 

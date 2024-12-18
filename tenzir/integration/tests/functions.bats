@@ -3,7 +3,7 @@ setup() {
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
-  export TENZIR_EXEC__TQL2=true
+  export TENZIR_TQL2=true
 }
 
 @test "community_id" {
@@ -65,10 +65,24 @@ EOF
   {"y":-6}
   ' |
     check tenzir 'read_json | z = x.otherwise(y)'
-  check tenzir 'from [{},{},{}] | z = x.otherwise(-1)'
-  check tenzir 'from [{x:1},{x:2},{x:3}] | z = x.otherwise(-1)'
-  check tenzir 'from [{},{x:1},{}] | z = x.otherwise(-1)'
-  check tenzir 'from [{x:1},{},{x:2}] | z = x.otherwise(-1)'
+  check tenzir 'from {},{},{} | z = x.otherwise(-1)'
+  check tenzir 'from {x:1},{x:2},{x:3} | z = x.otherwise(-1)'
+  check tenzir 'from {},{x:1},{} | z = x.otherwise(-1)'
+  check tenzir 'from {x:1},{},{x:2} | z = x.otherwise(-1)'
+}
+
+@test "heterogeneous otherwise" {
+  check tenzir -f /dev/stdin <<EOF
+from \
+  {x: int(null)},
+  {x: 1},
+  {x: 2},
+  {x: int(null)},
+  {x: int(null)},
+  {x: 3}
+y = x.otherwise("test")
+z = {x: [4 * x.otherwise(1s)], y: (x * 1s).otherwise(x * 1d)}
+EOF
 }
 
 @test "select and drop matching" {
@@ -254,4 +268,30 @@ EOF
 @test "hex" {
   check tenzir 'from {bytes: "Tenzir"} | encoded = bytes.encode_hex()'
   check tenzir 'from {bytes: "54656E7a6972"} | decoded = bytes.decode_hex()'
+}
+
+@test "string length" {
+  check tenzir -f /dev/stdin <<EOF
+from {
+  x: "é",
+  y: "👩‍👩‍👦‍👦",
+}
+xa = x.length()
+xb = x.length_bytes()
+xc = x.length_chars()
+ya = y.length()
+yb = y.length_bytes()
+yc = y.length_chars()
+write_json
+EOF
+}
+
+@test "list length" {
+  check tenzir -f /dev/stdin <<EOF
+from \
+  { x: null },
+  { x: [] },
+  { x: [1, 2, 3] }
+y = x.length()
+EOF
 }

@@ -484,7 +484,11 @@ public:
 
   auto to_expected() && -> caf::expected<T> {
     if (is_success()) {
-      return std::move(*this).unwrap();
+      if constexpr (std::is_void_v<T>) {
+        return {};
+      } else {
+        return std::move(*this).unwrap();
+      }
     }
     return ec::diagnostic;
   }

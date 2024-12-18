@@ -24,6 +24,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/store.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <arrow/api.h>
@@ -385,6 +386,48 @@ caf::error initialize(caf::actor_system_config& cfg) {
       return diagnostic::error(err)
         .note("failed to initialize the `{}` plugin", plugin->name())
         .to_error();
+    }
+  }
+  /// ensure no doubly registered schemes or extensions for TQL2
+  using map_t = std::unordered_map<std::string, std::string>;
+  map_t load_schemes;
+  map_t save_schemes;
+  map_t read_extensions;
+  map_t write_extensions;
+  constexpr static auto check
+    = [](std::string_view what, std::string_view name,
+         std::span<const std::string> list, map_t& map) -> caf::error {
+    for (auto value : list) {
+      const auto [it, is_new] = map.try_emplace(value, name);
+      if (not is_new) {
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("plugin `{}` tries to register {} "
+                                           "`{}`, already registered by plugin "
+                                           "`{}`",
+                                           name, what, value, it->second));
+      }
+    }
+    return caf::error{};
+  };
+  for (const auto& l : plugins::get<operator_factory_plugin>()) {
+    const auto name = l->name();
+    const auto load_prop = l->load_properties();
+    const auto save_prop = l->save_properties();
+    const auto read_prop = l->read_properties();
+    const auto write_prop = l->write_properties();
+    if (auto e = check("load scheme", name, load_prop.schemes, load_schemes)) {
+      return e;
+    }
+    if (auto e = check("save scheme", name, save_prop.schemes, save_schemes)) {
+      return e;
+    }
+    if (auto e = check("read extension", name, read_prop.extensions,
+                       read_extensions)) {
+      return e;
+    }
+    if (auto e = check("write extension", name, write_prop.extensions,
+                       write_extensions)) {
+      return e;
     }
   }
   return caf::none;

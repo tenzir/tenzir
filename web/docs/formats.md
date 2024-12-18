@@ -12,23 +12,14 @@ a *parser* and/or *printer*:
 1. **Parser**: translates raw bytes into structured event data
 2. **Printer**: translates structured events into raw bytes
 
-Parsers and printers interact with their corresponding dual from a
-[connector](connectors):
+Parsers and printers interact with their corresponding dual from a connector:
 
 ![Format](formats/format.excalidraw.svg)
 
-Formats appear as an argument to the [`read`](operators/read.md),
-[`write`](operators/write.md), [`from`](operators/from.md),
-[`to`](operators/to.md), [`parse`](operators/parse.md), and
+Formats appear as an argument to the [`parse`](operators/parse.md), and
 [`print`](operators/print.md) operators:
 
 ```
-read <format>
-write <format>
-
-from <connector> [read <format>]
-to <connector> [write <format>]
-
 parse <field> <format>
 print <field> <format>
 ```
@@ -147,8 +138,8 @@ Use with caution.
 When a printer constructs raw bytes, it sets a
 [MIME](https://en.wikipedia.org/wiki/Media_type) *content type* so that savers
 can make assumptions about the otherwise opaque content. For example, the
-[`http`](connectors/http.md) saver uses this value to populate the
-`Content-Type` header when copying the raw bytes into the HTTP request body.
+HTTP connector uses this value to populate the `Content-Type` header when
+copying the raw bytes into the HTTP request body.
 
 The printers set the following MIME types:
 

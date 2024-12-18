@@ -1,0 +1,16 @@
+[
+  write_xsv {
+    args: {
+      field_sep: 44,
+      list_sep: 59,
+      null_value: "",
+      no_header: false
+    }
+  },
+  compress {
+    type: "gzip" @ 0..0
+  },
+  tql2.save_file {
+    path: "example.csv.gz" @ 3..19
+  }
+]

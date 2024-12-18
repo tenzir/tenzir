@@ -46,6 +46,7 @@ void add_root_opts(command& cmd) {
     "forbid unsafe location overrides for pipelines with the "
     "'local' and 'remote' keywords, e.g., remotely reading from "
     "a file");
+  cmd.options.add<bool>("?tenzir", "tql2", "use TQL2 by default");
   cmd.options.add<std::string>("?tenzir", "console-verbosity",
                                "output verbosity level on the "
                                "console");
@@ -199,8 +200,9 @@ make_application(std::string_view path) {
   // Add additional commands from plugins.
   for (const auto* plugin : plugins::get<command_plugin>()) {
     auto [cmd, cmd_factory] = plugin->make_command();
-    if (!cmd || cmd_factory.empty())
+    if (!cmd || cmd_factory.empty()) {
       continue;
+    }
     root->add_subcommand(std::move(cmd));
     root_factory.insert(std::make_move_iterator(cmd_factory.begin()),
                         std::make_move_iterator(cmd_factory.end()));
@@ -213,9 +215,10 @@ make_application(std::string_view path) {
 
 void render_error(const command& root, const caf::error& err,
                   std::ostream& os) {
-  if (!err || err == ec::silent)
+  if (!err || err == ec::silent) {
     // The user most likely killed the process via CTRL+C, print nothing.
     return;
+  }
   const auto pretty_diagnostics = true;
   os << render(err, pretty_diagnostics) << '\n';
   if (err.category() == caf::type_id_v<tenzir::ec>) {
@@ -229,8 +232,9 @@ void render_error(const command& root, const caf::error& err,
         auto ctx = err.context();
         if (ctx.match_element<std::string>(1)) {
           auto name = ctx.get_as<std::string>(1);
-          if (auto cmd = resolve(root, name))
+          if (auto cmd = resolve(root, name)) {
             helptext(*cmd, os);
+          }
         } else {
           TENZIR_ASSERT(
             !"User visible error contexts must consist of strings!");

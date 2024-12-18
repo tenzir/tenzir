@@ -28,25 +28,26 @@ public:
   }
 
   auto update(const table_slice& input, session ctx) -> void override {
-    if (not is<caf::none_t>(result_)) {
+    if (Mode == mode::first and not is<caf::none_t>(result_)) {
       return;
     }
-    auto arg = eval(expr_, input, ctx);
-    if (is<null_type>(arg.type)) {
-      return;
-    }
-    if constexpr (Mode == mode::first) {
-      for (int64_t i = 0; i < arg.array->length(); ++i) {
-        if (arg.array->IsValid(i)) {
-          result_ = materialize(value_at(arg.type, *arg.array, i));
-          return;
-        }
+    for (auto& arg : eval(expr_, input, ctx)) {
+      if (is<null_type>(arg.type)) {
+        continue;
       }
-    } else {
-      for (int64_t i = arg.array->length() - 1; i >= 0; --i) {
-        if (arg.array->IsValid(i)) {
-          result_ = materialize(value_at(arg.type, *arg.array, i));
-          return;
+      if constexpr (Mode == mode::first) {
+        for (int64_t i = 0; i < arg.array->length(); ++i) {
+          if (arg.array->IsValid(i)) {
+            result_ = materialize(value_at(arg.type, *arg.array, i));
+            break;
+          }
+        }
+      } else {
+        for (int64_t i = arg.array->length() - 1; i >= 0; --i) {
+          if (arg.array->IsValid(i)) {
+            result_ = materialize(value_at(arg.type, *arg.array, i));
+            break;
+          }
         }
       }
     }

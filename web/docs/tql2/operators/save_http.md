@@ -3,7 +3,9 @@
 Sends a byte stream via HTTP.
 
 ```tql
-save_http url:string, [method=string, params=record, headers=record]
+save_http url:string, [params=record, headers=record, method=string,
+          skip_peer_verification=bool, skip_hostname_verification=bool,
+          verbose=bool]
 ```
 
 ## Description
@@ -29,6 +31,24 @@ The query parameters for the request.
 
 The headers for the request.
 
+### `skip_peer_verification = bool (optional)`
+
+Whether to skip TLS peer verification.
+
+Defaults to `false`.
+
+### `skip_hostname_verification = bool (optional)`
+
+Whether to skip TLS peer verification.
+
+Defaults to `false`.
+
+<!-- ### `verbose = bool (optional)` -->
+<!---->
+<!-- Whether to emit verbose output. -->
+<!---->
+<!-- Defaults to `false`. -->
+
 ## Examples
 
 ### Call a webhook with pipeline data
@@ -36,3 +56,7 @@ The headers for the request.
 ```tql
 save_http "example.org/api", headers={"X-API-Token": "0000-0000-0000"}
 ```
+
+## See Also
+
+[`load_http`](load_http.md)

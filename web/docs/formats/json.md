@@ -177,7 +177,7 @@ opposed to printing one object per event.
 This is particularly useful when interfacing with REST APIs, which often require
 sets of events grouped into one JSON object.
 
-Use the [`batch`](../operators/batch.md) operator to explicitly control how many
+Use the `batch` operator to explicitly control how many
 events get grouped together in the same array.
 
 Example:

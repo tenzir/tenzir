@@ -68,6 +68,30 @@ public:
     }
     return std::make_unique<Adapter<Plugin>>(Plugin{std::move(args)});
   }
+
+  virtual auto load_properties() const
+    -> operator_factory_plugin::load_properties_t override {
+    if constexpr (std::same_as<Plugin, sqs_loader>) {
+      return {
+        .schemes = {"sqs"},
+        .strip_scheme = true,
+      };
+    } else {
+      return operator_factory_plugin::load_properties();
+    }
+  }
+
+  virtual auto save_properties() const
+    -> operator_factory_plugin::save_properties_t override {
+    if constexpr (std::same_as<Plugin, sqs_saver>) {
+      return {
+        .schemes = {"sqs"},
+        .strip_scheme = true,
+      };
+    } else {
+      return operator_factory_plugin::save_properties();
+    }
+  }
 };
 
 } // namespace

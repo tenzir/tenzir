@@ -21,20 +21,20 @@ namespace tenzir::plugins::if_ {
 namespace {
 
 auto array_select(const table_slice& slice, const arrow::BooleanArray& array,
-                  bool target) -> generator<table_slice> {
-  TENZIR_ASSERT(slice.rows() == detail::narrow<uint64_t>(array.length()));
+                  bool target, int64_t offset) -> generator<table_slice> {
+  TENZIR_ASSERT(array.length() > 0);
   auto length = array.length();
   auto current_value = array.Value(0) == target;
   auto current_begin = int64_t{0};
   // Add `false` at index `length` to flush.
-  for (auto i = int64_t{1}; i < length + 1; ++i) {
+  for (auto i = current_begin + 1; i < length + 1; ++i) {
     // TODO: Null?
-    auto next = i != length && array.Value(i) == target;
+    auto next = i != length && array.IsValid(i) && array.Value(i) == target;
     if (current_value == next) {
       continue;
     }
     if (current_value) {
-      co_yield subslice(slice, current_begin, i);
+      co_yield subslice(slice, offset + current_begin, offset + i);
     }
     current_value = next;
     current_begin = i;
@@ -42,8 +42,8 @@ auto array_select(const table_slice& slice, const arrow::BooleanArray& array,
 }
 
 auto mask_slice(const table_slice& slice, const arrow::BooleanArray& array,
-                bool target) -> table_slice {
-  return concatenate(collect(array_select(slice, array, target)));
+                bool target, int64_t offset) -> table_slice {
+  return concatenate(collect(array_select(slice, array, target, offset)));
 }
 
 class if_operator final : public crtp_operator<if_operator> {
@@ -129,39 +129,44 @@ public:
         co_yield {};
         continue;
       }
-      auto mask = eval(condition_, slice, ctrl.diagnostics());
-      // TODO: Null array should also work.
-      auto array = try_as<arrow::BooleanArray>(&*mask.array);
-      if (not array) {
-        diagnostic::warning("condition must be `bool`, not `{}`",
-                            mask.type.kind())
-          .primary(condition_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      TENZIR_ASSERT(array); // TODO
-      then_input = mask_slice(slice, *array, true);
       auto yielded = false;
-      while (then_input->rows() > 0) {
-        if (auto next = then_gen.next()) {
-          if (auto output = std::get_if<table_slice>(&*next)) {
-            co_yield std::move(*output);
-            yielded = true;
+      auto masks = eval(condition_, slice, ctrl.diagnostics());
+      auto offset = int64_t{0};
+      for (auto& mask : masks.parts()) {
+        // TODO: Null array should also work.
+        auto array = try_as<arrow::BooleanArray>(&*mask.array);
+        if (not array) {
+          diagnostic::warning("condition must be `bool`, not `{}`",
+                              mask.type.kind())
+            .primary(condition_)
+            .emit(ctrl.diagnostics());
+          co_yield {};
+          offset += mask.array->length();
+          continue;
+        }
+        TENZIR_ASSERT(array);
+        then_input = mask_slice(slice, *array, true, offset);
+        while (then_input->rows() > 0) {
+          if (auto next = then_gen.next()) {
+            if (auto output = std::get_if<table_slice>(&*next)) {
+              co_yield std::move(*output);
+              yielded = true;
+            }
+            // TODO: Other outputs are just dropped.
+          } else {
+            break;
           }
-          // TODO: Other outputs are just dropped.
-        } else {
-          break;
         }
-      }
-      else_input = mask_slice(slice, *array, false);
-      while (else_input->rows() > 0) {
-        if (auto next = else_gen.next()) {
-          co_yield std::move(*next);
-          yielded = true;
-        } else {
-          break;
+        else_input = mask_slice(slice, *array, false, offset);
+        while (else_input->rows() > 0) {
+          if (auto next = else_gen.next()) {
+            co_yield std::move(*next);
+            yielded = true;
+          } else {
+            break;
+          }
         }
+        offset += array->length();
       }
       if (not yielded) {
         co_yield {};

@@ -61,6 +61,7 @@ context::load "ctx"
 [`context::create_lookup_table`](create_lookup_table.md),
 [`context::create_bloom_filter`](create_bloom_filter.md),
 [`context::enrich`](enrich.md),
+[`context::erase`](erase.md),
 [`context::inspect`](inspect.md),
 [`context::list`](list.md),
 [`context::load`](load.md),

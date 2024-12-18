@@ -3,10 +3,12 @@
 set -eu -o pipefail -o null_glob
 
 # Check if exactly one argument was passed: the new version.
-if (( $# != 1 )) || [[ "$1" == "--help" ]]; then
+if (( $# != 1 )) || (( $# != 2 )) || [[ "$1" == "--help" ]]; then
   >&2 {
-    echo "Usage: $0 <version>"
-    echo "  version: The new version, e.g., v1.0.0 or v1.0.0-rc1"
+    echo "Usage: $0 <version> <base-ref>"
+    echo "  version:  The new version, e.g., v1.0.0 or v1.0.0-rc1"
+    echo "  base-ref: The base branch for the release, e.g. topic/release-v4.23"
+    echo "            defaults to \"origin/main\""
   }
   exit 1
 fi
@@ -39,6 +41,8 @@ if [[ "${new_version}" == *"-rc"* ]]; then
   new_version_major_minor="${new_version%.*}-${new_version##*-}"
 fi
 
+base_ref="${2:-origin/main}"
+
 # Determine the build directory.
 build_dir=$(mktemp -d 2>/dev/null || mktemp -d -t "build-${new_version}")
 
@@ -52,8 +56,8 @@ fi
 things_done=""
 
 # Create a new branch that bases off of current origin/main.
-git fetch origin main
-git switch -C "topic/release-${new_version}" origin/main
+git fetch origin
+git switch -C "topic/prepare-${new_version}" "${base_ref}"
 # Update the version.
 version_json="$(jq --arg v "${new_version#v}" '."tenzir-version" = $v' version.json)"
 echo -E "${version_json}" > version.json

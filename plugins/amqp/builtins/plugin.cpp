@@ -141,6 +141,28 @@ class plugin : public virtual operator_plugin2<Adapter<Plugin>> {
       Plugin{std::move(args), std::move(config)});
   }
 
+  virtual auto load_properties() const
+    -> operator_factory_plugin::load_properties_t override {
+    if constexpr (std::same_as<Plugin, rabbitmq_loader>) {
+      return {
+        .schemes = {"amqp", "amqps"},
+      };
+    } else {
+      return operator_factory_plugin::load_properties();
+    }
+  }
+
+  virtual auto save_properties() const
+    -> operator_factory_plugin::save_properties_t override {
+    if constexpr (std::same_as<Plugin, rabbitmq_saver>) {
+      return {
+        .schemes = {"amqp", "amqps"},
+      };
+    } else {
+      return operator_factory_plugin::save_properties();
+    }
+  }
+
 private:
   record config_;
 };
