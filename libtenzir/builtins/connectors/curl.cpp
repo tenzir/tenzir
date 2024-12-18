@@ -545,8 +545,11 @@ public:
     return std::make_unique<load_http_operator>(std::move(args));
   }
 
-  auto load_schemes() const -> std::vector<std::string> override {
-    return {"http", "https"};
+  auto load_properties() const -> load_properties_t override {
+    return {
+      .schemes = {"http", "https"},
+      .default_format = plugins::find<operator_factory_plugin>("read_json"),
+    };
   }
 };
 
@@ -559,8 +562,11 @@ public:
     return std::make_unique<save_http_operator>(std::move(args));
   }
 
-  auto save_schemes() const -> std::vector<std::string> override {
-    return {"http", "https"};
+  auto save_properties() const -> save_properties_t override {
+    return {
+      .schemes = {"http", "https"},
+      .default_format = plugins::find<operator_factory_plugin>("write_ndjson"),
+    };
   }
 };
 
@@ -583,8 +589,10 @@ public:
     return std::make_unique<load_http_operator>(std::move(args));
   }
 
-  auto load_schemes() const -> std::vector<std::string> override {
-    return {"ftp", "ftps"};
+  auto load_properties() const -> load_properties_t override {
+    return {
+      .schemes = {"ftp", "ftps"},
+    };
   }
 };
 
@@ -607,8 +615,10 @@ public:
     return std::make_unique<save_http_operator>(std::move(args));
   }
 
-  auto save_schemes() const -> std::vector<std::string> override {
-    return {"ftp", "ftps"};
+  auto save_properties() const -> save_properties_t override {
+    return {
+      .schemes = {"ftp", "ftps"},
+    };
   }
 };
 

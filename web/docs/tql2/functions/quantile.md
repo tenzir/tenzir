@@ -24,12 +24,7 @@ The quantile to compute, where `q=0.5` represents the median.
 ### Compute the 0.5 quantile (median) of values
 
 ```tql
-from [
-  {x: 1},
-  {x: 2},
-  {x: 3},
-  {x: 4},
-]
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}
 summarize median_value=quantile(x, q=0.5)
 ```
 

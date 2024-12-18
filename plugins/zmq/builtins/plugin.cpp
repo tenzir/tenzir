@@ -53,6 +53,10 @@ public:
     return std::make_unique<loader_adapter<zmq_loader>>(
       zmq_loader{std::move(args)});
   }
+
+  auto load_properties() const -> load_properties_t override {
+    return {.schemes = {"zmq", "inproc"}};
+  }
 };
 
 class save_plugin final
@@ -91,9 +95,8 @@ public:
       zmq_saver{std::move(args)});
   }
 
-  // FIXME: override
-  auto supported_uri_schemes() const -> std::vector<std::string> {
-    return {"zmq", "inproc"};
+  auto save_properties() const -> save_properties_t override {
+    return {.schemes = {"zmq", "inproc"}};
   }
 };
 

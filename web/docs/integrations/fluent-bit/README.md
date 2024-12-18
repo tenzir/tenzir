@@ -1,9 +1,11 @@
 # Fluent Bit
 
 [Fluent Bit](https://fluentbit.io) is a an open source observability
-pipeline. Tenzir embeds Fluent Bit, exposing all its [inputs][inputs] and
-[outputs][outputs] through the [`fluentbit`](../../tql2/operators/fluentbit.md)
-operator. This makes Tenzir effectively a superset of Fluent Bit.
+pipeline. Tenzir embeds Fluent Bit, exposing all its [inputs][inputs] via
+[`from_fluent_bit`](tql2/operators/from_fluent_bit.md) and
+[outputs][outputs] via [`to_fluent_bit`](tql2/operators/to_fluent_bit.md)
+
+This makes Tenzir effectively a superset of Fluent Bit.
 
 [inputs]: https://docs.fluentbit.io/manual/pipeline/inputs
 [outputs]: https://docs.fluentbit.io/manual/pipeline/outputs
@@ -25,25 +27,28 @@ sink performs the reverse operation.
 
 ## Usage
 
-Syntactically, the `fluentbit` operator behaves similar to an invocation of the
-`fluent-bit` command line utility. For example, the invocation
+An invocation of the `fluent-bit` commandline utility
 
 ```bash
-fluent-bit -o plugin -p key1=value1 -p key2=value2 -p ...
+fluent-bit -o input_plugin -p key1=value1 -p key2=value2 -p…
 ```
 
-translates to Tenzir's `fluentbit` operator as follows:
+translates to Tenzir's [`from_fluent_bit`](tql2/operators/from_fluent_bit.md)
+operator as follows:
 
 ```tql
-fluentbit "plugin", options = {key1: value1, ...}
+from_fluent_bit "input_plugin", options={key1: value1, key2: value2, …}
 ```
+
+with the [`to_fluent_bit`](tql2/operators/to_fluent_bit.md) operator working
+exactly analogous.
 
 ## Examples
 
 ### Ingest OpenTelemetry logs, metrics, and traces
 
 ```tql
-fluentbit "opentelemetry"
+from_fluent_bit "opentelemetry"
 ```
 
 You can then send JSON-encoded log data to a freshly created API endpoint:
@@ -59,25 +64,30 @@ curl \
 ### Imitate a Splunk HEC endpoint
 
 ```tql
-fluentbit "splunk", options = {port: 8088}
+from_fluent_bit "splunk", options = {port: 8088}
 ```
+
+:::tip
+Use the dedicated [`to_splunk` operator](tql2/operators/to_splunk.md) to send
+events to a Splunk HEC.
+:::
 
 ### Imitate an ElasticSearch & OpenSearch Bulk API endpoint
 
 This allows you to ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat).
 
 ```tql
-fluentbit "elasticsearch", options = {port: 9200}
+from_fluent_bit "elasticsearch", options = {port: 9200}
 ```
 
 ### Send to Datadog
 
 ```tql
-fluentbit "datadog", options = {apikey: "XXX"}
+to_fluent_bit "datadog", options = {apikey: "XXX"}
 ```
 
 ### Send to ElasticSearch
 
 ```tql
-fluentbit "es", options = {host: 192.168.2.3, port: 9200, index: "my_index", type: "my_type"}
+to_fluent_bit "es", options = {host: 192.168.2.3, port: 9200, index: "my_index", type: "my_type"}
 ```

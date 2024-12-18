@@ -979,6 +979,10 @@ public:
           std::move(args));
       });
   }
+
+  auto load_properties() const -> load_properties_t override {
+    return {.schemes = {"tcp"}, .accepts_pipeline = true};
+  }
 };
 
 using load_tcp_bytes_plugin

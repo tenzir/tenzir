@@ -304,7 +304,7 @@ public:
               }
               return multi_series{b.finish()};
             },
-            [&](const auto&) {
+            [&](const auto&) -> multi_series {
               diagnostic::warning("`parse_cef` expected `string`, got `{}`",
                                   arg.type.kind())
                 .primary(call)

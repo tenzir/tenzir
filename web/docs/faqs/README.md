@@ -210,8 +210,9 @@ what level it should be.
 3. **Fluent Bit**. Tenzir ships with all of Fluent Bit's
    [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs], since the Fluent
    Bit library is baked into every Tenzir binary. Use the
-   [`fluentbit`](tql2/operators/fluentbit.md) operator makes to access Fluent
-   Bit integrations.
+   [`from_fluent_bit`](tql2/operators/from_fluent_bit.md) operator to get events
+   from Fluent Bit and the `to_fluent_bit`(tql2/operators/to_fluent_bit.md)
+   operator to send events to Fluent Bit.
 
 4. **Escape Hatches**. As last resort, you can bring in Shell and Python scripts
    to compensate for native support for *X*. The

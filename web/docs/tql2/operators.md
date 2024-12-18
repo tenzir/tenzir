@@ -60,11 +60,20 @@ Operator | Description | Example
 
 ## Inputs
 
+#### Events
+
+Operator | Description | Example
+:--------|:------------|:-------
+[`from`](./operators/from.md) | Reads events from an URI<br/>Creates events from records | `from "http://example.org/file.csv.gz"`<br/>`from {key: "value"}…` <!--at the top because its important-->
+[`from_fluent_bit`](./operators/from_fluent_bit.md) | Returns results from Fluent Bit | `from_fluent_bit "opentelemetry"`
+[`from_velocira…`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
+
 #### Bytes
 
 Operator | Description | Example
 :--------|:------------|:-------
 [`load_amqp`](./operators/load_amqp.md) | Loads bytes from an AMQP server | `load_amqp`
+[`load_azure_blob…`](./operators/load_azure_blob_storage.md) | Load bytes from an Azure Blob Storage | `load_azure_blob_storage "abfs://…`
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
 [`load_ftp`](./operators/load_ftp.md) | Loads bytes via FTP | `load_ftp "ftp.example.org"`
 [`load_google_c…`](./operators/load_google_cloud_pubsub.md) | Listen to a Google Cloud Pub/Sub subscription | `load_google_cloud_pubsub project_id=…`
@@ -77,19 +86,24 @@ Operator | Description | Example
 [`load_udp`](./operators/load_udp.md) | Loads bytes from a UDP socket | `load_udp "0.0.0.0:8090"`
 [`load_zmq`](./operators/load_zmq.md) | Receives bytes from ZeroMQ messages | `load_zmq`
 
+## Outputs
+
 #### Events
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`from_velocira…`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
-
-## Outputs
+[`to`](./operators/to.md) | Writes events to an URI | `from "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
+[`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
+[`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent Bit| `to_fluent_bit "elasticsearch" …`
+[`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
+[`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
 
 #### Bytes
 
 Operator | Description | Example
 :--------|:------------|:-------
 [`save_amqp`](./operators/save_amqp.md) | Saves incoming bytes to an AMQP server | `save_amqp`
+[`save_azure_blob…`](./operators/save_azure_blob_storage.md) | Saves to an Azure Blob Storage | `save_azure_blob_storage "abfs://…`
 [`save_email`](./operators/save_email.md) | Saves incoming bytes through an SMTP server | `save_email "user@example.org"`
 [`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`
 [`save_ftp`](./operators/save_ftp.md) | Saves incoming bytes via FTP | `save_ftp "ftp.example.org"`
@@ -101,18 +115,6 @@ Operator | Description | Example
 [`save_tcp`](./operators/save_tcp.md) | Saves incoming bytes to a TCP or TLS connection | `save_tcp "0.0.0.0:8090", tls=true`
 [`save_udp`](./operators/save_udp.md) | Saves incoming bytes to a UDP socket | `save_udp "0.0.0.0:8090"`
 [`save_zmq`](./operators/save_zmq.md) | Saves incoming bytes to ZeroMQ messages | `save_zmq`
-[`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
-
-#### Events
-
-Operator | Description | Example
-:--------|:------------|:-------
-[`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
-[`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
-[`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
-<!---
-[`save`](./operators/save.md) | Save incoming bytes according to a URL | `save "https://example.org/api"`
--->
 
 ## Parsing
 
@@ -226,6 +228,7 @@ Operator | Description | Example
 [`local`](./operators/local.md) | Forces a pipeline to run locally | `local { sort foo }`
 [`measure`](./operators/measure.md) | Returns events describing the incoming batches | `measure`
 [`remote`](./operators/remote.md) | Forces a pipeline to run remotely at a node | `remote { version }`
+[`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
 [`unordered`](./operators/unordered.md) | Remove ordering assumptions in a pipeline | `unordered { read_ndjson }`
 
 ## Encode & Decode

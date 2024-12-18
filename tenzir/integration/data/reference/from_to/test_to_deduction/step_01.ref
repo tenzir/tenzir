@@ -1,0 +1,8 @@
+[
+  tql2.write_json {
+    
+  },
+  tql2.save_file {
+    path: "example.json" @ 3..24
+  }
+]

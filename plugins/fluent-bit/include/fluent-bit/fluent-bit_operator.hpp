@@ -235,7 +235,7 @@ to_property_map(const std::optional<tenzir::record>& rec) -> property_map {
 
 /// The arguments passed to the operator.
 struct operator_args {
-  std::string plugin;                           ///< Fluent Bit plugin name.
+  located<std::string> plugin;                  ///< Fluent Bit plugin name.
   std::chrono::milliseconds poll_interval{250}; ///< Engine poll interval.
   property_map service_properties;              ///< The global service options.
   property_map args;                            ///< The plugin arguments.
@@ -269,57 +269,58 @@ class engine {
 public:
   /// Constructs a Fluent Bit engine for use as "source" in a pipeline.
   static auto
-  make_source(const operator_args& args, const record& plugin_config)
-    -> caf::expected<std::unique_ptr<engine>> {
-    auto result
-      = make_engine(plugin_config, args.poll_interval, args.service_properties);
+  make_source(const operator_args& args, const record& plugin_config,
+              diagnostic_handler& dh) -> std::unique_ptr<engine> {
+    auto result = make_engine(plugin_config, args.poll_interval,
+                              args.service_properties, dh);
     if (not result) {
       return result;
     }
-    if (not(*result)->input(args.plugin, args.args)) {
-      return caf::make_error(ec::unspecified,
-                             fmt::format("failed to setup Fluent Bit {} input",
-                                         args.plugin));
+    if (auto error = result->input(args.plugin.inner, args.args)) {
+      error->annotations.emplace_back(true, "", args.plugin.source);
+      dh.emit(std::move(*error));
+      return {};
     }
     auto callback = flb_lib_out_cb{
       .cb = handle_lib_output,
-      .data = result->get(),
+      .data = result.get(),
     };
     // There are two options for the `lib` output:
     // - format: "msgpack" or "json"
     // - max_records: integer representing the maximum number of records to
     //   process per single flush call.
-    if (not(*result)->output("lib", {{"format", "msgpack"}}, &callback)) {
-      return caf::make_error(ec::unspecified,
-                             "failed to setup Fluent Bit lib output");
+    if (auto error
+        = result->output("lib", {{"format", "msgpack"}}, &callback)) {
+      dh.emit(std::move(*error));
+      return {};
     }
-    if (not(*result)->start()) {
-      return caf::make_error(ec::unspecified,
-                             "failed to start Fluent Bit engine");
+    if (auto error = result->start()) {
+      dh.emit(std::move(*error));
+      return {};
     }
     return result;
   }
 
   /// Constructs a Fluent Bit engine for use as "sink" in a pipeline.
-  static auto make_sink(const operator_args& args, const record& plugin_config)
-    -> caf::expected<std::unique_ptr<engine>> {
-    auto result
-      = make_engine(plugin_config, args.poll_interval, args.service_properties);
+  static auto make_sink(const operator_args& args, const record& plugin_config,
+                        diagnostic_handler& dh) -> std::unique_ptr<engine> {
+    auto result = make_engine(plugin_config, args.poll_interval,
+                              args.service_properties, dh);
     if (not result) {
       return result;
     }
-    if (not(*result)->input("lib")) {
-      return caf::make_error(ec::unspecified,
-                             "failed to setup Fluent Bit lib input");
+    if (auto error = result->input("lib")) {
+      dh.emit(std::move(*error));
+      return {};
     }
-    if (not(*result)->output(args.plugin, args.args)) {
-      return caf::make_error(ec::unspecified,
-                             fmt::format("failed to setup Fluent Bit {} outut",
-                                         args.plugin));
+    if (auto error = result->output(args.plugin.inner, args.args)) {
+      error->annotations.emplace_back(true, "", args.plugin.source);
+      dh.emit(std::move(*error));
+      return {};
     }
-    if (not(*result)->start()) {
-      return caf::make_error(ec::unspecified,
-                             "failed to start Fluent Bit engine");
+    if (auto error = result->start()) {
+      dh.emit(std::move(*error));
+      return {};
     }
     return result;
   }
@@ -387,34 +388,35 @@ public:
 private:
   static auto make_engine(const record& global_properties,
                           std::chrono::milliseconds poll_interval,
-                          const property_map& local_properties)
-    -> caf::expected<std::unique_ptr<engine>> {
+                          const property_map& local_properties,
+                          diagnostic_handler& dh) -> std::unique_ptr<engine> {
     auto* ctx = flb_create();
     if (ctx == nullptr) {
-      return caf::make_error(ec::unspecified,
-                             "failed to create Fluent Bit context");
+      diagnostic::error("failed to create Fluent Bit context").emit(dh);
+      return {};
     }
     // Start with a less noisy log level.
     if (flb_service_set(ctx, "log_level", "error", nullptr) != 0) {
-      return caf::make_error(ec::unspecified,
-                             "failed to adjust Fluent Bit log_level");
+      diagnostic::error("failed to adjust Fluent Bit log_level").emit(dh);
+      return {};
     }
     for (const auto& [key, value] : global_properties) {
       auto str_value = to_string(value);
       TENZIR_DEBUG("setting global service option: {}={}", key, str_value);
       if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
-        return caf::make_error(ec::unspecified,
-                               fmt::format("failed to set global service "
-                                           "option: {}={}", //
-                                           key, str_value));
+        diagnostic::error("failed to set global service option: {}={}", key,
+                          str_value)
+          .emit(dh);
+        return {};
       }
     }
     for (const auto& [key, value] : local_properties) {
       TENZIR_DEBUG("setting local service option: {}={}", key, value);
       if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
-        return caf::make_error(
-          ec::unspecified,
-          fmt::format("failed to set local service option: {}={}", key, value));
+        diagnostic::error("failed to set local service option: {}={}", key,
+                          value)
+          .emit(dh);
+        return {};
       }
     }
     return std::unique_ptr<engine>(new engine{ctx, poll_interval});
@@ -434,54 +436,63 @@ private:
   }
 
   auto input(const std::string& plugin, const property_map& properties
-                                        = {}) -> bool {
+                                        = {}) -> std::optional<diagnostic> {
     ffd_ = flb_input(ctx_, plugin.c_str(), nullptr);
     if (ffd_ < 0) {
-      TENZIR_ERROR("failed to setup {} input plugin ({})", plugin, ffd_);
-      return false;
+      return diagnostic::error("failed to setup Fluent Bit `{}` input plugin ",
+                               plugin)
+        .note("error code `{}`", ffd_)
+        .done();
+      ;
     }
     // Apply user-provided plugin properties.
     for (const auto& [key, value] : properties) {
       TENZIR_DEBUG("setting {} plugin option: {}={}", plugin, key, value);
       if (flb_input_set(ctx_, ffd_, key.c_str(), value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set {} plugin option: {}={}", plugin, key,
-                     value);
-        return false;
+        return diagnostic::error("failed to set Fluent Bit `{}` plugin option: "
+                                 "{}={}",
+                                 plugin, key, value)
+          .done();
       }
     }
-    return true;
+    return {};
   }
 
   auto output(const std::string& plugin, const property_map& properties = {},
-              struct flb_lib_out_cb* callback = nullptr) -> bool {
+              struct flb_lib_out_cb* callback
+              = nullptr) -> std::optional<diagnostic> {
     auto ffd = flb_output(ctx_, plugin.c_str(), callback);
     if (ffd < 0) {
-      TENZIR_ERROR("failed to setup {} output plugin ({})", plugin, ffd);
-      return false;
+      return diagnostic::error("failed to setup Fluent Bit `{}` output plugin ",
+                               plugin)
+        .note("error code `{}`", ffd)
+        .done();
     }
     // Apply user-provided plugin properties.
     for (const auto& [key, value] : properties) {
       TENZIR_DEBUG("setting {} plugin option: {}={}", plugin, key, value);
       if (flb_output_set(ctx_, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set {} plugin option: {}={}", plugin, key,
-                     value);
-        return false;
+        return diagnostic::error("failed to set Fluent Bit `{}` plugin option: "
+                                 "{}={}",
+                                 plugin, key, value)
+          .done();
       }
     }
-    return true;
+    return {};
   }
 
   /// Starts the engine.
-  auto start() -> bool {
+  auto start() -> std::optional<diagnostic> {
     TENZIR_ASSERT(ctx_ != nullptr);
     TENZIR_DEBUG("starting Fluent Bit engine");
     auto ret = flb_start(ctx_);
     if (ret == 0) {
       started_ = true;
-      return true;
+      return {};
     }
-    TENZIR_ERROR("failed to start engine ({})", ret);
-    return false;
+    return diagnostic::error("failed to start engine")
+      .note("return code `{}`", ret)
+      .done();
   }
 
   /// Stops the engine.
@@ -593,28 +604,34 @@ auto add(auto field, const msgpack_object& object, diagnostic_handler& dh,
   return msgpack::visit(f, object);
 }
 
-class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
+template <bool enable_source, bool enable_sink>
+  requires(enable_source or enable_sink)
+class fluent_bit_operator_impl final
+  : public crtp_operator<fluent_bit_operator_impl<enable_source, enable_sink>> {
 public:
-  fluent_bit_operator() = default;
+  fluent_bit_operator_impl() = default;
 
-  fluent_bit_operator(operator_args operator_args,
-                      multi_series_builder::options builder_options,
-                      record config)
+  fluent_bit_operator_impl(operator_args operator_args,
+                           multi_series_builder::options builder_options,
+                           record config)
     : operator_args_{std::move(operator_args)},
       builder_options_{std::move(builder_options)},
       config_{std::move(config)} {
   }
 
-  auto
-  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
-    auto engine_expected = engine::make_source(operator_args_, config_);
-    if (not engine_expected) {
-      diagnostic::error("failed to create Fluent Bit engine")
-        .hint("{}", engine_expected.error())
-        .emit(ctrl.diagnostics());
+  fluent_bit_operator_impl(operator_args operator_args, record config)
+    requires(not enable_source)
+    : operator_args_{std::move(operator_args)}, config_{std::move(config)} {
+  }
+
+  auto operator()(operator_control_plane& ctrl) const -> generator<table_slice>
+    requires enable_source
+  {
+    auto engine
+      = engine::make_source(operator_args_, config_, ctrl.diagnostics());
+    if (not engine) {
       co_return;
     }
-    auto& engine = *engine_expected;
     // auto builder = series_builder{};
 
     auto dh = transforming_diagnostic_handler{
@@ -755,15 +772,15 @@ public:
 
   auto
   operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<std::monostate> {
-    auto engine = engine::make_sink(operator_args_, config_);
+             operator_control_plane& ctrl) const -> generator<std::monostate>
+    requires enable_sink
+  {
+    auto engine
+      = engine::make_sink(operator_args_, config_, ctrl.diagnostics());
     if (not engine) {
-      diagnostic::error("failed to create Fluent Bit engine")
-        .hint("{}", engine.error())
-        .emit(ctrl.diagnostics());
       co_return;
     }
-    (*engine)->max_wait_before_stop(std::chrono::seconds(1));
+    engine->max_wait_before_stop(std::chrono::seconds(1));
     auto event = std::string{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -785,7 +802,7 @@ public:
         TENZIR_ASSERT(ok);
         // Wrap JSON object in the 2-element JSON array that Fluent Bit expects.
         auto message = fmt::format("[{}, {}]", flb_time_now(), event);
-        if (not(*engine)->push(message)) {
+        if (engine->push(message)) {
           TENZIR_ERROR("failed to push data into Fluent Bit engine");
         }
         event.clear();
@@ -795,7 +812,13 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "fluent-bit";
+    if constexpr (enable_source and enable_sink) {
+      return "fluent-bit";
+    } else if constexpr (enable_source) {
+      return "from_fluent_bit";
+    } else {
+      return "to_fluent_bit";
+    }
   }
 
   auto detached() const -> bool override {
@@ -808,16 +831,22 @@ public:
 
   auto optimize(expression const& filter,
                 event_order order) const -> optimize_result override {
-    auto builder_options = builder_options_;
-    builder_options.settings.ordered = order == event_order::ordered;
-    auto replacement = std::make_unique<fluent_bit_operator>(
-      this->operator_args_, std::move(builder_options), this->config_);
-    return {filter, order, std::move(replacement)};
+    if constexpr (enable_source) {
+      auto builder_options = builder_options_;
+      builder_options.settings.ordered = order == event_order::ordered;
+      auto replacement = std::make_unique<fluent_bit_operator_impl>(
+        this->operator_args_, std::move(builder_options), this->config_);
+      return {filter, order, std::move(replacement)};
+    } else {
+      TENZIR_UNUSED(filter, order);
+      return do_not_optimize(*this);
+    }
   }
 
-  friend auto inspect(auto& f, fluent_bit_operator& x) -> bool {
+  friend auto inspect(auto& f, fluent_bit_operator_impl& x) -> bool {
     return f.object(x).fields(f.field("operator_args", x.operator_args_),
-                              f.field("builder_options", x.builder_options_));
+                              f.field("builder_options", x.builder_options_),
+                              f.field("config", x.config_));
   }
 
 private:
@@ -825,6 +854,10 @@ private:
   multi_series_builder::options builder_options_;
   record config_;
 };
+
+using fluent_bit_operator = fluent_bit_operator_impl<true, true>;
+using fluent_bit_source_operator = fluent_bit_operator_impl<true, false>;
+using fluent_bit_sink_operator = fluent_bit_operator_impl<false, true>;
 
 } // namespace
 } // namespace tenzir::plugins::fluentbit

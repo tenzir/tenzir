@@ -1158,6 +1158,10 @@ public:
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"json"}};
+  }
 };
 
 class read_ndjson_plugin final
@@ -1179,6 +1183,10 @@ public:
     args.split_mode = split_at::newline;
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
+  }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"ndjson", "jsonl"}};
   }
 };
 
@@ -1335,6 +1343,10 @@ public:
           .parse(inv, ctx));
     return std::make_unique<write_json>(args);
   }
+
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {"json"}};
+  }
 };
 
 class write_ndjson_plugin final : public virtual operator_plugin2<write_json> {
@@ -1351,6 +1363,10 @@ public:
           .named("color", args.color_output)
           .parse(inv, ctx));
     return std::make_unique<write_json>(args);
+  }
+
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {"ndjson", "jsonl"}};
   }
 };
 
