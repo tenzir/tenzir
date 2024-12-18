@@ -3,7 +3,7 @@
 Removes entries from a context.
 
 ```tql
-context::update name:string, key=any
+context::erase name:string, key=any
 ```
 
 ## Description
@@ -20,6 +20,15 @@ The name of the context to remove entries from.
 ### `key = any`
 
 The field that represents the enrichment key in the data.
+
+## Examples
+
+### Delete entries from a context
+
+```
+from {network: 10.0.0.1/16}
+context::erase "network-classification", key=network
+```
 
 ## See Also
 
