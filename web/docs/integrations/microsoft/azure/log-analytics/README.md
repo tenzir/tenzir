@@ -63,7 +63,7 @@ operator:
 ```tql
 load_file "users.csv"
 read_csv
-to_azure_log_analytics
+to_azure_log_analytics \
   tenant_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   client_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   client_secret="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
