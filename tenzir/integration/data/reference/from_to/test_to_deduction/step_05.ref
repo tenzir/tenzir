@@ -9,7 +9,7 @@
     url: "https://example.org/example.yaml.bz2",
     transfer_opts: {
       verbose: false,
-      default_protocol: "",
+      default_protocol: "https",
       poll_timeout: "100ms",
       skip_peer_verification: false,
       skip_host_verification: false
