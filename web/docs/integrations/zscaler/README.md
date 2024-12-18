@@ -90,6 +90,9 @@ publish "zscaler"
 In the above example, the pipeline uses `0.0.0.0` to listen on all IP addresses
 available.
 
+Depending on how your NSS Feed is configured, you can futher dissect the opaque
+Syslog message into a structured record.
+
 ### Create an NSS Feed
 
 First, [deploy an NSS server](https://help.zscaler.com/zia/adding-nss-servers).
