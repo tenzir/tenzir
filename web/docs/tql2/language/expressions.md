@@ -4,12 +4,12 @@ sidebar_position: 2
 
 # Expressions
 
-This page outlines the expressions available in the Tenzir Programming Language.
+This page describes the expressions available in the Tenzir Query Language (TQL).
 
 ## Literals
 
-Literals serve as the foundational building blocks for constructing data. They
-are simple, self-contained constants.
+You use literals as the foundational building blocks to construct data. They are
+simple, self-contained constants.
 
 ```tql
 true
@@ -28,47 +28,43 @@ r"C:\tmp"
 192.0.0.0/8
 ```
 
-Literals such as `42`, `123.45`, `2.5k` and `2s` are called scalars.
+Literals such as `42`, `123.45`, `2.5k`, and `2s` are called scalars.
 
 ### Numeric Suffixes
 
-Numeric scalars may have magnitude suffixes:
+Numeric scalars can have magnitude suffixes:
 
-* **Power-of-ten suffixes**: `k` (=1,000), `M` (=1,000,000),
-`G`, `T`, `P` and `E`.
-* **Power-of-two suffixes**: `Ki` (=1,024), `Mi` (=1,048,576), `Gi`, `Ti`, `Pi` and `Ei`, may also be used. For example, `2k` is
-equivalent to `2000`.
+- **Power-of-ten suffixes**: `k` (=1,000), `M` (=1,000,000), `G`, `T`, `P`, and
+  `E`.
+- **Power-of-two suffixes**: `Ki` (=1,024), `Mi` (=1,048,576), `Gi`, `Ti`, `Pi`,
+  and `Ei`. For example, `2k` is equivalent to `2000`.
 
 ### Duration Literals
 
-Duration scalars use unit suffixes `ns`, `us`, `ms`, `s`,
-`min`, `h`, `d`, `w` and `y`.
+Use unit suffixes like `ns`, `us`, `ms`, `s`, `min`, `h`, `d`, `w`, or `y` to
+create duration scalars.
 
 ### Date Literals
 
-Date literals follow the [ISO 8601 standard](https://en.wikipedia.org/wiki/ISO_8601).
+Write date literals using the
+[ISO 8601 standard](https://en.wikipedia.org/wiki/ISO_8601).
 
 ### IP Literals
 
-IP literals can be written using the IPv4 or IPv6 notation. Subnet literals are
-IP literals followed by a slash and the number of active bits.
+Write IP literals using either IPv4 or IPv6 notation. Subnet literals are IP
+literals followed by a slash and the number of active bits.
 
 ### String Literals
 
-String literals support escape sequences. For instance, `"\n"` is a single
-newline character. To opt out of this behavior, you can use raw strings: `r"\n"`
-is a backslash followed by the letter "n". Raw strings can also be enclosed with
-the `#` symbol. This is helpful if you want to include quotes in your string:
-`r#"They said "hello"."#`
-
-
-
+Write string literals with escape sequences. For example, `"\n"` represents a
+newline character. Use raw strings like `r"\n"` to prevent escape sequence
+behavior. Enclose raw strings with the `#` symbol to include quotes in your
+string, such as `r#"They said "hello"."#`.
 
 ## Fields
 
-A single identifier can be used to refer to a top-level field. To reference a
-field that is not on the top-level, use `.<name>` on an expression that returns
-a record.
+Use a single identifier to refer to a top-level field. To access a nested field,
+append `.<name>` to an expression that returns a record.
 
 ```tql
 from { my_field: 42, top_level: { nested: 0 } }
@@ -80,59 +76,56 @@ my_field = top_level.nested
 
 ## `this`
 
-The `this` keyword allows you to reference the entire top-level event. For
-instance, `from {x: 1, y: 2} | z = this` has the output
-`{x: 1, y: 2, z: {x: 1, y: 2}}`. This keyword can also be used to overwrite the
-whole event, as demonstrated by `this = {a: x, y: b}`.
+Use the `this` keyword to reference the entire top-level event. For example,
+`from {x: 1, y: 2} | z = this` produces `{x: 1, y: 2, z: {x: 1, y: 2}}`. You can
+also use `this` to overwrite the entire event, as in `this = {a: x, y: b}`.
 
 ## Metadata
 
-Events carry not only data, but also metadata. To refer to the metadata, use the
-`@` prefix. For example, `@name` carries the name of the event. Currently, the
-set of metadata fields is limited to just  `@name`, `@import_time` and
-`@internal`, but will potentially be expanded later to allow arbitrary
-user-defined metadata fields.
+Events carry both data and metadata. Access metadata fields using the `@`
+prefix. For instance, `@name` holds the name of the event. Currently, available
+metadata fields include `@name`, `@import_time`, and `@internal`. Future updates
+may allow defining custom metadata fields.
 
 ## Unary Expression
 
-The unary expression operators are `+`, `-` and `not`. `+` and `-` expect a
-number or duration. `not` expects a boolean value.
+Use the unary operators `+`, `-`, and `not`. The `+` and `-` operators expect a
+number or duration, while `not` expects a boolean value.
 
 ## Binary Expression
 
-The binary expressions operators are `+`, `-`, `*`, `/`, `==`, `!=`, `>`, `>=`,
-`<`, `<=`, `and`, `or`, and `in`.
+The binary expression operators include `+`, `-`, `*`, `/`, `==`, `!=`, `>`,
+`>=`, `<`, `<=`, `and`, `or`, and `in`.
 
 ### Arithmetic Operations
 
-The arithmetic operators `+`, `-`, `*` and `/` can be used to perform arithmetic
-on some types.
+Use the arithmetic operators `+`, `-`, `*`, and `/` to perform arithmetic on
+specific types.
 
 #### Numeric Values
 
-The numeric types, `int64`, `uint64` and `double` support all arithmetic operations.
-If the types of the left- and right-hand side are different, the return type will
-be the type able to hold most values:
+The numeric types `int64`, `uint64`, and `double` support all arithmetic
+operations. If the types of the left- and right-hand side differ, the return
+type will be the one capable of holding the most values.
 
 Operation | Result
-|:--- |: ---
+|:---|:---
 `int64` + `int64` | `int64`
 `int64` + `uint64` | `int64`
 `int64` + `double` | `double`
 
-The same applies to the other arithmetic operators, `-`, `*` and `/`.
+The same applies to the other arithmetic operators: `-`, `*`, and `/`.
 
-If the resulting value would be outside of the value range of the result type,
-it will be `null`. Conversely, there is no overflow/wrapping behavior.
-
-Integer division by zero yields `null`.
+If the resulting value exceeds the range of the result type, it evaluates to
+`null`. There is no overflow or wrapping behavior. Division by zero also
+produces `null`.
 
 #### Time & Duration
 
-The `time` and `duration` types only support a select set of operations.
+The `time` and `duration` types support specific operations:
 
 Operation | Result
-|:--- |: ---
+|:---|:---
 `time + duration` | `time`
 `time - duration` | `time`
 `time - time` | `duration`
@@ -143,7 +136,7 @@ Operation | Result
 
 ### String Operations
 
-Strings can be concatenated using the `+` operator:
+Concatenate strings using the `+` operator:
 
 ```tql
 result = "Hello " + "World!"
@@ -152,7 +145,7 @@ result = "Hello " + "World!"
 { result: "Hello World!" }
 ```
 
-`in` can be used to check whether a string contains a substring:
+Check if a string contains a substring using `in`:
 
 ```tql
 a = "World" in "Hello World"
@@ -166,20 +159,20 @@ b = "Planet" in "Hello World"
 
 #### Equality
 
-All types are equality comparable with themselves. Additionally, number types
-are equality comparable with each other. All types can be compared with `null`
-to check if they are null.
+All types can compare equality with themselves. Numeric types can compare
+equality across different numeric types. All types can also compare equality
+with `null`.
 
 #### Ordering
 
-For numeric types, operators `<`, `<=`, `>` and `>=` compare their magnitude.
-For the `string` type, the comparison is done lexicographically.
-`ip`s and `subnet`s are ordered by their IP-v6 bit pattern.
+For numeric types, operators `<`, `<=`, `>`, and `>=` compare their magnitude.
+For `string`, comparisons are lexicographic. The `ip` and `subnet` types are
+ordered by their IPv6 bit pattern.
 
 ### Logical Operations
 
-The logical operators `and` and `or` can be used to join multiple boolean
-expressions, allowing you to check multiple conditions in a single expression.
+Join multiple boolean expressions using the `and` and `or` operators to check
+multiple conditions.
 
 ```tql
 where timestamp > now() - 1d and severity == "alert"
@@ -187,21 +180,20 @@ where timestamp > now() - 1d and severity == "alert"
 
 ### Range Operations
 
-The `in` operator can be used to check whether a value is in a list/range.
+Use the `in` operator to check if a value is within a list or range.
 
-* `T in list<T>` checks whether a list contains a value.
-* `ip in subnet` checks whether an IP is in a given subnet.
-* `subnet in subnet` checks whether a subnet is a subset of a given subnet.
+* `T in list<T>` checks if a list contains a value.
+* `ip in subnet` checks if an IP is in a given subnet.
+* `subnet in subnet` checks if one subnet is a subset of another.
 
-`Value not in Range` is an alternative way to use `not (Value in Range)`.
+To negate, use `not (Value in Range)` or `Value not in Range`.
 
-
-## Indexing/Element access
+## Indexing/Element Access
 
 ### Lists
 
-You can access the elements of a list using an integral index, where `0` refers
-to the first element:
+Access list elements using an integral index, starting with `0` for the first
+element.
 
 ```tql
 let $my_list = ["Hello", "World"]
@@ -213,9 +205,8 @@ result = my_list[0]
 
 ### Records
 
-Most fields in a record can just be accessed using `record.fieldname`. If your
-fieldname is not a valid identifier (for example if it contains spaces), or if
-it depends on an event value, you can used an indexing expression:
+Access fields in a record using `record.fieldname`. If the field name contains
+spaces or depends on a runtime value, use an indexing expression:
 
 ```tql title="Accessing a fieldname with a space"
 let $answers = { "the ultimate question": 42 }
@@ -239,12 +230,11 @@ level = $severity_to_level[severity]
 
 ## Records
 
-Records are created with a pair of braces. `{}` denotes the empty record. Fields
-are normally specified  by using simple identifiers, followed by a colon and
-then an expression, for example: `{foo: 1, bar: 2}`. If the field name would not
-be valid identifier, use a string literal instead:
-`{"not a valid identifier!": 3}`. The individual fields are separated with
-commas. The final field may have a trailing comma: `{foo: 42,}`.
+Create records using a pair of braces. `{}` denotes the empty record. Specify
+fields using simple identifiers followed by a colon and an expression, e.g.,
+`{foo: 1, bar: 2}`. For invalid identifiers, use a string literal, e.g.,
+`{"not valid!": 3}`. Separate fields with commas. The final field can have a
+trailing comma, e.g., `{foo: 42,}`.
 
 ```tql title="Creating a record"
 let $my_record = {
@@ -255,11 +245,9 @@ let $my_record = {
 }
 ```
 
-Records can be expanded into other records by using `...`:
-
-For example, if `foo` is
-`{a: 1, b: 2}`, then `{...foo, c: 3}` is `{a: 1, b: 2, c: 3}`. As fields must be
-unique, having the same fields multiple times will only keep the last value.
+Expand records into other records using `...`. For example, if `foo` is
+`{a: 1, b: 2}`, then `{...foo, c: 3}` is `{a: 1, b: 2, c: 3}`. Fields must be
+unique, and later values overwrite earlier ones.
 
 ```tql title="Lifting nested fields"
 from { nested: { severity: 4, type: "source" } }
@@ -268,38 +256,37 @@ from { nested: { severity: 4, type: "source" } }
 {
   nested: { severity: 4, type: "source" },
   severity: 4,
-  type: "source
+  type: "source"
 }
 ```
 
 ## Lists
 
-Lists are created with a pair of brackets. `[]` denotes the empty list. The
-items of the list are specified with a comma-delimited list of expressions, such
-as `[1, 2+3, foo()]`. As with records, the final item may have a trailing comma:
-`[foo, bar,]`. Lists can be expanded into other lists by using `...`. For
-example, if `foo` is `[1, 2]`, then `[...foo, 3]` is `[1, 2, 3]`.
+Create lists using a pair of brackets. `[]` denotes the empty list. Specify list
+items with a comma-delimited sequence of expressions, e.g., `[1, 2+3, foo()]`.
+The final item can have a trailing comma, e.g., `[foo, bar,]`. Expand lists into
+other lists using `...`. For example, if `foo` is `[1, 2]`, then `[...foo, 3]`
+is `[1, 2, 3]`.
 
 ## Functions and Methods
 
-Functions are invoked by following name with parenthesis and a comma-delimited
-sequence of arguments, for example: `now()`, `sqrt(42)`, `round(391s, 1min)`.
-Methods are like functions, but also have additional method subject followed by
-a dot, such as `expr.trim()`. The final argument may have a trailing comma.
+Invoke functions by following the name with parentheses and a comma-delimited
+sequence of arguments, e.g., `now()`, `sqrt(42)`, `round(391s, 1min)`. Methods
+are similar to functions but include a method subject followed by a dot, e.g.,
+`expr.trim()`. The final argument can have a trailing comma.
 
 ## Pipeline Expression
 
-Some operators expect a pipeline expression as an argument. Pipeline expressions
-are written with a pair of braces, for example: `{ head 5 }`. If the final
-argument to an operator is a pipeline expression, then the preceding comma may
-be omitted, as in `every 10s { head 5 }`. The braces can contain multiple
-statements. The same statement separation rules apply as usual. For example,
-newlines can be used to separate statements.
+Some operators expect a pipeline expression as an argument. Write pipeline
+expressions using a pair of braces, e.g., `{ head 5 }`. If the final argument to
+an operator is a pipeline expression, omit the preceding comma, e.g.,
+`every 10s { head 5 }`. Braces can contain multiple statements. Separate
+statements using newlines or other delimiters.
 
 ## Let Substitution
 
-A previously defined `let` binding can be referenced in an expression by using
-the same `$`-prefixed name:
+Reference a previously defined `let` binding in an expression using the same
+`$`-prefixed name:
 
 ```tql
 let $pi = 3
@@ -316,7 +303,7 @@ area = radius * radius * pi
 This functionality is not implemented yet.
 :::
 
-The `if` keyword can also be used in an expression context. For example:
+The `if` keyword can also be used in an expression context, e.g.,
 `if foo == 42 { "yes" } else { "no" }`.
 
 ## `match` Expression
@@ -325,42 +312,35 @@ The `if` keyword can also be used in an expression context. For example:
 This functionality is not implemented yet.
 :::
 
-The `match` keyword can also be used in an expression context to perform pattern
-matching. For example, the expression
-`match num { 1 => "one", 2 => "two", _ => "neither one nor two"}` inspects the
-value of `num` and returns the corresponding description. `_` can be used as a
-final catch-all. Without a `_` case, it can happen that there is no match for
-the value. In that case, the `match` expression will evaluate to `null` and a
-warning will be emitted.
-
+Use the `match` keyword in an expression context to perform pattern matching,
+e.g., `match num { 1 => "one", 2 => "two", _ => "neither one nor two" }`. The
+`_` can be used as a catch-all case. If no match exists and no `_` is provided,
+the `match` expression evaluates to `null`.
 
 ## Operator Precedence
 
-Expressions such as `1 - 2 * 3 + 4` follow additional precedence and
-associativity rules, making the previous expression equivalent to
-`(1 - (2 * 3)) + 4`. The following table details the disambiguation process,
-ordered from highest to lowest precedence.
+Expressions like `1 - 2 * 3 + 4` follow precedence and associativity rules. The
+expression evaluates as `(1 - (2 * 3)) + 4`. The following table lists
+precedence, ordered from highest to lowest.
 
-Expression | Associativity
------------|-----
-method call |
-field access |
-`[]`-indexing |
-unary `+` `-`  |
-`*` `/` | left
-binary `+` `-` | left
-`==` `!=` `>` `>=` `<` `<=` `in` | left (will be changed to none)
-`not` |
-`and` | left
-`or` | left
+Expression          | Associativity
+--------------------|--------------
+method call         |
+field access        |
+`[]`-indexing       |
+unary `+`, `-`      |
+`*`, `/`            | left
+binary `+`, `-`     | left
+`==`, `!=`, `>`, `<`, `>=`, `<=`, `in` | left (will be changed to none)
+`not`               |
+`and`               | left
+`or`                | left
 
 ## Constant Expressions
 
-A constant expression is an expression that can be evaluated to a constant when
-the pipeline that contains it is started. Many pipeline operators require certain
-arguments to be constants. For example, `head 5` is valid because the integer
-literal is constant. On the other hand, `head x` is invalid, because the value
-of the field `x` depends on the events flowing through the `head` operator.
-Functions such as `now()` and `random()` can also be constant evaluated, even
-though their results vary. In such cases, the function call is evaluated once
-when the pipeline starts, and the resulting value is treated as a constant.
+A constant expression evaluates to a constant when the pipeline containing it
+starts. Many pipeline operators require constant arguments. For example,
+`head 5` is valid because the integer literal is constant. However, `head x` is
+invalid because the value of `x` depends on events flowing through the operator.
+Functions like `now()` and `random()` can also be constant evaluated; they are
+evaluated once at pipeline start, and the result is treated as a constant.
