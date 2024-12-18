@@ -96,6 +96,7 @@ Operator | Description | Example
 [`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
 [`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent Bit| `to_fluent_bit "elasticsearch" …`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
+[`to_opensearch`](./operators/to_opensearch.md) | Sends incoming events to the OpenSearch Bulk API | `to_opensearch 'localhost:9200", ...`
 [`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
 
 #### Bytes
