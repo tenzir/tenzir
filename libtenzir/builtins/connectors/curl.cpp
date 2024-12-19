@@ -406,6 +406,14 @@ public:
     }
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
   auto optimize(expression const& filter,
                 event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
@@ -446,6 +454,14 @@ public:
       (*func)(std::move(chunk));
       co_yield {};
     }
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto detached() const -> bool override {
+    return true;
   }
 
   auto optimize(expression const& filter,
