@@ -49,3 +49,11 @@ setup() {
   dd "if=${file}" "of=${file}.1k" bs=1 count=10000
   check ! tenzir "from ${file}.1k read parquet"
 }
+
+@test "empty records" {
+  check tenzir --tql2 'from {} | write_parquet | read_parquet'
+  check tenzir --tql2 'from {x: {}} | write_parquet | read_parquet'
+  check tenzir --tql2 'from {x: {y: {}}} | write_parquet | read_parquet'
+  check tenzir --tql2 'from {x: [{}]} | write_parquet | read_parquet'
+  check tenzir --tql2 'from {x: [[{}]]} | write_parquet | read_parquet'
+}
