@@ -3,7 +3,8 @@
 Read CSV (Comma-Separated Values) from a byte stream.
 
 ```tql
-read_csv [list_sep=string, null_value=string, comments=bool, header=string, auto_expand=bool,
+read_csv [list_sep=string, null_value=string, comments=bool, header=string,
+          quotes=string, doubled_quotes_escape=bool, auto_expand=bool,
           schema=string, selector=string, schema_only=bool, raw=bool, unflatten=string]
 ```
 
@@ -21,6 +22,24 @@ values instead of dropping the excess values.
 
 Treat lines beginning with "#" as comments.
 
+### `doubled_quotes_escape = bool (optional)`
+
+Whether to support "triple-escaping". That is, whether to consider two consecutive
+quote characters *inside of a quoted string* as an escape sequence. Enabling this option, all these inputs parts the same:
+
+```
+Header1, Header2
+"This is a single field with, ""quoted"" text",Next field
+"This is a single field with, \"quoted\" text",Next field
+This is a single field with\, "quoted" text,Next field
+```
+```tql
+{
+  Header1: "This is a single field with \"quoted\" text",
+  Header2: "Next field"
+}
+```
+
 ### `header = string (optional)`
 
 The `string` to be used as a `header` for the parsed values.
@@ -37,6 +56,12 @@ Defaults to `;`.
 The `string` denoting an absent value.
 
 Defaults to empty string (`""`).
+
+### `quotes = string (optional)`
+
+A string of not escaped characters that are supposed to be considered as quotes.
+
+Defaults to the characters `"'`.
 
 ### `raw = bool (optional)`
 
