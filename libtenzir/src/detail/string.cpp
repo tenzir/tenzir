@@ -217,20 +217,26 @@ auto quoting_escaping_policy::unquote_unescape(std::string_view text) const
 
 auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
                                                 char target) const
-  -> std::pair<std::string_view, std::string_view> {
-  const auto field_end = find_not_in_quotes(text, target, 0);
-  auto first = text.substr(0, field_end);
+  -> std::optional<std::pair<std::string_view, std::string_view>> {
+  const auto split_pos = find_not_in_quotes(text, target, 0);
+  if (split_pos == text.npos) {
+    return std::nullopt;
+  }
+  auto first = text.substr(0, split_pos);
   text.remove_prefix(std::min(first.size() + 1, text.size()));
-  return {first, text};
+  return std::pair{first, text};
 }
 
 auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
                                                 std::string_view target) const
-  -> std::pair<std::string_view, std::string_view> {
-  const auto field_end = find_not_in_quotes(text, target, 0);
-  auto first = text.substr(0, field_end);
+  -> std::optional<std::pair<std::string_view, std::string_view>> {
+  const auto split_pos = find_not_in_quotes(text, target, 0);
+  if (split_pos == text.npos) {
+    return std::nullopt;
+  }
+  auto first = text.substr(0, split_pos);
   text.remove_prefix(std::min(first.size() + target.size(), text.size()));
-  return {first, text};
+  return std::pair{first, text};
 }
 
 std::string byte_escape(std::string_view str) {

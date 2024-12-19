@@ -444,9 +444,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   TENZIR_ASSERT(header);
   auto fields = std::vector<std::string>{};
   line = header;
-  while (not line->empty()) {
-    std::tie(field_text, *line)
-      = quoting_options.split_at_unquoted(*line, args.field_sep);
+  while (auto split
+         = quoting_options.split_at_unquoted(*line, args.field_sep)) {
+    std::tie(field_text, *line) = *split;
     fields.emplace_back(quoting_options.unquote_unescape(field_text));
   }
   if (fields.empty()) {
@@ -535,40 +535,40 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         }
       }
       auto field = r.unflattened_field(fields[field_idx]);
-      std::tie(field_text, line)
-        = quoting_options.split_at_unquoted(*line, args.field_sep);
-      auto list_element_text = std::string_view{};
-      if (args.list_sep.empty()) {
-        list_element_text = field_text;
-        field_text = {};
+      if (auto split
+          = quoting_options.split_at_unquoted(*line, args.field_sep)) {
+        std::tie(field_text, *line) = *split;
       } else {
-        std::tie(list_element_text, field_text)
-          = quoting_options.split_at_unquoted(field_text, args.list_sep);
+        field_text = *line;
+        line = std::string_view{};
       }
-      // If it is a list, then there remains text in `field_text` (because it
-      // is after the list separator)
-      if (not field_text.empty()) {
-        auto l = field.list();
-        while (true) {
-          if (list_element_text.empty() and field_text.empty()) {
-            break;
-          } else if (list_element_text == args.null_value) {
-            l.null();
-          } else {
-            l.data_unparsed(
-              quoting_options.unquote_unescape(list_element_text));
-          }
-          std::tie(list_element_text, field_text)
-            = quoting_options.split_at_unquoted(field_text, args.list_sep);
-        }
-      }
-      // If it is NOT a list, then all text was moved into `list_element_text`
-      else {
-        if (list_element_text == args.null_value) {
-          field.null();
+      const auto add_value
+        = [&quoting_options](std::string_view text, std::string_view null_value,
+                             auto& builder) {
+            if (text == null_value) {
+              builder.null();
+            } else {
+              builder.data_unparsed(quoting_options.unquote_unescape(text));
+            }
+          };
+      if (args.list_sep.empty()) {
+        add_value(field_text, args.null_value, field);
+      } else {
+        if (auto split
+            = quoting_options.split_at_unquoted(field_text, args.list_sep)) {
+          auto list = field.list();
+          // Iterate the list
+          do {
+            auto list_element_text = std::string_view{};
+            std::tie(list_element_text, field_text) = *split;
+            add_value(quoting_options.unquote_unescape(list_element_text),
+                      args.null_value, list);
+          } while ((split = quoting_options.split_at_unquoted(field_text,
+                                                              args.list_sep)));
+          // Add the final element (for which the split would have failed)
+          add_value(field_text, args.null_value, list);
         } else {
-          field.data_unparsed(
-            quoting_options.unquote_unescape(list_element_text));
+          add_value(field_text, args.null_value, field);
         }
       }
     }
