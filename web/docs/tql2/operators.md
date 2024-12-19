@@ -97,6 +97,8 @@ Operator | Description | Example
 [`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent Bit| `to_fluent_bit "elasticsearch" …`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
 [`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
+[`to_opensearch`](./operators/to_opensearch.md) | Sends incoming events to an OpenSearch-compatible Bulk API | `to_opensearch "localhost:9200", action="create", index="idx"`
+[`to_elasticsearch`](./operators/to_elasticsearch.md) | Sends incoming events to an ElasticSearch-compatible Bulk API | `to_elasticsearch "localhost:9200", action="create", index="idx"`
 
 #### Bytes
 
