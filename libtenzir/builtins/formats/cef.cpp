@@ -88,7 +88,8 @@ auto parse_extension(std::string_view extension, auto builder,
     // Find the next not quoted, not escaped kv separator.
     kv_sep = quoting.find_not_in_quotes(extension, '=');
     // Find the last whitespace before the key, determining the end of the value
-    // text.
+    // text. Ignoring quoting is fine for this search; the CEF spec does not
+    // discuss/specify quoted keys.
     auto value_end = kv_sep == extension.npos
                        ? extension.npos
                        : extension.find_last_of(" \t", kv_sep);

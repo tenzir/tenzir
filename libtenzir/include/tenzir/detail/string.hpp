@@ -176,11 +176,11 @@ struct quoting_escaping_policy {
 
   /// Splits a string at the first `target`, that is not enclosed in quote
   auto split_at_unquoted(std::string_view text, char target) const
-    -> std::pair<std::string_view, std::string_view>;
+    -> std::optional<std::pair<std::string_view, std::string_view>>;
 
   /// Splits a string at the first `target`, that is not enclosed in quote
   auto split_at_unquoted(std::string_view text, std::string_view target) const
-    -> std::pair<std::string_view, std::string_view>;
+    -> std::optional<std::pair<std::string_view, std::string_view>>;
 
   friend auto inspect(auto& f, quoting_escaping_policy& x) -> bool {
     return f.object(x)

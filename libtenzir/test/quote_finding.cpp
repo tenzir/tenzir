@@ -101,19 +101,19 @@ TEST(finding nonquoted characters basic escaping) {
   const auto q = detail::quoting_escaping_policy{};
   {
     constexpr auto text = R"(text)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, npos);
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
   {
     constexpr auto text = R"(te$xt)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, text.find('$'));
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
   {
     constexpr auto text = R"("te$xt")"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, npos);
     CHECK(not q.is_inside_of_quotes(text, pos));
     const auto pos2 = text.find('$');
@@ -121,19 +121,19 @@ TEST(finding nonquoted characters basic escaping) {
   }
   {
     constexpr auto text = R"("te$xt"$)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, text.size() - 1);
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
   {
     constexpr auto text = R"("te$xt\"$)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, text.find('$'));
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
   {
     constexpr auto text = R"("text"$)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, text.size() - 1);
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
@@ -152,19 +152,19 @@ TEST(finding nonquoted characters doubled escaping) {
   };
   {
     constexpr auto text = R"(text)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, npos);
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
   {
     constexpr auto text = R"(te$xt)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, text.find('$'));
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
   {
     constexpr auto text = R"("""te$xt")"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, npos);
     CHECK(not q.is_inside_of_quotes(text, pos));
     const auto pos2 = text.find('$');
@@ -172,19 +172,19 @@ TEST(finding nonquoted characters doubled escaping) {
   }
   {
     constexpr auto text = R"("""te$xt"""$)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, text.size() - 1);
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
   {
     constexpr auto text = R"("te$xt""$)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, text.find('$'));
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
   {
     constexpr auto text = R"("text"$)"sv;
-    const auto pos = q.find_first_not_in_quotes(text, '$');
+    const auto pos = q.find_not_in_quotes(text, '$');
     CHECK_EQUAL(pos, text.size() - 1);
     CHECK(not q.is_inside_of_quotes(text, pos));
   }
@@ -229,36 +229,44 @@ TEST(unquoting doubled escaping) {
   }
 }
 
-TEST(unescaping basic escaping) {
+TEST(unquoting unescaping basic escaping) {
   const auto q = detail::quoting_escaping_policy{};
   {
     constexpr auto text = R"(text)"sv;
-    CHECK_EQUAL(q.unescape_quotes(text), text);
+    CHECK_EQUAL(q.unquote_unescape(text), text);
+  }
+  {
+    constexpr auto text = R"(""text)"sv;
+    CHECK_EQUAL(q.unquote_unescape(text), text);
   }
   {
     constexpr auto text = R"("text")"sv;
-    CHECK_EQUAL(q.unescape_quotes(text), text);
+    CHECK_EQUAL(q.unquote_unescape(text), "text");
   }
   {
     constexpr auto text = R"("text\"")"sv;
-    CHECK_EQUAL(q.unescape_quotes(text), R"("text"")");
+    CHECK_EQUAL(q.unquote_unescape(text), R"(text")");
+  }
+  {
+    constexpr auto text = R"("text\")"sv;
+    CHECK_EQUAL(q.unquote_unescape(text), R"("text")");
   }
 }
 
-TEST(unescaping doubled escaping) {
+TEST(unquoting unescaping doubled escaping) {
   const auto q = detail::quoting_escaping_policy{
     .doubled_quotes_escape = true,
   };
   {
     constexpr auto text = R"(text)"sv;
-    CHECK_EQUAL(q.unescape_quotes(text), text);
+    CHECK_EQUAL(q.unquote_unescape(text), text);
   }
   {
     constexpr auto text = R"("text")"sv;
-    CHECK_EQUAL(q.unescape_quotes(text), text);
+    CHECK_EQUAL(q.unquote_unescape(text), "text");
   }
   {
     constexpr auto text = R"("text""")"sv;
-    CHECK_EQUAL(q.unescape_quotes(text), R"("text"")");
+    CHECK_EQUAL(q.unquote_unescape(text), R"(text")");
   }
 }

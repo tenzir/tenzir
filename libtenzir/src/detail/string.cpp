@@ -102,8 +102,12 @@ auto quoting_escaping_policy::find_first_of_not_in_quotes(
       continue;
     }
     const bool is_quote = is_quote_character(character);
-    if (is_quote) {
+    if (is_quote and not active_escape) {
       quote_start = i;
+      continue;
+    }
+    if (active_escape) {
+      active_escape = false;
       continue;
     }
     const auto is_target = targets.find(character) != text.npos;
@@ -119,6 +123,7 @@ auto quoting_escaping_policy::find_first_of_not_in_quotes(
         quote_start = text.npos;
       }
     }
+    active_escape = backslashes_escape and character == '\\';
   }
   return text.npos;
 };
@@ -126,7 +131,7 @@ auto quoting_escaping_policy::find_first_of_not_in_quotes(
 auto quoting_escaping_policy::find_not_in_quotes(
   std::string_view text, char target,
   size_t start) const -> std::string_view::size_type {
-  return find_not_in_quotes(text, std::string_view{&target, 1}, start);
+  return find_first_of_not_in_quotes(text, std::string_view{&target, 1}, start);
 }
 
 auto quoting_escaping_policy::find_not_in_quotes(
@@ -149,12 +154,14 @@ auto quoting_escaping_policy::find_not_in_quotes(
       continue;
     }
     const bool is_quote = is_quote_character(character);
-    if (is_quote) {
+    if (is_quote and not active_escape) {
       quote_start = i;
       continue;
     }
+    if (active_escape) {
+      active_escape = false;
+    }
     /// TODO this is not the most efficient.
-    /// Alternatively
     const auto is_target = text.substr(i, target.size()) == target;
     if (is_target) {
       if (quote_start == text.npos) {
@@ -168,6 +175,7 @@ auto quoting_escaping_policy::find_not_in_quotes(
         quote_start = text.npos;
       }
     }
+    active_escape = backslashes_escape and character == '\\';
   }
   return text.npos;
 };
@@ -217,20 +225,26 @@ auto quoting_escaping_policy::unquote_unescape(std::string_view text) const
 
 auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
                                                 char target) const
-  -> std::pair<std::string_view, std::string_view> {
-  const auto field_end = find_not_in_quotes(text, target, 0);
-  auto first = text.substr(0, field_end);
+  -> std::optional<std::pair<std::string_view, std::string_view>> {
+  const auto split_pos = find_not_in_quotes(text, target, 0);
+  if (split_pos == text.npos) {
+    return std::nullopt;
+  }
+  auto first = text.substr(0, split_pos);
   text.remove_prefix(std::min(first.size() + 1, text.size()));
-  return {first, text};
+  return std::pair{first, text};
 }
 
 auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
                                                 std::string_view target) const
-  -> std::pair<std::string_view, std::string_view> {
-  const auto field_end = find_not_in_quotes(text, target, 0);
-  auto first = text.substr(0, field_end);
+  -> std::optional<std::pair<std::string_view, std::string_view>> {
+  const auto split_pos = find_not_in_quotes(text, target, 0);
+  if (split_pos == text.npos) {
+    return std::nullopt;
+  }
+  auto first = text.substr(0, split_pos);
   text.remove_prefix(std::min(first.size() + target.size(), text.size()));
-  return {first, text};
+  return std::pair{first, text};
 }
 
 std::string byte_escape(std::string_view str) {
