@@ -78,6 +78,18 @@ public:
     return {};
   }
 
+  struct compression_properties_t {
+    std::vector<std::string> extensions = {};
+  };
+  using decompress_properties_t = compression_properties_t;
+  using compress_properties_t = compression_properties_t;
+  virtual auto decompress_properties() const -> decompress_properties_t {
+    return {};
+  }
+  virtual auto compress_properties() const -> decompress_properties_t {
+    return {};
+  }
+
   struct format_properties_t {
     std::vector<std::string> extensions = {};
   };

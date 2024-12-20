@@ -84,12 +84,17 @@ template <>
 struct from_to_trait<true> {
   constexpr static std::string_view operator_name = "from";
   constexpr static std::string_view default_io_operator = "tql2.load_file";
-  constexpr static std::string_view compression_operator_name = "decompress";
   using io_properties_t = operator_factory_plugin::load_properties_t;
   constexpr static auto io_properties_getter
     = &operator_factory_plugin::load_properties;
   constexpr static auto io_properties_range_member
     = &operator_factory_plugin::load_properties_t::schemes;
+  using compression_properties_t
+    = operator_factory_plugin::decompress_properties_t;
+  constexpr static auto compression_properties_getter
+    = &operator_factory_plugin::decompress_properties;
+  constexpr static auto compression_properties_range_member
+    = &operator_factory_plugin::decompress_properties_t::extensions;
   using rw_properties_t = operator_factory_plugin::read_properties_t;
   constexpr static auto rw_properties_getter
     = &operator_factory_plugin::read_properties;
@@ -100,12 +105,17 @@ template <>
 struct from_to_trait<false> {
   constexpr static std::string_view operator_name = "to";
   constexpr static std::string_view default_io_operator = "tql2.save_file";
-  constexpr static std::string_view compression_operator_name = "compress";
   using io_properties_t = operator_factory_plugin::save_properties_t;
   constexpr static auto io_properties_getter
     = &operator_factory_plugin::save_properties;
   constexpr static auto io_properties_range_member
     = &operator_factory_plugin::save_properties_t::schemes;
+  using compression_properties_t
+    = operator_factory_plugin::compress_properties_t;
+  constexpr static auto compression_properties_getter
+    = &operator_factory_plugin::compress_properties;
+  constexpr static auto compression_properties_range_member
+    = &operator_factory_plugin::compress_properties_t::extensions;
   using rw_properties_t = operator_factory_plugin::write_properties_t;
   constexpr static auto rw_properties_range_member
     = &operator_factory_plugin::write_properties_t::extensions;
@@ -155,60 +165,63 @@ auto find_connector_given(std::string_view what, std::string_view path,
   return {};
 }
 
-constexpr static auto extension_to_compression_map
-  = std::array<std::pair<std::string_view, std::string_view>, 8>{{
-    {".br", "brotli"},
-    {".brotli", "brotli"},
-    {".bz2", "bz2"},
-    {".gz", "gzip"},
-    {".gzip", "gzip"},
-    {".lz4", "lz4"},
-    {".zst", "zstd"},
-    {".zstd", "zstd"},
-  }};
+template <bool is_loading>
+auto find_compression_and_format(std::string_view extension,
+                                 std::string_view path, location loc,
+                                 const char* docs, bool emit, session ctx)
+  -> std::tuple<const operator_factory_plugin*, const operator_factory_plugin*> {
+  using traits = from_to_trait<is_loading>;
+  auto format_extensions = std::vector<std::string>{};
+  auto compression_extensions = std::vector<std::string>{};
 
-auto determine_compression(std::string_view& file_ending)
-  -> std::pair<std::string_view, std::string_view> {
-  for (const auto& kvp : extension_to_compression_map) {
-    const auto [extension, name] = kvp;
-    if (file_ending.ends_with(extension)) {
-      file_ending.remove_suffix(extension.size());
-      return kvp;
+  const operator_factory_plugin* found_compression_plugin = nullptr;
+  const operator_factory_plugin* found_rw_plugin = nullptr;
+  auto compression_extension = std::string{};
+  for (const auto& p : plugins::get<operator_factory_plugin>()) {
+    auto comp_properties = (p->*traits::compression_properties_getter)();
+    auto rw_properties = (p->*traits::rw_properties_getter)();
+    for (auto& possibility :
+         comp_properties.*traits::compression_properties_range_member) {
+      if (extension.ends_with(possibility)) {
+        found_rw_plugin = p;
+        break;
+      }
+      format_extensions.push_back(std::move(possibility));
+    }
+    if (found_rw_plugin) {
+      break;
+    }
+    for (auto& possibility :
+         rw_properties.*traits::rw_properties_range_member) {
+      if (extension.ends_with(possibility)) {
+        TENZIR_ASSERT(compression_extension.empty());
+        compression_extension = possibility;
+        extension.remove_suffix(possibility.size() + 1);
+        found_compression_plugin = p;
+      }
+      compression_extensions.push_back(std::move(possibility));
     }
   }
-  return {};
-}
-
-template <bool is_loading>
-auto find_formatter_given(std::string_view what, std::string_view path,
-                          std::string_view compression, location loc,
-                          const char* docs, bool emit, session ctx)
-  -> std::pair<const operator_factory_plugin*,
-               typename from_to_trait<is_loading>::rw_properties_t> {
-  using traits = from_to_trait<is_loading>;
-  auto possibilities = std::vector<std::string>{};
-  auto res = find_given(what, traits::rw_properties_getter,
-                        traits::rw_properties_range_member, possibilities);
-  if (res.first) {
-    return res;
+  if (found_rw_plugin) {
+    return {found_compression_plugin, found_rw_plugin};
   }
-  std::ranges::sort(possibilities);
+  std::ranges::sort(format_extensions);
   if (loc.end - loc.begin == path.size() + 2) {
-    auto file_start = path.find(what);
+    auto file_start = path.find(compression_extension);
     loc.begin += file_start + 1;
     loc.end -= 1;
-    loc.end -= compression.size();
+    loc.end -= compression_extension.size();
   }
   if (emit) {
-    auto diag = diagnostic::error("no known format for extension `{}`", what)
-                  .primary(loc)
-                  .note("supported extensions for format deduction: `{}`",
-                        fmt::join(possibilities, "`, `"));
-
-    if (compression.empty()) {
-      diag = std::move(diag).note(
-        "supported extensions for compression deduction: `{}`",
-        fmt::join(extension_to_compression_map | std::views::keys, "`, `"));
+    auto diag
+      = diagnostic::error("no known format for extension `{}`", extension)
+          .primary(loc)
+          .note("supported extensions for format deduction: `{}`",
+                fmt::join(format_extensions, "`, `"));
+    if (compression_extension.empty()) {
+      diag = std::move(diag).note("supported extensions for compression "
+                                  "deduction: `{}`",
+                                  fmt::join(compression_extensions, "`, `"));
     }
     diag = std::move(diag)
              .hint("you can pass a pipeline to handle compression and format")
@@ -373,19 +386,10 @@ auto create_pipeline_from_uri(std::string path,
       goto post_deduction_reporting;
     }
     auto file_ending = std::string_view{file}.substr(first_dot);
-    // determine compression based on ending
-    auto compression_extension = std::string_view{};
-    std::tie(compression_extension, compression_name)
-      = determine_compression(file_ending);
-    if (not compression_name.empty()) {
-      compression_plugin = plugins::find<operator_factory_plugin>(
-        traits::compression_operator_name);
-      TENZIR_ASSERT(compression_plugin);
-    }
-    // determine read operator based on file ending
-    std::tie(rw_plugin, rw_properties) = find_formatter_given<is_loading>(
-      file_ending, path, compression_extension, inv.args.front().get_location(),
-      docs, io_properties.default_format == nullptr, ctx);
+    std::tie(compression_plugin, rw_plugin)
+      = find_compression_and_format<is_loading>(
+        file_ending, path, inv.args.front().get_location(), docs,
+        io_properties.default_format == nullptr, ctx);
   }
 post_deduction_reporting:
   TENZIR_TRACE("{} operator: given pipeline size   : {}", traits::operator_name,

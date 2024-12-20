@@ -6,6 +6,11 @@ Decompresses a stream of bytes.
 decompress codec:string
 ```
 
+:::warning Deprecated
+The `decompress` operator is deprecated. You should use the
+[bespoke operators](../operators.md#encode--decode) instead.
+:::
+
 ## Description
 
 The `decompress` operator decompresses bytes in a pipeline incrementally with a

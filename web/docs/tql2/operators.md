@@ -236,8 +236,17 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`compress`](./operators/compress.md) | Compresses a stream of bytes | `compress "zstd", level=18`
-[`decompress`](./operators/decompress.md) | Decompresses a stream of bytes | `decompress "brotli"`
+[`compress_brotli`](./operators/compress_brotli.md) | Compresses a stream of bytes | `compress_zstd, level=18`
+[`compress_bz2`](./operators/compress_bz2.md) | Compresses a stream of bytes | `compress_bz2, level=18`
+[`compress_gzip`](./operators/compress_gzip.md) | Compresses a stream of bytes | `compress_gzip, level=18`
+[`compress_lz4`](./operators/compress_lz4.md) | Compresses a stream of bytes | `compress_lz4, level=18`
+[`compress_zstd`](./operators/compress_zstd.md) | Compresses a stream of bytes | `compress_zstd, level=18`
+[`decompress_brotli`](./operators/decompress_brotli.md) | Decompresses a stream of bytes | `decompress_zstd`
+[`decompress_bz2`](./operators/decompress_bz2.md) | Decompresses a stream of bytes | `decompress_bz2`
+[`decompress_gzip`](./operators/decompress_gzip.md) | Decompresses a stream of bytes | `decompress_gzip`
+[`decompress_lz4`](./operators/decompress_lz4.md) | Decompresses a stream of bytes | `decompress_lz4`
+[`decompress_zstd`](./operators/decompress_zstd.md) | Decompresses a stream of bytes | `decompress_zstd`
+
 
 ## Contexts
 
