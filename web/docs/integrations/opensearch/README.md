@@ -36,5 +36,5 @@ from {category: "qux", doc_id: "XXX", event: {foo: "bar"}}
 to_opensearch "localhost:9200", id=doc_id, doc=event, action="update", index=category
 ```
 
-The above example udpates the document with ID 42 with the contents from the
+The above example updates the document with ID `XXX` with the contents from the
 nested field `event`.
