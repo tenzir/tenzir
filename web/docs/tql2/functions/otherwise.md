@@ -17,8 +17,7 @@ The expression to return if not `null`.
 
 ### `fallback: any`
 
-The expression to return if `primary` evaluates to `null`. It must have the same
-type as `primary`.
+The expression to return if `primary` evaluates to `null`.
 
 ## Examples
 
