@@ -116,21 +116,28 @@ public:
   }
 };
 
-auto remove_empty_records(std::shared_ptr<arrow::Schema> schema)
+auto remove_empty_records(std::shared_ptr<arrow::Schema> schema,
+                          diagnostic_handler& dh)
   -> std::shared_ptr<arrow::Schema> {
-  auto impl = [](const auto& impl, std::shared_ptr<arrow::DataType> type)
-    -> std::shared_ptr<arrow::DataType> {
+  auto impl = [](const auto& impl, std::shared_ptr<arrow::DataType> type,
+                 diagnostic_handler& dh,
+                 std::string_view path) -> std::shared_ptr<arrow::DataType> {
     TENZIR_ASSERT(type);
     if (const auto* list_type = try_as<arrow::ListType>(type.get())) {
-      return arrow::list(impl(impl, list_type->value_type()));
+      return arrow::list(
+        impl(impl, list_type->value_type(), dh, fmt::format("{}[]", path)));
     }
     if (const auto* struct_type = try_as<arrow::StructType>(type.get())) {
       if (struct_type->num_fields() == 0) {
+        diagnostic::warning("replacing empty record with null at `{}`", path)
+          .note("empty records are not supported in Apache Parquet")
+          .emit(dh);
         return arrow::null();
       }
       auto fields = struct_type->fields();
       for (auto& field : fields) {
-        field = field->WithType(impl(impl, field->type()));
+        field = field->WithType(impl(
+          impl, field->type(), dh, fmt::format("{}.{}", path, field->name())));
       }
       return arrow::struct_(fields);
     }
@@ -138,8 +145,8 @@ auto remove_empty_records(std::shared_ptr<arrow::Schema> schema)
   };
   for (auto i = 0; i < schema->num_fields(); ++i) {
     auto field = schema->field(i);
-    schema
-      = check(schema->SetField(i, field->WithType(impl(impl, field->type()))));
+    schema = check(schema->SetField(
+      i, field->WithType(impl(impl, field->type(), dh, field->name()))));
   }
   return schema;
 }
@@ -267,7 +274,8 @@ public:
       parquet_writer_props_builder.version(
         ::parquet::ParquetVersion::PARQUET_2_LATEST);
       auto parquet_writer_props = parquet_writer_props_builder.build();
-      const auto schema = remove_empty_records(input_schema.to_arrow_schema());
+      const auto schema = remove_empty_records(input_schema.to_arrow_schema(),
+                                               ctrl.diagnostics());
       auto out_buffer = std::make_shared<chunked_buffer_output_stream>();
       auto file_result = ::parquet::arrow::FileWriter::Open(
         *schema, arrow::default_memory_pool(), out_buffer,
