@@ -247,7 +247,6 @@ Operator | Description | Example
 [`decompress_lz4`](./operators/decompress_lz4.md) | Decompresses a stream of bytes | `decompress_lz4`
 [`decompress_zstd`](./operators/decompress_zstd.md) | Decompresses a stream of bytes | `decompress_zstd`
 
-
 ## Contexts
 
 Function | Description | Example
