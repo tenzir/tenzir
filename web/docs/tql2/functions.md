@@ -200,10 +200,10 @@ function | description | example
 
 Function | Description | Example
 :--------|:-------------|:-------
-[`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
 [`has`](functions/has.md) | Checks whether a record has a field | `record.has("field")`
 [`length`](functions/length.md) | Retrieves the length of a list | `[1,2,3].length()`
 [`network`](functions/network.md) | Retrieves the network address of a subnet | `10.0.0.0/8.network()`
+[`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
 
 ### Conversion
 
@@ -212,10 +212,11 @@ Function | Description | Example
 [`int`](functions/int.md) | Casts an expression to a signed integer | `int(-4.2)`
 [`uint`](functions/uint.md) | Casts an expression to an unsigned integer | `uint(4.2)`
 [`float`](functions/float.md) | Casts an expression to a float | `float(42)`
-[`time`](functions/time.md) | Casts an expression to a time value | `time("2020-03-15")`
 [`string`](functions/string.md) | Casts an expression to string | `string(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
 [`subnet`](functions/subnet.md) | Casts an expression to a subnet | `subnet("1.2.3.4/16")`
+[`time`](functions/time.md) | Casts an expression to a time value | `time("2020-03-15")`
+[`duration`](functions/duration.md) | Casts an expression to a duration value | `duration("1.34w")`
 
 ### Transposition
 

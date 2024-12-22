@@ -295,3 +295,7 @@ from \
 y = x.length()
 EOF
 }
+
+@test "duration" {
+  check tenzir 'from {x: "1.34w"}, {x: 1}, {x: ""} | x = x.duration()'
+}
