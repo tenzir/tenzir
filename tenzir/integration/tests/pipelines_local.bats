@@ -814,13 +814,13 @@ EOF
 }
 
 @test "assert operator" {
-  check tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 0'
-  check ! tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 2'
+  check tenzir --strict --tql2 'from {x: 1}, {x: 2}, {x: 3} | assert x != 0'
+  check ! tenzir --strict --tql2 'from {x: 1}, {x: 2}, {x: 3} | assert x != 2'
 }
 
 @test "summarize an empty input" {
-  check tenzir --tql2 'from [] | summarize count(), sum(foo)'
-  check tenzir --tql2 'from [] | summarize count(), sum(foo), bar'
+  check tenzir --tql2 'from {} | head 0 | summarize count(), sum(foo)'
+  check tenzir --tql2 'from {} | head 0| summarize count(), sum(foo), bar'
 }
 
 @test "map and where an empty list" {

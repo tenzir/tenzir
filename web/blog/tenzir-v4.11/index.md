@@ -28,9 +28,8 @@ realized that the need for such functionality ranged beyond a limited number of
 connectors. Hence, any solution we developed would ideally adapt to any source
 operator, providing wider functionality.
 
-In response to these needs, we developed a new [operator
-modifier](/next/language/operator-modifiers) that empowers any source operator
-to execute at regular intervals: `every <interval>`.
+In response to these needs, we developed a new operator modifier that empowers
+any source operator to execute at regular intervals: `every <interval>`.
 
 For instance, the operator `every 1s from <url>` will enable the system to poll
 the specified URL every single second. The capability delivers continuous,
@@ -67,12 +66,11 @@ context that contains entries in the form `{"key": "DE", "context": {"flag":
 flag as an emoji, how can I do that?
 
 If you're just replacing the value of a single field then it's easy—you can just
-use [`put`](/operators/put) to replace the input value with its context after
-the enrichment. But this user wanted to look into every single string in every
-event, and replace all country short codes that it contained.
+use `put` to replace the input value with its context after the enrichment. But
+this user wanted to look into every single string in every event, and replace
+all country short codes that it contained.
 
-Two newly added options for the [`enrich`](/next/operators/enrich) operator make
-this easily possible:
+Two newly added options for the `enrich` operator make this easily possible:
 
 ```
 …
@@ -82,7 +80,7 @@ this easily possible:
 The `--replace` flag causes `enrich` to replace fields with their context, if
 they exists. The option `--yield <field>` trims down the enrichment to just a
 specific field within the context. The `--yield` option is also available for
-the [`lookup`](/operators/lookup) operator.
+the `lookup` operator.
 
 ```json title="Before"
 {
@@ -170,10 +168,8 @@ of IOCs to create separate alerts per IOC even within a single event.
 
 ## The Sweet Spot Between Extend and Replace
 
-The [`set`](/next/operators/set) operator "upserts" into events. Its syntax
-exactly matches the syntax of the existing [`extend`](/next/operators/extend),
-[`replace`](/next/operators/replace), and [`put`](/next/operators/put)
-operators.
+The `set` operator "upserts" into events. Its syntax exactly matches the syntax
+of the existing `extend`, `replace`, and `put` operators.
 
 If a specified field already exists, the `set` operator replaces its value. If
 it does not, the `set` operator extends the event with new field. We found this

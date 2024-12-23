@@ -28,13 +28,13 @@ An arbitrary string that uniquely identifies the cache.
 
 ### `mode = string (optional)`
 
-Configures whether the operator is used a source, a sink, or a transformation.
+Configures whether the operator is used an input, an output, or a transformation.
 The following modes are available currently:
 
-- `"read"`: The operators acts as a source reading from a cache that is requires
-  to already exist.
-- `"write"`: The operator acts as a sink writing into a cache that must not
-  already exist.
+- `"read"`: The operators acts as an input operator reading from a cache that is
+  requires to already exist.
+- `"write"`: The operator acts as an output operator writing into a cache that
+  must not already exist.
 - `"readwrite"`: The operator acts as a transformation passing through events,
   lazily creating a cache if it does not already exist. If a cache exists,
   upstream operators will not be run and instead the cache is read.

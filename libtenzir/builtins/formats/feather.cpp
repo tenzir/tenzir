@@ -574,6 +574,10 @@ public:
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<parser_adapter<feather_parser>>(feather_parser{});
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"feather", "arrow"}};
+  }
 };
 
 class write_plugin final
@@ -589,6 +593,10 @@ public:
           .parse(inv, ctx));
     return std::make_unique<writer_adapter<feather_printer>>(
       feather_printer{std::move(options)});
+  }
+
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {"feather", "arrow"}};
   }
 };
 

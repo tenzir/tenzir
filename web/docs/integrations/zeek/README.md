@@ -119,9 +119,8 @@ on this method.
 ### Run Zeek on a packet pipeline
 
 You can run Zeek on a pipeline of PCAP packets and continue processing the logs
-in the same pipeline. A stock Tenzir installation comes with a
-[user-defined](../../language/user-defined-operators.md) `zeek` operator that
-looks as follows:
+in the same pipeline. A stock Tenzir installation comes with a user-defined
+`zeek` operator that looks as follows:
 
 ```yaml title=tenzir.yaml
 tenzir:

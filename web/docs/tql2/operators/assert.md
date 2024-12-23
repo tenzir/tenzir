@@ -18,7 +18,7 @@ such a warning.
 ### Make sure that all events satisfy `x > 2`
 
 ```tql
-from [{x: 1}, {x: 2}, {x: 1}]
+from {x: 1}, {x: 2}, {x: 1}
 assert x > 2
 ```
 

@@ -17,7 +17,7 @@ TODO: the following functions still need to be documented:
 
 -->
 
-Functions appear in [expressions](../language/expressions.md) and take
+Functions appear in [expressions](../tql2/language/expressions.md) and take
 positional and/or named arguments, producing a value as a result of their
 computation.
 
@@ -215,6 +215,7 @@ Function | Description | Example
 [`time`](functions/time.md) | Casts an expression to a time value | `time("2020-03-15")`
 [`string`](functions/string.md) | Casts an expression to string | `string(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
+[`subnet`](functions/subnet.md) | Casts an expression to a subnet | `subnet("1.2.3.4/16")`
 
 ### Transposition
 

@@ -589,13 +589,28 @@ public:
           .named("mmap", args.mmap)
           .named("timeout", timeout)
           .parse(inv, ctx));
-    args.path.inner = expand_path(args.path.inner);
+    auto& path = args.path.inner;
+    for (const auto& scheme : load_properties().schemes) {
+      if (path.size() < scheme.size() + 3) {
+        continue;
+      }
+      if (path.starts_with(scheme)
+          and std::string_view{path}.substr(scheme.size(), 3) == "://") {
+        path.erase(path.begin(), path.begin() + scheme.size() + 3);
+        break;
+      }
+    }
+    path = expand_path(path);
     if (timeout) {
       args.timeout = located{
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout->inner),
         timeout->source};
     }
     return std::make_unique<load_file_operator>(std::move(args));
+  }
+
+  auto load_properties() const -> load_properties_t override {
+    return {.schemes = {"file"}};
   }
 };
 
@@ -609,8 +624,8 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    auto loader = file_saver{args_};
-    auto instance = loader.instantiate(ctrl, {});
+    auto saver = file_saver{args_};
+    auto instance = saver.instantiate(ctrl, {});
     if (not instance) {
       co_return;
     }
@@ -653,7 +668,22 @@ public:
           .named("real_time", args.real_time)
           .named("uds", args.uds)
           .parse(inv, ctx));
+    auto& path = args.path.inner;
+    for (const auto& scheme : save_properties().schemes) {
+      if (path.size() < scheme.size() + 3) {
+        continue;
+      }
+      if (path.starts_with(scheme)
+          and std::string_view{path}.substr(scheme.size(), 3) == "://") {
+        path.erase(path.begin(), path.begin() + scheme.size() + 3);
+        break;
+      }
+    }
     return std::make_unique<save_file_operator>(std::move(args));
+  }
+
+  auto save_properties() const -> save_properties_t override {
+    return {.schemes = {"file"}};
   }
 };
 

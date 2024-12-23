@@ -18,8 +18,8 @@ the idea is as follows:
 3. We generate a detection finding when we encounter a match.
 
 Given this idea, we have to it to the building blocks we have in Tenzir:
-[pipelines](pipelines.md) and [contexts](enrichment/README.md). We can model it
-as follows.
+[pipelines](pipelines/README.md) and [contexts](enrichment/README.md). We can
+model it as follows.
 
 1. A lookup table that includes a copy of the SSLBL data.
 2. A pipeline that synchronizes the SSLBL data with the lookup table.

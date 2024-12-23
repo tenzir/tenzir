@@ -1,0 +1,11 @@
+[
+  write_yaml {
+    
+  },
+  compress {
+    type: "bz2" @ 0..0
+  },
+  tql2.save_file {
+    path: "example.yaml.bz2" @ 3..21
+  }
+]

@@ -62,6 +62,10 @@ public:
           .parse(inv, ctx));
     return std::make_unique<load_abs_operator>(std::move(uri));
   }
+
+  auto load_properties() const -> load_properties_t override {
+    return {.schemes = {"abfs", "abfss"}};
+  }
 };
 
 } // namespace tenzir::plugins::abs

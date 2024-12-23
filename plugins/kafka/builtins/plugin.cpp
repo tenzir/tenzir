@@ -122,6 +122,14 @@ public:
       kafka_loader{std::move(args), config_});
   }
 
+  auto load_properties() const
+    -> operator_factory_plugin::load_properties_t override {
+    return {
+      .schemes = {"kafka"},
+      .strip_scheme = true,
+    };
+  }
+
 private:
   record config_;
 };
@@ -169,7 +177,7 @@ class save_plugin final
     auto ts = std::optional<located<time>>{};
     auto options = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
-          .named("topic", args.topic)
+          .positional("topic", args.topic)
           .named("key", args.key)
           .named("timestamp", ts)
           .named("options", options)
@@ -193,6 +201,14 @@ class save_plugin final
     }
     return std::make_unique<saver_adapter<kafka_saver>>(
       kafka_saver{std::move(args), config_});
+  }
+
+  auto save_properties() const
+    -> operator_factory_plugin::save_properties_t override {
+    return {
+      .schemes = {"kafka"},
+      .strip_scheme = true,
+    };
   }
 
 private:

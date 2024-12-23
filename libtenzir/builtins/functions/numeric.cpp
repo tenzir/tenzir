@@ -35,61 +35,61 @@ public:
     TRY(argument_parser2::function("sqrt")
           .positional("x", expr, "number")
           .parse(inv, ctx));
-    return function_use::make([expr = std::move(expr)](evaluator eval,
-                                                       session ctx) -> series {
-      auto b = arrow::DoubleBuilder{};
-      check(b.Reserve(eval.length()));
-      auto append_sqrt = [&](const arrow::DoubleArray& x) {
-        for (auto y : x) {
-          if (not y) {
-            check(b.AppendNull());
-            continue;
-          }
-          auto z = *y;
-          if (z < 0.0) {
-            // TODO: Warning?
-            check(b.AppendNull());
-            continue;
-          }
-          check(b.Append(std::sqrt(z)));
-        }
-      };
-      for (auto value : eval(expr)) {
-        auto f = detail::overload{
-          [&](const arrow::DoubleArray& value) {
-            append_sqrt(value);
-          },
-          [&](const arrow::Int64Array& value) {
-            // TODO: Conversation should be automatic (if not
-            // part of the kernel).
-            auto b = arrow::DoubleBuilder{};
-            check(b.Reserve(value.length()));
-            for (auto y : value) {
-              if (y) {
-                check(b.Append(static_cast<double>(*y)));
-              } else {
-                check(b.AppendNull());
-              }
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        auto b = arrow::DoubleBuilder{};
+        check(b.Reserve(eval.length()));
+        auto append_sqrt = [&](const arrow::DoubleArray& x) {
+          for (auto y : x) {
+            if (not y) {
+              check(b.AppendNull());
+              continue;
             }
-            append_sqrt(*finish(b));
-          },
-          [&](const arrow::NullArray& value) {
-            check(b.AppendNulls(value.length()));
-          },
-          [&](const auto&) {
-            // TODO: Think about what we want and generalize this.
-            diagnostic::warning("expected `number`, got `{}`",
-                                value.type.kind())
-              .primary(expr)
-              .docs("https://docs.tenzir.com/functions/sqrt")
-              .emit(ctx);
-            check(b.AppendNulls(value.length()));
-          },
+            auto z = *y;
+            if (z < 0.0) {
+              // TODO: Warning?
+              check(b.AppendNull());
+              continue;
+            }
+            check(b.Append(std::sqrt(z)));
+          }
         };
-        match(*value.array, f);
-      }
-      return series{double_type{}, finish(b)};
-    });
+        for (auto value : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::DoubleArray& value) {
+              append_sqrt(value);
+            },
+            [&](const arrow::Int64Array& value) {
+              // TODO: Conversation should be automatic (if not
+              // part of the kernel).
+              auto b = arrow::DoubleBuilder{};
+              check(b.Reserve(value.length()));
+              for (auto y : value) {
+                if (y) {
+                  check(b.Append(static_cast<double>(*y)));
+                } else {
+                  check(b.AppendNull());
+                }
+              }
+              append_sqrt(*finish(b));
+            },
+            [&](const arrow::NullArray& value) {
+              check(b.AppendNulls(value.length()));
+            },
+            [&](const auto&) {
+              // TODO: Think about what we want and generalize this.
+              diagnostic::warning("expected `number`, got `{}`",
+                                  value.type.kind())
+                .primary(expr)
+                .docs("https://docs.tenzir.com/functions/sqrt")
+                .emit(ctx);
+              check(b.AppendNulls(value.length()));
+            },
+          };
+          match(*value.array, f);
+        }
+        return series{double_type{}, finish(b)};
+      });
   }
 };
 

@@ -21,10 +21,8 @@ The name of the context to inspect.
 Add data to the lookup table:
 
 ```tql
-from [
-  {x:1, y:"a"},
-  {x:2, y:"b"},
-]
+from {x:1, y:"a"},
+     {x:2, y:"b"}
 context::update "ctx", key=x, value=y
 ```
 
@@ -45,6 +43,7 @@ context::inspect "ctx"
 [`context::create_geoip`](create_geoip.md),
 [`context::create_lookup_table`](create_lookup_table.md),
 [`context::enrich`](enrich.md),
+[`context::erase`](enrich.md),
 [`context::list`](list.md),
 [`context::load`](load.md),
 [`context::remove`](remove.md),

@@ -23,6 +23,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
+#include <boost/version.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
@@ -500,7 +501,13 @@ struct connection_manager_state {
         .primary(args.endpoint.source)
         .to_error();
     }
-    if (acceptor->listen(boost::asio::socket_base::max_connections, ec)) {
+#if BOOST_VERSION >= 108700
+    const auto max_connections
+      = boost::asio::socket_base::max_listen_connections;
+#else
+    const auto max_connections = boost::asio::socket_base::max_connections;
+#endif
+    if (acceptor->listen(max_connections, ec)) {
       return diagnostic::error("{}", ec.message())
         .note("failed to start listening")
         .primary(args.endpoint.source)
@@ -971,6 +978,10 @@ public:
         return std::make_unique<load_tcp_operator<table_slice>>(
           std::move(args));
       });
+  }
+
+  auto load_properties() const -> load_properties_t override {
+    return {.schemes = {"tcp"}, .accepts_pipeline = true};
   }
 };
 

@@ -406,6 +406,14 @@ public:
     }
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
   auto optimize(expression const& filter,
                 event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
@@ -448,6 +456,14 @@ public:
     }
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
   auto optimize(expression const& filter,
                 event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
@@ -466,20 +482,41 @@ auto parse_http_args(std::string name,
                      const operator_factory_plugin::invocation& inv,
                      session ctx) -> failure_or<connector_args> {
   auto url = std::string{};
-  auto method = std::optional<std::string>{};
+  auto body_data = std::optional<located<record>>{};
   auto params = std::optional<located<record>>{};
   auto headers = std::optional<located<record>>{};
-  argument_parser2::operator_(std::move(name))
-    .positional("url", url)
-    .named("method", method)
-    .named("params", params)
-    .named("headers", headers)
-    .parse(inv, ctx)
-    .ignore();
+  auto form = std::optional<location>{};
+  auto method = std::optional<std::string>{};
   auto args = connector_args{};
+  args.transfer_opts.default_protocol = "https";
+  auto parser = argument_parser2::operator_(name);
+  parser.positional("url", url);
+  parser.named("params", params);
+  parser.named("headers", headers);
+  parser.named("method", method);
+  if (name == "load_http") {
+    parser.named("data", body_data);
+    parser.named("form", form);
+    parser.named("chunked", args.http_opts.chunked);
+    parser.named("multipart", args.http_opts.multipart);
+  }
+  parser.named("skip_peer_verification",
+               args.transfer_opts.skip_peer_verification);
+  parser.named("skip_hostname_verification",
+               args.transfer_opts.skip_hostname_verification);
+  parser.named("_verbose", args.transfer_opts.verbose);
+  TRY(parser.parse(inv, ctx));
   args.url = std::move(url);
-  if (method) {
-    args.http_opts.method = *method;
+  if (form) {
+    args.http_opts.form = true;
+  }
+  if (body_data) {
+    for (auto& [key, value] : body_data->inner) {
+      auto str = to_json(value);
+      TENZIR_ASSERT(str);
+      args.http_opts.items.emplace_back(tenzir::http::request_item::data_json,
+                                        std::move(key), std::move(*str));
+    }
   }
   if (params) {
     for (auto& [name, value] : params->inner) {
@@ -509,6 +546,9 @@ auto parse_http_args(std::string name,
                                         std::move(name), std::move(*str));
     }
   }
+  if (method) {
+    args.http_opts.method = std::move(*method);
+  }
   return args;
 }
 
@@ -521,8 +561,11 @@ public:
     return std::make_unique<load_http_operator>(std::move(args));
   }
 
-  auto load_schemes() const -> std::vector<std::string> override {
-    return {"http", "https"};
+  auto load_properties() const -> load_properties_t override {
+    return {
+      .schemes = {"http", "https"},
+      .default_format = plugins::find<operator_factory_plugin>("read_json"),
+    };
   }
 };
 
@@ -535,8 +578,11 @@ public:
     return std::make_unique<save_http_operator>(std::move(args));
   }
 
-  auto save_schemes() const -> std::vector<std::string> override {
-    return {"http", "https"};
+  auto save_properties() const -> save_properties_t override {
+    return {
+      .schemes = {"http", "https"},
+      .default_format = plugins::find<operator_factory_plugin>("write_ndjson"),
+    };
   }
 };
 
@@ -559,8 +605,10 @@ public:
     return std::make_unique<load_http_operator>(std::move(args));
   }
 
-  auto load_schemes() const -> std::vector<std::string> override {
-    return {"ftp", "ftps"};
+  auto load_properties() const -> load_properties_t override {
+    return {
+      .schemes = {"ftp", "ftps"},
+    };
   }
 };
 
@@ -583,8 +631,10 @@ public:
     return std::make_unique<save_http_operator>(std::move(args));
   }
 
-  auto save_schemes() const -> std::vector<std::string> override {
-    return {"ftp", "ftps"};
+  auto save_properties() const -> save_properties_t override {
+    return {
+      .schemes = {"ftp", "ftps"},
+    };
   }
 };
 

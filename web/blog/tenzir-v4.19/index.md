@@ -29,8 +29,8 @@ from path/to/package.yaml
 | package add
 ```
 
-This leverages the [`package` operator](/next/operators/package), which has two
-modes of operation: `package add` and `package remove`.
+This leverages the `package` operator, which has two modes of operation:
+`package add` and `package remove`.
 
 To list all installed packages, run `show packages`. Listing pipelines or
 contexts with `show pipelines` and `show contexts` contains an additional
@@ -127,14 +127,6 @@ snippets:
 ```
 
 That's it! Our own package, all done and wrapped up.
-
-:::tip Want to dive deeper?
-We've prepared some reading material:
-- Take a look at the [`package` operator's
-  documentation](/next/operators/package).
-- Read the user guide on [installing a
-  package](/next/installation/install-a-package).
-:::
 
 [pipelines-as-code]: /next/usage/run-pipelines#as-code
 [feodotracker-blocklist]: https://feodotracker.abuse.ch/blocklist

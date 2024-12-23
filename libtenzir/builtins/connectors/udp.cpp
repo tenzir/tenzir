@@ -315,6 +315,11 @@ class load_plugin final
     }
     return std::make_unique<loader_adapter<loader>>(loader{std::move(args)});
   }
+
+  auto load_properties() const
+    -> operator_factory_plugin::load_properties_t override {
+    return {.schemes = {"udp"}};
+  }
 };
 
 class save_plugin final
@@ -329,6 +334,11 @@ class save_plugin final
       args.url.insert(0, "udp://");
     }
     return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
+  }
+
+  auto save_properties() const
+    -> operator_factory_plugin::save_properties_t override {
+    return {.schemes = {"udp"}};
   }
 };
 } // namespace

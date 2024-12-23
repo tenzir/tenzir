@@ -20,11 +20,7 @@ A list of boolean values.
 ### Check if all values are true
 
 ```tql
-from [
-  {x: true},
-  {x: true},
-  {x: false},
-]
+from {x: true}, {x: true}, {x: false}
 summarize result=all(x)
 ```
 

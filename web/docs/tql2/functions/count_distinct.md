@@ -20,12 +20,7 @@ The values to count.
 ### Count distinct values
 
 ```tql
-from [
-  {x: 1},
-  {x: 2},
-  {x: 2},
-  {x: 3},
-]
+from {x: 1}, {x: 2}, {x: 2}, {x: 3}
 summarize unique=count_distinct(x)
 ```
 

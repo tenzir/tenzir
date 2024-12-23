@@ -23,7 +23,8 @@ The URL schemes `http://` and `https://` dispatch to
 
 Since the majority of HTTP activity uses JSON-encoded request/response
 bodies, you do not need to provide a separate pipeline argument with
-`read_json`/`write_json`.
+[`read_json`](../../tql2/operators/read_json.md) and
+[`write_ndjson`](../../tql2/operators/write_ndjson.md).
 :::
 
 ## Examples
@@ -37,7 +38,7 @@ from "http://example.com:8888/api", method="GET", params={query: "tenzir"}
 ### Perform a POST request with JSON body
 
 ```tql
-from "http://example.com:8888/api", method="POST", body={query: "tenzir"}
+from "http://example.com:8888/api", method="POST", data={query: "tenzir"}
 ```
 
 ### Call a webhook API with pipeline data

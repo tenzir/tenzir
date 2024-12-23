@@ -14,7 +14,7 @@ file(GLOB_RECURSE fluentbit_sources CONFIGURE_DEPENDS
 
 TenzirRegisterPlugin(
   TARGET fluent-bit
-  ENTRYPOINT src/plugin.cpp
+  ENTRYPOINT src/tql1_plugin.cpp
   SOURCES ${fluentbit_sources}
   INCLUDE_DIRECTORIES include
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")

@@ -57,9 +57,8 @@ compression, `gzip` for [gzip][gzip-docs] compression, and `snappy` for
 
 :::info Why would I use this over the `compress` operator?
 The Parquet format offers more efficient compression compared to the
-[`compress`](../operators/compress.md) operator. This is because it compresses
-the data column-by-column, leaving metadata that needs to be accessed frequently
-uncompressed.
+`compress` operator. This is because it compresses the data column-by-column,
+leaving metadata that needs to be accessed frequently uncompressed.
 :::
 
 ### `--compression-level` (Printer)
@@ -73,13 +72,13 @@ Defaults to the compression type's default compression level.
 
 ## Examples
 
-Read a Parquet file via the [`from`](../operators/from.md) operator:
+Read a Parquet file via the `from` operator:
 
 ```
 from file --mmap /tmp/data.prq read parquet
 ```
 
-Write a Zstd-compressed Parquet file via [`to`](../operators/to.md) operator:
+Write a Zstd-compressed Parquet file via the `to` operator:
 
 ```
 to /tmp/suricata.parquet write parquet --compression-type zstd

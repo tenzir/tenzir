@@ -827,6 +827,10 @@ public:
     return std::make_unique<parser_adapter<xsv_parser>>(
       xsv_parser{std::move(opts)});
   }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {std::string{Name}}};
+  }
 };
 
 template <detail::string_literal Name, char Sep, char ListSep,
@@ -853,6 +857,10 @@ public:
       .auto_expand = false,
       .allow_comments = false,
     }});
+  }
+
+  auto write_properties() const -> write_properties_t override {
+    return {.extensions = {std::string{Name}}};
   }
 };
 
