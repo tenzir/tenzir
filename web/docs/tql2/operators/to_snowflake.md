@@ -1,6 +1,6 @@
 # to_snowflake
 
-Sends events to a [snowflake](https://www.snowflake.com/) database via bulk ingestion.
+Sends events to a Snowflake database.
 
 ```tql
 to_snowflake account_identifier=string, user_name=string, password=string,
@@ -9,28 +9,30 @@ to_snowflake account_identifier=string, user_name=string, password=string,
 ```
 
 :::note
-This plugin is currently only available in the amd64 docker images.
+This plugin is currently only available in the amd64 Docker images.
 :::
 
 ## Description
 
-The `snowflake` operator makes it possible to upload events to a snowflake database.
+The `to_snowflake` operator makes it possible to send events to a
+[Snowflake](https://www.snowflake.com/) database. It uploads the events via
+bulk-ingestion under the hood and then copies them into the target table.
 
-It uploads the events via bulk-ingestion under the hood and then copies them into the target table.
-
-It supports nested types as
-[snowflake semi-structured types](https://docs.snowflake.com/en/sql-reference/data-types-semistructured).
-Alternatively, you can use Tenzir's [`flatten` function](../functions/flatten.md)
-operator before the snowflake sink.
+The operator supports nested types as [Snowflake semi-structured
+types](https://docs.snowflake.com/en/sql-reference/data-types-semistructured).
+Alternatively, you can use the [`flatten`](../functions/flatten.md) function
+operator beforehand.
 
 ### `account_identifier = string`
 
-The [snowflake account identifier](https://docs.snowflake.com/en/user-guide/admin-account-identifier) to use.
+The [Snowflake account
+identifier](https://docs.snowflake.com/en/user-guide/admin-account-identifier)
+to use.
 
 ### `user_name = string`
 
-The snowflake user name. The user must have the
-[`CREATE STAGE`](https://docs.snowflake.com/en/sql-reference/sql/create-stage#access-control-requirements)
+The Snowflake user name. The user must have the [`CREATE
+STAGE`](https://docs.snowflake.com/en/sql-reference/sql/create-stage#access-control-requirements)
 privilege on the given schema.
 
 ### `password = string`
@@ -39,12 +41,12 @@ The password for the user.
 
 ### `database = string`
 
-The [snowflake database](https://docs.snowflake.com/en/sql-reference/ddl-database)
+The [Snowflake database](https://docs.snowflake.com/en/sql-reference/ddl-database)
 to write to. The user must be allowed to access it.
 
 ### `schema = string`
 
-The [snowflake schema](https://docs.snowflake.com/en/sql-reference/ddl-database)
+The [Snowflake schema](https://docs.snowflake.com/en/sql-reference/ddl-database)
 to use. The user be allowed to access it.
 
 ### `table = string`
@@ -52,20 +54,23 @@ to use. The user be allowed to access it.
 The name of the table that should be used/created. The user must have the required
 permissions to create/write to it.
 
-Table columns that are not in the event will be null, while event fields
-that are not in the table will be dropped. Type mismatches between the table and
+Table columns that are not in the event will be null, while event fields that
+are not in the table will be dropped. Type mismatches between the table and
 events are a hard error.
 
 ### `ingest_mode = string (optional)`
 
 You can set the ingest mode to one of three options:
 
-* `"create_append"`: (default) Creates the table if it does not exist, otherwise appends to it.
-* `"create"`: creates the table, causing an error if it already exists.
-* `"append"`: appends to the table, causing an error if it does not exist.
+- `"create_append"`: Creates the table if it does not exist, otherwise
+  appends to it.
+- `"create"`: creates the table, causing an error if it already exists.
+- `"append"`: appends to the table, causing an error if it does not exist.
 
 In case the operator creates the table it will use the the first event to infer
 the columns.
+
+Default to `"create_append"`.
 
 ## Examples
 
