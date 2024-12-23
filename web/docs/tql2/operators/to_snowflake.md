@@ -8,6 +8,10 @@ to_snowflake account_identifier=string, user_name=string, password=string,
              [ingest_mode=string]
 ```
 
+:::note
+This plugin is currently only available in the amd64 docker images.
+:::
+
 ## Description
 
 The `snowflake` operator makes it possible to upload events to a snowflake database.
