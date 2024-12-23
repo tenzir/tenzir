@@ -12,16 +12,12 @@ to_snowflake account_identifier=string, user_name=string, password=string,
 
 The `snowflake` operator makes it possible to upload events to a snowflake database.
 
-The events are uploaded via bulk-ingestion under the hood and then copied into the target table.
+It uploads the events via bulk-ingestion under the hood and then copies them into the target table.
 
-Nested types are supported as
+It supports nested types as
 [snowflake semi-structured types](https://docs.snowflake.com/en/sql-reference/data-types-semistructured).
 Alternatively, you can use Tenzir's [`flatten` function](../functions/flatten.md)
 operator before the snowflake sink.
-
-Table columns that are not in the event will be null, while event fields
-that are not in the table will be dropped. Type mismatches between the table and
-events are a hard error.
 
 ### `account_identifier = string`
 
@@ -58,14 +54,14 @@ events are a hard error.
 
 ### `ingest_mode = string (optional)`
 
-The ingest mode must be one of three options:
+You can set the ingest mode to one of three options:
 
 * `"create_append"`: (default) Creates the table if it does not exist, otherwise appends to it.
 * `"create"`: creates the table, causing an error if it already exists.
 * `"append"`: appends to the table, causing an error if it does not exist.
 
-If the table is created by the operator, its columns will be inferred from the
-first event.
+In case the operator creates the table it will use the the first event to infer
+the columns.
 
 ## Examples
 
