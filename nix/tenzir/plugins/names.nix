@@ -5,6 +5,7 @@
   "packages"
   "pipeline-manager"
   "platform"
+  "snowflake"
   "to_splunk"
   "vast"
 ]
