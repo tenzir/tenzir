@@ -658,7 +658,6 @@ jobs:
         if: ${{ matrix.tenzir.name == 'macOS' }}
         run: |
           ./scripts/macOS/install-dev-dependencies.sh
-          ./scripts/macOS/install-arrow-adbc.sh
       - name: Setup Python
         if: ${{ matrix.tenzir.name == 'macOS' }}
         uses: actions/setup-python@v5
