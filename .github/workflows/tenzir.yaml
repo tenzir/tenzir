@@ -620,7 +620,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Tailscale
         if: false && runner.os == 'Linux'
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
@@ -894,7 +894,7 @@ jobs:
           apt-get -y install git curl jq sudo xz-utils
       - name: Tailscale
         if: false && matrix.plugin.name == 'Context'
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
