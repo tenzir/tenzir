@@ -1,6 +1,6 @@
 # subnet
 
-Casts an expression to a subnet mask.
+Casts an expression to a subnet value.
 
 ```tql
 subnet(x:string) -> subnet
@@ -8,11 +8,15 @@ subnet(x:string) -> subnet
 
 ## Description
 
-The `sub` function casts the provided string `x` to a subnet
+The `subnet` function casts an expression to a subnet.
+
+### `x: string`
+
+The string expression to cast.
 
 ## Examples
 
-### Cast a string to an IP address
+### Cast a string to a subnet
 
 ```tql
 from {x: subnet("1.2.3.4/16")}
