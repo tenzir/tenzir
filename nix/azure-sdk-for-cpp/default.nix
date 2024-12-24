@@ -4,6 +4,7 @@
   fetchFromGitHub,
   cmake,
   ninja,
+  pkg-config,
   curl,
   darwin,
   libxml2,
@@ -45,17 +46,17 @@ let
       hash = "sha256-RezVUPsG8TP2UxUa65jRl4on8RfrPRWoZdqsSVDGZ1Q=";
     };
 
-    nativeBuildInputs = [ cmake ninja ];
+    nativeBuildInputs = [ cmake ninja pkg-config ];
     buildInputs = [
       azure-macro-utils-c
       mbedtls_2
       umock-c
     ] ++ lib.optionals stdenv.hostPlatform.isStatic [
       openssl
-    ] ++ lib.optionals stdenv.hostPlatform.isDarwin [
-      darwin.apple_sdk.frameworks.Foundation
-      darwin.apple_sdk.frameworks.CoreFoundation
-      darwin.apple_sdk.frameworks.SystemConfiguration
+    #] ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    #  darwin.apple_sdk.frameworks.Foundation
+    #  darwin.apple_sdk.frameworks.CoreFoundation
+    #  darwin.apple_sdk.frameworks.SystemConfiguration
     ];
     propagatedBuildInputs = [
       curl
@@ -72,7 +73,7 @@ let
       # From `pkg-config --libs libcurl`.
       NIX_LDFLAGS = ""
       + lib.optionalString stdenv.hostPlatform.isStatic
-        "-lnghttp2 -lidn2 -lunistring -lssh2 -lpsl -lssl -lcrypto -lssl -lcrypto -lzstd -lz -lidn2 -lunistring"
+        "-lnghttp2 -lidn2 -liconv -lunistring -lssh2 -lpsl -lssl -lcrypto -lssl -lcrypto -lzstd -lzstd -lz -lidn2 -lunistring"
       + lib.optionalString (stdenv.hostPlatform.isStatic && stdenv.hostPlatform.isDarwin)
         " -framework SystemConfiguration";
     };
@@ -137,6 +138,10 @@ stdenv.mkDerivation (finalAttrs: {
     "-DDISABLE_AZURE_CORE_OPENTELEMETRY=ON"
     "-DWARNINGS_AS_ERRORS=OFF"
   ];
+
+  env = {
+    NIX_CFLAGS_COMPILE = "-Wno-error";
+  };
 
   meta = {
     homepage = "https://azure.github.io/azure-sdk-for-cpp";

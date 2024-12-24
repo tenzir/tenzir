@@ -18,7 +18,11 @@ in {
       })
     ];
   });
-  aws-sdk-cpp-tenzir = final.aws-sdk-cpp.override {
+  aws-sdk-cpp-tenzir = (final.aws-sdk-cpp.overrideAttrs (previousAttrs: {
+    cmakeFlags = previousAttrs.cmakeFlags ++ lib.optionals isDarwin [
+      "-DENABLE_TESTING=OFF"
+    ];
+  })).override {
     apis = [
       # arrow-cpp apis; must be kept in sync with nixpkgs.
       "cognito-identity"
@@ -31,6 +35,15 @@ in {
       "sqs"
     ];
   };
+  thrift = if !isStatic then prev.thrift else prev.thrift.overrideAttrs ({
+    nativeBuildInputs = [
+      prev.pkgsBuildBuild.bison
+      prev.pkgsBuildBuild.cmake
+      prev.pkgsBuildBuild.flex
+      prev.pkgsBuildBuild.pkg-config
+      (prev.pkgsBuildBuild.python3.withPackages (ps: [ ps.setuptools ]))
+    ];
+  });
   rabbitmq-c = prev.rabbitmq-c.overrideAttrs (orig: {
     patches = (orig.patches or []) ++ [
       (prev.fetchpatch2 {
@@ -38,6 +51,14 @@ in {
         url = "https://github.com/alanxz/rabbitmq-c/commit/819e18271105f95faba99c3b2ae4c791eb16a664.patch";
         hash = "sha256-/c4y+CvtdyXgfgHExOY8h2q9cJNhTUupsa22tE3a1YI=";
       })
+    ];
+  });
+  restinio = prev.restinio.overrideAttrs (finalAttrs: orig: {
+    # Reguires networking to bind to ports on darwin, but keeping it off is
+    # safer.
+    doCheck = !isDarwin;
+    cmakeFlags = orig.cmakeFlags ++ [
+      (lib.cmakeBool "RESTINIO_TEST" finalAttrs.doCheck)
     ];
   });
   azure-sdk-for-cpp = prev.callPackage ./azure-sdk-for-cpp { };
@@ -94,6 +115,10 @@ in {
         ++ lib.optionals isDarwin [
           (prev.buildPackages.writeScriptBin "libtool" ''
             #!${stdenv.shell}
+            if [ "$1" == "-V" ]; then
+              echo "Apple Inc. version cctools-1010.6"
+              exit 0
+            fi
             exec ${lib.getBin prev.buildPackages.darwin.cctools}/bin/${stdenv.cc.targetPrefix}libtool $@
           '')
         ];
@@ -106,7 +131,10 @@ in {
         ];
       doCheck = false;
       doInstallCheck = false;
-      env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
+      env = {
+        NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isStatic && stdenv.hostPlatform.isDarwin)
+          "-framework SystemConfiguration";
+      };
     });
   zeromq =
     if !isStatic
@@ -152,78 +180,79 @@ in {
   libmaxminddb = overrideAttrsIf isStatic prev.libmaxminddb (orig: {
     nativeBuildInputs = (orig.nativeBuildInputs or []) ++ [prev.buildPackages.cmake];
   });
-  fluent-bit = let
-    fluent-bit'' = prev.fluent-bit.overrideAttrs (orig: {
-      patches = (orig.patches or []) ++ [
-        ./fix-fluent-bit-install.patch
-      ];
-      cmakeFlags =
-        (orig.cmakeFlags or [])
-        ++ [
-          "-DFLB_DEBUG=OFF"
-          "-DFLB_RELEASE=ON"
-          "-DFLB_PREFER_SYSTEM_LIBS=ON"
-      ];
-    });
-    fluent-bit' =
-      overrideAttrsIf isDarwin fluent-bit''
-      (orig: {
-        buildInputs = (orig.buildInputs or []) ++ (with prev.darwin.apple_sdk.frameworks; [Foundation IOKit]);
-        # The name "kIOMainPortDefault" has been introduced in a a later SDK
-        # version.
-        cmakeFlags =
-          (orig.cmakeFlags or [])
-          ++ [
-            "-DCMAKE_C_FLAGS=\"-DkIOMainPortDefault=kIOMasterPortDefault\""
-            "-DFLB_LUAJIT=OFF"
-          ];
-        env.NIX_CFLAGS_COMPILE = "-mmacosx-version-min=10.12 -Wno-int-conversion";
-      });
-  in
-    overrideAttrsIf isStatic fluent-bit'
-    (orig: {
-      outputs = ["out"];
-      nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")
-      prev.pkgsBuildBuild.pkg-config];
-      # Neither systemd nor postgresql have a working static build.
-      propagatedBuildInputs =
-        [
-          final.openssl
-          final.libyaml
-        ]
-        ++ lib.optionals isLinux [final.musl-fts];
-      buildInputs = (orig.buildInputs or []) ++ [
-        final.c-ares
-        final.nghttp2
-        final.rdkafka
-      ];
-      cmakeFlags =
-        (orig.cmakeFlags or [])
-        ++ [
-          "-DFLB_BINARY=OFF"
-          "-DFLB_SHARED_LIB=OFF"
-          "-DFLB_LUAJIT=OFF"
-          "-DFLB_OUT_PGSQL=OFF"
-        ];
-      # The build scaffold of fluent-bit doesn't install static libraries, so we
-      # work around it by just copying them from the build directory. The
-      # blacklist is hand-written and prevents the inclusion of duplicates in
-      # the linker command line when building the fluent-bit plugin.
-      # The Findfluent-bit.cmake module then globs all archives into list for
-      # `target_link_libraries` to get a working link.
-      postInstall = let
-        archive-blacklist = [
-          "libbacktrace.a"
-          "libxxhash.a"
-        ];
-      in ''
-        set -x
-        mkdir -p $out/lib
-        find . -type f \( -name "*.a" ${lib.concatMapStrings (x: " ! -name \"${x}\"") archive-blacklist} \) \
-               -exec cp "{}" $out/lib/ \;
-        set +x
-      '';
-    });
+  fluent-bit = final.callPackage ./fluent-bit {};
+  #fluent-bit = let
+  #  fluent-bit'' = prev.fluent-bit.overrideAttrs (orig: {
+  #    patches = (orig.patches or []) ++ [
+  #      ./fix-fluent-bit-install.patch
+  #    ];
+  #    cmakeFlags =
+  #      (orig.cmakeFlags or [])
+  #      ++ [
+  #        "-DFLB_DEBUG=OFF"
+  #        "-DFLB_RELEASE=ON"
+  #        "-DFLB_PREFER_SYSTEM_LIBS=ON"
+  #    ];
+  #  });
+  #  fluent-bit' =
+  #    overrideAttrsIf isDarwin fluent-bit''
+  #    (orig: {
+  #      buildInputs = (orig.buildInputs or []) ++ (with prev.darwin.apple_sdk.frameworks; [Foundation IOKit]);
+  #      # The name "kIOMainPortDefault" has been introduced in a a later SDK
+  #      # version.
+  #      cmakeFlags =
+  #        (orig.cmakeFlags or [])
+  #        ++ [
+  #          "-DCMAKE_C_FLAGS=\"-DkIOMainPortDefault=kIOMasterPortDefault\""
+  #          "-DFLB_LUAJIT=OFF"
+  #        ];
+  #      env.NIX_CFLAGS_COMPILE = "-mmacosx-version-min=10.12 -Wno-int-conversion";
+  #    });
+  #in
+  #  overrideAttrsIf isStatic fluent-bit'
+  #  (orig: {
+  #    outputs = ["out"];
+  #    nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")
+  #    prev.pkgsBuildBuild.pkg-config];
+  #    # Neither systemd nor postgresql have a working static build.
+  #    propagatedBuildInputs =
+  #      [
+  #        final.openssl
+  #        final.libyaml
+  #      ]
+  #      ++ lib.optionals isLinux [final.musl-fts];
+  #    buildInputs = (orig.buildInputs or []) ++ [
+  #      final.c-ares
+  #      final.nghttp2
+  #      final.rdkafka
+  #    ];
+  #    cmakeFlags =
+  #      (orig.cmakeFlags or [])
+  #      ++ [
+  #        "-DFLB_BINARY=OFF"
+  #        "-DFLB_SHARED_LIB=OFF"
+  #        "-DFLB_LUAJIT=OFF"
+  #        "-DFLB_OUT_PGSQL=OFF"
+  #      ];
+  #    # The build scaffold of fluent-bit doesn't install static libraries, so we
+  #    # work around it by just copying them from the build directory. The
+  #    # blacklist is hand-written and prevents the inclusion of duplicates in
+  #    # the linker command line when building the fluent-bit plugin.
+  #    # The Findfluent-bit.cmake module then globs all archives into list for
+  #    # `target_link_libraries` to get a working link.
+  #    postInstall = let
+  #      archive-blacklist = [
+  #        "libbacktrace.a"
+  #        "libxxhash.a"
+  #      ];
+  #    in ''
+  #      set -x
+  #      mkdir -p $out/lib
+  #      find . -type f \( -name "*.a" ${lib.concatMapStrings (x: " ! -name \"${x}\"") archive-blacklist} \) \
+  #             -exec cp "{}" $out/lib/ \;
+  #      set +x
+  #    '';
+  #  });
   yara =
     if !isStatic
     then prev.yara
