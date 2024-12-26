@@ -1,7 +1,7 @@
 # Snowflake
 
 [Snowflake](https://snowflake.com) is a multi-cloud data warehouse. Tenzir can
-send events from a pipeline into [Snowflake
+send events from a pipeline to [Snowflake
 databases](https://docs.snowflake.com/en/sql-reference/ddl-database).
 
 ![Snowflake](snowflake.svg)
@@ -10,14 +10,14 @@ Use the [`to_snowflake`](../../tql2/operators/to_snowflake.md) output operator
 at the end of a pipeline to send events to a specific table.
 
 :::info ADBC
-Tenzir Apache Arrow under the hood to represent batches of events. Therefore, we
-can use [Arrow Database Connectivity
-(ADBC)](https://arrow.apache.org/docs/format/ADBC.html) as interface to
-Snowflake, enabling efficient transfer of large datasets. Think of ADBC as the
-columnar equivalent of JDBC/ODBC. Thanks to the existing [Snowflake
-driver](https://arrow.apache.org/adbc/current/driver/snowflake.html), you can
-directly stream events from a Tenzir pipeline to Snowflake using ADBC's *Bulk
-Ingestion* API. For further details on ADBC, read the [introductory blog
+Tenzir uses [Apache Arrow](https://arrow.apache.org) under the hood to encode
+batches of events into a columnar representation. The [Arrow Database
+Connectivity (ADBC)](https://arrow.apache.org/docs/format/ADBC.html) API makes
+makes it possible to efficiently transfer large datasets between Tenzir and a
+database. Think of ADBC as the columnar equivalent of JDBC/ODBC. ADBC has a
+[Snowflake driver](https://arrow.apache.org/adbc/current/driver/snowflake.html)
+that Tenzir uses to send events to Snowflake with the bulk ingestion API. For
+further details on ADBC, read the [introductory blog
 post](https://arrow.apache.org/blog/2023/01/05/introducing-arrow-adbc/) from the
 Arrow project.
 :::
