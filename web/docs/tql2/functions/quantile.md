@@ -3,7 +3,7 @@
 Computes the specified quantile of all grouped values.
 
 ```tql
-quantile(xs:list, q=float) -> float
+quantile(xs:list, q=double) -> double
 ```
 
 ## Description
@@ -15,7 +15,7 @@ specified by the argument `q`, which should be a value between 0 and 1.
 
 The values to evaluate.
 
-### `q: float`
+### `q: double`
 
 The quantile to compute, where `q=0.5` represents the median.
 

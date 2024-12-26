@@ -3,7 +3,7 @@
 Computes the mean of all grouped values.
 
 ```tql
-mean(xs:list) -> float
+mean(xs:list) -> double
 ```
 
 ## Description

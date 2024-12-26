@@ -24,4 +24,4 @@ from {x: string(1.2.3.4)}
 
 ## See Also
 
-[int](int.md), [uint](uint.md), [float](float.md), [time](time.md), [ip](ip.md)
+[int](int.md), [uint](uint.md), [double](double.md), [time](time.md), [ip](ip.md)

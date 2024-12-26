@@ -3,7 +3,7 @@
 Generates a random number in *[0,1]*.
 
 ```tql
-random() -> float
+random() -> double
 ```
 
 ## Description

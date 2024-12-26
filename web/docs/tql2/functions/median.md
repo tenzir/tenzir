@@ -3,7 +3,7 @@
 Computes the approximate median of all grouped values using a t-digest algorithm.
 
 ```tql
-median(xs:list) -> float
+median(xs:list) -> double
 ```
 
 ## Description

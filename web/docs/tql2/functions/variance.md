@@ -3,7 +3,7 @@
 Computes the variance of all grouped values.
 
 ```tql
-variance(xs:list) -> float
+variance(xs:list) -> double
 ```
 
 ## Description

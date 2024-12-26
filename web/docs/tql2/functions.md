@@ -211,7 +211,7 @@ Function | Description | Example
 :--------|:-------------|:-------
 [`int`](functions/int.md) | Casts an expression to a signed integer | `int(-4.2)`
 [`uint`](functions/uint.md) | Casts an expression to an unsigned integer | `uint(4.2)`
-[`float`](functions/float.md) | Casts an expression to a float | `float(42)`
+[`double`](functions/double.md) | Casts an expression to a double | `double(42)`
 [`string`](functions/string.md) | Casts an expression to string | `string(1.2.3.4)`
 [`ip`](functions/ip.md) | Casts an expression to an IP | `ip("1.2.3.4")`
 [`subnet`](functions/subnet.md) | Casts an expression to a subnet | `subnet("1.2.3.4/16")`

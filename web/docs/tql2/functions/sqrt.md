@@ -3,7 +3,7 @@
 Computes the square root of a number.
 
 ```tql
-sqrt(x:number) -> float
+sqrt(x:number) -> double
 ```
 
 ## Description
