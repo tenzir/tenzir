@@ -125,13 +125,13 @@ in the same pipeline. A stock Tenzir installation comes with a user-defined
 ```yaml title=tenzir.yaml
 tenzir:
   operators:
-    zeek:
+    zeek: |
       shell "eval \"$(zkg env)\" &&
              zeek -r - LogAscii::output_to_stdout=T
              JSONStreaming::disable_default_logs=T
              JSONStreaming::enable_log_rotation=F
              json-streaming-logs"
-      | read_zeek_json
+      read_zeek_json
 ```
 
 This allows you run Zeek on a packet trace as follows:
@@ -145,11 +145,11 @@ You can also perform more elaborate packet filtering after light-weight
 
 ```bash
 tenzir 'load_file "/path/to/trace.pcap"
-       read_pcap
-       this = decapsulate(this)
-       where ip.src in 10.0.0.0/8 || community == "1:YXWfTYEyYLKVv5Ge4WqijUnKTrM="
-       write_pcap
-       zeek'
+        read_pcap
+        this = decapsulate(this)
+        where ip.src in 10.0.0.0/8 || community == "1:YXWfTYEyYLKVv5Ge4WqijUnKTrM="
+        write_pcap
+        zeek'
 ```
 
 Read the [in-depth blog
