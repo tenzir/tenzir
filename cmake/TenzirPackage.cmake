@@ -82,13 +82,13 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 set(CPACK_DEBIAN_PACKAGE_DEBUG ON)
 
 set(CPACK_RPM_PRE_INSTALL_SCRIPT_FILE
-  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/preinstall")
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/preinstall")
 set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
-  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/postinstall")
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/postinstall")
 set(CPACK_RPM_PRE_UNINSTALL_SCRIPT_FILE
-  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/preuninstall")
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/preuninstall")
 set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
-  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/postuninstall")
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/postuninstall")
 set(CPACK_RPM_PACKAGE_REQUIRES_PRE "shadow-utils")
 
 # For the static binary builds it doesn't make much sense to install development
