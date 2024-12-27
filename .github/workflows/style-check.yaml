@@ -68,17 +68,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          python-version: '3.12'
-          cache: 'pip'
-      - name: Check
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
+      - name: Check out submodule
         run: |
-          pip install --upgrade cmake_format
-          git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) -- "**CMakeLists.txt" "**.cmake" |
-            tr '\\n' '\\0'
-            xargs -0 cmake-format --in-place
-          git diff --submodule=diff --exit-code
+          git submodule update --init --recommend-shallow contrib/tenzir-plugins
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+      - name: Run cmake-format
+        run: |
+          git ls-files -z -- 'CMakeLists.txt' '*.cmake' |
+            xargs -0 uvx --from cmakelang cmake-format --in-place
+          git -C contrib/tenzir-plugins ls-files -z -- 'CMakeLists.txt' '*.cmake' |
+            xargs -0 uvx --from cmakelang cmake-format --in-place
+          git diff --quiet --submodule=diff --exit-code || {
+            echo '::error title=cmake-format::Please run `cmake-format --in-place path/to/file.cmake` or apply the following diff directly:'
+            git diff --submodule=diff --exit-code
+          }
 
   markdownlint:
     name: markdownlint
