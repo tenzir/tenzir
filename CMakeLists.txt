@@ -740,11 +740,11 @@ if (NOT TENZIR_ENABLE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   find_package(
     CAF
-    COMPONENTS core io test openssl
+    COMPONENTS core io net test openssl
     REQUIRED)
-  if (NOT ${CAF_VERSION} VERSION_GREATER_EQUAL 0.18.6)
+  if (NOT ${CAF_VERSION} VERSION_GREATER_EQUAL 1.0.2)
     message(
-      FATAL_ERROR "Failed to find CAF >= 0.18.6 version (found ${CAF_VERSION})")
+      FATAL_ERROR "Failed to find CAF >= 1.0.2 version (found ${CAF_VERSION})")
   endif ()
   string(
     APPEND
