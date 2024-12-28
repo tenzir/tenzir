@@ -31,6 +31,7 @@
 
 #include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
+#include <caf/net/middleman.hpp>
 #include <caf/openssl/manager.hpp>
 
 #include <algorithm>
@@ -57,8 +58,8 @@ struct has_extension_type
 /// 1. A '_' translates into '-'
 /// 2. A "__" translates into the record separator '.'
 /// @pre `!prefix.empty()`
-auto to_config_key(std::string_view key,
-                   std::string_view prefix) -> std::optional<std::string> {
+auto to_config_key(std::string_view key, std::string_view prefix)
+  -> std::optional<std::string> {
   TENZIR_ASSERT(!prefix.empty());
   // PREFIX_X is the shortest allowed key.
   if (prefix.size() + 2 > key.size()) {
@@ -358,8 +359,9 @@ auto get_or_duration(const caf::settings& options, std::string_view key,
 
 configuration::configuration() {
   detail::add_message_types();
-  // Load I/O module.
+  // Load I/O and NET module.
   load<caf::io::middleman>();
+  load<caf::net::middleman>();
   // Initialize factories.
   factory<synopsis>::initialize();
   factory<value_index>::initialize();
