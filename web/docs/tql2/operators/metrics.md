@@ -34,7 +34,7 @@ Tenzir collects metrics with the following schemas.
 Contains information about all accessed API endpoints, emitted once per second.
 
 | Field           | Type       | Description                                            |
-| : | :- | :- |
+| :-------------- | :--------- | :----------------------------------------------------- |
 | `timestamp`     | `time`     | The time at which the API request was received.        |
 | `request_id`    | `string`   | The unique request ID assigned by the Tenzir Platform. |
 | `method`        | `double`   | The HTTP method used to access the API.                |
@@ -46,12 +46,56 @@ Contains information about all accessed API endpoints, emitted once per second.
 The schema of the record `params` depends on the API endpoint used. Refer to the
 [API documentation](/api) to see the available parameters per endpoint.
 
+### `tenzir.metrics.caf`
+
+Contains metrics about the CAF (C++ Actor Framework) runtime system.
+
+:::warning Aimed at Developers
+CAF metrics primarily exist for debugging purposes. Actor names and other
+details contained in these metrics are documented only in source code, and we
+may change them without notice. Do not rely on specific actor names or metrics
+in production systems.
+:::
+
+| Field       | Type           | Description                               |
+| :---------- | :------------- | :---------------------------------------- |
+| `system`    | `record`       | Metrics about the CAF actor system.       |
+| `middleman` | `record`       | Metrics about CAF's network layer.        |
+| `actors`    | `list<record>` | Per-actor metrics for all running actors. |
+
+The record `system` has the following schema:
+
+| Field                | Type    | Description                                     |
+| :------------------- | :------ | :---------------------------------------------- |
+| `running_actors`     | `int64` | Number of currently running actors.             |
+| `queued_messages`    | `int64` | Number of messages waiting in actor mailboxes.  |
+| `processed_messages` | `int64` | Number of messages processed since last metric. |
+| `rejected_messages`  | `int64` | Number of messages rejected since last metric.  |
+
+The record `middleman` has the following schema:
+
+| Field                    | Type       | Description                                           |
+| :----------------------- | :--------- | :---------------------------------------------------- |
+| `inbound_messages_size`  | `int64`    | Size of received messages in bytes since last metric. |
+| `outbound_messages_size` | `int64`    | Size of sent messages in bytes since last metric.     |
+| `serialization_time`     | `duration` | Time spent serializing messages since last metric.    |
+| `deserialization_time`   | `duration` | Time spent deserializing messages since last metric.  |
+
+Each record in the `actors` list has the following schema:
+
+| Field             | Type       | Description                                       |
+| :---------------- | :--------- | :------------------------------------------------ |
+| `name`            | `string`   | Name of the actor.                                |
+| `processing_time` | `duration` | Time spent processing messages since last metric. |
+| `mailbox_time`    | `duration` | Time messages spent in mailbox since last metric. |
+| `mailbox_size`    | `int64`    | Current number of messages in actor's mailbox.    |
+
 ### `tenzir.metrics.buffer`
 
 Contains information about the `buffer` operator's internal buffer.
 
 | Field         | Type     | Description                                                   |
-| : | :- | : |
+| :------------ | :------- | :------------------------------------------------------------ |
 | `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from. |
 | `run`         | `uint64` | The number of the run, starting at 1 for the first run.       |
 | `hidden`      | `bool`   | True if the pipeline is running for the explorer.             |
@@ -66,7 +110,7 @@ Contains information about the `buffer` operator's internal buffer.
 Contains a measurement of CPU utilization.
 
 | Field         | Type     | Description                                 |
-| : | :- | : |
+| :------------ | :------- | :------------------------------------------ |
 | `timestamp`   | `time`   | The time at which this metric was recorded. |
 | `loadavg_1m`  | `double` | The load average over the last minute.      |
 | `loadavg_5m`  | `double` | The load average over the last 5 minutes.   |
@@ -77,7 +121,7 @@ Contains a measurement of CPU utilization.
 Contains a measurement of disk space usage.
 
 | Field         | Type     | Description                                                                        |
-| : | :- | :- |
+| :------------ | :------- | :--------------------------------------------------------------------------------- |
 | `timestamp`   | `time`   | The time at which this metric was recorded.                                        |
 | `path`        | `string` | The byte measurements below refer to the filesystem on which this path is located. |
 | `total_bytes` | `uint64` | The total size of the volume, in bytes.                                            |
@@ -89,7 +133,7 @@ Contains a measurement of disk space usage.
 Contains a measurement of the `enrich` operator, emitted once every second.
 
 | Field         | Type     | Description                                                                          |
-| : | :- | :- |
+| :------------ | :------- | :----------------------------------------------------------------------------------- |
 | `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from.                        |
 | `run`         | `uint64` | The number of the run, starting at 1 for the first run.                              |
 | `hidden`      | `bool`   | True if the pipeline is running for the explorer.                                    |
@@ -105,13 +149,13 @@ Contains a measurement of the `export` operator, emitted once every second per
 schema. Note that internal events like metrics or diagnostics do not emit
 metrics themselves.
 
-| Field           | Type     | Description                                               |
-| : | :- | : |
+| Field           | Type     | Description                                                   |
+| :-------------- | :------- | :------------------------------------------------------------ |
 | `pipeline_id`   | `string` | The ID of the pipeline where the associated operator is from. |
 | `run`           | `uint64` | The number of the run, starting at 1 for the first run.       |
 | `hidden`        | `bool`   | True if the pipeline is running for the explorer.             |
 | `timestamp`     | `time`   | The time at which this metric was recorded.                   |
-| `operator_id`   | `uint64` | The ID of the `export` operator in the pipeline.                |
+| `operator_id`   | `uint64` | The ID of the `export` operator in the pipeline.              |
 | `schema`        | `string` | The schema name of the batch.                                 |
 | `schema_id`     | `string` | The schema ID of the batch.                                   |
 | `events`        | `uint64` | The amount of events that were imported.                      |
@@ -124,7 +168,7 @@ schema. Note that internal events like metrics or diagnostics do not emit
 metrics themselves.
 
 | Field         | Type     | Description                                                   |
-| : | :- | : |
+| :------------ | :------- | :------------------------------------------------------------ |
 | `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from. |
 | `run`         | `uint64` | The number of the run, starting at 1 for the first run.       |
 | `hidden`      | `bool`   | True if the pipeline is running for the explorer.             |
@@ -140,7 +184,7 @@ Contains a measurement of all data ingested into the database, emitted once per
 second and schema.
 
 | Field       | Type     | Description                                 |
-| : | :- | : |
+| :---------- | :------- | :------------------------------------------ |
 | `timestamp` | `time`   | The time at which this metric was recorded. |
 | `schema`    | `string` | The schema name of the batch.               |
 | `schema_id` | `string` | The schema ID of the batch.                 |
@@ -151,7 +195,7 @@ second and schema.
 Contains a measurement of the `lookup` operator, emitted once every second.
 
 | Field             | Type     | Description                                                                                        |
-| : | :- | :- |
+| :---------------- | :------- | :------------------------------------------------------------------------------------------------- |
 | `pipeline_id`     | `string` | The ID of the pipeline where the associated operator is from.                                      |
 | `run`             | `uint64` | The number of the run, starting at 1 for the first run.                                            |
 | `hidden`          | `bool`   | True if the pipeline is running for the explorer.                                                  |
@@ -165,14 +209,14 @@ Contains a measurement of the `lookup` operator, emitted once every second.
 The record `live` has the following schema:
 
 | Field    | Type     | Description                                                                |
-| :- | :- | :- |
+| :------- | :------- | :------------------------------------------------------------------------- |
 | `events` | `uint64` | The amount of input events used for the live lookup since the last metric. |
 | `hits`   | `uint64` | The amount of live lookup matches since the last metric.                   |
 
 The record `retro` has the following schema:
 
 | Field           | Type     | Description                                                           |
-| : | :- | : |
+| :-------------- | :------- | :-------------------------------------------------------------------- |
 | `events`        | `uint64` | The amount of input events used for the lookup since the last metric. |
 | `hits`          | `uint64` | The amount of lookup matches since the last metric.                   |
 | `queued_events` | `uint64` | The total amount of events that were in the queue for the lookup.     |
@@ -182,7 +226,7 @@ The record `retro` has the following schema:
 Contains a measurement of the available memory on the host.
 
 | Field         | Type     | Description                                 |
-| : | :- | : |
+| :------------ | :------- | :------------------------------------------ |
 | `timestamp`   | `time`   | The time at which this metric was recorded. |
 | `total_bytes` | `uint64` | The total available memory, in bytes.       |
 | `used_bytes`  | `uint64` | The amount of memory used, in bytes.        |
@@ -194,7 +238,7 @@ Contains input and output measurements over some amount of time for a single
 operator instantiation.
 
 | Field                 | Type       | Description                                                                     |
-| : | :- | : |
+| :-------------------- | :--------- | :------------------------------------------------------------------------------ |
 | `pipeline_id`         | `string`   | The ID of the pipeline where the associated operator is from.                   |
 | `run`                 | `uint64`   | The number of the run, starting at 1 for the first run.                         |
 | `hidden`              | `bool`     | True if the pipeline is running for the explorer.                               |
@@ -216,7 +260,7 @@ operator instantiation.
 The records `input` and `output` have the following schema:
 
 | Field          | Type     | Description                                                     |
-| :- | :- | : |
+| :------------- | :------- | :-------------------------------------------------------------- |
 | `unit`         | `string` | The type of the elements, which is `void`, `bytes` or `events`. |
 | `elements`     | `uint64` | Number of elements that were seen during the collection period. |
 | `approx_bytes` | `uint64` | An approximation for the number of bytes transmitted.           |
@@ -227,7 +271,7 @@ Signals whether the connection to the Tenzir Platform is working from the node's
 perspective. Emitted once per second.
 
 | Field       | Type   | Description                                 |
-| : | :- | : |
+| :---------- | :----- | :------------------------------------------ |
 | `timestamp` | `time` | The time at which this metric was recorded. |
 | `connected` | `bool` | The connection status.                      |
 
@@ -236,7 +280,7 @@ perspective. Emitted once per second.
 Contains a measurement of the amount of memory used by the `tenzir-node` process.
 
 | Field                  | Type     | Description                                                                       |
-| :- | :- | : |
+| :--------------------- | :------- | :-------------------------------------------------------------------------------- |
 | `timestamp`            | `time`   | The time at which this metric was recorded.                                       |
 | `current_memory_usage` | `uint64` | The memory currently used by this process.                                        |
 | `peak_memory_usage`    | `uint64` | The peak amount of memory, in bytes.                                              |
@@ -249,7 +293,7 @@ Contains a measurement of the `publish` operator, emitted once every second per
 schema.
 
 | Field         | Type     | Description                                                   |
-| : | :- | : |
+| :------------ | :------- | :------------------------------------------------------------ |
 | `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from. |
 | `run`         | `uint64` | The number of the run, starting at 1 for the first run.       |
 | `hidden`      | `bool`   | True if the pipeline is running for the explorer.             |
@@ -266,7 +310,7 @@ Contains a measurement of the partition rebuild process, emitted once every
 second.
 
 | Field               | Type     | Description                                               |
-| : | :- | : |
+| :------------------ | :------- | :-------------------------------------------------------- |
 | `timestamp`         | `time`   | The time at which this metric was recorded.               |
 | `partitions`        | `uint64` | The number of partitions currently being rebuilt.         |
 | `queued_partitions` | `uint64` | The number of partitions currently queued for rebuilding. |
@@ -277,7 +321,7 @@ Contains a measurement of the `subscribe` operator, emitted once every second
 per schema.
 
 | Field         | Type     | Description                                                   |
-| : | :- | : |
+| :------------ | :------- | :------------------------------------------------------------ |
 | `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from. |
 | `run`         | `uint64` | The number of the run, starting at 1 for the first run.       |
 | `hidden`      | `bool`   | True if the pipeline is running for the explorer.             |
@@ -294,7 +338,7 @@ Contains measurements about the number of read calls and the received bytes per
 TCP connection.
 
 | Field           | Type     | Description                                                   |
-| : | :- | : |
+| :-------------- | :------- | :------------------------------------------------------------ |
 | `pipeline_id`   | `string` | The ID of the pipeline where the associated operator is from. |
 | `run`           | `uint64` | The number of the run, starting at 1 for the first run.       |
 | `hidden`        | `bool`   | True if the pipeline is running for the explorer.             |
