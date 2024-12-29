@@ -48,7 +48,8 @@ public:
     return "disk";
   }
 
-  auto make_collector() const -> caf::expected<collector> override {
+  auto make_collector(caf::actor_system&) const
+    -> caf::expected<collector> override {
     return [state_directory = state_directory_]() {
       return get_diskspace_info(state_directory);
     };
