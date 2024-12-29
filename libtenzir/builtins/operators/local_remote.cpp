@@ -163,8 +163,7 @@ public:
     for (auto& op : ops) {
       op = std::make_unique<local_remote_operator>(std::move(op), Location);
     }
-    return std::make_unique<local_remote_operator>(
-      std::make_unique<pipeline>(std::move(ops)), Location);
+    return std::make_unique<pipeline>(std::move(ops));
   }
 };
 
