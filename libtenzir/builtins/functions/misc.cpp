@@ -404,6 +404,41 @@ private:
   bool select_ = {};
 };
 
+class merge final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "merge";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto record1 = ast::expression{};
+    auto record2 = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", record1, "record")
+          .positional("y", record2, "record")
+          .parse(inv, ctx));
+    return function_use::make(
+      [record1 = std::move(record1),
+       record2 = std::move(record2)](evaluator eval, session) {
+        return eval(ast::record{
+          location::unknown,
+          {
+            ast::spread{
+              location::unknown,
+              record1,
+            },
+            ast::spread{
+              location::unknown,
+              record2,
+            },
+          },
+          location::unknown,
+        });
+      });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::misc
@@ -414,5 +449,6 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::network)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::merge)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{false})
