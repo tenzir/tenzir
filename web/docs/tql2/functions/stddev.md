@@ -3,7 +3,7 @@
 Computes the standard deviation of all grouped values.
 
 ```tql
-stddev(xs:list) -> float
+stddev(xs:list) -> double
 ```
 
 ## Description

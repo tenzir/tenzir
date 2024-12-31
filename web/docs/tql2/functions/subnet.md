@@ -28,4 +28,4 @@ from {x: subnet("1.2.3.4/16")}
 
 ## See Also
 
-[ip](ip.md), [int](int.md), [uint](uint.md), [float](float.md), [time](time.md), [string](string.md)
+[ip](ip.md), [int](int.md), [uint](uint.md), [double](double.md), [time](time.md), [string](string.md)

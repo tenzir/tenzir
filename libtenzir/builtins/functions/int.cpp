@@ -28,8 +28,8 @@ public:
     return Signed ? "int" : "uint";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "string|number")
@@ -37,7 +37,6 @@ public:
     return function_use::make([expr = std::move(expr), this](auto eval,
                                                              session ctx) {
       return map_series(eval(expr), [&](series value) {
-        // TODO: Add overload for `int -> uint` conversion.
         auto f = detail::overload{
           [](const arrow::NullArray& arg) {
             auto b = Builder{};

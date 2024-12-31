@@ -3,7 +3,7 @@
 Converts a duration into seconds.
 
 ```tql
-as_secs(x:duration) -> float
+as_secs(x:duration) -> double
 ```
 
 ## Description

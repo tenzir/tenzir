@@ -25,4 +25,4 @@ from {x: uint(4.2)}
 
 ## See Also
 
-[int](int.md), [float](float.md), [time](time.md), [string](string.md), [ip](ip.md)
+[int](int.md), [double](double.md), [time](time.md), [string](string.md), [ip](ip.md)
