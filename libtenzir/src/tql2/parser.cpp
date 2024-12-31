@@ -245,6 +245,14 @@ public:
           .throw_();
       }
       if (not at_statement_end()) {
+        if (call->args.size() == 1) {
+          // This occurs in cases such as `where (x or y) and z`. We have now
+          // parsed `where (x or y)` as a function call and have to rewrite.
+          auto first_arg = parse_expression(std::move(call->args[0]));
+          auto args = std::vector<ast::expression>{};
+          args.push_back(std::move(first_arg));
+          return parse_invocation(std::move(call->fn), std::move(args));
+        }
         diagnostic::error("expected end of statement")
           .primary(next_location())
           .throw_();
@@ -274,8 +282,8 @@ public:
       .throw_();
   }
 
-  auto parse_invocation(entity op) -> ast::invocation {
-    auto args = std::vector<ast::expression>{};
+  auto parse_invocation(entity op, std::vector<ast::expression> args)
+    -> ast::invocation {
     while (not at_statement_end()) {
       if (not args.empty()) {
         if (not accept(tk::comma)) {
@@ -309,6 +317,10 @@ public:
     };
   }
 
+  auto parse_invocation(entity op) -> ast::invocation {
+    return parse_invocation(std::move(op), {});
+  }
+
   auto to_selector(ast::expression expr) -> selector {
     auto location = expr.get_location();
     auto result = selector::try_from(std::move(expr));
@@ -332,8 +344,8 @@ public:
       });
   }
 
-  auto parse_expression(int min_prec = 0) -> ast::expression {
-    auto expr = parse_unary_expression();
+  auto parse_expression(ast::expression expr, int min_prec = 0)
+    -> ast::expression {
     while (true) {
       if (min_prec == 0) {
         if (auto equal = accept(tk::equal)) {
@@ -375,6 +387,10 @@ public:
     // We clear the previously tried token to improve error messages.
     tries_.clear();
     return expr;
+  }
+
+  auto parse_expression(int min_prec = 0) -> ast::expression {
+    return parse_expression(parse_unary_expression(), min_prec);
   }
 
   auto parse_entity() -> ast::entity {
