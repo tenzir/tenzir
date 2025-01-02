@@ -25,13 +25,13 @@ Treat lines beginning with "#" as comments.
 ### `doubled_quotes_escape = bool (optional)`
 
 Whether to support "triple-escaping". That is, whether to consider two consecutive
-quote characters *inside of a quoted string* as an escape sequence. Enabling this option, all these inputs parts the same:
+quote characters *inside of a quoted string* as an escape sequence.
+Enabling this option, all these inputs parts the same:
 
 ```
 Header1, Header2
-"This is a single field with, ""quoted"" text",Next field
-"This is a single field with, \"quoted\" text",Next field
-This is a single field with\, "quoted" text,Next field
+"This is a single field with ""quoted"" text",Next field
+"This is a single field with \"quoted\" text",Next field
 ```
 ```tql
 {

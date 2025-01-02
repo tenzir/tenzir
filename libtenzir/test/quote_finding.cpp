@@ -33,7 +33,7 @@ TEST(finding quotes no escaping) {
   }
   {
     constexpr auto text = R"("text")"sv;
-    CHECK_EQUAL(q.find_opening_quote(text), 0);
+    CHECK_EQUAL(q.find_opening_quote(text), size_t{0});
     CHECK_EQUAL(q.find_closing_quote(text, 0), text.size() - 1);
     for (size_t i = 1; i < text.size() - 1; ++i) {
       CHECK(q.is_inside_of_quotes(text, i));
@@ -41,8 +41,8 @@ TEST(finding quotes no escaping) {
   }
   {
     constexpr auto text = R"("\"text\"")"sv;
-    CHECK_EQUAL(q.find_opening_quote(text), 0);
-    CHECK_EQUAL(q.find_closing_quote(text, 0), 2);
+    CHECK_EQUAL(q.find_opening_quote(text), size_t{0});
+    CHECK_EQUAL(q.find_closing_quote(text, 0), size_t{2});
     CHECK(q.is_inside_of_quotes(text, 1));
   }
 }
@@ -55,7 +55,7 @@ TEST(finding quotes basic escaping) {
   }
   {
     constexpr auto text = R"("text")"sv;
-    CHECK_EQUAL(q.find_opening_quote(text), 0);
+    CHECK_EQUAL(q.find_opening_quote(text), size_t{0});
     CHECK_EQUAL(q.find_closing_quote(text, 0), text.size() - 1);
     for (size_t i = 1; i < text.size() - 1; ++i) {
       CHECK(q.is_inside_of_quotes(text, i));
@@ -63,7 +63,7 @@ TEST(finding quotes basic escaping) {
   }
   {
     constexpr auto text = R"("\"text\"")"sv;
-    CHECK_EQUAL(q.find_opening_quote(text), 0);
+    CHECK_EQUAL(q.find_opening_quote(text), size_t{0});
     CHECK_EQUAL(q.find_closing_quote(text, 0), text.size() - 1);
     for (size_t i = 1; i < text.size() - 1; ++i) {
       CHECK(q.is_inside_of_quotes(text, i));
@@ -81,7 +81,7 @@ TEST(finding quotes doubled escaping) {
   }
   {
     constexpr auto text = R"("text")"sv;
-    CHECK_EQUAL(q.find_opening_quote(text), 0);
+    CHECK_EQUAL(q.find_opening_quote(text), size_t{0});
     CHECK_EQUAL(q.find_closing_quote(text, 0), text.size() - 1);
     for (size_t i = 1; i < text.size() - 1; ++i) {
       CHECK(q.is_inside_of_quotes(text, i));
@@ -89,7 +89,7 @@ TEST(finding quotes doubled escaping) {
   }
   {
     constexpr auto text = R"("""text""")"sv;
-    CHECK_EQUAL(q.find_opening_quote(text), 0);
+    CHECK_EQUAL(q.find_opening_quote(text), size_t{0});
     CHECK_EQUAL(q.find_closing_quote(text, 0), text.size() - 1);
     for (size_t i = 1; i < text.size() - 1; ++i) {
       CHECK(q.is_inside_of_quotes(text, i));
