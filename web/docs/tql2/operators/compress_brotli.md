@@ -10,14 +10,6 @@ compress_brotli [level=int, window_bits=int]
 
 The `compress_brotli` operator compresses bytes in a pipeline incrementally.
 
-:::note Streaming Compression
-The operator uses [Apache Arrow's compression
-utilities][apache-arrow-compression] under the hood, and transparently supports
-all options that Apache Arrow supports for streaming compression.
-:::
-
-[apache-arrow-compression]: https://arrow.apache.org/docs/cpp/api/utilities.html#compression
-
 ### `level = int (optional)`
 
 The compression level to use. The supported values depend on the codec used. If
@@ -35,10 +27,10 @@ A number representing the encoder window bits.
 export
 write_ndjson
 compress_brotli
-save_file "/tmp/backup.json.gz"
+save_file "/tmp/backup.json.bt"
 ```
 
-###  Recompress a Brotli-compressed file at a higher compression level
+### Recompress a Brotli-compressed file at a different compression level
 
 ```tql
 load_file "in.brotli"

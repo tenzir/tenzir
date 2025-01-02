@@ -18,6 +18,15 @@
 #include <arrow/type.h>
 #include <arrow/util/compression.h>
 
+namespace arrow::util {
+[[maybe_unused]] auto inspect(auto& f, GZipFormat& x) -> bool {
+  static_assert(static_cast<int>(GZipFormat::ZLIB) == 0);
+  static_assert(static_cast<int>(GZipFormat::DEFLATE) == 1);
+  static_assert(static_cast<int>(GZipFormat::GZIP) == 2);
+  return ::tenzir::detail::inspect_enum_str(f, x, {"zlib", "deflate", "gzip"});
+}
+} // namespace arrow::util
+
 namespace tenzir::plugins::compress_decompress {
 
 namespace {
@@ -118,27 +127,10 @@ struct operator_args {
   located<std::string> type = {};
   std::optional<located<int>> level = {};
   // used by gzip compress
-  std::optional<located<std::string>> gzip_format = {};
+  located<arrow::util::GZipFormat> gzip_format
+    = located{arrow::util::GZipFormat::GZIP, location::unknown};
   // used by gzip & brotli compress
   std::optional<located<int>> window_bits = {};
-
-  auto gzip_format_enum() const -> arrow::util::GZipFormat {
-    if (not gzip_format) {
-      TENZIR_ASSERT(arrow::util::GZipCodecOptions{}.gzip_format
-                    == arrow::util::GZipFormat::GZIP);
-      return arrow::util::GZipFormat::GZIP;
-    }
-    if (gzip_format->inner == "zlib") {
-      return arrow::util::GZipFormat::ZLIB;
-    }
-    if (gzip_format->inner == "deflate") {
-      return arrow::util::GZipFormat::DEFLATE;
-    }
-    if (gzip_format->inner == "gzip") {
-      return arrow::util::GZipFormat::GZIP;
-    }
-    TENZIR_UNREACHABLE();
-  }
 
   friend auto inspect(auto& f, operator_args& x) -> bool {
     return f.object(x)
@@ -148,7 +140,6 @@ struct operator_args {
               f.field("window_bits", x.window_bits));
   }
 };
-/// The conversion done by the
 
 auto codec_from_args(const operator_args& args)
   -> arrow::Result<std::shared_ptr<arrow::util::Codec>> {
@@ -168,7 +159,7 @@ auto codec_from_args(const operator_args& args)
   if (args.type.inner == "gzip") {
     auto opts = arrow::util::GZipCodecOptions{};
     opts.compression_level = compression_level;
-    opts.gzip_format = args.gzip_format_enum();
+    opts.gzip_format = args.gzip_format.inner;
     opts.window_bits = args.window_bits ? std::optional{args.window_bits->inner}
                                         : std::nullopt;
     return arrow::util::Codec::Create(*compression_type, opts);
@@ -448,15 +439,18 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto args = operator_args{};
+    auto args = operator_args{
+      .type = {method_name_, location::unknown},
+    };
     auto level = std::optional<located<int64_t>>{};
     auto parser = argument_parser2::operator_(name());
     if (method_name_.empty()) {
       parser.positional("type", args.type);
     }
     parser.named("level", level);
+    auto gzip_format_string = std::optional<located<std::string>>{};
     if (method_name_ == "gzip") {
-      parser.named("format", args.gzip_format);
+      parser.named("format", gzip_format_string);
     }
     auto window_bits = std::optional<located<uint64_t>>{};
     if (method_name_ == "gzip" or method_name_ == "brotli") {
@@ -465,7 +459,7 @@ public:
     TRY(parser.parse(inv, ctx));
     if (method_name_.empty()) {
       diagnostic::warning(R"(`{} "{}"` is deprecated)", name(), args.type.inner)
-        .hint("Use `{}_{}` instead", name(), args.type.inner)
+        .hint("use `{}_{}` instead", name(), args.type.inner)
         .primary(inv.self)
         .emit(ctx);
     }
@@ -485,13 +479,19 @@ public:
       args.window_bits.emplace(static_cast<int>(window_bits->inner),
                                window_bits->source);
     }
-    if (args.gzip_format) {
-      auto valid = args.gzip_format->inner == "zlib";
-      valid |= args.gzip_format->inner == "deflate";
-      valid |= args.gzip_format->inner == "gzip";
-      if (not valid) {
-        diagnostic::error("`format` must be one of `zlib`,`deflate`,`gzip`")
-          .primary(args.gzip_format->source)
+    if (gzip_format_string) {
+      if (gzip_format_string->inner == "zlib") {
+        args.gzip_format
+          = located{arrow::util::GZipFormat::ZLIB, gzip_format_string->source};
+      } else if (gzip_format_string->inner == "deflate") {
+        args.gzip_format = located{arrow::util::GZipFormat::DEFLATE,
+                                   gzip_format_string->source};
+      } else if (gzip_format_string->inner == "gzip") {
+        args.gzip_format
+          = located{arrow::util::GZipFormat::GZIP, gzip_format_string->source};
+      } else {
+        diagnostic::error("`format` must be one of `zlib`, `deflate` or `gzip`")
+          .primary(gzip_format_string->source)
           .emit(ctx);
         return failure::promise();
       }
@@ -546,7 +546,7 @@ public:
     TRY(parser.parse(inv, ctx));
     if (method_name_.empty()) {
       diagnostic::warning(R"(`{} "{}"` is deprecated)", name(), args.type.inner)
-        .hint("Use `{}_{}` instead", name(), args.type.inner)
+        .hint("use `{}_{}` instead", name(), args.type.inner)
         .primary(inv.self)
         .emit(ctx);
     }

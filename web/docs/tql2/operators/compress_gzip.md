@@ -10,14 +10,6 @@ compress_gzip [level=int, window_bits=int, format=string]
 
 The `compress_gzip` operator compresses bytes in a pipeline incrementally.
 
-:::note Streaming Compression
-The operator uses [Apache Arrow's compression
-utilities][apache-arrow-compression] under the hood, and transparently supports
-all options that Apache Arrow supports for streaming compression.
-:::
-
-[apache-arrow-compression]: https://arrow.apache.org/docs/cpp/api/utilities.html#compression
-
 ### `level = int (optional)`
 
 The compression level to use. The supported values depend on the codec used. If
@@ -45,7 +37,15 @@ compress_gzip
 save_file "/tmp/backup.json.gz"
 ```
 
-###  Recompress a Gzip-compressed file at a higher compression level
+### Compress using Gzip deflate
+
+```tql
+export
+write_ndjson
+compress_gzip format="deflate"
+```
+
+### Recompress a Gzip-compressed file at a different compression level
 
 ```tql
 load_file "in.gzip"

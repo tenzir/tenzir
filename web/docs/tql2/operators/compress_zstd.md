@@ -10,14 +10,6 @@ compress_zstd [level=int]
 
 The `compress_zstd` operator compresses bytes in a pipeline incrementally.
 
-:::note Streaming Compression
-The operator uses [Apache Arrow's compression
-utilities][apache-arrow-compression] under the hood, and transparently supports
-all options that Apache Arrow supports for streaming compression.
-:::
-
-[apache-arrow-compression]: https://arrow.apache.org/docs/cpp/api/utilities.html#compression
-
 ### `level = int (optional)`
 
 The compression level to use. The supported values depend on the codec used. If
@@ -31,10 +23,10 @@ omitted, the default level for the codec is used.
 export
 write_ndjson
 compress_zstd
-save_file "/tmp/backup.json.gz"
+save_file "/tmp/backup.json.zstd"
 ```
 
-###  Recompress a Zstd-compressed file at a higher compression level
+### Recompress a Zstd-compressed file at a different compression level
 
 ```tql
 load_file "in.zstd"

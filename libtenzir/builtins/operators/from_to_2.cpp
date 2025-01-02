@@ -165,70 +165,74 @@ auto find_connector_given(std::string_view what, std::string_view path,
   return {};
 }
 
+template <auto getter, auto member>
+auto find_plugin(std::string_view extension)
+  -> std::tuple<const operator_factory_plugin*, std::string,
+                std::vector<std::string>> {
+  const operator_factory_plugin* found_plugin = nullptr;
+  auto found_extension = std::string{};
+  auto all_extensions = std::vector<std::string>{};
+  for (const auto& plugin : plugins::get<operator_factory_plugin>()) {
+    const auto props = (plugin->*getter)();
+    for (const auto& possibility : props.*member) {
+      if (extension.ends_with(possibility)) {
+        TENZIR_ASSERT(not found_plugin);
+        found_plugin = plugin;
+        found_extension = possibility;
+      }
+      all_extensions.push_back(std::move(possibility));
+    }
+  }
+  return {found_plugin, found_extension, all_extensions};
+}
+
 template <bool is_loading>
 auto find_compression_and_format(std::string_view extension,
                                  std::string_view path, location loc,
-                                 const char* docs, bool emit, session ctx)
+                                 const char* docs, bool warn_on_failure,
+                                 session ctx)
   -> std::tuple<const operator_factory_plugin*, const operator_factory_plugin*> {
   using traits = from_to_trait<is_loading>;
-  auto format_extensions = std::vector<std::string>{};
-  auto compression_extensions = std::vector<std::string>{};
-
-  const operator_factory_plugin* found_compression_plugin = nullptr;
-  const operator_factory_plugin* found_rw_plugin = nullptr;
-  auto compression_extension = std::string{};
-  for (const auto& p : plugins::get<operator_factory_plugin>()) {
-    auto comp_properties = (p->*traits::compression_properties_getter)();
-    auto rw_properties = (p->*traits::rw_properties_getter)();
-    for (auto& possibility :
-         comp_properties.*traits::compression_properties_range_member) {
-      if (extension.ends_with(possibility)) {
-        found_rw_plugin = p;
-        break;
-      }
-      format_extensions.push_back(std::move(possibility));
-    }
-    if (found_rw_plugin) {
-      break;
-    }
-    for (auto& possibility :
-         rw_properties.*traits::rw_properties_range_member) {
-      if (extension.ends_with(possibility)) {
-        TENZIR_ASSERT(compression_extension.empty());
-        compression_extension = possibility;
-        extension.remove_suffix(possibility.size() + 1);
-        found_compression_plugin = p;
-      }
-      compression_extensions.push_back(std::move(possibility));
-    }
+  auto [found_compression_plugin, found_compression_extensions,
+        all_compression_extensions]
+    = find_plugin<traits::compression_properties_getter,
+                  traits::compression_properties_range_member>(extension);
+  if (found_compression_plugin) {
+    extension.remove_suffix(found_compression_extensions.size() + 1);
   }
+  auto [found_rw_plugin, found_rw_extension, all_rw_extensions]
+    = find_plugin<traits::rw_properties_getter,
+                  traits::rw_properties_range_member>(extension);
   if (found_rw_plugin) {
     return {found_compression_plugin, found_rw_plugin};
   }
-  std::ranges::sort(format_extensions);
-  if (loc.end - loc.begin == path.size() + 2) {
-    auto file_start = path.find(compression_extension);
-    loc.begin += file_start + 1;
-    loc.end -= 1;
-    loc.end -= compression_extension.size();
+  if (not warn_on_failure) {
+    return {};
   }
-  if (emit) {
-    auto diag
-      = diagnostic::error("no known format for extension `{}`", extension)
-          .primary(loc)
-          .note("supported extensions for format deduction: `{}`",
-                fmt::join(format_extensions, "`, `"));
-    if (compression_extension.empty()) {
-      diag = std::move(diag).note("supported extensions for compression "
-                                  "deduction: `{}`",
-                                  fmt::join(compression_extensions, "`, `"));
+  std::ranges::sort(all_rw_extensions);
+  if (loc.end - loc.begin == path.size() + 2) {
+    const auto extension_start = path.find(extension);
+    loc.begin += extension_start + 1;
+    loc.end -= 1;
+    if (found_compression_plugin) {
+      loc.end -= found_compression_extensions.size() + 1;
     }
+  }
+  std::ranges::sort(all_compression_extensions);
+  auto diag = diagnostic::error("no known format for extension `{}`", extension)
+                .primary(loc)
+                .note("supported extensions for format deduction: `{}`",
+                      fmt::join(all_rw_extensions, "`, `"));
+  if (found_compression_extensions.empty()) {
+    diag = std::move(diag).note("supported extensions for compression "
+                                "deduction: `{}`",
+                                fmt::join(all_compression_extensions, "`, `"));
+  }
     diag = std::move(diag)
              .hint("you can pass a pipeline to handle compression and format")
              .docs(docs);
     std::move(diag).emit(ctx);
-  }
-  return {};
+    return {};
 }
 
 auto strip_scheme(ast::expression& expr, std::string_view scheme) -> void {
@@ -358,7 +362,6 @@ auto create_pipeline_from_uri(std::string path,
       = plugins::find<operator_factory_plugin>(traits::default_io_operator);
   }
   const bool has_pipeline_or_events = pipeline_argument or io_properties.events;
-  auto compression_name = std::string_view{};
   if (not has_pipeline_or_events) {
     auto file = get_file(*url);
     if (file.empty()) {
@@ -434,9 +437,8 @@ post_deduction_reporting:
         ast::identifier{strip_prefix(compression_plugin->name()),
                         location::unknown},
       }};
-      pipeline_argument->inner.body.emplace_back(ast::invocation{
-        std::move(compression_ent),
-        {ast::constant{std::string{compression_name}, location::unknown}}});
+      pipeline_argument->inner.body.emplace_back(
+        ast::invocation{std::move(compression_ent), {}});
     }
     if constexpr (is_loading) {
       pipeline_argument->inner.body.emplace_back(
