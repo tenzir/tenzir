@@ -182,3 +182,10 @@ from {
 }
 EOF
 }
+
+@test "operator parenthesis continuation" {
+  check tenzir 'where (x or y)'
+  check tenzir 'where (x or y) and z'
+  check tenzir 'from ({}), {}'
+  check tenzir 'from 1 or 2, 3'
+}

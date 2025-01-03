@@ -1,0 +1,17 @@
+[
+  invocation {
+    op: {
+      path: [
+        `where` @ 0..5
+      ],
+      ref: unresolved
+    },
+    args: [
+      binary_expr {
+        left: root_field `x` @ 7..8,
+        op: "or_" @ 9..11,
+        right: root_field `y` @ 12..13
+      }
+    ]
+  }
+]
