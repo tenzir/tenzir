@@ -18,8 +18,11 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/scope_linked.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/signal_reflector.hpp"
 #include "tenzir/tql/parser.hpp"
+#include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/resolve.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/actor_registry.hpp>
@@ -219,6 +222,11 @@ auto main(int argc, char** argv) -> int {
       TENZIR_ERROR("could not load `tenzir.operators`: invalid record");
       return EXIT_FAILURE;
     }
+    auto force_tql2 = get_or(cfg, "tenzir.tql2", false);
+    auto dh = make_diagnostic_printer(std::nullopt, color_diagnostics::yes,
+                                      std::cerr);
+    auto provider = session_provider::make(*dh);
+    auto ctx = provider.as_session();
     for (auto&& [name, value] : *r) {
       auto* definition = try_as<std::string>(&value);
       if (!definition) {
@@ -227,7 +235,27 @@ auto main(int argc, char** argv) -> int {
                      name);
         return EXIT_FAILURE;
       }
-      aliases.emplace(std::move(name), *definition);
+      auto use_tql2 = force_tql2 or definition->starts_with("// tql2");
+      if (use_tql2) {
+        auto pipe = parse_pipeline_with_bad_diagnostics(*definition, ctx);
+        if (not pipe) {
+          TENZIR_ERROR("parsing of user-defined operator `{}` failed", name);
+          return EXIT_FAILURE;
+        }
+        // We already resolve entities here. This means that we can provide
+        // earlier errors, but that it's impossible to form cyclic references.
+        // We do not resolve `let` bindings yet in order to delay their
+        // evaluation in cases such as `let $t = now()`.
+        if (not resolve_entities(*pipe, ctx)) {
+          TENZIR_ERROR("entity resolving in user-defined operator `{}` failed",
+                       name);
+          return EXIT_FAILURE;
+        }
+        global_registry_mut().add(entity_pkg::cfg, name,
+                                  user_defined_operator{std::move(*pipe)});
+      } else {
+        aliases.emplace(std::move(name), *definition);
+      }
     }
   }
   tql::set_operator_aliases(std::move(aliases));

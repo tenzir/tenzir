@@ -26,50 +26,28 @@ public:
   }
 
   void visit(ast::entity& x) {
+    if (x.ref.resolved()) {
+      return;
+    }
     TENZIR_ASSERT(not x.path.empty());
     TENZIR_ASSERT(context_ != context_t::none);
-    auto ns = context_ == context_t::op_name ? entity_ns::op : entity_ns::fn;
-    // TODO: We pretend here that every name directly maps to its path. This is
-    // only the case if there are no user-given names.
-    auto segments = std::vector<std::string>{};
-    segments.reserve(x.path.size());
-    for (auto& segment : x.path) {
-      segments.push_back(segment.name);
-    }
-    auto path = entity_path{std::move(segments), ns};
-    auto result = reg_.try_get(path);
-    auto err = std::get_if<registry::error>(&result);
-    if (not err) {
-      x.ref = std::move(path);
-      return;
-    }
-    TENZIR_ASSERT(err->segment < x.path.size());
-    auto last = err->segment == path.segments().size() - 1;
-    if (not last) {
-      // TODO: We could print if there was something else with that name.
-      diagnostic::error("module `{}` not found", x.path[err->segment].name)
-        .primary(x.path[err->segment])
-        .emit(diag_);
-      result_ = failure::promise();
-      return;
-    }
-    auto type = std::invoke([&] {
-      switch (context_) {
-        case context_t::op_name:
-          return "operator";
-        case context_t::fn_name:
-          return "function";
-        case context_t::none:
-          TENZIR_UNREACHABLE();
-      }
-      TENZIR_UNREACHABLE();
-    });
-    if (err->other_exists) {
-      diagnostic::error("`{}` is not a `{}`", x.path[err->segment].name, type)
-        .primary(x.path[err->segment])
-        .emit(diag_);
-      result_ = failure::promise();
-    } else {
+    // We use the following logic:
+    // - Look at the first segment.
+    // - Use its name + namespace (mod/fn/op) for lookup as user-defined.
+    // - If something is found: Use rest of the segments. If not found: Error.
+    // - If nothing is found: Repeat with lookup for built-in entities.
+    auto report_not_found = [&](const ast::identifier& ident, entity_ns ns) {
+      auto type = std::invoke([&] {
+        switch (ns) {
+          case entity_ns::op:
+            return "operator";
+          case entity_ns::fn:
+            return "function";
+          case entity_ns::mod:
+            return "module";
+        }
+        TENZIR_UNREACHABLE();
+      });
       // TODO: This list is too long. Suggest only close matches instead. Also,
       // we should maybe only suggest things in the same module.
       auto available = std::invoke([&] {
@@ -78,15 +56,55 @@ public:
             return reg_.operator_names();
           case entity_ns::fn:
             return reg_.function_names();
+          case entity_ns::mod:
+            return reg_.module_names();
         }
         TENZIR_UNREACHABLE();
       });
-      diagnostic::error("{} `{}` not found", type, x.path[err->segment].name)
-        .primary(x.path[err->segment])
-        .hint("must be one of: {}", fmt::join(available, ", "))
-        .emit(diag_);
+      auto diag = diagnostic::error("{} `{}` not found", type, ident.name)
+                    .primary(ident);
+      if (not available.empty()) {
+        diag = std::move(diag).hint("must be one of: {}",
+                                    fmt::join(available, ", "));
+      }
+      std::move(diag).emit(diag_);
       result_ = failure::promise();
+    };
+    auto target_ns
+      = context_ == context_t::op_name ? entity_ns::op : entity_ns::fn;
+    auto first_ns = x.path.size() == 1 ? target_ns : entity_ns::mod;
+    // Because there currently is no way to bring additional entities into the
+    // scope, we can directly dispatch to the registry.
+    auto pkg = std::invoke([&]() -> std::optional<entity_pkg> {
+      for (auto pkg : {entity_pkg::cfg, entity_pkg::std}) {
+        auto path = entity_path{pkg, {x.path[0].name}, first_ns};
+        if (is<entity_ref>(reg_.try_get(path))) {
+          return pkg;
+        }
+      }
+      return std::nullopt;
+    });
+    if (not pkg) {
+      report_not_found(x.path[0], first_ns);
+      return;
     }
+    // After figuring out which package it belongs to, we try the full path.
+    auto segments = std::vector<std::string>{};
+    segments.reserve(x.path.size());
+    for (auto& segment : x.path) {
+      segments.push_back(segment.name);
+    };
+    auto path = entity_path{*pkg, std::move(segments), target_ns};
+    auto result = reg_.try_get(path);
+    auto err = try_as<registry::error>(result);
+    if (err) {
+      TENZIR_ASSERT(err->segment < x.path.size());
+      auto is_last = err->segment == path.segments().size() - 1;
+      auto error_ns = is_last ? target_ns : entity_ns::mod;
+      report_not_found(x.path[err->segment], error_ns);
+      return;
+    }
+    x.ref = std::move(path);
   }
 
   void visit(ast::invocation& x) {

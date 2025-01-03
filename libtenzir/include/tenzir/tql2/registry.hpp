@@ -16,62 +16,107 @@ namespace tenzir {
 
 struct module_def;
 
+struct user_defined_operator {
+  /// Definition with resolved entities, but without resolved `let`s.
+  ast::pipeline definition;
+};
+
+/// Operators are either operator plugins or user-defined operators.
+struct operator_def {
+public:
+  explicit(false) operator_def(user_defined_operator udo)
+    : kind_{std::move(udo)} {
+  }
+
+  explicit(false) operator_def(const operator_factory_plugin& plugin)
+    : kind_{plugin} {
+  }
+
+  /// Instantiate the operator with the given arguments.
+  auto make(operator_factory_plugin::invocation inv, session ctx) const
+    -> failure_or<operator_ptr>;
+
+private:
+  std::variant<std::reference_wrapper<const operator_factory_plugin>,
+               user_defined_operator>
+    kind_;
+};
+
 /// A set of entities, with a most one entity per entity namespace.
 struct entity_set {
   const function_plugin* fn;
-  const operator_factory_plugin* op;
+  std::optional<operator_def> op;
   std::unique_ptr<module_def> mod;
 };
 
+/// A module is a collection of named entities.
 struct module_def {
-  // TODO: Why are these needed?
   module_def() = default;
+  ~module_def() = default;
   module_def(const module_def&) = delete;
-  module_def(module_def&&) = default;
-  auto operator=(const module_def&) = delete;
-  auto operator=(module_def&&) -> module_def& = default;
+  module_def(module_def&&) noexcept = default;
+  auto operator=(const module_def&) -> module_def& = delete;
+  auto operator=(module_def&&) noexcept -> module_def& = default;
 
-  std::unordered_map<std::string, entity_set> defs;
+  detail::heterogeneous_string_hashmap<entity_set> defs;
 };
 
-/// Reference to a single entity definition.
+/// The definition of an entity. Modules are not included here because they are
+/// currently only created implicitly by other entities.
 using entity_def
-  = variant<std::reference_wrapper<const function_plugin>,
-            std::reference_wrapper<const operator_factory_plugin>,
-            std::reference_wrapper<const module_def>>;
+  = variant<operator_def, std::reference_wrapper<const function_plugin>>;
 
-// TODO: The interface of this class is drastically simplified for now. It
-// must be changed eventually to properly enable modules and use an
-// interned representation of `entity_path`.
+/// Reference to any entity, including modules.
+using entity_ref = variant<std::reference_wrapper<const function_plugin>,
+                           std::reference_wrapper<const operator_def>,
+                           std::reference_wrapper<const module_def>>;
+
+/// The registry holds references to all known entities and can thus be used to
+/// resolve an `entity_path` to an `entity_ref`.
 class registry {
 public:
   struct error {
+    /// The index of the segment that we could not resolve.
     size_t segment{};
+    /// Whether there exists an entity of a different namespace for that segment.
     bool other_exists{};
   };
 
-  auto try_get(const entity_path& path) const -> variant<entity_def, error>;
+  /// Try to resolve an entity path.
+  auto try_get(const entity_path& path) const -> variant<entity_ref, error>;
 
+  /// Resolve an entity path or panic if it fails.
   auto get(const ast::function_call& call) const -> const function_plugin&;
-  auto get(const ast::invocation& call) const -> const operator_factory_plugin&;
-  auto get(const entity_path& path) const -> entity_def;
+  auto get(const ast::invocation& inv) const -> const operator_def&;
+  auto get(const entity_path& path) const -> entity_ref;
 
+  /// Return a list of all entities for the given namespace.
+  auto entity_names(entity_ns ns) const -> std::vector<std::string>;
   auto operator_names() const -> std::vector<std::string>;
   auto function_names() const -> std::vector<std::string>;
+  auto module_names() const -> std::vector<std::string>;
 
   /// Register an entity. This should only be done on startup.
-  void add(std::string name, entity_def def);
-
-  auto root_module() const -> const module_def&;
+  void add(entity_pkg package, std::string_view name, entity_def def);
 
 private:
-  module_def root_;
+  /// Get the root module for the given package.
+  auto root(entity_pkg package) -> module_def&;
+  auto root(entity_pkg package) const -> const module_def&;
+
+  module_def std_;
+  module_def cfg_;
 };
 
 // TODO: This should be attached to the `session` object. However, because we
 // are still in the process of upgrading everything, we cannot consistently pass
 // this around.
 auto global_registry() -> const registry&;
+
+/// Obtain a mutable reference to the global registry.
+///
+/// This may only be used if nothing else accesses the registry concurrently.
+auto global_registry_mut() -> registry&;
 
 auto thread_local_registry() -> const registry*;
 

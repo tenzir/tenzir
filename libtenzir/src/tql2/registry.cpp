@@ -9,6 +9,7 @@
 #include "tenzir/tql2/registry.hpp"
 
 #include "tenzir/plugin.hpp"
+#include "tenzir/tql2/exec.hpp"
 
 #include <ranges>
 
@@ -20,9 +21,18 @@ void gather_names(const module_def& mod, entity_ns ns, std::string prefix,
                   std::vector<std::string>& out) {
   auto result = std::vector<std::string>{};
   for (auto& [name, def] : mod.defs) {
-    if (ns == entity_ns::fn and def.fn) {
-      out.push_back(prefix + name);
-    } else if (ns == entity_ns::op and def.op) {
+    auto eligible = std::invoke([&] {
+      switch (ns) {
+        case entity_ns::op:
+          return def.op.has_value();
+        case entity_ns::fn:
+          return def.fn != nullptr;
+        case entity_ns::mod:
+          return def.mod != nullptr;
+      }
+      TENZIR_UNREACHABLE();
+    });
+    if (eligible) {
       out.push_back(prefix + name);
     }
     if (def.mod) {
@@ -31,15 +41,26 @@ void gather_names(const module_def& mod, entity_ns ns, std::string prefix,
   }
 }
 
-auto gather_names(const module_def& mod, entity_ns ns)
-  -> std::vector<std::string> {
-  auto result = std::vector<std::string>{};
-  gather_names(mod, ns, "", result);
-  std::ranges::sort(result);
-  return result;
-}
-
 } // namespace
+
+auto operator_def::make(operator_factory_plugin::invocation inv,
+                        session ctx) const -> failure_or<operator_ptr> {
+  return match(
+    kind_,
+    [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {
+      if (not inv.args.empty()) {
+        diagnostic::error("user-defined operator does not support arguments")
+          .primary(inv.self)
+          .emit(ctx);
+        return failure::promise();
+      }
+      TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
+      return std::make_unique<pipeline>(std::move(compiled));
+    },
+    [&](const operator_factory_plugin& plugin) -> failure_or<operator_ptr> {
+      return plugin.make(inv, ctx);
+    });
+}
 
 thread_local const registry* g_thread_local_registry = nullptr;
 
@@ -51,7 +72,7 @@ void set_thread_local_registry(const registry* reg) {
   g_thread_local_registry = reg;
 }
 
-auto global_registry() -> const registry& {
+auto global_registry_mut() -> registry& {
   static auto reg = std::invoke([] {
     auto reg = registry{};
     for (auto op : plugins::get<operator_factory_plugin>()) {
@@ -61,7 +82,7 @@ auto global_registry() -> const registry& {
       if (name.starts_with("tql2.")) {
         name.erase(0, 5);
       }
-      reg.add(name, *op);
+      reg.add(entity_pkg::std, name, *op);
     }
     for (auto fn : plugins::get<function_plugin>()) {
       auto name = fn->function_name();
@@ -69,11 +90,15 @@ auto global_registry() -> const registry& {
       if (name.starts_with("tql2.")) {
         name.erase(0, 5);
       }
-      reg.add(name, *fn);
+      reg.add(entity_pkg::std, name, std::ref(*fn));
     }
     return reg;
   });
   return reg;
+}
+
+auto global_registry() -> const registry& {
+  return global_registry_mut();
 }
 
 auto registry::get(const ast::function_call& call) const
@@ -84,19 +109,17 @@ auto registry::get(const ast::function_call& call) const
   return *fn;
 }
 
-auto registry::get(const ast::invocation& call) const
-  -> const operator_factory_plugin& {
-  auto def = get(call.op.ref);
-  auto op
-    = std::get_if<std::reference_wrapper<const operator_factory_plugin>>(&def);
+auto registry::get(const ast::invocation& inv) const -> const operator_def& {
+  auto def = get(inv.op.ref);
+  auto op = std::get_if<std::reference_wrapper<const operator_def>>(&def);
   TENZIR_ASSERT(op);
   return *op;
 }
 
 auto registry::try_get(const entity_path& path) const
-  -> variant<entity_def, error> {
+  -> variant<entity_ref, error> {
   TENZIR_ASSERT(path.resolved());
-  auto current = &root_;
+  auto current = &root(path.pkg());
   auto&& segments = path.segments();
   for (auto i = size_t{0}; i < segments.size(); ++i) {
     auto it = current->defs.find(segments[i]);
@@ -118,6 +141,11 @@ auto registry::try_get(const entity_path& path) const
             return *set.op;
           }
           return error{i, true};
+        case entity_ns::mod:
+          if (set.mod) {
+            return *set.mod;
+          }
+          return error{i, true};
       }
       TENZIR_UNREACHABLE();
     }
@@ -130,26 +158,40 @@ auto registry::try_get(const entity_path& path) const
   TENZIR_UNREACHABLE();
 }
 
-auto registry::get(const entity_path& path) const -> entity_def {
+auto registry::get(const entity_path& path) const -> entity_ref {
   auto result = try_get(path);
-  TENZIR_ASSERT(std::holds_alternative<entity_def>(result));
-  return std::get<entity_def>(result);
+  TENZIR_ASSERT(std::holds_alternative<entity_ref>(result));
+  return std::get<entity_ref>(result);
 }
 
 auto registry::operator_names() const -> std::vector<std::string> {
-  return gather_names(root_, entity_ns::op);
+  return entity_names(entity_ns::op);
 }
 
 auto registry::function_names() const -> std::vector<std::string> {
-  return gather_names(root_, entity_ns::fn);
+  return entity_names(entity_ns::fn);
 }
 
-void registry::add(std::string name, entity_def def) {
+auto registry::module_names() const -> std::vector<std::string> {
+  return entity_names(entity_ns::mod);
+}
+
+auto registry::entity_names(entity_ns ns) const -> std::vector<std::string> {
+  // TODO: This does not really return the reachable entity names if the names
+  // from `cfg_` shadow names from `std_`.
+  auto result = std::vector<std::string>{};
+  gather_names(std_, ns, "", result);
+  gather_names(cfg_, ns, "", result);
+  std::ranges::sort(result);
+  return result;
+}
+
+void registry::add(entity_pkg package, std::string_view name, entity_def def) {
   TENZIR_ASSERT(not name.empty());
   auto path = detail::split(name, "::");
   TENZIR_ASSERT(not path.empty());
   // Find the correct module first.
-  auto mod = &root_;
+  auto mod = &root(package);
   for (auto& segment : path) {
     if (&segment == &path.back()) {
       break;
@@ -162,19 +204,33 @@ void registry::add(std::string name, entity_def def) {
   }
   // Insert the entity definition into the module.
   auto& set = mod->defs[std::string{path.back()}];
-  def.match(
+  match(
+    std::move(def),
     [&](std::reference_wrapper<const function_plugin> plugin) {
       TENZIR_ASSERT(not set.fn);
       set.fn = &plugin.get();
     },
-    [&](std::reference_wrapper<const operator_factory_plugin> plugin) {
+    [&](operator_def def) {
       TENZIR_ASSERT(not set.op);
-      set.op = &plugin.get();
-    },
-    [&](std::reference_wrapper<const module_def>) {
-      // Does this make sense?
-      TENZIR_TODO();
+      set.op = std::move(def);
     });
+}
+
+auto registry::root(entity_pkg package) -> module_def& {
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+  return const_cast<module_def&>(std::as_const(*this).root(package));
+}
+
+auto registry::root(entity_pkg package) const -> const module_def& {
+  return std::invoke([&]() -> const module_def& {
+    switch (package) {
+      case entity_pkg::std:
+        return std_;
+      case entity_pkg::cfg:
+        return cfg_;
+    }
+    TENZIR_UNREACHABLE();
+  });
 }
 
 } // namespace tenzir

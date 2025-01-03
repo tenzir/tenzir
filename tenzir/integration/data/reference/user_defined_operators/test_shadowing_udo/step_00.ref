@@ -1,0 +1,11 @@
+[
+  tql2.from_events [
+    record {
+      begin: 0..0,
+      items: [
+        
+      ],
+      end: 0..0
+    }
+  ]
+]
