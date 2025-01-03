@@ -3,7 +3,8 @@
     
   },
   compress {
-    type: "bz2" @ 0..0
+    type: "bz2" @ 0..0,
+    gzip_format: "gzip" @ 0..0
   },
   tql2.save_http {
     url: "https://example.org/example.yaml.bz2",

@@ -18,6 +18,15 @@
 #include <arrow/type.h>
 #include <arrow/util/compression.h>
 
+namespace arrow::util {
+[[maybe_unused]] auto inspect(auto& f, GZipFormat& x) -> bool {
+  static_assert(static_cast<int>(GZipFormat::ZLIB) == 0);
+  static_assert(static_cast<int>(GZipFormat::DEFLATE) == 1);
+  static_assert(static_cast<int>(GZipFormat::GZIP) == 2);
+  return ::tenzir::detail::inspect_enum_str(f, x, {"zlib", "deflate", "gzip"});
+}
+} // namespace arrow::util
+
 namespace tenzir::plugins::compress_decompress {
 
 namespace {
@@ -117,12 +126,18 @@ private:
 struct operator_args {
   located<std::string> type = {};
   std::optional<located<int>> level = {};
-  // TODO: gzip has some further options, which we should also cover.
+  // used by gzip compress
+  located<arrow::util::GZipFormat> gzip_format
+    = located{arrow::util::GZipFormat::GZIP, location::unknown};
+  // used by gzip & brotli compress
+  std::optional<located<int>> window_bits = {};
 
   friend auto inspect(auto& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
-      .fields(f.field("type", x.type), f.field("level", x.level));
+      .fields(f.field("type", x.type), f.field("level", x.level),
+              f.field("gzip_format", x.gzip_format),
+              f.field("window_bits", x.window_bits));
   }
 };
 
@@ -141,8 +156,22 @@ auto codec_from_args(const operator_args& args)
   }
   const auto compression_level
     = args.level ? args.level->inner : arrow::util::kUseDefaultCompressionLevel;
-  auto codec = arrow::util::Codec::Create(*compression_type, compression_level);
-  return codec;
+  if (args.type.inner == "gzip") {
+    auto opts = arrow::util::GZipCodecOptions{};
+    opts.compression_level = compression_level;
+    opts.gzip_format = args.gzip_format.inner;
+    opts.window_bits = args.window_bits ? std::optional{args.window_bits->inner}
+                                        : std::nullopt;
+    return arrow::util::Codec::Create(*compression_type, opts);
+  }
+  if (args.type.inner == "brotli") {
+    auto opts = arrow::util::BrotliCodecOptions{};
+    opts.compression_level = compression_level;
+    opts.window_bits = args.window_bits ? std::optional{args.window_bits->inner}
+                                        : std::nullopt;
+    return arrow::util::Codec::Create(*compression_type, opts);
+  }
+  return arrow::util::Codec::Create(*compression_type, compression_level);
 }
 
 class compress_operator final : public crtp_operator<compress_operator> {
@@ -367,11 +396,35 @@ private:
   operator_args args_ = {};
 };
 
+auto get_extensions(std::string_view method_name) -> std::vector<std::string> {
+  if (method_name == "brotli") {
+    return {"br", "brotli"};
+  } else if (method_name == "bz2") {
+    return {"bz2"};
+  } else if (method_name == "gzip") {
+    return {"gz", "gzip"};
+  } else if (method_name == "lz4") {
+    return {"lz4"};
+  } else if (method_name == "zstd") {
+    return {"zst", "zstd"};
+  }
+  return {};
+}
+
 class compress_plugin final : public virtual operator_plugin<compress_operator>,
                               public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
+  }
+
+  auto name() const -> std::string override {
+    return method_name_.empty() ? "compress" : "compress_" + method_name_;
+  }
+
+  compress_plugin() = default;
+  compress_plugin(std::string method_name)
+    : method_name_{std::move(method_name)} {
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
@@ -386,12 +439,30 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto args = operator_args{};
+    auto args = operator_args{
+      .type = {method_name_, location::unknown},
+    };
     auto level = std::optional<located<int64_t>>{};
-    TRY(argument_parser2::operator_(name())
-          .positional("type", args.type)
-          .named("level", level)
-          .parse(inv, ctx));
+    auto parser = argument_parser2::operator_(name());
+    if (method_name_.empty()) {
+      parser.positional("type", args.type);
+    }
+    parser.named("level", level);
+    auto gzip_format_string = std::optional<located<std::string>>{};
+    if (method_name_ == "gzip") {
+      parser.named("format", gzip_format_string);
+    }
+    auto window_bits = std::optional<located<uint64_t>>{};
+    if (method_name_ == "gzip" or method_name_ == "brotli") {
+      parser.named("window_bits", window_bits);
+    }
+    TRY(parser.parse(inv, ctx));
+    if (method_name_.empty()) {
+      diagnostic::warning(R"(`{} "{}"` is deprecated)", name(), args.type.inner)
+        .hint("use `{}_{}` instead", name(), args.type.inner)
+        .primary(inv.self)
+        .emit(ctx);
+    }
     // TODO: Where is `try_narrow`?
     using T = decltype(args.level->inner);
     if (level) {
@@ -404,8 +475,36 @@ public:
           .emit(ctx);
       }
     }
+    if (window_bits) {
+      args.window_bits.emplace(static_cast<int>(window_bits->inner),
+                               window_bits->source);
+    }
+    if (gzip_format_string) {
+      if (gzip_format_string->inner == "zlib") {
+        args.gzip_format
+          = located{arrow::util::GZipFormat::ZLIB, gzip_format_string->source};
+      } else if (gzip_format_string->inner == "deflate") {
+        args.gzip_format = located{arrow::util::GZipFormat::DEFLATE,
+                                   gzip_format_string->source};
+      } else if (gzip_format_string->inner == "gzip") {
+        args.gzip_format
+          = located{arrow::util::GZipFormat::GZIP, gzip_format_string->source};
+      } else {
+        diagnostic::error("`format` must be one of `zlib`, `deflate` or `gzip`")
+          .primary(gzip_format_string->source)
+          .emit(ctx);
+        return failure::promise();
+      }
+    }
     return std::make_unique<compress_operator>(std::move(args));
   }
+
+  auto compress_properties() const -> compress_properties_t override {
+    return {.extensions = get_extensions(method_name_)};
+  }
+
+private:
+  std::string method_name_;
 };
 
 class decompress_plugin final
@@ -414,6 +513,16 @@ class decompress_plugin final
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
+  }
+
+  decompress_plugin() = default;
+
+  decompress_plugin(std::string method_name)
+    : method_name_{std::move(method_name)} {
+  }
+
+  auto name() const -> std::string override {
+    return method_name_.empty() ? "decompress" : "decompress_" + method_name_;
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
@@ -427,12 +536,29 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto args = operator_args{};
-    TRY(argument_parser2::operator_(name())
-          .positional("type", args.type)
-          .parse(inv, ctx));
+    auto args = operator_args{
+      .type = {method_name_, location::unknown},
+    };
+    auto parser = argument_parser2::operator_(name());
+    if (method_name_.empty()) {
+      parser.positional("type", args.type);
+    }
+    TRY(parser.parse(inv, ctx));
+    if (method_name_.empty()) {
+      diagnostic::warning(R"(`{} "{}"` is deprecated)", name(), args.type.inner)
+        .hint("use `{}_{}` instead", name(), args.type.inner)
+        .primary(inv.self)
+        .emit(ctx);
+    }
     return std::make_unique<decompress_operator>(std::move(args));
   }
+
+  auto decompress_properties() const -> decompress_properties_t override {
+    return {.extensions = get_extensions(method_name_)};
+  }
+
+private:
+  std::string method_name_;
 };
 
 } // namespace
@@ -440,4 +566,24 @@ public:
 } // namespace tenzir::plugins::compress_decompress
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::compress_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::compress_plugin{
+  "brotli"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::compress_plugin{
+  "bz2"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::compress_plugin{
+  "gzip"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::compress_plugin{
+  "lz4"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::compress_plugin{
+  "zstd"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::decompress_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::decompress_plugin{
+  "brotli"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::decompress_plugin{
+  "bz2"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::decompress_plugin{
+  "gzip"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::decompress_plugin{
+  "lz4"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::compress_decompress::decompress_plugin{
+  "zstd"})

@@ -3,7 +3,8 @@
     
   },
   compress {
-    type: "gzip" @ 0..0
+    type: "gzip" @ 0..0,
+    gzip_format: "gzip" @ 0..0
   },
   tql2.save_file {
     path: "example.json.gz" @ 3..20
