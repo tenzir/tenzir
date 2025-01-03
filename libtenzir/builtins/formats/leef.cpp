@@ -136,7 +136,7 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
   while (not attributes.empty()) {
     auto attr_end = quoting.find_not_in_quotes(attributes, delimiter);
     /// We greedily accept more than one consecutive separator
-    while (attr_end < attributes.size()
+    while (attr_end < attributes.size() - 1
            and attributes[attr_end + 1] == delimiter) {
       ++attr_end;
     }
@@ -147,7 +147,8 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
         .note("attribute was `{}`", attribute)
         .done();
     }
-    while (detail::is_escaped_at(attribute, sep_pos)) {
+    while (sep_pos != attribute.npos
+           and detail::is_escaped_at(attribute, sep_pos)) {
       sep_pos = quoting.find_not_in_quotes(attribute, '=', sep_pos + 1);
     }
     if (sep_pos == attribute.npos) {

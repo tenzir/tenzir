@@ -10,8 +10,9 @@
     field_sep: ",",
     list_sep: ";",
     null_value: "",
-    allow_comments: false,
+    quotes: "\"'",
     auto_expand: false,
+    allow_comments: false,
     builder_options: {
       policy: policy_default {
         

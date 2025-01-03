@@ -121,13 +121,13 @@ Function | Description | Example
 [`file_name`](functions/file_name.md) | Extracts the file name from a file path | `file_name("/path/to/log.json")`
 [`parent_dir`](functions/parent_dir.md) | Extracts the parent directory from a file path | `parent_dir("/path/to/log.json")`
 
-### Parsing
+## Parsing
 
 Function | Description | Example
 :--------|:-------------|:-------
+[`parse_grok`](functions/parse_grok.md) | Parses a string following a grok pattern | `some_string.parse_grok("%{IP:client} …")`
 [`parse_json`](functions/parse_json.md) | Parses a string as a JSON record | `parse_json(some_string)`
 [`parse_leef`](functions/parse_leef.md) | Parses a string as a leef message | `parse_leef(some_string)`
-[`parse_grok`](functions/parse_grok.md) | Parses a string following a grok pattern | `some_string.parse_grok("%{IP:client} …")`
 
 ## Time & Date
 

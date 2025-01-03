@@ -106,7 +106,6 @@ struct xsv_parser_options {
   std::string list_sep = {};
   std::string null_value = {};
   std::string quotes = "\"\'";
-  bool doubled_quotes_escape = {};
   bool auto_expand = {};
   bool allow_comments = {};
   std::optional<std::string> header = {};
@@ -116,8 +115,8 @@ struct xsv_parser_options {
     return f.object(x).fields(
       f.field("name", x.name), f.field("field_sep", x.field_sep),
       f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
+      f.field("quotes", x.quotes), f.field("auto_expand", x.auto_expand),
       f.field("allow_comments", x.allow_comments), f.field("header", x.header),
-      f.field("auto_expand", x.auto_expand),
       f.field("builder_options", x.builder_options));
   }
 };
@@ -175,7 +174,6 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       parser.positional("null_value", *null_value_);
     }
     parser.named("quotes", quotes_);
-    parser.named("doubled_quotes_escape", doubled_quotes_escape_);
     parser.named("comments", allow_comments_);
     parser.named("header", header_);
     parser.named("auto_expand", auto_expand_);
@@ -256,7 +254,6 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       .list_sep = list_sep_->inner,
       .null_value = null_value_->inner,
       .quotes = quotes_->inner,
-      .doubled_quotes_escape = doubled_quotes_escape_,
       .auto_expand = auto_expand_,
       .allow_comments = allow_comments_,
       .header = header_ ? std::optional{header_->inner} : std::nullopt,
@@ -277,7 +274,6 @@ protected:
   std::optional<located<std::string>> null_value_{};
   std::optional<located<std::string>> quotes_
     = located{xsv_parser_options{}.quotes, location::unknown};
-  bool doubled_quotes_escape_{};
   bool auto_expand_{};
   mode mode_ = mode::all_required;
 };
@@ -417,7 +413,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   const auto quoting_options = detail::quoting_escaping_policy{
     .quotes = args.quotes,
     .backslashes_escape = true,
-    .doubled_quotes_escape = args.doubled_quotes_escape,
+    .doubled_quotes_escape = true,
   };
   if (not header) {
     for (; it != lines.end(); ++it) {

@@ -3,12 +3,12 @@
 Parses a string according to a grok pattern.
 
 ```tql
-parse_leef(input:string, pattern:string) -> record
+parse_grok(input:string, pattern:string) -> record
 ```
 
 ## Description
 
-The `parse_leef` function parses a string according to a grok pattern.
+The `parse_grok` function parses a string according to a grok pattern.
 
 ### `input: string`
 
