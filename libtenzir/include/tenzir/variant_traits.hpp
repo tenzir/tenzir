@@ -126,19 +126,29 @@ public:
     return backing_traits::template get<I>(t.get_data());
   }
 };
+
+// Intentionally not defined.
+template <class... Ts>
+auto as_std_variant(const std::variant<Ts...>& x) -> std::variant<Ts...>;
+
 } // namespace detail
 
-template <class... Ts>
-class variant_traits<std::variant<Ts...>> {
+template <concepts::unqualified T>
+  requires(
+    std::same_as<decltype(detail::as_std_variant(std::declval<const T&>()), 0),
+                 int>)
+class variant_traits<T> {
 public:
-  static constexpr auto count = sizeof...(Ts);
+  static constexpr auto count
+    = std::variant_size_v<decltype(detail::as_std_variant(
+      std::declval<const T&>()))>;
 
-  static constexpr auto index(const std::variant<Ts...>& x) -> size_t {
+  static constexpr auto index(const T& x) -> size_t {
     return x.index();
   }
 
   template <size_t I>
-  static constexpr auto get(const std::variant<Ts...>& x) -> decltype(auto) {
+  static constexpr auto get(const T& x) -> decltype(auto) {
     return *std::get_if<I>(&x);
   }
 };

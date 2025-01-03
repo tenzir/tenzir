@@ -401,6 +401,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     TENZIR_DEBUG("{} got EXIT from {}: {}", *self, source_name, msg.reason);
     const auto node_shutdown_reason
       = msg.reason == caf::exit_reason::user_shutdown
+            or msg.reason == ec::silent
           ? msg.reason
           : diagnostic::error(msg.reason)
               .note("node terminates after receiving error from {}",
