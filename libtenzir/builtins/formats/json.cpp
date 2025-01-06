@@ -213,7 +213,7 @@ public:
     return true;
   }
 
-  [[nodiscard]] auto parse_value(simdjson::ondemand::value val, auto builder,
+  [[nodiscard]] auto parse_value(simdjson::ondemand::value val, auto&& builder,
                                  size_t depth) -> result {
     TENZIR_ASSERT(depth <= defaults::max_recursion,
                   "nesting too deep in JSON parser");
@@ -254,7 +254,7 @@ public:
 
 private:
   [[nodiscard]] auto
-  parse_number(simdjson::ondemand::value val, auto builder) -> result {
+  parse_number(simdjson::ondemand::value val, auto&& builder) -> result {
     auto kind = simdjson::ondemand::number_type{};
     auto result = val.get_number_type();
     if (result.error()) {
@@ -309,7 +309,7 @@ private:
   }
 
   [[nodiscard]] auto
-  parse_string(simdjson::ondemand::value val, auto builder) -> result {
+  parse_string(simdjson::ondemand::value val, auto&& builder) -> result {
     auto maybe_str = val.get_string();
     if (maybe_str.error()) {
       report_parse_err(val, "a string");
@@ -1261,7 +1261,6 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
-    // TODO: Consider adding a `precise` option (this needs evaluator support).
     TRY(argument_parser2::function("parse_json")
           .positional("x", expr, "string")
           .parse(inv, ctx));
@@ -1270,15 +1269,19 @@ public:
                                                                session ctx) {
         return map_series(eval(expr), [&](series arg) {
           auto f = detail::overload{
-            [&](const arrow::NullArray&) {
+            [&](const arrow::NullArray&) -> multi_series {
               return arg;
             },
-            [&](const arrow::StringArray& arg) {
+            [&](const arrow::StringArray& arg) -> multi_series {
               auto parser = simdjson::ondemand::parser{};
-              auto b = series_builder{};
+              /// TODO consider keeping this builder alive
+              auto builder
+                = multi_series_builder{multi_series_builder::policy_default{},
+                                       multi_series_builder::settings_type{},
+                                       ctx};
               for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
-                  b.null();
+                  builder.null();
                   continue;
                 }
                 auto str = std::string{arg.Value(i)};
@@ -1288,36 +1291,27 @@ public:
                   diagnostic::warning("{}", error_message(doc.error()))
                     .primary(call)
                     .emit(ctx);
-                  b.null();
+                  builder.null();
                   continue;
                 }
                 const auto result
-                  = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
+                  = doc_p.parse_value(doc.get_value(), builder, 0);
                 switch (result) {
                   case doc_parser::result::failure_with_write:
-                    b.remove_last();
+                    builder.remove_last();
                     [[fallthrough]];
                   case doc_parser::result::failure_no_change:
                     diagnostic::warning("could not parse json")
                       .primary(call)
                       .emit(ctx);
-                    b.null();
+                    builder.null();
                     break;
                   case doc_parser::result::success: /*no op*/;
                 }
               }
-              auto result = b.finish();
-              // TODO: Consider whether we need heterogeneous for this. If so,
-              // then we must extend the evaluator accordingly.
-              if (result.size() != 1) {
-                diagnostic::warning("got incompatible JSON values")
-                  .primary(call)
-                  .emit(ctx);
-                return series::null(null_type{}, arg.length());
-              }
-              return std::move(result[0]);
+              return multi_series{builder.finalize()};
             },
-            [&](const auto&) {
+            [&](const auto&) -> multi_series {
               diagnostic::warning("`parse_json` expected `string`, got `{}`",
                                   arg.type.kind())
                 .primary(call)

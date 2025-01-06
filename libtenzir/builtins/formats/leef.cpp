@@ -363,34 +363,29 @@ public:
       [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
         return map_series(eval(expr), [&](series arg) {
           auto f = detail::overload{
-            [&](const arrow::NullArray&) {
+            [&](const arrow::NullArray&) -> multi_series {
               return arg;
             },
-            [&](const arrow::StringArray& arg) {
-              auto b = series_builder{};
+            [&](const arrow::StringArray& arg) -> multi_series {
+              auto builder = multi_series_builder{
+                multi_series_builder::policy_default{},
+                multi_series_builder::settings_type{},
+                ctx,
+              };
               for (auto string : arg) {
                 if (not string) {
-                  b.null();
+                  builder.null();
                   continue;
                 }
-                auto diag = parse_line(*string, b);
+                auto diag = parse_line(*string, builder);
                 if (diag) {
                   ctx.dh().emit(std::move(*diag));
-                  b.null();
+                  builder.null();
                 }
               }
-              auto result = b.finish();
-              // TODO: Consider whether we need heterogeneous for this. If so,
-              // then we must extend the evaluator accordingly.
-              if (result.size() != 1) {
-                diagnostic::warning("got incompatible CEF messages")
-                  .primary(call)
-                  .emit(ctx);
-                return series::null(null_type{}, arg.length());
-              }
-              return std::move(result[0]);
+              return multi_series{builder.finalize()};
             },
-            [&](const auto&) {
+            [&](const auto&) -> multi_series {
               diagnostic::warning("`parse_leef` expected `string`, got `{}`",
                                   arg.type.kind())
                 .primary(call)

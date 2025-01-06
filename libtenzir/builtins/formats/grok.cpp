@@ -697,7 +697,7 @@ public:
     auto pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
-    TRY(argument_parser2::function("grok")
+    TRY(argument_parser2::function("parse_grok")
           .positional("input", input, "string")
           .positional("pattern", pattern)
           .named("indexed_captures", indexed_captures)
@@ -713,7 +713,7 @@ public:
     return function_use::make([input = std::move(input),
                                parser = std::move(parser)](evaluator eval,
                                                            session ctx) {
-      return map_series(eval(input), [&](series values) {
+      return map_series(eval(input), [&](series values) -> multi_series {
         if (values.type.kind().is<null_type>()) {
           return values;
         }
@@ -725,14 +725,7 @@ public:
           return series::null(null_type{}, eval.length());
         }
         auto output = parser.parse_strings(*strings, ctx.dh());
-        // TODO: Evaluator can only handle single type atm.
-        if (output.size() != 1) {
-          diagnostic::warning("varying type within batch is not yet supported")
-            .primary(input)
-            .emit(ctx);
-          return series::null(null_type{}, eval.length());
-        }
-        return std::move(output[0]);
+        return multi_series{std::move(output)};
       });
     });
   }
