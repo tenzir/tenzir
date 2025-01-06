@@ -1,0 +1,27 @@
+[
+  invocation {
+    op: {
+      path: [
+        `from` @ 0..4
+      ],
+      ref: unresolved
+    },
+    args: [
+      binary_expr {
+        left: constant {
+          value: int64 1,
+          source: 5..6
+        },
+        op: "or_" @ 7..9,
+        right: constant {
+          value: int64 2,
+          source: 10..11
+        }
+      },
+      constant {
+        value: int64 3,
+        source: 13..14
+      }
+    ]
+  }
+]
