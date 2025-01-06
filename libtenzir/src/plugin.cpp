@@ -394,6 +394,8 @@ caf::error initialize(caf::actor_system_config& cfg) {
   map_t save_schemes;
   map_t read_extensions;
   map_t write_extensions;
+  map_t compress_extensions;
+  map_t decompress_extensions;
   constexpr static auto check
     = [](std::string_view what, std::string_view name,
          std::span<const std::string> list, map_t& map) -> caf::error {
@@ -413,12 +415,22 @@ caf::error initialize(caf::actor_system_config& cfg) {
     const auto name = l->name();
     const auto load_prop = l->load_properties();
     const auto save_prop = l->save_properties();
+    const auto compress_prop = l->compress_properties();
+    const auto decompress_prop = l->decompress_properties();
     const auto read_prop = l->read_properties();
     const auto write_prop = l->write_properties();
     if (auto e = check("load scheme", name, load_prop.schemes, load_schemes)) {
       return e;
     }
     if (auto e = check("save scheme", name, save_prop.schemes, save_schemes)) {
+      return e;
+    }
+    if (auto e = check("compress extension", name, compress_prop.extensions,
+                       compress_extensions)) {
+      return e;
+    }
+    if (auto e = check("decompress extension", name, decompress_prop.extensions,
+                       decompress_extensions)) {
       return e;
     }
     if (auto e = check("read extension", name, read_prop.extensions,
