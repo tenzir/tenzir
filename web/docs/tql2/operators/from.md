@@ -69,8 +69,8 @@ schemes. If no scheme is present, the connector attempts to load from the filesy
 ### Decompressing
 
 The compression is inferred from the "file-ending" in the URI. Under the hood,
-this uses the [`decompress` operator](decompress.md).
-Supported compressions can be found in the [list of supported codecs](decompress.md#codec-str).
+this uses the [`decompress_*` operators](../operators.md#encode--decode).
+Supported compressions can be found in the [list of compression extensions](#compression).
 
 The decompression step is optional and will only happen if a compression could be
 inferred. If you know that the source is compressed and the compression cannot be
@@ -102,7 +102,7 @@ from "myfile.json.gz"
 ```
 ```tql title="Effective pipeline"
 load_file "myfile.json.gz"
-decompress "gzip"
+decompress_gzip
 read_json
 ```
 
@@ -193,7 +193,7 @@ Provide an explicit header to the CSV parser:
 
 ```tql
 from "path/to/my/load/file.csv.bz2" {
-  decompress "brotli" // this is now necessary due to the pipeline argument
+  decompress_brotli // this is now necessary due to the pipeline argument
   read_csv header="col1,col2,col3"
 }
 ```
