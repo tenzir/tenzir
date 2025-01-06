@@ -24,7 +24,7 @@ Tenzir Node v4.25 offers several new sinks for sending your data. The [`to_snowf
 new [`to_opensearch`](/next/tql2/operators/to_opensearch) and [`to_elasticsearch`](/next/tql2/operators/to_elasticsearch) sink operators allow direct data output to
 [OpenSearch](https://opensearch.org/) and [Elasticsearch](https://www.elastic.co/elasticsearch), two powerful search and analytics engines.
 
-For more information on using Tenzir in combination with these new sinks, check out our integration pages for [OpenSearch](/next/integrations/opensearch), 
+For more information on using Tenzir in combination with these new sinks, check out our integration pages for [OpenSearch](/next/integrations/opensearch),
 [ElasticSearch](/next/integrations/elasticsearch) and [Snowflake](/next/integrations/snowflake)
 
 ## TQL2
