@@ -176,16 +176,17 @@ dev = ["freezegun (>=1.0,<2.0)", "pytest (>=6.0)", "pytest-cov"]
 
 [[package]]
 name = "bash-kernel"
-version = "0.9.3"
+version = "0.10.0"
 description = "A bash kernel for Jupyter"
 optional = false
 python-versions = "*"
 files = [
-    {file = "bash_kernel-0.9.3-py2.py3-none-any.whl", hash = "sha256:71297892a8c4edd4633aa42d4bccf662f147438e375b4093b6a3261321715099"},
-    {file = "bash_kernel-0.9.3.tar.gz", hash = "sha256:9f7a03811ca7d9cb1fbff8082237cf0450b97182252fd0b80587a16b65e66d58"},
+    {file = "bash_kernel-0.10.0-py2.py3-none-any.whl", hash = "sha256:da28513230f5307c7a49e87352366304dc52b66faa207d6caed1b2bdec03c1fa"},
+    {file = "bash_kernel-0.10.0.tar.gz", hash = "sha256:2ed5a0a416c418d1d751e71505bd6c889e12157444b50c4287a685da775c28ca"},
 ]
 
 [package.dependencies]
+filetype = "*"
 ipykernel = "*"
 pexpect = ">=4.0"
 
@@ -517,6 +518,17 @@ files = [
 
 [package.extras]
 devel = ["colorama", "json-spec", "jsonschema", "pylint", "pytest", "pytest-benchmark", "pytest-cache", "validictory"]
+
+[[package]]
+name = "filetype"
+version = "1.2.0"
+description = "Infer file type and MIME type of any file/buffer. No external dependencies."
+optional = false
+python-versions = "*"
+files = [
+    {file = "filetype-1.2.0-py2.py3-none-any.whl", hash = "sha256:7ce71b6880181241cf7ac8697a2f1eb6a8bd9b429f7ad6d27b8db9ba5f1c2d25"},
+    {file = "filetype-1.2.0.tar.gz", hash = "sha256:66b56cd6474bf41d8c54660347d37afcc3f7d1970648de365c102ef77548aadb"},
+]
 
 [[package]]
 name = "fqdn"
@@ -2164,4 +2176,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "99d7e28b57131332f58357987ae3a9158d584438bf71d266dc9c8d3e4c3cd804"
+content-hash = "b667f9d95433209ce1940741430c745ac0310cb975b777f2ad9d9b4ee0b0c0c3"
