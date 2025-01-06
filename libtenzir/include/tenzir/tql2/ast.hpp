@@ -12,6 +12,8 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/detail/type_list.hpp"
+#include "tenzir/diagnostics.hpp"
+#include "tenzir/let_id.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_path.hpp"
 
@@ -83,10 +85,32 @@ struct underscore : location {
   }
 };
 
-struct dollar_var : identifier {
-  auto get_location() const -> tenzir::location {
-    return identifier::location;
+struct dollar_var {
+  dollar_var() = default;
+
+  explicit dollar_var(identifier ident) : ident{std::move(ident)} {
   }
+
+  auto name_without_dollar() const -> std::string_view {
+    TENZIR_ASSERT(ident.name.starts_with("$"));
+    return std::string_view{ident.name}.substr(1);
+  }
+
+  auto get_location() const -> tenzir::location {
+    return ident.location;
+  }
+
+  friend auto inspect(auto& f, dollar_var& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      return dbg->fmt_value("`{}`", x.ident.name)
+             && dbg->append(" -> {:?}", x.let)
+             && dbg->append(" @ {:?}", x.ident.location);
+    }
+    return f.object(x).fields(f.field("ident", x.ident), f.field("let", x.let));
+  }
+
+  identifier ident;
+  let_id let;
 };
 
 struct null {};
@@ -108,6 +132,14 @@ struct constant {
   location source;
 
   friend auto inspect(auto& f, constant& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      if (auto t = try_as<time>(x.value)) {
+        // Time printing is not reliable across platforms otherwise.
+        return dbg->fmt_value("time {} @ {:?}", data{*t}, x.source);
+      }
+      return dbg->fmt_value("{:?} @ {:?}", use_default_formatter{x.value},
+                            x.source);
+    }
     return f.object(x).fields(f.field("value", x.value),
                               f.field("source", x.source));
   }
@@ -155,6 +187,8 @@ using expression_kinds
 
 using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
+TENZIR_ENUM(substitute_result, no_remaining, some_remaining);
+
 struct expression {
   expression() = default;
 
@@ -198,6 +232,15 @@ struct expression {
   auto match(Fs&&... fs) const&& -> decltype(auto);
 
   auto get_location() const -> location;
+
+  /// Performs name-resolution for all free `$` variables.
+  auto bind(compile_ctx ctx) & -> failure_or<void>;
+
+  /// Partially substitute previously name-resolved variables.
+  auto substitute(substitute_ctx ctx) & -> failure_or<substitute_result>;
+
+  /// Returns true if the expression always returns the same value.
+  auto is_deterministic(const registry& reg) const -> bool;
 };
 
 /// A "simple selector" has a path that contains only constant field names.
@@ -563,6 +606,8 @@ struct pipeline {
   friend auto inspect(Inspector& f, pipeline& x) -> bool {
     return f.apply(x.body);
   }
+
+  auto compile(compile_ctx ctx) && -> failure_or<ir::pipeline>;
 };
 
 struct let_stmt {
@@ -581,33 +626,51 @@ struct let_stmt {
                               f.field("expr", x.expr));
   }
 
+  auto name_without_dollar() const -> std::string_view {
+    TENZIR_ASSERT(name.name.starts_with("$"));
+    return std::string_view{name.name}.substr(1);
+  }
+
   auto get_location() const -> location {
     return let.combine(expr);
   }
 };
 
 struct if_stmt {
+  struct else_t {
+    location kw;
+    pipeline pipe;
+
+    friend auto inspect(auto& f, else_t& x) -> bool {
+      return f.object(x).fields(f.field("kw", x.kw), f.field("pipe", x.pipe));
+    }
+  };
+
   if_stmt() = default;
 
-  if_stmt(expression condition, pipeline then, std::optional<pipeline> else_)
-    : condition{std::move(condition)},
+  if_stmt(location if_kw, expression condition, pipeline then,
+          std::optional<else_t> else_)
+    : if_kw{if_kw},
+      condition{std::move(condition)},
       then{std::move(then)},
       else_{std::move(else_)} {
   }
 
+  location if_kw;
   expression condition;
   pipeline then;
-  std::optional<pipeline> else_;
+  std::optional<else_t> else_;
 
   friend auto inspect(auto& f, if_stmt& x) -> bool {
-    return f.object(x).fields(f.field("condition", x.condition),
+    return f.object(x).fields(f.field("if_kw", x.if_kw),
+                              f.field("condition", x.condition),
                               f.field("then", x.then),
                               f.field("else", x.else_));
   }
 
   auto get_location() const -> location {
     // TODO
-    return condition.get_location();
+    return if_kw;
   }
 };
 
@@ -739,7 +802,9 @@ protected:
   void enter(if_stmt& x) {
     go(x.condition);
     go(x.then);
-    go(x.else_);
+    if (x.else_) {
+      go(x.else_->pipe);
+    }
   }
 
   void enter(entity& x) {
@@ -842,7 +907,7 @@ protected:
   }
 
   void enter(ast::dollar_var& x) {
-    go(static_cast<ast::identifier&>(x));
+    TENZIR_UNUSED(x);
   }
 
   void enter(ast::unpack& x) {

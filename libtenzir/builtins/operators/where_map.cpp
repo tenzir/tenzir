@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
@@ -17,13 +18,17 @@
 #include <tenzir/detail/debug_writer.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/exec.hpp>
 #include <tenzir/expression.hpp>
+#include <tenzir/finalize_ctx.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/modules.hpp>
 #include <tenzir/null_bitmap.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql/basic.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -677,8 +682,87 @@ public:
   }
 };
 
+// TODO: Don't want to write this fully ourselves.
+class where_exec final : public exec::operator_base {
+public:
+  where_exec() = default;
+
+  auto name() const -> std::string override {
+    return "where_exec";
+  }
+
+  explicit where_exec(ast::expression predicate)
+    : predicate_{std::move(predicate)} {
+  }
+
+  friend auto inspect(auto& f, where_exec& x) -> bool {
+    return f.apply(x.predicate_);
+  }
+
+private:
+  ast::expression predicate_;
+};
+
+// TODO: Don't want to write this fully ourselves.
+class where_ir final : public ir::operator_base {
+public:
+  where_ir() = default;
+
+  where_ir(location self, ast::expression predicate)
+    : self_{self}, predicate_{std::move(predicate)} {
+  }
+
+  auto name() const -> std::string override {
+    return "where_ir";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    (void)instantiate;
+    TRY(predicate_.substitute(ctx));
+    return {};
+  }
+
+  // TODO: Should this get the type of the input?
+  // Or do we get it earlier? Or later?
+  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+    (void)ctx;
+    return std::make_unique<where_exec>(std::move(predicate_));
+  }
+
+  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<operator_type2>> override {
+    if (input.is_not<table_slice>()) {
+      // TODO: Do not duplicate these messages across the codebase.
+      diagnostic::error("operator expects events").primary(self_).emit(dh);
+      return failure::promise();
+    }
+    return tag_v<table_slice>;
+  }
+
+  auto optimize(ir::optimize_filter filter,
+                event_order order) && -> ir::optimize_result override {
+    // TODO: Shall we avoid optimizing if it doesn't make sense?
+    filter.insert(filter.begin(), std::move(predicate_));
+    return ir::optimize_result{std::move(filter), order, {}};
+  }
+
+  friend auto inspect(auto& f, where_ir& x) -> bool {
+    return f.object(x).fields(f.field("self", x.self_),
+                              f.field("predicate", x.predicate_));
+  }
+
+private:
+  location self_;
+  ast::expression predicate_;
+};
+
+TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::operator_base, where_ir>)
+TENZIR_REGISTER_PLUGIN(inspection_plugin<exec::operator_base, where_exec>)
+
 class where_plugin final : public virtual operator_factory_plugin,
-                           public virtual function_plugin {
+                           public virtual function_plugin,
+                           public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.where";
@@ -691,6 +775,22 @@ public:
           .positional("predicate", expr, "bool")
           .parse(inv, ctx));
     return std::make_unique<where_assert_operator>(std::move(expr), false);
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::operator_ptr> override {
+    // TODO: This should use the argument parser IR wrapper.
+    auto expr = ast::expression{};
+    // TODO: Yeah. No.
+    auto provider = session_provider::make(ctx);
+    auto loc = inv.op.get_location();
+    TRY(argument_parser2::operator_("where")
+          .positional("predicate", expr, "bool")
+          .parse(operator_factory_plugin::invocation{std::move(inv.op),
+                                                     std::move(inv.args)},
+                 provider.as_session()));
+    TRY(expr.bind(ctx));
+    return std::make_unique<where_ir>(loc, std::move(expr));
   }
 
   auto make_function(function_plugin::invocation inv, session ctx) const

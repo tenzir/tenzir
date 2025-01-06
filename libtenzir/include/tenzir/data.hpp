@@ -190,7 +190,11 @@ public:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, data& x) {
+  friend auto inspect(Inspector& f, data& x) -> bool {
+    if (auto dbg = as_debug_writer(f); dbg and is<time>(x.data_)) {
+      // Time printing is not reliable across platforms otherwise.
+      return dbg->fmt_value("time {}", x);
+    }
     return f.apply(x.data_);
   }
 

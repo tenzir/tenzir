@@ -1,0 +1,5 @@
+let $foo = 42
+
+// This test is for the legacy operator. It will fail once we upgrade `version`.
+// We should then replace `version` with another legacy operator.
+version $foo

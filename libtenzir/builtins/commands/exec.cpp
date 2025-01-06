@@ -64,6 +64,12 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   }
   cfg.dump_tokens = caf::get_or(inv.options, "tenzir.exec.dump-tokens", false);
   cfg.dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
+  cfg.dump_ir = caf::get_or(inv.options, "tenzir.exec.dump-ir", false);
+  cfg.dump_inst_ir
+    = caf::get_or(inv.options, "tenzir.exec.dump-inst-ir", false);
+  cfg.dump_opt_ir = caf::get_or(inv.options, "tenzir.exec.dump-opt-ir", false);
+  cfg.dump_finalized
+    = caf::get_or(inv.options, "tenzir.exec.dump-finalized", false);
   cfg.dump_pipeline
     = caf::get_or(inv.options, "tenzir.exec.dump-pipeline", false);
   cfg.dump_diagnostics
@@ -144,6 +150,14 @@ public:
                    "print a textual description of the tokens and then exit")
         .add<bool>("dump-ast",
                    "print a textual description of the AST and then exit")
+        .add<bool>("dump-ir",
+                   "print a textual description of the IR and then exit")
+        .add<bool>("dump-inst-ir", "print a textual description of the "
+                                   "instantiated IR and then exit")
+        .add<bool>("dump-opt-ir", "print a textual description of the "
+                                  "optimized IR and then exit")
+        .add<bool>("dump-finalized", "print a textual description of the "
+                                     "finalized pipeline and then exit")
         .add<bool>("dump-diagnostics",
                    "print all diagnostics to stdout before exiting")
         .add<bool>("dump-metrics",

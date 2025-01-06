@@ -6,16 +6,22 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/croncpp.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/exec.hpp>
+#include <tenzir/finalize_ctx.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/substitute_ctx.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
@@ -334,7 +340,107 @@ private:
 };
 using cron_plugin = scheduled_execution_plugin<cron_scheduler>;
 
-class every_plugin2 final : public virtual operator_factory_plugin {
+class every_exec final : public exec::operator_base {
+public:
+  every_exec() = default;
+
+  every_exec(duration interval, ir::pipeline pipe)
+    : interval_{interval}, pipe_{std::move(pipe)} {
+  }
+
+  auto name() const -> std::string override {
+    return "every_exec";
+  }
+
+  friend auto inspect(auto& f, every_exec& x) -> bool {
+    return f.object(x).fields(f.field("interval", x.interval_),
+                              f.field("pipe", x.pipe_));
+  }
+
+private:
+  // TODO: This needs to be part of the actor.
+  auto start_new(base_ctx ctx) const -> failure_or<exec::pipeline> {
+    auto copy = pipe_;
+    TRY(copy.substitute(substitute_ctx{ctx, nullptr}, true));
+    // TODO: Where is the type check?
+    return std::move(copy).finalize(finalize_ctx{ctx});
+  }
+
+  duration interval_{};
+  ir::pipeline pipe_;
+};
+
+using every_exec_plugin = inspection_plugin<exec::operator_base, every_exec>;
+
+class every_ir final : public ir::operator_base {
+public:
+  every_ir() = default;
+
+  every_ir(ast::expression interval, ir::pipeline pipe)
+    : interval_{std::move(interval)}, pipe_{std::move(pipe)} {
+  }
+
+  auto name() const -> std::string override {
+    return "every_ir";
+  }
+
+  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+    (void)ctx;
+    // TODO: Test the instantiation of the subpipeline? But in general,
+    // instantiation is done later by the actor.
+    // TRY(auto pipe, tenzir::instantiate(std::move(pipe_), ctx));
+    // We know that this succeeds because instantiation must happen before.
+    auto interval = as<duration>(interval_);
+    return std::make_unique<every_exec>(interval, std::move(pipe_));
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    TRY(match(
+      interval_,
+      [&](ast::expression& expr) -> failure_or<void> {
+        TRY(expr.substitute(ctx));
+        if (instantiate or expr.is_deterministic(ctx)) {
+          TRY(auto value, const_eval(expr, ctx));
+          auto cast = try_as<duration>(value);
+          if (not cast) {
+            diagnostic::error("expected `duration`, got `TODO`")
+              .primary(expr)
+              .emit(ctx);
+            return failure::promise();
+          }
+          // We can also do some extended validation here...
+          if (*cast <= duration::zero()) {
+            diagnostic::error("expected a positive duration")
+              .primary(expr)
+              .emit(ctx);
+            return failure::promise();
+          }
+          interval_ = *cast;
+        }
+        return {};
+      },
+      [&](duration&) -> failure_or<void> {
+        return {};
+      }));
+    TRY(pipe_.substitute(ctx, false));
+    return {};
+  }
+
+  friend auto inspect(auto& f, every_ir& x) -> bool {
+    return f.object(x).fields(f.field("interval", x.interval_),
+                              f.field("pipe", x.pipe_));
+  }
+
+private:
+  variant<ast::expression, duration> interval_;
+  ir::pipeline pipe_;
+};
+
+using every_ir_plugin = inspection_plugin<ir::operator_base, every_ir>;
+
+class every_plugin2 final : public virtual operator_factory_plugin,
+                            public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.every";
@@ -368,6 +474,22 @@ public:
     }
     return std::make_unique<scheduled_execution_operator<every_scheduler>>(
       std::move(pipe), every_scheduler{interval.inner}, *location);
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::operator_ptr> override {
+    // TODO: Improve this with argument parser.
+    if (inv.args.size() != 2) {
+      diagnostic::error("expected exactly two arguments")
+        .primary(inv.op)
+        .emit(ctx);
+      return failure::promise();
+    }
+    TRY(inv.args[0].bind(ctx));
+    auto pipe = as<ast::pipeline_expr>(inv.args[1]);
+    TRY(auto pipe_ir, std::move(pipe.inner).compile(ctx));
+    return std::make_unique<every_ir>(std::move(inv.args[0]),
+                                      std::move(pipe_ir));
   }
 };
 
@@ -425,5 +547,7 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::cron_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_exec_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_ir_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin2)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::cron_plugin2)

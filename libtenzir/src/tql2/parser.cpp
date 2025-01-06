@@ -157,24 +157,26 @@ public:
   }
 
   auto parse_if_stmt() -> if_stmt {
-    expect(tk::if_);
+    auto if_kw = expect(tk::if_);
     auto condition = parse_expression();
     expect(tk::lbrace);
     auto consequence = parse_pipeline();
     expect(tk::rbrace);
-    auto alternative = std::optional<ast::pipeline>{};
-    if (accept(tk::else_)) {
+    auto alternative = std::optional<ast::if_stmt::else_t>{};
+    if (auto else_kw = accept(tk::else_)) {
+      alternative.emplace(else_kw.location, ast::pipeline{});
       if (peek(tk::if_)) {
         auto body = std::vector<statement>{};
         body.emplace_back(parse_if_stmt());
-        alternative = ast::pipeline{std::move(body)};
+        alternative->pipe = ast::pipeline{std::move(body)};
       } else {
         expect(tk::lbrace);
-        alternative = parse_pipeline();
+        alternative->pipe = parse_pipeline();
         expect(tk::rbrace);
       }
     }
     return if_stmt{
+      if_kw.location,
       std::move(condition),
       std::move(consequence),
       std::move(alternative),

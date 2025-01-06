@@ -162,6 +162,12 @@ public:
     = 0;
 
   virtual auto function_name() const -> std::string;
+
+  virtual auto is_deterministic() const -> bool {
+    // TODO: Consider making this pure-virtual or changing the default, as most
+    // functions are deterministic.
+    return false;
+  }
 };
 
 class aggregation_instance {

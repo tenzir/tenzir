@@ -8,10 +8,14 @@
 
 #pragma once
 
+#include "tenzir/base_ctx.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 namespace tenzir {
+
+// TODO: This supersedes the `session` overload, which should be removed soon.
+auto resolve_entities(ast::pipeline& pipe, base_ctx ctx) -> failure_or<void>;
 
 auto resolve_entities(ast::pipeline& pipe, session ctx) -> failure_or<void>;
 

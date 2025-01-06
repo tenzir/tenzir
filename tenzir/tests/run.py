@@ -80,6 +80,32 @@ def last_and(gen):
     yield (True, previous)
 
 
+def print_diff(expected: bytes, actual: bytes, path: Path):
+    diff = list(
+        difflib.diff_bytes(
+            difflib.unified_diff,
+            expected.splitlines(keepends=True),
+            actual.splitlines(keepends=True),
+            n=2,
+        )
+    )
+    with stdout_lock:
+        skip = 2
+        for i, line in enumerate(diff):
+            if skip > 0:
+                skip -= 1
+                continue
+            if line.startswith(b"@@"):
+                print(f"┌─▶ \033[31m{path.relative_to(ROOT)}\033[0m")
+                continue
+            if line.startswith(b"+"):
+                line = b"\033[92m" + line + b"\033[0m"
+            elif line.startswith(b"-"):
+                line = b"\033[31m" + line + b"\033[0m"
+            prefix = ("│ " if i != len(diff) - 1 else "└─").encode()
+            sys.stdout.buffer.write(prefix + line)
+
+
 def run_simple_test(
     test: Path, *, update: bool, args: typing.Sequence[str] = (), ext: str
 ) -> bool:
@@ -120,32 +146,9 @@ def run_simple_test(
             return False
         expected = ref_path.read_bytes()
         if expected != output:
-            diff = list(
-                difflib.diff_bytes(
-                    difflib.unified_diff,
-                    expected.splitlines(keepends=True),
-                    output.splitlines(keepends=True),
-                    # b"expected",
-                    # b"actual",
-                    n=2,
-                )
-            )
             with stdout_lock:
                 fail(test)
-                skip = 2
-                for i, line in enumerate(diff):
-                    if skip > 0:
-                        skip -= 1
-                        continue
-                    if line.startswith(b"@@"):
-                        print(f"┌─▶ \033[31m{ref_path.relative_to(ROOT)}\033[0m")
-                        continue
-                    if line.startswith(b"+"):
-                        line = b"\033[92m" + line + b"\033[0m"
-                    elif line.startswith(b"-"):
-                        line = b"\033[31m" + line + b"\033[0m"
-                    prefix = ("│ " if i != len(diff) - 1 else "└─").encode()
-                    sys.stdout.buffer.write(prefix + line)
+                print_diff(expected, output, ref_path)
             return False
     success(test)
     return True
@@ -215,6 +218,77 @@ class AstRunner(TqlRunner):
 
     def run(self, test: str, update: bool) -> bool:
         return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt")
+
+
+class IrRunner(TqlRunner):
+    def __init__(self):
+        super().__init__(prefix="ir")
+
+    def run(self, test: str, update: bool) -> bool:
+        return run_simple_test(test, update=update, args=("--dump-ir",), ext="txt")
+
+
+class DiffRunner(TqlRunner):
+    def __init__(self, *, a: str, b: str, prefix: str):
+        super().__init__(prefix=prefix)
+        self._a = a
+        self._b = b
+
+    def run(self, test: Path, update: bool) -> bool:
+        unoptimized = subprocess.run(
+            [BINARY, self._a, "-f", test], timeout=TIMEOUT, stdout=subprocess.PIPE
+        )
+        optimized = subprocess.run(
+            [BINARY, self._b, "-f", test],
+            timeout=TIMEOUT,
+            stdout=subprocess.PIPE,
+        )
+        diff = list(
+            difflib.diff_bytes(
+                difflib.unified_diff,
+                unoptimized.stdout.splitlines(keepends=True),
+                optimized.stdout.splitlines(keepends=True),
+                n=float("inf"),
+            )
+        )[3:]
+        if diff:
+            diff = b"".join(diff)
+        else:
+            diff = b"".join(
+                map(lambda x: b" " + x, unoptimized.stdout.splitlines(keepends=True))
+            )
+        ref_path = test.with_suffix(".diff")
+        if update:
+            ref_path.write_bytes(diff)
+        else:
+            expected = ref_path.read_bytes()
+            if diff != expected:
+                with stdout_lock:
+                    fail(test)
+                    print_diff(expected, diff, ref_path)
+                    return False
+        success(test)
+        return True
+
+
+class InstantiationRunner(DiffRunner):
+    def __init__(self):
+        super().__init__(a="--dump-ir", b="--dump-inst-ir", prefix="instantiation")
+
+
+class OptRunner(DiffRunner):
+    def __init__(self):
+        super().__init__(a="--dump-inst-ir", b="--dump-opt-ir", prefix="opt")
+
+
+class FinalizeRunner(TqlRunner):
+    def __init__(self):
+        super().__init__(prefix="finalize")
+
+    def run(self, test: str, update: bool) -> bool:
+        return run_simple_test(
+            test, update=update, args=("--dump-finalized",), ext="txt"
+        )
 
 
 class ExecRunner(TqlRunner):
@@ -290,7 +364,15 @@ class CustomFixture(ExtRunner):
         return True
 
 
-RUNNERS = [AstRunner(), ExecRunner(), CustomFixture()]
+RUNNERS = [
+    AstRunner(),
+    ExecRunner(),
+    CustomFixture(),
+    IrRunner(),
+    InstantiationRunner(),
+    OptRunner(),
+    FinalizeRunner(),
+]
 
 runners = {}
 for runner in RUNNERS:
@@ -337,9 +419,9 @@ def main() -> None:
     parser.add_argument("tests", nargs="*", type=Path, default=[ROOT])
     parser.add_argument("-u", "--update", action="store_true")
     parser.add_argument("--purge", action="store_true")
-    parser.add_argument("-j", "--jobs", type=int, default=16, metavar="N")
+    default_jobs = 4 * (os.cpu_count() or 16)
+    parser.add_argument("-j", "--jobs", type=int, default=default_jobs, metavar="N")
     args = parser.parse_args()
-    #
     if args.purge:
         for _, runner in runners.items():
             runner.purge()

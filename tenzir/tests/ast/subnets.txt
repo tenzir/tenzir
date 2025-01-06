@@ -12,24 +12,15 @@
         items: [
           field {
             name: `x` @ 9..10,
-            expr: constant {
-              value: subnet 1.2.3.0/24,
-              source: 12..22
-            }
+            expr: constant subnet 1.2.3.0/24 @ 12..22
           },
           field {
             name: `z` @ 26..27,
-            expr: constant {
-              value: subnet 1.2.3.0/24,
-              source: 29..47
-            }
+            expr: constant subnet 1.2.3.0/24 @ 29..47
           },
           field {
             name: `y` @ 51..52,
-            expr: constant {
-              value: subnet ::/1,
-              source: 54..58
-            }
+            expr: constant subnet ::/1 @ 54..58
           }
         ],
         end: 60..61
