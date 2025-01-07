@@ -549,6 +549,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((std::vector<std::filesystem::path>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::expression>))
 
+  TENZIR_ADD_TYPE_ID((caf::typed_stream<tenzir::chunk_ptr>))
+
 CAF_END_TYPE_ID_BLOCK(tenzir_types)
 
 #undef TENZIR_CAF_ATOM_ALIAS
