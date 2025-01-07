@@ -164,7 +164,15 @@
 
         env = {
           POETRY_VIRTUALENVS_IN_PROJECT = 1;
-          NIX_LDFLAGS = lib.optionalString (stdenv.isDarwin && isStatic) "-lc++abi";
+          NIX_LDFLAGS = let
+            lto-cache = {
+              cctools = "-cache_path_lto,$TMPDIR";
+              gold = "-plugin-opt,cache-dir=$TMPDIR";
+              lld = "--thinlto-cache-dir=$TMPDIR";
+            };
+          in
+            # Speed up the second linking for the packag
+            lib.optionalString (stdenv.cc.isClang) (lto-cache.${stdenv.hostPlatform.linker} or "");
         };
         cmakeFlags =
           [
@@ -185,7 +193,7 @@
             "-DTENZIR_ENABLE_BATS_TENZIR_INSTALLATION=OFF"
             "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
           ] ++ lib.optionals isStatic [
-            #"-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
+            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=${if stdenv.hostPlatform.isLinux then "ON" else "ON"}"
             "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB;RPM"}"
             "-DTENZIR_UV_PATH:STRING=${lib.getExe uv}"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
@@ -233,6 +241,8 @@
           cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
         ''
         else ''
+          echo "!!!!!!!!!!!!!!!!!!!! AR     = $AR $(command -v $AR)"
+          echo "!!!!!!!!!!!!!!!!!!!! RANLIB = $RANLIB $(command -v $RANLIB)"
           version_build_metadata=$(basename $out | cut -d'-' -f 1)
           cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
         ''
@@ -240,11 +250,12 @@
         # executable names "llvm-ar" and "llvm-ranlib". Should work with
         # `readlink -f $AR` to find the correct ones.
           + lib.optionalString stdenv.isDarwin ''
-          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_AR=$(readlink -f $AR)")
-          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_AR=$(readlink -f $AR)")
-          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_RANLIB=$(readlink -f $RANLIB)")
-          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_RANLIB=$(readlink -f $RANLIB)")
-        '';
+          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_AR=$AR")
+          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_AR=$AR")
+          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_RANLIB=$RANLIB")
+          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_RANLIB=$RANLIB")
+        ''
+        ;
 
         hardeningDisable = lib.optionals isStatic [
           "fortify"

@@ -110,6 +110,13 @@ stdenv.mkDerivation rec {
     ++ lib.optionals stdenv.cc.isClang [
       # FLB_SECURITY causes bad linker options for Clang to be set.
       "-DFLB_SECURITY=Off"
+    ]
+    ++ lib.optionals stdenv.hostPlatform.isStatic [
+      # FLB_SECURITY causes bad linker options for Clang to be set.
+      "-DFLB_BINARY=OFF"
+      "-DFLB_SHARED_LIB=OFF"
+      "-DFLB_LUAJIT=OFF"
+      "-DFLB_OUT_PGSQL=OFF"
     ];
 
   outputs = [
@@ -117,9 +124,21 @@ stdenv.mkDerivation rec {
     "dev"
   ];
 
+  postInstall = let
+    archive-blacklist = [
+      "libxxhash.a"
+    ];
+  in lib.optionalString stdenv.hostPlatform.isStatic ''
+    set -x
+    mkdir -p $out/lib
+    find . -type f \( -name "*.a" ${lib.concatMapStrings (x: " ! -name \"${x}\"") archive-blacklist} \) \
+           -exec cp "{}" $out/lib/ \;
+    set +x
+  '';
+
   doInstallCheck = true;
 
-  nativeInstallCheckInputs = [ versionCheckHook ];
+  nativeInstallCheckInputs = lib.optionals (!stdenv.hostPlatform.isStatic) [ versionCheckHook ];
 
   versionCheckProgram = "${builtins.placeholder "out"}/bin/fluent-bit";
 

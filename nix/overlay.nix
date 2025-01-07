@@ -171,7 +171,6 @@ in {
       ++ lib.optionals stdenv.cc.isClang [
         "-DRDKAFKA_BUILD_TESTS=OFF"
       ];
-    env.NIX_LDFLAGS = lib.optionalString (isDarwin && isStatic) "-lc++abi";
   });
   mkStub = name:
     prev.writeShellScriptBin name ''
@@ -290,7 +289,6 @@ in {
         # are parsed in both projects are the same, otherwise the compiler will complain
         # at the optimization stage.
         # https://github.com/NixOS/nixpkgs/issues/130963
-        env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
         preCheck = ''
           export LD_LIBRARY_PATH=$PWD/lib
           export DYLD_LIBRARY_PATH=$PWD/lib
