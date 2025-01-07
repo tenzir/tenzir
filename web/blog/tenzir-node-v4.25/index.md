@@ -22,31 +22,31 @@ improvements.
 
 ## TQL2
 
-We continue to enhance TQL2, moving closer to making it the default language
-for writing pipelines. This release adds numerous improvements and new
-features to expand TQL2's capabilities.
+We continue enhancing TQL2 to make it the default language for writing
+pipelines. This release expands TQL2's capabilities with numerous improvements
+and features.
 
 To simplify TQL2 adoption, we introduced a TQL2-only mode. When you enable
 this mode for a Tenzir Nodes, all pipelines on that node run in TQL2, and
-the Explorer interface automatically selects TQL2 mode. On such nodes, the use
-of TQL1 is only possible through the `legacy` operator.
+the Explorer interface automatically selects TQL2 mode. On such nodes, you
+can only use TQL1 through the `legacy` operator.
 
 To enable it, set `TENZIR_TQL2=true` in your environment,
 configure `tenzir.tql2: true` in your settings, or start the node with
 `tenzir-node --tql2`.
 
 :::warning Call to Action
-We're going to make TQL2-only mode the default in the upcoming Tenzir Node 5.0
-release.
+We're going to enable TQL2-only mode by default in the upcoming
+Tenzir Node 5.0 release.
 
-Please make sure to test it out and report any issues back to us, so we can
+Please try to test it out and report any issues back to us, so we can
 ensure a seamless upgrade experience.
 :::
 
-### From and To
+### From and To Operators
 
 With the [`from`](/next/tql2/operators/from) and
-[`to`](/next/tql2/operators/to) operators, we have ported one of the last major
+[`to`](/next/tql2/operators/to) operators, we have ported one of the final major
 functionalities from TQL1 to TQL2.
 
 The [`from`](/next/tql2/operators/from) operator lets you onboard data from
@@ -65,9 +65,11 @@ from "https://example.com/file.json.gz"
 ```
 
 to automatically determine the load operator, compression, and format.
+If you want to learn more about how the automatic detection works, check
+out the [reference documentation](/next/tql2/operators/from).
 
-Conversely, the [`to`](/next/tql2/operators/to) operator makes it easy to
-send data to most destinations. For instance, instead of
+Conversely, the [`to`](/next/tql2/operators/to) operator simplifies data
+delivery to most destinations. For instance, instead of
 
 ```
 write_json
@@ -75,7 +77,7 @@ compress "gzip"
 save_file "myfile.json.gz"
 ```
 
-you can write
+you can now write
 
 ```
 to "file://file.json.gz"
@@ -151,7 +153,8 @@ to_snowflake \
 
 The new [`to_opensearch`](/next/tql2/operators/to_opensearch)
 sink operator allow direct data output to [OpenSearch](https://opensearch.org/)
-and OpenSearch Bulk API compatible providers such as [Elasticsearch](https://www.elastic.co/elasticsearch).
+and OpenSearch Bulk API compatible providers such as
+[Elasticsearch](https://www.elastic.co/elasticsearch).
 
 ![Opensearch Sink](opensearch.excalidraw.svg)
 
@@ -173,7 +176,7 @@ out our integration pages for [OpenSearch](/next/integrations/opensearch),
 
 ## Bugfixes
 
-This release also includes several important bug fixes. Notable items include:
+This release also includes several important bug fixes. Key fixes include:
 
 - Resolved a parsing error with operator parenthesis continuation to ensure
   proper evaluation of expressions like `where (x or y) and z`.
@@ -186,7 +189,10 @@ Check the [changelog][changelog] for the complete list.
 
 ## Let's Connect!
 
-We’re excited to engage with our community! Join us every second Tuesday at 5 PM CET for office hours on [Discord][discord]. Share your ideas, preview upcoming features, or chat with fellow Tenzir users and our team. Bring your questions, use cases, or just stop by to say hello!
+We’re excited to engage with our community!
+Join us every second Tuesday at 5 PM CET for office hours on [Discord][discord].
+Share your ideas, preview upcoming features, or chat with fellow Tenzir users
+and our team. Bring your questions, use cases, or just stop by to say hello!
 
 [discord]: /discord  
 [changelog]: /changelog#v4250  
