@@ -10,7 +10,7 @@ comments: true
 # Tenzir Node v4.25: Sinks Galore!
 
 Tenzir Node v4.25 adds new sinks for Snowflake, OpenSearch, and Elasticsearch,
-allowing seamless data integration and output. It also introduces major 
+allowing seamless data integration and output. It also introduces major
 enhancements to TQL2, including new language features and operator
 improvements.
 
@@ -27,8 +27,11 @@ for writing pipelines. This release adds numerous improvements and new
 features to expand TQL2's capabilities.
 
 To simplify TQL2 adoption, we introduced a TQL2-only mode. When you enable
-this mode, all pipelines run in TQL2, and the Explorer interface automatically
-selects TQL2 mode. To enable it, set `TENZIR_TQL2=true` in your environment,
+this mode for a Tenzir Nodes, all pipelines on that node run in TQL2, and
+the Explorer interface automatically selects TQL2 mode. On such nodes, the use
+of TQL1 is only possible through the `legacy` operator.
+
+To enable it, set `TENZIR_TQL2=true` in your environment,
 configure `tenzir.tql2: true` in your settings, or start the node with
 `tenzir-node --tql2`.
 
@@ -47,10 +50,9 @@ With the [`from`](/next/tql2/operators/from) and
 functionalities from TQL1 to TQL2.
 
 The [`from`](/next/tql2/operators/from) operator lets you onboard data from
-most sources effortlessly. For example, instead of 
+most sources effortlessly. For example, instead of
 
 ```
-// tql2
 load_http "https://example.com/file.json.gz"
 decompress_gzip
 read_json
@@ -59,17 +61,15 @@ read_json
 you can now write
 
 ```
-// tql2
 from "https://example.com/file.json.gz"
-``` 
+```
 
 to automatically determine the load operator, compression, and format.
 
 Conversely, the [`to`](/next/tql2/operators/to) operator makes it easy to
-send data to most destinations. For instance, instead of 
+send data to most destinations. For instance, instead of
 
 ```
-// tql2
 write_json
 compress "gzip"
 save_file "myfile.json.gz"
@@ -133,16 +133,33 @@ Tenzir Node v4.25 offers several new sinks for sending your data. The
 [`to_snowflake`](/next/tql2/operators/to_snowflake) sink enables seamless
 writing of data into [Snowflake](https://www.snowflake.com) databases, helping
 users integrate Tenzir with one of the most popular cloud data platforms.
-Additionally, the new [`to_opensearch`](/next/tql2/operators/to_opensearch)
+
+![Snowflake Sink](snowflake.excalidraw.svg)
+
+To send data to snowflake, a pipeline like this can be used:
+
+```
+from {foo: 42, bar: true}
+to_snowflake \
+  account_identifier="asldyuf-xgb47555",
+  user_name="tenzir_user",
+  password="password1234",
+  database="MY_DB",
+  schema="MY_SCHEMA",
+  table="TENZIR"
+```
+
+The new [`to_opensearch`](/next/tql2/operators/to_opensearch)
 sink operator allow direct data output to [OpenSearch](https://opensearch.org/)
-and [Elasticsearch](https://www.elastic.co/elasticsearch), two powerful
-search and analytics engines.
+and OpenSearch Bulk API compatible providers such as [Elasticsearch](https://www.elastic.co/elasticsearch).
+
+![Opensearch Sink](opensearch.excalidraw.svg)
 
 The [`to_opensearch`](/next/tql2/operators/to_opensearch) also
 integrates with the new [`from`](/next/tql2/operators/from) and
 [`to`](/next/tql2/operators/to) operators introduced above. So
 it is possible to write to OpenSearch or ElasticSearch instances
-by using the `opensearch:` or `elasticsearch:` URL schemes:
+by using the `opensearch:` or `elasticsearch:` URL schemes.
 
 ```
 from {event: "example"}
