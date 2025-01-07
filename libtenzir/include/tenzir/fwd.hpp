@@ -185,10 +185,10 @@ class wah_bitmap;
 struct active_partition_state;
 struct attribute;
 struct catalog_lookup_result;
-struct component_map;
 struct component_map_entry;
-struct component_state;
+struct component_map;
 struct component_state_map;
+struct component_state;
 struct concept_;
 struct conjunction;
 struct connect_request;
@@ -204,6 +204,8 @@ struct disjunction;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
+struct handshake_result;
+struct handshake;
 struct index_state;
 struct invocation;
 struct legacy_address_type;
@@ -230,10 +232,11 @@ struct model;
 struct negation;
 struct node_state;
 struct offset;
+struct operator_id;
 struct operator_metric;
-struct package;
-struct package_pipelines_map;
 struct package_contexts_map;
+struct package_pipelines_map;
+struct package;
 struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
@@ -445,13 +448,13 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::blob))
   TENZIR_ADD_TYPE_ID((tenzir::chunk_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::conjunction))
-  TENZIR_ADD_TYPE_ID((tenzir::context_parameter_map))
   TENZIR_ADD_TYPE_ID((tenzir::context_erase_args))
+  TENZIR_ADD_TYPE_ID((tenzir::context_parameter_map))
   TENZIR_ADD_TYPE_ID((tenzir::context_save_result))
   TENZIR_ADD_TYPE_ID((tenzir::context_update_args))
   TENZIR_ADD_TYPE_ID((tenzir::curried_predicate))
-  TENZIR_ADD_TYPE_ID((tenzir::data))
   TENZIR_ADD_TYPE_ID((tenzir::data_extractor))
+  TENZIR_ADD_TYPE_ID((tenzir::data))
   TENZIR_ADD_TYPE_ID((tenzir::diagnostic))
   TENZIR_ADD_TYPE_ID((tenzir::disjunction))
   TENZIR_ADD_TYPE_ID((tenzir::ec))
@@ -459,6 +462,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::expression))
   TENZIR_ADD_TYPE_ID((tenzir::extract_query_context))
   TENZIR_ADD_TYPE_ID((tenzir::field_extractor))
+  TENZIR_ADD_TYPE_ID((tenzir::handshake_result))
+  TENZIR_ADD_TYPE_ID((tenzir::handshake))
   TENZIR_ADD_TYPE_ID((tenzir::http_request_description))
   TENZIR_ADD_TYPE_ID((tenzir::invocation))
   TENZIR_ADD_TYPE_ID((tenzir::ip))
@@ -468,6 +473,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::negation))
   TENZIR_ADD_TYPE_ID((tenzir::null_bitmap))
   TENZIR_ADD_TYPE_ID((tenzir::operator_box))
+  TENZIR_ADD_TYPE_ID((tenzir::operator_id))
   TENZIR_ADD_TYPE_ID((tenzir::operator_metric))
   TENZIR_ADD_TYPE_ID((tenzir::operator_type))
   TENZIR_ADD_TYPE_ID((tenzir::package))
@@ -476,8 +482,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::pattern))
   TENZIR_ADD_TYPE_ID((tenzir::pipeline))
-  TENZIR_ADD_TYPE_ID((tenzir::port))
   TENZIR_ADD_TYPE_ID((tenzir::port_type))
+  TENZIR_ADD_TYPE_ID((tenzir::port))
   TENZIR_ADD_TYPE_ID((tenzir::predicate))
   TENZIR_ADD_TYPE_ID((tenzir::qualified_record_field))
   TENZIR_ADD_TYPE_ID((tenzir::query_context))
@@ -490,8 +496,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))
   TENZIR_ADD_TYPE_ID((tenzir::taxonomies))
-  TENZIR_ADD_TYPE_ID((tenzir::type))
   TENZIR_ADD_TYPE_ID((tenzir::type_extractor))
+  TENZIR_ADD_TYPE_ID((tenzir::type))
   TENZIR_ADD_TYPE_ID((tenzir::uuid))
   TENZIR_ADD_TYPE_ID((tenzir::wah_bitmap))
 

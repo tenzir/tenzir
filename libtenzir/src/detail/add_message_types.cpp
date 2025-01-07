@@ -30,6 +30,7 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pattern.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/pipeline2.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/port.hpp"
 #include "tenzir/qualified_record_field.hpp"
