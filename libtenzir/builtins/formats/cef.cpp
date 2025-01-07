@@ -69,20 +69,14 @@ std::string unescape(std::string_view value) {
 /// is simply the text after the separator before the start of the next key.
 /// @param extension The string value of the extension field.
 /// @returns A vector of key-value pairs with properly unescaped values.
-auto parse_extension(std::string_view extension,
-                     auto builder) -> std::optional<diagnostic> {
+auto parse_extension(std::string_view extension, auto builder,
+                     detail::quoting_escaping_policy quoting)
+  -> std::optional<diagnostic> {
   if (extension.empty()) {
     return {};
   }
-  auto find_next_kv_sep = [](std::string_view extension) {
-    auto kv_sep = detail::find_first_not_in_quotes(extension, '=');
-    while (detail::is_escaped(kv_sep, extension)) {
-      kv_sep = detail::find_first_not_in_quotes(extension, '=', kv_sep + 1);
-    }
-    return kv_sep;
-  };
   // Find the first not quoted, not escaped kv separator.
-  auto kv_sep = find_next_kv_sep(extension);
+  auto kv_sep = quoting.find_not_in_quotes(extension, '=');
   if (kv_sep == extension.npos) {
     return diagnostic::warning(
              "extension field did not contain a key-value separator")
@@ -92,14 +86,15 @@ auto parse_extension(std::string_view extension,
     auto key = unescape(detail::trim(extension.substr(0, kv_sep)));
     extension.remove_prefix(kv_sep + 1);
     // Find the next not quoted, not escaped kv separator.
-    kv_sep = find_next_kv_sep(extension);
+    kv_sep = quoting.find_not_in_quotes(extension, '=');
     // Find the last whitespace before the key, determining the end of the value
-    // text.
+    // text. Ignoring quoting is fine for this search; the CEF spec does not
+    // discuss/specify quoted keys.
     auto value_end = kv_sep == extension.npos
                        ? extension.npos
                        : extension.find_last_of(" \t", kv_sep);
     auto value
-      = unescape(detail::unquote(detail::trim(extension.substr(0, value_end))));
+      = unescape(quoting.unquote(detail::trim(extension.substr(0, value_end))));
     if constexpr (detail::multi_series_builder::has_unflattened_field<
                     decltype(builder)>) {
       auto field = builder.unflattened_field(key);
@@ -122,8 +117,9 @@ auto parse_extension(std::string_view extension,
   return {};
 }
 
-[[nodiscard]] auto
-parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
+[[nodiscard]] auto parse_line(std::string_view line, auto& msb,
+                              const detail::quoting_escaping_policy& quoting)
+  -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() < 7 or fields.size() > 8) {
@@ -151,7 +147,7 @@ parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
   r.field("name").data(std::move(fields[5]));
   r.field("severity").data(std::move(fields[6]));
   if (fields.size() == 8) {
-    auto d = parse_extension(fields[7], r.field("extension").record());
+    auto d = parse_extension(fields[7], r.field("extension").record(), quoting);
     if (d) {
       msb.remove_last();
       return d;
@@ -173,6 +169,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       return d;
     },
   };
+  auto quoting = detail::quoting_escaping_policy{};
   auto msb = multi_series_builder{
     std::move(options),
     dh,
@@ -190,7 +187,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       TENZIR_DEBUG("CEF parser ignored empty line");
       continue;
     }
-    auto d = parse_line(*line, msb);
+    auto d = parse_line(*line, msb, quoting);
     if (d) {
       dh.emit(std::move(*d));
     }
@@ -291,12 +288,13 @@ public:
             [&](const arrow::StringArray& arg) {
               // TODO: Use multi-series builder here.
               auto b = series_builder{};
+              auto quoting = detail::quoting_escaping_policy{};
               for (auto string : arg) {
                 if (not string) {
                   b.null();
                   continue;
                 }
-                auto diag = parse_line(*string, b);
+                auto diag = parse_line(*string, b, quoting);
                 if (diag) {
                   ctx.dh().emit(std::move(*diag));
                   b.null();
