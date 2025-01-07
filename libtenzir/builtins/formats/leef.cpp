@@ -55,30 +55,38 @@ namespace {
 // TODO: it's unlclear whether that's correct. There is not much info out there
 // in the internet that tells us how to do this properly.
 /// Unescapes LEEF string data containing \r, \n, \\, and \=.
-auto unescape(std::string_view value) -> std::string {
-  std::string result;
-  result.reserve(value.size());
-  for (auto i = 0u; i < value.size(); ++i) {
-    if (value[i] != '\\') {
-      result += value[i];
-    } else if (i + 1 < value.size()) {
-      auto next = value[i + 1];
-      switch (next) {
-        default:
-          result += next;
-          break;
-        case 'r':
-        case 'n':
-          result += '\n';
-          break;
-        case 't':
-          result += '\t';
-          break;
-      }
-      ++i;
+auto unescape(std::string_view::iterator begin, std::string_view::iterator end,
+              std::back_insert_iterator<std::string> out)
+  -> std::string_view::iterator {
+  TENZIR_ASSERT_EXPENSIVE(*std::prev(begin) == '\\');
+  TENZIR_ASSERT_EXPENSIVE(begin < end);
+  switch (*begin) {
+    case 'n': {
+      out = '\n';
+      return ++begin;
+    }
+    case 'r': {
+      out = '\n';
+      return ++begin;
+    }
+    case 't': {
+      out = '\t';
+      return ++begin;
+    }
+    case '=': {
+      out = '=';
+      return ++begin;
+    }
+    case '\\': {
+      out = '\\';
+      return ++begin;
+    }
+    default: {
+      return begin;
     }
   }
-  return result;
+  TENZIR_UNREACHABLE();
+  return begin;
 }
 
 /// Parses a LEEF delimiter.
@@ -141,7 +149,7 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
       ++attr_end;
     }
     const auto attribute = attributes.substr(0, attr_end);
-    auto sep_pos = quoting.find_not_in_quotes(attribute, '=');
+    auto sep_pos = quoting.find_not_in_quotes(attribute, '=', 0, true);
     if (sep_pos == 0) {
       return diagnostic::warning("missing key before separator in attributes")
         .note("attribute was `{}`", attribute)
@@ -149,7 +157,7 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
     }
     while (sep_pos != attribute.npos
            and detail::is_escaped_at(attribute, sep_pos)) {
-      sep_pos = quoting.find_not_in_quotes(attribute, '=', sep_pos + 1);
+      sep_pos = quoting.find_not_in_quotes(attribute, '=', sep_pos + 1, true);
     }
     if (sep_pos == attribute.npos) {
       return diagnostic::warning("missing key-value separator in attribute")
@@ -158,7 +166,7 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
     }
     auto key = attribute.substr(0, sep_pos);
     auto value
-      = unescape(quoting.unquote(detail::trim(attribute.substr(sep_pos + 1))));
+      = quoting.unquote_unescape(detail::trim(attribute.substr(sep_pos + 1)));
     if constexpr (detail::multi_series_builder::has_unflattened_field<
                     decltype(builder)>) {
       auto field = builder.unflattened_field(key);
@@ -257,7 +265,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       return d;
     },
   };
-  auto quoting = detail::quoting_escaping_policy{};
+  auto quoting = detail::quoting_escaping_policy{
+    .unescape_operation = unescape,
+  };
   auto msb = multi_series_builder{
     std::move(options),
     dh,

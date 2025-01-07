@@ -1,6 +1,6 @@
 # parse_json
 
-Parses a string as a JSON record
+Parses a string as a JSON value.
 
 ```tql
 parse_json(input:string) -> any
@@ -8,7 +8,7 @@ parse_json(input:string) -> any
 
 ## Description
 
-The `parse_json` function parses a string as a JSON record.
+The `parse_json` function parses a string as a JSON value.
 
 ### `input: string`
 

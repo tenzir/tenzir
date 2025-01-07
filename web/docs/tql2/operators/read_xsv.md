@@ -5,7 +5,7 @@ Read XSV from a byte stream.
 ```tql
 read_xsv field_sep:string, list_sep:string, null_value:string,
         [comments=bool, header=string, auto_expand=bool, quotes=string,
-         doubled_quotes_escape=bool, auto_expand=bool, schema=string,
+         auto_expand=bool, schema=string,
          selector=string, schema_only=bool, raw=bool, unflatten=string]
 ```
 

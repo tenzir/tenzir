@@ -125,9 +125,10 @@ Function | Description | Example
 
 Function | Description | Example
 :--------|:-------------|:-------
+[`parse_cef`](functions/parse_cef.md) | Parses a string as a CEF message  | `some_string.parse_cef()`
 [`parse_grok`](functions/parse_grok.md) | Parses a string following a grok pattern | `some_string.parse_grok("%{IP:client} …")`
-[`parse_json`](functions/parse_json.md) | Parses a string as a JSON record | `parse_json(some_string)`
-[`parse_leef`](functions/parse_leef.md) | Parses a string as a leef message | `parse_leef(some_string)`
+[`parse_json`](functions/parse_json.md) | Parses a string as a JSON value | `some_string.parse_json()`
+[`parse_leef`](functions/parse_leef.md) | Parses a string as a LEEF message | `some_string.parse_leef()`
 
 ## Time & Date
 

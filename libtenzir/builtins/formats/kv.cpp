@@ -301,10 +301,7 @@ public:
     auto msb_parser = multi_series_builder_argument_parser{};
     auto quoting = detail::quoting_escaping_policy{};
     msb_parser.add_all_to_parser(parser);
-    // parser.named()
     parser.named_optional("quotes", quoting.quotes);
-    parser.named_optional("doubled_quotes_escape",
-                          quoting.doubled_quotes_escape);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     opts.settings.default_schema_name = "tenzir.kv";
