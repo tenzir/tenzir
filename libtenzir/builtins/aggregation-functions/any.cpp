@@ -78,7 +78,7 @@ public:
             state_ = state::nulled;
           }
         },
-        [&](auto&&) {
+        [&](const auto&) {
           diagnostic::warning("expected type `bool`, got `{}`", arg.type.kind())
             .primary(expr_)
             .emit(ctx);
