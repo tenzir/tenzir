@@ -268,7 +268,9 @@ struct formatter<std::span<std::byte>> {
 template <>
 struct formatter<std::filesystem::path> : formatter<std::string> {};
 
-#else
+#endif
+
+#if (FMT_VERSION / 10000) < 11
 
 template <>
 struct formatter<std::error_code> {

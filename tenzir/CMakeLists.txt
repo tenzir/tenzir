@@ -203,6 +203,12 @@ set(TENZIR_PLUGINS
     ${plugins_default}
     CACHE STRING "Specify a list of plugins to build with Tenzir (supports
     globbing)")
+set(TENZIR_PLUGINS_BLACKLIST
+    ${plugins_default}
+    CACHE
+      STRING
+      "Specify a list of plugins to remove after the globs in TENZIR_PLUGINS are expanded."
+)
 cmake_dependent_option(
   TENZIR_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF
   "NOT TENZIR_ENABLE_STATIC_EXECUTABLE" ON)
@@ -225,6 +231,10 @@ if (TENZIR_PLUGINS)
   foreach (plugin_source_dir IN LISTS plugin_source_dirs)
     if (NOT IS_DIRECTORY "${plugin_source_dir}"
         OR NOT EXISTS "${plugin_source_dir}/CMakeLists.txt")
+      continue()
+    endif ()
+    get_filename_component(plugin_source_name plugin_source_dir NAME)
+    if (plugin_source_name IN_LIST TENZIR_PLUGINS_BLACKLIST)
       continue()
     endif ()
     get_filename_component(plugin_binary_dir "${plugin_source_dir}" NAME)

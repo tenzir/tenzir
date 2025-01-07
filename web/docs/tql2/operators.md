@@ -96,6 +96,8 @@ Operator | Description | Example
 [`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
 [`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent Bit| `to_fluent_bit "elasticsearch" …`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
+[`to_opensearch`](./operators/to_opensearch.md) | Sends incoming events to the OpenSearch Bulk API | `to_opensearch 'localhost:9200", ...`
+[`to_snowflake`](./operators/to_snowflake.md) | Sends incoming events to a Snowflake database | `to_snowflake account_identifier="…`
 [`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
 
 #### Bytes
@@ -235,8 +237,16 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`compress`](./operators/compress.md) | Compresses a stream of bytes | `compress "zstd", level=18`
-[`decompress`](./operators/decompress.md) | Decompresses a stream of bytes | `decompress "brotli"`
+[`compress_brotli`](./operators/compress_brotli.md) | Compresses bytes using Brotli compression | `compress_zstd, level=10`
+[`compress_bz2`](./operators/compress_bz2.md) | Compresses bytes using Bzip compression | `compress_bz2, level=9`
+[`compress_gzip`](./operators/compress_gzip.md) | Compresses bytes using Gzip compression | `compress_gzip, level=8`
+[`compress_lz4`](./operators/compress_lz4.md) | Compresses bytes using lz4 compression | `compress_lz4, level=7`
+[`compress_zstd`](./operators/compress_zstd.md) | Compresses bytes using Gzip compression | `compress_zstd, level=6`
+[`decompress_brotli`](./operators/decompress_brotli.md) | Decompresses Brotli compressed bytes | `decompress_zstd`
+[`decompress_bz2`](./operators/decompress_bz2.md) | Decompresses Bzip2 compressed bytes | `decompress_bz2`
+[`decompress_gzip`](./operators/decompress_gzip.md) | Decompresses Gzip compressed bytes | `decompress_gzip`
+[`decompress_lz4`](./operators/decompress_lz4.md) | Decompresses lz4 compressed bytes | `decompress_lz4`
+[`decompress_zstd`](./operators/decompress_zstd.md) | Decompresses Zstd compressed bytes | `decompress_zstd`
 
 ## Contexts
 

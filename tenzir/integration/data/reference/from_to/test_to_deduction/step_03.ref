@@ -8,7 +8,8 @@
     }
   },
   compress {
-    type: "gzip" @ 0..0
+    type: "gzip" @ 0..0,
+    gzip_format: "gzip" @ 0..0
   },
   tql2.save_file {
     path: "example.csv.gz" @ 3..19

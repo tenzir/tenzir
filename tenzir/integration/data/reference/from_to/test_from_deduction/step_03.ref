@@ -3,7 +3,8 @@
     path: "example.csv.gz" @ 5..21
   },
   decompress {
-    type: "gzip" @ 0..0
+    type: "gzip" @ 0..0,
+    gzip_format: "gzip" @ 0..0
   },
   read_xsv {
     name: "csv",

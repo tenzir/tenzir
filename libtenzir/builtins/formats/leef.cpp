@@ -155,10 +155,6 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
         .note("attribute was `{}`", attribute)
         .done();
     }
-    while (sep_pos != attribute.npos
-           and detail::is_escaped_at(attribute, sep_pos)) {
-      sep_pos = quoting.find_not_in_quotes(attribute, '=', sep_pos + 1, true);
-    }
     if (sep_pos == attribute.npos) {
       return diagnostic::warning("missing key-value separator in attribute")
         .note("attribute was `{}`", attribute)

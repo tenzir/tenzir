@@ -579,7 +579,7 @@ jobs:
             cc: clang
             cxx: clang++
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
-            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
+            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST=snowflake
             bundled-plugins:
               # macOS runners in GitHub Actions CI are very limited, so we
               # prefer to have fewer jobs running and build the proprietary
@@ -620,7 +620,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Tailscale
         if: false && runner.os == 'Linux'
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
@@ -656,7 +656,8 @@ jobs:
           ./scripts/debian/install-fluent-bit.sh
       - name: Install Dependencies (macOS)
         if: ${{ matrix.tenzir.name == 'macOS' }}
-        run: ./scripts/macOS/install-dev-dependencies.sh
+        run: |
+          ./scripts/macOS/install-dev-dependencies.sh
       - name: Setup Python
         if: ${{ matrix.tenzir.name == 'macOS' }}
         uses: actions/setup-python@v5
@@ -893,7 +894,7 @@ jobs:
           apt-get -y install git curl jq sudo xz-utils
       - name: Tailscale
         if: false && matrix.plugin.name == 'Context'
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
@@ -1029,7 +1030,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v3.0.1
+        uses: abatilo/actions-poetry@v4.0.0
         with:
           poetry-version: 1.8.2
       - name: Run poetry install
@@ -1068,7 +1069,7 @@ jobs:
         with:
           python-version: "3.9"
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v3.0.1
+        uses: abatilo/actions-poetry@v4.0.0
         with:
           poetry-version: 1.8.2
       - name: Configure PyPI

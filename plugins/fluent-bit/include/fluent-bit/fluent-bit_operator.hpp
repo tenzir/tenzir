@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#pragma once
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>

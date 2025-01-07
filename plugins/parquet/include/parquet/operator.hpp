@@ -11,6 +11,7 @@
 #include "parquet/chunked_buffer_output_stream.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/drain_bytes.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
@@ -115,6 +116,79 @@ public:
   }
 };
 
+auto remove_empty_records(std::shared_ptr<arrow::Schema> schema,
+                          diagnostic_handler& dh)
+  -> std::shared_ptr<arrow::Schema> {
+  auto impl = [](const auto& impl, std::shared_ptr<arrow::DataType> type,
+                 diagnostic_handler& dh,
+                 std::string_view path) -> std::shared_ptr<arrow::DataType> {
+    TENZIR_ASSERT(type);
+    if (const auto* list_type = try_as<arrow::ListType>(type.get())) {
+      return arrow::list(
+        impl(impl, list_type->value_type(), dh, fmt::format("{}[]", path)));
+    }
+    if (const auto* struct_type = try_as<arrow::StructType>(type.get())) {
+      if (struct_type->num_fields() == 0) {
+        diagnostic::warning("replacing empty record with null at `{}`", path)
+          .note("empty records are not supported in Apache Parquet")
+          .emit(dh);
+        return arrow::null();
+      }
+      auto fields = struct_type->fields();
+      for (auto& field : fields) {
+        field = field->WithType(impl(
+          impl, field->type(), dh, fmt::format("{}.{}", path, field->name())));
+      }
+      return arrow::struct_(fields);
+    }
+    return type;
+  };
+  for (auto i = 0; i < schema->num_fields(); ++i) {
+    auto field = schema->field(i);
+    schema = check(schema->SetField(
+      i, field->WithType(impl(impl, field->type(), dh, field->name()))));
+  }
+  return schema;
+}
+
+auto remove_empty_records(std::shared_ptr<arrow::RecordBatch> batch)
+  -> std::shared_ptr<arrow::RecordBatch> {
+  auto impl
+    = [](const auto& impl,
+         std::shared_ptr<arrow::Array> array) -> std::shared_ptr<arrow::Array> {
+    TENZIR_ASSERT(array);
+    if (const auto* list_array = try_as<arrow::ListArray>(array.get())) {
+      auto values = impl(impl, list_array->values());
+      return std::make_shared<arrow::ListArray>(arrow::list(values->type()),
+                                                list_array->length(),
+                                                list_array->value_offsets(),
+                                                values);
+    }
+    if (const auto* struct_array = try_as<arrow::StructArray>(array.get())) {
+      if (struct_array->num_fields() == 0) {
+        return check(
+          arrow::MakeArrayOfNull(arrow::null(), struct_array->length()));
+      }
+      auto arrays = struct_array->fields();
+      auto fields = struct_array->struct_type()->fields();
+      TENZIR_ASSERT(arrays.size() == fields.size());
+      for (auto i = size_t{0}; i < arrays.size(); ++i) {
+        arrays[i] = impl(impl, std::move(arrays[i]));
+        fields[i] = fields[i]->WithType(arrays[i]->type());
+      }
+      return std::make_shared<arrow::StructArray>(
+        arrow::struct_(fields), struct_array->length(), arrays);
+    }
+    return array;
+  };
+  for (auto i = 0; i < batch->num_columns(); ++i) {
+    auto column = impl(impl, batch->column(i));
+    batch = check(batch->SetColumn(
+      i, batch->schema()->field(i)->WithType(column->type()), column));
+  }
+  return batch;
+}
+
 class parquet_printer final : public plugin_printer {
 public:
   parquet_printer() = default;
@@ -198,9 +272,10 @@ public:
         }
       }
       parquet_writer_props_builder.version(
-        ::parquet::ParquetVersion::PARQUET_2_6);
+        ::parquet::ParquetVersion::PARQUET_2_LATEST);
       auto parquet_writer_props = parquet_writer_props_builder.build();
-      const auto schema = input_schema.to_arrow_schema();
+      const auto schema = remove_empty_records(input_schema.to_arrow_schema(),
+                                               ctrl.diagnostics());
       auto out_buffer = std::make_shared<chunked_buffer_output_stream>();
       auto file_result = ::parquet::arrow::FileWriter::Open(
         *schema, arrow::default_memory_pool(), out_buffer,
@@ -225,7 +300,7 @@ public:
         co_yield {};
         co_return;
       }
-      auto record_batch = to_record_batch(input);
+      auto record_batch = remove_empty_records(to_record_batch(input));
       auto record_batch_status = writer_->WriteRecordBatch(*record_batch);
       if (!record_batch_status.ok()) {
         diagnostic::error("{}",
