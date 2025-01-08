@@ -62,11 +62,7 @@ auto unescape(std::string_view::iterator begin, std::string_view::iterator end,
       out = '\\';
       return ++begin;
     }
-    default: {
-      return begin;
-    }
   }
-  TENZIR_UNREACHABLE();
   return begin;
 }
 

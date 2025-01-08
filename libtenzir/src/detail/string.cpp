@@ -30,7 +30,7 @@ auto quoting_escaping_policy::basic_unescape_operation(
       return ++begin;
     }
     case 'r': {
-      out = '\n';
+      out = '\r';
       return ++begin;
     }
     case 't': {
