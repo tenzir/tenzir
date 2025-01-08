@@ -3,7 +3,7 @@
 Parses a string according to a grok pattern.
 
 ```tql
-parse_grok(input:string, pattern:string) -> record
+parse_grok(input:string, pattern:string, [pattern_definitions=string]) -> record
 ```
 
 ## Description
@@ -16,23 +16,34 @@ The string to parse.
 
 ### `pattern: string`
 
-The pattern to use for parsing.
+The `grok` pattern used for matching. Must match the input in its entirety.
+
+### `pattern_definitions = string (optional)`
+
+A user-defined newline-delimited list of patterns, where a line starts
+with the pattern name, followed by a space, and the `grok`-pattern for that
+pattern. For example, the built-in pattern `INT` is defined as follows:
+
+```
+INT (?:[+-]?(?:[0-9]+))
+```
 
 ## Examples
 
 ```tql
 let $pattern = "%{IP:client} %{WORD} %{URIPATHPARAM:req} %{NUMBER:bytes} %{NUMBER:dur}"
-from { input = "Input: 55.3.244.1 GET /index.html 15824 0.043" }
-output = output.parse_grok(pattern)
+from { input: "55.3.244.1 GET /index.html 15824 0.043" }
+output = input.parse_grok(pattern)
+output.dur = output.dur * 1s
 ```
 ```tql
 {
-  x: "Input: 55.3.244.1 GET /index.html 15824 0.043",
-  y: {
+  input: "Input: 55.3.244.1 GET /index.html 15824 0.043",
+  output: {
     client: 55.3.244.1,
     req: "/index.html",
     bytes: 15824,
-    dur: 0.043
+    dur: 43.0ms
   }
 }
 ```

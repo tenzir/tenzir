@@ -363,7 +363,7 @@ public:
           diagnostic::warning("expected `string`, got `{}`", values.type.kind())
             .primary(input)
             .emit(ctx);
-          return series::null(null_type{}, eval.length());
+          return series::null(null_type{}, values.length());
         }
         auto output = parser.parse_strings(*strings, ctx.dh());
         return multi_series{std::move(output)};

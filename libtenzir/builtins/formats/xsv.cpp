@@ -20,6 +20,7 @@
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql/basic.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
 
@@ -401,13 +402,119 @@ struct xsv_printer_impl {
   std::string null{};
 };
 
+auto parse_header(std::string_view line, const xsv_parser_options& args,
+                  const detail::quoting_escaping_policy& quoting,
+                  diagnostic_handler& dh) -> std::vector<std::string> {
+  auto fields = std::vector<std::string>{};
+  auto field_text = std::string_view{};
+  while (auto split = quoting.split_at_unquoted(line, args.field_sep)) {
+    std::tie(field_text, line) = *split;
+    fields.emplace_back(quoting.unquote_unescape(field_text));
+  }
+  fields.emplace_back(quoting.unquote_unescape(line));
+  if (fields.empty() and not args.auto_expand) {
+    diagnostic::error("failed to parse header")
+      .note("from `{}`", args.name)
+      .emit(dh);
+  }
+  return fields;
+}
+
+auto parse_line(std::string_view line, std::vector<std::string>& fields,
+                const size_t original_field_count, auto r,
+                const xsv_parser_options& args, const size_t line_counter,
+                const detail::quoting_escaping_policy& quoting,
+                diagnostic_handler& dh) -> void {
+  auto field_idx = size_t{0};
+  auto field_text = std::string_view{};
+  for (field_idx = 0; true; ++field_idx) {
+    if (line.empty()) {
+      if (field_idx < original_field_count) {
+        diagnostic::warning("{} parser found too few values in a line",
+                            args.name)
+          .note("line {} has {} values, but should have {} values",
+                line_counter, field_idx, original_field_count)
+          .emit(dh);
+        r.unflattened_field(fields[field_idx]).null();
+        continue;
+      } else {
+        break;
+      }
+    } else if (field_idx >= fields.size()) {
+      if (args.auto_expand) {
+        size_t unnamed_idx = 1;
+        while (true) {
+          auto name = fmt::format("unnamed{}", unnamed_idx);
+          if (std::ranges::find(fields, name) == fields.end()) {
+            fields.push_back(name);
+            break;
+          } else {
+            ++unnamed_idx;
+          }
+        }
+      } else {
+        auto excess_values = 1;
+        auto it = size_t{0};
+        while ((it = quoting.find_not_in_quotes(line, args.field_sep,
+                                                it + args.field_sep.size()))
+               != line.npos) {
+          ++excess_values;
+        }
+        diagnostic::warning("{} parser skipped excess values in a line",
+                            args.name)
+          .note("line {}: {} extra values were skipped", line_counter,
+                excess_values)
+          .hint("use `auto_expand=true` to add fields for excess values")
+          .emit(dh);
+        break;
+      }
+    }
+    auto field = r.unflattened_field(fields[field_idx]);
+    if (auto split = quoting.split_at_unquoted(line, args.field_sep)) {
+      std::tie(field_text, line) = *split;
+    } else {
+      field_text = line;
+      line = std::string_view{};
+    }
+    const auto add_value
+      = [&quoting](std::string_view text, std::string_view null_value,
+                   auto& builder) {
+          if (text == null_value) {
+            builder.null();
+          } else {
+            builder.data_unparsed(quoting.unquote_unescape(text));
+          }
+        };
+    if (args.list_sep.empty()) {
+      add_value(field_text, args.null_value, field);
+    } else {
+      if (auto split = quoting.split_at_unquoted(field_text, args.list_sep)) {
+        auto list = field.list();
+        // Iterate the list
+        do {
+          auto list_element_text = std::string_view{};
+          std::tie(list_element_text, field_text) = *split;
+          add_value(list_element_text, args.null_value, list);
+        } while (
+          (split = quoting.split_at_unquoted(field_text, args.list_sep)));
+        // Add the final element (for which the split would have failed)
+        add_value(field_text, args.null_value, list);
+      } else {
+        add_value(field_text, args.null_value, field);
+      }
+    }
+  }
+  for (; field_idx < fields.size(); ++field_idx) {
+    r.unflattened_field(fields[field_idx]).null();
+  }
+}
+
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 operator_control_plane& ctrl,
                 xsv_parser_options args) -> generator<table_slice> {
   // Parse header.
   auto it = lines.begin();
   auto line = std::optional<std::string_view>{};
-  auto field_text = std::string_view{};
   size_t line_counter = 0;
   auto header = args.header;
   const auto quoting_options = detail::quoting_escaping_policy{
@@ -438,20 +545,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     }
   }
   TENZIR_ASSERT(header);
-  auto fields = std::vector<std::string>{};
-  line = header;
-  while (auto split
-         = quoting_options.split_at_unquoted(*line, args.field_sep)) {
-    std::tie(field_text, *line) = *split;
-    fields.emplace_back(quoting_options.unquote_unescape(field_text));
-  }
-  fields.emplace_back(quoting_options.unquote_unescape(*line));
-  if (fields.empty()) {
-    diagnostic::error("failed to parse header")
-      .note("from `{}`", args.name)
-      .emit(ctrl.diagnostics());
-    co_return;
-  }
+  auto fields
+    = parse_header(*header, args, quoting_options, ctrl.diagnostics());
   // parse the body
   const auto original_field_count = fields.size();
   args.builder_options.settings.default_schema_name
@@ -486,89 +581,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       continue;
     }
     auto r = msb.record();
-    auto field_idx = size_t{0};
-    for (field_idx = 0; true; ++field_idx) {
-      if (line->empty()) {
-        if (field_idx < original_field_count) {
-          diagnostic::warning("{} parser found too few values in a line",
-                              args.name)
-            .note("line {} has {} values, but should have {} values",
-                  line_counter, field_idx, original_field_count)
-            .emit(ctrl.diagnostics());
-          r.unflattened_field(fields[field_idx]).null();
-          continue;
-        } else {
-          break;
-        }
-      } else if (field_idx >= fields.size()) {
-        if (args.auto_expand) {
-          size_t unnamed_idx = 1;
-          while (true) {
-            auto name = fmt::format("unnamed{}", unnamed_idx);
-            if (std::ranges::find(fields, name) == fields.end()) {
-              fields.push_back(name);
-              break;
-            } else {
-              ++unnamed_idx;
-            }
-          }
-        } else {
-          auto excess_values = 1;
-          auto it = size_t{0};
-          while ((it = quoting_options.find_not_in_quotes(
-                    *line, args.field_sep, it + args.field_sep.size()))
-                 != line->npos) {
-            ++excess_values;
-          }
-          diagnostic::warning("{} parser skipped excess values in a line",
-                              args.name)
-            .note("line {}: {} extra values were skipped", line_counter,
-                  excess_values)
-            .hint("use `auto_expand=true` to add fields for excess values")
-            .emit(ctrl.diagnostics());
-          break;
-        }
-      }
-      auto field = r.unflattened_field(fields[field_idx]);
-      if (auto split
-          = quoting_options.split_at_unquoted(*line, args.field_sep)) {
-        std::tie(field_text, *line) = *split;
-      } else {
-        field_text = *line;
-        line = std::string_view{};
-      }
-      const auto add_value
-        = [&quoting_options](std::string_view text, std::string_view null_value,
-                             auto& builder) {
-            if (text == null_value) {
-              builder.null();
-            } else {
-              builder.data_unparsed(quoting_options.unquote_unescape(text));
-            }
-          };
-      if (args.list_sep.empty()) {
-        add_value(field_text, args.null_value, field);
-      } else {
-        if (auto split
-            = quoting_options.split_at_unquoted(field_text, args.list_sep)) {
-          auto list = field.list();
-          // Iterate the list
-          do {
-            auto list_element_text = std::string_view{};
-            std::tie(list_element_text, field_text) = *split;
-            add_value(list_element_text, args.null_value, list);
-          } while ((split = quoting_options.split_at_unquoted(field_text,
-                                                              args.list_sep)));
-          // Add the final element (for which the split would have failed)
-          add_value(field_text, args.null_value, list);
-        } else {
-          add_value(field_text, args.null_value, field);
-        }
-      }
-    }
-    for (; field_idx < fields.size(); ++field_idx) {
-      r.unflattened_field(fields[field_idx]).null();
-    }
+    parse_line(*line, fields, original_field_count, r, args, line_counter,
+               quoting_options, dh);
   }
   for (auto& v : msb.finalize_as_table_slice()) {
     co_yield std::move(v);
@@ -902,12 +916,150 @@ public:
   }
 };
 
+auto extract_header(ast::expression& header_expr,
+                    const xsv_parser_options& opts,
+                    const detail::quoting_escaping_policy& quoting_options,
+                    session ctx) -> failure_or<std::vector<std::string>> {
+  TRY(auto header_data, const_eval(header_expr, ctx));
+  using ret_t = failure_or<std::vector<std::string>>;
+  return match(
+    header_data,
+    [&](const std::string& s) -> ret_t {
+      return parse_header(s, opts, quoting_options, ctx);
+    },
+    [&](const list& l) -> ret_t {
+      if (l.empty()) {
+        /// TODO error?
+        diagnostic::warning("`header` list is empty")
+          .primary(header_expr)
+          .emit(ctx);
+        return failure::promise();
+      }
+      auto fields = std::vector<std::string>{};
+      fields.reserve(l.size());
+      for (auto& v : l) {
+        const auto good = match(
+          v,
+          [&fields](std::string& s) {
+            fields.push_back(std::move(s));
+            return true;
+          },
+          [&header_expr, &ctx](const auto& v) {
+            auto t = type::infer(v);
+            diagnostic::error("expected `list<string>`, but got `{}` in list",
+                              t ? t->kind() : type_kind{})
+              .primary(header_expr)
+              .emit(ctx);
+            return false;
+          });
+        if (not good) {
+          return failure::promise();
+        }
+      }
+      return fields;
+    },
+    [&](const auto&) -> ret_t {
+      const auto t = type::infer(header_data);
+      diagnostic::error("`header` must be a `string` or `list<string>`")
+        .primary(header_expr, "got `{}`", t ? t->kind() : type_kind{})
+        .emit(ctx);
+      return failure::promise();
+    });
+}
+
+class parse_xsv_plugin : public function_plugin {
+  auto name() const -> std::string override {
+    return "parse_xsv";
+  }
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+    auto header = ast::expression{};
+    auto parser = argument_parser2::function(name());
+    auto opt_parser = xsv_common_parser_options_parser{name()};
+    opt_parser.add_to_parser(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto opts, opt_parser.get_options(ctx.dh()));
+    opts.name = "xsv";
+    auto quoting_options = detail::quoting_escaping_policy{
+      .quotes = opts.quotes,
+      .backslashes_escape = true,
+      .doubled_quotes_escape = true,
+    };
+    TRY(auto fields, extract_header(header, opts, quoting_options, ctx));
+  }
+};
+
+template <detail::string_literal Name, detail::string_literal Sep,
+          detail::string_literal ListSep, detail::string_literal Null>
+class configured_parse_xsv_plugin final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return fmt::format("parse_{}", Name);
+  }
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+    auto header = ast::expression{};
+    auto parser = argument_parser2::function(name());
+    parser.positional("input", input, "string");
+    parser.named("header", header, "string|list<string>");
+    auto opt_parser = xsv_common_parser_options_parser{
+      name(),
+      std::string{Sep},
+      std::string{ListSep},
+      std::string{Null.str()},
+    };
+    opt_parser.add_to_parser(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto opts, opt_parser.get_options(ctx.dh()));
+    opts.name = Name.str();
+    auto quoting_options = detail::quoting_escaping_policy{
+      .quotes = opts.quotes,
+      .backslashes_escape = true,
+      .doubled_quotes_escape = true,
+    };
+    TRY(auto fields, extract_header(header, opts, quoting_options, ctx));
+    return function_use::make([input = std::move(input), opts = std::move(opts),
+                               quoting = std::move(quoting_options),
+                               original_field_count = fields.size(),
+                               fields = std::move(fields)](
+                                evaluator eval, session ctx) mutable {
+      return map_series(eval(input), [&](series data) -> multi_series {
+        if (data.type.kind().is<null_type>()) {
+          return data;
+        }
+        auto strings = try_as<arrow::StringArray>(&*data.array);
+        if (not strings) {
+          diagnostic::warning("expected `string`, got `{}`", data.type.kind())
+            .primary(input)
+            .emit(ctx);
+          return series::null(null_type{}, data.length());
+        }
+        auto builder = multi_series_builder{opts.builder_options, ctx};
+        for (auto&& line : values(string_type{}, *strings)) {
+          if (not line) {
+            builder.null();
+            continue;
+          }
+          parse_line(*line, fields, original_field_count, builder.record(),
+                     opts, 0, quoting, ctx);
+        }
+        return multi_series{builder.finalize()};
+      });
+    });
+  }
+};
+
 using read_csv = configured_read_xsv_plugin<"csv", ",", ";", "">;
 using read_tsv = configured_read_xsv_plugin<"tsv", "\t", ",", "-">;
 using read_ssv = configured_read_xsv_plugin<"ssv", " ", ",", "-">;
 using write_csv = configured_write_xsv_plugin<"csv", ',', ';', "">;
 using write_tsv = configured_write_xsv_plugin<"tsv", '\t', ',', "-">;
 using write_ssv = configured_write_xsv_plugin<"ssv", ' ', ',', "-">;
+using parse_csv = configured_parse_xsv_plugin<"csv", ",", ";", "">;
+using parse_tsv = configured_parse_xsv_plugin<"tsv", "\t", ",", "-">;
+using parse_ssv = configured_parse_xsv_plugin<"ssv", " ", ",", "-">;
 
 } // namespace tenzir::plugins::xsv
 
@@ -923,3 +1075,6 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::write_xsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::write_csv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::write_tsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::write_ssv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_csv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_tsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_ssv)
