@@ -129,8 +129,13 @@ TenzirDefineUpdateIntegrationTarget(
 if (Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
   add_custom_target(
     diff-integration
+    COMMAND "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}" "add"
+            "--intent-to-add" "--all"
     COMMAND "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}" "diff" "--exit-code"
             "--" "*.ref"
+    COMMAND
+      "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins"
+      "add" "--intent-to-add" "--all"
     COMMAND
       "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins"
       "diff" "--exit-code" "--" "*.ref"
