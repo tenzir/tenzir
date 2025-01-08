@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "tenzir/detail/assert.hpp"
-
-#include <algorithm>
+#include <functional>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -20,7 +19,7 @@
 namespace tenzir::detail {
 
 constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
-/// trims leading whitespace of string according to the given whitespace
+/// Trims leading whitespace of string according to the given whitespace
 /// @param value the string to trim
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
@@ -38,7 +37,7 @@ trim_front(std::string_view value, const std::string_view whitespace
   return value;
 }
 
-/// trims trailing whitespace of string according to the given whitespace
+/// Trims trailing whitespace of string according to the given whitespace
 /// @param value the string to trim
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
@@ -56,7 +55,7 @@ trim_back(std::string_view value, const std::string_view whitespace
   return value;
 }
 
-/// trims a string according to the given whitespace
+/// Trims a string according to the given whitespace
 /// @param value the string to trim
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
@@ -69,23 +68,25 @@ trim(std::string_view value, const std::string_view whitespace
   return value;
 }
 
-inline auto is_escaped_at(std::string_view text, size_t i) -> bool {
-  auto slashes = size_t{0};
-  while (i > 0) {
-    --i;
-    if (text[i] == '\\') {
-      ++slashes;
-    } else {
-      break;
-    }
-  }
-  return slashes % 2 == 1;
-}
-
 struct quoting_escaping_policy {
-  std::string quotes = "\"\'";
+  std::string quotes = R"("')";
   bool backslashes_escape = true;
   bool doubled_quotes_escape = false;
+  // A function to invoke if encountering a backslash during unescaping. The
+  // function is invoked on the characters *after* the backslash.
+  // It is guaranteed that `*std::prev(begin) == '\\'` and `begin < end`
+  std::function<std::string_view::iterator(
+    std::string_view::iterator begin, std::string_view::iterator end,
+    std::back_insert_iterator<std::string> out)>
+    unescape_operation = basic_unescape_operation;
+
+  // This function unescapes
+  // * """\n""", """\r""" => '\n'
+  // * """\t""" => '\t'
+  // * """\\""" => '\\'
+  static auto basic_unescape_operation(
+    std::string_view::iterator begin, std::string_view::iterator end,
+    std::back_insert_iterator<std::string> out) -> std::string_view::iterator;
 
   /// Checks whether position `idx` in the whole string `text` is enclosed in
   /// quotes. That is: There is an opening quote before `idx` and a closing
@@ -93,8 +94,7 @@ struct quoting_escaping_policy {
   /// Finds the next *opening* quote
   /// @param text the text to consider
   /// @param idx the index to check
-  auto
-  is_inside_of_quotes(std::string_view text, size_t idx) const noexcept -> bool;
+  auto is_inside_of_quotes(std::string_view text, size_t idx) const -> bool;
 
   /// Returns whether character `c` is a quote character.
   auto is_quote_character(char c) const -> bool {
@@ -118,41 +118,41 @@ struct quoting_escaping_policy {
   auto find_closing_quote(std::string_view text,
                           size_t opening) const -> std::string_view::size_type;
 
-  /// finds the index of the first occurrence that is not enclosed my matching
-  /// quotes quotes that are not closed are not considered quoting anything
+  /// Finds the index of the first occurrence that is not enclosed my matching
+  /// quotes. Quotes that are not closed are not considered quoting anything
   /// @param s the string to search
   /// @param targets a list of characters to search for
-  /// @param quotes list of characters to consider as "quotes"
   /// @param start index to start the search at
+  /// @param consider_escaping consider backslash escaping for the target
   /// @pre there must not be any intersection between `quotes` and `targets`
   /// @returns index of the first occurrence of a character from `find` that
   /// is`not enclosed by matching `quotes`; `npos` otherwise
   auto
   find_first_of_not_in_quotes(std::string_view text, std::string_view targets,
-                              size_t start
-                              = 0) const -> std::string_view::size_type;
+                              size_t start = 0,
+                              bool consider_escaping
+                              = false) const -> std::string_view::size_type;
 
-  /// finds the index of the first occurrence of a character that is not
-  /// enclosed my matching quotes quotes that are not closed are not considered
+  /// Finds the index of the first occurrence of a character that is not
+  /// enclosed my matching quotes. Quotes that are not closed are not considered
   /// quoting anything
   /// @param s the string to search
   /// @param target a character to search for
   /// @param start index to start the search at
-  /// @param quotes list of characters to consider as "quotes"
+  /// @param consider_escaping consider backslash escaping for the target
   /// @pre there must not be any intersection between `quotes` and `target`
   /// @returns index of the first occurrence of character `find` that is`not
   /// enclosed by matching `quotes`; `npos` otherwise
-  auto
-  find_not_in_quotes(std::string_view text, char target,
-                     size_t start = 0) const -> std::string_view::size_type;
+  auto find_not_in_quotes(std::string_view text, char target, size_t start = 0,
+                          bool consider_escaping
+                          = false) const -> std::string_view::size_type;
 
-  /// finds the index of the first occurrence of a character that is not
-  /// enclosed my matching quotes quotes that are not closed are not considered
+  /// Finds the index of the first occurrence of a character that is not
+  /// enclosed my matching quotes. Quotes that are not closed are not considered
   /// quoting anything
   /// @param s the string to search
   /// @param target a string to search for
   /// @param start index to start the search at
-  /// @param quotes list of characters to consider as "quotes"
   /// @pre there must not be any intersection between `quotes` and `target`
   /// @returns index of the first occurrence of character `find` that is`not
   /// enclosed by matching `quotes`; `npos` otherwise
@@ -162,16 +162,12 @@ struct quoting_escaping_policy {
 
   /// Check whether `text` is quoted, that is it starts with a quote character
   /// and the quote is by the final character
-  auto is_quoted(std::string_view text) const noexcept -> bool;
+  auto is_quoted(std::string_view text) const -> bool;
 
   /// Unquotes a string, if it is enclosed in matching quotes that are not escaped
   auto unquote(std::string_view text) const -> std::string_view;
 
-  /// Unescapes all escaped quote in the string
-  auto unescape_quotes(std::string_view text) const -> std::string;
-
-  /// Unquotes a string and unescapes all quotes inside of it.
-  /// Equivalent to `unquote(unescape_quotes(text))`
+  /// Unquotes a string and unescapes it according to the policy
   auto unquote_unescape(std::string_view text) const -> std::string;
 
   /// Splits a string at the first `target`, that is not enclosed in quote

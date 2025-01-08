@@ -4,8 +4,8 @@ Read TSV (Tab-Separated Values) from a byte stream.
 
 ```tql
 read_tsv [list_sep=string, null_value=string, comments=bool, header=string,
-          quotes=string, doubled_quotes_escape=bool, auto_expand=bool,
-					schema=string, selector=string, schema_only=bool, raw=bool, unflatten=string]
+          quotes=string, auto_expand=bool,
+          schema=string, selector=string, schema_only=bool, raw=bool, unflatten=string]
 ```
 
 ## Description

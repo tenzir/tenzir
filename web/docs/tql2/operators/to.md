@@ -64,8 +64,8 @@ If you want to provide additional arguments to the writer, you can use the
 ### Compressing
 
 The compression, just as the format, is inferred from the "file-ending" in the URI. Under the hood,
-this uses the [`decompress` operator](decompress.md).
-Supported compressions can be found in the [list of supported codecs](decompress.md#codec-str).
+this uses the [`decompress_*` operators](../operators.md#encode--decode).
+Supported compressions can be found in the [list of compression extensions](#compression).
 
 The compression step is optional and will only happen if a compression could be inferred.
 If you want to write with specific compression settings, you can use the
@@ -139,7 +139,7 @@ to "myfile.json.gz"
 ```
 ```tql title="Effective pipeline"
 write_json
-compress "gzip"
+compress_gzip
 save_file "myfile.json.gz"
 ```
 

@@ -4,7 +4,7 @@ Read CSV (Comma-Separated Values) from a byte stream.
 
 ```tql
 read_csv [list_sep=string, null_value=string, comments=bool, header=string,
-          quotes=string, doubled_quotes_escape=bool, auto_expand=bool,
+          quotes=string, auto_expand=bool,
           schema=string, selector=string, schema_only=bool, raw=bool, unflatten=string]
 ```
 

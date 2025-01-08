@@ -1,6 +1,6 @@
 # parse_leef
 
-Parses a string as a leef message
+Parses a string as a LEEF message
 
 ```tql
 parse_leef(input:string) -> record
@@ -8,7 +8,7 @@ parse_leef(input:string) -> record
 
 ## Description
 
-The `parse_leef` function parses a string as a leef message
+The `parse_leef` function parses a string as a LEEF message
 
 ### `input: string`
 
