@@ -6,7 +6,7 @@ tags: [fluent-bit, json, msgpack, performance]
 comments: true
 ---
 
-We re-wired Tenzir's [`fluent-bit`](/operators/fluent-bit) operator and
+We re-wired Tenzir's [`fluent-bit`](/v4.24/operators/fluent-bit) operator and
 introduced a significant performance boost as a side effect: A 3–5x gain for
 throughput in events per second (EPS) and 4–8x improvement of latency in terms
 of processing time.
@@ -70,7 +70,7 @@ bit explaining the difference.
 
 ## Summary
 
-We switched from JSON to MsgPack for our [`fluent-bit`](/operators/fluent-bit)
+We switched from JSON to MsgPack for our [`fluent-bit`](/v4.24/operators/fluent-bit)
 source operator. This removed one round-trip of printing JSON (in Fluent Bit)
 and parsing JSON (in Tenzir). We were surprised to see that this change resulted
 in such substantial performance improvements. As a result, you can now run many
