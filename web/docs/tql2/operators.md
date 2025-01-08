@@ -248,6 +248,12 @@ Operator | Description | Example
 [`decompress_lz4`](./operators/decompress_lz4.md) | Decompresses lz4 compressed bytes | `decompress_lz4`
 [`decompress_zstd`](./operators/decompress_zstd.md) | Decompresses Zstd compressed bytes | `decompress_zstd`
 
+## Pipelines
+
+Operator | Description | Example
+:--------|:------------|:-------
+[`pipeline::list`](./operators/pipeline/list.md) | Shows managed pipelines | `package::list`
+
 ## Contexts
 
 Function | Description | Example
