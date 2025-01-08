@@ -697,14 +697,16 @@ public:
     auto pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
+    auto pattern_definitions = std::optional<std::string>{};
     TRY(argument_parser2::function("parse_grok")
           .positional("input", input, "string")
           .positional("pattern", pattern)
+          .named("pattern_definitions", pattern_definitions)
           .named("indexed_captures", indexed_captures)
           .named("include_unnamed", include_unnamed)
           .parse(inv, ctx));
     auto parser = grok_parser{
-      std::nullopt,
+      std::move(pattern_definitions),
       std::move(pattern),
       indexed_captures,
       include_unnamed,
