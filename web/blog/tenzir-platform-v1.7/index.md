@@ -7,8 +7,9 @@ tags: [release, platform]
 comments: true
 ---
 
-To kick off the new year, we're releasing [Tenzir Platform v1.7][github-release], featuring support for file drag and drop and a lot
-of stability improvements..
+To kick off the new year, we're releasing [Tenzir Platform
+v1.7][github-release], featuring support for file drag and drop and a lot of
+stability improvements.
 
 ![Tenzir Platform v1.7](tenzir-platform-v1.7.png)
 
@@ -18,50 +19,49 @@ of stability improvements..
 
 ## Explorer Drag'n'Drop
 
-It is now possible to drag and drop files to the explorer
-window in order to create a pipeline reading the data from
-the dropped file.
+It is now possible to drag and drop files to the explorer window in order to
+create a pipeline reading the data from the dropped file.
 
-The generated pipeline is using the
-[`from` operator](/next/tql2/operators/from), so in order
-to use this feature a Tenzir Node with version 4.25 or
-later is required.
+The generated pipeline is using the [`from`
+operator](/next/tql2/operators/from), so in order to use this feature a Tenzir
+Node with version 4.25 or later is required.
 
-All file types that are
-[automatically recognized](/next/tql2/operators/from#file-extensions) by the
-`from` operator can be used as source files.
+All file types that are [automatically
+recognized](/next/tql2/operators/from#file-extensions) by the `from` operator
+can be used as source files.
 
 ## Webhook Analytics
 
-For sovereign edition users, it is now possible to specify a webhook URL
-as a destination for analytics events.
+For sovereign edition users, it is now possible to specify a webhook URL as a
+destination for analytics events.
 
-To configure this URL, set the `ANALYTICS_WEBHOOK_URL` environment variable
-in the platform environment to the desired value. If no URL is configured,
-no analytics are collected.
+To configure this URL, set the `ANALYTICS_WEBHOOK_URL` environment variable in
+the platform environment to the desired value. If no URL is configured, no
+analytics are collected.
 
-Note that analytics events are currently sent synchronously, so a slow
-analytics sink has the potential to slow down regular platform operations.
+Note that analytics events are currently sent synchronously, so a slow analytics
+sink has the potential to slow down regular platform operations.
 
 ## Stability Improvements
 
-Our recent focus on app stability continues to yield steady
-improvements that improve the quality of life for all users of the
-Tenzir Platform.
+Our recent focus on app stability continues to yield steady improvements that
+improve the quality of life for all users of the Tenzir Platform.
 
-For example, we now avoid unnecessary network activity by preventing
-the pipeline list requests from targeting offline nodes, we fixed the
-pipeline list spinner showing unnecessarily when changing a pipeline
-and we resolved an issue with pipeline keepalive daemons persisting longer than needed.
+For example, we now avoid unnecessary network activity by preventing the
+pipeline list requests from targeting offline nodes, we fixed the pipeline list
+spinner showing unnecessarily when changing a pipeline and we resolved an issue
+with pipeline keepalive daemons persisting longer than needed.
 
 ## Bug fixes
 
 This release also contains several additional bugfixes:
 
 - Fix sparkbar metrics query crashing when selecting offline nodes.
-- Fix the keyboard shortcut triggering a pipeline rerun instead of confirming the modal.
+- Fix the keyboard shortcut triggering a pipeline rerun instead of confirming
+  the modal.
 - Fix dashboard creation with an empty name.
-- Ensure "Add to dashboard" adds content based on the currently selected table or chart view.
+- Ensure "Add to dashboard" adds content based on the currently selected table
+  or chart view.
 - Fix several issues related to detailed activity metrics.
 
 ## Join Us for Office Hours
