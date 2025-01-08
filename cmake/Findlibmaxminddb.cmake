@@ -50,4 +50,3 @@ if (PkgConfig_FOUND)
     endif ()
   endif ()
 endif ()
-

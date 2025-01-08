@@ -1,6 +1,5 @@
 file(READ "${CMAKE_CURRENT_LIST_DIR}/../version.json" TENZIR_VERSION_JSON)
-string(JSON TENZIR_VERSION GET "${TENZIR_VERSION_JSON}"
-       tenzir-version)
+string(JSON TENZIR_VERSION GET "${TENZIR_VERSION_JSON}" tenzir-version)
 string(JSON TENZIR_PARTITION_VERSION GET "${TENZIR_VERSION_JSON}"
        tenzir-partition-version)
 
@@ -21,7 +20,8 @@ if (NOT DEFINED TENZIR_VERSION_BUILD_METADATA)
           "git-describe failed: ${_git_describe_result}; using a generic \"-dev\" version suffix"
       )
     else ()
-      string(REGEX MATCH "(g[0-9a-f]+)?(-dirty)?$" _git_describe_suffix "${_git_describe_output}")
+      string(REGEX MATCH "(g[0-9a-f]+)?(-dirty)?$" _git_describe_suffix
+                   "${_git_describe_output}")
       if (_git_describe_suffix)
         set(TENZIR_VERSION_BUILD_METADATA "${_git_describe_suffix}")
       endif ()

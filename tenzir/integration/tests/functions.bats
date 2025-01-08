@@ -295,3 +295,11 @@ from \
 y = x.length()
 EOF
 }
+
+@test "duration" {
+  check tenzir 'from {x: "1.34w"}, {x: 1}, {x: ""} | x = x.duration()'
+}
+
+@test "float" {
+  check tenzir 'from {x: "1.34"}, {x: " 1  "}, {x: -134}, {x: uint(null)} | x = x.float()'
+}

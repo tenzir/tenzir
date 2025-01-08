@@ -1,0 +1,7 @@
+error: operator `one` not found
+ --> <input>:1:1
+  |
+1 | one
+  | ^^^ 
+  |
+  = hint: must be one of: api, assert, batch, buffer, cache, compress, compress_brotli, compress_bz2, compress_gzip, compress_lz4, compress_zstd, config, context::create_bloom_filter, context::create_geoip, context::create_lookup_table, decompress, decompress_brotli, decompress_bz2, decompress_gzip, decompress_lz4, decompress_zstd, deduplicate, delay, diagnostics, discard, drop, enumerate, every, export, fields, files, fork, from, head, if, import, legacy, load_balance, load_file, load_ftp, load_http, load_tcp, load_udp, local, measure, metrics, openapi, partitions, pass, plugins, processes, python, rare, read_bitz, read_cef, read_csv, read_feather, read_gelf, read_grok, read_json, read_kv, read_leef, read_lines, read_ndjson, read_pcap, read_ssv, read_suricata, read_syslog, read_tsv, read_xsv, read_yaml, read_zeek_json, read_zeek_tsv, remote, repeat, reverse, sample, save_email, save_file, save_ftp, save_http, save_tcp, save_udp, schemas, select, serve, set, shell, slice, sockets, sort, summarize, tail, taste, throttle, timeshift, to, to_hive, to_opensearch, top, unordered, unroll, version, where, write_bitz, write_csv, write_feather, write_json, write_lines, write_ndjson, write_pcap, write_ssv, write_tsv, write_xsv, write_yaml, write_zeek_tsv

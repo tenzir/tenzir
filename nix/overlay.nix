@@ -136,6 +136,8 @@ in {
           "-framework SystemConfiguration";
       };
     });
+  arrow-adbc-cpp = prev.callPackage ./arrow-adbc-cpp { };
+  arrow-adbc-go = prev.callPackage ./arrow-adbc-go { };
   zeromq =
     if !isStatic
     then prev.zeromq
@@ -390,6 +392,8 @@ in {
         ps.pipeline-manager
         ps.platform
         ps.vast
+      ] ++ lib.optionals (!isStatic) [
+        ps.snowflake
       ]);
   };
   toChecked =

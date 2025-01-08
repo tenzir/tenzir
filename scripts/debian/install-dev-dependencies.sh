@@ -70,9 +70,16 @@ apt-get update
 # The apt download sometimes fails with a 403. We employ a similar workaround as
 # arrow itself: https://github.com/apache/arrow/pull/36836.
 # See also: https://github.com/apache/arrow/issues/35292.
-apt-get -y --no-install-recommends install libarrow-dev=18.0.0-1 libprotobuf-dev libparquet-dev=18.0.0-1 || \
-  apt-get -y --no-install-recommends install libarrow-dev=18.0.0-1 libprotobuf-dev libparquet-dev=18.0.0-1 || \
-  apt-get -y --no-install-recommends install libarrow-dev=18.0.0-1 libprotobuf-dev libparquet-dev=18.0.0-1
+apt-get -y --no-install-recommends install -o 'Acquire::Retries=3' \
+  libarrow-dev=18.0.0-1 \
+  libprotobuf-dev \
+  libparquet-dev=18.0.0-1
+
+if [ "$(uname -m)" == "x86_64" ]; then
+  apt-get -y --no-install-recommends install -o 'Acquire::Retries=3' \
+    libadbc-driver-snowflake-dev \
+    libadbc-driver-manager-dev
+fi
 rm ./"apache-arrow-apt-source-latest-${codename}.deb"
 
 # Node 18.x and Yarn

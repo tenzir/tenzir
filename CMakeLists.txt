@@ -305,7 +305,8 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 endif ()
 
 # FIXME: remove and fix warnings.
-target_compile_options(libtenzir_internal INTERFACE -Wno-deprecated-declarations)
+target_compile_options(libtenzir_internal
+                       INTERFACE -Wno-deprecated-declarations)
 
 set(gcc12plus
     "$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,12>>"
@@ -401,8 +402,8 @@ if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   # Not desired on darwin.
   if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
     # This works with clang as well, so we don't need an extra condition here.
-    target_link_libraries(libtenzir_internal INTERFACE -static-libgcc
-                                                       -static-libstdc++ -static)
+    target_link_libraries(libtenzir_internal
+                          INTERFACE -static-libgcc -static-libstdc++ -static)
   endif ()
 endif ()
 
@@ -760,13 +761,25 @@ else ()
         libtenzir/aux/caf submodule")
   else ()
     set(TENZIR_ENABLE_BUNDLED_CAF ON)
-    set(CAF_LOG_LEVEL "${TENZIR_CAF_LOG_LEVEL}" CACHE STRING "")
-    set(CAF_ENABLE_EXAMPLES OFF CACHE BOOL "")
-    set(CAF_ENABLE_TESTING OFF CACHE BOOL "")
-    set(CAF_ENABLE_TOOLS OFF CACHE BOOL "")
-    set(CAF_ENABLE_OPENSSL ON CACHE BOOL "")
+    set(CAF_LOG_LEVEL
+        "${TENZIR_CAF_LOG_LEVEL}"
+        CACHE STRING "")
+    set(CAF_ENABLE_EXAMPLES
+        OFF
+        CACHE BOOL "")
+    set(CAF_ENABLE_TESTING
+        OFF
+        CACHE BOOL "")
+    set(CAF_ENABLE_TOOLS
+        OFF
+        CACHE BOOL "")
+    set(CAF_ENABLE_OPENSSL
+        ON
+        CACHE BOOL "")
     if (TENZIR_ENABLE_ASSERTIONS)
-      set(CAF_ENABLE_RUNTIME_CHECKS ON CACHE BOOL "")
+      set(CAF_ENABLE_RUNTIME_CHECKS
+          ON
+          CACHE BOOL "")
     endif ()
     # add_subdirectory libtenzir/aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
     # can be removed once CAF cmake changes to use set(CMAKE_CXX_STANDARD) instead of it's own check
@@ -834,8 +847,8 @@ endif ()
 
 # -- python bindings ----------------------------------------------------------
 
-option(TENZIR_ENABLE_PYTHON_BINDINGS
-       "Build Python bindings (requires poetry)" ON)
+option(TENZIR_ENABLE_PYTHON_BINDINGS "Build Python bindings (requires poetry)"
+       ON)
 add_feature_info("TENZIR_ENABLE_PYTHON_BINDINGS" TENZIR_ENABLE_PYTHON_BINDINGS
                  "build Python bindings (requires poetry).")
 
@@ -845,8 +858,8 @@ if (DEFINED ENV{TENZIR_ENABLE_BUNDLED_UV})
 endif ()
 
 cmake_dependent_option(
-  TENZIR_ENABLE_BUNDLED_UV "Install a statically linked copy of uv" "${TENZIR_ENABLE_BUNDLED_UV_default}"
-  "TENZIR_ENABLE_PYTHON_BINDINGS" OFF)
+  TENZIR_ENABLE_BUNDLED_UV "Install a statically linked copy of uv"
+  "${TENZIR_ENABLE_BUNDLED_UV_default}" "TENZIR_ENABLE_PYTHON_BINDINGS" OFF)
 add_feature_info("TENZIR_ENABLE_BUNDLED_UV" TENZIR_ENABLE_BUNDLED_UV
                  "install a statically linked copy of uv.")
 
@@ -864,7 +877,7 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
   # first.
   set(TENZIR_PYTHON_BINARY_DIR "${CMAKE_BINARY_DIR}/share/tenzir/python")
   set(TENZIR_PYTHON_WHEEL
-    "${TENZIR_PYTHON_BINARY_DIR}/tenzir-${TENZIR_VERSION}-py3-none-any.whl")
+      "${TENZIR_PYTHON_BINARY_DIR}/tenzir-${TENZIR_VERSION}-py3-none-any.whl")
   file(
     WRITE "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
     "\
@@ -889,8 +902,7 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
     file(COPY_FILE \"\${_wheel}\" \"${TENZIR_PYTHON_WHEEL}\")")
   add_custom_command(
     OUTPUT "${TENZIR_PYTHON_WHEEL}"
-    COMMAND ${CMAKE_COMMAND} -P
-            "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
+    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/python)
   add_custom_target(tenzir-python-wheel DEPENDS "${TENZIR_PYTHON_WHEEL}")
   install(
@@ -900,18 +912,22 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
   if (TENZIR_ENABLE_BUNDLED_UV)
     set(build_libexecdir "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
     if (NOT TENZIR_UV_PATH)
-      file(READ "${CMAKE_CURRENT_LIST_DIR}/python/uv-source-info.json" uv_source_info)
+      file(READ "${CMAKE_CURRENT_LIST_DIR}/python/uv-source-info.json"
+           uv_source_info)
       set(UV_SYSTEM_arm64_Darwin "aarch64-darwin")
       set(UV_SYSTEM_aarch64_Linux "aarch64-linux")
       set(UV_SYSTEM_x86_64_Darwin "x86_64-darwin")
       set(UV_SYSTEM_x86_64_Linux "x86_64-linux")
-      string(JSON uv_source GET "${uv_source_info}" "${UV_SYSTEM_${CMAKE_HOST_SYSTEM_PROCESSOR}_${CMAKE_HOST_SYSTEM_NAME}}")
+      string(
+        JSON uv_source GET "${uv_source_info}"
+        "${UV_SYSTEM_${CMAKE_HOST_SYSTEM_PROCESSOR}_${CMAKE_HOST_SYSTEM_NAME}}")
       string(JSON uv_url GET "${uv_source}" url)
       string(JSON uv_sha256 GET "${uv_source}" sha256)
       get_filename_component(uv_stem "${uv_url}" NAME_WE)
-      file(DOWNLOAD "${uv_url}" "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz" EXPECTED_HASH "SHA256=${uv_sha256}")
-      file(ARCHIVE_EXTRACT INPUT "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz" DESTINATION
-        "${CMAKE_CURRENT_BINARY_DIR}" VERBOSE)
+      file(DOWNLOAD "${uv_url}" "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz"
+           EXPECTED_HASH "SHA256=${uv_sha256}")
+      file(ARCHIVE_EXTRACT INPUT "${CMAKE_CURRENT_BINARY_DIR}/uv.tar.gz"
+           DESTINATION "${CMAKE_CURRENT_BINARY_DIR}" VERBOSE)
       set(TENZIR_UV_PATH "${CMAKE_CURRENT_BINARY_DIR}/${uv_stem}/uv")
     endif ()
     file(MAKE_DIRECTORY "${build_libexecdir}")
@@ -944,8 +960,7 @@ install(
 
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfigVersion.cmake"
-  VERSION
-    "${TENZIR_VERSION}"
+  VERSION "${TENZIR_VERSION}"
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(

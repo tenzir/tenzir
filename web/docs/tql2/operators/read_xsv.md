@@ -4,7 +4,8 @@ Read XSV from a byte stream.
 
 ```tql
 read_xsv field_sep:string, list_sep:string, null_value:string,
-        [comments=bool, header=string, auto_expand=bool, schema=string,
+        [comments=bool, header=string, auto_expand=bool, quotes=string,
+         doubled_quotes_escape=bool, auto_expand=bool, schema=string,
          selector=string, schema_only=bool, raw=bool, unflatten=string]
 ```
 
@@ -50,6 +51,12 @@ Treat lines beginning with `#` as comments.
 
 The string to be used as the header for the parsed values. If unspecified, the
 first line of the input is used as the header.
+
+### `quotes = string (optional)`
+
+A string of not escaped characters that are supposed to be considered as quotes.
+
+Defaults to the characters `"'`.
 
 ### `raw = bool (optional)`
 

@@ -84,10 +84,17 @@ public:
   auto named(std::string name, T& x, std::string type = maybe_default<T>)
     -> argument_parser2&;
 
-  /// Adds an optional named argument.
+  /// Adds an optional named argument. Use this is "Not Given" is a case you
+  /// need to handle.
   template <argument_parser_type T>
   auto named(std::string name, std::optional<T>& x,
              std::string type = maybe_default<T>) -> argument_parser2&;
+
+  /// Adds an optional named argument. Use this if you have an object with a
+  /// default value.
+  template <argument_parser_type T>
+  auto named_optional(std::string name, T& x,
+                      std::string type = maybe_default<T>) -> argument_parser2&;
 
   /// Adds an optional named argument.
   auto named(std::string name, std::optional<location>& x,

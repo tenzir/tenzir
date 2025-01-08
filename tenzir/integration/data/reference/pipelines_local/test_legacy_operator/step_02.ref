@@ -3,7 +3,8 @@
     path: "example.json.gz" @ 0..0
   },
   decompress {
-    type: "gzip" @ 0..0
+    type: "gzip" @ 0..0,
+    gzip_format: "gzip" @ 0..0
   },
   read json {
     parser_name: "json",

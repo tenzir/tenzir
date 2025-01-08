@@ -6,6 +6,12 @@ Compresses a stream of bytes.
 compress codec:string, [level=int]
 ```
 
+:::warning Deprecated
+The `compress` operator is deprecated. You should use the
+[bespoke operators](../operators.md#encode--decode) instead.
+These operators offer more options for some of the formats.
+:::
+
 ## Description
 
 The `compress` operator compresses bytes in a pipeline incrementally with a

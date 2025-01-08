@@ -3,8 +3,8 @@
 Read Key-Value pairs from a byte stream.
 
 ```tql
-read_kv [field_split:string, value_split:string, merge=bool, raw=bool, schema=string,
-         selector=string, schema_only=bool, unflatten=string]
+read_kv [field_split:string, value_split:string, merge=bool, raw=bool, quotes=string,
+         schema=string, selector=string, schema_only=bool, unflatten=string]
 ```
 
 ## Description
@@ -76,6 +76,12 @@ lead to huge schemas filled with nulls and imprecise results. Use with caution.
 \*: In selector mode, only events with the same selector are merged.
 
 This option can not be combined with `raw=true, schema=<schema>`.
+
+### `quotes = string (optional)`
+
+A string of not escaped characters that are supposed to be considered as quotes.
+
+Defaults to the characters `"'`.
 
 ### `raw = bool (optional)`
 
