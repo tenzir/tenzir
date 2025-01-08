@@ -2,7 +2,7 @@
 title: "Tenzir Node v4.25: Sinks Galore!"
 slug: tenzir-node-v4.25
 authors: [lava]
-date: 2025-01-06
+date: 2025-01-08
 tags: [release, node]
 comments: true
 ---
@@ -27,7 +27,7 @@ pipelines. This release expands TQL2's capabilities with numerous improvements
 and features.
 
 To simplify TQL2 adoption, we introduced a TQL2-only mode. When you enable
-this mode for a Tenzir Nodes, all pipelines on that node run in TQL2, and
+this mode for a Tenzir Node, all pipelines on that node run in TQL2, and
 the Explorer interface automatically selects TQL2 mode. On such nodes, you
 can only use TQL1 through the `legacy` operator.
 
@@ -37,7 +37,7 @@ configure `tenzir.tql2: true` in your settings, or start the node with
 
 :::warning Call to Action
 We're going to enable TQL2-only mode by default in the upcoming
-Tenzir Node 5.0 release.
+Tenzir Node v5.0 release.
 
 Please try to test it out and report any issues back to us, so we can
 ensure a seamless upgrade experience.
@@ -52,7 +52,7 @@ functionalities from TQL1 to TQL2.
 The [`from`](/next/tql2/operators/from) operator lets you onboard data from
 most sources effortlessly. For example, instead of
 
-```
+```tql
 load_http "https://example.com/file.json.gz"
 decompress_gzip
 read_json
@@ -60,7 +60,7 @@ read_json
 
 you can now write
 
-```
+```tql
 from "https://example.com/file.json.gz"
 ```
 
@@ -71,7 +71,7 @@ out the [reference documentation](/next/tql2/operators/from).
 Conversely, the [`to`](/next/tql2/operators/to) operator simplifies data
 delivery to most destinations. For instance, instead of
 
-```
+```tql
 write_json
 compress "gzip"
 save_file "myfile.json.gz"
@@ -79,7 +79,7 @@ save_file "myfile.json.gz"
 
 you can now write
 
-```
+```tql
 to "file://file.json.gz"
 ```
 
@@ -116,11 +116,11 @@ The HTTP operators now include several new options. The
 We split the `compress` and `decompress` operators into
 separate operators for each compression algorithm:
 
- - [`compress_gzip`](/next/tql2/operators/compress_gzip)
- - [`compress_bz2`](/next/tql2/operators/compress_bz2)
- - [`compress_brotli`](/next/tql2/operators/compress_brotli)
- - [`compress_lz4`](/next/tql2/operators/compress_lz4)
- - [`compress_zstd`](/next/tql2/operators/compress_zstd)
+- [`compress_gzip`](/next/tql2/operators/compress_gzip)
+- [`compress_bz2`](/next/tql2/operators/compress_bz2)
+- [`compress_brotli`](/next/tql2/operators/compress_brotli)
+- [`compress_lz4`](/next/tql2/operators/compress_lz4)
+- [`compress_zstd`](/next/tql2/operators/compress_zstd)
 
 as well as their respective `decompress_*` versions.
 
@@ -140,7 +140,7 @@ users integrate Tenzir with one of the most popular cloud data platforms.
 
 To send data to snowflake, a pipeline like this can be used:
 
-```
+```tql
 from {foo: 42, bar: true}
 to_snowflake \
   account_identifier="asldyuf-xgb47555",
@@ -164,7 +164,7 @@ integrates with the new [`from`](/next/tql2/operators/from) and
 it is possible to write to OpenSearch or ElasticSearch instances
 by using the `opensearch:` or `elasticsearch:` URL schemes.
 
-```
+```tql
 from {event: "example"}
 to "opensearch://localhost:9200", action="create", index="main"
 ```
