@@ -40,25 +40,44 @@ namespace tenzir::plugins::cef {
 namespace {
 
 /// Unescapes CEF string data containing \r, \n, \\, and \=.
-std::string unescape(std::string_view value) {
-  std::string result;
-  result.reserve(value.size());
-  for (auto i = 0u; i < value.size(); ++i) {
-    if (value[i] != '\\') {
-      result += value[i];
-    } else if (i + 1 < value.size()) {
-      auto next = value[i + 1];
-      switch (next) {
-        default:
-          result += next;
-          break;
-        case 'r':
-        case 'n':
-          result += '\n';
-          break;
-      }
-      ++i;
+auto unescape(std::string_view::iterator begin, std::string_view::iterator end,
+              std::back_insert_iterator<std::string> out)
+  -> std::string_view::iterator {
+  TENZIR_ASSERT_EXPENSIVE(*std::prev(begin) == '\\');
+  TENZIR_ASSERT_EXPENSIVE(begin < end);
+  switch (*begin) {
+    case 'n': {
+      out = '\n';
+      return ++begin;
     }
+    case 'r': {
+      out = '\n';
+      return ++begin;
+    }
+    case '=': {
+      out = '=';
+      return ++begin;
+    }
+    case '\\': {
+      out = '\\';
+      return ++begin;
+    }
+  }
+  return begin;
+}
+
+auto unescape_string(std::string_view in) -> std::string {
+  auto result = std::string{};
+  result.reserve(in.size());
+  for (auto it = in.begin(); it != in.end(); ++it) {
+    if (*it == '\\' and it < in.end() - 1) {
+      auto start = it + 1;
+      auto end = unescape(start, in.end(), std::back_inserter(result));
+      if (end != start) {
+        continue;
+      }
+    }
+    result += *it;
   }
   return result;
 }
@@ -69,37 +88,32 @@ std::string unescape(std::string_view value) {
 /// is simply the text after the separator before the start of the next key.
 /// @param extension The string value of the extension field.
 /// @returns A vector of key-value pairs with properly unescaped values.
-auto parse_extension(std::string_view extension,
-                     auto builder) -> std::optional<diagnostic> {
+auto parse_extension(std::string_view extension, auto builder,
+                     detail::quoting_escaping_policy quoting)
+  -> std::optional<diagnostic> {
   if (extension.empty()) {
     return {};
   }
-  auto find_next_kv_sep = [](std::string_view extension) {
-    auto kv_sep = detail::find_first_not_in_quotes(extension, '=');
-    while (detail::is_escaped(kv_sep, extension)) {
-      kv_sep = detail::find_first_not_in_quotes(extension, '=', kv_sep + 1);
-    }
-    return kv_sep;
-  };
   // Find the first not quoted, not escaped kv separator.
-  auto kv_sep = find_next_kv_sep(extension);
+  auto kv_sep = quoting.find_not_in_quotes(extension, '=', 0, true);
   if (kv_sep == extension.npos) {
     return diagnostic::warning(
              "extension field did not contain a key-value separator")
       .done();
   }
   while (not extension.empty()) {
-    auto key = unescape(detail::trim(extension.substr(0, kv_sep)));
+    auto key = unescape_string(detail::trim(extension.substr(0, kv_sep)));
     extension.remove_prefix(kv_sep + 1);
     // Find the next not quoted, not escaped kv separator.
-    kv_sep = find_next_kv_sep(extension);
+    kv_sep = quoting.find_not_in_quotes(extension, '=', 0, true);
     // Find the last whitespace before the key, determining the end of the value
-    // text.
+    // text. Ignoring quoting is fine for this search; the CEF spec does not
+    // discuss/specify quoted keys.
     auto value_end = kv_sep == extension.npos
                        ? extension.npos
                        : extension.find_last_of(" \t", kv_sep);
     auto value
-      = unescape(detail::unquote(detail::trim(extension.substr(0, value_end))));
+      = quoting.unquote_unescape(detail::trim(extension.substr(0, value_end)));
     if constexpr (detail::multi_series_builder::has_unflattened_field<
                     decltype(builder)>) {
       auto field = builder.unflattened_field(key);
@@ -122,8 +136,9 @@ auto parse_extension(std::string_view extension,
   return {};
 }
 
-[[nodiscard]] auto
-parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
+[[nodiscard]] auto parse_line(std::string_view line, auto& msb,
+                              const detail::quoting_escaping_policy& quoting)
+  -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() < 7 or fields.size() > 8) {
@@ -151,7 +166,7 @@ parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
   r.field("name").data(std::move(fields[5]));
   r.field("severity").data(std::move(fields[6]));
   if (fields.size() == 8) {
-    auto d = parse_extension(fields[7], r.field("extension").record());
+    auto d = parse_extension(fields[7], r.field("extension").record(), quoting);
     if (d) {
       msb.remove_last();
       return d;
@@ -173,6 +188,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       return d;
     },
   };
+  auto quoting = detail::quoting_escaping_policy{
+    .unescape_operation = unescape,
+  };
   auto msb = multi_series_builder{
     std::move(options),
     dh,
@@ -190,7 +208,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       TENZIR_DEBUG("CEF parser ignored empty line");
       continue;
     }
-    auto d = parse_line(*line, msb);
+    auto d = parse_line(*line, msb, quoting);
     if (d) {
       dh.emit(std::move(*d));
     }
@@ -291,12 +309,15 @@ public:
             [&](const arrow::StringArray& arg) {
               // TODO: Use multi-series builder here.
               auto b = series_builder{};
+              auto quoting = detail::quoting_escaping_policy{
+                .unescape_operation = unescape,
+              };
               for (auto string : arg) {
                 if (not string) {
                   b.null();
                   continue;
                 }
-                auto diag = parse_line(*string, b);
+                auto diag = parse_line(*string, b, quoting);
                 if (diag) {
                   ctx.dh().emit(std::move(*diag));
                   b.null();

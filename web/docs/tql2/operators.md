@@ -237,8 +237,22 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`compress`](./operators/compress.md) | Compresses a stream of bytes | `compress "zstd", level=18`
-[`decompress`](./operators/decompress.md) | Decompresses a stream of bytes | `decompress "brotli"`
+[`compress_brotli`](./operators/compress_brotli.md) | Compresses bytes using Brotli compression | `compress_zstd, level=10`
+[`compress_bz2`](./operators/compress_bz2.md) | Compresses bytes using Bzip compression | `compress_bz2, level=9`
+[`compress_gzip`](./operators/compress_gzip.md) | Compresses bytes using Gzip compression | `compress_gzip, level=8`
+[`compress_lz4`](./operators/compress_lz4.md) | Compresses bytes using lz4 compression | `compress_lz4, level=7`
+[`compress_zstd`](./operators/compress_zstd.md) | Compresses bytes using Gzip compression | `compress_zstd, level=6`
+[`decompress_brotli`](./operators/decompress_brotli.md) | Decompresses Brotli compressed bytes | `decompress_zstd`
+[`decompress_bz2`](./operators/decompress_bz2.md) | Decompresses Bzip2 compressed bytes | `decompress_bz2`
+[`decompress_gzip`](./operators/decompress_gzip.md) | Decompresses Gzip compressed bytes | `decompress_gzip`
+[`decompress_lz4`](./operators/decompress_lz4.md) | Decompresses lz4 compressed bytes | `decompress_lz4`
+[`decompress_zstd`](./operators/decompress_zstd.md) | Decompresses Zstd compressed bytes | `decompress_zstd`
+
+## Pipelines
+
+Operator | Description | Example
+:--------|:------------|:-------
+[`pipeline::list`](./operators/pipeline/list.md) | Shows managed pipelines | `package::list`
 
 ## Contexts
 

@@ -27,14 +27,6 @@ namespace {
 
 constexpr auto docs = "https://docs.tenzir.com/formats/kv";
 
-auto is_quoted(std::string_view text) -> bool {
-  if (text.size() < 2) {
-    return false;
-  }
-  return text.front() == text.back() and text.front() == '\"'
-         and not detail::is_escaped(text.size() - 1, text);
-}
-
 class splitter {
 public:
   splitter() = default;
@@ -76,7 +68,8 @@ public:
     regex_ = std::move(regex);
   }
 
-  auto split(std::string_view input) const
+  auto split(std::string_view input,
+             const detail::quoting_escaping_policy& quoting) const
     -> std::pair<std::string_view, std::string_view> {
     TENZIR_ASSERT(regex_);
     TENZIR_ASSERT(regex_->NumberOfCapturingGroups() == 1);
@@ -90,14 +83,7 @@ public:
       auto head = std::string_view{input.data(), group.data()};
       auto tail = std::string_view{group.data() + group.size(),
                                    input.data() + input.size()};
-      auto quote_count = 0;
-      for (size_t i = 0; i < head.size(); ++i) {
-        if (head[i] == '\"' and not detail::is_escaped(i, head)) {
-          ++quote_count;
-        }
-      }
-      auto is_valid = quote_count == 0 or quote_count == 2
-                      or (quote_count == 4 and head[0] == '"');
+      auto is_valid = not quoting.is_inside_of_quotes(input, head.size());
       if (is_valid) {
         return {head, tail};
       } else {
@@ -144,6 +130,7 @@ private:
 
 struct kv_args {
   multi_series_builder::options msb_opts_;
+  detail::quoting_escaping_policy quoting_;
   splitter field_split_;
   splitter value_split_;
 
@@ -151,6 +138,7 @@ struct kv_args {
     return f.object(x)
       .pretty_name("kv_parser")
       .fields(f.field("msb_options", x.msb_opts_),
+              f.field("quoting", x.quoting_),
               f.field("field_split", x.field_split_),
               f.field("value_split", x.value_split_));
   }
@@ -184,12 +172,11 @@ public:
     while (not line.empty()) {
       // TODO: We ignore split failures here. There might be better ways
       // to handle this.
-      auto [head, tail] = args_.field_split_.split(line);
-      auto [key_view, value_view] = args_.value_split_.split(head);
-      auto key = is_quoted(key_view) ? detail::json_unescape(key_view)
-                                     : std::string{key_view};
-      auto value = is_quoted(value_view) ? detail::json_unescape(value_view)
-                                         : std::string{value_view};
+      auto [head, tail] = args_.field_split_.split(line, args_.quoting_);
+      auto [key_view, value_view]
+        = args_.value_split_.split(head, args_.quoting_);
+      auto key = args_.quoting_.unquote_unescape(key_view);
+      auto value = args_.quoting_.unquote_unescape(value_view);
       event.unflattened_field(std::move(key)).data_unparsed(std::move(value));
       if (line == tail) {
         diagnostic::error("`kv` did not make progress")
@@ -290,6 +277,7 @@ public:
     msb_opts->settings.default_schema_name = "tenzir.kv";
     return std::make_unique<kv_parser>(kv_args{
       std::move(*msb_opts),
+      detail::quoting_escaping_policy{},
       splitter{*field_split},
       splitter{*value_split},
     });
@@ -318,12 +306,15 @@ public:
     parser.positional("field_split", field_split);
     parser.positional("value_split", value_split);
     auto msb_parser = multi_series_builder_argument_parser{};
+    auto quoting = detail::quoting_escaping_policy{};
     msb_parser.add_all_to_parser(parser);
+    parser.named_optional("quotes", quoting.quotes);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     opts.settings.default_schema_name = "tenzir.kv";
     return std::make_unique<parser_adapter<kv_parser>>(kv_parser{{
       std::move(opts),
+      std::move(quoting),
       splitter{std::move(*field_split)},
       splitter{std::move(*value_split)},
     }});
@@ -350,17 +341,16 @@ public:
       "=",
       location::unknown,
     };
+    auto quoting = detail::quoting_escaping_policy{};
     parser.positional("input", input, "string");
     parser.positional("field_split", field_split);
     parser.positional("value_split", value_split);
-    auto msb_parser = multi_series_builder_argument_parser{};
-    msb_parser.add_all_to_parser(parser);
+    parser.named_optional("quotes", quoting.quotes);
     TRY(parser.parse(inv, ctx));
-    TRY(auto opts, msb_parser.get_options(ctx.dh()));
-    opts.settings.default_schema_name = "tenzir.kv";
     return function_use::make([input = std::move(input),
                                parser = kv_parser{{
                                  multi_series_builder::options{},
+                                 std::move(quoting),
                                  splitter{std::move(*field_split)},
                                  splitter{std::move(*value_split)},
                                }}](evaluator eval, session ctx) {

@@ -3,16 +3,17 @@
     path: "example.csv.gz" @ 5..21
   },
   decompress {
-    type: "gzip" @ 0..0
+    type: "gzip" @ 0..0,
+    gzip_format: "gzip" @ 0..0
   },
   read_xsv {
     name: "csv",
-    field_sep: 44,
-    list_sep: 59,
+    field_sep: ",",
+    list_sep: ";",
     null_value: "",
-    allow_comments: false,
-    no_header: false,
+    quotes: "\"'",
     auto_expand: false,
+    allow_comments: false,
     builder_options: {
       policy: policy_default {
         

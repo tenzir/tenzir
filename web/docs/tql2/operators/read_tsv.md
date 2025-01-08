@@ -3,8 +3,9 @@
 Read TSV (Tab-Separated Values) from a byte stream.
 
 ```tql
-read_tsv [list_sep=string, null_value=string, comments=bool, header=string, auto_expand=bool,
-					schema=string, selector=string, schema_only=bool, raw=bool, unflatten=string]
+read_tsv [list_sep=string, null_value=string, comments=bool, header=string,
+          quotes=string, auto_expand=bool,
+          schema=string, selector=string, schema_only=bool, raw=bool, unflatten=string]
 ```
 
 ## Description
@@ -37,6 +38,12 @@ Defaults to `,`.
 The `string` denoting an absent value.
 
 Defaults to `-`.
+
+### `quotes = string (optional)`
+
+A string of not escaped characters that are supposed to be considered as quotes.
+
+Defaults to the characters `"'`.
 
 ### `raw = bool (optional)`
 

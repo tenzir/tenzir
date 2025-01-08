@@ -3,7 +3,7 @@
 set -eu -o pipefail -o null_glob
 
 # Check if exactly one argument was passed: the new version.
-if (( $# != 1 )) || (( $# != 2 )) || [[ "$1" == "--help" ]]; then
+if (( $# != 1 && $# != 2 )) || [[ "$1" == "--help" ]]; then
   >&2 {
     echo "Usage: $0 <version> <base-ref>"
     echo "  version:  The new version, e.g., v1.0.0 or v1.0.0-rc1"

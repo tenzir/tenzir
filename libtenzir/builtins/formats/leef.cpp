@@ -55,30 +55,38 @@ namespace {
 // TODO: it's unlclear whether that's correct. There is not much info out there
 // in the internet that tells us how to do this properly.
 /// Unescapes LEEF string data containing \r, \n, \\, and \=.
-auto unescape(std::string_view value) -> std::string {
-  std::string result;
-  result.reserve(value.size());
-  for (auto i = 0u; i < value.size(); ++i) {
-    if (value[i] != '\\') {
-      result += value[i];
-    } else if (i + 1 < value.size()) {
-      auto next = value[i + 1];
-      switch (next) {
-        default:
-          result += next;
-          break;
-        case 'r':
-        case 'n':
-          result += '\n';
-          break;
-        case 't':
-          result += '\t';
-          break;
-      }
-      ++i;
+auto unescape(std::string_view::iterator begin, std::string_view::iterator end,
+              std::back_insert_iterator<std::string> out)
+  -> std::string_view::iterator {
+  TENZIR_ASSERT_EXPENSIVE(*std::prev(begin) == '\\');
+  TENZIR_ASSERT_EXPENSIVE(begin < end);
+  switch (*begin) {
+    case 'n': {
+      out = '\n';
+      return ++begin;
+    }
+    case 'r': {
+      out = '\n';
+      return ++begin;
+    }
+    case 't': {
+      out = '\t';
+      return ++begin;
+    }
+    case '=': {
+      out = '=';
+      return ++begin;
+    }
+    case '\\': {
+      out = '\\';
+      return ++begin;
+    }
+    default: {
+      return begin;
     }
   }
-  return result;
+  TENZIR_UNREACHABLE();
+  return begin;
 }
 
 /// Parses a LEEF delimiter.
@@ -130,20 +138,22 @@ auto parse_delimiter(std::string_view field) -> std::variant<char, diagnostic> {
 }
 
 /// Parses the LEEF attributes field as a sequence of key-value pairs.
-auto parse_attributes(char delimiter, std::string_view attributes,
-                      auto builder) -> std::optional<diagnostic> {
+auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
+                      const detail::quoting_escaping_policy& quoting)
+  -> std::optional<diagnostic> {
   while (not attributes.empty()) {
-    const auto attr_end
-      = detail::find_first_not_in_quotes(attributes, delimiter);
+    auto attr_end = quoting.find_not_in_quotes(attributes, delimiter);
+    /// We greedily accept more than one consecutive separator
+    while (attr_end < attributes.size() - 1
+           and attributes[attr_end + 1] == delimiter) {
+      ++attr_end;
+    }
     const auto attribute = attributes.substr(0, attr_end);
-    auto sep_pos = detail::find_first_not_in_quotes(attribute, '=');
+    auto sep_pos = quoting.find_not_in_quotes(attribute, '=', 0, true);
     if (sep_pos == 0) {
       return diagnostic::warning("missing key before separator in attributes")
         .note("attribute was `{}`", attribute)
         .done();
-    }
-    while (detail::is_escaped(sep_pos, attribute)) {
-      sep_pos = detail::find_first_not_in_quotes(attribute, '=', sep_pos + 1);
     }
     if (sep_pos == attribute.npos) {
       return diagnostic::warning("missing key-value separator in attribute")
@@ -152,7 +162,7 @@ auto parse_attributes(char delimiter, std::string_view attributes,
     }
     auto key = attribute.substr(0, sep_pos);
     auto value
-      = unescape(detail::unquote(detail::trim(attribute.substr(sep_pos + 1))));
+      = quoting.unquote_unescape(detail::trim(attribute.substr(sep_pos + 1)));
     if constexpr (detail::multi_series_builder::has_unflattened_field<
                     decltype(builder)>) {
       auto field = builder.unflattened_field(key);
@@ -175,8 +185,9 @@ auto parse_attributes(char delimiter, std::string_view attributes,
   return {};
 }
 
-[[nodiscard]] auto
-parse_line(std::string_view line, auto& builder) -> std::optional<diagnostic> {
+[[nodiscard]] auto parse_line(std::string_view line, auto& builder,
+                              const detail::quoting_escaping_policy& quoting)
+  -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   // We first need to find out whether we are LEEF 1.0 or 2.0. The latter has
   // one additional top-level component.
@@ -229,7 +240,7 @@ parse_line(std::string_view line, auto& builder) -> std::optional<diagnostic> {
   r.field("product_version").data(std::move(fields[3]));
 
   auto d = parse_attributes(delimiter, fields[num_fields],
-                            r.field("attributes").record());
+                            r.field("attributes").record(), quoting);
   if (d) {
     builder.remove_last();
     return d;
@@ -250,6 +261,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       return d;
     },
   };
+  auto quoting = detail::quoting_escaping_policy{
+    .unescape_operation = unescape,
+  };
   auto msb = multi_series_builder{
     std::move(options),
     dh,
@@ -267,7 +281,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       TENZIR_DEBUG("LEEF parser ignored empty line");
       continue;
     }
-    auto d = parse_line(*line, msb);
+    auto d = parse_line(*line, msb, quoting);
     if (d) {
       dh.emit(std::move(*d));
     }
@@ -372,12 +386,13 @@ public:
                 multi_series_builder::settings_type{},
                 ctx,
               };
+              auto quoting = detail::quoting_escaping_policy{};
               for (auto string : arg) {
                 if (not string) {
                   builder.null();
                   continue;
                 }
-                auto diag = parse_line(*string, builder);
+                auto diag = parse_line(*string, builder, quoting);
                 if (diag) {
                   ctx.dh().emit(std::move(*diag));
                   builder.null();
@@ -404,3 +419,4 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::leef_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::read_leef)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::parse_leef)
