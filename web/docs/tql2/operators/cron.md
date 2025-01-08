@@ -3,7 +3,7 @@
 Runs a pipeline periodically according to a cron expression.
 
 ```tql
-cron interval:string { … }
+cron schedule:string { … }
 ```
 
 ## Description
@@ -12,10 +12,10 @@ The `cron` operator performs scheduled execution of a pipeline indefinitely
 according to a [cron expression](https://en.wikipedia.org/wiki/Cron).
 
 The executor spawns a new pipeline according to the cadence given by
-`interval`. If the pipeline runs longer than the interval to the next
+`schedule`. If the pipeline runs longer than the interval to the next
 scheduled time point, the next run immediately starts.
 
-### `interval: string`
+### `schedule: string`
 
 The cron expression with the following syntax:
 
