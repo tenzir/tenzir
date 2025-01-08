@@ -53,7 +53,7 @@ and have built a new framework that makes emitting custom metrics from operators
 a breeze.
 
 :::tip Want to learn more?
-Take a look at the [`metrics` operator's documentation](/operators/metrics),
+Take a look at the [`metrics` operator's documentation](/v4.24/operators/metrics),
 which details all the available metrics and their schema.
 :::
 

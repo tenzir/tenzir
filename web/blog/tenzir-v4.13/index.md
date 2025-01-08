@@ -126,7 +126,7 @@ cron "0 5 4 * * SUN" from https://example.com/api
 
 ## Performance Improvements for Imports
 
-The [`import`](/operators/import) operator introduces a slight delay (up to one
+The [`import`](/v4.24/operators/import) operator introduces a slight delay (up to one
 second) in event handling to batch events by schema, substantially enhancing
 performance.
 
