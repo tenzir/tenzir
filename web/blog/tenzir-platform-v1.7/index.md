@@ -24,7 +24,7 @@ create a pipeline reading the data from the dropped file.
 
 The generated pipeline is using the [`from`
 operator](/next/tql2/operators/from), so in order to use this feature a Tenzir
-Node with version 4.25 or later is required.
+Node with v4.25 or later is required.
 
 All file types that are [automatically
 recognized](/next/tql2/operators/from#file-extensions) by the `from` operator
@@ -32,7 +32,7 @@ can be used as source files.
 
 ## Webhook Analytics
 
-For sovereign edition users, it is now possible to specify a webhook URL as a
+For Sovereign Edition users, it is now possible to specify a webhook URL as a
 destination for analytics events.
 
 To configure this URL, set the `ANALYTICS_WEBHOOK_URL` environment variable in
