@@ -9,6 +9,7 @@ setup() {
 
   # We don't care about the actual events, just the number of them.
   export TENZIR_EXEC__IMPLICIT_EVENTS_SINK="enumerate index | put index | write json --compact-output | save -"
+  export TENZIR_TQL2=true
 }
 
 teardown() {
@@ -16,19 +17,17 @@ teardown() {
 }
 
 @test "cron modifier" {
-  check tenzir "cron '* * * * * *' version | head"
-  check tenzir "cron '* * * * * *' version | cron '*/5 * * * * *' tail 1 | head 1"
+  check tenzir 'cron "* * * * * *", { version } | head'
+  check tenzir 'cron "* * * * * *", { version } | cron "*/5 * * * * *", { tail 1 } | head 1'
 }
 
 @test "cron with remote" {
-  check tenzir "cron '* * * * * *' remote version | head"
-  check tenzir "remote cron '* * * * * *' version | head"
+  check tenzir 'cron "* * * * * *", { remote { version  } } | head'
+  check tenzir 'remote { cron "* * * * * *", { version } | head }'
 }
 
 @test "cron errors" {
-  check ! tenzir "cron '* * * * * *' from ./this-file-does-not-exist.json"
-  check ! tenzir "cron * * * * * * version"
-  check ! tenzir "cron '120 * * * * *' version"
-  check ! tenzir "cron 'E * * * * *' version"
-  check ! tenzir "cron version"
+  check ! tenzir 'cron "* * * * * *", { from "./this-file-does-not-exist.json" }'
+  check ! tenzir 'cron "120 * * * * *", { version }'
+  check ! tenzir 'cron "E * * * * *", { version }'
 }
