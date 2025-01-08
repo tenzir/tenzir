@@ -244,8 +244,6 @@
           cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
         ''
         else ''
-          echo "!!!!!!!!!!!!!!!!!!!! AR     = $AR $(command -v $AR)"
-          echo "!!!!!!!!!!!!!!!!!!!! RANLIB = $RANLIB $(command -v $RANLIB)"
           version_build_metadata=$(basename $out | cut -d'-' -f 1)
           cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
         ''
