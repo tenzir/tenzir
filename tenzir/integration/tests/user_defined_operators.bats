@@ -9,7 +9,7 @@ setup() {
 }
 
 @test "unknown udo" {
-  check ! tenzir 'one'
+  check -c "tenzir 'one' | head -n 1"
 }
 
 @test "invalid udo" {
