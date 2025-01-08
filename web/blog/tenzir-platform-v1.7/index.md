@@ -18,9 +18,18 @@ of stability improvements..
 
 ## Explorer Drag'n'Drop
 
-It is now possible to drag and drop files to the explorer window in order to create a pipeline reading the data from the dropped file.
+It is now possible to drag and drop files to the explorer
+window in order to create a pipeline reading the data from
+the dropped file.
 
-<!-- todo: image -->
+The generated pipeline is using the
+[`from` operator](/next/tql2/operators/from), so in order
+to use this feature a Tenzir Node with version 4.25 or
+later is required.
+
+All file types that are
+[automatically recognized](/next/tql2/operators/from#file-extensions) by the
+`from` operator can be used as source files.
 
 ## Webhook Analytics
 
