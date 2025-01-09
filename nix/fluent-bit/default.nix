@@ -96,13 +96,15 @@ stdenv.mkDerivation rec {
       libnghttp2
       libyaml
       luajit
-      musl-fts
       openssl
       rdkafka
       # Needed by rdkafka.
       zlib
       # Needed by rdkafka.
       zstd
+    ]
+    ++ lib.optionals stdenv.hostPlatform.isLinux [
+      musl-fts
     ]
     ++ lib.optionals (stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isStatic) [
       # libbpf doesn't build for Darwin yet.
