@@ -173,6 +173,12 @@ in {
       ++ lib.optionals stdenv.cc.isClang [
         "-DRDKAFKA_BUILD_TESTS=OFF"
       ];
+
+    postFixup = lib.optionalString stdenv.hostPlatform.isStatic ''
+      for pc in rdkafka{,++}; do
+        ln -s $out/lib/pkgconfig/$pc{-static,}.pc
+      done
+    '';
   });
   mkStub = name:
     prev.writeShellScriptBin name ''
