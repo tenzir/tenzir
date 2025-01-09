@@ -44,7 +44,8 @@ public:
     return "process";
   }
 
-  auto make_collector() const -> caf::expected<collector> override {
+  auto make_collector(caf::actor_system&) const
+    -> caf::expected<collector> override {
     return get_process_statistics;
   }
 

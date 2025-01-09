@@ -216,7 +216,7 @@ if (BUILD_SHARED_LIBS)
 endif ()
 
 # Link against CAF.
-target_link_libraries(libtenzir PUBLIC CAF::core CAF::io CAF::openssl)
+target_link_libraries(libtenzir PUBLIC CAF::core CAF::io CAF::net CAF::openssl)
 
 # Link against libtenzir-fbs.
 target_link_libraries(libtenzir PUBLIC libtenzir-fbs)
