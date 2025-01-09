@@ -50,7 +50,7 @@ class load_plugin
   }
 };
 
-class plugin : public virtual operator_plugin2<nics_operator> {
+class tql2_plugin : public virtual operator_plugin2<nics_operator> {
   auto name() const -> std::string override {
     return "tql2.nics";
   }
@@ -67,4 +67,4 @@ class plugin : public virtual operator_plugin2<nics_operator> {
 } // namespace tenzir::plugins::nic
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::nic::load_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::nic::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::nic::tql2_plugin)

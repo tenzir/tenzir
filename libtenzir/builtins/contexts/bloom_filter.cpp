@@ -98,10 +98,6 @@ public:
   }
 
   auto dump() -> generator<table_slice> override {
-    const auto* ptr
-      = reinterpret_cast<const std::byte*>(bloom_filter_.data().data());
-    auto size = bloom_filter_.data().size();
-    auto data = std::basic_string<std::byte>{ptr, size};
     auto entry_builder = series_builder{};
     auto row = entry_builder.record();
     row.field("num_elements", bloom_filter_.num_elements());

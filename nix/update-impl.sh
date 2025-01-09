@@ -61,4 +61,3 @@ update-source() {
 }
 
 update-source caf "libtenzir/aux/caf"
-update-source fast_float "libtenzir/aux/fast_float"

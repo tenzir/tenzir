@@ -380,7 +380,7 @@ auto escape(const record& xs) -> std::string {
         using tenzir::to_string;
         return to_string(x);
       },
-      [](const std::basic_string<std::byte>& blob) {
+      [](const blob& blob) {
         const auto* ptr = reinterpret_cast<const char*>(blob.data());
         return std::string{ptr, blob.size()};
       },

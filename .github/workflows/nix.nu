@@ -1,18 +1,18 @@
 #!/usr/bin/env nu
 
 # The expected input schema:
-let config = {
-  editions: list<{
-    name: string
-    static: bool
-    upload-package-to-github: bool
-    package-stores: list<string>
-    image-registries: list<string>
-  }>
-  aliases: list<string>
-  container-tags: list<string>
-  release-tag: string
-}
+#let config = {
+#  editions: list<{
+#    name: string
+#    static: bool
+#    upload-package-to-github: bool
+#    package-stores: list<string>
+#    image-registries: list<string>
+#  }>
+#  aliases: list<string>
+#  container-tags: list<string>
+#  release-tag: string
+#}
 
 def upload_packages [
   name: string

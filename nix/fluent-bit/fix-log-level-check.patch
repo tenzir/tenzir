@@ -1,0 +1,22 @@
+diff --git a/include/fluent-bit/flb_log.h b/include/fluent-bit/flb_log.h
+index 48e8ff749..a03d0a684 100644
+--- a/include/fluent-bit/flb_log.h
++++ b/include/fluent-bit/flb_log.h
+@@ -103,14 +103,10 @@ static inline int flb_log_check_level(int level_set, int msg_level)
+ static inline int flb_log_check(int l) {
+     struct flb_worker *w;
+     w = (struct flb_worker *) FLB_TLS_GET(flb_worker_ctx);
+-    if (!w && l <= 3) {
+-        return FLB_TRUE;
+-    }
+ 
+-    if (w == NULL || flb_worker_log_level(w) < l) {
+-        return FLB_FALSE;
+-    }
+-    return FLB_TRUE;
++    const int configured_level = (w && w->log_ctx) ? flb_worker_log_level(w) : FLB_LOG_INFO;
++
++    return (l <= configured_level) ? FLB_TRUE : FLB_FALSE;
+ }
+ 
+ struct flb_log *flb_log_create(struct flb_config *config, int type,

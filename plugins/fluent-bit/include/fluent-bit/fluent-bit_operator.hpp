@@ -329,6 +329,11 @@ public:
 
   ~engine() {
     if (ctx_ != nullptr) {
+      // Workaround an uninitialized thread-local pointer that causes a bad
+      // `free`.
+      if (not started_) {
+        start();
+      }
       stop();
       flb_destroy(ctx_);
     }
@@ -556,8 +561,7 @@ auto add(auto field, const msgpack_object& object, diagnostic_handler& dh,
       return true;
     },
     [&](std::span<const std::byte> xs) {
-      auto blob_view = std::basic_string_view<std::byte>{xs.data(), xs.size()};
-      field.data(tenzir::blob{blob_view});
+      field.data(blob{xs.begin(), xs.end()});
       return true;
     },
     [&](std::span<msgpack_object> xs) {

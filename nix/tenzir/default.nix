@@ -19,7 +19,7 @@
     arrow-adbc-cpp,
     aws-sdk-cpp-tenzir,
     azure-sdk-for-cpp,
-    fast_float,
+    fast-float,
     flatbuffers,
     fluent-bit,
     protobuf,
@@ -41,6 +41,7 @@
     dpkg,
     rpm,
     restinio,
+    llhttp,
     pfs,
     extraPlugins ? [],
     symlinkJoin,
@@ -114,6 +115,7 @@
           ninja
           dpkg
           protobuf
+          grpc
           poetry
           makeBinaryWrapper
         ] ++ lib.optionals stdenv.isLinux [
@@ -124,7 +126,7 @@
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           aws-sdk-cpp-tenzir
-          fast_float
+          fast-float
           fluent-bit
           google-cloud-cpp
           grpc
@@ -136,7 +138,10 @@
           rdkafka
           cppzmq
           re2
-          restinio
+          (restinio.override {
+            with_boost_asio = true;
+          })
+          llhttp
         ] ++ lib.optionals isStatic [
           azure-sdk-for-cpp
         ] ++ lib.optionals stdenv.isLinux [
@@ -163,7 +168,15 @@
 
         env = {
           POETRY_VIRTUALENVS_IN_PROJECT = 1;
-          NIX_LDFLAGS = lib.optionalString (stdenv.isDarwin && isStatic) "-lc++abi";
+          NIX_LDFLAGS = let
+            lto-cache = {
+              cctools = "-cache_path_lto,$TMPDIR";
+              gold = "-plugin-opt,cache-dir=$TMPDIR";
+              lld = "--thinlto-cache-dir=$TMPDIR";
+            };
+          in
+            # Speed up the second linking for the packag
+            lib.optionalString (stdenv.cc.isClang) (lto-cache.${stdenv.hostPlatform.linker} or "");
         };
         cmakeFlags =
           [
@@ -182,10 +195,11 @@
             # reasonable coverage.
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
             "-DTENZIR_ENABLE_BATS_TENZIR_INSTALLATION=OFF"
+            "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
           ] ++ lib.optionals isStatic [
-            #"-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
+            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=${if stdenv.hostPlatform.isLinux then "ON" else "ON"}"
             "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB;RPM"}"
-            "-DTENZIR_UV_PATH:STRING=${lib.getBin uv}/bin/uv"
+            "-DTENZIR_UV_PATH:STRING=${lib.getExe uv}"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
             "-DTENZIR_ENABLE_BACKTRACE=${lib.boolToString (!stdenv.isDarwin)}"
@@ -238,11 +252,12 @@
         # executable names "llvm-ar" and "llvm-ranlib". Should work with
         # `readlink -f $AR` to find the correct ones.
           + lib.optionalString stdenv.isDarwin ''
-          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_AR=$(readlink -f $AR)")
-          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_AR=$(readlink -f $AR)")
-          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_RANLIB=$(readlink -f $RANLIB)")
-          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_RANLIB=$(readlink -f $RANLIB)")
-        '';
+          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_AR=$AR")
+          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_AR=$AR")
+          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_RANLIB=$RANLIB")
+          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_RANLIB=$RANLIB")
+        ''
+        ;
 
         hardeningDisable = lib.optionals isStatic [
           "fortify"
