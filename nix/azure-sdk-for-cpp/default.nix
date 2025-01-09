@@ -6,7 +6,6 @@
   ninja,
   pkg-config,
   curl,
-  darwin,
   libxml2,
   mbedtls_2,
   openssl
@@ -73,7 +72,7 @@ let
       # From `pkg-config --libs libcurl`.
       NIX_LDFLAGS = ""
       + lib.optionalString stdenv.hostPlatform.isStatic
-        "-lnghttp2 -lidn2 -liconv -lunistring -lssh2 -lpsl -lssl -lcrypto -lssl -lcrypto -lzstd -lzstd -lz -lidn2 -lunistring"
+        "-lnghttp2 -lidn2 -lunistring -lssh2 -lpsl -lssl -lcrypto -lssl -lcrypto -lzstd -lzstd -lz -lidn2 -lunistring"
       + lib.optionalString (stdenv.hostPlatform.isStatic && stdenv.hostPlatform.isDarwin)
         " -framework SystemConfiguration";
     };
