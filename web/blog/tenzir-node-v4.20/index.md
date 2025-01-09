@@ -62,7 +62,7 @@ obsolete.
 :::info Migrating to the `metrics` operator
 If you're still using the old metrics subsystem, be sure to check out our guide
 on [collecting metrics](/usage/collect-metrics) and the [`metrics` operator
-reference](/operators/metrics), which includes a comprehensive list of available
+reference](/v4.24/operators/metrics), which includes a comprehensive list of available
 metrics and their values.
 :::
 

@@ -21,7 +21,7 @@ easier text processing and a bunch of PCAP quality-of-life improvements.
 
 ## S3 Saver & Loader
 
-The new [`s3`](/connectors/s3) connector hooks up Tenzir to the vast data masses
+The new [`s3`](/v4.24/connectors/s3) connector hooks up Tenzir to the vast data masses
 on [Amazon S3](https://aws.amazon.com/s3/) and S3-compatible object storage
 systems. With the `s3` loader, you can access objects on S3 buckets, assuming
 you have the proper credentials provided:
@@ -94,7 +94,7 @@ more information, more value!
 
 ## Google Cloud Storage (GCS) Connector
 
-Similar to the `s3` connector we added the [`gcs`](/connectors/gcs) connector
+Similar to the `s3` connector we added the [`gcs`](/v4.24/connectors/gcs) connector
 that interfaces to [Google Cloud Storage
 (GCS)](https://cloud.google.com/storage).
 
@@ -110,11 +110,11 @@ to gcs gs://bucket/path/to/file
 
 As with `s3`, you can also use override the default endpoint and other options
 by passing URI query parameters. Have a look at the [connector
-documentation](/connectors/gcs) for further details.
+documentation](/v4.24/connectors/gcs) for further details.
 
 ## ZeroMQ Saver & Loader
 
-The new [`zmq`](/connectors/zmq) connector makes it easy to interact with the
+The new [`zmq`](/v4.24/connectors/zmq) connector makes it easy to interact with the
 raw bytes in [ZeroMQ][zeromq] messages. We model the `zmq` *loader* as
 subscriber with a `SUB` socket, and the *saver* as a publisher with the `PUB`
 socket:
@@ -247,7 +247,7 @@ especially handy on the command line:
 cat *.pcap | tenzir 'read pcap'
 ```
 
-The [`nic`](/connectors/nic) loader has a new flag `--emit-file-headers` that
+The [`nic`](/v4.24/connectors/nic) loader has a new flag `--emit-file-headers` that
 prepends a PCAP file header for every batch of bytes that it produces, yielding
 a stream of concatenated PCAP files. This gives rise to creative use cases
 involving packet shipping. For example, to ship blocks of packets as "micro

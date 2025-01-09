@@ -40,25 +40,44 @@ namespace tenzir::plugins::cef {
 namespace {
 
 /// Unescapes CEF string data containing \r, \n, \\, and \=.
-std::string unescape(std::string_view value) {
-  std::string result;
-  result.reserve(value.size());
-  for (auto i = 0u; i < value.size(); ++i) {
-    if (value[i] != '\\') {
-      result += value[i];
-    } else if (i + 1 < value.size()) {
-      auto next = value[i + 1];
-      switch (next) {
-        default:
-          result += next;
-          break;
-        case 'r':
-        case 'n':
-          result += '\n';
-          break;
-      }
-      ++i;
+auto unescape(std::string_view::iterator begin, std::string_view::iterator end,
+              std::back_insert_iterator<std::string> out)
+  -> std::string_view::iterator {
+  TENZIR_ASSERT_EXPENSIVE(*std::prev(begin) == '\\');
+  TENZIR_ASSERT_EXPENSIVE(begin < end);
+  switch (*begin) {
+    case 'n': {
+      out = '\n';
+      return ++begin;
     }
+    case 'r': {
+      out = '\n';
+      return ++begin;
+    }
+    case '=': {
+      out = '=';
+      return ++begin;
+    }
+    case '\\': {
+      out = '\\';
+      return ++begin;
+    }
+  }
+  return begin;
+}
+
+auto unescape_string(std::string_view in) -> std::string {
+  auto result = std::string{};
+  result.reserve(in.size());
+  for (auto it = in.begin(); it != in.end(); ++it) {
+    if (*it == '\\' and it < in.end() - 1) {
+      auto start = it + 1;
+      auto end = unescape(start, in.end(), std::back_inserter(result));
+      if (end != start) {
+        continue;
+      }
+    }
+    result += *it;
   }
   return result;
 }
@@ -76,17 +95,17 @@ auto parse_extension(std::string_view extension, auto builder,
     return {};
   }
   // Find the first not quoted, not escaped kv separator.
-  auto kv_sep = quoting.find_not_in_quotes(extension, '=');
+  auto kv_sep = quoting.find_not_in_quotes(extension, '=', 0, true);
   if (kv_sep == extension.npos) {
     return diagnostic::warning(
              "extension field did not contain a key-value separator")
       .done();
   }
   while (not extension.empty()) {
-    auto key = unescape(detail::trim(extension.substr(0, kv_sep)));
+    auto key = unescape_string(detail::trim(extension.substr(0, kv_sep)));
     extension.remove_prefix(kv_sep + 1);
     // Find the next not quoted, not escaped kv separator.
-    kv_sep = quoting.find_not_in_quotes(extension, '=');
+    kv_sep = quoting.find_not_in_quotes(extension, '=', 0, true);
     // Find the last whitespace before the key, determining the end of the value
     // text. Ignoring quoting is fine for this search; the CEF spec does not
     // discuss/specify quoted keys.
@@ -94,7 +113,7 @@ auto parse_extension(std::string_view extension, auto builder,
                        ? extension.npos
                        : extension.find_last_of(" \t", kv_sep);
     auto value
-      = unescape(quoting.unquote(detail::trim(extension.substr(0, value_end))));
+      = quoting.unquote_unescape(detail::trim(extension.substr(0, value_end)));
     if constexpr (detail::multi_series_builder::has_unflattened_field<
                     decltype(builder)>) {
       auto field = builder.unflattened_field(key);
@@ -169,7 +188,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       return d;
     },
   };
-  auto quoting = detail::quoting_escaping_policy{};
+  auto quoting = detail::quoting_escaping_policy{
+    .unescape_operation = unescape,
+  };
   auto msb = multi_series_builder{
     std::move(options),
     dh,
@@ -288,7 +309,9 @@ public:
             [&](const arrow::StringArray& arg) {
               // TODO: Use multi-series builder here.
               auto b = series_builder{};
-              auto quoting = detail::quoting_escaping_policy{};
+              auto quoting = detail::quoting_escaping_policy{
+                .unescape_operation = unescape,
+              };
               for (auto string : arg) {
                 if (not string) {
                   b.null();

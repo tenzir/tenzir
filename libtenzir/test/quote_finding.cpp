@@ -197,7 +197,7 @@ TEST(finding nonquoted characters doubled escaping) {
   }
 }
 
-TEST(unquoting basic escaping) {
+TEST(unquote basic quote escaping) {
   const auto q = detail::quoting_escaping_policy{};
   {
     constexpr auto text = R"(text)"sv;
@@ -213,7 +213,7 @@ TEST(unquoting basic escaping) {
   }
 }
 
-TEST(unquoting doubled escaping) {
+TEST(unquote doubled quote escaping) {
   const auto q = detail::quoting_escaping_policy{.doubled_quotes_escape = true};
   {
     constexpr auto text = R"(text)"sv;
@@ -229,7 +229,7 @@ TEST(unquoting doubled escaping) {
   }
 }
 
-TEST(unquoting unescaping basic escaping) {
+TEST(unquote_unescape basic quote escaping) {
   const auto q = detail::quoting_escaping_policy{};
   {
     constexpr auto text = R"(text)"sv;
@@ -253,7 +253,31 @@ TEST(unquoting unescaping basic escaping) {
   }
 }
 
-TEST(unquoting unescaping doubled escaping) {
+TEST(unquote_unescape basic escape sequences) {
+  const auto q = detail::quoting_escaping_policy{};
+  {
+    constexpr auto text = R"(\x)"sv;
+    CHECK_EQUAL(q.unquote_unescape(text), R"(\x)");
+  }
+  {
+    constexpr auto text = R"(\\)"sv;
+    CHECK_EQUAL(q.unquote_unescape(text), R"(\)");
+  }
+  {
+    constexpr auto text = R"(\n)"sv;
+    CHECK_EQUAL(q.unquote_unescape(text), "\n");
+  }
+  {
+    constexpr auto text = R"(\\n)"sv;
+    CHECK_EQUAL(q.unquote_unescape(text), R"(\n)");
+  }
+  {
+    constexpr auto text = R"(\\n\\\x)"sv;
+    CHECK_EQUAL(q.unquote_unescape(text), R"(\n\\x)");
+  }
+}
+
+TEST(unquote_unescape doubled quote escaping) {
   const auto q = detail::quoting_escaping_policy{
     .doubled_quotes_escape = true,
   };

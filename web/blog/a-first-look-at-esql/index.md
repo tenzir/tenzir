@@ -36,7 +36,7 @@ post about Splunk's Search Processing Language
 the best choice for analysts, and why thinking about one operator at a time
 provides an easier user experience. Second, we'd like to look under the hood of
 ES|QL to compare and reflect on our own [Tenzir Query Language
-(TQL)](/language).
+(TQL)](/v4.24/language).
 
 ## Walk-through by Example
 
