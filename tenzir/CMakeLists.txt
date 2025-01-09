@@ -135,9 +135,6 @@ if (Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
             "--" "*.ref"
     COMMAND
       "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins"
-      "add" "--intent-to-add" "--all"
-    COMMAND
-      "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins"
       "diff" "--exit-code" "--" "*.ref"
     DEPENDS update-integration
     COMMENT "Diffing all integration test results"
