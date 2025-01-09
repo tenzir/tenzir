@@ -56,6 +56,13 @@ if (TENZIR_GRPC_CPP_PLUGIN)
                         PROPERTIES IMPORTED_LOCATION ${TENZIR_GRPC_CPP_PLUGIN})
 endif ()
 
+if (NOT TARGET gRPC::grpc_cpp_plugin)
+  add_executable(gRPC::grpc_cpp_plugin IMPORTED)
+  find_program(_grpc_cpp_plugin_var NAME grpc_cpp_plugin REQUIRED)
+  set_target_properties(gRPC::grpc_cpp_plugin
+                        PROPERTIES IMPORTED_LOCATION ${_grpc_cpp_plugin_var})
+endif ()
+
 # Generate the gRPC code.
 protobuf_generate(
   TARGET velociraptor-proto

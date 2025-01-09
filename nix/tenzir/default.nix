@@ -115,6 +115,7 @@
           ninja
           dpkg
           protobuf
+          grpc
           poetry
           makeBinaryWrapper
         ] ++ lib.optionals stdenv.isLinux [
