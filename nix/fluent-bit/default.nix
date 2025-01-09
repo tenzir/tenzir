@@ -6,6 +6,7 @@
   curl,
   fetchFromGitHub,
   flex,
+  musl-fts,
   jemalloc,
   libbacktrace,
   libbpf,
@@ -34,6 +35,12 @@ stdenv.mkDerivation rec {
     tag = "v${version}";
     hash = "sha256-5Oyw3nHlAyywF+G0UiGyi1v+jAr8eyKt/1cDT5FdJXQ=";
   };
+
+  patches = [
+    ./fix-install-paths.patch
+    ./fix-log-level-check.patch
+    ./fix-strerror_r.patch
+  ];
 
   # `src/CMakeLists.txt` installs fluent-bit's systemd unit files at the path in the `SYSTEMD_UNITDIR` CMake variable.
   #
@@ -89,6 +96,7 @@ stdenv.mkDerivation rec {
       libnghttp2
       libyaml
       luajit
+      musl-fts
       openssl
       rdkafka
       # Needed by rdkafka.
@@ -96,7 +104,7 @@ stdenv.mkDerivation rec {
       # Needed by rdkafka.
       zstd
     ]
-    ++ lib.optionals stdenv.hostPlatform.isLinux [
+    ++ lib.optionals (stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isStatic) [
       # libbpf doesn't build for Darwin yet.
       libbpf
       systemd
@@ -104,7 +112,8 @@ stdenv.mkDerivation rec {
 
   cmakeFlags =
     [
-      "-DFLB_RELEASE=Yes"
+      "-DFLB_RELEASE=ON"
+      "-DFLB_DEBUG=OFF"
       "-DFLB_PREFER_SYSTEM_LIBS=Yes"
     ]
     ++ lib.optionals stdenv.cc.isClang [
@@ -126,6 +135,7 @@ stdenv.mkDerivation rec {
 
   postInstall = let
     archive-blacklist = [
+      "libmaxminddb.a"
       "libxxhash.a"
     ];
   in lib.optionalString stdenv.hostPlatform.isStatic ''
