@@ -29,8 +29,10 @@
 #include "velociraptor.pb.h"
 
 // BEGIN Workaround https://github.com/abseil/abseil-cpp/issues/1747
+#include <absl/base/config.h>
 
-#include "absl/base/config.h"
+#if ABSL_LTS_RELEASE_VERSION == 20240722
+#include <absl/log/internal/log_message.h>
 
 namespace absl {
 
@@ -61,6 +63,7 @@ ABSL_NAMESPACE_END
 
 } // namespace absl
 
+#endif
 // END Workaround
 
 namespace tenzir::plugins::velociraptor {
