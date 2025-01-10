@@ -15,6 +15,8 @@ macro (TenzirDefineUpdateIntegrationTarget _target _references_dir)
   elseif (Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
     add_custom_target(
       diff-${_target}
+      COMMAND "${GIT_EXECUTABLE}" "-C" "${_references_dir}" "add"
+              "--intent-to-add" "--all"
       COMMAND "${GIT_EXECUTABLE}" "-C" "${_references_dir}" "diff" "--exit-code"
               "--" "${_references_dir}/**/*.ref"
       DEPENDS update-${_target}
