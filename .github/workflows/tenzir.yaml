@@ -561,7 +561,6 @@ jobs:
             compiler: GCC
             cc: gcc-12
             cxx: g++-12
-            dependencies-script-path: scripts/debian/install-dev-dependencies.sh
             cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
             bundled-plugins:
               # We enable some plugins here, because:
@@ -578,7 +577,6 @@ jobs:
             compiler: Clang
             cc: clang
             cxx: clang++
-            dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
             cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST=snowflake
             bundled-plugins:
               # macOS runners in GitHub Actions CI are very limited, so we
@@ -653,6 +651,8 @@ jobs:
         if: ${{ matrix.tenzir.name == 'Debian' }}
         run: |
           ./scripts/debian/install-dev-dependencies.sh
+          ./scripts/debian/install-aws-sdk.sh
+          ./scripts/debian/build-arrow.sh
           ./scripts/debian/install-fluent-bit.sh
       - name: Install Dependencies (macOS)
         if: ${{ matrix.tenzir.name == 'macOS' }}
@@ -936,6 +936,7 @@ jobs:
             apt-transport-https \
             curl
           ./scripts/debian/install-dev-dependencies.sh
+          ./scripts/debian/install-upstream-arrow.sh
           ./scripts/debian/install-fluent-bit.sh
       - name: Determine Tenzir Package Name
         id: configure
