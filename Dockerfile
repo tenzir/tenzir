@@ -489,7 +489,8 @@ ENTRYPOINT ["tenzir-node"]
 
 FROM tenzir-node-ce AS tenzir-demo
 
-ENV TENZIR_START__COMMANDS="exec \"from https://raw.githubusercontent.com/tenzir/library/main/demo-node/package.yaml | package add\"" \
+COPY /scripts/install-demo-node-package.tql /tmp/install-demo-node-package.tql
+ENV TENZIR_START__COMMANDS="exec --file /tmp/install-demo-node-package.tql" \
     TENZIR_TQL2="true"
 
 # -- tenzir-node -----------------------------------------------------------------
