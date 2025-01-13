@@ -50,6 +50,11 @@ table FirstLast {
   result: Data (required);
 }
 
+table Once {
+  done: bool;
+  result: Data (required);
+}
+
 table CollectDistinct {
   result: [Data] (required);
 }
