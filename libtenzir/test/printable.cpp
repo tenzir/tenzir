@@ -352,21 +352,21 @@ TEST(duration) {
   CHECK_TO_STRING(42'123us, "42.12ms");
   CHECK_TO_STRING(-7ms, "-7.0ms");
   CHECK_TO_STRING(59s, "59.0s");
-  CHECK_TO_STRING(60s, "1.0m");
-  CHECK_TO_STRING(-90s, "-1.5m");
-  CHECK_TO_STRING(390s, "6.5m");
+  CHECK_TO_STRING(60s, "1.0min");
+  CHECK_TO_STRING(-90s, "-1.5min");
+  CHECK_TO_STRING(390s, "6.5min");
   CHECK_TO_STRING(-2400h, "-100.0d");
 }
 
 TEST(time) {
   using namespace std::chrono_literals;
-  CHECK_TO_STRING(tenzir::time{0s}, "1970-01-01T00:00:00.000000");
-  CHECK_TO_STRING(tenzir::time{1ms}, "1970-01-01T00:00:00.001000");
-  CHECK_TO_STRING(tenzir::time{1us}, "1970-01-01T00:00:00.000001");
-  CHECK_TO_STRING(tenzir::time{1ns}, "1970-01-01T00:00:00.000000");
-  CHECK_TO_STRING(tenzir::time{999ns}, "1970-01-01T00:00:00.000000");
+  CHECK_TO_STRING(tenzir::time{0s}, "1970-01-01T00:00:00Z");
+  CHECK_TO_STRING(tenzir::time{1ms}, "1970-01-01T00:00:00.001Z");
+  CHECK_TO_STRING(tenzir::time{1us}, "1970-01-01T00:00:00.000001Z");
+  CHECK_TO_STRING(tenzir::time{1ns}, "1970-01-01T00:00:00.000000001Z");
+  CHECK_TO_STRING(tenzir::time{999ns}, "1970-01-01T00:00:00.000000999Z");
   CHECK_TO_STRING(tenzir::time{1502658642123456us},
-                  "2017-08-13T21:10:42.123456");
+                  "2017-08-13T21:10:42.123456Z");
 }
 
 // -- JSON --------------------------------------------------------------------

@@ -1,5 +1,5 @@
 {
-  "ts": "2009-11-18T17:04:48.093251",
+  "ts": "2009-11-18T17:04:48.093251840Z",
   "uid": "hVh9xMdKk34",
   "id": {
     "orig_h": "192.168.1.103",
@@ -9,7 +9,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.28m",
+  "duration": "1.28min",
   "orig_bytes": 3865,
   "resp_bytes": 127987,
   "conn_state": "RSTO",
@@ -26,7 +26,7 @@
   "_write_ts": null
 }
 {
-  "ts": "2009-11-18T17:04:48.092505",
+  "ts": "2009-11-18T17:04:48.092505856Z",
   "uid": "JjS66I7YlVd",
   "id": {
     "orig_h": "192.168.1.103",
@@ -36,7 +36,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.28m",
+  "duration": "1.28min",
   "orig_bytes": 3528,
   "resp_bytes": 101160,
   "conn_state": "RSTO",
@@ -53,7 +53,7 @@
   "_write_ts": null
 }
 {
-  "ts": "2009-11-18T17:04:49.828411",
+  "ts": "2009-11-18T17:04:49.828411136Z",
   "uid": "xEj2ngX3Wt1",
   "id": {
     "orig_h": "192.168.1.103",
@@ -63,7 +63,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.25m",
+  "duration": "1.25min",
   "orig_bytes": 1586,
   "resp_bytes": 4447,
   "conn_state": "RSTO",
@@ -80,7 +80,7 @@
   "_write_ts": null
 }
 {
-  "ts": "2009-11-18T17:04:48.121735",
+  "ts": "2009-11-18T17:04:48.121735936Z",
   "uid": "hIGemUGneQa",
   "id": {
     "orig_h": "192.168.1.103",
@@ -90,7 +90,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.28m",
+  "duration": "1.28min",
   "orig_bytes": 2250,
   "resp_bytes": 18788,
   "conn_state": "RSTO",
@@ -107,7 +107,7 @@
   "_write_ts": null
 }
 {
-  "ts": "2009-11-18T17:04:47.806685",
+  "ts": "2009-11-18T17:04:47.806685952Z",
   "uid": "Eosv8c09sO",
   "id": {
     "orig_h": "192.168.1.103",
@@ -117,7 +117,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.28m",
+  "duration": "1.28min",
   "orig_bytes": 1332,
   "resp_bytes": 18615,
   "conn_state": "RSTO",
@@ -134,7 +134,7 @@
   "_write_ts": null
 }
 {
-  "ts": "2009-11-18T17:04:47.807432",
+  "ts": "2009-11-18T17:04:47.807432960Z",
   "uid": "yPoUFGOfikk",
   "id": {
     "orig_h": "192.168.1.103",
@@ -144,7 +144,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.28m",
+  "duration": "1.28min",
   "orig_bytes": 1349,
   "resp_bytes": 16514,
   "conn_state": "RSTO",
@@ -161,7 +161,7 @@
   "_write_ts": null
 }
 {
-  "ts": "2009-11-18T17:04:47.988317",
+  "ts": "2009-11-18T17:04:47.988317952Z",
   "uid": "fivYaXTb6Tg",
   "id": {
     "orig_h": "192.168.1.103",
@@ -171,7 +171,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.28m",
+  "duration": "1.28min",
   "orig_bytes": 14441,
   "resp_bytes": 24193,
   "conn_state": "RSTO",
@@ -188,7 +188,7 @@
   "_write_ts": null
 }
 {
-  "ts": "2009-11-18T17:05:03.114577",
+  "ts": "2009-11-18T17:05:03.114577920Z",
   "uid": "0oTdtqDzmHi",
   "id": {
     "orig_h": "192.168.1.103",
@@ -198,7 +198,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.03m",
+  "duration": "1.03min",
   "orig_bytes": 6894,
   "resp_bytes": 3262,
   "conn_state": "RSTO",
@@ -215,7 +215,7 @@
   "_write_ts": null
 }
 {
-  "ts": "2009-11-18T17:04:48.022296",
+  "ts": "2009-11-18T17:04:48.022296832Z",
   "uid": "Aoavsadc0Sb",
   "id": {
     "orig_h": "192.168.1.103",
@@ -225,7 +225,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.53m",
+  "duration": "1.53min",
   "orig_bytes": 1305,
   "resp_bytes": 3505,
   "conn_state": "RSTO",
@@ -242,7 +242,7 @@
   "_write_ts": null
 }
 {
-  "ts": "2009-11-18T17:04:48.031289",
+  "ts": "2009-11-18T17:04:48.031289088Z",
   "uid": "zGyq2NzOUv5",
   "id": {
     "orig_h": "192.168.1.103",
@@ -252,7 +252,7 @@
   },
   "proto": "tcp",
   "service": "http",
-  "duration": "1.53m",
+  "duration": "1.53min",
   "orig_bytes": 1318,
   "resp_bytes": 5415,
   "conn_state": "RSTO",

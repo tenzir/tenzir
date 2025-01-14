@@ -1,7 +1,7 @@
 {
   "__name": "sensor_10_0_0_2",
-  "_write_ts": "2020-02-26T04:00:03.734769",
-  "ts": "2020-02-26T03:40:03.724911",
+  "_write_ts": "2020-02-26T04:00:03.734769Z",
+  "ts": "2020-02-26T03:40:03.724911Z",
   "uid": "Cx3bf12iVwo5m7Gkd1",
   "id": {
     "orig_h": "193.10.255.99",
@@ -24,8 +24,8 @@
   "resp_ip_bytes": 8404
 }
 {
-  "_write_ts": "2020-02-11T03:48:57.477193",
-  "ts": "2020-02-11T03:48:57.477193",
+  "_write_ts": "2020-02-11T03:48:57.477193Z",
+  "ts": "2020-02-11T03:48:57.477193Z",
   "uid": "Cpk0Nl33Zb5ZWLP1tc",
   "id": {
     "orig_h": "185.100.59.59",
@@ -48,7 +48,7 @@
   "suppress_for": 3600
 }
 {
-  "ts": "2020-04-01T16:19:42.100275",
+  "ts": "2020-04-01T16:19:42.100275Z",
   "uid": "CdHDig24EL8JxZeOtj",
   "id": {
     "orig_h": "45.231.152.1",
@@ -72,7 +72,7 @@
   "resp_ip_bytes": 120,
   "tunnel_parents": null,
   "community_id": null,
-  "_write_ts": "2020-04-01T16:19:47.100869",
+  "_write_ts": "2020-04-01T16:19:47.100869Z",
   "_path": "conn",
   "_system_name": "sensor_10_0_0_2",
   "orig_cc": "BR",
@@ -81,8 +81,8 @@
   "resp_l2_addr": "42:10:47:e6:ef:4b"
 }
 {
-  "_write_ts": "2020-01-17T17:46:28.728717",
-  "ts": "2020-01-17T17:26:28.716994",
+  "_write_ts": "2020-01-17T17:46:28.728717Z",
+  "ts": "2020-01-17T17:26:28.716994Z",
   "uid": "CmcIAq2mcAPR7zjTQe",
   "id": {
     "orig_h": "159.203.34.57",
@@ -107,8 +107,8 @@
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "_write_ts": "2020-04-01T16:20:08.000000",
-  "ts": "2020-04-01T16:20:08.000000",
+  "_write_ts": "2020-04-01T16:20:08Z",
+  "ts": "2020-04-01T16:20:08Z",
   "_path": "corelight_metrics_bro",
   "_system_name": "sensor_10_0_0_2",
   "cpu": {
@@ -649,8 +649,8 @@
   }
 }
 {
-  "_write_ts": "2020-04-01T16:20:08.000000",
-  "ts": "2020-04-01T16:20:08.000000",
+  "_write_ts": "2020-04-01T16:20:08Z",
+  "ts": "2020-04-01T16:20:08Z",
   "_path": "corelight_metrics_cpu",
   "_system_name": "sensor_10_0_0_2",
   "total": {
@@ -678,8 +678,8 @@
   }
 }
 {
-  "_write_ts": "2020-04-01T16:20:08.000000",
-  "ts": "2020-04-01T16:20:08.000000",
+  "_write_ts": "2020-04-01T16:20:08Z",
+  "ts": "2020-04-01T16:20:08Z",
   "_path": "corelight_metrics_disk",
   "_system_name": "sensor_10_0_0_2",
   "io": {
@@ -768,8 +768,8 @@
   }
 }
 {
-  "_write_ts": "2020-04-01T16:20:08.000000",
-  "ts": "2020-04-01T16:20:08.000000",
+  "_write_ts": "2020-04-01T16:20:08Z",
+  "ts": "2020-04-01T16:20:08Z",
   "_path": "corelight_metrics_iface",
   "_system_name": "sensor_10_0_0_2",
   "mgmt": {
@@ -860,15 +860,15 @@
   }
 }
 {
-  "_write_ts": "2020-04-01T16:20:08.000000",
-  "ts": "2020-04-01T16:20:08.000000",
+  "_write_ts": "2020-04-01T16:20:08Z",
+  "ts": "2020-04-01T16:20:08Z",
   "_path": "corelight_metrics_memory",
   "_system_name": "sensor_10_0_0_2",
   "usage": 17.16
 }
 {
-  "_write_ts": "2020-04-01T16:20:08.000000",
-  "ts": "2020-04-01T16:20:08.000000",
+  "_write_ts": "2020-04-01T16:20:08Z",
+  "ts": "2020-04-01T16:20:08Z",
   "_path": "corelight_metrics_system",
   "_system_name": "sensor_10_0_0_2",
   "cpu": {
@@ -879,7 +879,7 @@
   "uptime": 9531441
 }
 {
-  "ts": "2020-01-11T11:48:10.324118",
+  "ts": "2020-01-11T11:48:10.324118Z",
   "uids": [
     "ClUCS21hMUIBawvwq3"
   ],
@@ -899,12 +899,12 @@
   ],
   "duration": "0.0ns",
   "trans_id": null,
-  "_write_ts": "2020-01-11T11:48:26.617838",
+  "_write_ts": "2020-01-11T11:48:26.617838Z",
   "_path": "dhcp",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-03-14T16:04:55.005266",
+  "ts": "2020-03-14T16:04:55.005266Z",
   "uid": "CPhzls33vlU1jfxgK",
   "id": {
     "orig_h": "213.32.39.37",
@@ -914,13 +914,13 @@
   },
   "fc_reply": null,
   "iin": null,
-  "_write_ts": "2020-03-14T16:05:00.001218",
+  "_write_ts": "2020-03-14T16:05:00.001218Z",
   "_path": "dnp3",
   "_system_name": "sensor_10_0_0_2",
   "fc_request": "UNSOLICITED_RESPONSE"
 }
 {
-  "ts": "2020-04-01T16:19:37.102876",
+  "ts": "2020-04-01T16:19:37.102876Z",
   "uid": "Cn6fzt3wSvKgd1UI25",
   "id": {
     "orig_h": "147.203.238.18",
@@ -946,12 +946,12 @@
   "answers": null,
   "TTLs": null,
   "rejected": false,
-  "_write_ts": "2020-04-01T16:19:47.102893",
+  "_write_ts": "2020-04-01T16:19:47.102893Z",
   "_path": "dns",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-04-01T16:21:51.624207",
+  "ts": "2020-04-01T16:21:51.624207Z",
   "uid": "CE6zP14Zq9RVJw5OO5",
   "id": {
     "orig_h": "223.149.205.1",
@@ -962,12 +962,12 @@
   "proto": "tcp",
   "analyzer": "HTTP",
   "failure_reason": "not a http request line",
-  "_write_ts": "2020-04-01T16:21:51.624207",
+  "_write_ts": "2020-04-01T16:21:51.624207Z",
   "_path": "dpd",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-04-01T16:20:08.463409",
+  "ts": "2020-04-01T16:20:08.463409Z",
   "fuid": "FMDqXw2opf5aBVrHQb",
   "tx_hosts": [
     "125.65.82.213"
@@ -1002,12 +1002,12 @@
   "extracted": null,
   "extracted_cutoff": null,
   "extracted_size": null,
-  "_write_ts": "2020-04-01T16:20:08.463409",
+  "_write_ts": "2020-04-01T16:20:08.463409Z",
   "_path": "files",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-03-11T12:40:32.814140",
+  "ts": "2020-03-11T12:40:32.814140Z",
   "uid": "CCvohx2J3SVGjK2fki",
   "id": {
     "orig_h": "152.136.69.32",
@@ -1030,12 +1030,12 @@
     "resp_p": 49382
   },
   "fuid": null,
-  "_write_ts": "2020-03-11T12:40:33.376149",
+  "_write_ts": "2020-03-11T12:40:33.376149Z",
   "_path": "ftp",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-04-01T16:19:37.118121",
+  "ts": "2020-04-01T16:19:37.118121Z",
   "uid": "C1gAAv4KbB6T0SWLuc",
   "id": {
     "orig_h": "113.107.111.117",
@@ -1066,12 +1066,12 @@
   "resp_fuids": null,
   "resp_filenames": null,
   "resp_mime_types": null,
-  "_write_ts": "2020-04-01T16:20:04.125462",
+  "_write_ts": "2020-04-01T16:20:04.125462Z",
   "_path": "http",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-01-13T09:54:44.361720",
+  "ts": "2020-01-13T09:54:44.361720Z",
   "uid": "Cl5aIk1zbOsvUeOtV8",
   "id": {
     "orig_h": "223.71.167.165",
@@ -1088,13 +1088,13 @@
   "dcc_file_size": null,
   "dcc_mime_type": null,
   "fuid": null,
-  "_write_ts": "2020-01-13T09:54:44.361720",
+  "_write_ts": "2020-01-13T09:54:44.361720Z",
   "_path": "irc",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "_write_ts": "2020-04-01T16:24:51.000935",
-  "ts": "2020-04-01T16:19:51.010509",
+  "_write_ts": "2020-04-01T16:24:51.000935Z",
+  "ts": "2020-04-01T16:19:51.010509Z",
   "uid": "CGQ2SK2rNx5NENjoO5",
   "id": {
     "orig_h": "66.240.236.119",
@@ -1107,13 +1107,13 @@
   "service": "krbtgt/NM",
   "request_type": "AS",
   "client": "/NM",
-  "till": "1970-01-01T00:00:00.000000",
+  "till": "1970-01-01T00:00:00Z",
   "forwardable": true,
   "renewable": true
 }
 {
-  "_write_ts": "2020-01-06T13:57:20.649317",
-  "ts": "2020-01-06T13:57:20.649317",
+  "_write_ts": "2020-01-06T13:57:20.649317Z",
+  "ts": "2020-01-06T13:57:20.649317Z",
   "uid": "CDblDS2t5fTIupB8Mg",
   "id": {
     "orig_h": "141.9.32.104",
@@ -1126,7 +1126,7 @@
   "func": "unknown-0"
 }
 {
-  "ts": "2020-01-06T15:24:18.583424",
+  "ts": "2020-01-06T15:24:18.583424Z",
   "uid": "C51z9U2JhGktj9c5W9",
   "id": {
     "orig_h": "106.75.3.35",
@@ -1152,15 +1152,15 @@
   "suppress_for": "1.0h",
   "dropped": null,
   "remote_location": null,
-  "_write_ts": "2020-01-06T15:24:18.583424",
+  "_write_ts": "2020-01-06T15:24:18.583424Z",
   "_path": "notice",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-03-11T13:01:41.030180",
+  "ts": "2020-03-11T13:01:41.030180Z",
   "id": "Ff6rjOK1yZosJUi36",
   "machine": "I386",
-  "compile_ts": "2018-09-04T14:43:33.000000",
+  "compile_ts": "2018-09-04T14:43:33Z",
   "os": "Windows XP",
   "subsystem": "WINDOWS_GUI",
   "is_exe": true,
@@ -1181,12 +1181,12 @@
     ".rsrc",
     ".reloc"
   ],
-  "_write_ts": "2020-03-11T13:01:41.030180",
+  "_write_ts": "2020-03-11T13:01:41.030180Z",
   "_path": "pe",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-01-16T12:35:25.832921",
+  "ts": "2020-01-16T12:35:25.832921Z",
   "uid": "COnAsd47ANnOS599T6",
   "id": {
     "orig_h": "106.75.22.216",
@@ -1196,12 +1196,12 @@
   },
   "username": "steve",
   "result": "unknown",
-  "_write_ts": "2020-01-16T12:35:56.042519",
+  "_write_ts": "2020-01-16T12:35:56.042519Z",
   "_path": "radius",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-01-10T13:27:24.237608",
+  "ts": "2020-01-10T13:27:24.237608Z",
   "uid": "C05HhY2kX9l0xafXL7",
   "id": {
     "orig_h": "101.89.191.10",
@@ -1224,21 +1224,21 @@
   "cert_permanent": null,
   "encryption_level": null,
   "encryption_method": null,
-  "_write_ts": "2020-01-10T13:27:25.105154",
+  "_write_ts": "2020-01-10T13:27:25.105154Z",
   "_path": "rdp",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-02-11T19:25:56.420723",
+  "ts": "2020-02-11T19:25:56.420723999Z",
   "level": "Reporter::ERROR",
   "message": "bad PTR name (ptr_name_to_addr(Namecache::ans$query) and _services._dns-sd._udp.local)",
   "location": "/opt/bro/share/bro/site/packages/corelight/packages/./namecache/./dns.bro, line 59",
-  "_write_ts": "2020-02-11T19:25:56.420723",
+  "_write_ts": "2020-02-11T19:25:56.420723999Z",
   "_path": "reporter",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-04-01T16:19:33.739522",
+  "ts": "2020-04-01T16:19:33.739522Z",
   "uid": "CqP5So1AHmr3HhBV5c",
   "id": {
     "orig_h": "223.71.167.165",
@@ -1269,12 +1269,12 @@
   "request_body_len": 0,
   "response_body_len": null,
   "content_type": null,
-  "_write_ts": "2020-04-01T16:24:33.732830",
+  "_write_ts": "2020-04-01T16:24:33.732830Z",
   "_path": "sip",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-02-10T03:31:58.341691",
+  "ts": "2020-02-10T03:31:58.341691Z",
   "uid": "CBnFgfpTodmyL6pbk",
   "id": {
     "orig_h": "150.164.15.49",
@@ -1308,12 +1308,12 @@
     "Ffj73b4ZAtY0ceO3gl"
   ],
   "is_webmail": false,
-  "_write_ts": "2020-02-10T03:32:29.014382",
+  "_write_ts": "2020-02-10T03:32:29.014382Z",
   "_path": "smtp",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-04-01T16:19:33.529926",
+  "ts": "2020-04-01T16:19:33.529926Z",
   "uid": "C8Z7zO3pFoxOiC4yj9",
   "id": {
     "orig_h": "104.206.128.30",
@@ -1330,12 +1330,12 @@
   "set_requests": 0,
   "display_string": null,
   "up_since": null,
-  "_write_ts": "2020-04-01T16:24:33.525023",
+  "_write_ts": "2020-04-01T16:24:33.525023Z",
   "_path": "snmp",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-02-02T17:57:56.049922",
+  "ts": "2020-02-02T17:57:56.049922Z",
   "host": "141.9.47.194",
   "software_type": "HTTP::SERVER",
   "name": "squid",
@@ -1347,13 +1347,13 @@
     "addl": "STABLE12"
   },
   "unparsed_version": "squid/2.5.STABLE12",
-  "_write_ts": "2020-02-02T17:57:56.052185",
+  "_write_ts": "2020-02-02T17:57:56.052185Z",
   "_path": "software",
   "_system_name": "sensor_10_0_0_2",
   "host_p": 8080
 }
 {
-  "ts": "2020-04-01T16:19:46.292708",
+  "ts": "2020-04-01T16:19:46.292708Z",
   "uid": "Cjn8AS2xEA1SO0txtf",
   "id": {
     "orig_h": "71.6.167.142",
@@ -1377,13 +1377,13 @@
   "client_issuer": null,
   "validation_status": null,
   "ja3": "248a2544f4221c0f02f877e42fe67853",
-  "_write_ts": "2020-04-01T16:24:46.284093",
+  "_write_ts": "2020-04-01T16:24:46.284093Z",
   "_path": "ssl",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "_write_ts": "2020-04-01T16:19:47.445848",
-  "ts": "2020-04-01T16:19:47.445848",
+  "_write_ts": "2020-04-01T16:19:47.445848Z",
+  "ts": "2020-04-01T16:19:47.445848Z",
   "uid": "Cr7xn118fZuwuAQEQ1",
   "id": {
     "orig_h": "159.83.123.38",
@@ -1399,7 +1399,7 @@
   "severity": "WARNING"
 }
 {
-  "ts": "2020-04-01T16:20:34.146738",
+  "ts": "2020-04-01T16:20:34.146738Z",
   "uid": "C0XkrZ2SPxmCCyNPGc",
   "id": {
     "orig_h": "192.88.99.1",
@@ -1409,12 +1409,12 @@
   },
   "tunnel_type": "Tunnel::IP",
   "action": "Tunnel::DISCOVER",
-  "_write_ts": "2020-04-01T16:20:34.146738",
+  "_write_ts": "2020-04-01T16:20:34.146738Z",
   "_path": "tunnel",
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "ts": "2020-04-01T16:19:47.135801",
+  "ts": "2020-04-01T16:19:47.135801Z",
   "uid": "Cdb8303OaXpyiNDlui",
   "id": {
     "orig_h": "150.107.75.221",
@@ -1426,7 +1426,7 @@
   "addl": null,
   "notice": false,
   "peer": null,
-  "_write_ts": "2020-04-01T16:19:47.135801",
+  "_write_ts": "2020-04-01T16:19:47.135801Z",
   "_path": "weird",
   "_system_name": "sensor_10_0_0_2"
 }

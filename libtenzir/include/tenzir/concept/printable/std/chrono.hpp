@@ -107,7 +107,7 @@ public:
       if (is_at_least<hours>(d))
         return print_adaptive(out, count<hours>(d), "h");
       if (is_at_least<minutes>(d))
-        return print_adaptive(out, count<minutes>(d), "m");
+        return print_adaptive(out, count<minutes>(d), "min");
       if (is_at_least<seconds>(d))
         return print_adaptive(out, count<seconds>(d), "s");
       if (is_at_least<milliseconds>(d))
@@ -154,6 +154,8 @@ constexpr year_month_day from_days(days dp) noexcept {
 
 template <class Clock, class Duration>
 struct time_point_printer : printer_base<time_point_printer<Clock, Duration>> {
+  static_assert(std::integral<typename Duration::rep>);
+
   using attribute = std::chrono::time_point<Clock, Duration>;
 
   template <class Iterator>
@@ -170,19 +172,36 @@ struct time_point_printer : printer_base<time_point_printer<Clock, Duration>> {
     auto h = duration_cast<hours>(t);
     auto m = duration_cast<minutes>(t - h);
     auto s = duration_cast<seconds>(t - h - m);
-    auto sub_secs = duration_cast<nanoseconds>(t - h - m - s).count();
+    auto ns = duration_cast<nanoseconds>(t - h - m - s).count();
     if (!p(out, static_cast<int>(Y), static_cast<unsigned>(M),
            static_cast<unsigned>(D), static_cast<int>(h.count()),
            static_cast<int>(m.count()), static_cast<int>(s.count())))
       return false;
-    *out++ = '.';
-    constexpr auto num6 = printers::integral<int, policy::plain, 6>;
-    // We don't do proper rounding for nanoseconds to avoid surprising
-    // output like .999999999 -> .000000.
-    // Rounding the entire timestamp can be equally problematic:
-    //  in:  1999-12-31T23.59.59.999999500
-    //  out: 2000-01-01T00:00:00.000000
-    return num6(out, sub_secs / 1000);
+    // We want to keep the full precision if possible, but only show as much
+    // precision as necessary. Thus, if we have no subsecond resolution, we do
+    // not print any fractional value. Otherwise, we try to print the number of
+    // milliseconds, microseconds, or nanoseconds, in that order.
+    if (ns != 0) {
+      *out++ = '.';
+      constexpr auto num3 = printers::integral<decltype(ns), policy::plain, 3>;
+      constexpr auto num6 = printers::integral<decltype(ns), policy::plain, 6>;
+      constexpr auto num9 = printers::integral<decltype(ns), policy::plain, 9>;
+      if (ns % 1'000'000 == 0) {
+        if (not num3(out, ns / 1'000'000)) {
+          return false;
+        }
+      } else if (ns % 1'000 == 0) {
+        if (not num6(out, ns / 1'000)) {
+          return false;
+        }
+      } else {
+        if (not num9(out, ns)) {
+          return false;
+        }
+      }
+    }
+    *out++ = 'Z';
+    return true;
   }
 };
 
