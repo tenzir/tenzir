@@ -2,6 +2,12 @@
 
 set -euo pipefail
 
+: "${ARROW_TAG=apache-arrow-18.1.0}"
+: "${ARROW_VERSION=$(printf '%s' "$ARROW_TAG" | sed 's@[^0-9]*\(.*\)@\1@')}"
+
+CMAKE_INSTALL_PREFIX=/usr/local
+export CMAKE_INSTALL_PREFIX
+
 apt-get -qq update
 apt-get install --no-install-recommends -y \
   bison \
@@ -9,32 +15,33 @@ apt-get install --no-install-recommends -y \
   ca-certificates \
   checkinstall \
   cmake \
-  libcurl4-openssl-dev \
+  curl \
   dh-make \
   flex \
+  libcurl4-openssl-dev \
   libminizip-dev \
   libsasl2-dev \
   libssl-dev \
   libabsl-dev \
   libyaml-dev \
-  make \
+  libxml2-dev \
+  lsb-base \
+  lsb-release \
   pkg-config \
   unzip \
   wget \
   zlib1g-dev
-apt-get install -y --reinstall \
-  lsb-base \
-  lsb-release
 
-mkdir -p source
-pushd source
-curl -L 'https://github.com/apache/arrow/archive/refs/tags/apache-arrow-18.1.0.tar.gz' | tar -xz --strip-components=1
+SOURCE_TREE="/tmp/src/arrow"
+mkdir -p "${SOURCE_TREE}"
+pushd "${SOURCE_TREE}"
+curl -L "https://github.com/apache/arrow/archive/refs/tags/${ARROW_TAG}.tar.gz" | tar -xz --strip-components=1
 cd cpp
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX=/usr \
-  -DCMAKE_INSTALL_SYSCONFDIR=/etc \
+  -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
   -DAWSSDK_SOURCE=SYSTEM \
+  -DGOOGLE_CLOUD_CPP_SOURCE=SYSTEM \
   -DARROW_FILESYSTEM=ON \
   -DARROW_AZURE=ON \
   -DARROW_GCS=ON \
@@ -46,21 +53,20 @@ cmake -B build -S . \
   -DARROW_WITH_LZ4=ON \
   -DARROW_WITH_SNAPPY=ON \
   -DARROW_WITH_ZLIB=ON \
-  -DARROW_WITH_ZSTD=ON
+  -DARROW_WITH_ZSTD=ON \
+  "${EXTRA_CMAKE_ARGS[@]}"
+
 cmake --build build --parallel "$(nproc --all)"
-cmake --install build
-cd build
+
 checkinstall \
-  --pakdir / \
+  --fstrans=no \
+  --pakdir /tmp \
   --pkgsource="https://github.com/apache/arrow/" \
   --pkglicense="ASL2.0" \
   --deldesc=no \
   --nodoc \
-  --pkgversion="18.1.0" \
+  --pkgversion="${ARROW_VERSION}" \
   --pkgrelease="TENZIR" \
   --pkgname=arrow \
   --requires="libc6,libcurl4,libgcc1,libssl3,libstdc++6,libxml2,zlib1g" \
-  make install
-popd
-rm -rf source
-ls -l /
+  cmake --install build --strip
