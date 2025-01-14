@@ -11,6 +11,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/api.h>
+#include <re2/re2.h>
 
 #include <string_view>
 
@@ -75,6 +76,62 @@ public:
 
 private:
   bool starts_with_;
+};
+
+class match_regex : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "match_regex";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto pattern = located<std::string>{};
+    TRY(argument_parser2::function(name())
+          .positional("x", subject_expr, "string")
+          .positional("regex", pattern)
+          .parse(inv, ctx));
+    auto regex = std::make_unique<re2::RE2>(pattern.inner,
+                                            re2::RE2::CannedOptions::Quiet);
+    TENZIR_ASSERT(regex);
+    if (not regex->ok()) {
+      // TODO improve diag
+      diagnostic::error("failed to parse regex").primary(pattern).emit(ctx);
+    }
+    return function_use::make(
+      [this, subject_expr = std::move(subject_expr),
+       regex = std::move(regex)](evaluator eval, session ctx) {
+        return map_series(eval(subject_expr), [&](series subject) {
+          auto f = detail::overload{
+            [&](const arrow::StringArray& array) -> multi_series {
+              auto b = arrow::BooleanBuilder{};
+              for (auto i = int64_t{0}; i < subject.length(); ++i) {
+                if (array.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                const auto v = array.Value(i);
+                auto matches = re2::RE2::PartialMatch(v, *regex);
+                check(b.Append(matches));
+              }
+              return series{bool_type{}, finish(b)};
+            },
+            [&](const arrow::NullArray& array) -> multi_series {
+              return series::null(bool_type{}, array.length());
+            },
+            [&](const auto&) -> multi_series {
+              diagnostic::warning("`{}` expected `string`, but got `{}`",
+                                  name(), subject.type.kind())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(bool_type{}, subject.length());
+            },
+          };
+          return match(*subject.array, f);
+        });
+      });
+  }
 };
 
 class trim : public virtual function_plugin {
@@ -546,6 +603,8 @@ using namespace tenzir::plugins::string;
 
 TENZIR_REGISTER_PLUGIN(starts_or_ends_with{true})
 TENZIR_REGISTER_PLUGIN(starts_or_ends_with{false})
+
+TENZIR_REGISTER_PLUGIN(match_regex)
 
 TENZIR_REGISTER_PLUGIN(trim{"trim", "utf8_trim"})
 TENZIR_REGISTER_PLUGIN(trim{"trim_start", "utf8_ltrim"})
