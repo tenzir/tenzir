@@ -426,6 +426,16 @@ RUN cmake -S contrib/tenzir-plugins/snowflake -B build-snowflake -G Ninja \
       DESTDIR=/plugin/snowflake cmake --install build-snowflake --strip --component Runtime && \
       rm -rf build-snowflake
 
+FROM plugins-source AS to_asl-plugin
+
+COPY contrib/tenzir-plugins/to_asl ./contrib/tenzir-plugins/to_asl
+RUN cmake -S contrib/tenzir-plugins/to_asl -B build-to_asl -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-to_asl --parallel && \
+      cmake --build build-to_asl --target integration && \
+      DESTDIR=/plugin/to_asl cmake --install build-to_asl --strip --component Runtime && \
+      rm -rf build-to_asl
+
 FROM plugins-source AS to_splunk-plugin
 
 COPY contrib/tenzir-plugins/to_splunk ./contrib/tenzir-plugins/to_splunk
@@ -456,6 +466,7 @@ COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
+COPY --from=to_asl-plugin --chown=tenzir:tenzir /plugin/to_asl /
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 

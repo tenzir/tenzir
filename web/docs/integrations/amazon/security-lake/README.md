@@ -13,7 +13,7 @@ Tenzir can send events to ASL via the [`to_asl` operator](../../../tql2/operator
 Follow the [standard configuration instructions](../README.md) to authenticate
 with your AWS credentials.
 
-Set up a custom source in ASL and use its s3 bucket URI with the `to_asl` operator.
+Set up a custom source in ASL and use its S3 bucket URI with the `to_asl` operator.
 
 ## Examples
 
@@ -24,11 +24,11 @@ Given a AWS security lake running on `eu-west-2`, a custom source called
 for it:
 
 ```tql
-let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuvwxzz1234/ext/tenzir_network_activity/"
+let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuvwxyz1234/ext/tenzir_network_activity/"
 
 export
 where @name == "ocsf.network_activity"
-to_asl §s3_uri,
+to_asl $s3_uri,
   region="eu-west-2",
   accountId="123456789012"
 ```

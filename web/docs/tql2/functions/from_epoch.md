@@ -18,11 +18,11 @@ The duration since the Unix epoch, i.e., 00:00:00 UTC on 1 January
 
 ## Examples
 
-### Convert an integral UNIX timestamp
+### Convert an integral Unix time
 
 ```tql
 from {time: 1736525429}
-time = from_epoch(time*1s)
+time = from_epoch(time * 1s)
 ```
 ```tql
 {x: 2025-01-10T16:10:29+00:00}
