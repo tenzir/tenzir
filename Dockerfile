@@ -92,7 +92,7 @@ RUN cmake -B build -G Ninja \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
       -D TENZIR_ENABLE_AVX2_INSTRUCTIONS:BOOL="OFF" \
-      -D TENZIR_ENABLE_UNIT_TESTS:BOOL="OFF" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
       -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
@@ -100,7 +100,9 @@ RUN cmake -B build -G Ninja \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       ${TENZIR_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
+    cmake --build build --target test && \
     cmake --build build --target integration && \
+    cmake --install build --strip --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build --strip && \
     rm -rf build
 
@@ -174,7 +176,7 @@ FROM plugins-source AS google-cloud-pubsub-plugin
 COPY plugins/google-cloud-pubsub ./plugins/google-cloud-pubsub
 RUN cmake -S plugins/google-cloud-pubsub -B build-google-cloud-pubsub -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
-        -D CMAKE_PREFIX_PATH="/opt/google-cloud-cpp;" && \
+        -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
       cmake --build build-google-cloud-pubsub --parallel && \
       cmake --build build-google-cloud-pubsub --target integration && \
       DESTDIR=/plugin/google-cloud-pubsub cmake --install build-google-cloud-pubsub --strip --component Runtime && \
@@ -294,7 +296,7 @@ ENV PREFIX="/opt/tenzir" \
     TENZIR_ENDPOINT="0.0.0.0"
 
 RUN useradd --system --user-group tenzir
-COPY --from=development --chown=tenzir:tenzir $PREFIX/ $PREFIX/
+COPY --from=development --chown=tenzir:tenzir /opt/tenzir-runtime/ /opt/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
