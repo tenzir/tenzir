@@ -702,6 +702,9 @@ jobs:
       - name: Install
         run: |
           cmake --install "$BUILD_DIR"
+      - name: Run Better Integration Tests
+        run: |
+          PATH="${{ env.BUILD_DIR }}/bin:$PATH" ./tenzir/tests/run.py
       - name: Run Integration Tests
         id: integration_tests
         run: |

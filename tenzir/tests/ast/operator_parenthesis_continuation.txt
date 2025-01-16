@@ -1,0 +1,85 @@
+[
+  invocation {
+    op: {
+      path: [
+        `where` @ 0..5
+      ],
+      ref: unresolved
+    },
+    args: [
+      binary_expr {
+        left: root_field `x` @ 7..8,
+        op: "or_" @ 9..11,
+        right: root_field `y` @ 12..13
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `where` @ 15..20
+      ],
+      ref: unresolved
+    },
+    args: [
+      binary_expr {
+        left: binary_expr {
+          left: root_field `x` @ 22..23,
+          op: "or_" @ 24..26,
+          right: root_field `y` @ 27..28
+        },
+        op: "and_" @ 30..33,
+        right: root_field `z` @ 34..35
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `from` @ 36..40
+      ],
+      ref: unresolved
+    },
+    args: [
+      record {
+        begin: 42..43,
+        items: [
+          
+        ],
+        end: 43..44
+      },
+      record {
+        begin: 47..48,
+        items: [
+          
+        ],
+        end: 48..49
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `from` @ 50..54
+      ],
+      ref: unresolved
+    },
+    args: [
+      binary_expr {
+        left: constant {
+          value: int64 1,
+          source: 55..56
+        },
+        op: "or_" @ 57..59,
+        right: constant {
+          value: int64 2,
+          source: 60..61
+        }
+      },
+      constant {
+        value: int64 3,
+        source: 63..64
+      }
+    ]
+  }
+]

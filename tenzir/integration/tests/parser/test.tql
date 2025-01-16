@@ -1,0 +1,223 @@
+let $dangerous = {
+  from "test.csv"
+  select indicator
+}
+
+let $affected_clients = {
+  export
+  where dest_ip in $dangerous
+  summarize \
+    events=count(),
+    start=min(timestamp),
+    end=max(timestamp),
+    src_ip,
+    dest_ip
+}
+
+foo = {
+  bar: 42,
+  foo: bar,
+}
+
+function map_path($x) {
+  return {
+    path: path,
+    parent_folder: std'path'parent($x),
+    name: std'path'file_name($x),
+    type: "Unknown",
+    type_id: 0,
+  }
+}
+
+function do_something(x) {
+  if x {
+    return {
+      yield whatever
+      where foo == $x
+    }
+  }
+}
+
+pipeline foo($src) {
+  yield $src
+  activity_name = "Launch"
+  activity_id = 1
+  actor.process = {
+    file: {
+      path: path,
+      parent_folder: std'path'parent(src.event_data.ParentImage),
+      name: std'path'file_name(src.event_data.ParentImage),
+      type: "Unknown",
+      type_id: 0,
+    },
+    pid: int(src.event_data.ParentProcessId),
+  }
+  drop src.event_data.ParentImage, src.event_data.ParentProcessId
+  actor.user = {
+    account_type: "Windows Account",
+    account_type_id: 2,
+    domain: src.user.domain,
+    name: src.user.name,
+    uid: src.user.identifier,
+  }
+  drop src.user.domain, src.user.name, src.user.identifier
+  category_name = "System Activity"
+  category_uid = ocsf'category_uid(category_name)
+  class_name = "Process Activity"
+  class_uid = ocsf'class_uid(class_name)
+  device = {
+    hostname: src.computer_name,
+    os: {
+      name: "Windows",
+      type: "Windows",
+      type_id: 100,
+    },
+    type: "Unknown",
+    type_id: 0,
+  }
+  drop src.computer_name
+  message = "A new process has been created."
+  metadata = {
+    original_time: src.event_data.UtcTime,
+    product: {
+      feature: {
+        name: "Security",
+      },
+      name: "Microsoft Windows",
+      vendor_name: "Microsoft",
+    },
+    profiles: ["host"],
+    uid: src.record_id,
+    version: "1.1.0",
+  }
+  drop src.event_data.UtcTime, src.record_id
+  process = {
+    cmd_line: src.event_data.CommandLine,
+    file: {
+      path: src.event_data.Image,
+      parent_folder: std'path'parent(src.event_data.Image),
+      name: std'path'file_name(src.event_data.Image),
+      type: "Unknown",
+      type_id: 0,
+    },
+    pid: int(src.event_data.ProcessId),
+  }
+  drop src.event_data.CommandLine, src.event_data.Image, src.event_data.ProcessId
+  severity = "Informational"
+  severity_id = 1
+  status = "Success"
+  status_id = 1
+  time = ((metadata.original_time.parse_time() - std'time'$epoch).in_secs() * 1000).round()
+  time = (time(metadata.original_time).since_epoch().in_seconds() * 1000).round()
+  type_name = "Process Activity: Launch"
+  type_uid = 100701
+  unmapped = src
+  drop src
+}
+
+from $affected_clients
+set foo = bar
+write json, compact=true
+to "/DATA/case_id.json"
+
+
+x = y
+xyz = this::beef
+
+foo = $bar
+
+foo = std::path::$test
+
+$xyz = sqrt(std::path::$test)
+
+let $foo = 42
+$test = 31
+
+
+$foo = 42
+$ips = [3, 3, 12]
+
+export
+der = for ip in $ips {
+
+}
+
+map(sqrt(_), test)
+
+
+let $ip = 123
+test = foo(bar)
+group $test = what_ever {
+  collect {
+    foo: sum(x),
+    bar: x -> {
+      where direction == "in"
+      sum x
+    }
+  }
+}
+// { test: foo, sum_x: bar }
+
+for foo in $bar {
+  tee {
+
+  }
+}
+
+write json,
+  indent = 4,
+  bla = 431
+
+read json(indent = 4, bla = 4)
+read json(indent=4)
+to "okay.json", format={json(indent: 4}}
+
+foo = 3.31.34.134 in 431.31.13.31/24
+ip(f"{test}.413.134.1")
+
+from_incoming "tcp://0.0.0.0" test {
+  foo = 4.3.13.31
+}
+
+3.mod(4)
+
+group $server = random() % len($servers) {
+  parse_kafka 314
+  to_kafka server = $servers[$server]
+}
+
+
+'ip
+
+where test.foo(foo == bar)
+set foo = 13
+foo = 4313::foo
+bad = $(bad$beef test)
+
+test = 'foo'bar'baz(qux)
+test = okay'
+foo = okay'test'foo()
+foo = okay'test()
+foo = ocsf'my_const
+xyz = std'path'to_string(xyz)
+std'path'to_string(xyz)
+
+xyz = std'path'to_string(raer)
+
+ocsf'apply test
+
+
+ocsf$apply test
+ocsf#apply test
+ocsf'apply test
+
+ocsf$apply$test okay
+
+
+foo = 'foo
+bad'beef'foo fadfa
+group foo, bar, test.bar[0].sqrt() {
+  topic: 5h + 4
+}
+// # $ '
+// ^ °
