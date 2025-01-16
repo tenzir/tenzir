@@ -15,6 +15,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/si_literals.hpp"
 
@@ -426,6 +427,82 @@ auto set(easy& handle, chunk_ptr chunk) -> caf::error {
     return buffer.size();
   };
   return to_error(handle.set(on_read));
+}
+
+auto get(const std::string_view url) -> caf::expected<std::string> {
+  auto req = easy{};
+  TENZIR_ASSERT(req.set(CURLOPT_URL, url) == curl::easy::code::ok);
+  auto response = std::string{};
+  const auto write_callback = [&](std::span<const std::byte> data) {
+    response.append(reinterpret_cast<const char*>(data.data()),
+                    reinterpret_cast<const char*>(data.data() + data.size()));
+  };
+  TENZIR_ASSERT(req.set(write_callback) == curl::easy::code::ok);
+  if (const auto ec = req.perform(); ec != curl::easy::code::ok) {
+    return diagnostic::error("{}", to_string(ec))
+      .to_error();
+  }
+  const auto [ec, http_code] = req.get<curl::easy::info::response_code>();
+  TENZIR_ASSERT(ec == curl::easy::code::ok);
+  if (http_code < 200 or http_code > 299) {
+    return diagnostic::error("unable to get url: {}", http_code)
+      .note("response body: {}", response)
+      .to_error();
+  }
+  return response;
+}
+
+auto get_json(const std::string_view url) -> caf::expected<record> {
+  TRY(auto response, get(url));
+  TRY(auto json, from_json(response));
+  const auto* r = try_as<record>(json);
+  if (not r) {
+    return diagnostic::error("not a JSON object", json).to_error();
+  }
+  return *r;
+}
+
+auto post(const std::string_view url, const std::string_view body,
+  const std::unordered_map<std::string, std::string>& headers = {})
+  -> caf::expected<std::string> {
+  auto req = easy{};
+  TENZIR_ASSERT(req.set(CURLOPT_URL, url) == curl::easy::code::ok);
+  TENZIR_ASSERT(req.set(CURLOPT_POSTFIELDS, body) == curl::easy::code::ok);
+  TENZIR_ASSERT(req.set(CURLOPT_POSTFIELDSIZE, body.size())
+                == curl::easy::code::ok);
+  for (const auto& [key, value] : headers) {
+    req.set_http_header(key, value);
+  }
+  auto response = std::string{};
+  const auto write_callback = [&](std::span<const std::byte> data) {
+    response.append(reinterpret_cast<const char*>(data.data()),
+                    reinterpret_cast<const char*>(data.data() + data.size()));
+  };
+  TENZIR_ASSERT(req.set(write_callback) == curl::easy::code::ok);
+  if (const auto ec = req.perform(); ec != curl::easy::code::ok) {
+    return diagnostic::error("{}", to_string(ec)).to_error();
+  }
+  const auto [ec, http_code] = req.get<curl::easy::info::response_code>();
+  TENZIR_ASSERT(ec == curl::easy::code::ok);
+  if (http_code < 200 or http_code > 299) {
+    return diagnostic::error("unable to get url: {}", http_code)
+      .note("response body: {}", response)
+      .to_error();
+  }
+  return response;
+}
+
+auto post_json(const std::string_view url, const record& body,
+               const std::unordered_map<std::string, std::string>& headers = {})
+  -> caf::expected<record> {
+  TRY(auto body_string, to_json(body));
+  TRY(auto response, post(url, body_string, headers));
+  TRY(auto json, from_json(response));
+  const auto* r = try_as<record>(json);
+  if (not r) {
+    return diagnostic::error("not a JSON object", json).to_error();
+  }
+  return *r;
 }
 
 } // namespace tenzir::curl

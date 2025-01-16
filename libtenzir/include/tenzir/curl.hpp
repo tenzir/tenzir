@@ -701,4 +701,16 @@ auto escape(const record& xs) -> std::string;
 /// Prepares an easy handle with a chunk through the read callback.
 auto set(easy& handle, chunk_ptr chunk) -> caf::error;
 
+auto get(std::string_view url) -> caf::expected<std::string>;
+
+auto get_json(std::string_view url) -> caf::expected<record>;
+
+auto post(std::string_view url, std::string_view body,
+          const std::unordered_map<std::string, std::string>& headers = {})
+  -> caf::expected<std::string>;
+
+auto post_json(std::string_view url, const record& body,
+               const std::unordered_map<std::string, std::string>& headers = {})
+  -> caf::expected<record>;
+
 } // namespace tenzir::curl
