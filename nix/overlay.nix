@@ -163,7 +163,7 @@ in {
     in prev.rdkafka.overrideAttrs (orig: {
     nativeBuildInputs = orig.nativeBuildInputs ++ [prev.buildPackages.cmake];
     # The cmake config file doesn't find them if they are not propagated.
-    propagatedBuildInputs = (builtins.filter (x: x.pname == "zlib") orig.buildInputs) ++ [ zlib ];
+    buildInputs = (builtins.filter (x: x.pname != "zlib") orig.buildInputs) ++ [ zlib ];
     cmakeFlags =
       lib.optionals isStatic [
         "-DRDKAFKA_BUILD_STATIC=ON"
