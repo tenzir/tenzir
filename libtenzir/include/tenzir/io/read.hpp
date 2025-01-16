@@ -33,7 +33,6 @@ read(const std::filesystem::path& filename);
 /// Reads a file into a string in one shot.
 /// @param filename The file to read from.
 /// @returns The contents of the file.
-caf::expected<std::string>
-read_string(const std::filesystem::path& filename);
+caf::expected<std::string> read_string(const std::filesystem::path& filename);
 
 } // namespace tenzir::io

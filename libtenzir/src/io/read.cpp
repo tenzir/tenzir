@@ -48,8 +48,7 @@ read(const std::filesystem::path& filename) {
   return buffer;
 }
 
-caf::expected<std::string>
-read_string(const std::filesystem::path& filename) {
+caf::expected<std::string> read_string(const std::filesystem::path& filename) {
   auto result = read(filename);
   if (!result) {
     return result.error();

@@ -439,8 +439,7 @@ auto get(const std::string_view url) -> caf::expected<std::string> {
   };
   TENZIR_ASSERT(req.set(write_callback) == curl::easy::code::ok);
   if (const auto ec = req.perform(); ec != curl::easy::code::ok) {
-    return diagnostic::error("{}", to_string(ec))
-      .to_error();
+    return diagnostic::error("{}", to_string(ec)).to_error();
   }
   const auto [ec, http_code] = req.get<curl::easy::info::response_code>();
   TENZIR_ASSERT(ec == curl::easy::code::ok);
@@ -463,13 +462,15 @@ auto get_json(const std::string_view url) -> caf::expected<record> {
 }
 
 auto post(const std::string_view url, const std::string_view body,
-  const std::unordered_map<std::string, std::string>& headers = {})
+          const std::unordered_map<std::string, std::string>& headers)
   -> caf::expected<std::string> {
   auto req = easy{};
+  // TENZIR_ASSERT(req.set(CURLOPT_VERBOSE, true) == curl::easy::code::ok);
   TENZIR_ASSERT(req.set(CURLOPT_URL, url) == curl::easy::code::ok);
   TENZIR_ASSERT(req.set(CURLOPT_POSTFIELDS, body) == curl::easy::code::ok);
   TENZIR_ASSERT(req.set(CURLOPT_POSTFIELDSIZE, body.size())
                 == curl::easy::code::ok);
+  req.set_http_header("Content-Type", "application/json");
   for (const auto& [key, value] : headers) {
     req.set_http_header(key, value);
   }
@@ -493,7 +494,7 @@ auto post(const std::string_view url, const std::string_view body,
 }
 
 auto post_json(const std::string_view url, const record& body,
-               const std::unordered_map<std::string, std::string>& headers = {})
+               const std::unordered_map<std::string, std::string>& headers)
   -> caf::expected<record> {
   TRY(auto body_string, to_json(body));
   TRY(auto response, post(url, body_string, headers));

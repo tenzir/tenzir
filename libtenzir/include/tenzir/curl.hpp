@@ -706,11 +706,11 @@ auto get(std::string_view url) -> caf::expected<std::string>;
 auto get_json(std::string_view url) -> caf::expected<record>;
 
 auto post(std::string_view url, std::string_view body,
-          const std::unordered_map<std::string, std::string>& headers = {})
-  -> caf::expected<std::string>;
+          const std::unordered_map<std::string, std::string>& headers
+          = {}) -> caf::expected<std::string>;
 
 auto post_json(std::string_view url, const record& body,
-               const std::unordered_map<std::string, std::string>& headers = {})
-  -> caf::expected<record>;
+               const std::unordered_map<std::string, std::string>& headers
+               = {}) -> caf::expected<record>;
 
 } // namespace tenzir::curl
