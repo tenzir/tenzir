@@ -1,4 +1,4 @@
 {
   "bytes": null
 }
-warning: aggregation column `bytes` does not exist for schema `tenzir.metrics.events`
+warning: aggregation column `bytes` does not exist for schema `tenzir.measure.events`
