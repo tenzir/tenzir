@@ -1,33 +1,60 @@
-# -- fluent-bit-package -----------------------------------------------------------
+FROM debian:bookworm-slim AS runtime-base
 
-FROM debian:bookworm-slim AS fluent-bit-package
+FROM runtime-base AS build-base
 
 ENV CC="gcc-12" \
-    CXX="g++-12"
+    CXX="g++-12" \
+    CMAKE_INSTALL_PREFIX=/usr/local
 
-WORKDIR /tmp/fluent-bit
-COPY scripts/debian/build-fluent-bit.sh ./scripts/debian/
-RUN ./scripts/debian/build-fluent-bit.sh && \
-    rm -rf /var/lib/apt/lists/*
+# -- aws-sdk-cpp-package -------------------------------------------------------
+
+FROM build-base AS aws-sdk-cpp-package
+
+COPY scripts/debian/build-aws-sdk-cpp-package.sh .
+RUN ./build-aws-sdk-cpp-package.sh
+
+# -- google-cloud-cpp-package --------------------------------------------------
+
+FROM build-base AS google-cloud-cpp-package
+
+COPY scripts/debian/build-google-cloud-cpp-package.sh .
+RUN ./build-google-cloud-cpp-package.sh
+
+# -- arrow-package -------------------------------------------------------------
+
+FROM build-base AS arrow-package
+
+COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
+COPY scripts/debian/build-arrow-package.sh .
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
+    ./build-arrow-package.sh
+
+# -- fluent-bit-package --------------------------------------------------------
+
+FROM build-base AS fluent-bit-package
+
+COPY scripts/debian/build-fluent-bit-package.sh .
+RUN ./build-fluent-bit-package.sh
 
 # -- dependencies --------------------------------------------------------------
 
-FROM debian:bookworm-slim AS dependencies
+FROM build-base AS dependencies
 LABEL maintainer="engineering@tenzir.com"
-
-ENV CC="gcc-12" \
-    CXX="g++-12"
 
 WORKDIR /tmp/tenzir
 
-COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
-COPY scripts/debian/install-dev-dependencies.sh ./scripts/debian/
+COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
+
+COPY ./scripts/debian/install-dev-dependencies.sh ./scripts/debian/
 RUN ./scripts/debian/install-dev-dependencies.sh && \
-    apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
-    rm /root/fluent-bit_*.deb && \
+    apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
+    rm -rf /tmp/custom-packages && \
     rm -rf /var/lib/apt/lists/*
-COPY scripts/debian/install-aws-sdk.sh ./scripts/debian/
-RUN ./scripts/debian/install-aws-sdk.sh
 
 # Tenzir
 COPY changelog ./changelog
@@ -61,12 +88,11 @@ ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
 ARG TENZIR_BUILD_OPTIONS
 
 RUN cmake -B build -G Ninja \
-      -D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp" \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
       -D TENZIR_ENABLE_AVX2_INSTRUCTIONS:BOOL="OFF" \
-      -D TENZIR_ENABLE_UNIT_TESTS:BOOL="OFF" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
       -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
@@ -74,7 +100,9 @@ RUN cmake -B build -G Ninja \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       ${TENZIR_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
+    cmake --build build --target test && \
     cmake --build build --target integration && \
+    cmake --install build --strip --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build --strip && \
     rm -rf build
 
@@ -145,12 +173,10 @@ RUN cmake -S plugins/gcs -B build-gcs -G Ninja \
 
 FROM plugins-source AS google-cloud-pubsub-plugin
 
-COPY scripts/debian/install-google-cloud.sh ./scripts/debian/
-RUN ./scripts/debian/install-google-cloud.sh
 COPY plugins/google-cloud-pubsub ./plugins/google-cloud-pubsub
 RUN cmake -S plugins/google-cloud-pubsub -B build-google-cloud-pubsub -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
-        -D CMAKE_PREFIX_PATH="/opt/google-cloud-cpp;" && \
+        -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
       cmake --build build-google-cloud-pubsub --parallel && \
       cmake --build build-google-cloud-pubsub --target integration && \
       DESTDIR=/plugin/google-cloud-pubsub cmake --install build-google-cloud-pubsub --strip --component Runtime && \
@@ -210,7 +236,6 @@ FROM plugins-source AS sqs-plugin
 
 COPY plugins/sqs ./plugins/sqs
 RUN cmake -S plugins/sqs -B build-sqs -G Ninja \
-        -D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp" \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-sqs --parallel && \
       cmake --build build-sqs --target integration && \
@@ -259,7 +284,7 @@ RUN cmake -S plugins/zmq -B build-zmq -G Ninja \
 
 # -- tenzir-de -----------------------------------------------------------------
 
-FROM debian:bookworm-slim AS tenzir-de
+FROM runtime-base AS tenzir-de
 
 # When changing these, make sure to also update the entries in the flake.nix
 # file.
@@ -271,12 +296,15 @@ ENV PREFIX="/opt/tenzir" \
     TENZIR_ENDPOINT="0.0.0.0"
 
 RUN useradd --system --user-group tenzir
-COPY --from=development --chown=tenzir:tenzir $PREFIX/ $PREFIX/
+COPY --from=development --chown=tenzir:tenzir /opt/tenzir-runtime/ /opt/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
-COPY --from=development /opt/aws-sdk-cpp/lib/ /opt/aws-sdk-cpp/lib/
-COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
+
+COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=fluent-bit-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
@@ -309,16 +337,9 @@ RUN apt-get update && \
       python3-venv \
       robin-map-dev \
       wget && \
-    wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-    apt-get -y --no-install-recommends install \
-      ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install libarrow1800=18.0.0-1 libparquet1800=18.0.0-1 && \
-    apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
-    rm /root/fluent-bit_*.deb && \
-    rm -rf /var/lib/apt/lists/* && \
-    echo "/opt/aws-sdk-cpp/lib" > /etc/ld.so.conf.d/aws-cpp-sdk.conf && \
-    ldconfig
+    apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
+    rm -rf /tmp/custom-packages && \
+    rm -rf /var/lib/apt/lists/*
 
 USER tenzir:tenzir
 

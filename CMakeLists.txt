@@ -740,11 +740,11 @@ if (NOT TENZIR_ENABLE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   find_package(
     CAF
-    COMPONENTS core io test openssl
+    COMPONENTS core io net test openssl
     REQUIRED)
-  if (NOT ${CAF_VERSION} VERSION_GREATER_EQUAL 0.18.6)
+  if (NOT ${CAF_VERSION} VERSION_GREATER_EQUAL 1.0.2)
     message(
-      FATAL_ERROR "Failed to find CAF >= 0.18.6 version (found ${CAF_VERSION})")
+      FATAL_ERROR "Failed to find CAF >= 1.0.2 version (found ${CAF_VERSION})")
   endif ()
   string(
     APPEND
@@ -784,7 +784,7 @@ else ()
     # add_subdirectory libtenzir/aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
     # can be removed once CAF cmake changes to use set(CMAKE_CXX_STANDARD) instead of it's own check
     set(ORIGINAL_CXX_STANDARD ${CMAKE_CXX_STANDARD})
-    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD 20)
     add_subdirectory(libtenzir/aux/caf)
     set(CMAKE_CXX_STANDARD ${ORIGINAL_CXX_STANDARD})
     TenzirSystemizeTarget(libcaf_core)
@@ -800,6 +800,11 @@ else ()
         $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
     TenzirSystemizeTarget(libcaf_io)
     set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
+    target_compile_options(
+      libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
+                        -Wno-unknown-warning-option)
+    TenzirSystemizeTarget(libcaf_net)
+    set_target_properties(libcaf_net PROPERTIES EXPORT_NAME net)
     target_compile_options(
       libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
                         -Wno-unknown-warning-option)
@@ -826,7 +831,8 @@ else ()
     set(CAF_FOUND true)
   endif ()
   # Make bundled CAF available for component-based CPack installations.
-  install(TARGETS libcaf_core libcaf_openssl libcaf_io COMPONENT Runtime)
+  install(TARGETS libcaf_core libcaf_openssl libcaf_io libcaf_net
+          COMPONENT Runtime)
   install(TARGETS libcaf_test COMPONENT Development)
   # Figure out whether we point to a build directory or a prefix.
   dependency_summary("CAF" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf"
