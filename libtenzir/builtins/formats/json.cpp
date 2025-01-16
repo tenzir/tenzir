@@ -789,6 +789,7 @@ struct printer_args {
   std::optional<location> omit_empty_objects;
   std::optional<location> omit_empty_lists;
   std::optional<location> arrays_of_objects;
+  bool tql = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, printer_args& x) -> bool {
@@ -801,7 +802,8 @@ struct printer_args {
               f.field("omit_nulls", x.omit_nulls),
               f.field("omit_empty_objects", x.omit_empty_objects),
               f.field("omit_empty_lists", x.omit_empty_lists),
-              f.field("arrays_of_objects", x.arrays_of_objects));
+              f.field("arrays_of_objects", x.arrays_of_objects),
+              f.field("tql", x.tql));
   }
 };
 
@@ -822,6 +824,8 @@ public:
     auto style = default_style();
     if (args_.monochrome_output) {
       style = no_style();
+    } else if (args_.color_output and args_.tql) {
+      style = tql_style();
     } else if (args_.color_output) {
       style = jq_style();
     }
@@ -837,13 +841,14 @@ public:
                                                  : "application/json"};
     return printer_instance::make(
       [compact, style, omit_nulls, omit_empty_objects, omit_empty_lists,
-       arrays_of_objects,
+       arrays_of_objects, tql = args_.tql,
        meta = std::move(meta)](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
         }
         auto printer = tenzir::json_printer{{
+          .tql = tql,
           .style = style,
           .oneline = compact,
           .omit_nulls = omit_nulls,
@@ -1333,20 +1338,35 @@ public:
 
 class write_json_plugin final : public virtual operator_plugin2<write_json> {
 public:
+  explicit write_json_plugin(bool tql) : tql_{tql} {
+  }
+
+  auto name() const -> std::string override {
+    return tql_ ? "write_tql" : "write_json";
+  }
+
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
-    TRY(argument_parser2::operator_("write_json")
-          // TODO: Perhaps "indent=0"?
-          .named("color", args.color_output)
-          .parse(inv, ctx));
+    args.tql = tql_;
+    auto parser = argument_parser2::operator_("write_json");
+    parser.named("color", args.color_output);
+    if (tql_) {
+      parser.named("oneline", args.compact_output);
+    }
+    TRY(parser.parse(inv, ctx));
     return std::make_unique<write_json>(args);
   }
 
   auto write_properties() const -> write_properties_t override {
+    if (tql_) {
+      return {};
+    }
     return {.extensions = {"json"}};
   }
+
+  bool tql_ = false;
 };
 
 class write_ndjson_plugin final : public virtual operator_plugin2<write_json> {
@@ -1383,6 +1403,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_ndjson_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_gelf_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_zeek_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_suricata_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{false})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)

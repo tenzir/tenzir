@@ -27,6 +27,6 @@
     mode: "none"
   },
   write json {
-    
+    tql: false
   }
 ]
