@@ -6,6 +6,7 @@
   "pipeline-manager"
   "platform"
   "snowflake"
+  "to_asl"
   "to_splunk"
   "vast"
 ]

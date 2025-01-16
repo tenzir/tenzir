@@ -397,6 +397,7 @@ in {
         ps.packages
         ps.pipeline-manager
         ps.platform
+        ps.to_asl
         ps.vast
       ] ++ lib.optionals (!isStatic) [
         ps.snowflake
