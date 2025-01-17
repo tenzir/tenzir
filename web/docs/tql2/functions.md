@@ -73,6 +73,7 @@ Function | Description | Example
 :--------|:-------------|:-------
 [`has`](functions/has.md) | Checks whether a record has a field | `record.has("field")`
 [`merge`](functions/merge.md) | Merges two records | `merge(foo, bar)`
+[`sort`](functions/sort.md) | Sorts a record by field names. | `xs.sort()`
 
 ## List
 
@@ -83,6 +84,7 @@ Function | Description | Example
 [`concatenate`](functions/concatenate.md) | Merges two lists | `concatenate(xs, ys)`
 [`length`](functions/length.md) | Retrieves the length of a list | `[1,2,3].length()`
 [`map`](functions/map.md) | Maps each list element to an expression | `xs.map(x, x + 3)`
+[`sort`](functions/sort.md) | Sorts a list by its values. | `xs.sort()`
 [`where`](functions/where.md) | Filters list elements based on a predicate | `xs.where(x, x > 5)`
 [`zip`](functions/zip.md) | Combines two lists into a list of pairs | `zip(xs, ys)`
 
