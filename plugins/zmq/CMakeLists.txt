@@ -16,7 +16,7 @@ TenzirRegisterPlugin(
   INCLUDE_DIRECTORIES include
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 
-find_package(cppzmq QUIET)
+find_package(cppzmq QUIET REQUIRED)
 
 if (TARGET libzmq)
   # libzmq declares its link dependencies as public, but in reality they are all
