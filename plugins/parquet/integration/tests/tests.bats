@@ -2,6 +2,9 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
+
+  export TENZIR_TQL2=false
+  export TENZIR_EXEC__IMPLICIT_EVENTS_SINK='write_json | save_file "-"'
 }
 
 @test "file roundtrip" {

@@ -784,8 +784,9 @@ struct printer_args {
   std::optional<location> compact_output;
   std::optional<location> color_output;
   std::optional<location> monochrome_output;
-  std::optional<location> omit_empty;
-  std::optional<location> omit_nulls;
+  std::optional<location> omit_all;
+  std::optional<location> omit_null_fields;
+  std::optional<location> omit_nulls_in_lists;
   std::optional<location> omit_empty_objects;
   std::optional<location> omit_empty_lists;
   std::optional<location> arrays_of_objects;
@@ -798,8 +799,9 @@ struct printer_args {
       .fields(f.field("compact_output", x.compact_output),
               f.field("color_output", x.color_output),
               f.field("monochrome_output", x.monochrome_output),
-              f.field("omit_empty", x.omit_empty),
-              f.field("omit_nulls", x.omit_nulls),
+              f.field("omit_empty", x.omit_all),
+              f.field("omit_null_fields", x.omit_null_fields),
+              f.field("omit_nulls_in_lists", x.omit_nulls_in_lists),
               f.field("omit_empty_objects", x.omit_empty_objects),
               f.field("omit_empty_lists", x.omit_empty_lists),
               f.field("arrays_of_objects", x.arrays_of_objects),
@@ -829,19 +831,21 @@ public:
     } else if (args_.color_output) {
       style = jq_style();
     }
-    const auto omit_nulls
-      = args_.omit_nulls.has_value() or args_.omit_empty.has_value();
+    const auto omit_null_fields
+      = args_.omit_null_fields.has_value() or args_.omit_all.has_value();
+    const auto omit_nulls_in_lists
+      = args_.omit_nulls_in_lists.has_value() or args_.omit_all.has_value();
     const auto omit_empty_objects
-      = args_.omit_empty_objects.has_value() or args_.omit_empty.has_value();
+      = args_.omit_empty_objects.has_value() or args_.omit_all.has_value();
     const auto omit_empty_lists
-      = args_.omit_empty_lists.has_value() or args_.omit_empty.has_value();
+      = args_.omit_empty_lists.has_value() or args_.omit_all.has_value();
     const auto arrays_of_objects = args_.arrays_of_objects.has_value();
     auto meta = chunk_metadata{.content_type = compact and not arrays_of_objects
                                                  ? "application/x-ndjson"
                                                  : "application/json"};
     return printer_instance::make(
-      [compact, style, omit_nulls, omit_empty_objects, omit_empty_lists,
-       arrays_of_objects, tql = args_.tql,
+      [compact, style, omit_null_fields, omit_nulls_in_lists,
+       omit_empty_objects, omit_empty_lists, arrays_of_objects, tql = args_.tql,
        meta = std::move(meta)](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
@@ -851,7 +855,8 @@ public:
           .tql = tql,
           .style = style,
           .oneline = compact,
-          .omit_nulls = omit_nulls,
+          .omit_null_fields = omit_null_fields,
+          .omit_nulls_in_lists = omit_nulls_in_lists,
           .omit_empty_records = omit_empty_objects,
           .omit_empty_lists = omit_empty_lists,
         }};
@@ -1004,8 +1009,8 @@ public:
     parser.add("-c,--compact-output", args.compact_output);
     parser.add("-C,--color-output", args.color_output);
     parser.add("-M,--monochrome-output", args.color_output);
-    parser.add("--omit-empty", args.omit_empty);
-    parser.add("--omit-nulls", args.omit_nulls);
+    parser.add("--omit-empty", args.omit_all);
+    parser.add("--omit-nulls", args.omit_null_fields);
     parser.add("--omit-empty-objects", args.omit_empty_objects);
     parser.add("--omit-empty-lists", args.omit_empty_lists);
     parser.add("--arrays-of-objects", args.arrays_of_objects);
@@ -1342,7 +1347,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return tql_ ? "write_tql" : "write_json";
+    return tql_ ? "write_tql" : "tql2.write_json";
   }
 
   auto
@@ -1352,6 +1357,11 @@ public:
     args.tql = tql_;
     auto parser = argument_parser2::operator_("write_json");
     parser.named("color", args.color_output);
+    parser.named("strip", args.omit_all);
+    parser.named("strip_null_fields", args.omit_null_fields);
+    parser.named("strip_nulls_in_lists", args.omit_nulls_in_lists);
+    parser.named("strip_empty_records", args.omit_empty_objects);
+    parser.named("strip_empty_lists", args.omit_empty_lists);
     if (tql_) {
       parser.named("oneline", args.compact_output);
     }
@@ -1381,6 +1391,11 @@ public:
     args.compact_output = location::unknown;
     TRY(argument_parser2::operator_(name())
           .named("color", args.color_output)
+          .named("strip", args.omit_all)
+          .named("strip_null_fields", args.omit_null_fields)
+          .named("strip_nulls_in_lists", args.omit_nulls_in_lists)
+          .named("strip_empty_records", args.omit_empty_objects)
+          .named("strip_empty_lists", args.omit_empty_lists)
           .parse(inv, ctx));
     return std::make_unique<write_json>(args);
   }

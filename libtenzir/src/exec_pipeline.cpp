@@ -124,18 +124,23 @@ auto add_implicit(std::string_view what, pipeline pipe,
                   std::string_view source) -> caf::expected<pipeline> {
   auto dh = collecting_diagnostic_handler{};
   auto sp = session_provider::make(dh);
-  // FIXME actually report diagnostics in this
   auto maybe_ast = parse_pipeline_with_bad_diagnostics(source, sp.as_session());
   if (not maybe_ast) {
-    return caf::make_error(ec::logic_error,
-                           fmt::format("failed to parse implicit {}: `{}`",
-                                       what, source));
+    auto message
+      = fmt::format("failed to parse implicit {}: `{}`", what, source);
+    for (auto& diag : std::move(dh).collect()) {
+      message += "; " + diag.message;
+    }
+    return caf::make_error(ec::logic_error, std::move(message));
   }
   auto compiled = compile(std::move(*maybe_ast), sp.as_session());
   if (not compiled) {
-    return caf::make_error(ec::logic_error,
-                           fmt::format("failed to compile implicit {}: `{}`",
-                                       what, source));
+    auto message
+      = fmt::format("failed to compile implicit {}: `{}`", what, source);
+    for (auto& diag : std::move(dh).collect()) {
+      message += "; " + diag.message;
+    }
+    return caf::make_error(ec::logic_error, std::move(message));
   }
   if (what.ends_with("sink")) {
     for (auto&& op : std::move(*compiled).unwrap()) {

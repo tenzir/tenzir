@@ -156,8 +156,9 @@ struct json_printer : printer_base<json_printer> {
       bool printed_once = false;
       out_ = fmt::format_to(out_, options_.style.array, "[");
       for (const auto& element : x) {
-        if (should_skip(element))
+        if (should_skip(element, true)) {
           continue;
+        }
         if (!printed_once) {
           indent();
           newline();
@@ -258,8 +259,11 @@ struct json_printer : printer_base<json_printer> {
     }
 
   private:
-    auto should_skip(view<data> x) noexcept -> bool {
-      if (options_.omit_nulls && is<caf::none_t>(x)) {
+    auto should_skip(view<data> x, bool in_list = false) noexcept -> bool {
+      if (in_list and options_.omit_nulls_in_lists && is<caf::none_t>(x)) {
+        return true;
+      }
+      if (options_.omit_null_fields && is<caf::none_t>(x)) {
         return true;
       }
       if (options_.omit_empty_lists && is<view<list>>(x)) {
