@@ -80,10 +80,7 @@ struct duration_printer : printer_base<duration_printer<Rep, Period, Policy>> {
 private:
   static bool
   print_adaptive(auto& out, double duration, std::string_view suffix) {
-    auto double_str = fmt::format("{:.2f}", duration);
-    if (double_str.back() == '0')
-      double_str.pop_back();
-    out = fmt::format_to(out, "{}{}", std::move(double_str), suffix);
+    out = fmt::format_to(out, "{}{}", duration, suffix);
     return true;
   }
 

@@ -367,7 +367,7 @@ TEST(duration to string) {
                                 tenzir::duration{std::chrono::milliseconds{27}},
                                 tenzir::string_type{});
   REQUIRE(out);
-  CHECK_EQUAL(*out, "27.0ms");
+  CHECK_EQUAL(*out, "27ms");
 }
 
 TEST(time to string) {

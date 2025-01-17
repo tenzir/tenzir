@@ -58,7 +58,7 @@
   },
   "proto": "tcp",
   "service": null,
-  "duration": "3.42s",
+  "duration": "3.423925s",
   "orig_bytes": 0,
   "resp_bytes": 1982834349,
   "conn_state": "REJ",
@@ -897,7 +897,7 @@
   "msg_types": [
     "REQUEST"
   ],
-  "duration": "0.0ns",
+  "duration": "0ns",
   "trans_id": null,
   "_write_ts": "2020-01-11T11:48:26.617838Z",
   "_path": "dhcp",
@@ -987,7 +987,7 @@
   ],
   "mime_type": "text/plain",
   "filename": null,
-  "duration": "0.0ns",
+  "duration": "0ns",
   "local_orig": false,
   "is_orig": true,
   "seen_bytes": 119,
@@ -1149,7 +1149,7 @@
   "actions": [
     "Notice::ACTION_LOG"
   ],
-  "suppress_for": "1.0h",
+  "suppress_for": "1h",
   "dropped": null,
   "remote_location": null,
   "_write_ts": "2020-01-06T15:24:18.583424Z",
@@ -1321,7 +1321,7 @@
     "resp_h": "141.9.71.231",
     "resp_p": 161
   },
-  "duration": "0.0ns",
+  "duration": "0ns",
   "version": "1",
   "community": "public",
   "get_requests": 1,

@@ -54,7 +54,7 @@ id:
   resp_p: 21
 proto: tcp
 service: null
-duration: 3.42s
+duration: 3.423925s
 orig_bytes: 0
 resp_bytes: 1982834349
 conn_state: REJ
