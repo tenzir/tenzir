@@ -89,15 +89,16 @@ public:
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
     TRY(argument_parser2::function(name())
-          .positional("x", subject_expr, "string")
+          .positional("input", subject_expr, "string")
           .positional("regex", pattern)
           .parse(inv, ctx));
     auto regex = std::make_unique<re2::RE2>(pattern.inner,
                                             re2::RE2::CannedOptions::Quiet);
     TENZIR_ASSERT(regex);
     if (not regex->ok()) {
-      // TODO improve diag
-      diagnostic::error("failed to parse regex").primary(pattern).emit(ctx);
+      diagnostic::error("failed to parse regex: {}", regex->error())
+        .primary(pattern)
+        .emit(ctx);
     }
     return function_use::make(
       [this, subject_expr = std::move(subject_expr),
