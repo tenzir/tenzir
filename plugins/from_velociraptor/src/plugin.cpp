@@ -32,7 +32,7 @@
 #include <absl/base/config.h>
 
 #if ABSL_LTS_RELEASE_VERSION == 20240722
-#include <absl/log/internal/log_message.h>
+#  include <absl/log/internal/log_message.h>
 
 namespace absl {
 

@@ -106,8 +106,8 @@ struct blob_view : detail::totally_ordered<blob_view>,
                                                   r.end());
   }
 
-  friend constexpr auto
-  operator==(const blob_view& l, const blob_view& r) -> bool {
+  friend constexpr auto operator==(const blob_view& l, const blob_view& r)
+    -> bool {
     return l.size() == r.size() and std::equal(l.begin(), l.end(), r.begin());
   }
 };

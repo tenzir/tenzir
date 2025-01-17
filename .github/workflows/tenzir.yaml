@@ -633,7 +633,7 @@ jobs:
       - if: ${{ matrix.tenzir.name == 'macOS' }}
         name: Setup Homebrew Clang
         run: |
-          llvm_root="$(brew --prefix llvm@17)"
+          llvm_root="$(brew --prefix llvm)"
           echo "${llvm_root}/bin" >> $GITHUB_PATH
           echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
