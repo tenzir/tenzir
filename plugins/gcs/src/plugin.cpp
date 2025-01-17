@@ -79,10 +79,19 @@ public:
           co_return;
         }
         auto opts = get_options(args);
-        // TODO: As of Arrow 13, arrow::GCSFileSystem::Make() only intializes
-        // fields of the filesystem & returns a shared_ptr. This is supposed to
-        // be changed to a Result, sometime in the future.
+#if ARROW_VERSION_MAJOR < 19
         auto fs = arrow::fs::GcsFileSystem::Make(opts);
+#else
+        auto fs_result = arrow::fs::GcsFileSystem::Make(opts);
+        if (not fs_result.ok()) {
+          diagnostic::error("{}", fs_result.status().ToString())
+            .note("failed to create GCS filesystem")
+            .primary(args.uri.source)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+        auto fs = fs_result.MoveValueUnsafe();
+#endif
         auto file_info
           = fs->GetFileInfo(fmt::format("{}{}", uri.host(), uri.path()));
         if (not file_info.ok()) {
@@ -154,12 +163,22 @@ public:
                         parse_result.ToString())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
+      return ec::silent;
     }
     auto opts = get_options(args_);
-    // TODO: As of Arrow 13, arrow::GCSFileSystem::Make() only intializes
-    // fields of the filesystem & returns a shared_ptr. This is supposed to be
-    // changed to a Result, sometime in the future.
+#if ARROW_VERSION_MAJOR < 19
     auto fs = arrow::fs::GcsFileSystem::Make(opts);
+#else
+    auto fs_result = arrow::fs::GcsFileSystem::Make(opts);
+    if (not fs_result.ok()) {
+      diagnostic::error("{}", fs_result.status().ToString())
+        .note("failed to create GCS filesystem")
+        .primary(args_.uri.source)
+        .emit(ctrl.diagnostics());
+      return ec::silent;
+    }
+    auto fs = fs_result.MoveValueUnsafe();
+#endif
     auto file_info
       = fs->GetFileInfo(fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
@@ -167,6 +186,7 @@ public:
                         args_.uri.inner, file_info.status().ToString())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
+      return ec::silent;
     }
     auto output_stream
       = fs->OpenOutputStream(file_info->path(), opts.default_metadata);
@@ -175,23 +195,24 @@ public:
                         args_.uri.inner, output_stream.status().ToString())
         .primary(args_.uri.source)
         .emit(ctrl.diagnostics());
+      return ec::silent;
     }
-    auto stream_guard
-      = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
-          auto status = output_stream.ValueUnsafe()->Close();
-          if (not output_stream.ok()) {
-            diagnostic::error("failed to close output stream for URI `{}`: {}",
-                              args_.uri.inner,
-                              output_stream.status().ToString())
-              .primary(args_.uri.source)
-              .emit(ctrl.diagnostics());
-          }
-        });
+    auto stream_guard = detail::scope_guard(
+      [this, &ctrl, output_stream]() noexcept {
+        auto status = output_stream.ValueUnsafe()->Close();
+        if (not output_stream.ok()) {
+          diagnostic::error("failed to close output stream for URI `{}`: {}",
+                            args_.uri.inner, output_stream.status().ToString())
+            .primary(args_.uri.source)
+            .emit(ctrl.diagnostics());
+        }
+      });
     return [&ctrl, output_stream, uri = args_.uri.inner,
             stream_guard = std::make_shared<decltype(stream_guard)>(
               std::move(stream_guard))](chunk_ptr chunk) mutable {
-      if (!chunk || chunk->size() == 0)
+      if (!chunk || chunk->size() == 0) {
         return;
+      }
       auto status
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
       if (not output_stream.ok()) {
@@ -241,8 +262,9 @@ public:
     parser.add(args.uri, "<uri>");
     parser.parse(p);
     // TODO: URI parser.
-    if (not args.uri.inner.starts_with("gs://"))
+    if (not args.uri.inner.starts_with("gs://")) {
       args.uri.inner = fmt::format("gs://{}", args.uri.inner);
+    }
     return std::make_unique<gcs_loader>(std::move(args));
   }
 
@@ -255,8 +277,9 @@ public:
     parser.add(args.uri, "<uri>");
     parser.parse(p);
     // TODO: URI parser.
-    if (not args.uri.inner.starts_with("gs://"))
+    if (not args.uri.inner.starts_with("gs://")) {
       args.uri.inner = fmt::format("gs://{}", args.uri.inner);
+    }
     return std::make_unique<gcs_saver>(std::move(args));
   }
 
