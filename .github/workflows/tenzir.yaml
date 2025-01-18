@@ -546,7 +546,7 @@ jobs:
             compiler: Clang
             cc: clang
             cxx: clang++
-            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST=snowflake -DCMAKE_CXX_STANDARD_LIBRARIES="-L\"$(brew --prefix llvm)/lib/c++\" -L\"$(brew --prefix llvm)/lib\""
+            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST=snowflake -DCMAKE_CXX_STANDARD_LIBRARIES="-L\"$(brew --prefix llvm)/lib/c++\" -L\"$(brew --prefix llvm)/lib/unwind\" -lunwind"
             bundled-plugins:
               # macOS runners in GitHub Actions CI are very limited, so we
               # prefer to have fewer jobs running and build the proprietary
