@@ -52,10 +52,6 @@ let
       umock-c
     ] ++ lib.optionals stdenv.hostPlatform.isStatic [
       openssl
-    #] ++ lib.optionals stdenv.hostPlatform.isDarwin [
-    #  darwin.apple_sdk.frameworks.Foundation
-    #  darwin.apple_sdk.frameworks.CoreFoundation
-    #  darwin.apple_sdk.frameworks.SystemConfiguration
     ];
     propagatedBuildInputs = [
       curl
