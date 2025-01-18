@@ -28,6 +28,8 @@ The replacement value for `pattern`.
 
 The maximum number of replacements to perform.
 
+If the option is not set, all occurrences are replaced.
+
 ## Examples
 
 ### Replace all matches of a regular expression

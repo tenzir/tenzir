@@ -27,7 +27,7 @@ first match is used.
 
 The supported regular expression syntax is
 [RE2](https://github.com/google/re2/wiki/Syntax). In particular, this means that
-lookahead `(?=...)` and lookbehind `(?<=...)` are not supported by `kv` at the
+lookahead `(?=...)` and lookbehind `(?<=...)` are not supported by `read_kv` at the
 moment. However, if the regular expression has a capture group, it is assumed
 that only the content of the capture group shall be used as the separator. This
 means that unsupported regular expressions such as `(?=foo)bar(?<=baz)` can be
