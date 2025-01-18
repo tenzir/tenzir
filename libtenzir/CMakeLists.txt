@@ -106,6 +106,7 @@ find_package(Boost REQUIRED COMPONENTS headers filesystem url)
 # -- re2 ----------------------------------------------------------------------
 
 find_package(re2 REQUIRED)
+provide_find_module(re2)
 
 # -- libmaxminddb -------------------------------------------------------------
 
@@ -216,7 +217,7 @@ if (BUILD_SHARED_LIBS)
 endif ()
 
 # Link against CAF.
-target_link_libraries(libtenzir PUBLIC CAF::core CAF::io CAF::openssl)
+target_link_libraries(libtenzir PUBLIC CAF::core CAF::io CAF::net CAF::openssl)
 
 # Link against libtenzir-fbs.
 target_link_libraries(libtenzir PUBLIC libtenzir-fbs)
@@ -370,8 +371,9 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
-target_link_libraries(libtenzir PRIVATE re2::re2)
-target_link_libraries(libtenzir_builtins PRIVATE re2::re2)
+target_link_libraries(libtenzir PUBLIC re2::re2)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+  "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
 
 # Link against fast_float
@@ -387,7 +389,7 @@ if (NOT FastFloat_FOUND)
   if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float/CMakeLists.txt")
     message(
       FATAL_ERROR
-        "fast_float library not found, either use -FastFloat_DIR=... or"
+        "fast_float library not found, either use -DFastFloat_DIR=... or"
         " initialize the libtenzir/aux/fast_float submodule")
   endif ()
   add_subdirectory(aux/fast_float)
@@ -399,6 +401,7 @@ else ()
 endif ()
 target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 
+unset(_tenzir_bundled_pfs)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)
   add_feature_info("TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
@@ -408,7 +411,7 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   endif ()
   if (NOT pfs_FOUND)
     if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/pfs/CMakeLists.txt")
-      message(FATAL_ERROR "pfs library not found, either use -pfs_DIR=... or"
+      message(FATAL_ERROR "pfs library not found, either use -Dpfs_DIR=... or"
                           " initialize the libtenzir/aux/pfs submodule")
     endif ()
     add_subdirectory(aux/pfs)
@@ -416,6 +419,7 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
       EXPORT pfsTargets
       FILE pfs-config.cmake
       NAMESPACE pfs::)
+    set(_tenzir_bundled_pfs "pfs")
     dependency_summary("pfs" "${CMAKE_CURRENT_SOURCE_DIR}/aux/pfs"
                        "Dependencies")
   else ()
@@ -534,7 +538,7 @@ endif ()
 # install the static libtenzir_builtins archive for development targets because
 # the plugin unit test binaries need to be able to link against it.
 install(
-  TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
+  TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson} ${_tenzir_bundled_pfs}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime

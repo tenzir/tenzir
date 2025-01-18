@@ -81,7 +81,7 @@ struct metrics_collector_state {
   }
 
   auto setup(const metrics_plugin& plugin) -> caf::expected<void> {
-    auto collector = plugin.make_collector();
+    auto collector = plugin.make_collector(self->system());
     if (not collector) {
       TENZIR_WARN("{} failed to set up {} metrics: {}", *self, plugin.name(),
                   collector.error());

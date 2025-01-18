@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+: "${FLUENT_BIT_TAG=v2.2.2}"
+
 set -euo pipefail
 
 apt-get -qq update
@@ -27,11 +29,13 @@ apt-get install -y --reinstall \
 
 mkdir -p source
 pushd source
-curl -L 'https://github.com/fluent/fluent-bit/archive/refs/tags/v2.2.2.tar.gz' | tar -xz --strip-components=1
-cmake -B build -S . -DFLB_RELEASE=ON -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_SYSCONFDIR=/etc
+curl -L "https://github.com/fluent/fluent-bit/archive/refs/tags/${FLUENT_BIT_TAG}.tar.gz" | tar -xz --strip-components=1
+cmake -B build \
+  -DFLB_RELEASE=ON \
+  "${EXTRA_CMAKE_ARGS[@]}"
+
 cmake --build build --parallel "$(nproc --all)"
+
 cd build
 cpack -G DEB -D CPACK_STRIP_FILES=ON
-mv fluent-bit_*.deb /root
-popd
-rm -rf source
+mv fluent-bit_*.deb /tmp

@@ -75,7 +75,8 @@ public:
     return "memory";
   }
 
-  auto make_collector() const -> caf::expected<collector> override {
+  auto make_collector(caf::actor_system&) const
+    -> caf::expected<collector> override {
 #ifdef _SC_AVPHYS_PAGES
     return get_raminfo;
 #elif __has_include(<mach/mach.h>)
