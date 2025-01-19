@@ -546,7 +546,7 @@ jobs:
             compiler: Clang
             cc: clang
             cxx: clang++
-            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST=snowflake -DCMAKE_CXX_STANDARD_LIBRARIES="-L\"$(brew --prefix llvm)/lib/c++\" -L\"$(brew --prefix llvm)/lib/unwind\" -lunwind"
+            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON -DTENZIR_PLUGINS_BLACKLIST=snowflake
             bundled-plugins:
               # macOS runners in GitHub Actions CI are very limited, so we
               # prefer to have fewer jobs running and build the proprietary
@@ -633,7 +633,7 @@ jobs:
       - if: ${{ matrix.tenzir.name == 'macOS' }}
         name: Setup Homebrew Clang
         run: |
-          llvm_root="$(brew --prefix llvm)"
+          llvm_root="$(brew --prefix llvm@17)"
           echo "${llvm_root}/bin" >> $GITHUB_PATH
           echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV

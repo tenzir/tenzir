@@ -64,11 +64,11 @@ The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
 
 :::tip macOS
-On macOS, we recommend using Clang from the Homebrew `llvm` package with the
+On macOS, we recommend using Clang from the Homebrew `llvm@17` package with the
 following settings:
 
 ```bash
-export LLVM_PREFIX="$(brew --prefix llvm)"
+export LLVM_PREFIX="$(brew --prefix llvm@17)"
 export PATH="${LLVM_PREFIX}/bin:${PATH}"
 export CC="${LLVM_PREFIX}/bin/clang"
 export CXX="${LLVM_PREFIX}/bin/clang++"
