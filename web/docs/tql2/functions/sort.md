@@ -25,13 +25,7 @@ xs = xs.sort()
 ```
 
 ```tql
-{
-  xs: [
-    1,
-    2,
-    3,
-  ]
-}
+{xs: [1, 2, 3]}
 ```
 
 ### Sort a record by its field names
@@ -42,14 +36,7 @@ this = this.sort()
 ```
 
 ```tql
-{
-  "a": 1,
-  "b": {
-    "x": false,
-    "y": true,
-  },
-  "c": 3,
-}
+{a: 1, b: {y: true, x: false}, c: 3}
 ```
 
 Observe that the nested record is *not* sorted. Use `b = b.sort()` to sort it
