@@ -966,8 +966,7 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
     // The most common case: We are already building objects of this type.
     return cast;
   }
-  if (auto* cast
-      = dynamic_cast<detail::typed_builder<null_type>*>(builder_.get())) {
+  if (dynamic_cast<detail::typed_builder<null_type>*>(builder_.get())) {
     // Only happens for the first non-null top-level item: Upgrade the builder.
     auto length = builder_->length();
     builder_ = std::make_unique<Target>(root_);

@@ -12,6 +12,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/view.hpp>
 
 #include <deque>
 #include <string_view>
@@ -341,9 +342,7 @@ private:
             auto bytes = std::span<const std::byte>{
               reinterpret_cast<const std::byte*>(match->data),
               detail::narrow_cast<size_t>(match->data_length)};
-            auto blob_view
-              = std::basic_string_view<std::byte>{bytes.data(), bytes.size()};
-            match_rec.field("data").data(blob_view);
+            match_rec.field("data").data(blob_view{bytes.data(), bytes.size()});
             match_rec.field("base").data(match->base);
             match_rec.field("offset").data(match->offset);
             match_rec.field("match_length")

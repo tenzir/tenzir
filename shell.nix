@@ -3,7 +3,7 @@ let
   inherit (pkgs) lib;
   inherit (pkgs.stdenv.hostPlatform) isStatic;
 in
-  pkgs.mkShell.override {stdenv = pkgs.gcc13Stdenv;} ({
+  pkgs.mkShell ({
       name = "tenzir-dev";
       hardeningDisable = ["fortify"] ++ lib.optional isStatic "pic";
       inputsFrom = [pkgs.tenzir-de pkgs.tenzir-de.unchecked];
