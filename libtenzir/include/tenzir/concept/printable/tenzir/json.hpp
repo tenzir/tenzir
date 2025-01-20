@@ -183,8 +183,9 @@ struct json_printer : printer_base<json_printer> {
       bool printed_once = false;
       out_ = fmt::format_to(out_, options_.style.array, "[");
       for (const auto& element : x) {
-        if (should_skip(element.second))
+        if (should_skip(element.second, false)) {
           continue;
+        }
         if (!printed_once) {
           indent();
           newline();
@@ -221,7 +222,7 @@ struct json_printer : printer_base<json_printer> {
       bool printed_once = false;
       out_ = fmt::format_to(out_, options_.style.object, "{{");
       for (const auto& [key, value] : x) {
-        if (should_skip(value)) {
+        if (should_skip(value, false)) {
           continue;
         }
         if (!printed_once) {
@@ -259,7 +260,7 @@ struct json_printer : printer_base<json_printer> {
     }
 
   private:
-    auto should_skip(view<data> x, bool in_list = false) noexcept -> bool {
+    auto should_skip(view<data> x, bool in_list) noexcept -> bool {
       if (in_list and options_.omit_nulls_in_lists && is<caf::none_t>(x)) {
         return true;
       }
@@ -270,7 +271,7 @@ struct json_printer : printer_base<json_printer> {
         const auto& ys = as<view<list>>(x);
         return std::all_of(ys.begin(), ys.end(),
                            [this](const view<data>& y) noexcept {
-                             return should_skip(y);
+                             return should_skip(y, true);
                            });
       }
       if (options_.omit_empty_maps && is<view<map>>(x)) {
@@ -278,7 +279,7 @@ struct json_printer : printer_base<json_printer> {
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<map>::view_type::value_type& y) noexcept {
-            return should_skip(y.second);
+            return should_skip(y.second, false);
           });
       }
       if (options_.omit_empty_records && is<view<record>>(x)) {
@@ -286,7 +287,7 @@ struct json_printer : printer_base<json_printer> {
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<record>::view_type::value_type& y) noexcept {
-            return should_skip(y.second);
+            return should_skip(y.second, false);
           });
       }
       return false;

@@ -20,35 +20,49 @@ Transforms the input event stream to a TQL notation byte stream.
 
 Enables all `strip_*` options.
 
-### `color = bool (optional)`
-
-Colorize the output.
+Defaults to `false`.
 
 ### `oneline = bool (optional)`
 
 Write one event per line, omitting linebreaks and indentation of records.
 
+Defaults to `false`.
+
+### `color = bool (optional)`
+
+Colorize the output.
+
+Defaults to `false`.
+
 ### `strip_null_fields = bool (optional)`
 
 Strips all fields with a `null` value from records.
 
+Defaults to `false`.
+
 ### `strip_nulls_in_lists = bool (optional)`
 
-Strips all `null` value to be from lists.
+Strips all `null` values from lists.
+
+Defaults to `false`.
 
 ### `strip_empty_records = bool (optional)`
 
-Strips empty records from the output, including those that only became empty
-by stripping nulls.
+Strips empty records, including those that only became empty
+by stripping.
+
+Defaults to `false`.
 
 ### `strip_empty_lists = bool (optional)`
 
-Strips empty lists from the output, including those that only became empty
-by stripping nulls.
+Strips empty lists, including those that only became empty
+by stripping.
+
+Defaults to `false`.
 
 ## Examples
 
-### Print
+### Print an event as TQL
 
 ```tql
 from {activity_id: 16, activity_name: "Query", rdata: 31.3.245.133, dst_endpoint: {ip: 192.168.4.1, port: 53}}
@@ -62,6 +76,18 @@ write_tql
   dst_endpoint: {
     ip: 192.168.4.1,
     port: 53,
-  }
+  },
+}
+```
+
+### Strip null fields
+
+```tql
+from { yes: 1, no: null}
+write_tql strip_null_fields=true
+```
+```tql
+{
+  yes: 1,
 }
 ```

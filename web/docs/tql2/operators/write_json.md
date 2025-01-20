@@ -19,27 +19,39 @@ You can use the [`write_ndjson` operator](write_ndjson.md) to write Newline-Deli
 
 Enables all `strip_*` options.
 
+Defaults to `false`.
+
 ### `color = bool (optional)`
 
 Colorize the output.
+
+Defaults to `false`.
 
 ### `strip_null_fields = bool (optional)`
 
 Strips all fields with a `null` value from records.
 
+Defaults to `false`.
+
 ### `strip_nulls_in_lists = bool (optional)`
 
-Strips all `null` value to be from lists.
+Strips all `null` values from lists.
+
+Defaults to `false`.
 
 ### `strip_empty_records = bool (optional)`
 
-Strips empty records from the output, including those that only became empty
-by stripping nulls.
+Strips empty records, including those that only became empty
+by stripping.
+
+Defaults to `false`.
 
 ### `strip_empty_lists = bool (optional)`
 
-Strips empty lists from the output, including those that only became empty
-by stripping nulls.
+Strips empty lists, including those that only became empty
+by stripping.
+
+Defaults to `false`.
 
 ## Examples
 
@@ -50,4 +62,16 @@ load_file "input.yaml"
 read_yaml
 write_json
 save_file "output.json"
+```
+
+### Strip null fields
+
+```tql
+from { yes: 1, no: null}
+write_json strip_null_fields=true
+```
+```json
+{
+  "yes": 1
+}
 ```
