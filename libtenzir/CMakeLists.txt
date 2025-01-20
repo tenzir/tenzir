@@ -382,7 +382,7 @@ add_feature_info(
   "TENZIR_ENABLE_BUNDLED_FASTFLOAT" TENZIR_ENABLE_BUNDLED_FASTFLOAT
   "use the fast_float submodule.")
 if (NOT TENZIR_ENABLE_BUNDLED_FASTFLOAT)
-  find_package(FastFloat 6.1.4 CONFIG)
+  find_package(FastFloat CONFIG)
 endif ()
 if (NOT FastFloat_FOUND)
   # Use bundled fast_float.

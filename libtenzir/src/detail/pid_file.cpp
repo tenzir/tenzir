@@ -13,7 +13,6 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/posix.hpp"
-#include "tenzir/detail/system.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 
@@ -50,7 +49,7 @@ bool pid_belongs_to_tenzir(pid_t pid) {
 #endif // TENZIR_LINUX
 
 caf::error acquire_pid_file(const std::filesystem::path& filename) {
-  auto pid = process_id();
+  auto pid = ::getpid();
   std::error_code err{};
   // Check if the db directory is owned by an existing Tenzir process.
   const auto exists = std::filesystem::exists(filename, err);

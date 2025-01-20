@@ -7,13 +7,13 @@
 in
   stdenv.mkDerivation (finalAttrs: {
     pname = "pfs";
-    version = "0.8.0";
+    version = "0.11.0";
 
     src = fetchFromGitHub {
       owner = "dtrugman";
       repo = "pfs";
       rev = "v${finalAttrs.version}";
-      sha256 = "sha256-TeSdON2MXUZ8LDiIFfh8cjyP361SE7cE1c8oDXQL3OU=";
+      hash = "sha256-lceQXLmQuTv4phDID1dDduHFJqs09oAMWi6kKmM1eSg=";
     };
 
     cmakeFlags = lib.optionals stdenv.hostPlatform.isStatic [

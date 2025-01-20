@@ -1363,7 +1363,7 @@ public:
     parser.named("strip_empty_records", args.omit_empty_objects);
     parser.named("strip_empty_lists", args.omit_empty_lists);
     if (tql_) {
-      parser.named("oneline", args.compact_output);
+      parser.named("compact", args.compact_output);
     }
     TRY(parser.parse(inv, ctx));
     return std::make_unique<write_json>(args);

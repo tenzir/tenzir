@@ -22,7 +22,7 @@ Enables all `strip_*` options.
 
 Defaults to `false`.
 
-### `oneline = bool (optional)`
+### `compact = bool (optional)`
 
 Write one event per line, omitting linebreaks and indentation of records.
 
