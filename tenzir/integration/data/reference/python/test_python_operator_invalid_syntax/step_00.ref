@@ -1,2 +1,5 @@
-error: child process exited with exit-code 1
- = note: child process execution failed
+error: File "<inline>", line 1
+    x=
+      ^
+SyntaxError: invalid syntax
+ = note: python process exited with error
