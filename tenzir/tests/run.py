@@ -7,11 +7,15 @@ import os
 import shutil
 import subprocess
 import sys
-from pprint import pprint
 import threading
 import difflib
 import typing
 import re
+import time
+import socket
+
+from contextlib import contextmanager
+
 
 # TODO: This needs a better way to discover tenzir, if its not in the path
 BINARY = shutil.which("tenzir") or "../../build/debug/bin/tenzir"
@@ -22,7 +26,6 @@ INFO = "\033[94;1mi\033[0m"
 TIMEOUT = 10
 
 stdout_lock = threading.RLock()
-
 
 
 @dataclasses.dataclass
@@ -139,21 +142,26 @@ def run_simple_test(
     success(test)
     return True
 
+
 class Fixture :
     def __init__(self, path_prefix:str ) :
         self.path_prefix = path_prefix
 
-    def collect_tests( self, test:Path ) :
-        rel = test.relative_to(ROOT)
+    def collect_with_ext(self, path: Path, ext: str) -> set:
         todo = set()
-        if rel.parts[0] != self.path_prefix :
-            raise ValueError(f"test path `{test}` should`not be collected via fixture `{self.path_prefix}`")
-        if test.suffix == ".tql" :
-            todo.add((self,test))
+        if path.relative_to(ROOT).parts[0] != self.path_prefix:
+            raise ValueError(
+                f"test path `{path}` should` not be collected via fixture `{self.path_prefix}`"
+            )
+        if path.suffix == f".{ext}":
+            todo.add((self, path))
             return todo
-        for tql in test.glob("**/*.tql"):
-            todo.add((self,tql))
+        for test in path.glob(f"**/*.{ext}"):
+            todo.add((self, test))
         return todo
+
+    def collect_tests(self, path: Path):
+        return self.collect_with_ext(path, "tql")
 
     def purge(self) :
         purge_base = ROOT/self.path_prefix
@@ -163,22 +171,97 @@ class Fixture :
                 continue
             if p.suffix == ".tql" :
                 continue
-            p.unlink()
+            # p.unlink()
 
-    def run( self, test_name: str) :
+    def run(self, test_name: str, update: bool) -> bool:
         raise NotImplementedError
 
+
 class AST_Fixture(Fixture):
-    def run( self, test:str, update:bool) :
+
+    def run(self, test: str, update: bool) -> bool:
         return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt")
 
+
 class Exec_Fixture(Fixture) :
-    def run( self, test:str, update:bool) :
+
+    def run(self, test: str, update: bool) -> bool:
         return run_simple_test(test, update=update, ext="json")
 
 
-fixtures = { "ast": AST_Fixture("ast"),
-            "exec": Exec_Fixture("exec") }
+@contextmanager
+def check_server():
+    stop = False
+    port = None
+
+    def server():
+        counter = 0
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("", 0))
+        s.listen(100)
+        s.settimeout(0.5)
+        # TODO: Proper synchronization.
+        nonlocal port
+        port = s.getsockname()[1]
+        while True:
+            try:
+                c, _ = s.accept()
+                c.send(str(counter).encode())
+                counter += 1
+                c.close()
+            except socket.timeout:
+                if stop:
+                    break
+
+    t = threading.Thread(target=server)
+    t.start()
+    # TODO: Wait until it is actually started.
+    while port is None:
+        time.sleep(0.1)
+    try:
+        yield port
+    finally:
+        stop = True
+        t.join()
+
+
+class CustomFixture(Fixture):
+    def __init__(self):
+        super().__init__("custom")
+
+    def collect_tests(self, path: Path):
+        return self.collect_with_ext(path, "sh")
+
+    def run(self, path: Path, update: bool) -> bool:
+        env = os.environ.copy()
+        env["PATH"] = (ROOT / "_todo").as_posix() + ":" + env["PATH"]
+        # TODO: Choose a random free port instead.
+        with check_server() as port:
+            env["TENZIR_TESTER_CHECK_PORT"] = str(port)
+            env["TENZIR_TESTER_CHECK_UPDATE"] = str(int(update))
+            env["TENZIR_TESTER_CHECK_PATH"] = str(path)
+            try:
+                output = subprocess.check_output(
+                    ["sh", "-eu", path], stderr=subprocess.PIPE, env=env
+                )
+                # TODO: What do to with output?
+            except subprocess.CalledProcessError as e:
+                with stdout_lock:
+                    fail(path)
+                    sys.stdout.buffer.write(e.stdout)
+                    sys.stdout.buffer.write(e.output)
+                    sys.stdout.buffer.write(e.stderr)
+                return False
+        success(path)
+        return True
+
+
+fixtures = {
+    "ast": AST_Fixture("ast"),
+    "exec": Exec_Fixture("exec"),
+    "custom": CustomFixture(),
+}
 
 
 class Worker:
@@ -207,7 +290,7 @@ class Worker:
                     item = self._queue.pop()
                 except IndexError:
                     break
-                success = item[0].run(item[1],self._update)
+                success = item[0].run(item[1], self._update)
                 self._result.total += 1
                 if not success:
                     self._result.failed += 1
@@ -221,7 +304,7 @@ def main() -> None:
     parser.add_argument("tests", nargs="*", type=Path, default=[ROOT])
     parser.add_argument("-u", "--update", action="store_true")
     parser.add_argument("-p", "--purge", action="store_true")
-    parser.add_argument("-n", "--parallel", type=int, default=16)
+    parser.add_argument("-j", "--jobs", type=int, default=16)
     args = parser.parse_args()
     #
     if args.purge:
@@ -246,7 +329,7 @@ def main() -> None:
             print(f"unknown category fixture")
 
     queue = list(todo)
-    queue.sort(key= lambda tup: tup[1])
+    queue.sort(key=lambda tup: tup[1], reverse=True)
 
     # TODO
     os.environ["TENZIR_TQL2"] = "true"
@@ -257,7 +340,7 @@ def main() -> None:
         sys.exit(f"could not find `{BINARY}` executable")
     print(f"{INFO} running {version}")
 
-    workers = [Worker(queue, update=args.update) for _ in range(args.parallel)]
+    workers = [Worker(queue, update=args.update) for _ in range(args.jobs)]
     summary = Summary()
     for worker in workers:
         worker.start()
