@@ -4,11 +4,8 @@
 
 We provide Docker images and a Docker Compose file for a container setup.
 
-Install a node as follows:
+After [provisioning a node](README.md), proceed as follows:
 
-1. Visit https://app.tenzir.com/pipelines.
-1. Click the *Add node* button in the left pane and select *self-hosted node*.
-1. Enter a name for your node and click *Add node*.
 1. Select the Docker tab and click the download button to obtain the
    `docker-compose.NODE.yaml` configuration file, where `NODE` is the name you
    entered for your node.
