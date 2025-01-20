@@ -13,12 +13,14 @@ import typing
 import re
 import time
 import socket
+from abc import ABC, abstractmethod
+import builtins
 
 from contextlib import contextmanager
 
 
 # TODO: This needs a better way to discover tenzir, if its not in the path
-BINARY = shutil.which("tenzir") or "../../build/debug/bin/tenzir"
+BINARY = shutil.which("tenzir")
 ROOT = Path(os.path.dirname(__file__ or ".")).resolve()
 CHECKMARK = "\033[92;1m✓\033[0m"
 CROSS = "\033[31m✘\033[0m"
@@ -26,6 +28,13 @@ INFO = "\033[94;1mi\033[0m"
 TIMEOUT = 10
 
 stdout_lock = threading.RLock()
+
+
+def print(*args, **kwargs):
+    # TODO: Properly solve the synchronization below.
+    if "flush" not in kwargs:
+        kwargs["flush"] = True
+    return builtins.print(*args, **kwargs)
 
 
 @dataclasses.dataclass
@@ -58,11 +67,6 @@ def success(test: Path) -> None:
 def fail(test: Path) -> None:
     with stdout_lock:
         print(f"{CROSS} {test.relative_to(ROOT)}")
-
-
-# TODO: This line number is incorrect. We need to go to the first `-` or `+`.
-def get_line_number(line: bytes) -> int:
-    return int(re.match(b"@@ -([0-9]*)", line).group(1).decode())
 
 
 def last_and(gen):
@@ -128,9 +132,7 @@ def run_simple_test(
                         skip -= 1
                         continue
                     if line.startswith(b"@@"):
-                        print(
-                            f"┌─▶ \033[31m{ref_path.relative_to(ROOT)}:{get_line_number(line)}\033[0m"
-                        )
+                        print(f"┌─▶ \033[31m{ref_path.relative_to(ROOT)}\033[0m")
                         continue
                     if line.startswith(b"+"):
                         line = b"\033[92m" + line + b"\033[0m"
@@ -143,15 +145,19 @@ def run_simple_test(
     return True
 
 
-class Fixture :
-    def __init__(self, path_prefix:str ) :
-        self.path_prefix = path_prefix
+class Runner(ABC):
+    def __init__(self, *, prefix: str):
+        self._prefix = prefix
+
+    @property
+    def prefix(self) -> str:
+        return self._prefix
 
     def collect_with_ext(self, path: Path, ext: str) -> set:
         todo = set()
-        if path.relative_to(ROOT).parts[0] != self.path_prefix:
+        if path.relative_to(ROOT).parts[0] != self._prefix:
             raise ValueError(
-                f"test path `{path}` should` not be collected via fixture `{self.path_prefix}`"
+                f"test path `{path}` should` not be collected via fixture `{self._prefix}`"
             )
         if path.suffix == f".{ext}":
             todo.add((self, path))
@@ -160,30 +166,54 @@ class Fixture :
             todo.add((self, test))
         return todo
 
+    @abstractmethod
     def collect_tests(self, path: Path):
-        return self.collect_with_ext(path, "tql")
+        raise NotImplementedError
 
-    def purge(self) :
-        purge_base = ROOT/self.path_prefix
-        print(f"purging `{purge_base}`")
-        for p in purge_base.rglob("*") :
-            if p.is_dir() :
-                continue
-            if p.suffix == ".tql" :
-                continue
-            # p.unlink()
+    @abstractmethod
+    def purge(self):
+        raise NotImplementedError
 
+    @abstractmethod
     def run(self, test_name: str, update: bool) -> bool:
         raise NotImplementedError
 
 
-class AST_Fixture(Fixture):
+class ExtRunner(Runner):
+    def __init__(self, *, prefix: str, ext: str):
+        super().__init__(prefix=prefix)
+        self._ext = ext
+
+    def collect_tests(self, path: Path):
+        return self.collect_with_ext(path, self._ext)
+
+    def purge(self):
+        purge_base = ROOT / self._prefix
+        for p in purge_base.rglob("*"):
+            if p.is_dir():
+                continue
+            if p.suffix == f".{self._ext}":
+                continue
+            # print(f"would have deleted {p}")
+            p.unlink()
+
+
+class TqlRunner(ExtRunner):
+    def __init__(self, *, prefix: str):
+        super().__init__(prefix=prefix, ext="tql")
+
+
+class AstRunner(TqlRunner):
+    def __init__(self):
+        super().__init__(prefix="ast")
 
     def run(self, test: str, update: bool) -> bool:
         return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt")
 
 
-class Exec_Fixture(Fixture) :
+class ExecRunner(TqlRunner):
+    def __init__(self):
+        super().__init__(prefix="exec")
 
     def run(self, test: str, update: bool) -> bool:
         return run_simple_test(test, update=update, ext="json")
@@ -226,16 +256,13 @@ def check_server():
         t.join()
 
 
-class CustomFixture(Fixture):
+class CustomFixture(ExtRunner):
     def __init__(self):
-        super().__init__("custom")
-
-    def collect_tests(self, path: Path):
-        return self.collect_with_ext(path, "sh")
+        super().__init__(prefix="custom", ext="sh")
 
     def run(self, path: Path, update: bool) -> bool:
         env = os.environ.copy()
-        env["PATH"] = (ROOT / "_todo").as_posix() + ":" + env["PATH"]
+        env["PATH"] = (ROOT / "_custom").as_posix() + ":" + env["PATH"]
         # TODO: Choose a random free port instead.
         with check_server() as port:
             env["TENZIR_TESTER_CHECK_PORT"] = str(port)
@@ -257,11 +284,11 @@ class CustomFixture(Fixture):
         return True
 
 
-fixtures = {
-    "ast": AST_Fixture("ast"),
-    "exec": Exec_Fixture("exec"),
-    "custom": CustomFixture(),
-}
+RUNNERS = [AstRunner(), ExecRunner(), CustomFixture()]
+
+runners = {}
+for runner in RUNNERS:
+    runners[runner.prefix] = runner
 
 
 class Worker:
@@ -303,42 +330,48 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("tests", nargs="*", type=Path, default=[ROOT])
     parser.add_argument("-u", "--update", action="store_true")
-    parser.add_argument("-p", "--purge", action="store_true")
-    parser.add_argument("-j", "--jobs", type=int, default=16)
+    parser.add_argument("--purge", action="store_true")
+    parser.add_argument("-j", "--jobs", type=int, default=16, metavar="N")
     args = parser.parse_args()
     #
     if args.purge:
-        for name,fixture in fixtures.items() :
-            fixture.purge()
+        for _, runner in runners.items():
+            runner.purge()
         return
 
     # TODO Make sure that all tests are located in the `tests` directory.
-    tests = [test.resolve() for test in args.tests]
+    tests = [test for test in args.tests]
     todo = set()
     for test in tests:
-        if test == ROOT:
-            for name,fixture in fixtures.items() :
-                todo.update( fixture.collect_tests(ROOT/name) )
+        if test.resolve() == ROOT:
+            for name, runner in runners.items():
+                todo.update(runner.collect_tests(ROOT / name))
             continue
-        found = False
-        for name, fixture in fixtures :
-            if test.parts[0] == name :
-                todo.update( fixture.collect_tests(test) )
-                found = True
-        if not found :
-            print(f"unknown category fixture")
+        resolved = test.resolve()
+        try:
+            target_name = resolved.relative_to(ROOT).parts[0]
+        except ValueError:
+            if not test.is_absolute():
+                resolved = ROOT / test
+                target_name = resolved.relative_to(ROOT).parts[0]
+            else:
+                sys.exit(f"error: `{test}` is not in `{ROOT}`")
+        for name, runner in runners.items():
+            if target_name == name:
+                todo.update(runner.collect_tests(resolved))
+                break
+        else:
+            sys.exit(f"error: no runner found for `{test}`")
 
     queue = list(todo)
     queue.sort(key=lambda tup: tup[1], reverse=True)
-
-    # TODO
     os.environ["TENZIR_TQL2"] = "true"
     os.environ["TENZIR_EXEC__DUMP_DIAGNOSTICS"] = "true"
     try:
         version = get_version()
     except FileNotFoundError:
-        sys.exit(f"could not find `{BINARY}` executable")
-    print(f"{INFO} running {version}")
+        sys.exit(f"error: could not find `{BINARY}` executable")
+    print(f"{INFO} running {len(queue)} tests with v{version}")
 
     workers = [Worker(queue, update=args.update) for _ in range(args.jobs)]
     summary = Summary()
