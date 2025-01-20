@@ -24,4 +24,4 @@ import
 
 The `import` operator requires a node execution context. To invoke the above
 pipeline successfully, you need to [deploy a
-node](../../installation/deploy-a-node.md) first.
+node](../../installation/deploy-a-node/README.md) first.

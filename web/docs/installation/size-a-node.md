@@ -5,9 +5,9 @@ sidebar_position: 0
 # Size a node
 
 To better understand what resources you need to [run a
-node](../installation/deploy-a-node.md), we provide guidance on sizing and a
-[calculator](#calculator) to derive concrete **CPU**, **RAM**, and **storage**
-requirements.
+node](../installation/deploy-a-node/README.md), we provide guidance on sizing
+and a [calculator](#calculator) to derive concrete **CPU**, **RAM**, and
+**storage** requirements.
 
 ## Considerations
 
