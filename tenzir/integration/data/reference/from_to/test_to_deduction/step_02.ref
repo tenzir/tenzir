@@ -1,6 +1,6 @@
 [
   tql2.write_json {
-    
+    tql: false
   },
   compress {
     type: "gzip" @ 0..0,

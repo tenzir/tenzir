@@ -159,6 +159,7 @@ Operator | Description | Example
 [`write_pcap`](./operators/write_pcap.md) | Writes events as PCAP | `write_pcap`
 [`write_ssv`](./operators/write_ssv.md) | Writes events as SSV | `write_ssv`
 [`write_tsv`](./operators/write_tsv.md) | Writes events as TSV | `write_tsv`
+[`write_tql`](./operators/write_tql.md) | Writes events as TQL objects | `write_tql`
 [`write_xsv`](./operators/write_xsv.md) | Writes events as XSV | `write_xsv`
 [`write_yaml`](./operators/write_yaml.md) | Writes events as YAML | `write_yaml`
 [`write_zeek_tsv`](./operators/write_zeek_tsv.md) | Writes events as Zeek TSV | `write_zeek_tsv`
