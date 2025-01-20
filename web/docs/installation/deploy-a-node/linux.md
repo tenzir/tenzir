@@ -94,10 +94,12 @@ curl -O https://storage.googleapis.com/tenzir-dist-public/packages/main/tarball/
 
 ## Start a node manually
 
-The installer script uses the package manager of your Linux distribution to install the Tenzir package. This typically also creates a systemd unit and starts the node automatically.
+The installer script uses the package manager of your Linux distribution to
+install the Tenzir package. This typically also creates a systemd unit and
+starts the node automatically.
 
-For testing, development, our troubleshooting, run `tenzir-node` executable to
-start a node manually:
+For testing, development, our troubleshooting, run the `tenzir-node` executable
+to start a node manually:
 
 ```bash
 tenzir-node
@@ -119,7 +121,7 @@ Visit https://app.tenzir.com to get started.
 
 This will spawn a blocking process that listens by default for node-to-node
 connections on the TCP endpoint `127.0.0.1:5158`. Select a different endpoint
-via the `tenzir.endpoint` option, e.g., bind to an IPv6 address:
+via the `tenzir.endpoint` option, e.g., to bind to an IPv6 address:
 
 ```bash
 tenzir-node --endpoint=[::1]:42000
@@ -137,4 +139,4 @@ There exist two ways stop a server:
 2. Send the process a SIGINT or SIGTERM signal, e.g., via
    `pkill -2 tenzir-node`.
 
-Sending the process a SIGTERM is the same as hitting CTRL+C.
+Hitting CTRL+C is equivalent to manually sending a SIGTERM signal.
