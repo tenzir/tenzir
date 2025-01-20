@@ -4,6 +4,7 @@ from pathlib import Path
 import argparse
 import dataclasses
 import os
+import shutil
 import subprocess
 import sys
 from pprint import pprint
@@ -12,7 +13,8 @@ import difflib
 import typing
 import re
 
-BINARY = "tenzir"
+# TODO: This needs a better way to discover tenzir, if its not in the path
+BINARY = shutil.which("tenzir") or "../../build/debug/bin/tenzir"
 ROOT = Path(os.path.dirname(__file__ or ".")).resolve()
 CHECKMARK = "\033[92;1m✓\033[0m"
 CROSS = "\033[31m✘\033[0m"
@@ -20,6 +22,7 @@ INFO = "\033[94;1mi\033[0m"
 TIMEOUT = 10
 
 stdout_lock = threading.RLock()
+
 
 
 @dataclasses.dataclass
@@ -71,7 +74,7 @@ def last_and(gen):
     yield (True, previous)
 
 
-def run_test(
+def run_simple_test(
     test: Path, *, update: bool, args: typing.Sequence[str] = (), ext: str
 ) -> bool:
     try:
@@ -136,24 +139,46 @@ def run_test(
     success(test)
     return True
 
+class Fixture :
+    def __init__(self, path_prefix:str ) :
+        self.path_prefix = path_prefix
 
-def run_ast_test(test: Path, *, update: bool) -> bool:
-    return run_test(test, update=update, args=("--dump-ast",), ext="txt")
+    def collect_tests( self, test:Path ) :
+        rel = test.relative_to(ROOT)
+        todo = set()
+        if rel.parts[0] != self.path_prefix :
+            raise ValueError(f"test path `{test}` should`not be collected via fixture `{self.path_prefix}`")
+        if test.suffix == ".tql" :
+            todo.add((self,test))
+            return todo
+        for tql in test.glob("**/*.tql"):
+            todo.add((self,tql))
+        return todo
+
+    def purge(self) :
+        purge_base = ROOT/self.path_prefix
+        print(f"purging `{purge_base}`")
+        for p in purge_base.rglob("*") :
+            if p.is_dir() :
+                continue
+            if p.suffix == ".tql" :
+                continue
+            p.unlink()
+
+    def run( self, test_name: str) :
+        raise NotImplementedError
+
+class AST_Fixture(Fixture):
+    def run( self, test:str, update:bool) :
+        return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt")
+
+class Exec_Fixture(Fixture) :
+    def run( self, test:str, update:bool) :
+        return run_simple_test(test, update=update, ext="json")
 
 
-def run_exec_test(test: Path, *, update: bool) -> bool:
-    return run_test(test, update=update, ext="json")
-
-
-def run(*, update: bool) -> Summary:
-    summary = Summary()
-    ast = ROOT / "ast"
-    tests = list(ast.glob("*.tql"))
-    for test in tests:
-        summary.total += 1
-        if not run_ast_test(test, update=update):
-            summary.failed += 1
-    return summary
+fixtures = { "ast": AST_Fixture("ast"),
+            "exec": Exec_Fixture("exec") }
 
 
 class Worker:
@@ -182,14 +207,7 @@ class Worker:
                     item = self._queue.pop()
                 except IndexError:
                     break
-                category = item.relative_to(ROOT).parts[0]
-                if category == "ast":
-                    success = run_ast_test(item, update=self._update)
-                elif category == "exec":
-                    success = run_exec_test(item, update=self._update)
-                else:
-                    print(f"unknown category {category}")
-                    success = False
+                success = item[0].run(item[1],self._update)
                 self._result.total += 1
                 if not success:
                     self._result.failed += 1
@@ -203,35 +221,32 @@ def main() -> None:
     parser.add_argument("tests", nargs="*", type=Path, default=[ROOT])
     parser.add_argument("-u", "--update", action="store_true")
     parser.add_argument("-p", "--purge", action="store_true")
+    parser.add_argument("-n", "--parallel", type=int, default=16)
     args = parser.parse_args()
     #
     if args.purge:
-        for p in ROOT.rglob("*/*"):
-            if p.is_dir():
-                continue
-            if p.suffix == ".tql":
-                continue
-            p.unlink()
-        sys.exit()
+        for name,fixture in fixtures.items() :
+            fixture.purge()
+        return
 
     # TODO Make sure that all tests are located in the `tests` directory.
     tests = [test.resolve() for test in args.tests]
     todo = set()
     for test in tests:
         if test == ROOT:
-            for tql in test.glob("**/*.tql"):
-                todo.add(tql)
+            for name,fixture in fixtures.items() :
+                todo.update( fixture.collect_tests(ROOT/name) )
             continue
-        if ROOT not in test.parents:
-            sys.exit(f"error: {test} is not in {ROOT}")
-        # category =
-        if test.suffix == ".tql":
-            todo.add(test)
-        else:
-            for tql in test.glob("**/*.tql"):
-                todo.add(tql)
+        found = False
+        for name, fixture in fixtures :
+            if test.parts[0] == name :
+                todo.update( fixture.collect_tests(test) )
+                found = True
+        if not found :
+            print(f"unknown category fixture")
+
     queue = list(todo)
-    queue.sort()
+    queue.sort(key= lambda tup: tup[1])
 
     # TODO
     os.environ["TENZIR_TQL2"] = "true"
@@ -242,7 +257,7 @@ def main() -> None:
         sys.exit(f"could not find `{BINARY}` executable")
     print(f"{INFO} running {version}")
 
-    workers = [Worker(queue, update=args.update) for _ in range(16)]
+    workers = [Worker(queue, update=args.update) for _ in range(args.parallel)]
     summary = Summary()
     for worker in workers:
         worker.start()
