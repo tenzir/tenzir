@@ -38,7 +38,7 @@ to_asl $s3_uri,
 For more information, look at the [Integrations](/next/integrations/amazon/security-lake)
 page in our documentation.
 
-### Output Changes
+## Output Changes
 
 With this version, we made some changes to the default output format
 of the Tenzir Node in order to make it easier for downstream tooling
@@ -109,13 +109,13 @@ Durations that are printed as minutes now use `min` instead of `m`.
 Additionally, the fractional part of durations is now printed with full
 precision instead of being rounded to two digits.
 
-### TQL Updates
+## TQL Updates
 
 We are continously working on expanding the feature set available for writing
 pipelines. This release adds two new functions, one new operator, and adds
 more options to the JSON output.
 
-#### Functions
+### Functions
 
 You can use the new `string.match_regex(regex:string)` function to check whether
 a string partially matches a regular expression.
@@ -123,7 +123,7 @@ a string partially matches a regular expression.
 The new `merge` function combines two records. `merge(foo, bar)` is a shorthand
 for `{...foo, ...bar}`.
 
-#### Operators
+### Operators
 
 You can use the new `write_tql` operator to print events as TQL expressions.
 
