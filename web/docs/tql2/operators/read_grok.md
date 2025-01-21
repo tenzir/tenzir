@@ -1,7 +1,7 @@
 # read_grok
 
 ```tql
-read_grok pattern:string, [pattern_definitions=string, indexed_captures=bool,
+read_grok pattern:string, [pattern_definitions=record|string, indexed_captures=bool,
           include_unnamed=bool, schema=string, selector=string,
           schema_only=bool, merge=bool, raw=bool, unflatten=string]
 ```
@@ -29,11 +29,26 @@ which is effectively Perl-compatible.
 
 The `grok` pattern used for matching. Must match the input in its entirety.
 
-### `pattern_definitions = string (optional)`
+### `pattern_definitions = record|string (optional)`
 
-A user-defined newline-delimited list of patterns, where a line starts
-with the pattern name, followed by a space, and the `grok`-pattern for that
-pattern. For example, the built-in pattern `INT` is defined as follows:
+New pattern definitions to use. This may be a record of the form
+
+```tql
+{
+  pattern_name: "pattern"
+}
+```
+
+For example, the built-in pattern `INT` would be defined as
+
+```tql
+{ INT: "(?:[+-]?(?:[0-9]+))" }
+```
+
+Alternatively, this may be a user-defined newline-delimited list of patterns,
+where a line starts with the pattern name, followed by a space, and the
+`grok`-pattern for that pattern. For example, the built-in pattern `INT` is
+defined as follows:
 
 ```
 INT (?:[+-]?(?:[0-9]+))
@@ -145,9 +160,9 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ```tql
 // Input: 55.3.244.1 GET /index.html 15824 0.043
-read_grok "%{IP:client} %{WORD} %{URIPATHPARAM:req} %{NUMBER:bytes} %{NUMBER:dur}"
+let $pattern = "%{IP:client} %{WORD} %{URIPATHPARAM:req} %{NUMBER:bytes} %{NUMBER:dur}"
+read_grok $pattern
 ```
-
 ```tql
 {
   client: 55.3.244.1,

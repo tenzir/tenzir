@@ -22,9 +22,10 @@ values instead of dropping the excess values.
 
 Treat lines beginning with "#" as comments.
 
-### `header = string (optional)`
+### `header = list<string>|string (optional)`
 
-The `string` to be used as a `header` for the parsed values.
+A list of strings to be used as the column names, or a `string` to be parsed
+as the `header` for the parsed values.
 If unspecified, the first line of the input is used as the header.
 
 ### `list_sep = string (optional)`
