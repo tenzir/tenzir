@@ -15,6 +15,7 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/tql2/tokens.hpp"
 #include "tenzir/view.hpp"
 
 #include <fmt/format.h>
@@ -81,14 +82,23 @@ struct json_printer : printer_base<json_printer> {
           = std::chrono::duration_cast<std::chrono::duration<double>>(x).count();
         return (*this)(seconds);
       }
-      out_
-        = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
+      if (options_.tql) {
+        out_
+          = fmt::format_to(out_, options_.style.duration, "{}", to_string(x));
+      } else {
+        out_
+          = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
+      }
       return true;
     }
 
     auto operator()(view<time> x) noexcept -> bool {
-      out_
-        = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
+      if (options_.tql) {
+        out_ = fmt::format_to(out_, options_.style.time, "{}", to_string(x));
+      } else {
+        out_
+          = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
+      }
       return true;
     }
 
@@ -99,7 +109,15 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view<blob> x) noexcept -> bool {
-      return (*this)(detail::base64::encode(x));
+      if (options_.tql) {
+        out_ = fmt::format_to(
+          out_, options_.style.blob, "b{}",
+          detail::json_escape(
+            {reinterpret_cast<const char*>(x.data()), x.size()}));
+        return true;
+      } else {
+        return (*this)(detail::base64::encode(x));
+      }
     }
 
     auto operator()(view<pattern> x) noexcept -> bool {
@@ -107,14 +125,22 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view<ip> x) noexcept -> bool {
-      out_
-        = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
+      if (options_.tql) {
+        out_ = fmt::format_to(out_, options_.style.ip, "{}", to_string(x));
+      } else {
+        out_
+          = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
+      }
       return true;
     }
 
     auto operator()(view<subnet> x) noexcept -> bool {
-      out_
-        = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
+      if (options_.tql) {
+        out_ = fmt::format_to(out_, options_.style.subnet, "{}", to_string(x));
+      } else {
+        out_
+          = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
+      }
       return true;
     }
 
@@ -130,8 +156,9 @@ struct json_printer : printer_base<json_printer> {
       bool printed_once = false;
       out_ = fmt::format_to(out_, options_.style.array, "[");
       for (const auto& element : x) {
-        if (should_skip(element))
+        if (should_skip(element, true)) {
           continue;
+        }
         if (!printed_once) {
           indent();
           newline();
@@ -144,6 +171,7 @@ struct json_printer : printer_base<json_printer> {
           return false;
       }
       if (printed_once) {
+        trailing_comma();
         dedent();
         newline();
       }
@@ -155,8 +183,9 @@ struct json_printer : printer_base<json_printer> {
       bool printed_once = false;
       out_ = fmt::format_to(out_, options_.style.array, "[");
       for (const auto& element : x) {
-        if (should_skip(element.second))
+        if (should_skip(element.second, false)) {
           continue;
+        }
         if (!printed_once) {
           indent();
           newline();
@@ -181,6 +210,7 @@ struct json_printer : printer_base<json_printer> {
         out_ = fmt::format_to(out_, options_.style.object, "}}");
       }
       if (printed_once) {
+        trailing_comma();
         dedent();
         newline();
       }
@@ -188,68 +218,60 @@ struct json_printer : printer_base<json_printer> {
       return true;
     }
 
-    auto operator()(const view<record>& x, std::string_view prefix
-                                           = {}) noexcept -> bool {
+    auto operator()(const view<record>& x) noexcept -> bool {
       bool printed_once = false;
-      if (!options_.flattened || prefix.empty())
-        out_ = fmt::format_to(out_, options_.style.object, "{{");
-      for (const auto& element : x) {
-        if (should_skip(element.second))
+      out_ = fmt::format_to(out_, options_.style.object, "{{");
+      for (const auto& [key, value] : x) {
+        if (should_skip(value, false)) {
           continue;
+        }
         if (!printed_once) {
-          if (!options_.flattened) {
-            indent();
-            newline();
-          }
+          indent();
+          newline();
           printed_once = true;
         } else {
           separator();
           newline();
         }
-        if (options_.flattened) {
-          const auto name = prefix.empty()
-                              ? fmt::format(options_.style.field, "{}",
-                                            std::string{element.first})
-                              : fmt::format(options_.style.field, "{}.{}",
-                                            prefix, element.first);
-          if (const auto* r = try_as<view<record>>(&element.second)) {
-            if (!(*this)(*r, name))
-              return false;
+        if (options_.tql) {
+          auto x = tokenize_permissive(key);
+          if (x.size() == 1 and x.front().kind == token_kind::identifier) {
+            out_ = fmt::format_to(out_, options_.style.field, "{}", key);
           } else {
-            if (!(*this)(name))
-              return false;
-            out_ = fmt::format_to(out_, options_.style.object, ": ");
-            if (!match(element.second, *this)) {
-              return false;
-            }
+            out_ = fmt::format_to(out_, options_.style.string, "{}",
+                                  detail::json_escape(key));
           }
         } else {
           out_ = fmt::format_to(out_, options_.style.field, "{}",
-                                detail::json_escape(element.first));
-          out_ = fmt::format_to(out_, options_.style.object, ": ");
-          if (!match(element.second, *this))
-            return false;
+                                detail::json_escape(key));
+        }
+        out_ = fmt::format_to(out_, options_.style.colon, ": ");
+        if (!match(value, *this)) {
+          return false;
         }
       }
-      if (printed_once && !options_.flattened) {
+      if (printed_once) {
+        trailing_comma();
         dedent();
         newline();
       }
-      if (!options_.flattened || prefix.empty())
-        out_ = fmt::format_to(out_, options_.style.object, "}}");
+      out_ = fmt::format_to(out_, options_.style.object, "}}");
       return true;
     }
 
   private:
-    auto should_skip(view<data> x) noexcept -> bool {
-      if (options_.omit_nulls && is<caf::none_t>(x)) {
+    auto should_skip(view<data> x, bool in_list) noexcept -> bool {
+      if (in_list and options_.omit_nulls_in_lists && is<caf::none_t>(x)) {
+        return true;
+      }
+      if (options_.omit_null_fields && is<caf::none_t>(x)) {
         return true;
       }
       if (options_.omit_empty_lists && is<view<list>>(x)) {
         const auto& ys = as<view<list>>(x);
         return std::all_of(ys.begin(), ys.end(),
                            [this](const view<data>& y) noexcept {
-                             return should_skip(y);
+                             return should_skip(y, true);
                            });
       }
       if (options_.omit_empty_maps && is<view<map>>(x)) {
@@ -257,7 +279,7 @@ struct json_printer : printer_base<json_printer> {
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<map>::view_type::value_type& y) noexcept {
-            return should_skip(y.second);
+            return should_skip(y.second, false);
           });
       }
       if (options_.omit_empty_records && is<view<record>>(x)) {
@@ -265,7 +287,7 @@ struct json_printer : printer_base<json_printer> {
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<record>::view_type::value_type& y) noexcept {
-            return should_skip(y.second);
+            return should_skip(y.second, false);
           });
       }
       return false;
@@ -276,9 +298,21 @@ struct json_printer : printer_base<json_printer> {
     }
 
     void dedent() noexcept {
-      TENZIR_ASSERT_EXPENSIVE(indentation_ >= options_.indentation,
-                              "imbalanced calls between indent() and dedent()");
+      TENZIR_ASSERT(indentation_ >= options_.indentation,
+                    "imbalanced calls between indent() and dedent()");
       indentation_ -= options_.indentation;
+    }
+
+    auto trailing_comma() -> void {
+      auto print = false;
+      if (options_.trailing_commas) {
+        print = *options_.trailing_commas;
+      } else {
+        print = options_.tql and not options_.oneline;
+      }
+      if (print) {
+        out_ = fmt::format_to(out_, options_.style.comma, ",");
+      }
     }
 
     void separator() noexcept {

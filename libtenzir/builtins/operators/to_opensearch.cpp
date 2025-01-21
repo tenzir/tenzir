@@ -407,7 +407,7 @@ public:
       {
         .style = no_style(),
         .oneline = true,
-        .omit_nulls = not args_.include_nulls,
+        .omit_null_fields = not args_.include_nulls,
         .omit_empty_records = false,
         .omit_empty_lists = false,
       },

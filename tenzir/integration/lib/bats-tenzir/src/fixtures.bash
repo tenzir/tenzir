@@ -21,7 +21,7 @@ export_default_node_config() {
   export TENZIR_EXPORT__ZEEK__DISABLE_TIMESTAMP_TAGS=true
   export TENZIR_AUTOMATIC_REBUILD=0
   export TENZIR_EXEC__DUMP_DIAGNOSTICS=true
-  export TENZIR_EXEC__IMPLICIT_EVENTS_SINK="write json --compact-output | save -"
+  export TENZIR_EXEC__IMPLICIT_EVENTS_SINK='write_ndjson | save_file "-"'
 }
 
 bats_tenzir_initialize() {

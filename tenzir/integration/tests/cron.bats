@@ -8,7 +8,7 @@ setup() {
   setup_node_with_default_config
 
   # We don't care about the actual events, just the number of them.
-  export TENZIR_EXEC__IMPLICIT_EVENTS_SINK="enumerate index | put index | write json --compact-output | save -"
+  export TENZIR_EXEC__IMPLICIT_EVENTS_SINK='legacy "enumerate index | put index | write json --compact-output | save -"'
   export TENZIR_TQL2=true
 }
 

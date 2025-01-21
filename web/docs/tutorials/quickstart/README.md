@@ -41,7 +41,7 @@ The easiest way to get started with Tenzir is using our cloud demo setup:
 ## Up next
 
 Now that you got a first impression of Tenzir, [onboard your own
-node](installation/deploy-a-node.md) and dive deeper by
+node](installation/deploy-a-node/README.md) and dive deeper by
 
 - understanding [how Tenzir works](how-tenzir-works/README.md)
   other systems,

@@ -58,6 +58,7 @@ public:
             TENZIR_UNREACHABLE();
           });
       } else {
+        failure_ = value.error();
         map_[let->name.name] = std::nullopt;
       }
       it = x.body.erase(it);

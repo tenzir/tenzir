@@ -1,5 +1,5 @@
 {
-  "timestamp": "2011-08-12T12:52:57.716360",
+  "timestamp": "2011-08-12T12:52:57.716360Z",
   "flow_id": 1031464864740687,
   "pcap_cnt": 83,
   "vlan": [],
@@ -37,7 +37,7 @@
   "flow.pkts_toclient": 35,
   "flow.bytes_toserver": 2302,
   "flow.bytes_toclient": 4520,
-  "flow.start": "2011-08-12T12:47:24.357711",
+  "flow.start": "2011-08-12T12:47:24.357711Z",
   "flow.end": null,
   "flow.age": null,
   "flow.state": null,
@@ -73,7 +73,7 @@
   "packet_info.linktype": 1
 }
 {
-  "timestamp": "2011-08-12T12:55:22.154618",
+  "timestamp": "2011-08-12T12:55:22.154618Z",
   "flow_id": 2247896271051770,
   "pcap_cnt": 775,
   "vlan": [],
@@ -150,7 +150,7 @@
   "dns.answers.srv.name": []
 }
 {
-  "timestamp": "2011-08-12T14:59:22.181050",
+  "timestamp": "2011-08-12T14:59:22.181050Z",
   "flow_id": 472067367468746,
   "pcap_cnt": 25767,
   "vlan": [],
@@ -196,7 +196,7 @@
   "http.length": 301
 }
 {
-  "timestamp": "2011-08-14T05:38:53.914038",
+  "timestamp": "2011-08-14T05:38:53.914038Z",
   "flow_id": 929669869939483,
   "pcap_cnt": null,
   "vlan": [],
@@ -222,8 +222,8 @@
   "flow.pkts_toclient": 0,
   "flow.bytes_toserver": 486,
   "flow.bytes_toclient": 0,
-  "flow.start": "2011-08-12T12:53:47.928539",
-  "flow.end": "2011-08-12T12:53:47.928552",
+  "flow.start": "2011-08-12T12:53:47.928539Z",
+  "flow.end": "2011-08-12T12:53:47.928552Z",
   "flow.age": 0,
   "flow.state": "new",
   "flow.reason": "timeout",
@@ -253,7 +253,7 @@
   "flow.emergency": null
 }
 {
-  "timestamp": "2011-08-12T13:00:36.378914",
+  "timestamp": "2011-08-12T13:00:36.378914Z",
   "flow_id": 269421754201300,
   "pcap_cnt": 22569,
   "vlan": [],
@@ -289,7 +289,7 @@
   "tx_id": 0
 }
 {
-  "timestamp": "2011-08-14T05:38:55.549713",
+  "timestamp": "2011-08-14T05:38:55.549713Z",
   "flow_id": 929669869939483,
   "pcap_cnt": null,
   "vlan": [],
@@ -313,12 +313,12 @@
   "community_id": null,
   "netflow.pkts": 2,
   "netflow.bytes": 486,
-  "netflow.start": "2011-08-12T12:53:47.928539",
-  "netflow.end": "2011-08-12T12:53:47.928552",
+  "netflow.start": "2011-08-12T12:53:47.928539Z",
+  "netflow.end": "2011-08-12T12:53:47.928552Z",
   "netflow.age": 0
 }
 {
-  "timestamp": "2019-05-02T13:56:53.843674",
+  "timestamp": "2019-05-02T13:56:53.843674Z",
   "event_type": "stats",
   "stats.uptime": 3,
   "stats.decoder.pkts": 495056,
@@ -2209,7 +2209,7 @@
   "stats.threads.Global.flow.memuse_delta": 20822744
 }
 {
-  "timestamp": "2018-03-02T15:20:26.274662",
+  "timestamp": "2018-03-02T15:20:26.274662Z",
   "flow_id": 377203059543418,
   "pcap_cnt": 78030141,
   "vlan": [],
