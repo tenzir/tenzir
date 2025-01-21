@@ -1,5 +1,5 @@
 ---
-title: "Tenzir Node v4.26: Amazon Security Lake Integration"
+title: "Tenzir Node v4.26: ASL Integration"
 slug: tenzir-node-v4.26
 authors: [lava]
 date: 2025-01-21
@@ -7,11 +7,9 @@ tags: [release, node]
 comments: true
 ---
 
-# Tenzir Node v4.26: Amazon Security Lake Integration
-
 Tenzir Node v4.26 continues to leverage our native Parquet and OCSF
 capabilities by adding a new operator to write data directly to
-Amazon Security Lake.
+Amazon Security Lake (ASL).
 
 ![Tenzir Node v4.26](tenzir-node-v4.26.excalidraw.svg)
 
@@ -35,7 +33,7 @@ to_asl $s3_uri,
   accountId="123456789012"
 ```
 
-For more information, look at the [Integrations](/next/integrations/amazon/security-lake)
+For more information, take a look at the [Integrations](/next/integrations/amazon/security-lake)
 page in our documentation.
 
 ## Output Changes
@@ -51,15 +49,15 @@ This may break automations that parse the JSON output of a Tenzir Pipeline.
 
 ### TQL Output
 
-By default, the node now outputs pipeline results as TQL rather than JSON.
+By default, the node now outputs pipeline results as native TQL data
+rather than JSON.
 
 TQL is a superset of JSON, but it includes support for native IP, subnet,
 timestamp and duration types which were formerly rendered as strings.
-
 Additionally, TQL also supports and outputs trailing commas by default.
 
-To restore the previous behavior, use the `write_json` sink, or set
-a default sink to revert it globally:
+To restore the previous behavior, append the [`write_json`](/next/tql2/operators/write_json)
+operator to your pipeline or set a default sink to restore it globally:
 
 ```env
 TENZIR_EXEC__IMPLICIT_EVENTS_SINK='write_json | save_file "-"'
@@ -109,25 +107,27 @@ Durations that are printed as minutes now use `min` instead of `m`.
 Additionally, the fractional part of durations is now printed with full
 precision instead of being rounded to two digits.
 
-## TQL Updates
+## TQL Features
 
 We are continously working on expanding the feature set available for writing
-pipelines. This release adds two new functions, one new operator, and adds
-more options to the JSON output.
+pipelines. This release adds two new functions, one new operator, and
+additional options to the JSON output.
 
 ### Functions
 
-You can use the new `string.match_regex(regex:string)` function to check whether
-a string partially matches a regular expression.
+The new [`string.match_regex(regex:string)`](/next/tql2/functions/match_regex)
+function checks whether a string partially matches a regular expression.
 
-The new `merge` function combines two records. `merge(foo, bar)` is a shorthand
-for `{...foo, ...bar}`.
+The new [`merge`](/next/tql2/functions/merge) function combines two records. The
+expression `merge(foo, bar)` is a shorthand for `{...foo, ...bar}`.
 
 ### Operators
 
-You can use the new `write_tql` operator to print events as TQL expressions.
+You can use the new [`write_tql`](/next/tql2/operators/write_tql) operator
+prints events as TQL expressions.
 
-We added `strip` options to `write_json` and `write_ndjson`, allowing you to
+We added `strip` options to [`write_json`](/next/tql2/operators/write_json)
+and [`write_ndjson`]((/next/tql2/operators/write_ndjson)), allowing you to
 strip null fields as well as empty records or lists.
 
 ## Let's Connect!
