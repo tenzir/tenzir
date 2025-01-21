@@ -5,7 +5,7 @@ tenzir:
   bare-mode: true
   exec:
     dump-diagnostics: true
-    implicit-events-sink: write json --compact-output | save -
+    implicit-events-sink: write_ndjson | save_file "-"
   export:
     zeek:
       disable-timestamp-tags: true

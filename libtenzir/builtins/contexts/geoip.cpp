@@ -162,9 +162,10 @@ public:
         break;
       }
       case MMDB_DATA_TYPE_BYTES: {
-        auto bytes = blob{
-          reinterpret_cast<const std::byte*>(entry_data_list->entry_data.bytes),
-          entry_data_list->entry_data.data_size};
+        const auto* ptr = reinterpret_cast<const std::byte*>(
+          entry_data_list->entry_data.bytes);
+        auto bytes
+          = blob{ptr, std::next(ptr, entry_data_list->entry_data.data_size)};
         l.emplace_back(std::move(bytes));
         entry_data_list = entry_data_list->next;
         break;
@@ -265,9 +266,10 @@ public:
         break;
       }
       case MMDB_DATA_TYPE_BYTES: {
-        auto bytes = blob{
-          reinterpret_cast<const std::byte*>(entry_data_list->entry_data.bytes),
-          entry_data_list->entry_data.data_size};
+        const auto* ptr = reinterpret_cast<const std::byte*>(
+          entry_data_list->entry_data.bytes);
+        auto bytes
+          = blob{ptr, std::next(ptr, entry_data_list->entry_data.data_size)};
         r[key] = std::move(bytes);
         entry_data_list = entry_data_list->next;
         break;

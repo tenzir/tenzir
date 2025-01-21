@@ -67,6 +67,14 @@ Function | Description | Example
 [`value_counts`](functions/value_counts.md) | Returns a list of values with their frequency | `value_counts([1,2,2,3])`
 [`variance`](functions/variance.md) | Computes the variance of all values | `variance([1,2,3])`
 
+## Record
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`has`](functions/has.md) | Checks whether a record has a field | `record.has("field")`
+[`merge`](functions/merge.md) | Merges two records | `merge(foo, bar)`
+[`sort`](functions/sort.md) | Sorts a record by field names. | `xs.sort()`
+
 ## List
 
 Function | Description | Example
@@ -74,9 +82,18 @@ Function | Description | Example
 [`append`](functions/append.md) | Inserts an element at the back of a list | `xs.append(y)`
 [`prepend`](functions/prepend.md) | Inserts an element at the front of a list | `xs.prepend(y)`
 [`concatenate`](functions/concatenate.md) | Merges two lists | `concatenate(xs, ys)`
+[`length`](functions/length.md) | Retrieves the length of a list | `[1,2,3].length()`
 [`map`](functions/map.md) | Maps each list element to an expression | `xs.map(x, x + 3)`
+[`sort`](functions/sort.md) | Sorts a list by its values. | `xs.sort()`
 [`where`](functions/where.md) | Filters list elements based on a predicate | `xs.where(x, x > 5)`
 [`zip`](functions/zip.md) | Combines two lists into a list of pairs | `zip(xs, ys)`
+
+## Subnet
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`network`](functions/network.md) | Retrieves the network address of a subnet | `10.0.0.0/8.network()`
+[`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
 
 ## String
 
@@ -95,6 +112,7 @@ Function | Description | Example
 [`is_printable`](functions/is_printable.md) | Checks if a string contains only printable characters | `"hello".is_printable()`
 [`is_title`](functions/is_title.md) | Checks if a string follows title case | `"Hello World".is_title()`
 [`is_upper`](functions/is_upper.md) | Checks if a string is in uppercase | `"HELLO".is_upper()`
+[`match_regex`](functions/match_regex.md) | Checks if a string partially matches a regular expression | `"Hi".match_regex("[Hh]i")`
 
 ### Transformation
 
@@ -209,9 +227,6 @@ function | description | example
 
 Function | Description | Example
 :--------|:-------------|:-------
-[`has`](functions/has.md) | Checks whether a record has a field | `record.has("field")`
-[`length`](functions/length.md) | Retrieves the length of a list | `[1,2,3].length()`
-[`network`](functions/network.md) | Retrieves the network address of a subnet | `10.0.0.0/8.network()`
 [`type_id`](functions/type_id.md) | Retrieves the type of an expression | `type_id(1 + 3.2)`
 
 ### Conversion

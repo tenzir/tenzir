@@ -1,6 +1,7 @@
 [
   tql2.write_json {
-    compact_output: 0..0
+    compact_output: 0..0,
+    tql: false
   },
   tql2.save_http {
     url: "https://example.org/api/json",

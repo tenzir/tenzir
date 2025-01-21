@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tenzir"
-version = "4.24.1"
+version = "4.25.1"
 description = "A security telemetry engine for detection and response"
 authors = ["Tenzir <engineering@tenzir.com>"]
 maintainers = ["Tenzir <engineering@tenzir.com>"]
@@ -24,7 +24,7 @@ repository = "https://github.com/tenzir/tenzir"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-pyarrow = ">=11,<19"
+pyarrow = ">=11,<20"
 dynaconf = "^3.2"
 
 aiohttp = { version = "^3.8", optional = true }
@@ -34,7 +34,7 @@ pandas = { version = "^2.1.3", optional = true }
 
 [tool.poetry.dev-dependencies]
 pytest = "^8.3"
-pytest-asyncio = "^0.25.1"
+pytest-asyncio = "^0.25.2"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto" # required for async fixtures

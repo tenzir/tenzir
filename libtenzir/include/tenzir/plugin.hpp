@@ -674,7 +674,8 @@ public:
   /// Create a metrics collector.
   /// Plugins may return an error if the collector is not supported on the
   /// platform the node is currently running on.
-  [[nodiscard]] virtual auto make_collector() const -> caf::expected<collector>
+  [[nodiscard]] virtual auto make_collector(caf::actor_system& system) const
+    -> caf::expected<collector>
     = 0;
 
   /// Returns the frequency for collecting the metrics, expressed as the

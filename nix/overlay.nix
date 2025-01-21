@@ -18,63 +18,11 @@ in {
       })
     ];
   });
-  cmakeWithPatch = final.cmake.overrideAttrs (orig: {
-    patches = (orig.patches or []) ++ [
-      (prev.buildPackages.fetchpatch {
-        name = "cmake-fix-findcurl-link-libraries.patch";
-        url = "https://gitlab.kitware.com/cmake/cmake/-/commit/76c2d7781eb37acd6731bcd8ea9a25ad03b01021.patch";
-        hash = "sha256-ZIvRkfmdkhNCf2qu0t6HgMPCindDIbMkMzI2WtI20Ds=";
-      })
+  aws-sdk-cpp-tenzir = (final.aws-sdk-cpp.overrideAttrs (previousAttrs: {
+    cmakeFlags = previousAttrs.cmakeFlags ++ lib.optionals isDarwin [
+      "-DENABLE_TESTING=OFF"
     ];
-  });
-  crc32c = overrideAttrsIf (isDarwin && isStatic) prev.crc32c (orig: {
-    env = orig.env // {
-      NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
-    };
-  });
-  google-cloud-cpp =
-    let
-      google-cloud-cpp' = prev.google-cloud-cpp.overrideAttrs (orig: {
-        installCheckPhase = let
-          disabledTests = lib.optionalString stdenv.hostPlatform.isDarwin ''
-            common_internal_async_connection_ready_test
-            bigtable_async_read_stream_test
-            bigtable_metadata_update_policy_test
-            bigtable_bigtable_benchmark_test
-            bigtable_embedded_server_test
-          '';
-        in ''
-          runHook preInstallCheck
-
-          # Disable any integration tests, which need to contact the internet.
-          ctest \
-            --label-exclude integration-test \
-            --exclude-from-file <(echo '${disabledTests}')
-
-          runHook postInstallCheck
-        '';
-
-        meta = orig.meta // {
-          platforms = lib.platforms.linux ++ lib.platforms.darwin;
-        };
-      });
-    in
-    if !isStatic
-    then google-cloud-cpp'
-    else
-      google-cloud-cpp'.overrideAttrs (orig: {
-        propagatedNativeBuildInputs = (orig.propagatedNativeBuildInputs or [])
-        ++ [prev.pkgsBuildBuild.pkg-config];
-        patches =
-          (orig.patches or [])
-          ++ [
-            ./google-cloud-cpp/0001-Use-pkg-config-to-find-CURL.patch
-          ];
-        cmakeFlags = (orig.cmakeFlags or []) ++ [
-          "-DBUILD_TESTING=OFF"
-        ];
-      });
-  aws-sdk-cpp-tenzir = overrideAttrsIf isDarwin (overrideAttrsIf isStatic (final.aws-sdk-cpp.override {
+  })).override {
     apis = [
       # arrow-cpp apis; must be kept in sync with nixpkgs.
       "cognito-identity"
@@ -86,27 +34,34 @@ in {
       # Additional apis used by tenzir.
       "sqs"
     ];
-  })
-  (orig: {
-    patches = (orig.patches or []) ++ [
-      ./aws-sdk-cpp-findcurl.patch
-    ];
-    cmakeFlags = (orig.cmakeFlags or []) ++ [
-    ];
-  })
-  )
-    (orig: {
-      doCheck = false;
-      cmakeFlags = orig.cmakeFlags ++ [
-        "-DENABLE_TESTING=OFF"
-      ];
-    });
-  azure-sdk-for-cpp = prev.callPackage ./azure-sdk-for-cpp { };
-  glog = overrideAttrsIf (isDarwin && isStatic) prev.glog (orig: {
-    cmakeFlags = orig.cmakeFlags ++ [
-      "-DBUILD_TESTING=OFF"
+  };
+  thrift = if !isStatic then prev.thrift else prev.thrift.overrideAttrs ({
+    nativeBuildInputs = [
+      prev.pkgsBuildBuild.bison
+      prev.pkgsBuildBuild.cmake
+      prev.pkgsBuildBuild.flex
+      prev.pkgsBuildBuild.pkg-config
+      (prev.pkgsBuildBuild.python3.withPackages (ps: [ ps.setuptools ]))
     ];
   });
+  rabbitmq-c = prev.rabbitmq-c.overrideAttrs (orig: {
+    patches = (orig.patches or []) ++ [
+      (prev.fetchpatch2 {
+        name = "rabbitmq-c-fix-include-path.patch";
+        url = "https://github.com/alanxz/rabbitmq-c/commit/819e18271105f95faba99c3b2ae4c791eb16a664.patch";
+        hash = "sha256-/c4y+CvtdyXgfgHExOY8h2q9cJNhTUupsa22tE3a1YI=";
+      })
+    ];
+  });
+  restinio = prev.restinio.overrideAttrs (finalAttrs: orig: {
+    # Reguires networking to bind to ports on darwin, but keeping it off is
+    # safer.
+    doCheck = !isDarwin;
+    cmakeFlags = orig.cmakeFlags ++ [
+      (lib.cmakeBool "RESTINIO_TEST" finalAttrs.doCheck)
+    ];
+  });
+  azure-sdk-for-cpp = prev.callPackage ./azure-sdk-for-cpp { };
   arrow-cpp = let
     arrow-cpp' = prev.arrow-cpp.override {
       aws-sdk-cpp-arrow = final.aws-sdk-cpp-tenzir;
@@ -152,7 +107,6 @@ in {
           google-cloud-cpp = final.google-cloud-cpp.override {
             apis = ["pubsub" "storage"];
           };
-          cmake = final.buildPackages.cmakeWithPatch;
         }
     )
     (orig: {
@@ -161,6 +115,10 @@ in {
         ++ lib.optionals isDarwin [
           (prev.buildPackages.writeScriptBin "libtool" ''
             #!${stdenv.shell}
+            if [ "$1" == "-V" ]; then
+              echo "Apple Inc. version cctools-1010.6"
+              exit 0
+            fi
             exec ${lib.getBin prev.buildPackages.darwin.cctools}/bin/${stdenv.cc.targetPrefix}libtool $@
           '')
         ];
@@ -173,7 +131,10 @@ in {
         ];
       doCheck = false;
       doInstallCheck = false;
-      env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
+      env = {
+        NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.isStatic && stdenv.hostPlatform.isDarwin)
+          "-framework SystemConfiguration";
+      };
     });
   arrow-adbc-cpp = prev.callPackage ./arrow-adbc-cpp { };
   arrow-adbc-go = prev.callPackage ./arrow-adbc-go { };
@@ -190,59 +151,6 @@ in {
             "-DBUILD_TESTS=OFF"
           ];
       });
-  grpc =
-    if !isStatic
-    then prev.grpc
-    else
-      prev.grpc.overrideAttrs (orig: {
-        patches =
-          orig.patches
-          ++ [
-            ./grpc/drop-broken-cross-check.patch
-          ];
-        cmakeFlags = (orig.cmakeFlags or []) ++ [
-        ];
-        env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
-      });
-  http-parser =
-    if !isStatic
-    then prev.http-parser
-    else
-      prev.http-parser.overrideAttrs (_: {
-        postPatch = let
-          cMakeLists = prev.writeTextFile {
-            name = "http-parser-cmake";
-            text = ''
-              cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
-              project(http_parser)
-              include(GNUInstallDirs)
-              add_library(http_parser http_parser.c)
-              target_compile_options(http_parser PRIVATE -Wall -Wextra)
-              target_include_directories(http_parser PUBLIC .)
-              set_target_properties(http_parser PROPERTIES PUBLIC_HEADER http_parser.h)
-              install(
-                TARGETS http_parser
-                ARCHIVE DESTINATION "''${CMAKE_INSTALL_LIBDIR}"
-                LIBRARY DESTINATION "''${CMAKE_INSTALL_LIBDIR}"
-                RUNTIME DESTINATION "''${CMAKE_INSTALL_BINDIR}"
-                PUBLIC_HEADER DESTINATION "''${CMAKE_INSTALL_INCLUDEDIR}")
-            '';
-          };
-        in ''
-          cp ${cMakeLists} CMakeLists.txt
-        '';
-        nativeBuildInputs = [prev.buildPackages.cmake];
-        makeFlags = [];
-        buildFlags = [];
-        doCheck = false;
-      });
-  libbacktrace =
-    if !isStatic
-    then prev.libbacktrace
-    else
-      prev.libbacktrace.overrideAttrs (old: {
-        doCheck = false;
-      });
   rdkafka =
     let
       # The FindZLIB.cmake module from CMake breaks when multiple outputs are
@@ -255,7 +163,7 @@ in {
     in prev.rdkafka.overrideAttrs (orig: {
     nativeBuildInputs = orig.nativeBuildInputs ++ [prev.buildPackages.cmake];
     # The cmake config file doesn't find them if they are not propagated.
-    propagatedBuildInputs = (builtins.filter (x: x.pname == "zlib") orig.buildInputs) ++ [ zlib ];
+    buildInputs = (builtins.filter (x: x.pname != "zlib") orig.buildInputs) ++ [ zlib ];
     cmakeFlags =
       lib.optionals isStatic [
         "-DRDKAFKA_BUILD_STATIC=ON"
@@ -265,7 +173,12 @@ in {
       ++ lib.optionals stdenv.cc.isClang [
         "-DRDKAFKA_BUILD_TESTS=OFF"
       ];
-    env.NIX_LDFLAGS = lib.optionalString (isDarwin && isStatic) "-lc++abi";
+
+    postFixup = lib.optionalString stdenv.hostPlatform.isStatic ''
+      for pc in rdkafka{,++}; do
+        ln -s $out/lib/pkgconfig/$pc{-static,}.pc
+      done
+    '';
   });
   mkStub = name:
     prev.writeShellScriptBin name ''
@@ -274,104 +187,7 @@ in {
   libmaxminddb = overrideAttrsIf isStatic prev.libmaxminddb (orig: {
     nativeBuildInputs = (orig.nativeBuildInputs or []) ++ [prev.buildPackages.cmake];
   });
-  fluent-bit = let
-    fluent-bit'' = prev.fluent-bit.overrideAttrs (orig: {
-      patches = (orig.patches or []) ++ [
-        ./fix-fluent-bit-install.patch
-      ];
-    });
-    fluent-bit' =
-      overrideAttrsIf isDarwin fluent-bit''
-      (orig: {
-        buildInputs = (orig.buildInputs or []) ++ (with prev.darwin.apple_sdk.frameworks; [Foundation IOKit]);
-        # The name "kIOMainPortDefault" has been introduced in a a later SDK
-        # version.
-        cmakeFlags =
-          (orig.cmakeFlags or [])
-          ++ [
-            "-DCMAKE_C_FLAGS=\"-DkIOMainPortDefault=kIOMasterPortDefault\""
-            "-DFLB_LUAJIT=OFF"
-          ];
-        env.NIX_CFLAGS_COMPILE = "-mmacosx-version-min=10.12 -Wno-int-conversion";
-      });
-  in
-    overrideAttrsIf isStatic fluent-bit'
-    (orig: {
-      outputs = ["out"];
-      patches = (orig.patches or []) ++ [
-        ./fluent-bit-devendor.patch
-      ];
-      nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")
-      prev.pkgsBuildBuild.pkg-config];
-      # Neither systemd nor postgresql have a working static build.
-      propagatedBuildInputs =
-        [
-          final.openssl
-          final.libyaml
-        ]
-        ++ lib.optionals isLinux [final.musl-fts];
-      buildInputs = (orig.buildInputs or []) ++ [
-        final.c-ares
-        final.nghttp2
-        final.rdkafka
-      ];
-      cmakeFlags =
-        (orig.cmakeFlags or [])
-        ++ [
-          "-DFLB_BINARY=OFF"
-          "-DFLB_SHARED_LIB=OFF"
-          "-DFLB_LUAJIT=OFF"
-          "-DFLB_OUT_PGSQL=OFF"
-        ];
-      # The build scaffold of fluent-bit doesn't install static libraries, so we
-      # work around it by just copying them from the build directory. The
-      # blacklist is hand-written and prevents the inclusion of duplicates in
-      # the linker command line when building the fluent-bit plugin.
-      # The Findfluent-bit.cmake module then globs all archives into list for
-      # `target_link_libraries` to get a working link.
-      postInstall = let
-        archive-blacklist = [
-          "libbacktrace.a"
-          "libxxhash.a"
-        ];
-      in ''
-        set -x
-        mkdir -p $out/lib
-        find . -type f \( -name "*.a" ${lib.concatMapStrings (x: " ! -name \"${x}\"") archive-blacklist} \) \
-               -exec cp "{}" $out/lib/ \;
-        set +x
-      '';
-    });
-  asio = overrideAttrsIf (isDarwin && isStatic) prev.asio (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  catch2_3 = overrideAttrsIf (isDarwin && isStatic) prev.catch2_3 (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  flatbuffers = overrideAttrsIf (isDarwin && isStatic) prev.flatbuffers (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  fmt = overrideAttrsIf (isDarwin && isStatic) prev.fmt (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  libyaml = overrideAttrsIf (isDarwin && isStatic) prev.libyaml (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  lz4 = overrideAttrsIf (isDarwin && isStatic) prev.lz4 (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  protobuf = overrideAttrsIf (isDarwin && isStatic) prev.protobuf (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  rapidjson = overrideAttrsIf (isDarwin && isStatic) prev.rapidjson (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  spdlog = overrideAttrsIf (isDarwin && isStatic) prev.spdlog (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
-  thrift = overrideAttrsIf (isDarwin && isStatic) prev.thrift (orig: {
-    env.NIX_LDFLAGS = "-lc++abi";
-  });
+  fluent-bit = final.callPackage ./fluent-bit {};
   yara =
     if !isStatic
     then prev.yara
@@ -379,7 +195,15 @@ in {
       prev.yara.overrideAttrs (orig: {
         NIX_CFLAGS_LINK = "-lz";
       });
-  restinio = final.callPackage ./restinio {};
+  llhttp = prev.llhttp.overrideAttrs (orig: {
+    patches = [ 
+      (prev.buildPackages.fetchpatch2 {
+        name = "llhttp-fix-cmake-pkgconfig-paths.patch";
+        url = "https://github.com/nodejs/llhttp/pull/560/commits/9d37252aa424eb9af1d2a83dfa83153bcc0cc27f.patch";
+        hash = "sha256-8KsrJsD9orLjZv8mefCMuu8kftKisQ/57lCPK0eiX30=";
+      })
+    ];
+  });
   pfs = final.callPackage ./pfs {};
   uv = final.callPackage ./uv-binary {};
   caf = let
@@ -401,7 +225,6 @@ in {
         # are parsed in both projects are the same, otherwise the compiler will complain
         # at the optimization stage.
         # https://github.com/NixOS/nixpkgs/issues/130963
-        env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
         preCheck = ''
           export LD_LIBRARY_PATH=$PWD/lib
           export DYLD_LIBRARY_PATH=$PWD/lib
@@ -427,7 +250,6 @@ in {
         dontStrip = true;
         doCheck = false;
       });
-  fast_float = final.callPackage ./fast_float {};
   jemalloc =
     if !isStatic
     then prev.jemalloc
@@ -437,13 +259,6 @@ in {
         configureFlags = old.configureFlags ++ ["--enable-prof" "--enable-stats"];
         doCheck = !isStatic;
       });
-  rabbitmq-c =
-    if !isStatic
-    then prev.rabbitmq-c
-    else
-      prev.rabbitmq-c.override {
-        xmlto = null;
-      };
   bats-tenzir = prev.stdenv.mkDerivation {
     pname = "bats-tenzir";
     version = "0.1";
@@ -510,6 +325,7 @@ in {
         ps.packages
         ps.pipeline-manager
         ps.platform
+        ps.to_asl
         ps.vast
       ] ++ lib.optionals (!isStatic) [
         ps.snowflake

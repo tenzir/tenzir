@@ -80,7 +80,7 @@ medium. The next step is translating bytes into structured data. Parsing gets
 the data onto the "reshaping highway" where it can be manipulated at ease in a
 rich data model.
 
-In our nomenclature, [connectors](/connectors) are responsible for loading and
+In our nomenclature, [connectors](/v4.24/connectors) are responsible for loading and
 saving raw, unstructured bytes; [formats](/formats) translate unstructured bytes
 into structured bytes; a rich set of computational [operators](/operators)
 enable transformations on structured data.
@@ -125,7 +125,7 @@ New pipeline languages are mushrooming all over the place. Splunk started with
 its own Search Processing Language (SPL) and now released SPL2 to make it
 more pipeline-ish. And Elastic also doubled down as well with [their new
 ES|QL](/blog/a-first-look-at-esql). When we designed the [Tenzir Query Language
-(TQL)](/language), we drew a lot of inspiration from
+(TQL)](/v4.24/language), we drew a lot of inspiration from
 [PRQL](https://prql-lang.org/), [Nu](https://www.nushell.sh/), and
 [Zed](https://zed.brimdata.io/). These may sound esoteric to some, but they are
 remarkably well designed evolutions of pipeline languages that are *not* SQL.

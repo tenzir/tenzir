@@ -141,17 +141,17 @@ public:
   }
 };
 
-class tql2_where_assert_operator final
-  : public crtp_operator<tql2_where_assert_operator> {
+class where_assert_operator final
+  : public crtp_operator<where_assert_operator> {
 public:
-  tql2_where_assert_operator() = default;
+  where_assert_operator() = default;
 
-  explicit tql2_where_assert_operator(ast::expression expr, bool warn)
+  explicit where_assert_operator(ast::expression expr, bool warn)
     : expr_{std::move(expr)}, warn_{warn} {
   }
 
   auto name() const -> std::string override {
-    return warn_ ? "tql2.assert" : "tql2.where";
+    return "where_assert_operator";
   }
 
   auto
@@ -215,7 +215,7 @@ public:
     auto [legacy, remainder] = split_legacy_expression(expr_);
     auto remainder_op = is_true_literal(remainder)
                           ? nullptr
-                          : std::make_unique<tql2_where_assert_operator>(
+                          : std::make_unique<where_assert_operator>(
                             std::move(remainder), warn_);
     if (filter == trivially_true_expression()) {
       return optimize_result{std::move(legacy), order, std::move(remainder_op)};
@@ -227,7 +227,7 @@ public:
                            std::move(remainder_op)};
   }
 
-  friend auto inspect(auto& f, tql2_where_assert_operator& x) -> bool {
+  friend auto inspect(auto& f, where_assert_operator& x) -> bool {
     return f.object(x).fields(f.field("expression", x.expr_),
                               f.field("warn", x.warn_));
   }
@@ -355,8 +355,9 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
   });
 }
 
-class assert_plugin final
-  : public virtual operator_plugin2<tql2_where_assert_operator> {
+using where_assert_plugin = operator_inspection_plugin<where_assert_operator>;
+
+class assert_plugin final : public virtual operator_factory_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.assert";
@@ -368,7 +369,7 @@ public:
     TRY(argument_parser2::operator_("assert")
           .positional("invariant", expr, "bool")
           .parse(inv, ctx));
-    return std::make_unique<tql2_where_assert_operator>(std::move(expr), true);
+    return std::make_unique<where_assert_operator>(std::move(expr), true);
   }
 };
 
@@ -385,7 +386,7 @@ public:
     TRY(argument_parser2::operator_("where")
           .positional("predicate", expr, "bool")
           .parse(inv, ctx));
-    return std::make_unique<tql2_where_assert_operator>(std::move(expr), false);
+    return std::make_unique<where_assert_operator>(std::move(expr), false);
   }
 
   auto make_function(function_plugin::invocation inv, session ctx) const
@@ -412,4 +413,5 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::tql1_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::assert_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::where_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::where_assert_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::map_plugin)

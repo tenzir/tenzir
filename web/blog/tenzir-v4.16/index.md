@@ -8,7 +8,7 @@ comments: true
 
 Pipelines now connect more flexibly than ever before with [Tenzir
 v4.16](https://github.com/tenzir/tenzir/releases/tag/v4.16.0) and its upgraded
-[`publish`](/operators/publish) and [`subscribe`](/operators/subscribe)
+[`publish`](/v4.24/operators/publish) and [`subscribe`](/v4.24/operators/subscribe)
 operators.
 
 ![Tenzir v4.16](tenzir-v4.16.excalidraw.svg)

@@ -135,7 +135,7 @@ A host for [pipelines](#pipeline) and storage reachable over the network.
 The `tenzir-node` binary starts a node in a dedicated server process that
 listens on TCP port 5158.
 
-- [Deploy a node](./installation/deploy-a-node.md)
+- [Deploy a node](./installation/deploy-a-node/README.md)
 - Use the [REST API](./rest-api.md) to manage a node
 - [Import into a node](./usage/import-into-a-node/README.md)
 - [Export from a node](./usage/export-from-a-node/README.md)

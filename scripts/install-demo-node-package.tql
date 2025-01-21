@@ -1,0 +1,3 @@
+// tql2
+from "https://raw.githubusercontent.com/tenzir/library/main/demo-node/package.yaml"
+package::add
