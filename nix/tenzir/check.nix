@@ -27,7 +27,7 @@ stdenvNoCC.mkDerivation {
           echo "running ${path} BATS tests"
           bats -T -j $(nproc) "${path}/bats/tests"
         fi
-        if [ -d "${path}/tests" ]; then
+        if [ -f "${path}/tests/run.py" ]; then
           echo "running ${path} integration tests"
           ${path}/tests/run.py -j $(nproc)
         fi
