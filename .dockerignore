@@ -1,6 +1,7 @@
 *.md
 */*/.git*
 .clangd/
+.github/
 /libtenzir/aux/*
 !/libtenzir/aux/caf/
 !/libtenzir/aux/fast_float/
