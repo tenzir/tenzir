@@ -138,16 +138,10 @@ Run component-level unit tests:
 ctest --test-dir build
 ```
 
-Run the "black box" integration tests:
-
-```bash
-cmake --build build --target integration
-```
-
 Run end-to-end integration tests:
 
 ```bash
-cmake --build build --target integration
+cmake --build build --target bats
 ```
 
 ## Install

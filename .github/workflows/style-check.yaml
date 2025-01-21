@@ -128,7 +128,7 @@ jobs:
       - name: Check
         run: |
           pip install --upgrade shfmt-py
-          git ls-files --recurse-submodules -z -- '*.bats' ':!:tenzir/integration/lib/bats*/**' |
+          git ls-files --recurse-submodules -z -- '*.bats' ':!:tenzir/bats/lib/bats*/**' |
             xargs -0 shfmt -l -w
           git diff --submodule=diff --exit-code
 

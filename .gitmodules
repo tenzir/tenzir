@@ -27,15 +27,15 @@
 	path = libtenzir/aux/pfs
 	url = https://github.com/tenzir/pfs.git
 	shallow = true
-[submodule "tenzir/integration/bats"]
-	path = tenzir/integration/lib/bats
+[submodule "tenzir/bats/bats"]
+	path = tenzir/bats/lib/bats
 	url = https://github.com/bats-core/bats-core
 	shallow = true
-[submodule "tenzir/integration/bats-support"]
-	path = tenzir/integration/lib/bats-support
+[submodule "tenzir/bats/bats-support"]
+	path = tenzir/bats/lib/bats-support
 	url = https://github.com/bats-core/bats-support
 	shallow = true
-[submodule "tenzir/integration/bats-assert"]
-	path = tenzir/integration/lib/bats-assert
+[submodule "tenzir/bats/bats-assert"]
+	path = tenzir/bats/lib/bats-assert
 	url = https://github.com/bats-core/bats-assert
 	shallow = true

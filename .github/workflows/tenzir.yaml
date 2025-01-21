@@ -693,7 +693,7 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.ref-slug }}-${{ github.sha }}
           enableCrossOsArchive: true
-      - name: Run Unit Tests
+      - name: Run Unit and Integration Tests
         env:
           CTEST_OUTPUT_ON_FAILURE: YES
         # --test-dir is not yet supported in the ctest version we're using here.
@@ -703,11 +703,10 @@ jobs:
       - name: Install
         run: |
           cmake --install "$BUILD_DIR"
-      - name: Run Integration Tests
-        id: integration_tests
+      - name: Run BATS Tests
         run: |
-          VERBOSE=1 cmake --build "$BUILD_DIR" --target diff-integration -j 1
-      - name: Publish Integration Test Report
+          VERBOSE=1 cmake --build "$BUILD_DIR" --target diff-bats -j 1
+      - name: Publish BATS Test Report
         uses: mikepenz/action-junit-report@v5
         if: always()
         with:
