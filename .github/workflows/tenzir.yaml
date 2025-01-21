@@ -819,7 +819,8 @@ jobs:
       - policy-enforcement
       - python
       - python-package
-      - regression-tests
+      # TODO: Re-enable this after v4.26 was released.
+      # - regression-tests
       - tenzir
       - tenzir-nix
     if: always() && github.event_name != 'workflow_dispatch'
