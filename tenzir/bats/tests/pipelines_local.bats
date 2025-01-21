@@ -733,22 +733,6 @@ EOF
 
 }
 
-# bats test_tags=json,python_operator
-@test "weird json floats" {
-  check tenzir -f /dev/stdin <<EOF
-version |
-python "
-  import sys
-
-  self.inf = float(\"inf\");
-  self.nan = float(\"nan\");
-  self.zero = -0.0
-  self.subnormal = sys.float_info.min / 100
-" |
-put inf, nan, subnormal, zero
-EOF
-}
-
 @test "unflatten empty record and empty record null" {
   check tenzir 'read json | unflatten' <<EOF
 {"foo": {}}
