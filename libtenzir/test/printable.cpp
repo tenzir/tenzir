@@ -337,36 +337,36 @@ TEST(data) {
   data s{std::string{"foobar"}};
   CHECK_TO_STRING(s, "\"foobar\"");
   data d{duration{512}};
-  CHECK_TO_STRING(d, "512.0ns");
+  CHECK_TO_STRING(d, "512ns");
   data v{list{r, b, c, i, s, d}};
-  CHECK_TO_STRING(v, "[12.21, true, 23, +42, \"foobar\", 512.0ns]");
+  CHECK_TO_STRING(v, "[12.21, true, 23, +42, \"foobar\", 512ns]");
 }
 
 // -- std::chrono types -------------------------------------------------------
 
 TEST(duration) {
   using namespace std::chrono_literals;
-  CHECK_TO_STRING(15ns, "15.0ns");
+  CHECK_TO_STRING(15ns, "15ns");
   CHECK_TO_STRING(15'450ns, "15.45us");
-  CHECK_TO_STRING(42us, "42.0us");
-  CHECK_TO_STRING(42'123us, "42.12ms");
-  CHECK_TO_STRING(-7ms, "-7.0ms");
-  CHECK_TO_STRING(59s, "59.0s");
-  CHECK_TO_STRING(60s, "1.0m");
-  CHECK_TO_STRING(-90s, "-1.5m");
-  CHECK_TO_STRING(390s, "6.5m");
-  CHECK_TO_STRING(-2400h, "-100.0d");
+  CHECK_TO_STRING(42us, "42us");
+  CHECK_TO_STRING(42'123us, "42.123ms");
+  CHECK_TO_STRING(-7ms, "-7ms");
+  CHECK_TO_STRING(59s, "59s");
+  CHECK_TO_STRING(60s, "1min");
+  CHECK_TO_STRING(-90s, "-1.5min");
+  CHECK_TO_STRING(390s, "6.5min");
+  CHECK_TO_STRING(-2400h, "-100d");
 }
 
 TEST(time) {
   using namespace std::chrono_literals;
-  CHECK_TO_STRING(tenzir::time{0s}, "1970-01-01T00:00:00.000000");
-  CHECK_TO_STRING(tenzir::time{1ms}, "1970-01-01T00:00:00.001000");
-  CHECK_TO_STRING(tenzir::time{1us}, "1970-01-01T00:00:00.000001");
-  CHECK_TO_STRING(tenzir::time{1ns}, "1970-01-01T00:00:00.000000");
-  CHECK_TO_STRING(tenzir::time{999ns}, "1970-01-01T00:00:00.000000");
+  CHECK_TO_STRING(tenzir::time{0s}, "1970-01-01T00:00:00Z");
+  CHECK_TO_STRING(tenzir::time{1ms}, "1970-01-01T00:00:00.001Z");
+  CHECK_TO_STRING(tenzir::time{1us}, "1970-01-01T00:00:00.000001Z");
+  CHECK_TO_STRING(tenzir::time{1ns}, "1970-01-01T00:00:00.000000001Z");
+  CHECK_TO_STRING(tenzir::time{999ns}, "1970-01-01T00:00:00.000000999Z");
   CHECK_TO_STRING(tenzir::time{1502658642123456us},
-                  "2017-08-13T21:10:42.123456");
+                  "2017-08-13T21:10:42.123456Z");
 }
 
 // -- JSON --------------------------------------------------------------------
