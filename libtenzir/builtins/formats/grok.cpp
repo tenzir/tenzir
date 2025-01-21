@@ -311,8 +311,7 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
           conversion = capture_type::infer;
         } else if (elems[2] == "string") {
           conversion = capture_type::string;
-        }
-        if (elems[2] == "int") {
+        } else if (elems[2] == "int") {
           conversion = capture_type::integer;
         } else if (elems[2] == "long") {
           conversion = capture_type::integer;
