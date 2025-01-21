@@ -2,7 +2,7 @@
 title: "Tenzir Node v4.26: Security Lake Integration"
 slug: tenzir-node-v4.26
 authors: [lava]
-date: 2025-01-08
+date: 2025-01-21
 tags: [release, node]
 comments: true
 ---
@@ -27,7 +27,8 @@ Amazon Security Lake:
 ```tql
 let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuvwxyz1234/ext/tenzir_network_activity/"
  
-export
+load_kafka "ocsf_data"
+read_ndjson
 where @name == "ocsf.network_activity"
 to_asl $s3_uri,
   region="eu-west-2",
@@ -66,16 +67,16 @@ TENZIR_DEFAULT_SINK=write_json
 
 Before:
 
-```tql
+```txt
 {
-  activity_id: 16,
-  activity_name: "Query",
-  rdata: "31.3.245.133",
-  time: "2020-06-05T14:39:59.305988",
-  duration: "40s",
-  dst_endpoint: {
-    ip: "192.168.4.1",
-    port: 53
+  "activity_id": 16,
+  "activity_name": "Query",
+  "rdata": "31.3.245.133",
+  "time": "2020-06-05T14:39:59.305988",
+  "duration": "40s",
+  "dst_endpoint": {
+    "ip": "192.168.4.1",
+    "port": 53
   }
 }
 ```

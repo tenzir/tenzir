@@ -17,7 +17,7 @@ Set up a custom source in ASL and use its S3 bucket URI with the `to_asl` operat
 
 ## Examples
 
-### Send all stored OCSF Network Activity events to ASL
+### Send all OCSF Network Activity events from a Kafka Topic to ASL
 
 Given a AWS security lake running on `eu-west-2`, a custom source called
 `tenzir_network_activity` set up on that lake and an account with id `123456789012`
@@ -26,7 +26,8 @@ for it:
 ```tql
 let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuvwxyz1234/ext/tenzir_network_activity/"
 
-export
+load_kafka "ocsf_data"
+read_ndjson
 where @name == "ocsf.network_activity"
 to_asl $s3_uri,
   region="eu-west-2",
