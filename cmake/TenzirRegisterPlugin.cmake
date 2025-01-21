@@ -539,6 +539,11 @@ function (TenzirRegisterPlugin)
   # when there are no sources for target, but since the plugins have sources, we
   # manually specify this here. `CXX` because we only use C/C++ currently.
   set_target_properties(${PLUGIN_TARGET} PROPERTIES LINKER_LANGUAGE CXX)
+  target_compile_options(
+    ${PLUGIN_TARGET}
+    PUBLIC
+      "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=plugins/${PLUGIN_TARGET}/"
+  )
   TenzirTargetEnableTooling(${PLUGIN_TARGET})
   target_link_libraries(
     ${PLUGIN_TARGET}

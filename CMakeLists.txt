@@ -21,6 +21,8 @@ set(TENZIR_EDITION_NAME
     "Tenzir"
     CACHE STRING "Set the edition name")
 
+add_compile_options("-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
+
 # -- sanity checks -------------------------------------------------------------
 
 # Prohibit in-source builds.
