@@ -100,7 +100,7 @@ RUN cmake -B build -G Ninja \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       ${TENZIR_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
-    cmake --build build --target test && \
+    CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test && \
     cmake --build build --target integration && \
     cmake --install build --strip --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build --strip && \

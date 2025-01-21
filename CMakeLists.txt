@@ -138,16 +138,6 @@ set(TENZIR_UNIT_TEST_TIMEOUT
     "60"
     CACHE STRING "The per-test timeout in unit tests" FORCE)
 
-option(TENZIR_ENABLE_INTEGRATION_TESTS "Build integration tests for libtenzir"
-       ON)
-add_feature_info(
-  "TENZIR_ENABLE_INTEGRATION_TESTS" TENZIR_ENABLE_INTEGRATION_TESTS
-  "build integration tests for tenzir.")
-
-option(TENZIR_ENABLE_BATS_TESTS "Build bats tests for libtenzir" ON)
-add_feature_info("TENZIR_ENABLE_BATS_TESTS" TENZIR_ENABLE_BATS_TESTS
-                 "build bats tests for tenzir.")
-
 # -- library flavor ------------------------------------------------------------
 
 option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)

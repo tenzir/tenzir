@@ -19,7 +19,6 @@ import builtins
 from contextlib import contextmanager
 
 
-# TODO: This needs a better way to discover tenzir, if its not in the path
 BINARY = shutil.which("tenzir")
 ROOT = Path(os.path.dirname(__file__ or ".")).resolve()
 CHECKMARK = "\033[92;1m✓\033[0m"
