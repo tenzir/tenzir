@@ -127,7 +127,7 @@ You can use the new [`write_tql`](/next/tql2/operators/write_tql) operator
 prints events as TQL expressions.
 
 We added `strip` options to [`write_json`](/next/tql2/operators/write_json)
-and [`write_ndjson`]((/next/tql2/operators/write_ndjson)), allowing you to
+and [`write_ndjson`](/next/tql2/operators/write_ndjson), allowing you to
 strip null fields as well as empty records or lists.
 
 ## Let's Connect!
