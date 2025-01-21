@@ -1,15 +1,14 @@
 ---
-title: "Tenzir Node v4.26: ASL Integration"
+title: "Tenzir Node v4.26: Amazon Security Lake Integration"
 slug: tenzir-node-v4.26
 authors: [lava]
-date: 2025-01-21
+date: 2025-01-22
 tags: [release, node]
 comments: true
 ---
 
-Tenzir Node v4.26 continues to leverage our native Parquet and OCSF
-capabilities by adding a new operator to write data directly to
-Amazon Security Lake (ASL).
+Tenzir Node v4.26 enhances our native Parquet and OCSF capabilities with a new
+operator for writing data directly to Amazon Security Lake (ASL).
 
 ![Tenzir Node v4.26](tenzir-node-v4.26.excalidraw.svg)
 
@@ -19,13 +18,13 @@ Amazon Security Lake (ASL).
 
 ## Amazon Security Lake
 
-The new `to_asl` operator allows users to write data directly to the
+The new `to_asl` operator enables users to write data directly to the
 Amazon Security Lake:
 
 ```tql
 let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuvwxyz1234/ext/tenzir_network_activity/"
  
-load_kafka "ocsf_data"
+load_kafka "ocsf_events"
 read_ndjson
 where @name == "ocsf.network_activity"
 to_asl $s3_uri,
@@ -33,7 +32,7 @@ to_asl $s3_uri,
   accountId="123456789012"
 ```
 
-For more information, take a look at the [Integrations](/next/integrations/amazon/security-lake)
+For more information, visit the [Integrations](/next/integrations/amazon/security-lake)
 page in our documentation.
 
 ## Output Changes
@@ -43,7 +42,6 @@ of the Tenzir Node in order to make it easier for downstream tooling
 to work with the data provided by a Tenzir Node.
 
 :::warning Potentially Breaking Change
-
 This may break automations that parse the JSON output of a Tenzir Pipeline.
 :::
 
@@ -52,12 +50,12 @@ This may break automations that parse the JSON output of a Tenzir Pipeline.
 By default, the node now outputs pipeline results as native TQL data
 rather than JSON.
 
-TQL is a superset of JSON, but it includes support for native IP, subnet,
-timestamp and duration types which were formerly rendered as strings.
-Additionally, TQL also supports and outputs trailing commas by default.
+TQL is a superset of JSON, adding support for native IP addresses,
+subnets, timestamps, and durations, which were previously represented
+as strings. Additionally, TQL now includes trailing commas by default.
 
-To restore the previous behavior, append the [`write_json`](/next/tql2/operators/write_json)
-operator to your pipeline or set a default sink to restore it globally:
+To restore the previous JSON output format, append the [`write_json`](/next/tql2/operators/write_json)
+operator to your pipeline or configure a default sink:
 
 ```env
 TENZIR_EXEC__IMPLICIT_EVENTS_SINK='write_json | save_file "-"'
@@ -79,7 +77,7 @@ Before:
 }
 ```
 
-Now becomes:
+Now:
 
 ```tql
 {
@@ -97,15 +95,14 @@ Now becomes:
 
 ### Timestamp Rendering
 
-Timestamps are now printed with a `Z` suffix to indicate that they are relative
-to UTC. Furthermore, the fractional part of the seconds is no longer always
-printed using 6 digits. Instead, timestamps that do not have sub-second
-information no longer have a fractional part. Other timestamps are either
-printed with 3, 6 or 9 fractional digits, depending on their resolution.
+Timestamps now include a `Z` suffix to indicate UTC time. The fractional seconds
+display has been refined: timestamps without sub-second precision no longer
+include a fractional part, while others are printed with 3, 6, or 9 decimal
+places based on their resolution.
 
-Durations that are printed as minutes now use `min` instead of `m`.
-Additionally, the fractional part of durations is now printed with full
-precision instead of being rounded to two digits.
+Additionally, durations expressed in minutes now use `min` instead of `m`, and
+fractional durations are displayed with full precision instead of rounding to
+two decimal places.
 
 ## TQL Features
 
