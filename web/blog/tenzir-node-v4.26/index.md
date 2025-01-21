@@ -1,5 +1,5 @@
 ---
-title: "Tenzir Node v4.26: Security Lake Integration"
+title: "Tenzir Node v4.26: Amazon Security Lake Integration"
 slug: tenzir-node-v4.26
 authors: [lava]
 date: 2025-01-21
@@ -7,7 +7,7 @@ tags: [release, node]
 comments: true
 ---
 
-# Tenzir Node v4.26: Security Lake Integration
+# Tenzir Node v4.26: Amazon Security Lake Integration
 
 Tenzir Node v4.26 continues to leverage our native Parquet and OCSF
 capabilities by adding a new operator to write data directly to
@@ -40,9 +40,9 @@ page in our documentation.
 
 ### Output Changes
 
-With this version, we made some changes in the way we render timestamps
-in order to make it easier for downstream tooling to work with the data
-provided by a Tenzir Node.
+With this version, we made some changes to the default output format
+of the Tenzir Node in order to make it easier for downstream tooling
+to work with the data provided by a Tenzir Node.
 
 :::warning Potentially Breaking Change
 
@@ -62,7 +62,7 @@ To restore the previous behavior, use the `write_json` sink, or set
 a default sink to revert it globally:
 
 ```env
-TENZIR_DEFAULT_SINK=write_json
+TENZIR_EXEC__IMPLICIT_EVENTS_SINK='write_json | save_file "-"'
 ```
 
 Before:
