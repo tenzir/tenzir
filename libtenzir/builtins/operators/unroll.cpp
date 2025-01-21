@@ -8,6 +8,8 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/argument_parser2.hpp>
+#include <tenzir/arrow_utils.hpp>
+#include <tenzir/bitmap.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
@@ -114,8 +116,41 @@ private:
 
 /// Unrolls the list located at `offset` by duplicating the surrounding data,
 /// once for each list item.
-auto unroll(const table_slice& slice, const offset& offset) -> table_slice {
+auto unroll(const table_slice& slice, const offset& offset)
+  -> generator<table_slice> {
   auto resolved = offset.get(slice);
+  if (const auto* rt = try_as<record_type>(resolved.first)) {
+    const auto& sa = as<arrow::StructArray>(*resolved.second);
+    for (auto i = size_t{}; i < rt->num_fields(); ++i) {
+      auto transformation = indexed_transformation::function_type{
+        [&](struct record_type::field field,
+            std::shared_ptr<arrow::Array>) noexcept {
+          auto replacement = std::make_shared<arrow::StructArray>(
+            arrow::struct_({sa.struct_type()->field(i)}), sa.length(),
+            std::vector{sa.field(i)}, sa.null_bitmap(), sa.null_count(),
+            sa.offset());
+          auto replacement_type = type{record_type{{rt->field(i)}}};
+          replacement_type.assign_metadata(field.type);
+          field.type = std::move(replacement_type);
+          return indexed_transformation::result_type{
+            {std::move(field), std::move(replacement)},
+          };
+        }};
+      auto transformations = std::vector<indexed_transformation>{};
+      transformations.emplace_back(offset, std::move(transformation));
+      auto transformed = transform_columns(slice, transformations);
+      auto ids = null_bitmap{};
+      for (auto i = int64_t{}; i < resolved.second->length(); ++i) {
+        ids.append_bit(resolved.second->IsValid(i));
+      }
+      for (const auto [begin, end] : select_runs(ids)) {
+        auto result = subslice(transformed, begin, end);
+        auto rb = to_record_batch(result);
+        co_yield std::move(result);
+      }
+    }
+    co_return;
+  }
   auto list_array = dynamic_cast<arrow::ListArray*>(&*resolved.second);
   TENZIR_ASSERT(list_array);
   auto list_offsets
@@ -147,7 +182,7 @@ auto unroll(const table_slice& slice, const offset& offset) -> table_slice {
   TENZIR_ASSERT(status.ok());
   auto batch = arrow::RecordBatch::Make(result_ty.to_arrow_schema(),
                                         result->length(), result->fields());
-  return table_slice{batch, result_ty};
+  co_yield table_slice{batch, result_ty};
 }
 
 class unroll_operator final : public crtp_operator<unroll_operator> {
@@ -204,13 +239,21 @@ public:
           return resolve(field, slice.schema())
             .match(
               [&](offset result) -> std::optional<offset> {
+                if (result.empty()) {
+                  diagnostic::error("cannot unroll `this`")
+                    .primary(field)
+                    .emit(ctrl.diagnostics());
+                  return {};
+                }
                 const auto& field_type
                   = as<record_type>(slice.schema()).field(result).type;
                 if (is<null_type>(field_type)) {
                   return {};
                 }
-                if (not is<list_type>(field_type)) {
-                  diagnostic::warning("expected `list`, but got `{}`",
+                if (not is<list_type>(field_type)
+                    and not is<record_type>(field_type)) {
+                  diagnostic::warning("expected `list` or `record`, but got "
+                                      "`{}`",
                                       field_type.kind())
                     .primary(field)
                     .emit(ctrl.diagnostics());
@@ -245,7 +288,9 @@ public:
         // Zero or multiple offsets; cannot proceed.
         continue;
       }
-      co_yield unroll(slice, *offset);
+      for (auto unrolled : unroll(slice, *offset)) {
+        co_yield std::move(unrolled);
+      }
     }
   }
 

@@ -731,6 +731,15 @@ EOF
 {"event_type": "dns", "dns": {"type": "answer", "answers": [{}, null]}}
 EOF
 
+  # Test how we unroll records, including their various options for null fields.
+  check tenzir --tql2 -f /dev/stdin <<EOF
+from {foo: 1, bar: {baz: 2, qux: 3}},
+     {foo: 2, bar: null},
+     {foo: 3, bar: {baz: null, qux: 3}},
+     {foo: 4, bar: {baz: 4, qux: null}},
+     {foo: 5, bar: {baz: 5, qux: 6}}
+unroll bar
+EOF
 }
 
 @test "unflatten empty record and empty record null" {
