@@ -12,16 +12,16 @@ The `measure` operator yields metrics for each received batch of events or bytes
 using the following schema, respectively:
 
 ```text title="Events Metrics"
-type tenzir.metrics.events = record{
+type tenzir.measure.events = record{
   timestamp: time,
-  schema: string,
-  schema_id: string,
   events: uint64,
+  schema_id: string,
+  schema: string,
 }
 ```
 
 ```text title="Bytes Metrics"
-type tenzir.metrics.bytes = record{
+type tenzir.measure.bytes = record{
   timestamp: time,
   bytes: uint64,
 }
@@ -68,14 +68,14 @@ measure
 {
   timestamp: 2023-04-28T10:26:45.159885,
   events: 65536,
-  schema: "suricata.dns",
-  schema_id: "d49102998baae44a"
+  schema_id: "d49102998baae44a",
+  schema: "suricata.dns"
 }
 {
   timestamp: 2023-04-28T10:26:45.812321,
   events: 412,
-  schema: "suricata.dns",
-  schema_id: "d49102998baae44a"
+  schema_id: "d49102998baae44a",
+  schema: "suricata.dns"
 }
 ```
 

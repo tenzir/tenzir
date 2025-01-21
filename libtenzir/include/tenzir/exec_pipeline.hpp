@@ -13,10 +13,12 @@
 namespace tenzir {
 
 struct exec_config {
-  std::string implicit_bytes_source = "load file -";
-  std::string implicit_events_source = "from stdin read json";
-  std::string implicit_bytes_sink = "save file -";
-  std::string implicit_events_sink = "to stdout write json";
+  std::string implicit_bytes_source = R"(load_file "-")";
+  std::string implicit_events_source = R"(load_file "-" | read_json)";
+  std::string implicit_bytes_sink = R"(save_file "-")";
+  std::string implicit_events_sink
+    = isatty(STDOUT_FILENO) ? R"(write_tql color=true | save_file "-")"
+                            : R"(write_tql | save_file "-")";
   bool dump_tokens = false;
   bool dump_ast = false;
   bool dump_pipeline = false;

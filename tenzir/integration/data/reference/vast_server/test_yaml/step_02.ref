@@ -1,7 +1,7 @@
 ---
 __name: sensor_10_0_0_2
-_write_ts: 2020-02-26T04:00:03.734769
-ts: 2020-02-26T03:40:03.724911
+_write_ts: 2020-02-26T04:00:03.734769Z
+ts: 2020-02-26T03:40:03.724911Z
 uid: Cx3bf12iVwo5m7Gkd1
 id:
   orig_h: 193.10.255.99
@@ -23,8 +23,8 @@ resp_pkts: 191
 resp_ip_bytes: 8404
 ...
 ---
-_write_ts: 2020-02-11T03:48:57.477193
-ts: 2020-02-11T03:48:57.477193
+_write_ts: 2020-02-11T03:48:57.477193Z
+ts: 2020-02-11T03:48:57.477193Z
 uid: Cpk0Nl33Zb5ZWLP1tc
 id:
   orig_h: 185.100.59.59
@@ -45,7 +45,7 @@ actions:
 suppress_for: 3600
 ...
 ---
-ts: 2020-04-01T16:19:42.100275
+ts: 2020-04-01T16:19:42.100275Z
 uid: CdHDig24EL8JxZeOtj
 id:
   orig_h: 45.231.152.1
@@ -54,7 +54,7 @@ id:
   resp_p: 21
 proto: tcp
 service: null
-duration: 3.42s
+duration: 3.423925s
 orig_bytes: 0
 resp_bytes: 1982834349
 conn_state: REJ
@@ -68,7 +68,7 @@ resp_pkts: 3
 resp_ip_bytes: 120
 tunnel_parents: null
 community_id: null
-_write_ts: 2020-04-01T16:19:47.100869
+_write_ts: 2020-04-01T16:19:47.100869Z
 _path: conn
 _system_name: sensor_10_0_0_2
 orig_cc: BR
@@ -77,8 +77,8 @@ orig_l2_addr: e8:e7:32:df:62:26
 resp_l2_addr: 42:10:47:e6:ef:4b
 ...
 ---
-_write_ts: 2020-01-17T17:46:28.728717
-ts: 2020-01-17T17:26:28.716994
+_write_ts: 2020-01-17T17:46:28.728717Z
+ts: 2020-01-17T17:26:28.716994Z
 uid: CmcIAq2mcAPR7zjTQe
 id:
   orig_h: 159.203.34.57
@@ -102,8 +102,8 @@ _path: conn_long
 _system_name: sensor_10_0_0_2
 ...
 ---
-_write_ts: 2020-04-01T16:20:08.000000
-ts: 2020-04-01T16:20:08.000000
+_write_ts: 2020-04-01T16:20:08Z
+ts: 2020-04-01T16:20:08Z
 _path: corelight_metrics_bro
 _system_name: sensor_10_0_0_2
 cpu:

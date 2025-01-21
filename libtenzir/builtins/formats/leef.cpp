@@ -16,7 +16,6 @@
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/coding.hpp>
 #include <tenzir/detail/line_range.hpp>
-#include <tenzir/detail/make_io_stream.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/module.hpp>
@@ -349,8 +348,8 @@ public:
   auto name() const -> std::string override {
     return "read_leef";
   }
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
@@ -367,8 +366,8 @@ public:
     return "parse_leef";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "string")

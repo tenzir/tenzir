@@ -22,6 +22,7 @@
 #include <caf/make_counted.hpp>
 #include <caf/ref_counted.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <string>
@@ -94,6 +95,23 @@ private:
   bool case_insensitive_;
 };
 
+/// @relates view_trait
+struct blob_view : detail::totally_ordered<blob_view>,
+                   std::span<const std::byte> {
+  using super = std::span<const std::byte>;
+  using super::super;
+
+  friend constexpr auto operator<=>(const blob_view& l, const blob_view& r) {
+    return std::lexicographical_compare_three_way(l.begin(), l.end(), r.begin(),
+                                                  r.end());
+  }
+
+  friend constexpr auto operator==(const blob_view& l, const blob_view& r)
+    -> bool {
+    return l.size() == r.size() and std::equal(l.begin(), l.end(), r.begin());
+  }
+};
+
 //// @relates view_trait
 template <>
 struct view_trait<pattern> {
@@ -133,7 +151,7 @@ struct view_trait<record> {
 /// @relates view_trait
 template <>
 struct view_trait<blob> {
-  using type = std::basic_string_view<std::byte>;
+  using type = blob_view;
 };
 
 // clang-format off

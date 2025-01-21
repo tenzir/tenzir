@@ -784,11 +784,13 @@ struct printer_args {
   std::optional<location> compact_output;
   std::optional<location> color_output;
   std::optional<location> monochrome_output;
-  std::optional<location> omit_empty;
-  std::optional<location> omit_nulls;
+  std::optional<location> omit_all;
+  std::optional<location> omit_null_fields;
+  std::optional<location> omit_nulls_in_lists;
   std::optional<location> omit_empty_objects;
   std::optional<location> omit_empty_lists;
   std::optional<location> arrays_of_objects;
+  bool tql = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, printer_args& x) -> bool {
@@ -797,11 +799,13 @@ struct printer_args {
       .fields(f.field("compact_output", x.compact_output),
               f.field("color_output", x.color_output),
               f.field("monochrome_output", x.monochrome_output),
-              f.field("omit_empty", x.omit_empty),
-              f.field("omit_nulls", x.omit_nulls),
+              f.field("omit_empty", x.omit_all),
+              f.field("omit_null_fields", x.omit_null_fields),
+              f.field("omit_nulls_in_lists", x.omit_nulls_in_lists),
               f.field("omit_empty_objects", x.omit_empty_objects),
               f.field("omit_empty_lists", x.omit_empty_lists),
-              f.field("arrays_of_objects", x.arrays_of_objects));
+              f.field("arrays_of_objects", x.arrays_of_objects),
+              f.field("tql", x.tql));
   }
 };
 
@@ -822,31 +826,37 @@ public:
     auto style = default_style();
     if (args_.monochrome_output) {
       style = no_style();
+    } else if (args_.color_output and args_.tql) {
+      style = tql_style();
     } else if (args_.color_output) {
       style = jq_style();
     }
-    const auto omit_nulls
-      = args_.omit_nulls.has_value() or args_.omit_empty.has_value();
+    const auto omit_null_fields
+      = args_.omit_null_fields.has_value() or args_.omit_all.has_value();
+    const auto omit_nulls_in_lists
+      = args_.omit_nulls_in_lists.has_value() or args_.omit_all.has_value();
     const auto omit_empty_objects
-      = args_.omit_empty_objects.has_value() or args_.omit_empty.has_value();
+      = args_.omit_empty_objects.has_value() or args_.omit_all.has_value();
     const auto omit_empty_lists
-      = args_.omit_empty_lists.has_value() or args_.omit_empty.has_value();
+      = args_.omit_empty_lists.has_value() or args_.omit_all.has_value();
     const auto arrays_of_objects = args_.arrays_of_objects.has_value();
     auto meta = chunk_metadata{.content_type = compact and not arrays_of_objects
                                                  ? "application/x-ndjson"
                                                  : "application/json"};
     return printer_instance::make(
-      [compact, style, omit_nulls, omit_empty_objects, omit_empty_lists,
-       arrays_of_objects,
+      [compact, style, omit_null_fields, omit_nulls_in_lists,
+       omit_empty_objects, omit_empty_lists, arrays_of_objects, tql = args_.tql,
        meta = std::move(meta)](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
         }
         auto printer = tenzir::json_printer{{
+          .tql = tql,
           .style = style,
           .oneline = compact,
-          .omit_nulls = omit_nulls,
+          .omit_null_fields = omit_null_fields,
+          .omit_nulls_in_lists = omit_nulls_in_lists,
           .omit_empty_records = omit_empty_objects,
           .omit_empty_lists = omit_empty_lists,
         }};
@@ -999,8 +1009,8 @@ public:
     parser.add("-c,--compact-output", args.compact_output);
     parser.add("-C,--color-output", args.color_output);
     parser.add("-M,--monochrome-output", args.color_output);
-    parser.add("--omit-empty", args.omit_empty);
-    parser.add("--omit-nulls", args.omit_nulls);
+    parser.add("--omit-empty", args.omit_all);
+    parser.add("--omit-nulls", args.omit_null_fields);
     parser.add("--omit-empty-objects", args.omit_empty_objects);
     parser.add("--omit-empty-lists", args.omit_empty_lists);
     parser.add("--arrays-of-objects", args.arrays_of_objects);
@@ -1333,20 +1343,40 @@ public:
 
 class write_json_plugin final : public virtual operator_plugin2<write_json> {
 public:
+  explicit write_json_plugin(bool tql) : tql_{tql} {
+  }
+
+  auto name() const -> std::string override {
+    return tql_ ? "write_tql" : "tql2.write_json";
+  }
+
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
-    TRY(argument_parser2::operator_("write_json")
-          // TODO: Perhaps "indent=0"?
-          .named("color", args.color_output)
-          .parse(inv, ctx));
+    args.tql = tql_;
+    auto parser = argument_parser2::operator_("write_json");
+    parser.named("color", args.color_output);
+    parser.named("strip", args.omit_all);
+    parser.named("strip_null_fields", args.omit_null_fields);
+    parser.named("strip_nulls_in_lists", args.omit_nulls_in_lists);
+    parser.named("strip_empty_records", args.omit_empty_objects);
+    parser.named("strip_empty_lists", args.omit_empty_lists);
+    if (tql_) {
+      parser.named("compact", args.compact_output);
+    }
+    TRY(parser.parse(inv, ctx));
     return std::make_unique<write_json>(args);
   }
 
   auto write_properties() const -> write_properties_t override {
+    if (tql_) {
+      return {};
+    }
     return {.extensions = {"json"}};
   }
+
+  bool tql_ = false;
 };
 
 class write_ndjson_plugin final : public virtual operator_plugin2<write_json> {
@@ -1361,6 +1391,11 @@ public:
     args.compact_output = location::unknown;
     TRY(argument_parser2::operator_(name())
           .named("color", args.color_output)
+          .named("strip", args.omit_all)
+          .named("strip_null_fields", args.omit_null_fields)
+          .named("strip_nulls_in_lists", args.omit_nulls_in_lists)
+          .named("strip_empty_records", args.omit_empty_objects)
+          .named("strip_empty_lists", args.omit_empty_lists)
           .parse(inv, ctx));
     return std::make_unique<write_json>(args);
   }
@@ -1383,6 +1418,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_ndjson_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_gelf_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_zeek_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_suricata_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{false})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)

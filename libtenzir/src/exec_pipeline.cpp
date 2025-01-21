@@ -10,13 +10,16 @@
 #include <tenzir/exec_pipeline.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/exec.hpp>
+#include <tenzir/tql2/parser.hpp>
 
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
 
+#include <ranges>
 #include <string_view>
 
 namespace tenzir {
@@ -117,33 +120,56 @@ auto format_metric(const operator_metric& metric) -> std::string {
   return result;
 }
 
-auto add_implicit_source_and_sink(pipeline pipe, exec_config const& config)
+auto add_implicit(std::string_view what, pipeline pipe, diagnostic_handler& dh,
+                  std::string_view source) -> caf::expected<pipeline> {
+  auto sp = session_provider::make(dh);
+  auto maybe_ast = parse_pipeline_with_bad_diagnostics(source, sp.as_session());
+  if (not maybe_ast) {
+    return caf::make_error(ec::logic_error,
+                           fmt::format("failed to parse implicit {}: `{}`",
+                                       what, source));
+  }
+  auto compiled = compile(std::move(*maybe_ast), sp.as_session());
+  if (not compiled) {
+    return caf::make_error(ec::logic_error,
+                           fmt::format("failed to compile implicit {}: `{}`",
+                                       what, source));
+  }
+  if (what.ends_with("sink")) {
+    for (auto&& op : std::move(*compiled).unwrap()) {
+      pipe.append(std::move(op));
+    }
+  } else if (what.ends_with("source")) {
+    for (auto&& op : std::move(*compiled).unwrap() | std::views::reverse) {
+      pipe.prepend(std::move(op));
+    }
+  } else {
+    TENZIR_UNREACHABLE();
+  }
+  return pipe;
+}
+
+auto add_implicit_source_and_sink(pipeline pipe, diagnostic_handler& dh,
+                                  exec_config const& config)
   -> caf::expected<pipeline> {
   if (pipe.infer_type<void>()) {
     // Don't add implicit source.
   } else if (pipe.infer_type<chunk_ptr>()
              && !config.implicit_bytes_source.empty()) {
-    auto op
-      = pipeline::internal_parse_as_operator(config.implicit_bytes_source);
-    if (not op) {
-      return caf::make_error(
-        ec::logic_error, fmt::format("failed to prepend implicit "
-                                     "'{}': {}",
-                                     config.implicit_bytes_source, op.error()));
+    auto res = add_implicit("bytes source", std::move(pipe), dh,
+                            config.implicit_bytes_source);
+    if (not res) {
+      return res.error();
     }
-    pipe.prepend(std::move(*op));
+    pipe = std::move(*res);
   } else if (pipe.infer_type<table_slice>()
              && !config.implicit_events_source.empty()) {
-    auto op
-      = pipeline::internal_parse_as_operator(config.implicit_events_source);
-    if (not op) {
-      return caf::make_error(ec::logic_error,
-                             fmt::format("failed to prepend implicit "
-                                         "'{}': {}",
-                                         config.implicit_events_source,
-                                         op.error()));
+    auto res = add_implicit("events source", std::move(pipe), dh,
+                            config.implicit_events_source);
+    if (not res) {
+      return res.error();
     }
-    pipe.prepend(std::move(*op));
+    pipe = std::move(*res);
   } else {
     // Pipeline is ill-typed. We don't add implicit source or sink and continue,
     // as this is handled further down the line.
@@ -159,23 +185,19 @@ auto add_implicit_source_and_sink(pipeline pipe, exec_config const& config)
   if (out->is<void>()) {
     // Pipeline is already closed, nothing to do here.
   } else if (out->is<chunk_ptr>() && !config.implicit_bytes_sink.empty()) {
-    auto op = pipeline::internal_parse_as_operator(config.implicit_bytes_sink);
-    if (not op) {
-      return caf::make_error(
-        ec::logic_error, fmt::format("failed to append implicit "
-                                     "'{}': {}",
-                                     config.implicit_bytes_sink, op.error()));
+    auto res = add_implicit("bytes sink", std::move(pipe), dh,
+                            config.implicit_bytes_sink);
+    if (not res) {
+      return res.error();
     }
-    pipe.append(std::move(*op));
+    pipe = std::move(*res);
   } else if (out->is<table_slice>() && !config.implicit_events_sink.empty()) {
-    auto op = pipeline::internal_parse_as_operator(config.implicit_events_sink);
-    if (not op) {
-      return caf::make_error(
-        ec::logic_error, fmt::format("failed to append implicit "
-                                     "'{}': {}",
-                                     config.implicit_events_sink, op.error()));
+    auto res = add_implicit("events sink", std::move(pipe), dh,
+                            config.implicit_events_sink);
+    if (not res) {
+      return res.error();
     }
-    pipe.append(std::move(*op));
+    pipe = std::move(*res);
   }
   if (not pipe.is_closed()) {
     return caf::make_error(ec::logic_error,
@@ -190,7 +212,7 @@ auto add_implicit_source_and_sink(pipeline pipe, exec_config const& config)
 auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
                    const exec_config& cfg,
                    caf::actor_system& sys) -> caf::expected<void> {
-  auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), cfg);
+  auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), dh, cfg);
   if (not implicit_pipe) {
     return std::move(implicit_pipe.error());
   }

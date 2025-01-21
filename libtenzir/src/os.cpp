@@ -385,6 +385,7 @@ auto darwin_os::fetch_processes(std::optional<int> pid_filter)
                    + std::chrono::microseconds(proc.pbi_start_tvusec);
     auto p = process{
       .name = std::string{static_cast<char*>(proc.pbi_name)},
+      .command_line = {},
       .pid = proc.pbi_pid,
       .ppid = proc.pbi_ppid,
       .uid = proc.pbi_uid,
