@@ -49,7 +49,6 @@
     python3,
     uv,
     pkgsBuildHost,
-    runCommand,
     makeBinaryWrapper,
     isReleaseBuild ? false,
   }: let
@@ -77,7 +76,7 @@
       ]
       # Temporarily disable yara on the static mac build because of issues
       # building protobufc.
-      ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
+      ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
         "plugins/yara"
       ];
     py3 = let
@@ -120,7 +119,7 @@
           makeBinaryWrapper
         ] ++ lib.optionals stdenv.isLinux [
           rpm
-        ] ++ lib.optionals stdenv.isDarwin [
+        ] ++ lib.optionals stdenv.hostPlatform.isDarwin [
           lld
         ];
         propagatedNativeBuildInputs = [pkg-config];
@@ -137,7 +136,6 @@
           rabbitmq-c
           rdkafka
           cppzmq
-          re2
           (restinio.override {
             with_boost_asio = true;
           })
@@ -146,7 +144,7 @@
           azure-sdk-for-cpp
         ] ++ lib.optionals stdenv.isLinux [
           pfs
-        ] ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
+        ] ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
           yara
         ];
         propagatedBuildInputs = [
@@ -156,6 +154,7 @@
           curl
           flatbuffers
           libmaxminddb
+          re2
           robin-map
           simdjson
           spdlog
@@ -183,7 +182,7 @@
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
             "-DCAF_ROOT_DIR=${caf}"
             "-DTENZIR_EDITION_NAME=${lib.toUpper pname}"
-            "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=${lib.boolToString isStatic}"
+            "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
             "-DTENZIR_ENABLE_BACKTRACE=ON"
             "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
             "-DTENZIR_ENABLE_MANPAGES=OFF"
@@ -197,12 +196,23 @@
             "-DTENZIR_ENABLE_BATS_TENZIR_INSTALLATION=OFF"
             "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
           ] ++ lib.optionals isStatic [
-            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=${if stdenv.hostPlatform.isLinux then "ON" else "ON"}"
-            "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB;RPM"}"
+            "-UCMAKE_INSTALL_BINDIR"
+            "-UCMAKE_INSTALL_SBINDIR"
+            "-UCMAKE_INSTALL_INCLUDEDIR"
+            "-UCMAKE_INSTALL_OLDINCLUDEDIR"
+            "-UCMAKE_INSTALL_MANDIR"
+            "-UCMAKE_INSTALL_INFODIR"
+            "-UCMAKE_INSTALL_DOCDIR"
+            "-UCMAKE_INSTALL_LIBDIR"
+            "-UCMAKE_INSTALL_LIBEXECDIR"
+            "-UCMAKE_INSTALL_LOCALEDIR"
+            "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
+            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
+            "-DCPACK_GENERATOR=${if stdenv.hostPlatform.isDarwin then "TGZ;productbuild" else "TGZ;DEB;RPM"}"
             "-DTENZIR_UV_PATH:STRING=${lib.getExe uv}"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
-            "-DTENZIR_ENABLE_BACKTRACE=${lib.boolToString (!stdenv.isDarwin)}"
+            "-DTENZIR_ENABLE_BACKTRACE=${lib.boolToString (!stdenv.hostPlatform.isDarwin)}"
           ]
           ++ lib.optionals stdenv.hostPlatform.isx86_64 [
             "-DTENZIR_ENABLE_SSE3_INSTRUCTIONS=ON"
@@ -213,7 +223,7 @@
             "-DTENZIR_ENABLE_AVX_INSTRUCTIONS=OFF"
             "-DTENZIR_ENABLE_AVX2_INSTRUCTIONS=OFF"
           ]
-          ++ lib.optionals stdenv.isDarwin (
+          ++ lib.optionals stdenv.hostPlatform.isDarwin (
           let
             compilerName =
               if stdenv.cc.isClang
@@ -251,7 +261,7 @@
         # TODO: Fix LTO on darwin by passing these commands by their original
         # executable names "llvm-ar" and "llvm-ranlib". Should work with
         # `readlink -f $AR` to find the correct ones.
-          + lib.optionalString stdenv.isDarwin ''
+          + lib.optionalString stdenv.hostPlatform.isDarwin ''
           cmakeFlagsArray+=("-DCMAKE_C_COMPILER_AR=$AR")
           cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_AR=$AR")
           cmakeFlagsArray+=("-DCMAKE_C_COMPILER_RANLIB=$RANLIB")
@@ -264,11 +274,21 @@
           "pic"
         ];
 
+        preBuild = lib.optionalString (isStatic && stdenv.hostPlatform.isLinux) ''
+          # Needed for the RPM package.
+          mkdir -p .var/lib
+          export HOME=$(mktemp -d)
+          cat << EOF > $HOME/.rpmmacros
+          %_var                 $PWD/.var
+          %_buildshell          $SHELL
+          %_topdir              $PWD/rpmbuild
+          %__strip              true
+          EOF
+          rpmdb --rebuilddb
+        '';
+
         postBuild = lib.optionalString isStatic ''
           ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/*
-        '';
-        fixupPhase = lib.optionalString isStatic ''
-          rm -rf $out/nix-support
         '';
 
         # Checking is done in a dedicated derivation, see check.nix.
@@ -318,43 +338,30 @@
         #disallowedReferences = [ tenzir-source ] ++ extraPlugins;
       }
       // lib.optionalAttrs isStatic {
-        __noChroot = stdenv.isDarwin;
+        __noChroot = stdenv.hostPlatform.isDarwin;
 
+        buildPhase = ''
+          runHook preBuild
+        ''
+          # TODO: Check if we need this and comment if yes.
+          + lib.optionalString stdenv.hostPlatform.isDarwin
+        ''
+          PATH=$PATH:/usr/bin
+        '' + ''
+
+          cmake --build . --target package --parallel $NIX_BUILD_CORES
+          rm -rf package/_CPack_Packages
+
+          runHook postBuild
+        '';
         installPhase = ''
           runHook preInstall
-        '' + lib.optionalString stdenv.isLinux ''
-          # Needed for the RPM package.
-          mkdir -p .var/lib
-          export HOME=$(mktemp -d)
-          cat << EOF > $HOME/.rpmmacros
-          %_var                 $PWD/.var
-          %_buildshell          $SHELL
-          %_topdir              $PWD/rpmbuild
-          %__strip              true
-          EOF
-          rpmdb --rebuilddb
-        '' + ''
-          # TODO: Check if we need this and comment if yes.
-          PATH=$PATH:/usr/bin
-          cmake --install . --component Runtime
-          cmakeFlagsArray+=(
-            "-UCMAKE_INSTALL_BINDIR"
-            "-UCMAKE_INSTALL_SBINDIR"
-            "-UCMAKE_INSTALL_INCLUDEDIR"
-            "-UCMAKE_INSTALL_OLDINCLUDEDIR"
-            "-UCMAKE_INSTALL_MANDIR"
-            "-UCMAKE_INSTALL_INFODIR"
-            "-UCMAKE_INSTALL_DOCDIR"
-            "-UCMAKE_INSTALL_LIBDIR"
-            "-UCMAKE_INSTALL_LIBEXECDIR"
-            "-UCMAKE_INSTALL_LOCALEDIR"
-            "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
-          )
-          echo "cmake flags: $cmakeFlags ''${cmakeFlagsArray[@]}"
-          cmake "$cmakeDir" $cmakeFlags "''${cmakeFlagsArray[@]}"
-          cmake --build . --target package
-          rm -rf package/_CPack_Packages
+
           install -m 644 -Dt $package package/*
+
+          mkdir -p $out
+          tar -xf package/*.tar.gz --strip-components=2 -C $out
+
           runHook postInstall
         '';
       }));
