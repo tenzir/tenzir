@@ -25,6 +25,7 @@
 #include <arrow/ipc/api.h>
 #include <arrow/status.h>
 
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -64,9 +65,9 @@ class record_batch_decoder final {
 public:
   record_batch_decoder() noexcept
     : decoder_{make_record_batch_listener(
-      [&](std::shared_ptr<arrow::RecordBatch> record_batch) {
-        record_batch_ = std::move(record_batch);
-      })} {
+        [&](std::shared_ptr<arrow::RecordBatch> record_batch) {
+          record_batch_ = std::move(record_batch);
+        })} {
     // nop
   }
 
@@ -105,8 +106,9 @@ void index_column_arrays(const std::shared_ptr<arrow::Array>& arr,
 arrow::ArrayVector
 index_column_arrays(const std::shared_ptr<arrow::RecordBatch>& record_batch) {
   arrow::ArrayVector result{};
-  for (const auto& arr : record_batch->columns())
+  for (const auto& arr : record_batch->columns()) {
     index_column_arrays(arr, result);
+  }
   return result;
 }
 
@@ -178,16 +180,18 @@ const type& arrow_table_slice<FlatBuffer>::schema() const noexcept {
 
 template <class FlatBuffer>
 table_slice::size_type arrow_table_slice<FlatBuffer>::rows() const noexcept {
-  if (auto&& batch = record_batch())
+  if (auto&& batch = record_batch()) {
     return batch->num_rows();
+  }
   return 0;
 }
 
 template <class FlatBuffer>
 table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
-    if (auto&& batch = record_batch())
+    if (auto&& batch = record_batch()) {
       return state_.flat_columns.size();
+    }
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
@@ -296,7 +300,7 @@ std::pair<type, std::shared_ptr<arrow::StructArray>>
 transform_columns(type schema,
                   const std::shared_ptr<arrow::StructArray>& struct_array,
                   const std::vector<indexed_transformation>& transformations) {
-  if (struct_array->num_fields() == 0) {
+  if (struct_array->num_fields() == 0 or transformations.empty()) {
     return {schema, struct_array};
   }
   TENZIR_ASSERT_EXPENSIVE(std::is_sorted(transformations.begin(),
@@ -315,6 +319,19 @@ transform_columns(type schema,
                             }),
     "transformation indices must not be a subset of the following "
     "transformation's index");
+  if (transformations.front().index.empty()) {
+    TENZIR_ASSERT(transformations.size() == 1);
+    auto result = transformations.front().fun({{}, schema}, struct_array);
+    TENZIR_ASSERT(result.size() == 1);
+    TENZIR_ASSERT(result.front().first.name.empty());
+    TENZIR_ASSERT(is<record_type>(result.front().first.type));
+    TENZIR_ASSERT(is<arrow::StructArray>(*result.front().second));
+    return {
+      std::move(result.front().first.type),
+      std::static_pointer_cast<arrow::StructArray>(
+        std::move(result.front().second)),
+    };
+  }
   // The current unpacked layer of the transformation, i.e., the pieces required
   // to re-assemble the current layer of both the record type and the record
   // batch.
@@ -336,8 +353,9 @@ transform_columns(type schema,
     for (; index.back() < layer.fields.size(); ++index.back()) {
       const auto [is_prefix_match, is_exact_match]
         = [&]() -> std::pair<bool, bool> {
-        if (current == sentinel)
+        if (current == sentinel) {
           return {false, false};
+        }
         const auto [index_mismatch, current_index_mismatch]
           = std::mismatch(index.begin(), index.end(), current->index.begin(),
                           current->index.end());
@@ -378,9 +396,10 @@ transform_columns(type schema,
                                      nested_schema);
           auto nested_arrow_fields = arrow::FieldVector{};
           nested_arrow_fields.reserve(nested_layer.fields.size());
-          for (const auto& nested_field : nested_layer.fields)
+          for (const auto& nested_field : nested_layer.fields) {
             nested_arrow_fields.push_back(
               nested_field.type.to_arrow_field(nested_field.name));
+          }
           result.arrays.push_back(
             make_struct_array(nested_array.length(), nested_array.null_bitmap(),
                               nested_arrow_fields, nested_layer.arrays));
@@ -392,8 +411,9 @@ transform_columns(type schema,
     }
     return result;
   };
-  if (transformations.empty())
+  if (transformations.empty()) {
     return {schema, struct_array};
+  }
   auto current = transformations.begin();
   const auto sentinel = transformations.end();
   auto layer = unpacked_layer{
@@ -419,8 +439,9 @@ transform_columns(type schema,
   new_schema.assign_metadata(schema);
   auto arrow_fields = arrow::FieldVector{};
   arrow_fields.reserve(layer.fields.size());
-  for (const auto& field : layer.fields)
+  for (const auto& field : layer.fields) {
     arrow_fields.push_back(field.type.to_arrow_field(field.name));
+  }
   auto new_struct_array = std::shared_ptr<arrow::StructArray>{};
   // TODO: Does it make sense to add `struct_array->offset()` here?
   if (layer.arrays.empty()
@@ -459,8 +480,9 @@ transform_columns(const table_slice& slice,
   auto input_struct_array = input_batch->ToStructArray().ValueOrDie();
   auto [output_schema, output_struct_array]
     = transform_columns(slice.schema(), input_struct_array, transformations);
-  if (!output_schema)
+  if (!output_schema) {
     return {};
+  }
   auto output_batch = arrow::RecordBatch::Make(output_schema.to_arrow_schema(),
                                                output_struct_array->length(),
                                                output_struct_array->fields());
@@ -507,8 +529,9 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
     for (; index.back() < layer.fields.size(); ++index.back()) {
       const auto [is_prefix_match, is_exact_match]
         = [&]() -> std::pair<bool, bool> {
-        if (current == sentinel)
+        if (current == sentinel) {
           return {false, false};
+        }
         const auto [index_mismatch, current_index_mismatch] = std::mismatch(
           index.begin(), index.end(), current->begin(), current->end());
         const auto is_prefix_match = index_mismatch == index.end();
@@ -543,9 +566,10 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                                    nested_schema);
         auto nested_arrow_fields = arrow::FieldVector{};
         nested_arrow_fields.reserve(nested_layer.fields.size());
-        for (const auto& nested_field : nested_layer.fields)
+        for (const auto& nested_field : nested_layer.fields) {
           nested_arrow_fields.push_back(
             nested_field.type.to_arrow_field(nested_field.name));
+        }
         result.arrays.push_back(
           make_struct_array(nested_array.length(), nested_array.null_bitmap(),
                             nested_arrow_fields, nested_layer.arrays));
@@ -553,8 +577,9 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
     }
     return result;
   };
-  if (indices.empty())
+  if (indices.empty()) {
     return {};
+  }
   auto current = indices.begin();
   const auto sentinel = indices.end();
   auto layer = unpacked_layer{
@@ -571,8 +596,9 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   TENZIR_ASSERT(current == sentinel, "index out of bounds");
   // Re-assemble the record batch after the transformation.
   TENZIR_ASSERT(layer.fields.size() == layer.arrays.size());
-  if (layer.fields.empty())
+  if (layer.fields.empty()) {
     return {};
+  }
   auto new_schema = type{record_type{layer.fields}};
   new_schema.assign_metadata(schema);
   auto arrow_schema = new_schema.to_arrow_schema();
@@ -588,8 +614,9 @@ table_slice
 select_columns(const table_slice& slice, const std::vector<offset>& indices) {
   auto [schema, batch]
     = select_columns(slice.schema(), to_record_batch(slice), indices);
-  if (!schema)
+  if (!schema) {
     return {};
+  }
   auto result = table_slice{batch, std::move(schema)};
   result.offset(slice.offset());
   result.import_time(slice.import_time());

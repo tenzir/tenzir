@@ -12,7 +12,8 @@ unroll [field:list|record]
 The `unroll` returns an event for each member of a specified list or record
 field, leaving the surrounding event unchanged.
 
-Drops events where the specified field is an empty record or list or null.
+Drops events where the specified field is an empty record, an empty list, or
+null.
 
 ### `field: list|record`
 
@@ -39,7 +40,7 @@ unroll y
 ### Unroll a record
 
 ```tql
-from {x: "a", y: {foo: 1, baz: 2}
+from {x: "a", y: {foo: 1, baz: 2}},
      {x: "b", y: {foo: null, baz: 3}},
      {x: "c", y: null}
 unroll y
@@ -47,7 +48,7 @@ unroll y
 
 ```tql
 {x: "a", y: {foo: 1}}
-{x: "b", y: {foo: null}}
 {x: "a", y: {baz: 2}}
+{x: "b", y: {foo: null}}
 {x: "b", y: {baz: 3}}
 ```

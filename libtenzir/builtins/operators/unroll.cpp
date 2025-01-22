@@ -116,11 +116,13 @@ private:
 
 /// Unrolls the list located at `offset` by duplicating the surrounding data,
 /// once for each list item.
-auto unroll(const table_slice& slice, const offset& offset)
+auto unroll(const table_slice& slice, const offset& offset, bool unordered)
   -> generator<table_slice> {
   auto resolved = offset.get(slice);
   if (const auto* rt = try_as<record_type>(resolved.first)) {
     const auto& sa = as<arrow::StructArray>(*resolved.second);
+    auto transformed_slices = std::vector<table_slice>{};
+    transformed_slices.reserve(rt->num_fields());
     for (auto i = size_t{}; i < rt->num_fields(); ++i) {
       auto transformation = indexed_transformation::function_type{
         [&](struct record_type::field field,
@@ -138,15 +140,26 @@ auto unroll(const table_slice& slice, const offset& offset)
         }};
       auto transformations = std::vector<indexed_transformation>{};
       transformations.emplace_back(offset, std::move(transformation));
-      auto transformed = transform_columns(slice, transformations);
-      auto ids = null_bitmap{};
-      for (auto i = int64_t{}; i < resolved.second->length(); ++i) {
-        ids.append_bit(resolved.second->IsValid(i));
+      transformed_slices.push_back(transform_columns(slice, transformations));
+    }
+    if (unordered) {
+      for (const auto& transformed_slice : transformed_slices) {
+        auto ids = null_bitmap{};
+        for (auto i = int64_t{}; i < resolved.second->length(); ++i) {
+          ids.append_bit(resolved.second->IsValid(i));
+        }
+        for (const auto [begin, end] : select_runs(ids)) {
+          co_yield subslice(transformed_slice, begin, end);
+        }
       }
-      for (const auto [begin, end] : select_runs(ids)) {
-        auto result = subslice(transformed, begin, end);
-        auto rb = to_record_batch(result);
-        co_yield std::move(result);
+      co_return;
+    }
+    for (auto i = int64_t{}; i < resolved.second->length(); ++i) {
+      if (resolved.second->IsNull(i)) {
+        continue;
+      }
+      for (const auto& transformed_slice : transformed_slices) {
+        co_yield subslice(transformed_slice, i, i + 1);
       }
     }
     co_return;
@@ -219,6 +232,9 @@ public:
               .emit(ctrl.diagnostics());
             return {};
           }
+          if (offsets.front().empty()) {
+            return offsets.front();
+          }
           const auto& field_type
             = as<record_type>(slice.schema()).field(offsets.front()).type;
           if (is<null_type>(field_type)) {
@@ -240,10 +256,7 @@ public:
             .match(
               [&](offset result) -> std::optional<offset> {
                 if (result.empty()) {
-                  diagnostic::error("cannot unroll `this`")
-                    .primary(field)
-                    .emit(ctrl.diagnostics());
-                  return {};
+                  return result;
                 }
                 const auto& field_type
                   = as<record_type>(slice.schema()).field(result).type;
@@ -288,7 +301,7 @@ public:
         // Zero or multiple offsets; cannot proceed.
         continue;
       }
-      for (auto unrolled : unroll(slice, *offset)) {
+      for (auto unrolled : unroll(slice, *offset, unordered_)) {
         co_yield std::move(unrolled);
       }
     }
@@ -298,18 +311,22 @@ public:
     return "unroll";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(const expression& filter, event_order order) const
     -> optimize_result override {
     (void)filter;
-    return optimize_result::order_invariant(*this, order);
+    auto replacement = std::make_unique<unroll_operator>(*this);
+    replacement->unordered_ = order == event_order::unordered;
+    return optimize_result{std::nullopt, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, unroll_operator& x) -> bool {
-    return f.object(x).fields(f.field("field", x.field_));
+    return f.object(x).fields(f.field("field", x.field_),
+                              f.field("unordered", x.unordered_));
   }
 
 private:
   variant<ast::simple_selector, located<std::string>> field_;
+  bool unordered_ = {};
 };
 
 class plugin final : public virtual operator_plugin<unroll_operator>,
