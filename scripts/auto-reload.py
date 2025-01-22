@@ -48,7 +48,7 @@ def main():
                 "--tql2",
                 "--color=always",
                 "-q",
-                "--implicit-events-sink=to stdout write json -C",
+                "--implicit-events-sink=write_tql color=true | save_file \"/dev/stdout\"",
                 "-f",
                 tql,
             ],
