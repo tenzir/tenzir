@@ -265,7 +265,23 @@
           "pic"
         ];
 
-        preBuild = lib.optionalString (isStatic && stdenv.hostPlatform.isLinux) ''
+        preBuild = let
+          memory_bytes_command = {
+            Linux = "awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo";
+            Darwin = "${lib.getBin pkgsBuildHost.darwin.system_cmds}/bin/sysctl -n hw.memsize";
+          };
+        in
+        ''
+          echo "Reserving at least 2 GB per compilation unit."
+          echo "Old NIX_BUILD_CORES = $NIX_BUILD_CORES"
+          set -x
+          memory_bytes="$(${memory_bytes_command.${stdenv.buildPlatform.uname.system}})"
+          compile_mem_slots=$(( memory_bytes / 1024 / 1024 / 1024 / 2 ))
+          NIX_BUILD_CORES=$(( compile_mem_slots < NIX_BUILD_CORES ? compile_mem_slots : NIX_BUILD_CORES ))
+          export NIX_BUILD_CORES
+          set +x
+          echo "New NIX_BUILD_CORES = $NIX_BUILD_CORES"
+        '' + lib.optionalString (isStatic && stdenv.hostPlatform.isLinux) ''
           # Needed for the RPM package.
           mkdir -p .var/lib
           export HOME=$(mktemp -d)
