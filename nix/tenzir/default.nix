@@ -343,7 +343,7 @@
         buildPhase = ''
           runHook preBuild
         ''
-          # TODO: Check if we need this and comment if yes.
+          # Append /usr/bin to PATH so CPack can find `pkgbuild`.
           + lib.optionalString stdenv.hostPlatform.isDarwin
         ''
           PATH=$PATH:/usr/bin
