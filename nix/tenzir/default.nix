@@ -207,7 +207,7 @@
             "-UCMAKE_INSTALL_LIBEXECDIR"
             "-UCMAKE_INSTALL_LOCALEDIR"
             "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
-            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
+            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=${lib.boolToString stdenv.hostPlatform.isLinux}"
             "-DCPACK_GENERATOR=${if stdenv.hostPlatform.isDarwin then "TGZ;productbuild" else "TGZ;DEB;RPM"}"
             "-DTENZIR_UV_PATH:STRING=${lib.getExe uv}"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
