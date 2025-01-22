@@ -73,7 +73,7 @@ Function | Description | Example
 :--------|:-------------|:-------
 [`has`](functions/has.md) | Checks whether a record has a field | `record.has("field")`
 [`merge`](functions/merge.md) | Merges two records | `merge(foo, bar)`
-[`sort`](functions/sort.md) | Sorts a record by field names. | `xs.sort()`
+[`sort`](functions/sort.md) | Sorts a record by field names | `xs.sort()`
 
 ## List
 
