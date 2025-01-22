@@ -161,6 +161,7 @@ struct pattern_store : public caf::ref_counted {
           .emit(dh);
       }
     }
+    resolve_all();
   }
 
   void
@@ -427,6 +428,7 @@ void pattern_store::add_single(std::string_view line, location loc,
       .primary(loc)
       .emit(dh);
   }
+  return add_single(parts[0], std::string{parts[1]}, loc, dh);
 }
 
 auto& get_builtin_pattern_store(diagnostic_handler& dh) {
@@ -466,6 +468,7 @@ public:
         return p.resolved_pattern.has_value();
       }));
     input_pattern_.resolve(*patterns_, false);
+    TENZIR_ASSERT(input_pattern_.resolved_pattern);
   }
 
   auto name() const -> std::string override {
@@ -766,28 +769,33 @@ public:
     auto indexed_captures = false;
     auto include_unnamed = false;
     auto pattern_definitions_expression = std::optional<ast::expression>{};
-    TRY(argument_parser2::function("parse_grok")
-          .positional("input", input, "string")
-          .positional("pattern", pattern)
-          .named("pattern_definitions", pattern_definitions_expression,
-                 "record|string")
-          .named("indexed_captures", indexed_captures)
-          .named("include_unnamed", include_unnamed)
-          .parse(inv, ctx));
+
+    auto parser = argument_parser2::function("parse_grok");
+    parser.positional("input", input, "string");
+    parser.positional("pattern", pattern);
+    parser.named("pattern_definitions", pattern_definitions_expression,
+                 "record|string");
+    parser.named("indexed_captures", indexed_captures);
+    parser.named("include_unnamed", include_unnamed);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
     TRY(auto pattern_definitions,
         extract_pattern_definitions(std::move(pattern_definitions_expression),
                                     ctx));
-    auto parser = grok_parser{
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
+    auto p = grok_parser{
       std::move(pattern_definitions),
       std::move(pattern),
       indexed_captures,
       include_unnamed,
-      multi_series_builder::options{},
+      std::move(msb_opts),
       ctx.dh(),
     };
     return function_use::make(
-      [input = std::move(input), parser = std::move(parser)](evaluator eval,
-                                                             session ctx) {
+      [input = std::move(input),
+       parser = std::move(p)](evaluator eval, session ctx) -> multi_series {
         return map_series(eval(input), [&](series values) -> multi_series {
           if (values.type.kind().is<null_type>()) {
             return values;
