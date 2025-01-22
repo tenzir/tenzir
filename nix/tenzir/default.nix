@@ -167,15 +167,6 @@
 
         env = {
           POETRY_VIRTUALENVS_IN_PROJECT = 1;
-          NIX_LDFLAGS = let
-            lto-cache = {
-              cctools = "-cache_path_lto,$TMPDIR";
-              gold = "-plugin-opt,cache-dir=$TMPDIR";
-              lld = "--thinlto-cache-dir=$TMPDIR";
-            };
-          in
-            # Speed up the second linking for the packag
-            lib.optionalString (stdenv.cc.isClang) (lto-cache.${stdenv.hostPlatform.linker} or "");
         };
         cmakeFlags =
           [
