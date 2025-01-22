@@ -1,0 +1,5 @@
+export
+foo = 42
+set bar = 43
+foo bar, baz=qux, quux
+import

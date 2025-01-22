@@ -1,6 +1,0 @@
-error: duplicate comma
- --> /dev/stdin:1:9
-  |
-1 | a = b(c,,)
-  |         ^ 
-  |

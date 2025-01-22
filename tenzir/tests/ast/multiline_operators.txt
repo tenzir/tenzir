@@ -1,0 +1,55 @@
+[
+  invocation {
+    op: {
+      path: [
+        `a` @ 0..1
+      ],
+      ref: unresolved
+    },
+    args: [
+      root_field `b` @ 2..3,
+      root_field `c` @ 7..8,
+      root_field `d` @ 12..13,
+      root_field `e` @ 15..16
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `f` @ 17..18
+      ],
+      ref: unresolved
+    },
+    args: [
+      root_field `g` @ 19..20
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `h` @ 21..22
+      ],
+      ref: unresolved
+    },
+    args: [
+      root_field `i` @ 27..28,
+      root_field `j` @ 32..33,
+      root_field `k` @ 38..39
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `l` @ 40..41
+      ],
+      ref: unresolved
+    },
+    args: [
+      binary_expr {
+        left: root_field `m` @ 42..43,
+        op: "add" @ 44..45,
+        right: root_field `n` @ 48..49
+      }
+    ]
+  }
+]

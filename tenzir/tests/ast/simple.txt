@@ -1,0 +1,85 @@
+[
+  invocation {
+    op: {
+      path: [
+        `export` @ 0..6
+      ],
+      ref: unresolved
+    },
+    args: [
+      
+    ]
+  },
+  assignment {
+    left: simple_selector {
+      expr: root_field `foo` @ 7..10,
+      has_this: false,
+      path: [
+        `foo` @ 7..10
+      ]
+    },
+    equals: 11..12,
+    right: constant {
+      value: int64 42,
+      source: 13..15
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `set` @ 16..19
+      ],
+      ref: unresolved
+    },
+    args: [
+      assignment {
+        left: simple_selector {
+          expr: root_field `bar` @ 20..23,
+          has_this: false,
+          path: [
+            `bar` @ 20..23
+          ]
+        },
+        equals: 24..25,
+        right: constant {
+          value: int64 43,
+          source: 26..28
+        }
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `foo` @ 29..32
+      ],
+      ref: unresolved
+    },
+    args: [
+      root_field `bar` @ 33..36,
+      assignment {
+        left: simple_selector {
+          expr: root_field `baz` @ 38..41,
+          has_this: false,
+          path: [
+            `baz` @ 38..41
+          ]
+        },
+        equals: 41..42,
+        right: root_field `qux` @ 42..45
+      },
+      root_field `quux` @ 47..51
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `import` @ 52..58
+      ],
+      ref: unresolved
+    },
+    args: [
+      
+    ]
+  }
+]
