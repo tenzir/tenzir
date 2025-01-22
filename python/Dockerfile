@@ -20,8 +20,8 @@ RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
 WORKDIR /tenzir/python/
 # Layer the Poetry install to optimize the dev experience.
 COPY --chown=tenzir:tenzir \ 
-    ./tenzir/integration/data/ \
-    /tenzir/tenzir/integration/data/
+    ./tenzir/bats/data/ \
+    /tenzir/tenzir/bats/data/
 COPY --chown=tenzir:tenzir \
     ./python/pyproject.toml \
     ./python/poetry.lock \

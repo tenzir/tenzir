@@ -263,8 +263,8 @@ in {
     pname = "bats-tenzir";
     version = "0.1";
     src = lib.fileset.toSource {
-      root = ./../tenzir/integration/lib/bats-tenzir;
-      fileset = ./../tenzir/integration/lib/bats-tenzir;
+      root = ./../tenzir/bats/lib/bats-tenzir;
+      fileset = ./../tenzir/bats/lib/bats-tenzir;
     };
     dontBuild = true;
     installPhase = ''
@@ -280,8 +280,8 @@ in {
   };
   bundledPlugins = builtins.attrNames (lib.filterAttrs (name: type: type == "directory") (builtins.readDir ../plugins));
   integration-test-tree = lib.fileset.unions ([
-    (lib.fileset.difference ../tenzir/integration ../tenzir/integration/lib/bats-tenzir)
-  ] ++ builtins.map (x: lib.fileset.maybeMissing (./.. + "/plugins/${x}/integration")) final.bundledPlugins);
+    (lib.fileset.difference ../tenzir/bats ../tenzir/bats/lib/bats-tenzir)
+  ] ++ builtins.map (x: lib.fileset.maybeMissing (./.. + "/plugins/${x}/bats")) final.bundledPlugins);
   tenzir-tree = lib.fileset.difference (lib.fileset.unions [
     ../changelog
     ../cmake

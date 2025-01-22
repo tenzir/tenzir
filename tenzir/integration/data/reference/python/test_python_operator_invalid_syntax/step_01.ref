@@ -1,5 +1,0 @@
-error: File "<inline>", line 1
-    @@
-     ^
-SyntaxError: invalid syntax
- = note: python process exited with error

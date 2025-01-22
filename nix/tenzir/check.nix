@@ -23,16 +23,20 @@ stdenvNoCC.mkDerivation {
         ps.datetime
       ]);
       template = path: ''
-        if [ -d "${path}/integration/tests" ]; then
-          echo "running ${path} tests"
-          bats -T -j $(nproc) --filter-tags !python_operator "${path}/integration/tests"
+        if [ -d "${path}/bats/tests" ]; then
+          echo "running ${path} BATS tests"
+          bats -T -j $(nproc) "${path}/bats/tests"
+        fi
+        if [ -f "${path}/tests/run.py" ]; then
+          echo "running ${path} integration tests"
+          ${path}/tests/run.py -j $(nproc)
         fi
       '';
     in
     ''
-      patchShebangs tenzir/integration/data/misc/scripts
+      patchShebangs tenzir/bats/data/misc/scripts
       export PATH=''${PATH:+$PATH:}${lib.getBin unchecked}/bin:${lib.getBin pkgsBuildBuild.toybox}/bin
-      export BATS_LIB_PATH=''${BATS_LIB_PATH:+''${BATS_LIB_PATH}:}$PWD/tenzir/integration
+      export BATS_LIB_PATH=''${BATS_LIB_PATH:+''${BATS_LIB_PATH}:}$PWD/tenzir/bats
       export PYTHONPATH=''${PYTHONPATH:+''${PYTHONPATH}:}${py3}/${py3.sitePackages}
       mkdir -p cache
       export XDG_CACHE_HOME=$PWD/cache

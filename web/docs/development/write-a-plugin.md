@@ -179,7 +179,7 @@ the documentation to find out how to explicitly de-/activate plugins.
 
 It is also possible to build plugins against an installed Tenzir. The
 `TenzirRegisterPlugin` CMake function contains the required scaffolding to set
-up `test` and `integration` targets that mimic Tenzir's targets. Here's how you
+up `test` and `bats` targets that mimic Tenzir's targets. Here's how you
 can use it:
 
 ```bash
@@ -195,7 +195,7 @@ cmake --install build
 # Optionally you can manually specify a non-standard Tenzir install root:
 #   cmake --install build --prefix /opt/tenzir
 # Run plugin-specific integration tests against the installed Tenzir.
-cmake --build build --target integration
+cmake --build build --target bats
 ```
 
 ## Add unit and integration tests
@@ -219,15 +219,15 @@ To execute registered unit tests, you can also simply run the test binary
 
 Every plugin ideally comes with integration tests as well. Our convention is
 that integration tests reside in an `integration` subdirectory. If you add a
-file called `integration/*.bats`, Tenzir runs them alongside the regular
+file called `bats/*.bats`, Tenzir runs them alongside the regular
 integration tests.
 
 Note that plugins may affect the overall behavior of Tenzir. Therefore we
 recommend to to run all integrations regularly by running the build target
-`integration`.
+`bats`.
 
 To execute plugin-specific integration tests only, run the build target
-`integration-<plugin>`, where `<plugin>` is the name of your plugin.
+`bats-<plugin>`, where `<plugin>` is the name of your plugin.
 
 ## Package it
 

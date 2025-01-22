@@ -100,8 +100,8 @@ RUN cmake -B build -G Ninja \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       ${TENZIR_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
-    cmake --build build --target test && \
-    cmake --build build --target integration && \
+    CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test && \
+    cmake --build build --target bats && \
     cmake --install build --strip --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build --strip && \
     rm -rf build
@@ -137,7 +137,7 @@ COPY plugins/amqp ./plugins/amqp
 RUN cmake -S plugins/amqp -B build-amqp -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-amqp --parallel && \
-      cmake --build build-amqp --target integration && \
+      cmake --build build-amqp --target bats && \
       DESTDIR=/plugin/amqp cmake --install build-amqp --strip --component Runtime && \
       rm -rf build-build-amqp
 
@@ -147,7 +147,7 @@ COPY plugins/azure-blob-storage ./plugins/azure-blob-storage
 RUN cmake -S plugins/azure-blob-storage -B build-azure-blob-storage -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-azure-blob-storage --parallel && \
-      cmake --build build-azure-blob-storage --target integration && \
+      cmake --build build-azure-blob-storage --target bats && \
       DESTDIR=/plugin/azure-blob-storage cmake --install build-azure-blob-storage --strip --component Runtime && \
       rm -rf build-build-azure-blob-storage
 
@@ -157,7 +157,7 @@ COPY plugins/fluent-bit ./plugins/fluent-bit
 RUN cmake -S plugins/fluent-bit -B build-fluent-bit -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-fluent-bit --parallel && \
-      cmake --build build-fluent-bit --target integration && \
+      cmake --build build-fluent-bit --target bats && \
       DESTDIR=/plugin/fluent-bit cmake --install build-fluent-bit --strip --component Runtime && \
       rm -rf build-build-fluent-bit
 
@@ -167,7 +167,7 @@ COPY plugins/gcs ./plugins/gcs
 RUN cmake -S plugins/gcs -B build-gcs -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-gcs --parallel && \
-      cmake --build build-gcs --target integration && \
+      cmake --build build-gcs --target bats && \
       DESTDIR=/plugin/gcs cmake --install build-gcs --strip --component Runtime && \
       rm -rf build-build-gcs
 
@@ -178,7 +178,7 @@ RUN cmake -S plugins/google-cloud-pubsub -B build-google-cloud-pubsub -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
         -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
       cmake --build build-google-cloud-pubsub --parallel && \
-      cmake --build build-google-cloud-pubsub --target integration && \
+      cmake --build build-google-cloud-pubsub --target bats && \
       DESTDIR=/plugin/google-cloud-pubsub cmake --install build-google-cloud-pubsub --strip --component Runtime && \
       rm -rf build-build-google-cloud-pubsub
 
@@ -188,7 +188,7 @@ COPY plugins/kafka ./plugins/kafka
 RUN cmake -S plugins/kafka -B build-kafka -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-kafka --parallel && \
-      cmake --build build-kafka --target integration && \
+      cmake --build build-kafka --target bats && \
       DESTDIR=/plugin/kafka cmake --install build-kafka --strip --component Runtime && \
       rm -rf build-build-kafka
 
@@ -198,7 +198,7 @@ COPY plugins/nic ./plugins/nic
 RUN cmake -S plugins/nic -B build-nic -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-nic --parallel && \
-      cmake --build build-nic --target integration && \
+      cmake --build build-nic --target bats && \
       DESTDIR=/plugin/nic cmake --install build-nic --strip --component Runtime && \
       rm -rf build-build-nic
 
@@ -208,7 +208,7 @@ COPY plugins/parquet ./plugins/parquet
 RUN cmake -S plugins/parquet -B build-parquet -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-parquet --parallel && \
-    cmake --build build-parquet --target integration && \
+    cmake --build build-parquet --target bats && \
     DESTDIR=/plugin/parquet cmake --install build-parquet --strip --component Runtime && \
     rm -rf build-build-parquet
 
@@ -218,7 +218,7 @@ COPY plugins/s3 ./plugins/s3
 RUN cmake -S plugins/s3 -B build-s3 -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-s3 --parallel && \
-      cmake --build build-s3 --target integration && \
+      cmake --build build-s3 --target bats && \
       DESTDIR=/plugin/s3 cmake --install build-s3 --strip --component Runtime && \
       rm -rf build-build-s3
 
@@ -228,7 +228,7 @@ COPY plugins/sigma ./plugins/sigma
 RUN cmake -S plugins/sigma -B build-sigma -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-sigma --parallel && \
-      cmake --build build-sigma --target integration && \
+      cmake --build build-sigma --target bats && \
       DESTDIR=/plugin/sigma cmake --install build-sigma --strip --component Runtime && \
       rm -rf build-build-sigma
 
@@ -238,7 +238,7 @@ COPY plugins/sqs ./plugins/sqs
 RUN cmake -S plugins/sqs -B build-sqs -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-sqs --parallel && \
-      cmake --build build-sqs --target integration && \
+      cmake --build build-sqs --target bats && \
       DESTDIR=/plugin/sqs cmake --install build-sqs --strip --component Runtime && \
       rm -rf build-build-sqs
 
@@ -248,7 +248,7 @@ COPY plugins/from_velociraptor ./plugins/from_velociraptor
 RUN cmake -S plugins/from_velociraptor -B build-from_velociraptor -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-from_velociraptor --parallel && \
-      cmake --build build-from_velociraptor --target integration && \
+      cmake --build build-from_velociraptor --target bats && \
       DESTDIR=/plugin/from_velociraptor cmake --install build-from_velociraptor --strip --component Runtime && \
       rm -rf build-build-from_velociraptor
 
@@ -258,7 +258,7 @@ COPY plugins/web ./plugins/web
 RUN cmake -S plugins/web -B build-web -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-web --parallel && \
-      cmake --build build-web --target integration && \
+      cmake --build build-web --target bats && \
       DESTDIR=/plugin/web cmake --install build-web --strip --component Runtime && \
       rm -rf build-build-web
 
@@ -268,7 +268,7 @@ COPY plugins/yara ./plugins/yara
 RUN cmake -S plugins/yara -B build-yara -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-yara --parallel && \
-      cmake --build build-yara --target integration && \
+      cmake --build build-yara --target bats && \
       DESTDIR=/plugin/yara cmake --install build-yara --strip --component Runtime && \
       rm -rf build-build-yara
 
@@ -278,7 +278,7 @@ COPY plugins/zmq ./plugins/zmq
 RUN cmake -S plugins/zmq -B build-zmq -G Ninja \
         -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-zmq --parallel && \
-      cmake --build build-zmq --target integration && \
+      cmake --build build-zmq --target bats && \
       DESTDIR=/plugin/zmq cmake --install build-zmq --strip --component Runtime && \
       rm -rf build-build-zmq
 
@@ -382,7 +382,7 @@ COPY contrib/tenzir-plugins/azure-log-analytics ./contrib/tenzir-plugins/azure-l
 RUN cmake -S contrib/tenzir-plugins/azure-log-analytics -B build-azure-log-analytics -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-azure-log-analytics --parallel && \
-      cmake --build build-azure-log-analytics --target integration && \
+      cmake --build build-azure-log-analytics --target bats && \
       DESTDIR=/plugin/azure-log-analytics cmake --install build-azure-log-analytics --strip --component Runtime && \
       rm -rf build-build-azure-log-analytics
 
@@ -392,7 +392,7 @@ COPY contrib/tenzir-plugins/compaction ./contrib/tenzir-plugins/compaction
 RUN cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-compaction --parallel 1 && \
-      cmake --build build-compaction --target integration && \
+      cmake --build build-compaction --target bats && \
       DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
       rm -rf build-compaction
 
@@ -402,7 +402,7 @@ COPY contrib/tenzir-plugins/context ./contrib/tenzir-plugins/context
 RUN cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-context --parallel && \
-      cmake --build build-context --target integration && \
+      cmake --build build-context --target bats && \
       DESTDIR=/plugin/context cmake --install build-context --strip --component Runtime && \
       rm -rf build-context
 
@@ -412,7 +412,7 @@ COPY contrib/tenzir-plugins/pipeline-manager ./contrib/tenzir-plugins/pipeline-m
 RUN cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-pipeline-manager --parallel && \
-      cmake --build build-pipeline-manager --target integration && \
+      cmake --build build-pipeline-manager --target bats && \
       DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --strip --component Runtime && \
       rm -rf build-pipeline-manager
 
@@ -433,7 +433,7 @@ COPY contrib/tenzir-plugins/platform ./contrib/tenzir-plugins/platform
 RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-platform --parallel && \
-      cmake --build build-platform --target integration && \
+      cmake --build build-platform --target bats && \
       DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime && \
       rm -rf build-platform
 
@@ -443,7 +443,7 @@ COPY contrib/tenzir-plugins/snowflake ./contrib/tenzir-plugins/snowflake
 RUN cmake -S contrib/tenzir-plugins/snowflake -B build-snowflake -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-snowflake --parallel && \
-      cmake --build build-snowflake --target integration && \
+      cmake --build build-snowflake --target bats && \
       DESTDIR=/plugin/snowflake cmake --install build-snowflake --strip --component Runtime && \
       rm -rf build-snowflake
 
@@ -453,7 +453,7 @@ COPY contrib/tenzir-plugins/to_asl ./contrib/tenzir-plugins/to_asl
 RUN cmake -S contrib/tenzir-plugins/to_asl -B build-to_asl -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-to_asl --parallel && \
-      cmake --build build-to_asl --target integration && \
+      cmake --build build-to_asl --target bats && \
       DESTDIR=/plugin/to_asl cmake --install build-to_asl --strip --component Runtime && \
       rm -rf build-to_asl
 
@@ -463,7 +463,7 @@ COPY contrib/tenzir-plugins/to_splunk ./contrib/tenzir-plugins/to_splunk
 RUN cmake -S contrib/tenzir-plugins/to_splunk -B build-to_splunk -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-to_splunk --parallel && \
-      cmake --build build-to_splunk --target integration && \
+      cmake --build build-to_splunk --target bats && \
       DESTDIR=/plugin/to_splunk cmake --install build-to_splunk --strip --component Runtime && \
       rm -rf build-to_splunk
 
@@ -473,7 +473,7 @@ COPY contrib/tenzir-plugins/vast ./contrib/tenzir-plugins/vast
 RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-vast --parallel && \
-      cmake --build build-vast --target integration && \
+      cmake --build build-vast --target bats && \
       DESTDIR=/plugin/vast cmake --install build-vast --strip --component Runtime && \
       rm -rf build-vast
 

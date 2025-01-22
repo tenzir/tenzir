@@ -116,19 +116,60 @@ endif ()
 
 # -- integration tests ---------------------------------------------------------
 
-add_custom_target(integration)
-TenzirDefineUpdateIntegrationTarget(integration OFF)
-add_custom_target(integration-tenzir)
-add_dependencies(integration integration-tenzir)
-TenzirDefineUpdateIntegrationTarget(
-  integration-tenzir "${CMAKE_CURRENT_SOURCE_DIR}/integration/data/reference")
+add_test(NAME build-tenzir
+         COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
+                 "$<CONFIG>" --target tenzir)
+set_tests_properties(build-tenzir PROPERTIES FIXTURES_SETUP
+                                             "tenzir_integration_test_fixture")
+
+unset(_integration_test_dirs)
+file(
+  GLOB _integration_test_dirs
+  RELATIVE "${CMAKE_CURRENT_LIST_DIR}/tests/"
+  "${CMAKE_CURRENT_LIST_DIR}/tests/[^_]*")
+foreach (dir IN LISTS _integration_test_dirs)
+  if (NOT IS_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/tests/${dir}")
+    continue()
+  endif ()
+  add_test(
+    NAME "tenzir/${dir}"
+    COMMAND
+      "${CMAKE_COMMAND}" "-E" "env"
+      "PATH=$<TARGET_FILE_DIR:tenzir::tenzir>:${PATH}" "--" "${TENZIR_UV_PATH}"
+      "run" "${CMAKE_CURRENT_LIST_DIR}/tests/run.py" "${dir}/")
+  set_tests_properties(
+    "tenzir/${dir}" PROPERTIES FIXTURES_REQUIRED
+                               "tenzir_integration_test_fixture")
+endforeach ()
+
+add_custom_target(
+  integration
+  COMMAND
+    "${CMAKE_COMMAND}" "-E" "env"
+    "PATH=$<TARGET_FILE_DIR:tenzir::tenzir>:${PATH}" "--" "${TENZIR_UV_PATH}"
+    "run" "${CMAKE_CURRENT_LIST_DIR}/tests/run.py"
+  DEPENDS tenzir)
+add_custom_target(
+  update-integration
+  COMMAND
+    "${CMAKE_COMMAND}" "-E" "env"
+    "PATH=$<TARGET_FILE_DIR:tenzir::tenzir>:${PATH}" "--" "${TENZIR_UV_PATH}"
+    "run" "${CMAKE_CURRENT_LIST_DIR}/tests/run.py" "-u"
+  DEPENDS tenzir)
+
+add_custom_target(bats)
+TenzirDefineUpdateBATSTarget(bats OFF)
+add_custom_target(bats-tenzir)
+add_dependencies(bats bats-tenzir)
+TenzirDefineUpdateBATSTarget(bats-tenzir
+                             "${CMAKE_CURRENT_SOURCE_DIR}/bats/data/reference")
 
 # This needs a custom definition instead of the one from
-# TenzirDefineUpdateIntegrationTarget as it requires two calls to properly diff
+# TenzirDefineUpdateBATSTarget as it requires two calls to properly diff
 # within the submodule.
 if (Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
   add_custom_target(
-    diff-integration
+    diff-bats
     COMMAND "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}" "add"
             "--intent-to-add" "--all"
     COMMAND "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}" "diff" "--exit-code"
@@ -136,8 +177,8 @@ if (Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
     COMMAND
       "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins"
       "diff" "--exit-code" "--" "*.ref"
-    DEPENDS update-integration
-    COMMENT "Diffing all integration test results"
+    DEPENDS update-bats
+    COMMENT "Diffing all bats test results"
     USES_TERMINAL)
 endif ()
 
@@ -146,23 +187,23 @@ ProcessorCount(parallel_level)
 math(EXPR parallel_level "${parallel_level} + 2")
 
 file(GLOB_RECURSE _suites CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests/*.bats")
+     "${CMAKE_CURRENT_SOURCE_DIR}/bats/tests/*.bats")
 foreach (suite IN LISTS _suites)
   get_filename_component(bats_suite_name "${suite}" NAME_WE)
   string(REGEX REPLACE "_" "-" suite_name "${bats_suite_name}")
   add_custom_target(
-    "integration-tenzir-${suite_name}"
+    "bats-tenzir-${suite_name}"
     COMMAND
       "${CMAKE_COMMAND}" -E env
-      PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/integration/lib/bats/bin"
+      PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/bats/lib/bats/bin"
       bats "-T" "--jobs" "${parallel_level}" "${suite}"
-    COMMENT "Executing integration test suite ${suite_name}..."
+    COMMENT "Executing bats test suite ${suite_name}..."
     USES_TERMINAL)
-  add_dependencies(integration-tenzir-${suite_name} tenzir)
-  add_dependencies(integration-tenzir integration-tenzir-${suite_name})
-  TenzirDefineUpdateIntegrationTarget(
-    integration-tenzir-${suite_name}
-    "${CMAKE_CURRENT_SOURCE_DIR}/integration/data/reference/${bats_suite_name}")
+  add_dependencies(bats-tenzir-${suite_name} tenzir)
+  add_dependencies(bats-tenzir bats-tenzir-${suite_name})
+  TenzirDefineUpdateBATSTarget(
+    bats-tenzir-${suite_name}
+    "${CMAKE_CURRENT_SOURCE_DIR}/bats/data/reference/${bats_suite_name}")
 endforeach ()
 
 unset(parallel_level)
@@ -173,9 +214,8 @@ add_custom_target(
   COMMAND "${CMAKE_COMMAND}" -E make_directory
           "${CMAKE_BINARY_DIR}/share/tenzir"
   COMMAND
-    "${CMAKE_COMMAND}" -E create_symlink
-    "${CMAKE_CURRENT_SOURCE_DIR}/integration"
-    "${CMAKE_BINARY_DIR}/share/tenzir/integration"
+    "${CMAKE_COMMAND}" -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/bats"
+    "${CMAKE_BINARY_DIR}/share/tenzir/bats"
   COMMENT "Linking integration test directory")
 
 add_dependencies(tenzir link-integration)
@@ -189,9 +229,9 @@ add_feature_info("TENZIR_ENABLE_BATS_TENZIR_INSTALLATION"
 
 if (TENZIR_ENABLE_BATS_TENZIR_INSTALLATION)
   install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration/lib/bats-tenzir"
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bats/lib/bats-tenzir"
     COMPONENT Development
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/integration")
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/bats")
 endif ()
 
 # -- add plugins ---------------------------------------------------------------

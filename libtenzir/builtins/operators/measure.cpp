@@ -13,7 +13,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
@@ -26,92 +26,104 @@ class measure_operator final : public crtp_operator<measure_operator> {
 public:
   measure_operator() = default;
 
-  measure_operator(uint64_t batch_size, bool real_time, bool cumulative)
-    : batch_size_{batch_size}, real_time_{real_time}, cumulative_{cumulative} {
+  measure_operator(uint64_t batch_size, bool real_time, bool cumulative,
+                   bool definition)
+    : batch_size_{detail::narrow<int64_t>(batch_size)},
+      real_time_{real_time},
+      cumulative_{cumulative},
+      definition_{definition} {
   }
 
   auto operator()(generator<table_slice> input) const
     -> generator<table_slice> {
     auto last_finish = std::chrono::steady_clock::now();
     static const auto schema = type{
-      "tenzir.metrics.events",
+      "tenzir.measure.events",
       record_type{
         {"timestamp", time_type{}},
         {"events", uint64_type{}},
-        {"schema", string_type{}},
         {"schema_id", string_type{}},
+        {"schema", definition_ ? type{record_type{}} : type{string_type{}}},
       },
     };
-    auto builder = table_slice_builder{schema};
+    auto builder = series_builder{schema};
     auto counters = std::unordered_map<type, uint64_t>{};
     for (auto&& slice : input) {
       const auto now = std::chrono::steady_clock::now();
       if (slice.rows() == 0) {
-        if (builder.rows() > 0
+        if (builder.length() > 0
             and last_finish + defaults::import::batch_timeout < now) {
           last_finish = now;
-          co_yield builder.finish();
+          co_yield builder.finish_assert_one_slice();
           continue;
         }
         co_yield {};
         continue;
       }
       auto& events = counters[slice.schema()];
+      const auto is_new = events == 0;
       events = cumulative_ ? events + slice.rows() : slice.rows();
-      const auto ok
-        = builder.add(time{std::chrono::system_clock::now()}, events,
-                      slice.schema().name(), slice.schema().make_fingerprint());
-      TENZIR_ASSERT(ok);
-      if (real_time_ or builder.rows() == batch_size_
+      auto metric = builder.record();
+      metric.field("timestamp", time::clock::now());
+      metric.field("events", events);
+      metric.field("schema_id", slice.schema().make_fingerprint());
+      if (definition_) {
+        metric.field("schema",
+                     is_new ? data{slice.schema().to_definition()} : data{});
+      } else {
+        metric.field("schema", slice.schema().name());
+      }
+      if (real_time_ or builder.length() == batch_size_
           or last_finish + defaults::import::batch_timeout < now) {
         last_finish = now;
-        co_yield builder.finish();
+        co_yield builder.finish_assert_one_slice();
         continue;
       }
       co_yield {};
     }
-    if (builder.rows() > 0)
-      co_yield builder.finish();
+    if (builder.length() > 0) {
+      co_yield builder.finish_assert_one_slice();
+    }
   }
 
   auto operator()(generator<chunk_ptr> input) const -> generator<table_slice> {
     auto last_finish = std::chrono::steady_clock::now();
     static const auto schema = type{
-      "tenzir.metrics.bytes",
+      "tenzir.measure.bytes",
       record_type{
         {"timestamp", time_type{}},
         {"bytes", uint64_type{}},
       },
     };
-    auto builder = table_slice_builder{schema};
+    auto builder = series_builder{schema};
     auto counter = uint64_t{};
     for (auto&& chunk : input) {
       const auto now = std::chrono::steady_clock::now();
       if (!chunk || chunk->size() == 0) {
-        if (builder.rows() > 0
+        if (builder.length() > 0
             and last_finish + defaults::import::batch_timeout < now) {
           last_finish = now;
-          co_yield builder.finish();
+          co_yield builder.finish_assert_one_slice();
           continue;
         }
         co_yield {};
         continue;
       }
       counter = cumulative_ ? counter + chunk->size() : chunk->size();
-      const auto ok = builder.add(std::chrono::time_point_cast<time::duration>(
-                                    std::chrono::system_clock::now()),
-                                  counter);
-      TENZIR_ASSERT(ok);
-      if (real_time_ or builder.rows() == batch_size_
+      auto metric = builder.record();
+      metric.field("timestamp", time::clock::now());
+      metric.field("bytes", counter);
+      if (real_time_ or builder.length() == batch_size_
           or last_finish + defaults::import::batch_timeout < now) {
         last_finish = now;
-        co_yield builder.finish();
+        co_yield builder.finish_assert_one_slice();
         continue;
       }
       co_yield {};
     }
-    if (builder.rows() > 0)
-      co_yield builder.finish();
+    if (builder.length() > 0) {
+      co_yield builder.finish_assert_one_slice();
+    }
   }
 
   auto name() const -> std::string override {
@@ -126,13 +138,17 @@ public:
   }
 
   friend auto inspect(auto& f, measure_operator& x) -> bool {
-    return detail::apply_all(f, x.batch_size_, x.real_time_, x.cumulative_);
+    return f.object(x).fields(f.field("batch_size", x.batch_size_),
+                              f.field("real_time", x.real_time_),
+                              f.field("cumulative", x.cumulative_),
+                              f.field("definition", x.definition_));
   }
 
 private:
-  uint64_t batch_size_ = {};
+  int64_t batch_size_ = {};
   bool real_time_ = {};
   bool cumulative_ = {};
+  bool definition_ = {};
 };
 
 class plugin final : public virtual operator_plugin<measure_operator>,
@@ -145,26 +161,28 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     bool real_time = false;
     bool cumulative = false;
-    auto parser
-      = argument_parser{"measure", "https://docs.tenzir.com/operators/measure"};
+    auto parser = argument_parser{"measure", "https://docs.tenzir.com/"
+                                             "operators/measure"};
     parser.add("--real-time", real_time);
     parser.add("--cumulative", cumulative);
     parser.parse(p);
     return std::make_unique<measure_operator>(batch_size_, real_time,
-                                              cumulative);
+                                              cumulative, false);
   }
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     bool real_time = false;
     bool cumulative = false;
+    bool definition = false;
     argument_parser2::operator_("measure")
       .named("real_time", real_time)
       .named("cumulative", cumulative)
+      .named("_definition", definition)
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<measure_operator>(batch_size_, real_time,
-                                              cumulative);
+                                              cumulative, definition);
   }
 
 private:
