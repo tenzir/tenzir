@@ -64,18 +64,24 @@ public:
     return caf::none;
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     auto offset = std::optional<ast::expression>{};
     auto options = std::optional<located<record>>{};
+    auto iam_opts = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
-          .named("topic", args.topic)
+          .positional("topic", args.topic)
           .named("count", args.count)
           .named("exit", args.exit)
           .named("offset", offset, "string|int")
+          .named("aws_iam", iam_opts)
           .named("options", options)
           .parse(inv, ctx));
+    if (iam_opts) {
+      TRY(args.aws, configuration::aws_iam_options::from_record(
+                      std::move(iam_opts).value(), ctx));
+    }
     if (offset) {
       TRY(auto evaluated, const_eval(offset.value(), ctx.dh()));
       constexpr auto f = detail::overload{
@@ -171,17 +177,23 @@ class save_plugin final
     return caf::none;
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     auto ts = std::optional<located<time>>{};
     auto options = std::optional<located<record>>{};
+    auto iam_opts = std::optional<located<record>>{};
     TRY(argument_parser2::operator_(name())
           .positional("topic", args.topic)
           .named("key", args.key)
           .named("timestamp", ts)
+          .named("aws_iam", iam_opts)
           .named("options", options)
           .parse(inv, ctx));
+    if (iam_opts) {
+      TRY(args.aws, configuration::aws_iam_options::from_record(
+                      std::move(iam_opts).value(), ctx));
+    }
     // HACK: Should directly accept a time
     if (ts) {
       args.timestamp = located{fmt::to_string(ts->inner), ts->source};

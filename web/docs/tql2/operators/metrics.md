@@ -389,10 +389,10 @@ in the Explorer:
 
 ```tql
 metrics "operator"
-where timestamp > now() - 1 week
+where timestamp > now() - 1week
 where source and not hidden
-summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
-```
+timestamp = floor(timestamp, 1day)
+summarize timestamp, bytes=sum(output.approx_bytes)```
 
 ```tql
 {timestamp: 2023-11-08T00:00:00.000000, bytes: 79927223}

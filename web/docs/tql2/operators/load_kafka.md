@@ -3,7 +3,8 @@
 Loads a byte stream from a Apache Kafka topic.
 
 ```tql
-load_kafka topic:string, [count=int, exit=bool, offset=int|string, options=record]
+load_kafka topic:string, [count=int, exit=bool, offset=int|string,
+          options=record, aws_iam=record]
 ```
 
 ## Description
@@ -72,6 +73,17 @@ options][librdkafka-options] to configure Kafka according to your needs.
 
 We recommand factoring these options into the plugin-specific `kafka.yaml` so
 that they are indpendent of the `load_kafka` arguments.
+
+### `aws_iam = record (optional)`
+
+If specified, enables using AWS IAM Authentication for MSK. The keys must be
+non-empty when specified.
+
+Available keys:
+- `region`: Region of the MSK Clusters. Must be specified when using IAM.
+- `assume_role`: Optional role ARN to assume.
+- `session_name`: Optional session name to use when assume a role.
+- `external_id`: Optional external id to use when assuming a role.
 
 ## Examples
 

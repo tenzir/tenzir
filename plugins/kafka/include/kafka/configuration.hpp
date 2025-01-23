@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/location.hpp>
 #include <tenzir/type.hpp>
 
 #include <caf/error.hpp>
@@ -27,8 +29,33 @@ class configuration {
   friend class consumer;
 
 public:
+  struct aws_iam_options {
+    std::string region;
+    std::optional<std::string> role;
+    std::optional<std::string> session_name;
+    std::optional<std::string> ext_id;
+
+    static auto from_record(located<record> config, diagnostic_handler& dh)
+      -> failure_or<aws_iam_options>;
+  };
+
+  class aws_iam_callback : public RdKafka::OAuthBearerTokenRefreshCb {
+  public:
+    aws_iam_callback(aws_iam_options options, diagnostic_handler& dh)
+      : options_{std::move(options)}, dh_{dh} {
+    }
+
+    auto oauthbearer_token_refresh_cb(RdKafka::Handle*, const std::string&)
+      -> void override;
+
+  private:
+    aws_iam_options options_;
+    diagnostic_handler& dh_;
+  };
+
   /// Creates a configuration from a record.
-  static auto make(const record& options) -> caf::expected<configuration>;
+  static auto make(const record& options, std::optional<aws_iam_options> aws,
+                   diagnostic_handler& dh) -> caf::expected<configuration>;
 
   /// Gets a value for a given key.
   auto get(std::string_view key) const -> caf::expected<std::string>;
@@ -61,6 +88,7 @@ private:
   configuration();
 
   std::shared_ptr<RdKafka::Conf> conf_{};
+  std::shared_ptr<aws_iam_callback> aws_{};
   std::shared_ptr<rebalancer> rebalance_callback_;
 };
 
