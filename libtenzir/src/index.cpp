@@ -668,10 +668,16 @@ void index_state::flush_to_disk() {
 
 void index_state::handle_slice(table_slice x) {
   const auto& schema = x.schema();
-  if (no_store_internal_events) {
+  if (dont_persist_diagnostics or dont_persist_metrics) {
     const auto is_internal = schema.attribute("internal").has_value();
     if (is_internal) {
-      return;
+      auto name = schema.name();
+      if (dont_persist_diagnostics and name == "tenzir.diagnostic") {
+        return;
+      }
+      if (dont_persist_metrics and name.starts_with("tenzir.metrics.")) {
+        return;
+      }
     }
   }
   auto active_partition = active_partitions.find(schema);
@@ -1035,8 +1041,9 @@ index(index_actor::stateful_pointer<index_state> self,
       const std::filesystem::path& dir, std::string store_backend,
       size_t partition_capacity, duration active_partition_timeout,
       size_t max_inmem_partitions, size_t taste_partitions,
-      size_t max_concurrent_partition_lookups, bool no_store_internal_events,
-      const std::filesystem::path& catalog_dir, index_config index_config) {
+      size_t max_concurrent_partition_lookups, bool dont_persist_diagnostics,
+      bool dont_persist_metrics, const std::filesystem::path& catalog_dir,
+      index_config index_config) {
   TENZIR_TRACE("index {} {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
                TENZIR_ARG(filesystem), TENZIR_ARG(dir),
                TENZIR_ARG(partition_capacity),
@@ -1059,7 +1066,8 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state().accept_queries = true;
   self->state().max_concurrent_partition_lookups
     = max_concurrent_partition_lookups;
-  self->state.no_store_internal_events = no_store_internal_events;
+  self->state().dont_persist_diagnostics = dont_persist_diagnostics;
+  self->state().dont_persist_metrics = dont_persist_metrics;
   self->state().store_actor_plugin
     = plugins::find<store_actor_plugin>(store_backend);
   if (!self->state().store_actor_plugin) {

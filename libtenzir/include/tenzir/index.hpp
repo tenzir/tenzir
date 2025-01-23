@@ -249,8 +249,9 @@ struct index_state {
   /// Timeout after which an active partition is forcibly flushed.
   duration active_partition_timeout = {};
 
-  /// Wether to drop all data flagged as internal.
-  bool no_store_internal_events = {};
+  /// Wether to drop data flagged as internal.
+  bool dont_persist_diagnostics = {};
+  bool dont_persist_metrics = {};
 
   /// The maximum size of the partition LRU cache (or the maximum number of
   /// read-only partition loaded to memory).
@@ -342,8 +343,10 @@ struct index_state {
 /// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param max_concurrent_partition_lookups The maximum amount of concurrent
 ///        lookups.
-/// @param no_store_internal_events Whether to ignore internally generated events
-///        like metrics or diagnostics instead of persisting them.
+/// @param dont_persist_diagnostics Whether to ignore internally generated
+///        diagnostics instead of persisting them.
+/// @param dont_persist_metrics Whether to ignore internally generated
+///        metrics instead of persisting them.
 /// @param catalog_dir The directory used by the catalog.
 /// @param index_config The meta-index configuration of the false-positives
 /// rates for the types and fields.
@@ -355,7 +358,8 @@ index(index_actor::stateful_pointer<index_state> self,
       const std::filesystem::path& dir, std::string store_backend,
       size_t partition_capacity, duration active_partition_timeout,
       size_t max_inmem_partitions, size_t taste_partitions,
-      size_t max_concurrent_partition_lookups, bool no_store_internal_events,
-      const std::filesystem::path& catalog_dir, index_config);
+      size_t max_concurrent_partition_lookups, bool dont_persist_diagnostics,
+      bool dont_persist_metrics, const std::filesystem::path& catalog_dir,
+      index_config);
 
 } // namespace tenzir

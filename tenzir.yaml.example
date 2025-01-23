@@ -142,6 +142,9 @@ tenzir:
   # internal storeage engine.
   no-store-internal-events: false
 
+  dont-persist-diagnostics: false
+  dont-persist-metrics: false
+
   # Automatically rebuild undersized and outdated partitions in the background.
   # The given number controls how much resources to spend on it. Set to 0 to
   # disable.
