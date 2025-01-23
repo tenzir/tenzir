@@ -143,10 +143,14 @@ Function | Description | Example
 
 Function | Description | Example
 :--------|:-------------|:-------
-[`parse_cef`](functions/parse_cef.md) | Parses a string as a CEF message  | `some_string.parse_cef()`
-[`parse_grok`](functions/parse_grok.md) | Parses a string following a grok pattern | `some_string.parse_grok("%{IP:client} …")`
-[`parse_json`](functions/parse_json.md) | Parses a string as a JSON value | `some_string.parse_json()`
-[`parse_leef`](functions/parse_leef.md) | Parses a string as a LEEF message | `some_string.parse_leef()`
+[`parse_cef`](functions/parse_cef.mdx) | Parses a string as a CEF message  | `some_string.parse_cef()`
+[`parse_csv`](functions/parse_csv.mdx) | Parses a string as CSV  | `some_string.parse_csv(header=["a","b"])`
+[`parse_grok`](functions/parse_grok.mdx) | Parses a string following a grok pattern | `some_string.parse_grok("%{IP:client} …")`
+[`parse_json`](functions/parse_json.mdx) | Parses a string as a JSON value | `some_string.parse_json()`
+[`parse_leef`](functions/parse_leef.mdx) | Parses a string as a LEEF message | `some_string.parse_leef()`
+[`parse_ssv`](functions/parse_ssv.mdx) | Parses a string as SSV  | `some_string.parse_ssv(header=["a","b"])`
+[`parse_tsv`](functions/parse_tsv.mdx) | Parses a string as TSV  | `some_string.parse_tsv(header=["a","b"])`
+[`parse_xsv`](functions/parse_xsv.mdx) | Parses a string as XSV | `some_string.parse_xsv(header=["a","b"])`
 
 ## Time & Date
 

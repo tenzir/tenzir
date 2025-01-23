@@ -1,9 +1,12 @@
+import CommonOptions from './_common_parsing_options.mdx';
+
 # parse_json
 
 Parses a string as a JSON value.
 
 ```tql
-parse_json(input:string) -> any
+parse_json(input:string, [schema=string, selector=string, schema_only=bool,
+           raw=bool, unflatten=string]) -> any
 ```
 
 ## Description
@@ -13,6 +16,8 @@ The `parse_json` function parses a string as a JSON value.
 ### `input: string`
 
 The string to parse.
+
+<CommonOptions />
 
 ## Examples
 
@@ -44,3 +49,7 @@ output = input.parse_json()
   output: [0, 1]
 }
 ```
+
+## See Also
+
+[`read_json`](../operators/read_json.mdx)

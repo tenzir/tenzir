@@ -1,36 +1,11 @@
-# read_gelf
+import RawOption from './_common_parsing_options_raw.mdx'
+import SchemaOnlyOption from './_common_parsing_options_schema_only.mdx'
 
-Parses an incoming [GELF](https://go2docs.graylog.org/current/getting_in_log_data/gelf.html) stream into events.
-
-```tql
-read_gelf [merge=bool, raw=bool, schema=string, selector=string, schema_only=bool, unflatten=string]
-```
-
-## Description
-
-Parses an incoming [GELF](https://go2docs.graylog.org/current/getting_in_log_data/gelf.html) stream into events.
-
-### `merge = bool (optional)`
-
-Merges all incoming events into a single schema\* that converges over time. This
-option is usually the fastest *for reading* highly heterogeneous data, but can
-lead
-to huge schemas filled with nulls and imprecise results. Use with caution.
-
-\*: In selector mode, only events with the same selector are merged.
-
-### `raw = bool (optional)`
-
-Use only the raw types that are native to the parsed format. Fields that have a type
-specified in the chosen `schema` will still be parsed according to the schema.
-
-Since GELF is JSON under the hood, this means that JSON numbers will be parsed as numbers,
-but every JSON string remains a string, unless the field is in the `schema`.
+<RawOption />
 
 ### `schema = string (optional)`
 
-Provide the name of a schema to be used by the
-parser.
+Provide the name of a schema to be used by the parser.
 
 If a schema with a matching name is installed, the result will always have
 all fields from that schema.
@@ -56,11 +31,7 @@ For example, the Suricata EVE JSON format includes a field
 
 The `selector` option is incompatible with the `schema` option.
 
-### `schema_only = bool (optional)`
-
-When working with an existing schema, this option will ensure that the output
-schema has *only* the fields from that schema. If the schema name is obtained via a `selector`
-and it does not exist, this has no effect.
+<SchemaOnlyOption />
 
 This option requires either `schema` or `selector` to be set.
 
@@ -69,7 +40,7 @@ This option requires either `schema` or `selector` to be set.
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.
 
-A popular example of this is the [Zeek JSON](read_zeek_json.md) format. It includes
+A popular example of this is the [Zeek JSON](operators/read_zeek_json.mdx) format. It includes
 the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
 top-level. The data is best modeled as an `id` record with four nested fields
 `orig_h`, `orig_p`, `resp_h`, and `resp_p`.
@@ -96,13 +67,4 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
     "resp_p": 5
   }
 }
-```
-
-## Examples
-
-### Read a GELF stream from a TCP socket
-
-```tql
-load_tcp "0.0.0.0:54321"
-read_gelf
 ```

@@ -1271,12 +1271,16 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
-    TRY(argument_parser2::function("parse_json")
-          .positional("x", expr, "string")
-          .parse(inv, ctx));
+    auto parser = argument_parser2::function("parse_json");
+    parser.positional("x", expr, "string");
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
     return function_use::make(
-      [call = inv.call.get_location(), expr = std::move(expr)](evaluator eval,
-                                                               session ctx) {
+      [call = inv.call.get_location(), msb_opts = std::move(msb_opts),
+       expr = std::move(expr)](evaluator eval, session ctx) {
         return map_series(eval(expr), [&](series arg) {
           auto f = detail::overload{
             [&](const arrow::NullArray&) -> multi_series {
@@ -1285,10 +1289,7 @@ public:
             [&](const arrow::StringArray& arg) -> multi_series {
               auto parser = simdjson::ondemand::parser{};
               /// TODO consider keeping this builder alive
-              auto builder
-                = multi_series_builder{multi_series_builder::policy_default{},
-                                       multi_series_builder::settings_type{},
-                                       ctx};
+              auto builder = multi_series_builder{msb_opts, ctx};
               for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
                   builder.null();
@@ -1412,7 +1413,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_ndjson_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_gelf_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_zeek_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_suricata_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{false})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{true})
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)

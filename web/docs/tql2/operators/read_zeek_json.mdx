@@ -1,3 +1,6 @@
+import RawOption from '../_common_parsing_options_raw.mdx'
+import SchemaOnlyOption from '../_common_parsing_options_schema_only.mdx'
+
 # read_zeek_json
 
 Parse an incoming Zeek JSON stream into events.
@@ -8,21 +11,8 @@ read_zeek_json [schema_only=bool, raw=bool]
 
 ## Description
 
-### `raw = bool (optional)`
-
-Use only the raw types that are native to the parsed format. Fields that have a type
-specified in the chosen `schema` will still be parsed according to the schema.
-
-This means that JSON numbers will be parsed as numbers,
-but every JSON string remains a string, unless the field is in the `schema`.
-
-### `schema_only = bool (optional)`
-
-When working with an existing schema, this option will ensure that the output
-schema has *only* the fields from that schema. If the schema name is obtained via a `selector`
-and it does not exist, this has no effect.
-
-This option requires either `schema` or `selector` to be set.
+<SchemaOnlyOption />
+<RawOption />
 
 ## Examples
 

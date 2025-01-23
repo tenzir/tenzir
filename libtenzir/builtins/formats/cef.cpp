@@ -295,19 +295,23 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name())
-          .positional("x", expr, "string")
-          .parse(inv, ctx));
-    return function_use::make(
-      [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
-        return map_series(eval(expr), [&](series arg) {
-          auto f = detail::overload{
+    auto parser = argument_parser2::function(name());
+    parser.positional("x", expr, "string");
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
+    return function_use::make([call = inv.call, msb_opts = std::move(msb_opts),
+                               expr = std::move(expr)](auto eval, session ctx) {
+      return map_series(eval(expr), [&](series arg) {
+        auto f
+          = detail::overload{
             [&](const arrow::NullArray&) {
               return multi_series{arg};
             },
             [&](const arrow::StringArray& arg) {
-              // TODO: Use multi-series builder here.
-              auto b = series_builder{};
+              auto b = multi_series_builder{msb_opts, ctx};
               auto quoting = detail::quoting_escaping_policy{
                 .unescape_operation = unescape,
               };
@@ -322,7 +326,7 @@ public:
                   b.null();
                 }
               }
-              return multi_series{b.finish()};
+              return multi_series{b.finalize()};
             },
             [&](const auto&) -> multi_series {
               diagnostic::warning("`parse_cef` expected `string`, got `{}`",
@@ -332,9 +336,9 @@ public:
               return series::null(null_type{}, arg.length());
             },
           };
-          return match(*arg.array, f);
-        });
+        return match(*arg.array, f);
       });
+    });
   }
 };
 

@@ -67,7 +67,7 @@ C:\Program Files\Winlogbeat> Start-Service winlogbeat
 #### Run a Tenzir pipeline
 
 Now consume the data via a Tenzir pipeline using the
-[`from_fluent_bit`](../../../tql2/operators/from_fluent_bit.md) operator that mimics an
+[`from_fluent_bit`](../../../tql2/operators/from_fluent_bit.mdx) operator that mimics an
 ElasticSearch bulk ingest endpoint:
 
 ```tql
@@ -114,7 +114,7 @@ Bit to monitor.
 
 #### Run a Tenzir pipeline
 
-Use the [`from_fluent_bit`](../../../tql2/operators/from_fluent_bit.md) source operator with
+Use the [`from_fluent_bit`](../../../tql2/operators/from_fluent_bit.mdx) source operator with
 the [Forward input](https://docs.fluentbit.io/manual/pipeline/inputs/forward):
 
 ```tql

@@ -128,7 +128,7 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 | `abfs`,`abfss` | [`load_azure_blob_storage`](load_azure_blob_storage.md) | `from "abfs://path/to/file.json"` |
 | `amqp` | [`load_amqp`](load_amqp.md) | `from "amqp://…` |
 | `file` | [`load_file`](load_file.md) | `from "file://path/to/file.json"` |
-| `fluent-bit` | [`from_fluent_bit`](from_fluent_bit.md) | `from "fluent-bit://elasticsearch"` |
+| `fluent-bit` | [`from_fluent_bit`](from_fluent_bit.mdx) | `from "fluent-bit://elasticsearch"` |
 | `ftp`, `ftps` | [`load_ftp`](load_ftp.md) | `from "ftp://example.com/file.json"` |
 | `gcps` | [`load_google_cloud_pubsub`](load_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id" { … }` |
 | `http`, `https` | [`load_http`](load_http.md) | `from "http://example.com/file.json"` |
@@ -150,15 +150,15 @@ The `from` operator can deduce the file format based on these file-endings:
 
 | Format | File Endings | Operator  |
 |:------ |:------------ |:--------- |
-|  CSV  | `.csv` | [`read_csv`](read_csv.md) |
+|  CSV  | `.csv` | [`read_csv`](read_csv.mdx) |
 |  Feather  | `.feather`, `.arrow` | [`read_feather`](read_feather.md) |
-|  JSON  | `.json` | [`read_json`](read_json.md) |
-|  NDJSON  | `.ndjson`, `.jsonl` | [`read_ndjson`](read_ndjson.md) |
+|  JSON  | `.json` | [`read_json`](read_json.mdx) |
+|  NDJSON  | `.ndjson`, `.jsonl` | [`read_ndjson`](read_ndjson.mdx) |
 |  Parquet  | `.parquet` | [`read_parquet`](read_parquet.md) |
 |  Pcap  | `.pcap` | [`read_pcap`](read_pcap.md) |
-|  SSV  | `.ssv` | [`read_ssv`](read_ssv.md) |
-|  TSV  | `.tsv` | [`read_tsv`](read_tsv.md) |
-|  YAML  | `.yaml` | [`read_yaml`](read_yaml.md) |
+|  SSV  | `.ssv` | [`read_ssv`](read_ssv.mdx) |
+|  TSV  | `.tsv` | [`read_tsv`](read_tsv.mdx) |
+|  YAML  | `.yaml` | [`read_yaml`](read_yaml.mdx) |
 
 #### Compression
 

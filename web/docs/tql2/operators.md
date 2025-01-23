@@ -65,7 +65,7 @@ Operator | Description | Example
 Operator | Description | Example
 :--------|:------------|:-------
 [`from`](./operators/from.md) | Reads events from an URI<br/>Creates events from records | `from "http://example.org/file.csv.gz"`<br/>`from {key: "value"}…` <!--at the top because its important-->
-[`from_fluent_bit`](./operators/from_fluent_bit.md) | Returns results from Fluent Bit | `from_fluent_bit "opentelemetry"`
+[`from_fluent_bit`](./operators/from_fluent_bit.mdx) | Returns results from Fluent Bit | `from_fluent_bit "opentelemetry"`
 [`from_velocira…`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
 
 #### Bytes
@@ -124,25 +124,25 @@ Operator | Description | Example
 Operator | Description | Example
 :--------|:------------|:-------
 [`read_bitz`](./operators/read_bitz.md) | Parses Tenzir's internal wire format | `read_bitz`
-[`read_cef`](./operators/read_cef.md) | Parses the Common Event Format | `read_cef`
-[`read_csv`](./operators/read_csv.md) | Parses comma-separated values | `read_csv null_value="-"`
+[`read_cef`](./operators/read_cef.mdx) | Parses the Common Event Format | `read_cef`
+[`read_csv`](./operators/read_csv.mdx) | Parses comma-separated values | `read_csv null_value="-"`
 [`read_feather`](./operators/read_feather.md) | Parses Feather format | `read_feather`
-[`read_gelf`](./operators/read_gelf.md) | Parses the Graylog Extended Log Format | `read_gelf`
-[`read_grok`](./operators/read_grok.md) | Parses events using a Grok pattern | `read_grok "%{IP:client} %{WORD:action}"`
-[`read_json`](./operators/read_json.md) | Parses JSON objects | `read_json arrays_of_objects=true`
-[`read_kv`](./operators/read_kv.md) | Parses key-value pairs | `read_kv r"(\s+)[A-Z_]+:", r":\s*"`
-[`read_leef`](./operators/read_leef.md) | Parses the Log Event Extended Format | `read_leef`
+[`read_gelf`](./operators/read_gelf.mdx) | Parses the Graylog Extended Log Format | `read_gelf`
+[`read_grok`](./operators/read_grok.mdx) | Parses events using a Grok pattern | `read_grok "%{IP:client} %{WORD:action}"`
+[`read_json`](./operators/read_json.mdx) | Parses JSON objects | `read_json arrays_of_objects=true`
+[`read_kv`](./operators/read_kv.mdx) | Parses key-value pairs | `read_kv r"(\s+)[A-Z_]+:", r":\s*"`
+[`read_leef`](./operators/read_leef.mdx) | Parses the Log Event Extended Format | `read_leef`
 [`read_lines`](./operators/read_lines.md) | Parses each line into a separate event | `read_lines`
-[`read_ndjson`](./operators/read_ndjson.md) | Parses newline-delimited JSON | `read_ndjson`
+[`read_ndjson`](./operators/read_ndjson.mdx) | Parses newline-delimited JSON | `read_ndjson`
 [`read_pcap`](./operators/read_pcap.md) | Parses raw network packets in PCAP format | `read_pcap`
 [`read_parquet`](./operators/read_parquet.md) | Parses Parquet format | `read_parquet`
-[`read_ssv`](./operators/read_ssv.md) | Parses space-separated values | `read_ssv header="name count"`
-[`read_suricata`](./operators/read_suricata.md) | Parses Suricata's Eve format | `read_suricata`
-[`read_syslog`](./operators/read_syslog.md) | Parses syslog | `read_syslog`
-[`read_tsv`](./operators/read_tsv.md) | Parses tab-separated values | `read_tsv auto_expand=true`
-[`read_xsv`](./operators/read_xsv.md) | Parses custom-separated values | `read_xsv ";", ":", "N/A"`
-[`read_yaml`](./operators/read_yaml.md) | Parses YAML | `read_yaml`
-[`read_zeek_json`](./operators/read_zeek_json.md) | Parses Zeek JSON | `read_zeek_json`
+[`read_ssv`](./operators/read_ssv.mdx) | Parses space-separated values | `read_ssv header="name count"`
+[`read_suricata`](./operators/read_suricata.mdx) | Parses Suricata's Eve format | `read_suricata`
+[`read_syslog`](./operators/read_syslog.mdx) | Parses syslog | `read_syslog`
+[`read_tsv`](./operators/read_tsv.mdx) | Parses tab-separated values | `read_tsv auto_expand=true`
+[`read_xsv`](./operators/read_xsv.mdx) | Parses custom-separated values | `read_xsv ";", ":", "N/A"`
+[`read_yaml`](./operators/read_yaml.mdx) | Parses YAML | `read_yaml`
+[`read_zeek_json`](./operators/read_zeek_json.mdx) | Parses Zeek JSON | `read_zeek_json`
 [`read_zeek_tsv`](./operators/read_zeek_tsv.md) | Parses Zeek TSV | `read_zeek_tsv`
 
 ## Printing

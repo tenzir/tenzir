@@ -1,9 +1,12 @@
+import CommonOptions from './_common_parsing_options.mdx';
+
 # parse_leef
 
 Parses a string as a LEEF message
 
 ```tql
-parse_leef(input:string) -> record
+parse_leef(input:string, [schema=string, selector=string, schema_only=bool,
+           raw=bool, unflatten=string]) -> record
 ```
 
 ## Description
@@ -13,6 +16,8 @@ The `parse_leef` function parses a string as a LEEF message
 ### `input: string`
 
 The string to parse.
+
+<CommonOptions />
 
 ## Examples
 
@@ -34,3 +39,7 @@ y = x.parse_leef()
   }
 }
 ```
+
+# See Also
+
+[`read_leef`](../operators/read_leef.mdx), [`parse_cef`](../functions/parse_cef.mdx)

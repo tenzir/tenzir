@@ -1,9 +1,12 @@
+import CommonOptions from './_common_parsing_options.mdx';
+
 # parse_cef
 
 Parses a string as a CEF message
 
 ```tql
-parse_cef(input:string) -> record
+parse_cef(input:string, [schema=string, selector=string, schema_only=bool,
+          raw=bool, unflatten=string]) -> record
 ```
 
 ## Description
@@ -13,6 +16,8 @@ The `parse_cef` function parses a string as a CEF message
 ### `input: string`
 
 The string to parse.
+
+<CommonOptions />
 
 ## Examples
 
@@ -34,3 +39,7 @@ y = x.cef()
   }
 }
 ```
+
+# See Also
+
+[`read_cef`](../operators/read_cef.mdx)
