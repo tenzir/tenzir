@@ -25,11 +25,11 @@ stdenvNoCC.mkDerivation {
       template = path: ''
         if [ -d "${path}/bats/tests" ]; then
           echo "running ${path} BATS tests"
-          bats -T -j $(nproc) "${path}/bats/tests"
+          bats -T -j $NIX_BUILD_CORES "${path}/bats/tests"
         fi
         if [ -f "${path}/tests/run.py" ]; then
           echo "running ${path} integration tests"
-          ${path}/tests/run.py -j $(nproc)
+          ${path}/tests/run.py -j $NIX_BUILD_CORES
         fi
       '';
     in

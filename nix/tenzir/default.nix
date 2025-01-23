@@ -167,15 +167,6 @@
 
         env = {
           POETRY_VIRTUALENVS_IN_PROJECT = 1;
-          NIX_LDFLAGS = let
-            lto-cache = {
-              cctools = "-cache_path_lto,$TMPDIR";
-              gold = "-plugin-opt,cache-dir=$TMPDIR";
-              lld = "--thinlto-cache-dir=$TMPDIR";
-            };
-          in
-            # Speed up the second linking for the packag
-            lib.optionalString (stdenv.cc.isClang) (lto-cache.${stdenv.hostPlatform.linker} or "");
         };
         cmakeFlags =
           [
@@ -274,7 +265,23 @@
           "pic"
         ];
 
-        preBuild = lib.optionalString (isStatic && stdenv.hostPlatform.isLinux) ''
+        preBuild = let
+          memory_bytes_command = {
+            Linux = "awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo";
+            Darwin = "${lib.getBin pkgsBuildHost.darwin.system_cmds}/bin/sysctl -n hw.memsize";
+          };
+        in
+        ''
+          echo "Reserving at least 2 GB per compilation unit."
+          echo "Old NIX_BUILD_CORES = $NIX_BUILD_CORES"
+          set -x
+          memory_bytes="$(${memory_bytes_command.${stdenv.buildPlatform.uname.system}})"
+          compile_mem_slots=$(( memory_bytes / 1024 / 1024 / 1024 / 2 ))
+          NIX_BUILD_CORES=$(( compile_mem_slots < NIX_BUILD_CORES ? compile_mem_slots : NIX_BUILD_CORES ))
+          export NIX_BUILD_CORES
+          set +x
+          echo "New NIX_BUILD_CORES = $NIX_BUILD_CORES"
+        '' + lib.optionalString (isStatic && stdenv.hostPlatform.isLinux) ''
           # Needed for the RPM package.
           mkdir -p .var/lib
           export HOME=$(mktemp -d)
@@ -343,7 +350,7 @@
         buildPhase = ''
           runHook preBuild
         ''
-          # TODO: Check if we need this and comment if yes.
+          # Append /usr/bin to PATH so CPack can find `pkgbuild`.
           + lib.optionalString stdenv.hostPlatform.isDarwin
         ''
           PATH=$PATH:/usr/bin
