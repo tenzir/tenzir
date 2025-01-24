@@ -376,7 +376,8 @@ public:
     msb_parser.add_settings_to_parser(parser, true, false);
     TRY(parser.parse(inv, ctx));
     TRY(auto msb_opts, msb_parser.get_options(ctx));
-    return function_use::make([call = inv.call, msb_ops = std::move(msb_opts),
+    return function_use::make([call = inv.call.get_location(),
+                               msb_ops = std::move(msb_opts),
                                expr = std::move(expr)](auto eval, session ctx) {
       return map_series(eval(expr), [&](series arg) {
         auto f = detail::overload{

@@ -5,8 +5,8 @@ import CommonOptions from './_common_parsing_options.mdx';
 Parses a string as delimiter separated values.
 
 ```tql
-parse_xsv(input:string, header=list<string>|string,
-          field_sep:string, list_sep:string, null_value:string,
+parse_xsv(input:string, field_sep:string, list_sep:string, null_value:string,
+          header=list<string>|string,
          [auto_expand=bool, quotes=string,
           selector=string, schema_only=bool, raw=bool, unflatten=string]) -> record
 ```
@@ -62,10 +62,8 @@ Defaults to the characters `"'`.
 ```tql
 from { input: "1,2,3" }
 output = input.parse_xsv(
+  ",", ";", "",
   header=["a","b","c"],
-  field_sep=",",
-  list_sep=";",
-  null_value="",
 )
 ```
 ```tql

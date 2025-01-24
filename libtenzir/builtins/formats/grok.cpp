@@ -402,10 +402,10 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
   }
 }
 
-void pattern_store::add_single(std::string_view key, std::string pattern,
+void pattern_store::add_single(std::string_view key, std::string pat,
                                location loc, diagnostic_handler& dh) {
   const auto [it, inserted]
-    = patterns.try_emplace(std::string{key}, std::move(pattern), loc);
+    = patterns.insert_or_assign(std::string{key}, pattern{std::move(pat), loc});
   if (not inserted) {
     diagnostic::warning(
       "GROK pattern `{}` is already defined and will be overwritten", key)
@@ -805,7 +805,7 @@ public:
             diagnostic::warning("expected string, got `{}`", values.type.kind())
               .primary(input)
               .emit(ctx);
-            return series::null(null_type{}, eval.length());
+            return series::null(null_type{}, values.length());
           }
           auto output = parser.parse_strings(*strings, ctx.dh());
           return multi_series{std::move(output)};

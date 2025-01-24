@@ -2,11 +2,11 @@ import CommonOptions from './_common_parsing_options.mdx';
 
 # parse_csv
 
-Parses a string as comma separated values
+Parses a string as comma separated values.
 
 ```tql
-parse_xsv(input:string, header=list<string>|string,
-         [list_sep:string, null_value:string,
+parse_csv(input:string, header=list<string>|string,
+         [list_sep=string, null_value=string,
           auto_expand=bool, quotes=string,
           selector=string, schema_only=bool, raw=bool, unflatten=string]) -> record
 ```

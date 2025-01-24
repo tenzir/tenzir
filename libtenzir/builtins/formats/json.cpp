@@ -1271,7 +1271,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
-    auto parser = argument_parser2::function("parse_json");
+    auto parser = argument_parser2::function(name());
     parser.positional("x", expr, "string");
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
@@ -1288,7 +1288,7 @@ public:
             },
             [&](const arrow::StringArray& arg) -> multi_series {
               auto parser = simdjson::ondemand::parser{};
-              /// TODO consider keeping this builder alive
+              /// TODO: consider keeping this builder alive
               auto builder = multi_series_builder{msb_opts, ctx};
               for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {

@@ -26,7 +26,11 @@ option `selector=event_type:suricata`. The `suricata` parser does this by
 default.
 
 <SchemaOnlyOption />
+
 <RawOption />
+
+This means that JSON numbers will be parsed as numbers,
+but every JSON string remains a string, unless the field is in the `schema`.
 
 ## Examples
 

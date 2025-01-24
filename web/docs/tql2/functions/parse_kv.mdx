@@ -1,20 +1,20 @@
 import CommonOptions from './_common_parsing_options.mdx';
 
-# read_kv
+# parse_cef
 
-Read Key-Value pairs from a byte stream.
+Parses a string as Key-Value pairs.
 
 ```tql
-read_kv [field_split:string, value_split:string, merge=bool, raw=bool, quotes=string,
-         schema=string, selector=string, schema_only=bool, unflatten=string]
+parse_kv(input:string, field_sep:string, value_sep: string
+        [schema=string, selector=string, schema_only=bool,
+         raw=bool, unflatten=string]) -> record
 ```
 
 ## Description
 
-The `read_kv` operator transforms a byte stream into a event stream by parsing
-the bytes as Key-Value pairs.
+The `parse_kv` operator parses a string as  Key-Value pairs.
 
-Incoming strings are first split into fields according to `field_split`. This
+The string is first split into fields according to `field_split`. This
 can be a regular expression. For example, the input `foo: bar, baz: 42` can be
 split into `foo: bar` and `baz: 42` with the `r",\s*"` (a comma, followed by any
 amount of whitespace) as the field splitter. Note that the matched separators
@@ -57,6 +57,10 @@ will parse as
 }
 ```
 
+### `input: string`
+
+The string to parse.
+
 ### `field_split: string (optional)`
 
 The regular expression used to separate individual fields.
@@ -79,52 +83,23 @@ Defaults to the characters `"'`.
 
 ## Examples
 
-### Read comma-separated key-value pairs
+### parse comma-separated key-value pairs
 
-```txt title="Input"
-surname:"John Norman", family_name:Smith, date_of_birth: 1995-05-26
-```
-
-```tql title=" "
-read_kv r"\s*,\s*", r"\s*:\s*"
+```tql
+from { input: "surname: John, family_name: Smith, date_of_birth: 1995-05-26"}
+output = input.parse_kv(r"\s*,\s*", r"\s*:\s*")
 ```
 ```tql
 {
-  surname: "John Norman",
-  family_name: "Smith",
-  date_of_birth: 1995-05-26,
+  input: "surname: John, family_name: Smith, date_of_birth: 1995-05-26",
+  output: {
+    surname: "John",
+    family_name: "Smith",
+    date_of_birth: 1995-05-26,
+  },
 }
 ```
 
-### Extract key-value pairs with more complex rules
+# See Also
 
-```txt title="Input"
-PATH: C:\foo INPUT_MESSAGE: hello world
-PATH: D:\bar VALUE: 42 INFO: Great
-```
-
-```tql title=" "
-read_kv r"(\s+)[A-Z][A-Z_]+:", r":\s*"
-```
-```tql
-{
-  PATH: "C:\\foo",
-  INPUT_MESSAGE: "hello world",
-}
-{
-  PATH: "D:\\bar",
-  VALUE: 42,
-  INFO: "Great",
-}
-```
-
-This requires lookahead because not every whitespace acts as a field separator.
-Instead, we only want to split if the whitespace is followed by `[A-Z][A-Z_]+:`,
-i.e., at least two uppercase characters followed by a colon. We can express this
-as `"(\s+)[A-Z][A-Z_]+:"`, which yields `PATH: C:\foo` and `INPUT_MESSAGE: hello
-world`. We then split the key from its value with `":\s*"`. Since only the first
-match is used to split key and value, this leaves the path intact.
-
-## See Also
-
-[`parse_kv`](../functions/parse_kv.mdx)
+[`read_kv`](../operators/read_kv.mdx)

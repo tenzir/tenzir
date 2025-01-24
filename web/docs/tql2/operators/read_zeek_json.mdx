@@ -12,7 +12,11 @@ read_zeek_json [schema_only=bool, raw=bool]
 ## Description
 
 <SchemaOnlyOption />
+
 <RawOption />
+
+This means that JSON numbers will be parsed as numbers,
+but every JSON string remains a string, unless the field is in the `schema`.
 
 ## Examples
 

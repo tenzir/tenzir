@@ -230,12 +230,12 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
                                                                  false);
   }
 
-  auto add_to_parser(argument_parser2& parser, bool add_merge_option) -> void {
+  auto add_to_parser(argument_parser2& parser, bool add_merge_option,
+                     bool header_required) -> void {
     if (mode_ == mode::special_optional) {
       TENZIR_ASSERT(list_sep_);
       TENZIR_ASSERT(null_value_);
       parser.named_optional("list_sep", *list_sep_);
-
       parser.named_optional("null_value", *null_value_);
     } else {
       field_sep_ = located{"REQUIRED", location::unknown};
@@ -245,9 +245,14 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       parser.positional("list_sep", *list_sep_);
       parser.positional("null_value", *null_value_);
     }
+    if (header_required) {
+      parser.named("header", header_expression_.emplace(),
+                   "list<string>|string");
+    } else {
+      parser.named("header", header_expression_, "list<string>|string");
+    }
     parser.named("quotes", quotes_);
     parser.named("comments", allow_comments_);
-    parser.named("header", header_expression_, "list<string>|string");
     parser.named("auto_expand", auto_expand_);
     multi_series_builder_argument_parser::add_policy_to_parser(parser);
     multi_series_builder_argument_parser::add_settings_to_parser(
@@ -862,7 +867,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto opt_parser = xsv_common_parser_options_parser{name()};
-    opt_parser.add_to_parser(parser, true);
+    opt_parser.add_to_parser(parser, true, false);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     TRY(auto opts, opt_parser.get_options(ctx));
@@ -949,7 +954,7 @@ public:
       std::string{ListSep},
       std::string{Null.str()},
     };
-    opt_parser.add_to_parser(parser, true);
+    opt_parser.add_to_parser(parser, true, false);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     TRY(auto opts, opt_parser.get_options(ctx));
@@ -1033,7 +1038,7 @@ class parse_xsv : public function_plugin {
     auto input = ast::expression{};
     auto parser = argument_parser2::function(name());
     auto opt_parser = xsv_common_parser_options_parser{name()};
-    opt_parser.add_to_parser(parser, false);
+    opt_parser.add_to_parser(parser, false, true);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, opt_parser.get_options(ctx));
     opts.name = "xsv";
@@ -1065,7 +1070,7 @@ public:
       std::string{ListSep},
       std::string{Null.str()},
     };
-    opt_parser.add_to_parser(parser, false);
+    opt_parser.add_to_parser(parser, false, true);
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, opt_parser.get_options(ctx));
     opts.name = Name.str();
