@@ -70,6 +70,21 @@ struct tenzir::tryable<std::optional<T>> {
   }
 };
 
+template <>
+struct tenzir::tryable<caf::error> {
+  static auto is_success(const caf::error& x) -> bool {
+    return !x;
+  }
+
+  static void get_success(caf::error&& x) {
+    TENZIR_UNUSED(x);
+  }
+
+  static auto get_error(caf::error&& x) -> caf::error {
+    return std::move(x);
+  }
+};
+
 template <class T>
 struct tenzir::tryable<caf::expected<T>> {
   static auto is_success(const caf::expected<T>& x) -> bool {

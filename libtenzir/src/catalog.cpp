@@ -26,6 +26,7 @@
 #include "tenzir/pipeline.hpp"
 #include "tenzir/prune.hpp"
 #include "tenzir/query_context.hpp"
+#include "tenzir/retention_policy.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
@@ -185,8 +186,9 @@ auto catalog_state::lookup_impl(const expression& expr,
   auto memoized_partitions = catalog_lookup_result::candidate_info{};
   auto all_partitions = [&] {
     if (!memoized_partitions.partition_infos.empty()
-        || partition_synopses.empty())
+        || partition_synopses.empty()) {
       return memoized_partitions;
+    }
     for (const auto& [partition_id, synopsis] : partition_synopses) {
       memoized_partitions.partition_infos.emplace_back(partition_id, *synopsis);
     }
@@ -197,18 +199,20 @@ auto catalog_state::lookup_impl(const expression& expr,
       TENZIR_ASSERT(!x.empty());
       auto i = x.begin();
       auto result = lookup_impl(*i, schema);
-      if (!result.partition_infos.empty())
+      if (!result.partition_infos.empty()) {
         for (++i; i != x.end(); ++i) {
           // TODO: A conjunction means that we can restrict the lookup to the
           // remaining candidates. This could be achived by passing the `result`
           // set to `lookup` along with the child expression.
           auto xs = lookup_impl(*i, schema);
-          if (xs.partition_infos.empty())
+          if (xs.partition_infos.empty()) {
             return xs; // short-circuit
+          }
           detail::inplace_intersect(result.partition_infos, xs.partition_infos);
           TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
                                                  result.partition_infos.end()));
         }
+      }
       return result;
     },
     [&](const disjunction& x) -> catalog_lookup_result::candidate_info {
@@ -217,8 +221,9 @@ auto catalog_state::lookup_impl(const expression& expr,
         // TODO: A disjunction means that we can restrict the lookup to the
         // set of partitions that are outside of the current result set.
         auto xs = lookup_impl(op, schema);
-        if (xs.partition_infos.size() == partition_synopses.size())
+        if (xs.partition_infos.size() == partition_synopses.size()) {
           return xs; // short-circuit
+        }
         TENZIR_ASSERT_EXPENSIVE(
           std::is_sorted(xs.partition_infos.begin(), xs.partition_infos.end()));
         detail::inplace_unify(result.partition_infos, xs.partition_infos);
@@ -385,20 +390,25 @@ auto catalog_state::lookup_impl(const expression& expr,
                 return sub == key && (pos == 0 || field_name[pos - 1] == '.');
               }
               auto schema_name = field.schema_name();
-              if (key.length() > schema_name.length() + 1 + field_name.length())
+              if (key.length()
+                  > schema_name.length() + 1 + field_name.length()) {
                 return false;
+              }
               auto pos = key.length() - field_name.length();
               auto second = key.substr(pos);
-              if (second != field_name)
+              if (second != field_name) {
                 return false;
-              if (key[pos - 1] != '.')
+              }
+              if (key[pos - 1] != '.') {
                 return false;
+              }
               auto fpos = schema_name.length() - (pos - 1);
               return key.substr(0, pos - 1) == schema_name.substr(fpos)
                      && (fpos == 0 || schema_name[fpos - 1] == '.');
             };
-            if (!match_name())
+            if (!match_name()) {
               return false;
+            }
             TENZIR_ASSERT(!field.is_standalone_type());
             return compatible(field.type(), x.op, d);
           };
@@ -410,9 +420,11 @@ auto catalog_state::lookup_impl(const expression& expr,
             if (!lhs.type) {
               auto pred = [&](auto& field) {
                 const auto type = field.type();
-                for (const auto& name : type.names())
-                  if (name == lhs.type.name())
+                for (const auto& name : type.names()) {
+                  if (name == lhs.type.name()) {
                     return compatible(type, x.op, d);
+                  }
+                }
                 return false;
               };
               return search(pred);
@@ -455,10 +467,11 @@ auto catalog_state::memusage() const -> size_t {
 }
 
 void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
-  for (auto const& [field, synopsis] : ps.field_synopses_)
+  for (auto const& [field, synopsis] : ps.field_synopses_) {
     if (synopsis != nullptr && is<string_type>(field.type())) {
       unprunable_fields.insert(std::string{field.name()});
     }
+  }
   // TODO/BUG: We also need to prevent pruning for enum types,
   // which also use string literals for lookup. We must be even
   // more strict here than with string fields, because incorrectly
@@ -474,8 +487,9 @@ void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
 
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
   -> catalog_actor::behavior_type {
-  if (self->getf(caf::local_actor::is_detached_flag))
+  if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.catalog");
+  }
   self->state().self = self;
   self->state().taxonomies.concepts = modules::concepts();
   return {
@@ -528,8 +542,9 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
     },
     [self](atom::replace, const std::vector<uuid>& old_uuids,
            std::vector<partition_synopsis_pair>& new_synopses) {
-      for (auto const& uuid : old_uuids)
+      for (auto const& uuid : old_uuids) {
         self->state().erase(uuid);
+      }
       return self->state().merge(std::move(new_synopses));
     },
     [self](atom::candidates, const tenzir::query_context& query_context)

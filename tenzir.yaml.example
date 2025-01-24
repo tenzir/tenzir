@@ -18,6 +18,20 @@ tenzir:
   # without retries.
   connection-retry-delay: 3s
 
+  # Configure retention policies.
+  retention:
+    # How long to keep metrics for. Set to 0s to disable metrics retention
+    # entirely.
+    # WARNING: A low retention period may negatively impact the usability of
+    # pipeline activity in the Tenzir Platform.
+    #metrics: 7d
+
+    # How long to keep diagnostics for. Set to 0s to disable diagnostics
+    # retention entirely.
+    # WARNING: A low retention period may negatively impact the usability of
+    # diagnostics in the Tenzir Platform.
+    #diagnostics: 30d
+
   # Always use TQL2 for pipelines.
   #tql2: false
 
