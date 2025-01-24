@@ -3,7 +3,7 @@
 Shows managed pipelines.
 
 ```tql
-package::list
+pipeline::list
 ```
 
 ## Description
@@ -17,7 +17,7 @@ includes all pipelines run through the Tenzir Platform.
 ### Count pipelines per state
 
 ```tql
-package::list
+pipeline::list
 top state
 ```
 
@@ -39,7 +39,7 @@ top state
 ### Show pipelines per package
 
 ```tql
-package::list
+pipeline::list
 summarize package, names=collect(name)
 ```
 
