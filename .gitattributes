@@ -1,0 +1,4 @@
+# We want to have some syntax highlighting for our TQL files, and the one for
+# Dart works out okay. We mark it as not detectable to prevent contribution to
+# language statistics.
+*.tql linguist-language=Dart -linguist-detectable
