@@ -8,6 +8,10 @@
 
 #include "tenzir/multi_series.hpp"
 
+#include "tenzir/series_builder.hpp"
+
+#include <ranges>
+
 namespace tenzir {
 
 auto split_multi_series(std::span<const multi_series> input,
@@ -104,6 +108,102 @@ auto map_series(multi_series x, multi_series y,
     TENZIR_ASSERT(output.size() == 2);
     return f(std::move(output[0]), std::move(output[1]));
   });
+}
+
+auto multi_series::to_series(multi_series::to_series_strategy strategy)
+  -> to_series_result {
+  if (length() == 0) {
+    return to_series_result{{}, to_series_result::status_t::ok};
+  }
+  if (length() == 1) {
+    return to_series_result{
+      std::move(parts_.front()),
+      to_series_result::status_t::ok,
+    };
+  }
+  auto selected_group_index = size_t{0};
+  auto part_groups = std::vector<size_t>(parts_.size());
+  struct group_info_t {
+    tenzir::type type;
+    int64_t size = 0;
+  };
+  // This map needs to be ordered, because we need to iterate the groups in order
+  auto groups = std::map<size_t, group_info_t>{
+    {0, {parts_.front().type, parts_.front().length()}},
+  };
+  for (size_t i = 1; i < parts_.size(); ++i) {
+    auto& slice = parts_[i];
+    // Check all groups.
+    auto target_group = groups.size();
+    for (auto& [group_index, group] : groups) {
+      if (group.type == slice.type) {
+        part_groups[i] = group_index;
+        group.size += slice.length();
+        target_group = group_index;
+        break;
+      }
+      auto unified_type = unify(group.type, slice.type);
+      if (unified_type) {
+        part_groups[i] = group_index;
+        group.type = std::move(*unified_type);
+        group.size += slice.length();
+        target_group = group_index;
+        break;
+      }
+    }
+    part_groups[i] = target_group;
+    // If we are going to take the first type anyways, there is no need to
+    // update the rest.
+    if (strategy == to_series_strategy::take_first_null_rest) {
+      continue;
+    }
+    // Potentially update the selected, i.e. largest group.
+    if (target_group != groups.size()) {
+      // Potentially update the selected (largest) group.
+      if (selected_group_index != target_group
+          and groups[selected_group_index].size < groups[target_group].size) {
+        selected_group_index = target_group;
+      }
+      // No need to create a new group, we found one.
+      continue;
+    }
+    // If we arrive here, it has to be a new group.
+    groups.try_emplace(groups.end(), groups.size(), slice.type, slice.length());
+    // Potentially update the selected, i.e. largest group.
+    if (slice.length() > groups[selected_group_index].size) {
+      selected_group_index = target_group;
+    }
+  }
+  auto b = series_builder{groups[selected_group_index].type};
+  for (size_t i = 0; i < parts_.size(); ++i) {
+    auto& slice = parts_[i];
+    if (part_groups[i] != selected_group_index) {
+      for (int64_t j = 0; j < slice.length(); ++j) {
+        b.null();
+      }
+      continue;
+    }
+    for (auto event : slice.values()) {
+      if (not b.try_data(event)) {
+        return {{}, to_series_result::status_t::fail};
+      }
+    }
+  }
+  if (groups.size() > 1) {
+    auto conflicting_types = std::vector<type>{};
+    for (auto& [_, group] : groups) {
+      conflicting_types.push_back(std::move(group.type));
+    }
+    return {
+      b.finish_assert_one_array(),
+      to_series_result::status_t::conflict,
+      std::move(conflicting_types),
+    };
+  }
+  return {
+    b.finish_assert_one_array(),
+    to_series_result::status_t::ok,
+  };
 }
 
 } // namespace tenzir

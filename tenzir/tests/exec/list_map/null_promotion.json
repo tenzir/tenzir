@@ -1,0 +1,17 @@
+{
+  l: [
+    null,
+    {
+      w: "world",
+      n: 42,
+    },
+  ],
+}
+warning: grok parser: pattern could not be matched
+ --> exec/list_map/null_promotion.tql:4:32
+  |
+4 | l = l.map( str, str.parse_grok($pattern) )
+  |                                ~~~~~~~~ 
+  |
+  = hint: input: `hello`
+  = hint: pattern: `(?<w>\b\w+\b) (?<n>(?:(?<BASE10NUM>(?<![0-9.+-])(?>[+-]?(?:(?:[0-9]+(?:\.[0-9]+)?)|(?:\.[0-9]+))))))`

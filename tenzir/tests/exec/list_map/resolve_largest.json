@@ -1,0 +1,29 @@
+{
+  l: [
+    {
+      x: 0,
+      y: null,
+    },
+    {
+      x: null,
+      y: 1,
+    },
+    null,
+    {
+      x: 2,
+      y: null,
+    },
+    null,
+    null,
+    {
+      x: null,
+      y: null,
+    },
+  ],
+}
+warning: expression evaluated to incompatible types
+  --> exec/list_map/resolve_largest.tql:10:17
+   |
+10 | l = l.map( str, str.parse_json() )
+   |                 ~~~~~~~~~~~~~~~~ types `record`, `list` are incompatible
+   |

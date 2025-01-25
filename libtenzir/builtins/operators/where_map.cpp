@@ -36,6 +36,8 @@
 #include <arrow/type.h>
 #include <caf/expected.hpp>
 
+#include <ranges>
+
 namespace tenzir::plugins::where {
 
 TENZIR_ENUM(mode, map, where);
@@ -284,17 +286,23 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
         empty_type,
       };
       slice = assign(args.capture, list_values, slice, ctx);
-      auto result = tenzir::eval(args.expr, slice, ctx);
-      TENZIR_ASSERT(not result.parts().empty());
-      if (result.parts().size() > 1) {
-        // TODO: We could do some attempt of unification here.
+      auto ms = tenzir::eval(args.expr, slice, ctx);
+      TENZIR_ASSERT(not ms.parts().empty());
+      /// TODO: Should the conflict resolution be exposed to the user?
+      auto [values, result, conflict] = ms.to_series(
+        multi_series::to_series_strategy::take_largest_null_rest);
+      if (result != multi_series::to_series_result::status_t::ok) {
         // TODO: The error message is bad. It's difficult to explain.
-        diagnostic::warning("expression type must not depend on the argument")
-          .primary(args.expr)
+        diagnostic::warning("expression evaluated to incompatible types")
+          .primary(args.expr, "types `{}` are incompatible",
+                   fmt::join(conflict
+                               | std::ranges::views::transform(&type::kind),
+                             "`, `"))
           .emit(ctx);
-        return series::null(null_type{}, eval.length());
+        if (result == multi_series::to_series_result::status_t::fail) {
+          return series::null(null_type{}, eval.length());
+        }
       }
-      auto values = result.part(0);
       switch (mode) {
         case mode::map: {
           // Lastly, we create a new series with the value offsets from the

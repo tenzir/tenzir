@@ -8,3 +8,5 @@ either a `record` or `string`.
 
 The new `parse_csv`, `parse_kv`, `parse_ssv`, `parse_tsv` and `parse_xsv` functions can be
 used to parse strings in their respective formats.
+
+`list.map` can now handle cases where list elements mapped to different types.
