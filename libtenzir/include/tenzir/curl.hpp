@@ -320,7 +320,7 @@ public:
   /// @param size The size of the file.
   auto set_infilesize(long size) -> code;
 
-  /// Sets ` CURLOPT_POSTFIELDSIZE` and `CURLOPT_POSTFIELDSIZE_LARGE` based on
+  /// Sets `CURLOPT_POSTFIELDSIZE` and `CURLOPT_POSTFIELDSIZE_LARGE` based on
   /// the input value.
   /// @param size The size of the post data.
   auto set_postfieldsize(long size) -> code;
@@ -338,6 +338,13 @@ public:
 
   /// Enumerates the list of all added headers.
   auto headers() -> generator<std::pair<std::string_view, std::string_view>>;
+
+  /// Retrieves as much as possible of a received WebSocket data fragment into
+  /// the provided span.
+  /// Equivalent to `curl_ws_recv`.
+  /// @param buffer The buffer to receive into.
+  /// @returns A pair of error code and returned bytes.
+  auto ws_recv(std::span<std::byte> buffer) -> std::pair<code, size_t>;
 
   /// `curl_easy_perform`
   auto perform() -> code;

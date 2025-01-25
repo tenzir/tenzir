@@ -171,6 +171,15 @@ auto easy::headers()
   }
 }
 
+auto easy::ws_recv(std::span<std::byte> buffer) -> std::pair<code, size_t> {
+  auto bytes_received = size_t{0};
+  const curl_ws_frame *meta = nullptr; // unused for now
+  auto curl_code = curl_ws_recv(easy_.get(), buffer.data(), buffer.size(),
+      &bytes_received, &meta);
+  auto result = static_cast<code>(curl_code);
+  return {result, bytes_received};
+}
+
 auto easy::perform() -> code {
   auto curl_code = curl_easy_perform(easy_.get());
   return static_cast<code>(curl_code);

@@ -9,17 +9,17 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config.hpp>
+#include <tenzir/curl.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/transfer.hpp>
 
-#include <filesystem>
 #include <regex>
 #include <string_view>
-#include <system_error>
 
 using namespace std::chrono_literals;
 
@@ -638,6 +638,105 @@ public:
   }
 };
 
+class load_ws_operator final : public crtp_operator<load_ws_operator> {
+public:
+  load_ws_operator() = default;
+
+  explicit load_ws_operator(connector_args args) : args_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.load_ws";
+  }
+
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto easy = curl::easy{};
+    auto code = easy.set(CURLOPT_URL, args_.url);
+    if (code != curl::easy::code::ok) {
+      diagnostic::error("failed to set URL to {}", args_.url)
+        .note("{}", to_string(code))
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    // Enable WebSocket mode.
+    code = easy.set(CURLOPT_CONNECT_ONLY, 2L);
+    if (code != curl::easy::code::ok) {
+      diagnostic::error("failed to enable WebSocket mode")
+        .note("{}", to_string(code))
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    // Establish the connection.
+    code = easy.perform();
+    if (code != curl::easy::code::ok) {
+      diagnostic::error("failed to establish WebSocket connection to {}",
+                        args_.url)
+        .note("{}", to_string(code))
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    // Read from the WebSocket.
+    using namespace decimal_byte_literals;
+    auto buffer = std::vector<std::byte>(8_kB);
+    co_yield {};
+    while (true) {
+      auto span = std::span{buffer};
+      auto [result, bytes_received] = easy.ws_recv(span);
+      if (result != curl::easy::code::ok) {
+        diagnostic::error("failed to read from WebSocket",
+                          args_.url)
+          .note("{}", to_string(result))
+          .emit(ctrl.diagnostics());
+        break;
+      }
+      TENZIR_ASSERT(bytes_received <= span.size());
+      span = span.first(bytes_received);
+      co_yield chunk::copy(span);
+    }
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, load_ws_operator& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  connector_args args_;
+};
+
+class load_ws_plugin final
+  : public virtual operator_plugin2<load_ws_operator> {
+public:
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = connector_args{};
+    TRY(argument_parser2::operator_(name())
+          .positional("url", args.url)
+          .parse(inv, ctx));
+    return std::make_unique<load_ws_operator>(std::move(args));
+  }
+
+  auto load_properties() const -> load_properties_t override {
+    return {
+      .schemes = {"ws", "wss"},
+      .default_format = plugins::find<operator_factory_plugin>("read_json"),
+    };
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins
@@ -650,3 +749,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_http_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::save_http_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_ftp_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::save_ftp_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_ws_plugin)
