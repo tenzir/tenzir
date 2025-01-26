@@ -173,8 +173,8 @@ public:
       parsed_lines_{parsed_lines} {
   }
 
-  [[nodiscard]] auto parse_object(simdjson::ondemand::value v, auto builder,
-                                  size_t depth = 0u) -> bool {
+  [[nodiscard]] auto
+  parse_object(auto&& v, auto builder, size_t depth = 0u) -> bool {
     auto obj = v.get_object();
     if (obj.error()) {
       report_parse_err(v, "object");
@@ -213,8 +213,8 @@ public:
     return true;
   }
 
-  [[nodiscard]] auto parse_value(simdjson::ondemand::value val, auto&& builder,
-                                 size_t depth) -> result {
+  [[nodiscard]] auto
+  parse_value(auto&& val, auto&& builder, size_t depth) -> result {
     TENZIR_ASSERT(depth <= defaults::max_recursion,
                   "nesting too deep in JSON parser");
     auto type = val.type();
@@ -253,8 +253,7 @@ public:
   }
 
 private:
-  [[nodiscard]] auto
-  parse_number(simdjson::ondemand::value val, auto&& builder) -> result {
+  [[nodiscard]] auto parse_number(auto&& val, auto&& builder) -> result {
     auto kind = simdjson::ondemand::number_type{};
     auto result = val.get_number_type();
     if (result.error()) {
@@ -301,15 +300,23 @@ private:
         // * store a double (i.e. as an approx value)
         // * store the value as a string
         // builder.null();
-        builder.data(std::string{val.raw_json_token()});
+        auto raw = val.raw_json_token();
+        if constexpr (std::same_as<decltype(raw), std::string_view>) {
+          builder.data(std::string{raw});
+        } else {
+          if (raw.error()) {
+            builder.null();
+          } else {
+            builder.data(std::string{raw.value_unsafe()});
+          }
+        }
         return result::success;
       }
     }
     TENZIR_UNREACHABLE();
   }
 
-  [[nodiscard]] auto
-  parse_string(simdjson::ondemand::value val, auto&& builder) -> result {
+  [[nodiscard]] auto parse_string(auto&& val, auto&& builder) -> result {
     auto maybe_str = val.get_string();
     if (maybe_str.error()) {
       report_parse_err(val, "a string");
@@ -334,8 +341,8 @@ private:
     return result::success;
   }
 
-  [[nodiscard]] auto parse_array(simdjson::ondemand::array arr, auto builder,
-                                 size_t depth) -> bool {
+  [[nodiscard]] auto
+  parse_array(auto&& arr, auto builder, size_t depth) -> bool {
     auto written_once = false;
     for (auto element : arr) {
       if (element.error()) {
@@ -1306,7 +1313,7 @@ public:
                   continue;
                 }
                 const auto result
-                  = doc_p.parse_value(doc.get_value(), builder, 0);
+                  = doc_p.parse_value(doc.value_unsafe(), builder, 0);
                 switch (result) {
                   case doc_parser::result::failure_with_write:
                     builder.remove_last();
