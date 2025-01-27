@@ -48,9 +48,8 @@ auto get_node_components(caf::scoped_actor& self, const node_actor& node)
   };
   auto labels = std::vector<std::string>{
     normalize(caf::type_name_by_id<caf::type_id<Actors>::value>::value)...};
-  self
-    ->request(node, caf::infinite, atom::get_v, atom::label_v,
-              std::move(labels))
+  self->mail(atom::get_v, atom::label_v, std::move(labels))
+    .request(node, caf::infinite)
     .receive(
       [&](std::vector<caf::actor>& components) {
         result = detail::tuple_map<result_t>(

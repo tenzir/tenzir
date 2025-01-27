@@ -22,6 +22,7 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/version.hpp>
+#include <caf/anon_mail.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -351,7 +352,7 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
       // operator terminates. If the windows in which the connections relinquish
       // their handles don't overlap the bridge and all connections are kept
       // alive indefinitely.
-      caf::anon_send(handle, std::move(slice));
+      caf::anon_mail(std::move(slice)).send(handle);
     }
     ++self->state().it;
   });
@@ -546,7 +547,8 @@ public:
       auto slice = table_slice{};
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(bridge, caf::infinite, atom::get_v)
+        .mail(atom::get_v)
+        .request(bridge, caf::infinite)
         .then(
           [&](table_slice& result) {
             ctrl.set_waiting(false);

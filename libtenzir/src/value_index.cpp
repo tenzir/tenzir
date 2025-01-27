@@ -31,17 +31,19 @@ caf::expected<void> value_index::append(data_view x) {
 
 caf::expected<void> value_index::append(data_view x, id pos) {
   auto off = offset();
-  if (pos < off)
+  if (pos < off) {
     // Can only append at the end
     return caf::make_error(ec::unspecified, pos, '<', off);
+  }
   if (is<caf::none_t>(x)) {
     none_.append_bits(false, pos - none_.size());
     none_.append_bit(true);
     return {};
   }
   // TODO: let append_impl return caf::error
-  if (!append_impl(x, pos))
+  if (!append_impl(x, pos)) {
     return caf::make_error(ec::unspecified, "append_impl");
+  }
   mask_.append_bits(false, pos - mask_.size());
   mask_.append_bit(true);
   return {};
@@ -52,18 +54,21 @@ value_index::lookup(relational_operator op, data_view x) const {
   // When x is null, we can answer the query right here.
   if (is<caf::none_t>(x)) {
     if (!(op == relational_operator::equal
-          || op == relational_operator::not_equal))
+          || op == relational_operator::not_equal)) {
       return caf::make_error(ec::unsupported_operator, op);
+    }
     auto is_equal = op == relational_operator::equal;
     auto result = is_equal ? none_ : ~none_;
-    if (result.size() < mask_.size())
+    if (result.size() < mask_.size()) {
       result.append_bits(!is_equal, mask_.size() - result.size());
+    }
     return result;
   }
   // If x is not null, we dispatch to the concrete implementation.
   auto result = lookup_impl(op, x);
-  if (!result)
+  if (!result) {
     return result;
+  }
   // The result can only have mass (i.e., 1-bits) where actual IDs exist.
   *result &= mask_;
   // Because the value index implementations never see null values, they need
@@ -71,13 +76,15 @@ value_index::lookup(relational_operator op, data_view x) const {
   // operator, then we need to add the null to the result, because the
   // expression `null != RHS` is true when RHS is not null.
   auto is_negation = op == relational_operator::not_equal;
-  if (is_negation)
+  if (is_negation) {
     *result |= none_;
+  }
   // Finally, the concrete result may be too short, e.g., when the last values
   // have been nulls. In this case we need to fill it up. For any operator other
   // than !=, the result of comparing with null is undefined.
-  if (result->size() < offset())
+  if (result->size() < offset()) {
     result->append_bits(is_negation, offset() - result->size());
+  }
   return std::move(*result);
 }
 
@@ -129,23 +136,28 @@ caf::error unpack(const fbs::ValueIndex& from, value_index_ptr& to) {
     // Create initial value index by unpacking type and options,
     const auto type = tenzir::type{chunk::copy(*base.type()->buffer())};
     auto options_data = data{};
-    if (auto err = unpack(*base.options(), options_data))
+    if (auto err = unpack(*base.options(), options_data)) {
       return err;
+    }
     auto options = caf::settings{};
     if (const auto* options_record = try_as<record>(&options_data)) {
-      if (auto err = convert(*options_record, options))
+      if (auto err = convert(*options_record, options)) {
         return err;
+      }
     }
     to = factory<value_index>::make(type, options);
-    if (!to)
+    if (!to) {
       return caf::make_error(ec::format_error,
                              fmt::format("failed to create value index for "
                                          "type {} with options {}",
                                          type, options_data));
-    if (auto err = unpack(*base.mask(), to->mask_))
+    }
+    if (auto err = unpack(*base.mask(), to->mask_)) {
       return err;
-    if (auto err = unpack(*base.none(), to->none_))
+    }
+    if (auto err = unpack(*base.none(), to->none_)) {
       return err;
+    }
     return to->unpack_impl(from);
   };
   switch (from.value_index_type()) {
@@ -179,9 +191,10 @@ const ewah_bitmap& value_index::none() const {
 
 tenzir::chunk_ptr chunkify(const value_index_ptr& idx) {
   caf::byte_buffer buf;
-  caf::binary_serializer sink{nullptr, buf};
-  if (!sink.apply(idx))
+  caf::binary_serializer sink{buf};
+  if (!sink.apply(idx)) {
     return nullptr;
+  }
   return chunk::make(std::move(buf));
 }
 

@@ -210,8 +210,8 @@ auto add_implicit_source_and_sink(pipeline pipe, diagnostic_handler& dh,
 } // namespace
 
 auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
-                   const exec_config& cfg,
-                   caf::actor_system& sys) -> caf::expected<void> {
+                   const exec_config& cfg, caf::actor_system& sys)
+  -> caf::expected<void> {
   auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), dh, cfg);
   if (not implicit_pipe) {
     return std::move(implicit_pipe.error());
@@ -232,20 +232,20 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   auto dedup = diagnostic_deduplicator{};
   auto handler = self->spawn(
     [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
-      self->set_down_handler([&, self](const caf::down_msg& msg) {
-        TENZIR_DEBUG("command received down message `{}` from {}", msg.reason,
-                     msg.source);
-        if (msg.reason) {
-          result = msg.reason;
+      self->state().executor
+        = self->spawn(pipeline_executor, std::move(pipe),
+                      caf::actor_cast<receiver_actor<diagnostic>>(self),
+                      caf::actor_cast<metrics_receiver_actor>(self),
+                      node_actor{}, true, true);
+      self->monitor(self->state().executor, [&, self](caf::error err) {
+        TENZIR_DEBUG("command received down message `{}`", err);
+        if (err) {
+          result = std::move(err);
         }
         self->quit();
       });
-      self->state().executor = self->spawn<caf::monitored>(
-        pipeline_executor, std::move(pipe),
-        caf::actor_cast<receiver_actor<diagnostic>>(self),
-        caf::actor_cast<metrics_receiver_actor>(self), node_actor{}, true,
-        true);
-      self->request(self->state().executor, caf::infinite, atom::start_v)
+      self->mail(atom::start_v)
+        .request(self->state().executor, caf::infinite)
         .then(
           []() {
             TENZIR_DEBUG("started pipeline successfully");
@@ -306,8 +306,8 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
 }
 
 auto exec_pipeline(std::string content, diagnostic_handler& dh,
-                   const exec_config& cfg,
-                   caf::actor_system& sys) -> caf::expected<void> {
+                   const exec_config& cfg, caf::actor_system& sys)
+  -> caf::expected<void> {
   if (cfg.tql2) {
     auto success = exec2(std::move(content), dh, cfg, sys);
     return success ? caf::expected<void>{} : ec::silent;

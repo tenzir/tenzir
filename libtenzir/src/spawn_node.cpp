@@ -39,41 +39,46 @@ caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self) {
     = get_or(opts, "tenzir.state-directory", defaults::state_directory.data());
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
-  if (err)
+  if (err) {
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to get absolute path to "
                                        "state-directory {}: {}",
                                        db_dir, err.message()));
+  }
   const auto dir_exists = std::filesystem::exists(abs_dir, err);
   if (!dir_exists) {
     if (auto created_dir = std::filesystem::create_directories(abs_dir, err);
-        !created_dir)
+        !created_dir) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("unable to create state-directory {}: "
                                          "{}",
                                          abs_dir, err.message()));
+    }
   }
   if (const auto is_writable = ::access(abs_dir.c_str(), W_OK) == 0;
-      !is_writable)
+      !is_writable) {
     return caf::make_error(
       ec::filesystem_error,
       "unable to write to state-directory:", abs_dir.string());
+  }
   // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
   TENZIR_DEBUG("node acquires PID lock {}", pid_file.string());
-  if (auto err = detail::acquire_pid_file(pid_file))
+  if (auto err = detail::acquire_pid_file(pid_file)) {
     return err;
+  }
   // Remove old VERSION file if it exists. This can be removed once the minimum
   // partition version is >= 3.
   {
     std::filesystem::remove(abs_dir / "VERSION", err);
-    if (err)
+    if (err) {
       TENZIR_WARN("failed to remove outdated VERSION file: {}", err.message());
+    }
   }
   // Register self as the termination handler.
   auto signal_reflector
     = self->system().registry().get<signal_reflector_actor>("signal-reflector");
-  self->send(signal_reflector, atom::subscribe_v);
+  self->mail(atom::subscribe_v).send(signal_reflector);
   // Wipe the contents of the old cache directory.
   {
     auto cache_directory = get_if<std::string>(&opts, "tenzir.cache-directory");
@@ -92,23 +97,25 @@ caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self) {
   TENZIR_DEBUG("{} spawns local node: {}", __func__, id);
   // Pointer to the root command to node.
   auto actor = self->spawn(node, id, abs_dir);
-  actor->attach_functor([=, pid_file = std::move(pid_file),
-                         &system = self->system()](
-                          const caf::error&) -> caf::result<void> {
-    TENZIR_DEBUG("node removes PID lock: {}", pid_file);
-    // TODO: This works because the scope_linked framing around the actor handle
-    //       sends an implicit exit message to the node in its destructor.
-    //       In case we change this to RAII we need to add `scope_lock` like
-    //       callback functionality to `scope_linked` instead.
-    system.registry().erase("tenzir.node");
-    std::error_code err{};
-    std::filesystem::remove_all(pid_file, err);
-    if (err)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("unable to remove pid file {} : {}",
-                                         pid_file, err.message()));
-    return {};
-  });
+  actor->attach_functor(
+    [=, pid_file = std::move(pid_file),
+     &system = self->system()](const caf::error&) -> caf::result<void> {
+      TENZIR_DEBUG("node removes PID lock: {}", pid_file);
+      // TODO: This works because the scope_linked framing around the actor
+      // handle
+      //       sends an implicit exit message to the node in its destructor.
+      //       In case we change this to RAII we need to add `scope_lock` like
+      //       callback functionality to `scope_linked` instead.
+      system.registry().erase("tenzir.node");
+      std::error_code err{};
+      std::filesystem::remove_all(pid_file, err);
+      if (err) {
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("unable to remove pid file {} : {}",
+                                           pid_file, err.message()));
+      }
+      return {};
+    });
   self->system().registry().put("tenzir.node", actor);
   return scope_linked<node_actor>{std::move(actor)};
 }

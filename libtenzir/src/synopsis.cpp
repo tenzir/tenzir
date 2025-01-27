@@ -28,20 +28,23 @@
 namespace tenzir {
 
 namespace {
+
 caf::expected<synopsis_ptr> unpack_opaque_synopsis(
   const tenzir::fbs::synopsis::LegacyOpaqueSynopsis& synopsis) {
   auto ret = synopsis_ptr{nullptr};
   if (auto data = synopsis.caf_0_17_data()) {
     tenzir::detail::legacy_deserializer sink(as_bytes(*data));
-    if (sink(ret))
+    if (sink(ret)) {
       return ret;
+    }
     return caf::make_error(ec::parse_error, "opaque_synopsis not "
                                             "deserializable");
   }
   if (auto data = synopsis.caf_0_18_data()) {
-    caf::binary_deserializer sink(nullptr, data->data(), data->size());
-    if (sink.apply(ret))
+    caf::binary_deserializer sink(data->data(), data->size());
+    if (sink.apply(ret)) {
       return ret;
+    }
     return caf::make_error(ec::parse_error, "opaque_synopsis(0_18) not "
                                             "deserializable");
   }
@@ -49,7 +52,9 @@ caf::expected<synopsis_ptr> unpack_opaque_synopsis(
                                           "opaque_synopsis. Unable to "
                                           "deserialize");
 }
+
 } // namespace
+
 synopsis::synopsis(tenzir::type x) : type_{std::move(x)} {
   // nop
 }
@@ -66,8 +71,9 @@ caf::expected<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>
 pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
      const qualified_record_field& fqf) {
   auto column_name = fbs::serialize_bytes(builder, fqf);
-  if (!column_name)
+  if (!column_name) {
     return column_name.error();
+  }
   auto* ptr = synopsis.get();
   if (auto* tptr = dynamic_cast<time_synopsis*>(ptr)) {
     auto min = tptr->min().time_since_epoch().count();
@@ -87,8 +93,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
     return synopsis_builder.Finish();
   } else {
     auto data = fbs::serialize_bytes(builder, synopsis);
-    if (!data)
+    if (!data) {
       return data.error();
+    }
     fbs::synopsis::LegacyOpaqueSynopsisBuilder opaque_builder(builder);
     opaque_builder.add_caf_0_18_data(*data);
     auto opaque_synopsis = opaque_builder.Finish();
@@ -103,19 +110,18 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
 caf::error
 unpack(const fbs::synopsis::LegacySynopsis& synopsis, synopsis_ptr& ptr) {
   ptr = nullptr;
-  if (auto bs = synopsis.bool_synopsis())
+  if (auto bs = synopsis.bool_synopsis()) {
     ptr = std::make_unique<bool_synopsis>(bs->any_true(), bs->any_false());
-  else if (auto ts = synopsis.time_synopsis())
+  } else if (auto ts = synopsis.time_synopsis()) {
     ptr = std::make_unique<time_synopsis>(
       tenzir::time{} + tenzir::duration{ts->start()},
       tenzir::time{} + tenzir::duration{ts->end()});
-  else if (auto os = synopsis.opaque_synopsis()) {
+  } else if (auto os = synopsis.opaque_synopsis()) {
     if (auto synopsis = unpack_opaque_synopsis(*os)) {
       ptr = std::move(*synopsis);
     } else {
       return std::move(synopsis.error());
     }
-
   } else {
     return caf::make_error(ec::format_error, "no synopsis type");
   }

@@ -332,8 +332,9 @@ public:
       // to avoid upstream operators starting up in the first place.
       auto blocking_self = caf::scoped_actor{ctrl.self().system()};
       blocking_self
-        ->request(cache_manager, caf::infinite, atom::get_v, id_.inner,
-                  /* exclusive */ true)
+        ->mail(atom::get_v, id_.inner,
+               /* exclusive */ true)
+        .request(cache_manager, caf::infinite)
         .receive(
           [&](caf::actor& handle) {
             cache = caf::actor_cast<cache_actor>(std::move(handle));
@@ -494,7 +495,8 @@ public:
       auto events = table_slice{};
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(cache, caf::infinite, atom::read_v)
+        .mail(atom::read_v)
+        .request(cache, caf::infinite)
         .then(
           [&](table_slice& response) {
             ctrl.set_waiting(false);

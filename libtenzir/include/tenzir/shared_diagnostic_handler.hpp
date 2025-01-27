@@ -14,6 +14,7 @@
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/diagnostics.hpp"
 
+#include <caf/anon_mail.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 namespace tenzir {
@@ -43,7 +44,7 @@ public:
     if (auto exec_node = weak_exec_node_.lock()) {
       // FIXME: The diagnostics sent by this do not appear at the target
       // actor when that utilizes request/await.
-      caf::anon_send<caf::message_priority::high>(exec_node, std::move(diag));
+      caf::anon_mail(std::move(diag)).urgent().send(exec_node);
     }
   }
 

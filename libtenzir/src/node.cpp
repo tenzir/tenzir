@@ -113,7 +113,32 @@ auto register_component(node_actor::stateful_pointer<node_state> self,
     fmt::format("failed to register component {}", it->second).c_str());
   TENZIR_VERBOSE("component {} registered with id {}", it->second,
                  component->id());
-  self->monitor(component);
+  self->monitor(
+    component, [self, source = component->address()](const caf::error& err) {
+      TENZIR_DEBUG("{} got DOWN from {}", *self, err);
+      const auto it = std::ranges::find_if(
+        self->state().alive_components, [&](const auto& alive_component) {
+          return alive_component.first == source;
+        });
+      TENZIR_ASSERT(it != self->state().alive_components.end());
+      auto component = it->second;
+      self->state().alive_components.erase(it);
+      TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])",
+                     component, self->state().alive_components.size(),
+                     fmt::join(self->state().alive_components
+                                 | std::ranges::views::values,
+                               ", "));
+      self->system().registry().erase(source.id());
+      if (!self->state().tearing_down) {
+        auto component = self->state().registry.remove(source);
+        // Terminate if a singleton dies.
+        if (is_core_component(component->type)) {
+          TENZIR_ERROR("{} terminates after DOWN from {} with reason {}", *self,
+                       component->type, err);
+          self->send_exit(self, caf::exit_reason::user_shutdown);
+        }
+      }
+    });
   return caf::none;
 }
 
@@ -239,7 +264,7 @@ auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
         .throw_();
     }
     // Set low == high as the default value.
-    if (not *lowater) {
+    if (not*lowater) {
       *lowater = *hiwater;
     }
     const auto step_size
@@ -344,38 +369,6 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           std::filesystem::path dir) -> node_actor::behavior_type {
   self->state().self = self;
   self->state().dir = std::move(dir);
-  // Remove monitored components.
-  self->set_down_handler([=](const caf::down_msg& msg) {
-    TENZIR_DEBUG("{} got DOWN from {}", *self, msg.source);
-    if (self->state().monitored_exec_nodes.erase(msg.source) > 0) {
-      return;
-    }
-    auto it = std::ranges::find_if(self->state().alive_components,
-                                   [&](const auto& alive_component) {
-                                     return alive_component.first == msg.source;
-                                   });
-    if (it != self->state().alive_components.end()) {
-      auto component = it->second;
-      self->state().alive_components.erase(it);
-      TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])",
-                     component, self->state().alive_components.size(),
-                     fmt::join(self->state().alive_components
-                                 | std::ranges::views::values,
-                               ", "));
-    }
-    if (!self->state().tearing_down) {
-      auto actor = caf::actor_cast<caf::actor>(msg.source);
-      auto component = self->state().registry.remove(actor);
-      TENZIR_ASSERT(component);
-      self->system().registry().erase(component->actor.id());
-      // Terminate if a singleton dies.
-      if (is_core_component(component->type)) {
-        TENZIR_ERROR("{} terminates after DOWN from {} with reason {}", *self,
-                     component->type, msg.reason);
-        self->send_exit(self, caf::exit_reason::user_shutdown);
-      }
-    }
-  });
   self->set_exception_handler([=](std::exception_ptr& ptr) -> caf::error {
     try {
       std::rethrow_exception(ptr);
@@ -389,97 +382,6 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       return diagnostic::error("unhandled exception in {}", *self).to_error();
     }
   });
-  // Terminate deterministically on shutdown.
-  self->set_exit_handler([=](const caf::exit_msg& msg) {
-    const auto source_name = [&]() -> std::string {
-      const auto component = self->state().component_names.find(msg.source);
-      if (component == self->state().component_names.end()) {
-        return "an unknown component";
-      }
-      return fmt::format("the {} component", component->second);
-    }();
-    TENZIR_DEBUG("{} got EXIT from {}: {}", *self, source_name, msg.reason);
-    const auto node_shutdown_reason
-      = msg.reason == caf::exit_reason::user_shutdown
-            or msg.reason == ec::silent
-          ? msg.reason
-          : diagnostic::error(msg.reason)
-              .note("node terminates after receiving error from {}",
-                    source_name)
-              .to_error();
-    self->state().tearing_down = true;
-    for (auto&& exec_node :
-         std::exchange(self->state().monitored_exec_nodes, {})) {
-      if (auto handle = caf::actor_cast<caf::actor>(exec_node)) {
-        self->send_exit(handle, msg.reason);
-      }
-    }
-    // Ignore duplicate EXIT messages except for hard kills.
-    self->set_exit_handler([=](const caf::exit_msg& msg) {
-      if (msg.reason == caf::exit_reason::kill) {
-        TENZIR_WARN("{} received hard kill and terminates immediately", *self);
-        self->quit(msg.reason);
-      } else {
-        TENZIR_DEBUG("{} ignores duplicate EXIT message from {}", *self,
-                     msg.source);
-      }
-    });
-    auto& registry = self->state().registry;
-    // Core components are terminated in a second stage, we remove them from the
-    // registry upfront and deal with them later.
-    std::vector<caf::actor> core_shutdown_handles;
-    for (const auto& name :
-         self->state().ordered_components | std::ranges::views::reverse) {
-      if (auto comp = registry.remove(name)) {
-        core_shutdown_handles.push_back(comp->actor);
-      }
-    }
-    caf::actor filesystem_handle;
-    for (const char* name : ordered_core_components) {
-      if (auto comp = registry.remove(name)) {
-        if (comp->type == "filesystem") {
-          filesystem_handle = comp->actor;
-        } else {
-          core_shutdown_handles.push_back(comp->actor);
-        }
-      }
-    }
-    std::vector<caf::actor> aux_components;
-    for (const auto& [_, comp] : registry.components()) {
-      // Ignore remote actors.
-      if (comp.actor->node() != self->node()) {
-        continue;
-      }
-      aux_components.push_back(comp.actor);
-    }
-    // Drop everything.
-    registry.clear();
-    auto core_shutdown_sequence
-      = [=, core_shutdown_handles = std::move(core_shutdown_handles),
-         filesystem_handle = std::move(filesystem_handle)]() mutable {
-          shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
-                                       node_shutdown_reason);
-          // We deliberately do not send an exit message to the filesystem
-          // actor, as that would mean that actors not tracked by the component
-          // registry which hold a strong handle to the filesystem actor cannot
-          // use it for persistence on shutdown.
-        };
-    terminate<policy::parallel>(self, std::move(aux_components))
-      .then(
-        [self, core_shutdown_sequence](atom::done) mutable {
-          TENZIR_DEBUG("{} terminated auxiliary actors, commencing core "
-                       "shutdown "
-                       "sequence...",
-                       *self);
-          core_shutdown_sequence();
-        },
-        [self, core_shutdown_sequence](const caf::error& err) mutable {
-          TENZIR_ERROR("{} failed to cleanly terminate auxiliary actors {}, "
-                       "shutting down core components",
-                       *self, err);
-          core_shutdown_sequence();
-        });
-  });
   spawn_components(self);
   // Emit metrics once per second.
   detail::weak_run_delayed_loop(
@@ -488,14 +390,14 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
            = detail::make_actor_metrics_builder()]() mutable {
       const auto importer
         = self->system().registry().get<importer_actor>("tenzir.importer");
-      self->send(importer,
-                 detail::generate_actor_metrics(actor_metrics_builder, self));
+      self->mail(detail::generate_actor_metrics(actor_metrics_builder, self))
+        .send(importer);
       TENZIR_ASSERT(importer);
       for (auto& [_, builder] : self->state().api_metrics_builders) {
         if (builder.length() == 0) {
           continue;
         }
-        self->send(importer, builder.finish_assert_one_slice());
+        self->mail(builder.finish_assert_one_slice()).send(importer);
       }
     });
   return {
@@ -574,9 +476,8 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         }
         rp.deliver(std::move(*response));
       };
-      self
-        ->request(handler, caf::infinite, atom::http_request_v,
-                  endpoint.endpoint_id, *params)
+      self->mail(atom::http_request_v, endpoint.endpoint_id, *params)
+        .request(handler, caf::infinite)
         .then(
           [deliver](rest_response& rsp) mutable {
             deliver(std::move(rsp));
@@ -636,10 +537,111 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                                            *self, description,
                                            spawn_result.error()));
       }
-      self->monitor(spawn_result->first);
+      self->monitor(
+        spawn_result->first,
+        [self, source = spawn_result->first->address()](const caf::error&) {
+          if (self->state().tearing_down) {
+            return;
+          }
+          const auto num_erased
+            = self->state().monitored_exec_nodes.erase(source);
+          TENZIR_ASSERT(num_erased == 1);
+        });
       self->state().monitored_exec_nodes.insert(spawn_result->first->address());
       // TODO: Check output type.
       return spawn_result->first;
+    },
+    [self](const caf::exit_msg& msg) {
+      const auto source_name = [&]() -> std::string {
+        const auto component = self->state().component_names.find(msg.source);
+        if (component == self->state().component_names.end()) {
+          return "an unknown component";
+        }
+        return fmt::format("the {} component", component->second);
+      }();
+      if (self->state().tearing_down) {
+        if (msg.reason == caf::exit_reason::kill) {
+          TENZIR_WARN("{} received hard kill from {} and terminates "
+                      "immediately",
+                      *self, source_name);
+          self->quit(msg.reason);
+        } else {
+          TENZIR_DEBUG("{} ignores duplicate EXIT message from {}", *self,
+                       source_name);
+        }
+        return;
+      }
+      TENZIR_DEBUG("{} got EXIT from {}: {}", *self, source_name, msg.reason);
+      const auto node_shutdown_reason
+        = msg.reason == caf::exit_reason::user_shutdown
+              or msg.reason == ec::silent
+            ? msg.reason
+            : diagnostic::error(msg.reason)
+                .note("node terminates after receiving error from {}",
+                      source_name)
+                .to_error();
+      self->state().tearing_down = true;
+      for (auto&& exec_node :
+           std::exchange(self->state().monitored_exec_nodes, {})) {
+        if (auto handle = caf::actor_cast<caf::actor>(exec_node)) {
+          self->send_exit(handle, msg.reason);
+        }
+      }
+      auto& registry = self->state().registry;
+      // Core components are terminated in a second stage, we remove them from
+      // the registry upfront and deal with them later.
+      std::vector<caf::actor> core_shutdown_handles;
+      for (const auto& name :
+           self->state().ordered_components | std::ranges::views::reverse) {
+        if (auto comp = registry.remove(name)) {
+          core_shutdown_handles.push_back(comp->actor);
+        }
+      }
+      caf::actor filesystem_handle;
+      for (const char* name : ordered_core_components) {
+        if (auto comp = registry.remove(name)) {
+          if (comp->type == "filesystem") {
+            filesystem_handle = comp->actor;
+          } else {
+            core_shutdown_handles.push_back(comp->actor);
+          }
+        }
+      }
+      std::vector<caf::actor> aux_components;
+      for (const auto& [_, comp] : registry.components()) {
+        // Ignore remote actors.
+        if (comp.actor->node() != self->node()) {
+          continue;
+        }
+        aux_components.push_back(comp.actor);
+      }
+      // Drop everything.
+      registry.clear();
+      auto core_shutdown_sequence
+        = [=, core_shutdown_handles = std::move(core_shutdown_handles),
+           filesystem_handle = std::move(filesystem_handle)]() mutable {
+            shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
+                                         node_shutdown_reason);
+            // We deliberately do not send an exit message to the filesystem
+            // actor, as that would mean that actors not tracked by the
+            // component registry which hold a strong handle to the filesystem
+            // actor cannot use it for persistence on shutdown.
+          };
+      terminate<policy::parallel>(self, std::move(aux_components))
+        .then(
+          [self, core_shutdown_sequence](atom::done) mutable {
+            TENZIR_DEBUG("{} terminated auxiliary actors, commencing core "
+                         "shutdown "
+                         "sequence...",
+                         *self);
+            core_shutdown_sequence();
+          },
+          [self, core_shutdown_sequence](const caf::error& err) mutable {
+            TENZIR_ERROR("{} failed to cleanly terminate auxiliary actors {}, "
+                         "shutting down core components",
+                         *self, err);
+            core_shutdown_sequence();
+          });
     },
   };
 }

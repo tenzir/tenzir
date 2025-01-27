@@ -23,8 +23,8 @@ namespace {
 
 using float_seconds = std::chrono::duration<double>;
 
-auto split_chunk(const chunk_ptr& in, size_t head_offset,
-                 size_t position) -> std::pair<chunk_ptr, chunk_ptr> {
+auto split_chunk(const chunk_ptr& in, size_t head_offset, size_t position)
+  -> std::pair<chunk_ptr, chunk_ptr> {
   if (head_offset >= in->size()) {
     return {chunk::make_empty(), chunk::make_empty()};
   }
@@ -80,8 +80,8 @@ public:
         budget = 0;
         ctrl.set_waiting(true);
         ctrl.self()
-          .request(alarm_clock, caf::infinite,
-                   duration_cast<caf::timespan>(window_))
+          .mail(duration_cast<caf::timespan>(window_))
+          .request(alarm_clock, caf::infinite)
           .then(
             [&]() {
               ctrl.set_waiting(false);
@@ -106,8 +106,8 @@ public:
     return "throttle";
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -153,8 +153,8 @@ public:
              : float_seconds{1});
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto bandwidth = located<uint64_t>{};
     auto window = std::optional<located<duration>>{};
     argument_parser2::operator_("throttle")

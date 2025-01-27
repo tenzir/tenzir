@@ -72,7 +72,7 @@ struct metrics_collector_state {
         TENZIR_TRACE("{} sends out metrics", *self);
         for (auto& instance : instances) {
           for (auto&& slice : instance.builder.finish_as_table_slice()) {
-            self->send(importer, std::move(slice));
+            self->mail(std::move(slice)).send(importer);
           }
         }
       },

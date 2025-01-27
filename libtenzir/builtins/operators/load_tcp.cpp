@@ -24,6 +24,7 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/version.hpp>
+#include <caf/anon_mail.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
@@ -142,7 +143,8 @@ public:
       auto result = chunk_ptr{};
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(connection, caf::infinite, atom::read_v, handle_)
+        .mail(atom::read_v, handle_)
+        .request(connection, caf::infinite)
         .then(
           [&](chunk_ptr chunk) {
             ctrl.set_waiting(false);
@@ -212,8 +214,8 @@ public:
     for (auto&& elements : input) {
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(connection_manager, caf::infinite, atom::write_v,
-                 std::move(elements))
+        .mail(atom::write_v, std::move(elements))
+        .request(connection_manager, caf::infinite)
         .then(
           [&]() {
             ctrl.set_waiting(false);
@@ -331,8 +333,8 @@ struct connection_manager_state {
         {"bytes_read", std::exchange(bytes_read, {})},
         {"bytes_written", uint64_t{0}},
       };
-      caf::anon_send(metrics_receiver, operator_id, tcp_metrics_id,
-                     std::move(metric));
+      caf::anon_mail(operator_id, tcp_metrics_id, std::move(metric))
+        .send(metrics_receiver);
       if (self) {
         next_emit_metrics
           = detail::weak_run_delayed(self, defaults::metrics_interval,
@@ -380,8 +382,7 @@ struct connection_manager_state {
         {
           auto lock = std::unique_lock{connection->mutex};
           if (connection->rp.pending()) {
-            caf::anon_send(caf::actor_cast<caf::actor>(self),
-                           caf::make_action(
+            caf::anon_mail(caf::make_action(
                              [self, connection, ec, chunk = std::move(chunk),
                               diagnostics = std::move(diagnostics)]() mutable {
                                auto lock = std::unique_lock{connection->mutex};
@@ -391,7 +392,8 @@ struct connection_manager_state {
                                  connection->async_read(self,
                                                         std::move(diagnostics));
                                }
-                             }));
+                             }))
+              .send(caf::actor_cast<caf::actor>(self));
             TENZIR_ASSERT(connection->chunks.empty());
             return;
           }
@@ -445,9 +447,8 @@ struct connection_manager_state {
         {"bytes_written", uint64_type{}},
       },
     };
-    self
-      ->request(metrics_receiver, caf::infinite, operator_id, tcp_metrics_id,
-                std::move(tcp_metrics_schema))
+    self->mail(operator_id, tcp_metrics_id, std::move(tcp_metrics_schema))
+      .request(metrics_receiver, caf::infinite)
       .then([]() {},
             [this](const caf::error& err) {
               diagnostic::error(err)
@@ -591,9 +592,27 @@ struct connection_manager_state {
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
-    connection->pipeline_executor = self->template spawn<caf::monitored>(
+    connection->pipeline_executor = self->spawn(
       pipeline_executor, std::move(pipeline), receiver_actor<diagnostic>{self},
       metrics_receiver_actor{self}, node, has_terminal, is_hidden);
+    self->monitor(
+      connection->pipeline_executor,
+      [this, source = connection->pipeline_executor->address()](
+        const caf::error& err) {
+        const auto connection
+          = std::ranges::find_if(connections, [&](const auto& connection) {
+              return connection.second->pipeline_executor.address() == source;
+            });
+        TENZIR_ASSERT(connection != connections.end());
+        if (err) {
+          diagnostic::warning(err)
+            .note("nested pipeline terminated unexpectedly")
+            .note("handle `{}`", connection->first)
+            .primary(args.pipeline->source)
+            .emit(diagnostics);
+        }
+        connections.erase(connection);
+      });
     if (std::is_same_v<Elements, chunk_ptr> and connections.size() > 1) {
       diagnostic::warning(
         "potentially interleaved bytes from parallel connections")
@@ -603,7 +622,8 @@ struct connection_manager_state {
         .primary(args.pipeline->source)
         .emit(diagnostics);
     }
-    self->request(connection->pipeline_executor, caf::infinite, atom::start_v)
+    self->mail(atom::start_v)
+      .request(connection->pipeline_executor, caf::infinite)
       .then(
         [this, handle = connection->socket->native_handle()]() {
           // Start the async read loop for this connection.
@@ -639,7 +659,7 @@ struct connection_manager_state {
           }
           handle_connection(std::move(socket));
         };
-        caf::anon_send(handle, caf::make_action(std::move(action)));
+        caf::anon_mail(caf::make_action(std::move(action))).send(handle);
       });
   }
 
@@ -703,22 +723,6 @@ struct connection_manager_state {
     read_rp = self->template make_response_promise<Elements>();
     return read_rp;
   }
-
-  auto handle_down_msg(const caf::down_msg& msg) -> void {
-    const auto connection
-      = std::ranges::find_if(connections, [&](const auto& connection) {
-          return connection.second->pipeline_executor.address() == msg.source;
-        });
-    TENZIR_ASSERT(connection != connections.end());
-    if (msg.reason) {
-      diagnostic::warning(msg.reason)
-        .note("nested pipeline terminated unexpectedly")
-        .note("handle `{}`", connection->first)
-        .primary(args.pipeline->source)
-        .emit(diagnostics);
-    }
-    connections.erase(connection);
-  }
 };
 
 template <class Elements>
@@ -742,9 +746,6 @@ auto make_connection_manager(
     return connection_manager_actor<
       Elements>::behavior_type::make_empty_behavior();
   }
-  self->set_down_handler([self](const caf::down_msg& msg) {
-    self->state().handle_down_msg(msg);
-  });
   return {
     [self](atom::read, boost::asio::ip::tcp::socket::native_handle_type handle)
       -> caf::result<chunk_ptr> {
@@ -762,14 +763,14 @@ auto make_connection_manager(
       if (id == 0) {
         id = self->state().next_metrics_id++;
       }
-      return self->delegate(self->state().metrics_receiver,
-                            self->state().operator_id, id, std::move(schema));
+      return self->mail(self->state().operator_id, id, std::move(schema))
+        .delegate(self->state().metrics_receiver);
     },
     [self](uint64_t op_index, uint64_t metric_index,
            record& metric) -> caf::result<void> {
       const auto& id = self->state().metrics_id_map[op_index][metric_index];
-      return self->delegate(self->state().metrics_receiver,
-                            self->state().operator_id, id, std::move(metric));
+      return self->mail(self->state().operator_id, id, std::move(metric))
+        .delegate(self->state().metrics_receiver);
     },
     [](const operator_metric& op_metric) -> caf::result<void> {
       // We have no mechanism for forwarding operator metrics. That's a bit
@@ -808,7 +809,8 @@ public:
       auto result = Elements{};
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(connection_manager_actor.get(), caf::infinite, atom::read_v)
+        .mail(atom::read_v)
+        .request(connection_manager_actor.get(), caf::infinite)
         .then(
           [&](Elements& elements) {
             ctrl.set_waiting(false);

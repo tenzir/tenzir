@@ -56,7 +56,7 @@ public:
   /// @param comp The component to erase.
   /// @returns The deleted component or an error if *comp* is not an existing
   /// actor.
-  [[nodiscard]] caf::expected<component> remove(const caf::actor& comp);
+  [[nodiscard]] caf::expected<component> remove(const caf::actor_addr& comp);
 
   /// Finds the label of a given component actor.
   /// @param comp The component actor.
@@ -106,8 +106,9 @@ public:
       [this](auto&&... labels) -> std::array<caf::actor, sizeof...(Handles)> {
         auto find_component = [this](auto&& label) -> caf::actor {
           if (auto i = components_.find(std::forward<decltype(label)>(label));
-              i != components_.end())
+              i != components_.end()) {
             return i->second.actor;
+          }
           return {};
         };
         return {find_component(std::forward<decltype(labels)>(labels))...};
