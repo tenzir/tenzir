@@ -201,3 +201,37 @@ TENZIR_PLATFORM_POSTGRES_PASSWORD=YOUR_POSTGRES_PASSWORD
 TENZIR_PLATFORM_POSTGRES_DB=YOUR_POSTGRES_DB
 TENZIR_PLATFORM_POSTGRES_HOSTNAME=YOUR_POSTGRES_HOSTNAME
 ```
+
+### TLS Settings
+
+We strongly recommend using signed TLS certificates which are trusted by the machines
+running the Tenzir Nodes.
+
+However, it can sometimes be necessary to use self-signed certificates for the Tenzir Platform.
+ in this situation we recommend the creation of a local certificate authority, e.g., using the
+[trustme](https://pypi.org/project/trustme/) project. This approach has the advantage of not
+requiring the client to disable TLS certificate validation, thus preventing man-in-the-middle
+attacks when compared to a self-signed certificate..
+
+If that is not possible, a self-signed certificate can be generated using `openssl`
+by following [this procedure](https://stackoverflow.com/a/10176685/92560).
+
+#### Node Settings
+
+On the node, in order to trust a custom CA certificate, the following option
+needs to point to a CA certificate file in PEM format without password protection:
+
+```env
+TENZIR_PLATFORM_CACERT=/path/to/ca-certificate.pem
+```
+
+If you want to use a self-signed TLS certificate, you need to disable
+TLS certificate validation by setting:
+
+```env
+TENZIR_PLATFORM_SKIP_PEER_VERIFICATION=true
+```
+
+Note that these settings only apply to the connection that is established
+between the node and the platform, not to any TLS connections that may
+be created by running pipelines on the node.
