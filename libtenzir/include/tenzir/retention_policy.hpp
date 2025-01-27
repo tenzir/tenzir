@@ -65,7 +65,7 @@ struct retention_policy {
     if (not schema.attribute("internal")) {
       return true;
     }
-    if (schema.name() == "tenzir.diagnostics") {
+    if (schema.name() == "tenzir.diagnostic") {
       return not diagnostics_period or * diagnostics_period > duration::zero();
     }
     if (schema.name().starts_with("tenzir.metrics.")) {
