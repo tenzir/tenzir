@@ -8,6 +8,7 @@
 
 #include "tenzir/multi_series.hpp"
 
+#include "tenzir/detail/flat_map.hpp"
 #include "tenzir/series_builder.hpp"
 
 #include <ranges>
@@ -128,9 +129,10 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy)
     int64_t size = 0;
   };
   // This map needs to be ordered, because we need to iterate the groups in order
-  auto groups = std::map<size_t, group_info_t>{
+  auto groups = detail::flat_map<size_t, group_info_t>{
     {0, {parts_.front().type, parts_.front().length()}},
   };
+  groups.reserve(parts_.size());
   for (size_t i = 1; i < parts_.size(); ++i) {
     auto& slice = parts_[i];
     // Check all groups.
@@ -168,7 +170,7 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy)
       continue;
     }
     // If we arrive here, it has to be a new group.
-    groups.try_emplace(groups.end(), groups.size(), slice.type, slice.length());
+    groups.try_emplace(groups.size(), slice.type, slice.length());
     // Potentially update the selected, i.e. largest group.
     if (slice.length() > groups[selected_group_index].size) {
       selected_group_index = target_group;
