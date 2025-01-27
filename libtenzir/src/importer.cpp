@@ -76,7 +76,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->state().retention_policy = std::move(*policy);
   } else {
     self->quit(std::move(policy.error()));
-    return {};
+    return importer_actor::behavior_type::make_empty_behavior();
   }
   self->set_down_handler([self](const caf::down_msg& msg) {
     const auto subscriber

@@ -46,7 +46,7 @@ struct importer_state {
 
   /// The index actor and the policy for retention.
   index_actor index;
-  retention_policy retention_policy = {};
+  struct retention_policy retention_policy = {};
 
   /// Potentially unpersisted events.
   std::vector<table_slice> unpersisted_events = {};
