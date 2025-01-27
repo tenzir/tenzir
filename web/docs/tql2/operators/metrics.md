@@ -11,6 +11,17 @@ metrics [name:string, live=bool, retro=bool]
 The `metrics` operator retrieves metrics events from a Tenzir node. Metrics
 events are collected every second.
 
+:::tip Retention Policy
+Set the `tenzir.retention.metrics` configuration option to change how long
+Tenzir Nodes store metrics:
+
+```yaml
+tenzir:
+  retention:
+    metrics: 7d
+```
+:::
+
 ### `name: string (optional)`
 
 Show only metrics with the specified name. For example, `metrics "cpu"` only shows

@@ -11,6 +11,17 @@ diagnostics [live=bool, retro=bool]
 The `diagnostics` operator retrieves diagnostic events from a Tenzir
 node.
 
+:::tip Retention Policy
+Set the `tenzir.retention.diagnostics` configuration option to change how long
+Tenzir Nodes store diagnostics:
+
+```yaml
+tenzir:
+  retention:
+    diagnostics: 30d
+```
+:::
+
 ### `live = bool (optional)`
 
 If `true`, emits diagnostic events as they are generated in real-time. Unless
