@@ -122,7 +122,7 @@ auto main(int argc, char** argv) -> int {
     }
   }
 #if TENZIR_POSIX
-  struct rlimit rlimit {};
+  struct rlimit rlimit{};
   if (::getrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
     TENZIR_ERROR("failed to get RLIMIT_NOFILE: {}", detail::describe_errno());
     return -errno;

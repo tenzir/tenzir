@@ -365,6 +365,10 @@ public:
     return std::move(result);
   }
 
+  auto to_error() && -> caf::error {
+    return caf::make_error(ec::diagnostic, std::move(result));
+  }
+
   auto empty() const -> bool {
     return result.empty();
   }

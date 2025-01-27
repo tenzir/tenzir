@@ -14,7 +14,9 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/retention_policy.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"
@@ -33,7 +35,6 @@ importer_state::importer_state(importer_actor::pointer self) : self{self} {
 importer_state::~importer_state() = default;
 
 void importer_state::on_process(const table_slice& slice) {
-  auto t = timer::start(measurement_);
   const auto rows = slice.rows();
   TENZIR_ASSERT(rows > 0);
   const auto is_internal = slice.schema().attribute("internal").has_value();
@@ -46,13 +47,14 @@ void importer_state::on_process(const table_slice& slice) {
     }
   }
   unpersisted_events.push_back(std::move(slice));
-  t.stop(rows);
 }
 
 void importer_state::handle_slice(table_slice&& slice) {
   slice.import_time(time::clock::now());
   on_process(slice);
-  self->send(index, std::move(slice));
+  if (retention_policy.should_be_persisted(slice)) {
+    self->send(index, std::move(slice));
+  }
 }
 
 importer_actor::behavior_type
@@ -68,6 +70,13 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   });
   if (index) {
     self->state().index = std::move(index);
+  }
+  if (auto policy
+      = retention_policy::make(check(to<record>(content(self->config()))))) {
+    self->state().retention_policy = std::move(*policy);
+  } else {
+    self->quit(std::move(policy.error()));
+    return importer_actor::behavior_type::make_empty_behavior();
   }
   self->set_down_handler([self](const caf::down_msg& msg) {
     const auto subscriber
