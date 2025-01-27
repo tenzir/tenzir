@@ -270,7 +270,7 @@ ocsf.metadata = {
 ocsf.src_endpoint = {
   ip: zeek.id.orig_h,
   port: zeek.id.orig_p,
-  ..
+  ...
 }
 drop zeek.id
 
