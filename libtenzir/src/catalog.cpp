@@ -26,7 +26,6 @@
 #include "tenzir/pipeline.hpp"
 #include "tenzir/prune.hpp"
 #include "tenzir/query_context.hpp"
-#include "tenzir/retention_policy.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
