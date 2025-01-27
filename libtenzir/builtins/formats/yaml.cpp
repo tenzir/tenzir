@@ -76,7 +76,7 @@ auto parse_node(auto guard, const YAML::Node& node,
   }
 };
 
-auto load_document(multi_series_builder& msb, std::string&& document,
+auto load_document(multi_series_builder& msb, const std::string& document,
                    diagnostic_handler& diag) -> void {
   bool added_event = false;
   try {
@@ -129,19 +129,22 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       if (document.empty()) {
         continue;
       }
-      load_document(msb, std::exchange(document, {}), diag);
+      load_document(msb, document, diag);
+      document.clear();
       continue;
     }
     if (*line == document_start_marker) {
       if (not document.empty()) {
-        load_document(msb, std::exchange(document, {}), diag);
+        load_document(msb, document, diag);
+        document.clear();
       }
       continue;
     }
     fmt::format_to(std::back_inserter(document), "{}\n", *line);
   }
   if (not document.empty()) {
-    load_document(msb, std::exchange(document, {}), diag);
+    load_document(msb, document, diag);
+    document.clear();
   }
   for (auto& slice : msb.finalize_as_table_slice()) {
     co_yield std::move(slice);
@@ -337,6 +340,61 @@ class read_yaml final
   }
 };
 
+class parse_yaml final : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.parse_yaml";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    // TODO: Consider adding a `many` option to expect multiple json values.
+    auto parser = argument_parser2::function(name());
+    parser.positional("x", expr, "string");
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
+    return function_use::make(
+      [call = inv.call.get_location(), msb_opts = std::move(msb_opts),
+       expr = std::move(expr)](evaluator eval, session ctx) {
+        return map_series(eval(expr), [&](series arg) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray&) -> multi_series {
+              return arg;
+            },
+            [&](const arrow::StringArray& arg) -> multi_series {
+              auto builder = multi_series_builder{
+                msb_opts,
+                ctx,
+                modules::schemas(),
+                detail::data_builder::non_number_parser,
+              };
+              for (int64_t i = 0; i < arg.length(); ++i) {
+                if (arg.IsNull(i)) {
+                  builder.null();
+                  continue;
+                }
+                load_document(builder, arg.GetString(i), ctx);
+              }
+              return multi_series{builder.finalize()};
+            },
+            [&](const auto&) -> multi_series {
+              diagnostic::warning("`parse_json` expected `string`, got `{}`",
+                                  arg.type.kind())
+                .primary(call)
+                .emit(ctx);
+              return series::null(null_type{}, arg.length());
+            },
+          };
+          return match(*arg.array, f);
+        });
+      });
+  }
+};
+
 class write_yaml final
   : public virtual operator_plugin2<writer_adapter<yaml_printer>> {
   auto
@@ -355,4 +413,5 @@ class write_yaml final
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::yaml_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::read_yaml)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::parse_yaml)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::write_yaml)

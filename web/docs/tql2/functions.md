@@ -152,6 +152,7 @@ Function | Description | Example
 [`parse_ssv`](functions/parse_ssv.mdx) | Parses a string as SSV  | `some_string.parse_ssv(header=["a","b"])`
 [`parse_tsv`](functions/parse_tsv.mdx) | Parses a string as TSV  | `some_string.parse_tsv(header=["a","b"])`
 [`parse_xsv`](functions/parse_xsv.mdx) | Parses a string as XSV | `some_string.parse_xsv(",", ";", "", header=["a","b"])`
+[`parse_yaml`](functions/parse_yaml.mdx) | Parses a string as YAML | `some_string.parse_yaml()`
 
 ## Time & Date
 

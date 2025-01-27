@@ -1296,7 +1296,12 @@ public:
             [&](const arrow::StringArray& arg) -> multi_series {
               auto parser = simdjson::ondemand::parser{};
               /// TODO: consider keeping this builder alive
-              auto builder = multi_series_builder{msb_opts, ctx};
+              auto builder = multi_series_builder{
+                msb_opts,
+                ctx,
+                modules::schemas(),
+                detail::data_builder::non_number_parser,
+              };
               for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
                   builder.null();
