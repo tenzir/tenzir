@@ -307,14 +307,14 @@ auto operator_base::copy() const -> operator_ptr {
     TENZIR_ASSERT(false);
   }
   auto buffer = caf::byte_buffer{};
-  auto f = caf::binary_serializer{nullptr, buffer};
+  auto f = caf::binary_serializer{buffer};
   auto success = p->serialize(f, *this);
   if (not success) {
     TENZIR_ERROR("failed to serialize `{}` operator: {}", name(),
                  f.get_error());
     TENZIR_ASSERT(false);
   }
-  auto g = caf::binary_deserializer{nullptr, buffer};
+  auto g = caf::binary_deserializer{buffer};
   auto copy = operator_ptr{};
   p->deserialize(g, copy);
   if (not copy) {

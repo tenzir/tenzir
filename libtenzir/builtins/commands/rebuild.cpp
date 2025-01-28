@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/atoms.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/catalog.hpp>
@@ -45,10 +47,6 @@ namespace tenzir::plugins::rebuild {
 
 namespace {
 
-/// The threshold at which to consider a partition undersized, relative to the
-/// configured 'tenzir.max-partition-size'.
-inline constexpr auto undersized_threshold = 0.8;
-
 /// The parsed options of the `tenzir rebuild start` command.
 struct start_options {
   bool all = false;
@@ -74,6 +72,25 @@ struct stop_options {
     return f.apply(x.detached);
   }
 };
+
+} // namespace
+
+} // namespace tenzir::plugins::rebuild
+
+CAF_BEGIN_TYPE_ID_BLOCK(tenzir_rebuild_plugin_types, 1400)
+  CAF_ADD_TYPE_ID(tenzir_rebuild_plugin_types,
+                  (tenzir::plugins::rebuild::start_options))
+  CAF_ADD_TYPE_ID(tenzir_rebuild_plugin_types,
+                  (tenzir::plugins::rebuild::stop_options))
+CAF_END_TYPE_ID_BLOCK(tenzir_rebuild_plugin_types)
+
+namespace tenzir::plugins::rebuild {
+
+namespace {
+
+/// The threshold at which to consider a partition undersized, relative to the
+/// configured 'tenzir.max-partition-size'.
+inline constexpr auto undersized_threshold = 0.8;
 
 /// Statistics for an ongoing rebuild. Numbers are partitions.
 struct statistics {
@@ -131,8 +148,9 @@ struct rebuilder_state {
 
   /// Shows the status of a currently ongoing rebuild.
   auto status(status_verbosity) -> record {
-    if (!run)
+    if (!run) {
       return {};
+    }
     return {
       {"partitions",
        record{
@@ -158,12 +176,14 @@ struct rebuilder_state {
 
   /// Start a new rebuild.
   auto start(start_options options) -> caf::result<void> {
-    if (options.parallel == 0)
+    if (options.parallel == 0) {
       return caf::make_error(ec::invalid_configuration,
                              "rebuild requires a non-zero parallel level");
-    if (options.automatic && run)
+    }
+    if (options.automatic && run) {
       return {};
-    if (run && !run->options.automatic)
+    }
+    if (run && !run->options.automatic) {
       return caf::make_error(
         ec::invalid_argument,
         fmt::format(
@@ -171,11 +191,11 @@ struct rebuilder_state {
           "ongoing ({}/{} done); consider running 'tenzir-ctl rebuild "
           "stop'",
           *self, run->statistics.num_completed, run->statistics.num_total));
+    }
     if (!options.automatic && run && run->options.automatic) {
       auto rp = self->make_response_promise<void>();
-      self
-        ->request(static_cast<rebuilder_actor>(self), caf::infinite,
-                  atom::stop_v, stop_options{.detached = false})
+      self->mail(atom::stop_v, stop_options{.detached = false})
+        .request(static_cast<rebuilder_actor>(self), caf::infinite)
         .then(
           [this, rp, options = std::move(options)]() mutable {
             rp.delegate(static_cast<rebuilder_actor>(self), atom::start_v,
@@ -197,35 +217,39 @@ struct rebuilder_state {
       if (!silent) {
         // Only print to INFO when work was actually done, or when the run
         // was manually requested.
-        if (run->statistics.num_completed == 0)
-          if (run->options.automatic)
+        if (run->statistics.num_completed == 0) {
+          if (run->options.automatic) {
             TENZIR_VERBOSE("{} had nothing to do", *self);
-          else
+          } else {
             TENZIR_INFO("{} had nothing to do", *self);
-        else
+          }
+        } else {
           TENZIR_INFO("{} rebuilt {} into {} partitions", *self,
                       run->statistics.num_completed,
                       run->statistics.num_results);
+        }
       }
-      for (auto&& rp : std::exchange(run->stop_requests, {}))
+      for (auto&& rp : std::exchange(run->stop_requests, {})) {
         rp.deliver();
+      }
       run.reset();
-      if (run->options.detached)
+      if (run->options.detached) {
         return;
+      }
       if (err) {
         rp.deliver(std::move(err));
         return;
       }
       rp.deliver();
     };
-    if (run->options.detached)
+    if (run->options.detached) {
       rp.deliver();
+    }
     auto query_context
       = query_context::make_extract("rebuild", self, run->options.expression);
     query_context.id = uuid::random();
-    self
-      ->request(catalog, caf::infinite, atom::candidates_v,
-                std::move(query_context))
+    self->mail(atom::candidates_v, std::move(query_context))
+      .request(catalog, caf::infinite)
       .then(
         [this, finish](catalog_lookup_result& lookup_result) mutable {
           TENZIR_ASSERT(run->statistics.num_total == 0);
@@ -233,13 +257,15 @@ struct rebuilder_state {
             if (not run->options.all) {
               std::erase_if(
                 result.partition_infos, [&](const partition_info& partition) {
-                  if (partition.version < version::current_partition_version)
+                  if (partition.version < version::current_partition_version) {
                     return false;
+                  }
                   if (run->options.undersized
                       && partition.events < detail::narrow_cast<size_t>(
                            detail::narrow_cast<double>(max_partition_size)
-                           * undersized_threshold))
+                           * undersized_threshold)) {
                     return false;
+                  }
                   return true;
                 });
             }
@@ -270,16 +296,17 @@ struct rebuilder_state {
             TENZIR_DEBUG("{} ignores rebuild request for 0 partitions", *self);
             return finish({}, true);
           }
-          if (run->options.automatic)
+          if (run->options.automatic) {
             TENZIR_VERBOSE("{} triggered an automatic run for {} candidate "
                            "partitions with {} threads",
                            *self, run->statistics.num_total,
                            run->options.parallel);
-          else
+          } else {
             TENZIR_INFO(
               "{} triggered a run for {} candidate partitions with {} "
               "threads",
               *self, run->statistics.num_total, run->options.parallel);
+          }
           self
             ->fan_out_request<caf::policy::select_all>(
               std::vector<rebuilder_actor>(run->options.parallel, self),
@@ -301,11 +328,12 @@ struct rebuilder_state {
   /// Stop a rebuild.
   auto stop(const stop_options& options) -> caf::result<void> {
     if (!run) {
-      if (!stopping)
+      if (!stopping) {
         TENZIR_DEBUG("{} got request to stop rebuild but no rebuild is running",
                      *self);
-      else
+      } else {
         TENZIR_INFO("{} stopped ongoing rebuild", *self);
+      }
       stopping = false;
       return {};
     }
@@ -322,16 +350,18 @@ struct rebuilder_state {
       run->statistics.num_total -= run->remaining_partitions.size();
       run->remaining_partitions.clear();
     }
-    if (options.detached)
+    if (options.detached) {
       return {};
+    }
     auto rp = self->make_response_promise<void>();
     return run->stop_requests.emplace_back(std::move(rp));
   }
 
   /// Make progress on the ongoing rebuild.
   auto rebuild() -> caf::result<void> {
-    if (run->remaining_partitions.empty())
+    if (run->remaining_partitions.empty()) {
       return {}; // We're done!
+    }
     auto current_run_partitions = std::vector<partition_info>{};
     auto current_run_events = size_t{0};
     // Take the first partition and collect as many of the same
@@ -376,8 +406,8 @@ struct rebuilder_state {
       run->statistics.num_rebuilding -= 1;
       run->statistics.num_total -= 1;
       // Pick up new work until we run out of remainig partitions.
-      return self->delegate(static_cast<rebuilder_actor>(self),
-                            atom::internal_v, atom::rebuild_v);
+      return self->mail(atom::internal_v, atom::rebuild_v)
+        .delegate(static_cast<rebuilder_actor>(self));
     }
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
@@ -394,8 +424,9 @@ struct rebuilder_state {
               });
     const auto num_partitions = current_run_partitions.size();
     self
-      ->request(index, caf::infinite, atom::apply_v, std::move(*rebatch),
-                std::move(current_run_partitions), keep_original_partition::no)
+      ->mail(atom::apply_v, std::move(*rebatch),
+             std::move(current_run_partitions), keep_original_partition::no)
+      .request(index, caf::infinite)
       .then(
         [this, rp, current_run_events,
          num_partitions](std::vector<partition_info>& result) mutable {
@@ -422,11 +453,12 @@ struct rebuilder_state {
                                     [](const partition_info& partition) {
                                       return partition.events;
                                     });
-          if (current_run_events != result_events)
+          if (current_run_events != result_events) {
             TENZIR_WARN("{} detected a mismatch: rebuilt {} events from {} "
                         "partitions into {} events in {} partitions",
                         *self, current_run_events, num_partitions,
                         result_events, result.size());
+          }
           // Adjust the counters, update the indicator, and move back
           // undersized transformed partitions to the list of remainig
           // partitions as desired.
@@ -459,11 +491,11 @@ struct rebuilder_state {
       .detached = true,
       .automatic = true,
     };
-    self->delayed_send(self, rebuild_interval, atom::internal_v,
-                       atom::schedule_v);
-    self
-      ->request(static_cast<rebuilder_actor>(self), caf::infinite,
-                atom::start_v, std::move(options))
+    self->mail(atom::internal_v, atom::schedule_v)
+      .delay(rebuild_interval)
+      .send(self);
+    self->mail(atom::start_v, std::move(options))
+      .request(static_cast<rebuilder_actor>(self), caf::infinite)
       .then(
         [this] {
           TENZIR_DEBUG("{} finished automatic rebuild", *self);
@@ -498,20 +530,6 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
                     defaults::rebuild_interval);
     self->state().schedule();
   }
-  self->set_exit_handler([self](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received EXIT from {}: {}", *self, msg.source, msg.reason);
-    if (!self->state().run) {
-      self->quit(msg.reason);
-      return;
-    }
-    for (auto&& rp : std::exchange(self->state().run->stop_requests, {})) {
-      rp.deliver(msg.reason);
-    }
-    for (auto&& rp : std::exchange(self->state().run->delayed_rebuilds, {})) {
-      rp.deliver(msg.reason);
-    }
-    self->quit(msg.reason);
-  });
   if (auto importer
       = self->system().registry().get<importer_actor>("tenzir.importer")) {
     auto builder = series_builder{type{
@@ -539,7 +557,7 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
         metric.field("timestamp", time::clock::now());
         metric.field("partitions", partitions);
         metric.field("queued_partitions", queued_partitions);
-        self->send(importer, builder.finish_assert_one_slice());
+        self->mail(builder.finish_assert_one_slice()).send(importer);
       });
   }
   return {
@@ -558,6 +576,21 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     [self](atom::internal, atom::schedule) {
       return self->state().schedule();
     },
+    [self](const caf::exit_msg& msg) {
+      TENZIR_DEBUG("{} received EXIT from {}: {}", *self, msg.source,
+                   msg.reason);
+      if (!self->state().run) {
+        self->quit(msg.reason);
+        return;
+      }
+      for (auto&& rp : std::exchange(self->state().run->stop_requests, {})) {
+        rp.deliver(msg.reason);
+      }
+      for (auto&& rp : std::exchange(self->state().run->delayed_rebuilds, {})) {
+        rp.deliver(msg.reason);
+      }
+      self->quit(msg.reason);
+    },
   };
 }
 
@@ -571,9 +604,8 @@ caf::expected<rebuilder_actor> get_rebuilder(caf::actor_system& sys) {
   }
   auto result = caf::expected<caf::actor>{caf::error{}};
   const auto node = std::move(*node_opt);
-  self
-    ->request(node, caf::infinite, atom::get_v, atom::label_v,
-              std::vector<std::string>{"rebuilder"})
+  self->mail(atom::get_v, atom::label_v, std::vector<std::string>{"rebuilder"})
+    .request(node, caf::infinite)
     .receive(
       [&](std::vector<caf::actor>& actors) {
         if (actors.empty()) {
@@ -594,8 +626,9 @@ caf::expected<rebuilder_actor> get_rebuilder(caf::actor_system& sys) {
       [&](caf::error& err) { //
         result = std::move(err);
       });
-  if (!result)
+  if (!result) {
     return std::move(result.error());
+  }
   return caf::actor_cast<rebuilder_actor>(std::move(*result));
 }
 
@@ -605,19 +638,22 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
   // the node.
   auto self = caf::scoped_actor{sys};
   auto rebuilder = get_rebuilder(sys);
-  if (!rebuilder)
+  if (!rebuilder) {
     return caf::make_message(std::move(rebuilder.error()));
+  }
   // Parse the query expression, iff it exists.
   auto query = read_query(inv, "tenzir.rebuild.read", must_provide_query::no);
-  if (!query)
+  if (!query) {
     return caf::make_message(std::move(query.error()));
+  }
   auto expr = expression{};
   if (query->empty()) {
     expr = trivially_true_expression();
   } else {
     auto parsed = to<expression>(*query);
-    if (!parsed)
+    if (!parsed) {
       return caf::make_message(std::move(parsed.error()));
+    }
     expr = std::move(*parsed);
   }
   auto options = start_options{
@@ -631,7 +667,8 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
     .automatic = false,
   };
   auto result = caf::message{};
-  self->request(*rebuilder, caf::infinite, atom::start_v, std::move(options))
+  self->mail(atom::start_v, std::move(options))
+    .request(*rebuilder, caf::infinite)
     .receive(
       [] {
         // nop
@@ -648,13 +685,15 @@ rebuild_stop_command(const invocation& inv, caf::actor_system& sys) {
   // the node.
   auto self = caf::scoped_actor{sys};
   auto rebuilder = get_rebuilder(sys);
-  if (!rebuilder)
+  if (!rebuilder) {
     return caf::make_message(std::move(rebuilder.error()));
+  }
   auto result = caf::message{};
   auto options = stop_options{
     .detached = caf::get_or(inv.options, "tenzir.rebuild.detached", false),
   };
-  self->request(*rebuilder, caf::infinite, atom::stop_v, std::move(options))
+  self->mail(atom::stop_v, std::move(options))
+    .request(*rebuilder, caf::infinite)
     .receive(
       [] {
         // nop
@@ -737,13 +776,5 @@ public:
 } // namespace
 
 } // namespace tenzir::plugins::rebuild
-
-CAF_BEGIN_TYPE_ID_BLOCK(tenzir_rebuild_plugin_types, 1400)
-  CAF_ADD_TYPE_ID(tenzir_rebuild_plugin_types,
-                  (tenzir::plugins::rebuild::start_options))
-  CAF_ADD_TYPE_ID(tenzir_rebuild_plugin_types,
-                  (tenzir::plugins::rebuild::stop_options))
-CAF_END_TYPE_ID_BLOCK(tenzir_rebuild_plugin_types)
-
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::rebuild::plugin)
 TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(tenzir_rebuild_plugin_types)

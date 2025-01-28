@@ -196,7 +196,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
       }
       auto runner = self->spawn<caf::detached>(command_runner);
       command_runners.push_back(runner);
-      self->send(runner, atom::run_v, *hook_invocation);
+      self->mail(atom::run_v, *hook_invocation).send(runner);
     }
   }
   self

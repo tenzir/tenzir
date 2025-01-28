@@ -57,7 +57,8 @@ public:
     auto synopses = std::vector<partition_synopsis_pair>{};
     ctrl.set_waiting(true);
     ctrl.self()
-      .request(catalog, caf::infinite, atom::get_v, filter_)
+      .mail(atom::get_v, filter_)
+      .request(catalog, caf::infinite)
       .await(
         [&](std::vector<partition_synopsis_pair>& result) {
           ctrl.set_waiting(false);

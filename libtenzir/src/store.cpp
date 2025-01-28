@@ -21,6 +21,26 @@ namespace tenzir {
 
 namespace {
 
+void remove_down_source(auto* self, const caf::actor_addr& source,
+                        const caf::error& err) {
+  for (const auto& [query_id, state] : self->state().running_extractions) {
+    if (state.sink->address() == source) {
+      TENZIR_DEBUG("{} received DOWN from extract query {}: {}", *self,
+                   query_id, err);
+      self->state().running_extractions.erase(query_id);
+      break; // a sink can only have one active extract query, so we stop
+    }
+  }
+  for (const auto& [query_id, state] : self->state().running_counts) {
+    if (state.sink->address() == source) {
+      TENZIR_DEBUG("{} received DOWN from count query {}: {}", *self, query_id,
+                   err);
+      self->state().running_counts.erase(query_id);
+      break; // a sink can only have one active count query, so we stop
+    }
+  }
+}
+
 // A query execution is performed incrementally on individual table slices.
 // On each invocation, only a single table slice is processed via filter
 // or count, then execution is paused to allow incremental processing and
@@ -47,8 +67,9 @@ handle_query(const auto& self, const query_context& query_context) {
     // taxonomy resolution is not guaranteed to have worked (whenever the
     // type in this store did not exist in the catalog when the partition
     // was created). In that case we simply discard the query.
-    if constexpr (std::is_same_v<default_active_store_actor, Actor>)
+    if constexpr (std::is_same_v<default_active_store_actor, Actor>) {
       return 0ull;
+    }
     return caf::make_error(ec::invalid_query,
                            fmt::format("{} failed to tailor '{}' to '{}'",
                                        *self, query_context.expr, schema));
@@ -56,7 +77,11 @@ handle_query(const auto& self, const query_context& query_context) {
   auto rp = self->template make_response_promise<uint64_t>();
   auto f = detail::overload{
     [&](const extract_query_context& extract) -> void {
-      self->monitor(extract.sink);
+      // We monitor all query sinks, and remove queries associated with the sink.
+      self->monitor(extract.sink, [self, source = extract.sink->address()](
+                                    const caf::error& err) {
+        remove_down_source(self, source, err);
+      });
       auto [state, inserted] = self->state().running_extractions.try_emplace(
         query_context.id, extract_query_state{});
       if (!inserted) {
@@ -70,9 +95,8 @@ handle_query(const auto& self, const query_context& query_context) {
       state->second.result_iterator = state->second.result_generator.begin();
       state->second.sink = extract.sink;
       state->second.start = start;
-      self
-        ->request(static_cast<Actor>(self), caf::infinite, atom::internal_v,
-                  atom::extract_v, query_context.id)
+      self->mail(atom::internal_v, atom::extract_v, query_context.id)
+        .request(static_cast<Actor>(self), caf::infinite)
         .then(
           [self, issuer = query_context.issuer, query_id = query_context.id,
            rp]() mutable {
@@ -102,25 +126,6 @@ handle_query(const auto& self, const query_context& query_context) {
   return rp;
 }
 
-auto remove_down_source(auto* self, const caf::down_msg& down_msg) {
-  for (const auto& [query_id, state] : self->state().running_extractions) {
-    if (state.sink->address() == down_msg.source) {
-      TENZIR_DEBUG("{} received DOWN from extract query {}: {}", *self,
-                   query_id, down_msg.reason);
-      self->state().running_extractions.erase(query_id);
-      break; // a sink can only have one active extract query, so we stop
-    }
-  }
-  for (const auto& [query_id, state] : self->state().running_counts) {
-    if (state.sink->address() == down_msg.source) {
-      TENZIR_DEBUG("{} received DOWN from count query {}: {}", *self, query_id,
-                   down_msg.reason);
-      self->state().running_counts.erase(query_id);
-      break; // a sink can only have one active count query, so we stop
-    }
-  }
-}
-
 } // namespace
 
 type base_store::schema() const {
@@ -139,8 +144,9 @@ generator<uint64_t> base_store::count(expression expr, ids selection) const {
 generator<table_slice>
 base_store::extract(expression expr, ids selection) const {
   for (const auto& slice : slices()) {
-    if (auto filtered_slice = filter(slice, expr, selection))
+    if (auto filtered_slice = filter(slice, expr, selection)) {
       co_yield std::move(*filtered_slice);
+    }
   }
 }
 
@@ -156,22 +162,18 @@ default_passive_store_actor::behavior_type default_passive_store(
   self->state().path = std::move(path);
   self->state().store_type = std::move(store_type);
   // Load data from disk.
-  self
-    ->request(self->state().filesystem, caf::infinite, atom::mmap_v,
-              self->state().path)
+  self->mail(atom::mmap_v, self->state().path)
+    .request(self->state().filesystem, caf::infinite)
     .await(
       [self](chunk_ptr& chunk) {
         auto load_error = self->state().store->load(std::move(chunk));
-        if (load_error)
+        if (load_error) {
           self->quit(std::move(load_error));
+        }
       },
       [self](caf::error& error) {
         self->quit(std::move(error));
       });
-  // We monitor all query sinks, and remove queries associated with the sink.
-  self->set_down_handler([self](const caf::down_msg& down_msg) {
-    remove_down_source(self, down_msg);
-  });
   return {
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
@@ -186,9 +188,8 @@ default_passive_store_actor::behavior_type default_passive_store(
       TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
                               || rank(selection) == num_events);
       auto rp = self->make_response_promise<uint64_t>();
-      self
-        ->request(self->state().filesystem, caf::infinite, atom::erase_v,
-                  self->state().path)
+      self->mail(atom::erase_v, self->state().path)
+        .request(self->state().filesystem, caf::infinite)
         .then(
           [rp, num_events](atom::done) mutable {
             rp.deliver(num_events);
@@ -216,12 +217,12 @@ default_passive_store_actor::behavior_type default_passive_store(
       }
       auto slice = *state.result_iterator;
       state.num_hits += slice.rows();
-      self->send(state.sink, std::move(slice));
+      self->mail(std::move(slice)).send(state.sink);
       if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
-      return self->delegate(static_cast<default_passive_store_actor>(self),
-                            atom::internal_v, atom::extract_v, query_id);
+      return self->mail(atom::internal_v, atom::extract_v, query_id)
+        .delegate(static_cast<default_passive_store_actor>(self));
     },
     [self](atom::internal, atom::count,
            const uuid& query_id) -> caf::result<void> {
@@ -241,8 +242,8 @@ default_passive_store_actor::behavior_type default_passive_store(
       if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
-      return self->delegate(static_cast<default_passive_store_actor>(self),
-                            atom::internal_v, atom::count_v, query_id);
+      return self->mail(atom::internal_v, atom::count_v, query_id)
+        .delegate(static_cast<default_passive_store_actor>(self));
     },
   };
 }
@@ -257,9 +258,6 @@ default_active_store_actor::behavior_type default_active_store(
   self->state().store = std::move(store);
   self->state().path = std::move(path);
   self->state().store_type = std::move(store_type);
-  self->set_down_handler([self](const caf::down_msg& down_msg) {
-    remove_down_source(self, down_msg);
-  });
   return {
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
@@ -297,9 +295,8 @@ default_active_store_actor::behavior_type default_active_store(
         .url = fmt::format("file://{}", self->state().path),
         .size = (*chunk)->size(),
       };
-      self
-        ->request(self->state().filesystem, caf::infinite, atom::write_v,
-                  self->state().path, std::move(*chunk))
+      self->mail(atom::write_v, self->state().path, std::move(*chunk))
+        .request(self->state().filesystem, caf::infinite)
         .then(
           [self, rp, res](atom::ok) mutable {
             TENZIR_DEBUG("{} ({}) persisted itself to {}", *self,
@@ -351,12 +348,12 @@ default_active_store_actor::behavior_type default_active_store(
       }
       auto slice = *state.result_iterator;
       state.num_hits += slice.rows();
-      self->send(state.sink, std::move(slice));
+      self->mail(std::move(slice)).send(state.sink);
       if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
-      return self->delegate(static_cast<default_active_store_actor>(self),
-                            atom::internal_v, atom::extract_v, query_id);
+      return self->mail(atom::internal_v, atom::extract_v, query_id)
+        .delegate(static_cast<default_active_store_actor>(self));
     },
     [self](atom::internal, atom::count,
            const uuid& query_id) -> caf::result<void> {
@@ -376,8 +373,8 @@ default_active_store_actor::behavior_type default_active_store(
       if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
-      return self->delegate(static_cast<default_active_store_actor>(self),
-                            atom::internal_v, atom::count_v, query_id);
+      return self->mail(atom::internal_v, atom::count_v, query_id)
+        .delegate(static_cast<default_active_store_actor>(self));
     },
   };
 }

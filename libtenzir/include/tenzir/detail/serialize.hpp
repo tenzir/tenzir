@@ -24,7 +24,7 @@ namespace tenzir::detail {
 /// @relates detail::deserialize
 template <class... Ts>
 auto serialize(caf::byte_buffer& buffer, Ts&&... xs) {
-  caf::binary_serializer serializer{nullptr, buffer};
+  caf::binary_serializer serializer{buffer};
   return apply_all(serializer, std::forward<Ts>(xs)...);
 }
 

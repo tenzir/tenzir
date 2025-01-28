@@ -36,25 +36,15 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
     untyped_exec_nodes.push_back(caf::actor_cast<caf::actor>(node));
   }
   self->link_to(exec_nodes.back());
-  self->set_exit_handler([this](caf::exit_msg& msg) {
-    // If we get an exit message, then it's either because the last execution
-    // node died, or because the pipeline manager sent us an exit message. In
-    // either case we just wan to shut down all execution nodes.
-    for (const auto& exec_node : exec_nodes) {
-      TENZIR_ASSERT(exec_node);
-      self->send_exit(exec_node, msg.reason);
-    }
-    self->quit(std::move(msg.reason));
-  });
+  is_started = true;
   TENZIR_DEBUG("{} successfully spawned {} execution nodes", *self,
                untyped_exec_nodes.size());
   untyped_exec_nodes.pop_back();
   // The exec nodes delegate the `atom::start` message to the preceding exec
   // node. Thus, when we start the last node, all nodes before are started as
   // well, and the request is completed only afterwards.
-  self
-    ->request(exec_nodes.back(), caf::infinite, atom::start_v,
-              std::move(untyped_exec_nodes))
+  self->mail(atom::start_v, std::move(untyped_exec_nodes))
+    .request(exec_nodes.back(), caf::infinite)
     .then(
       [this]() mutable {
         finish_start();
@@ -108,13 +98,19 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       auto index = exec_nodes.size();
       exec_nodes.emplace_back();
       self
-        ->request(node, caf::infinite, atom::spawn_v,
-                  operator_box{std::move(op)}, input_type, diagnostics, metrics,
-                  op_index, is_hidden, run_id)
+        ->mail(atom::spawn_v, operator_box{std::move(op)}, input_type,
+               diagnostics, metrics, op_index, is_hidden, run_id)
+        .request(node, caf::infinite)
         .then(
           [this, description, index](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
-            self->monitor(exec_node);
+            self->monitor(exec_node, [this, source = exec_node->address()](
+                                       const caf::error&) {
+              const auto exec_node = std::ranges::find(
+                exec_nodes, source, &exec_node_actor::address);
+              TENZIR_ASSERT(exec_node != exec_nodes.end());
+              exec_nodes.erase(exec_node);
+            });
             exec_nodes[index] = std::move(exec_node);
             start_nodes_if_all_spawned();
           },
@@ -137,7 +133,13 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       }
       TENZIR_TRACE("{} spawned {} locally", *self, description);
       std::tie(previous, input_type) = std::move(*spawn_result);
-      self->monitor(previous);
+      self->monitor(previous, [this, source
+                                     = previous->address()](const caf::error&) {
+        const auto exec_node
+          = std::ranges::find(exec_nodes, source, &exec_node_actor::address);
+        TENZIR_ASSERT(exec_node != exec_nodes.end());
+        exec_nodes.erase(exec_node);
+      });
       exec_nodes.push_back(previous);
     }
     ++op_index;
@@ -280,12 +282,6 @@ auto pipeline_executor(
     self->system().config(), "tenzir.no-location-overrides", false);
   self->state().has_terminal = has_terminal;
   self->state().is_hidden = is_hidden;
-  self->set_down_handler([self](caf::down_msg& msg) {
-    const auto exec_node = std::ranges::find(
-      self->state().exec_nodes, msg.source, &exec_node_actor::address);
-    TENZIR_ASSERT(exec_node != self->state().exec_nodes.end());
-    self->state().exec_nodes.erase(exec_node);
-  });
   return {
     [self](atom::start) -> caf::result<void> {
       return self->state().start();
@@ -295,6 +291,22 @@ auto pipeline_executor(
     },
     [self](atom::resume) -> caf::result<void> {
       return self->state().resume();
+    },
+    [self](caf::exit_msg msg) {
+      if (self->state().is_started) {
+        // If we get an exit message, then it's either because the last
+        // execution node died, or because the pipeline manager sent us an exit
+        // message. In either case we just wan to shut down all execution nodes.
+        for (const auto& exec_node : self->state().exec_nodes) {
+          TENZIR_ASSERT(exec_node);
+          self->send_exit(exec_node, msg.reason);
+        }
+        self->quit(std::move(msg.reason));
+        return;
+      }
+      if (msg.reason) {
+        self->quit(std::move(msg.reason));
+      }
     },
   };
 }

@@ -27,6 +27,7 @@
 #include <arrow/util/compression.h>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system.hpp>
+#include <caf/anon_mail.hpp>
 #include <caf/fwd.hpp>
 #include <sys/resource.h>
 
@@ -278,9 +279,10 @@ auto main(int argc, char** argv) -> int {
         int signum = 0;
         sigwait(&sigset, &signum);
         TENZIR_DEBUG("received signal {}", signum);
-        if (!stop)
-          caf::anon_send<caf::message_priority::high>(
-            reflector.get(), atom::internal_v, atom::signal_v, signum);
+        if (!stop) {
+          caf::anon_mail(atom::internal_v, atom::signal_v, signum)
+            .urgent().send(reflector.get());
+        }
       });
   // clang-format on
   // Put it into the actor registry so any actor can communicate with it.

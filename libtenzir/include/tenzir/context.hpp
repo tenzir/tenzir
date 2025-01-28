@@ -163,8 +163,8 @@ public:
     TENZIR_ASSERT(context_manager);
     ctrl.set_waiting(true);
     ctrl.self()
-      .request(context_manager, caf::infinite, atom::create_v, name_.inner,
-               std::string{Name.str()}, save_result_)
+      .mail(atom::create_v, name_.inner, std::string{Name.str()}, save_result_)
+      .request(context_manager, caf::infinite)
       .then(
         [&]() {
           ctrl.set_waiting(false);

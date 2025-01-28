@@ -22,6 +22,8 @@
 
 #include <arrow/config.h>
 #include <arrow/util/byte_size.h>
+#include <caf/actor_addr.hpp>
+#include <caf/anon_mail.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
@@ -133,7 +135,7 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
       throw std::move(diag);
     }
     if (deduplicator_.insert(diag)) {
-      self->send(handle, std::move(diag));
+      self->mail(std::move(diag)).send(handle);
     }
   }
 
@@ -335,7 +337,7 @@ struct exec_node_state {
       = std::chrono::duration_cast<duration>(now - start_time);
     metrics_copy.time_running
       = metrics_copy.time_total - metrics_copy.time_paused;
-    caf::anon_send(metrics_receiver, std::move(metrics_copy));
+    caf::anon_mail(std::move(metrics_copy)).send(metrics_receiver);
   }
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
@@ -355,12 +357,6 @@ struct exec_node_state {
                                            "not have a previous exec-node",
                                            *self));
       }
-      self->set_exit_handler([this](const caf::exit_msg& msg) {
-        TENZIR_DEBUG("{} {} got exit message from the next execution node or "
-                     "its executor with address {}: {}",
-                     *self, op->name(), msg.source, msg.reason);
-        on_error(msg.reason);
-      });
     } else {
       // The previous exec-node must be set when the operator is not a source.
       if (all_previous.empty()) {
@@ -373,33 +369,6 @@ struct exec_node_state {
         = caf::actor_cast<exec_node_actor>(std::move(all_previous.back()));
       all_previous.pop_back();
       self->link_to(previous);
-      self->set_exit_handler([this, prev_addr = previous.address()](
-                               const caf::exit_msg& msg) {
-        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-        // We got an exit message, which can mean one of four things:
-        // 1. The pipeline manager quit.
-        // 2. The next operator quit.
-        // 3. The previous operator quit gracefully.
-        // 4. The previous operator quit ungracefully.
-        // In cases (1-3) we need to shut down this operator unconditionally.
-        // For (4) we we need to treat the previous operator as offline.
-        if (msg.source != prev_addr) {
-          TENZIR_DEBUG("{} {} got exit message from the next execution node or "
-                       "its executor with address {}: {}",
-                       *self, op->name(), msg.source, msg.reason);
-          on_error(msg.reason);
-          return;
-        }
-        TENZIR_DEBUG("{} {} got exit message from previous execution node with "
-                     "address {}: {}",
-                     *self, op->name(), msg.source, msg.reason);
-        if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
-          on_error(msg.reason);
-          return;
-        }
-        previous = nullptr;
-        schedule_run(false);
-      });
     }
     // Instantiate the operator with its input type.
     {
@@ -445,9 +414,8 @@ struct exec_node_state {
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
       start_rp = self->make_response_promise<void>();
-      self
-        ->request(previous, caf::infinite, atom::start_v,
-                  std::move(all_previous))
+      self->mail(atom::start_v, std::move(all_previous))
+        .request(previous, caf::infinite)
         .then(
           [this]() {
             auto time_starting_guard
@@ -469,7 +437,8 @@ struct exec_node_state {
     }
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       TENZIR_DEBUG("{} {} delegates start to {}", *self, op->name(), previous);
-      return self->delegate(previous, atom::start_v, std::move(all_previous));
+      return self->mail(atom::start_v, std::move(all_previous))
+        .delegate(previous);
     }
     return {};
   }
@@ -547,8 +516,8 @@ struct exec_node_state {
         // control plane?
         demand->remaining -= output_size;
       }
-      self
-        ->request(demand->sink, caf::infinite, atom::push_v, std::move(output))
+      self->mail(atom::push_v, std::move(output))
+        .request(demand->sink, caf::infinite)
         .then(
           [this, output_size, should_quit]() {
             auto time_scheduled_guard
@@ -644,10 +613,10 @@ struct exec_node_state {
                  data{backoff});
     run_scheduled = true;
     if (backoff == duration::zero()) {
-      self->send(self, atom::internal_v, atom::run_v);
+      self->mail(atom::internal_v, atom::run_v).send(self);
     } else {
       backoff_disposable = detail::weak_run_delayed(self, backoff, [this] {
-        self->send(self, atom::internal_v, atom::run_v);
+        self->mail(atom::internal_v, atom::run_v).send(self);
       });
     }
   }
@@ -670,9 +639,9 @@ struct exec_node_state {
                  demand);
     issue_demand_inflight = true;
     self
-      ->request(previous, caf::infinite, atom::pull_v,
-                static_cast<exec_node_sink_actor>(self),
-                detail::narrow_cast<uint64_t>(demand))
+      ->mail(atom::pull_v, static_cast<exec_node_sink_actor>(self),
+             detail::narrow_cast<uint64_t>(demand))
+      .request(previous, caf::infinite)
       .then(
         [this, demand] {
           auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
@@ -788,6 +757,49 @@ struct exec_node_state {
       return;
     }
     self->quit(std::move(error));
+  }
+
+  void handle_exit_msg(const caf::exit_msg& msg) {
+    if (not instance) {
+      if (msg.reason) {
+        self->quit(msg.reason);
+      }
+    }
+    if constexpr (std::is_same_v<Input, std::monostate>) {
+      TENZIR_DEBUG("{} {} got exit message from the next execution node or "
+                   "its executor with address {}: {}",
+                   *self, op->name(), msg.source, msg.reason);
+      on_error(msg.reason);
+      return;
+    } else {
+      if (not previous) {
+        return;
+      }
+      const auto prev_addr = previous->address();
+      // We got an exit message, which can mean one of four things:
+      // 1. The pipeline manager quit.
+      // 2. The next operator quit.
+      // 3. The previous operator quit gracefully.
+      // 4. The previous operator quit ungracefully.
+      // In cases (1-3) we need to shut down this operator unconditionally.
+      // For (4) we we need to treat the previous operator as offline.
+      if (msg.source != prev_addr) {
+        TENZIR_DEBUG("{} {} got exit message from the next execution node or "
+                     "its executor with address {}: {}",
+                     *self, op->name(), msg.source, msg.reason);
+        on_error(msg.reason);
+        return;
+      }
+      TENZIR_DEBUG("{} {} got exit message from previous execution node with "
+                   "address {}: {}",
+                   *self, op->name(), msg.source, msg.reason);
+      if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
+        on_error(msg.reason);
+        return;
+      }
+      previous = nullptr;
+      schedule_run(false);
+    }
   }
 };
 
@@ -930,6 +942,12 @@ auto exec_node(
           fmt::format("{} is a sink and must not be pulled from", *self));
       }
     },
+    [self](const caf::exit_msg& msg) -> caf::result<void> {
+      auto time_scheduled_guard
+        = make_timer_guard(self->state().metrics.time_scheduled);
+      self->state().handle_exit_msg(msg);
+      return {};
+    },
   };
 }
 
@@ -967,7 +985,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       return result;
     };
   };
-  return std::pair{
+  return std::pair {
     op->detached() ? std::visit(f.template operator()<caf::detached>(),
                                 input_type, *output_type)
                    : std::visit(f.template operator()<caf::no_spawn_options>(),

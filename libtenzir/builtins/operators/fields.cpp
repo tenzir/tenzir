@@ -71,15 +71,17 @@ auto traverse(type t) -> generator<schema_context> {
     t = list->value_type();
   }
   result.type.name = t.name();
-  for (auto [key, value] : t.attributes())
+  for (auto [key, value] : t.attributes()) {
     result.type.attributes.emplace_back(key, value);
+  }
   result.type.kind = t.kind();
   // TODO: This categorization is somewhat arbitrary, and we probably want to
   // think about this more.
-  if (result.type.kind.is<record_type>())
+  if (result.type.kind.is<record_type>()) {
     result.type.category = "container";
-  else
+  } else {
     result.type.category = "atomic";
+  }
   TENZIR_ASSERT(not is<list_type>(t));
   TENZIR_ASSERT(not is<map_type>(t));
   if (const auto* record = try_as<record_type>(&t)) {
@@ -93,10 +95,12 @@ auto traverse(type t) -> generator<schema_context> {
         auto nested = not inner.field.name.empty();
         if (nested) {
           result.field.name = inner.field.name;
-          for (const auto& p : inner.field.path)
+          for (const auto& p : inner.field.path) {
             result.field.path.push_back(p);
-          for (const auto& i : inner.field.index)
+          }
+          for (const auto& i : inner.field.index) {
             result.field.index.push_back(i);
+          }
         }
         co_yield result;
         if (nested) {
@@ -125,11 +129,13 @@ auto add_field(builder_ref builder, const type& t) {
     row.field("schema_id").data(t.make_fingerprint());
     row.field("field").data(ctx.field.name);
     auto path = row.field("path").list();
-    for (const auto& p : ctx.field.path)
+    for (const auto& p : ctx.field.path) {
       path.data(p);
+    }
     auto index = row.field("index").list();
-    for (auto i : ctx.field.index)
+    for (auto i : ctx.field.index) {
       index.data(uint64_t{i});
+    }
     auto type = row.field("type").record();
     type.field("kind").data(to_string(ctx.type.kind));
     type.field("category").data(ctx.type.category);
@@ -156,7 +162,8 @@ public:
     ctrl.set_waiting(true);
     auto synopses = std::vector<partition_synopsis_pair>{};
     ctrl.self()
-      .request(catalog, caf::infinite, atom::get_v)
+      .mail(atom::get_v)
+      .request(catalog, caf::infinite)
       .then(
         [&](std::vector<partition_synopsis_pair>& result) {
           synopses = std::move(result);
@@ -169,8 +176,9 @@ public:
         });
     co_yield {};
     auto fields = std::set<type>{};
-    for (const auto& synopsis : synopses)
+    for (const auto& synopsis : synopses) {
       fields.insert(synopsis.synopsis->schema);
+    }
     auto builder = series_builder{field_type()};
     for (const auto& schema : fields) {
       add_field(builder, schema);

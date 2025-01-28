@@ -12,6 +12,8 @@
 
 #include <tenzir/tql2/plugin.hpp>
 
+#include <caf/anon_mail.hpp>
+
 #include <deque>
 
 namespace tenzir::plugins::load_balance {
@@ -118,7 +120,8 @@ public:
       auto result = table_slice{};
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(load_balancer_, caf::infinite, atom::read_v)
+        .mail(atom::read_v)
+        .request(load_balancer_, caf::infinite)
         .then(
           [&](table_slice slice) {
             result = std::move(slice);
@@ -191,12 +194,24 @@ auto make_load_balancer(
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
     TENZIR_DEBUG("spawning inner executor");
-    auto executor = self->spawn<caf::monitored>(
-      pipeline_executor, pipe, self, self, node, has_terminal, is_hidden);
+    auto executor = self->spawn(pipeline_executor, pipe, self, self, node,
+                                has_terminal, is_hidden);
+    self->monitor(executor, [self, source
+                                   = executor->address()](const caf::error&) {
+      auto it = std::ranges::find(self->state().executors, source,
+                                  &pipeline_executor_actor::address);
+      TENZIR_ASSERT(it != self->state().executors.end());
+      self->state().executors.erase(it);
+      if (self->state().executors.empty()) {
+        // We are done, even if `not self->state().finished`.
+        self->quit();
+      }
+    });
     executor->attach_functor([] {
       TENZIR_DEBUG("inner executor terminated");
     });
-    self->request(executor, caf::infinite, atom::start_v)
+    self->mail(atom::start_v)
+      .request(executor, caf::infinite)
       .then(
         []() {
           TENZIR_DEBUG("started inner pipeline successfully");
@@ -208,26 +223,6 @@ auto make_load_balancer(
         });
     self->state().executors.push_back(std::move(executor));
   }
-  self->set_exit_handler([self](caf::exit_msg& msg) {
-    if (msg.reason != caf::exit_reason::user_shutdown) {
-      // This should never happen.
-      TENZIR_DEBUG("load balancer got unexpected exit msg: {}", msg.reason);
-      self->quit(msg.reason);
-      return;
-    }
-    // Let the sources know we are done and wait for their termination.
-    self->state().finish();
-  });
-  self->set_down_handler([self](const caf::down_msg& msg) {
-    auto it = std::ranges::find(self->state().executors, msg.source,
-                                &pipeline_executor_actor::address);
-    TENZIR_ASSERT(it != self->state().executors.end());
-    self->state().executors.erase(it);
-    if (self->state().executors.empty()) {
-      // We are done, even if `not self->state().finished`.
-      self->quit();
-    }
-  });
   return {
     [self](atom::write, table_slice& events) -> caf::result<void> {
       return self->state().write(std::move(events));
@@ -243,16 +238,17 @@ auto make_load_balancer(
                                  self->state().next_metrics_id += 1;
                                  return id;
                                });
-      return self->delegate(self->state().metrics, self->state().operator_index,
-                            id, schema);
+      return self->mail(self->state().operator_index, id, schema)
+        .delegate(self->state().metrics);
     },
     [self](uint64_t op_index, uint64_t metric_index,
            record& metric) -> caf::result<void> {
       auto id
         = self->state().metrics_id_map.find(std::pair{op_index, metric_index});
       TENZIR_ASSERT(id != self->state().metrics_id_map.end());
-      return self->delegate(self->state().metrics, self->state().operator_index,
-                            id->second, std::move(metric));
+      return self
+        ->mail(self->state().operator_index, id->second, std::move(metric))
+        .delegate(self->state().metrics);
     },
     [](const operator_metric& op_metric) -> caf::result<void> {
       // There currently is no way to have subpipeline metrics.
@@ -263,6 +259,16 @@ auto make_load_balancer(
       TENZIR_ASSERT(diagnostic.severity != severity::error);
       self->state().diagnostics.emit(std::move(diagnostic));
       return {};
+    },
+    [self](const caf::exit_msg& msg) {
+      if (msg.reason != caf::exit_reason::user_shutdown) {
+        // This should never happen.
+        TENZIR_DEBUG("load balancer got unexpected exit msg: {}", msg.reason);
+        self->quit(msg.reason);
+        return;
+      }
+      // Let the sources know we are done and wait for their termination.
+      self->state().finish();
     },
   };
 }
@@ -309,8 +315,8 @@ public:
       }
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(load_balancer.get(), caf::infinite, atom::write_v,
-                 std::move(slice))
+        .mail(atom::write_v, std::move(slice))
+        .request(load_balancer.get(), caf::infinite)
         .then(
           [&]() {
             ctrl.set_waiting(false);
@@ -327,9 +333,10 @@ public:
     ctrl.set_waiting(true);
     load_balancer.get()->attach_functor(
       [self = caf::actor_cast<caf::actor>(&ctrl.self()), &ctrl] {
-        caf::anon_send(self, caf::make_action([&ctrl] {
-                         ctrl.set_waiting(false);
-                       }));
+        caf::anon_mail(caf::make_action([&ctrl] {
+          ctrl.set_waiting(false);
+        }))
+          .send(self);
       });
     caf::anon_send_exit(load_balancer.get(), caf::exit_reason::user_shutdown);
     co_yield {};

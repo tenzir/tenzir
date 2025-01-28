@@ -25,8 +25,8 @@ using dummy_saving_inspector = dummy_inspector<false>;
 
 } // namespace
 
-TEST(callback is invoked and the fields invocation returns true when all
-       fields and callback return true) {
+TEST(callback is invoked and the fields invocation
+       returns true when all fields and callback return true) {
   dummy_saving_inspector inspector;
   std::size_t callback_calls_count{0u};
   bool field1_invoked = false;
@@ -141,11 +141,11 @@ TEST(inspect_enum with caf binary inspectors) {
   // serialize
   auto in = enum_example::value_1;
   caf::byte_buffer buf;
-  caf::binary_serializer serializer{nullptr, buf};
+  caf::binary_serializer serializer{buf};
   tenzir::detail::inspect_enum(serializer, in);
   // deserialize
   auto out = enum_example::value_2;
-  caf::binary_deserializer deserializer{nullptr, buf};
+  caf::binary_deserializer deserializer{buf};
   tenzir::detail::inspect_enum(deserializer, out);
   CHECK_EQUAL(in, out);
 }

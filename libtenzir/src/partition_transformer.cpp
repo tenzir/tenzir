@@ -126,8 +126,9 @@ public:
   auto operator()(generator<table_slice> input) const
     -> generator<std::monostate> {
     for (auto&& slice : input) {
-      if (slice.rows() > 0)
+      if (slice.rows() > 0) {
         result_->push_back(std::move(slice));
+      }
       co_yield {};
     }
   }
@@ -156,9 +157,10 @@ partition_transformer_state::create_or_get_partition(const table_slice& slice) {
     x = std::prev(end);
     // Create a new partition if inserting the slice would overflow
     // the old one.
-    if (x->second.events + slice.rows() > partition_capacity)
+    if (x->second.events + slice.rows() > partition_capacity) {
       x = data.insert(
         std::make_pair(schema, active_partition_state::serialization_data{}));
+    }
   }
   return x->second;
 }
@@ -190,8 +192,9 @@ void partition_transformer_state::update_type_ids_and_indexers(
       it = typed_indexers.emplace(qf, nullptr).first;
     }
     auto& idx = it->second;
-    if (idx != nullptr)
+    if (idx != nullptr) {
       slice.append_column_to_index(flat_index, *idx);
+    }
     ++flat_index;
   }
 }
@@ -233,13 +236,14 @@ void partition_transformer_state::fulfill(
   // no error during packing, so at least one of these chunks must be
   // nonnull.
   for (auto& [id, synopsis_chunk] : *stream_data.synopsis_chunks) {
-    if (!synopsis_chunk)
+    if (!synopsis_chunk) {
       continue;
+    }
     auto filename = fmt::format(
       TENZIR_FMT_RUNTIME(self->state().synopsis_path_template), id);
     auto synopsis_path = std::filesystem::path{filename};
-    self
-      ->request(fs, caf::infinite, atom::write_v, synopsis_path, synopsis_chunk)
+    self->mail(atom::write_v, synopsis_path, synopsis_chunk)
+      .request(fs, caf::infinite)
       .then([](atom::ok) { /* nop */ },
             [synopsis_path, self](const caf::error& e) {
               // The catalog data can always be regenerated on restart, so we
@@ -279,9 +283,8 @@ void partition_transformer_state::fulfill(
     auto filename = fmt::format(
       TENZIR_FMT_RUNTIME(self->state().partition_path_template), id);
     auto partition_path = std::filesystem::path{filename};
-    self
-      ->request(fs, caf::infinite, atom::write_v, partition_path,
-                partition_chunk)
+    self->mail(atom::write_v, partition_path, partition_chunk)
+      .request(fs, caf::infinite)
       .then(
         [fanout_counter, aps = std::move(aps)](atom::ok) mutable {
           fanout_counter->state().emplace_back(std::move(aps));
@@ -313,19 +316,6 @@ auto partition_transformer(
   self->state().catalog = std::move(catalog);
   self->state().transform = std::move(transform);
   self->state().store_id = std::move(store_id);
-  self->set_down_handler([self](caf::down_msg& msg) {
-    // This is currently safe because we do all increases to
-    // `launched_stores` within the same continuation, but when
-    // that changes we need to take a bit more care here to avoid
-    // a race.
-    ++self->state().stores_finished;
-    TENZIR_DEBUG("{} sees {} finished for a total of {}/{} stores", *self,
-                 msg.source, self->state().stores_finished,
-                 self->state().stores_launched);
-    if (self->state().stores_finished >= self->state().stores_launched) {
-      quit_or_stall(self, partition_transformer_state::stores_are_finished{});
-    }
-  });
   return {
     [self](tenzir::table_slice& slice) {
       // Adjust the import time range iff necessary.
@@ -404,8 +394,9 @@ auto partition_transformer(
         return {};
       }
       for (auto& [schema, partition_data] : self->state().data) {
-        if (partition_data.events == 0)
+        if (partition_data.events == 0) {
           continue;
+        }
         auto builder_and_header = store_actor_plugin->make_store_builder(
           self->state().fs, partition_data.id);
         if (!builder_and_header) {
@@ -417,13 +408,26 @@ auto partition_transformer(
           return {};
         }
         partition_data.builder = builder_and_header->store_builder;
-        self->monitor(partition_data.builder);
+        self->monitor(partition_data.builder, [self](const caf::error& err) {
+          // This is currently safe because we do all increases to
+          // `launched_stores` within the same continuation, but when
+          // that changes we need to take a bit more care here to avoid
+          // a race.
+          ++self->state().stores_finished;
+          TENZIR_DEBUG(
+            "{} sees builder finished for a total of {}/{} stores: {}", *self,
+            self->state().stores_finished, self->state().stores_launched, err);
+          if (self->state().stores_finished >= self->state().stores_launched) {
+            quit_or_stall(self,
+                          partition_transformer_state::stores_are_finished{});
+          }
+        });
         ++self->state().stores_launched;
         partition_data.store_header = builder_and_header->header;
       }
       TENZIR_DEBUG("{} received all table slices", *self);
-      return self->delegate(static_cast<partition_transformer_actor>(self),
-                            atom::internal_v, atom::resume_v, atom::done_v);
+      return self->mail(atom::internal_v, atom::resume_v, atom::done_v)
+        .delegate(static_cast<partition_transformer_actor>(self));
     },
     [self](atom::internal, atom::resume, atom::done) {
       TENZIR_DEBUG("{} got resume", *self);
@@ -435,7 +439,7 @@ auto partition_transformer(
         for (auto& slice : buildup.slices) {
           slice.offset(offset);
           offset += slice.rows();
-          self->send(data.builder, slice);
+          self->mail(slice).send(data.builder);
           self->state().update_type_ids_and_indexers(data.type_ids, data.id,
                                                      slice);
           mutable_synopsis.add(slice, self->state().partition_capacity,
@@ -450,16 +454,19 @@ auto partition_transformer(
              self->state().partition_buildup.at(data.id).indexers) {
           auto chunk = chunk_ptr{};
           // Note that `chunkify(nullptr)` return a chunk of size > 0.
-          if (idx)
+          if (idx) {
             chunk = chunkify(idx);
+          }
           // We defensively treat every empty chunk as non-existing.
-          if (chunk && chunk->size() == 0)
+          if (chunk && chunk->size() == 0) {
             chunk = nullptr;
+          }
           data.indexer_chunks.emplace_back(qf.name(), chunk);
         }
       }
       for (auto& [_, partition_data] : self->state().data) {
-        self->request(partition_data.builder, caf::infinite, atom::persist_v)
+        self->mail(atom::persist_v)
+          .request(partition_data.builder, caf::infinite)
           .then(
             [](resource&) {
               // This is handled via the down handler.
@@ -503,8 +510,9 @@ auto partition_transformer(
           auto& indexers = indexers_it->second.indexers;
           auto fields = std::vector<struct record_type::field>{};
           fields.reserve(indexers.size());
-          for (const auto& [qf, _] : indexers)
+          for (const auto& [qf, _] : indexers) {
             fields.emplace_back(std::string{qf.name()}, qf.type());
+          }
           auto partition = pack_full(partition_data, record_type{fields});
           if (!partition) {
             stream_data.partition_chunks = partition.error();

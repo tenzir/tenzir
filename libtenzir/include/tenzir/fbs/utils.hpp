@@ -56,10 +56,11 @@ caf::expected<flatbuffers::Offset<flatbuffers::Vector<Byte>>>
 serialize_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
   static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
   caf::byte_buffer buf;
-  caf::binary_serializer source(nullptr, buf);
-  if (!source.apply(x))
+  caf::binary_serializer source(buf);
+  if (!source.apply(x)) {
     return caf::make_error(ec::serialization_error, "failed to serialize "
                                                     "bytes");
+  }
   return builder.CreateVector(reinterpret_cast<const Byte*>(buf.data()),
                               buf.size());
 }
@@ -69,13 +70,15 @@ serialize_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
 template <class T, class Byte = uint8_t>
 caf::error deserialize_bytes(const flatbuffers::Vector<Byte>* v, T& x) {
   static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
-  if (!v)
+  if (!v) {
     return caf::make_error(ec::format_error, "no input");
+  }
   detail::legacy_deserializer sink(as_bytes(*v));
-  if (!sink.apply(x))
+  if (!sink.apply(x)) {
     return caf::make_error(ec::parse_error,
                            fmt::format("failed to deserialize {}",
                                        detail::pretty_type_name(x)));
+  }
   return caf::none;
 }
 
@@ -92,8 +95,9 @@ const Flatbuffer* as_flatbuffer(std::span<const std::byte, Extent> xs) {
   auto data = reinterpret_cast<const uint8_t*>(xs.data());
   auto size = xs.size();
   flatbuffers::Verifier verifier{data, size};
-  if (!verifier.template VerifyBuffer<Flatbuffer>())
+  if (!verifier.template VerifyBuffer<Flatbuffer>()) {
     return nullptr;
+  }
   return flatbuffers::GetRoot<Flatbuffer>(data);
 }
 
@@ -114,8 +118,9 @@ caf::expected<chunk_ptr>
 wrap(T const& x, const char* file_identifier = nullptr) {
   flatbuffers::FlatBufferBuilder builder;
   auto root = pack(builder, x);
-  if (!root)
+  if (!root) {
     return root.error();
+  }
   builder.Finish(*root, file_identifier);
   return release(builder);
 }
@@ -128,8 +133,9 @@ wrap(T const& x, const char* file_identifier = nullptr) {
 /// @returns An error iff the operation failed.
 template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
 [[nodiscard]] caf::error unwrap(std::span<const std::byte, Extent> xs, T& x) {
-  if (auto flatbuf = as_flatbuffer<Flatbuffer>(xs))
+  if (auto flatbuf = as_flatbuffer<Flatbuffer>(xs)) {
     return unpack(*flatbuf, x);
+  }
   return caf::make_error(ec::unspecified, "flatbuffer verification failed");
 }
 
@@ -139,8 +145,9 @@ template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
 template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
 caf::expected<T> unwrap(std::span<const std::byte, Extent> xs) {
   T result;
-  if (auto err = unwrap(xs, result))
+  if (auto err = unwrap(xs, result)) {
     return err;
+  }
   return result;
 }
 

@@ -43,7 +43,7 @@ void importer_state::on_process(const table_slice& slice) {
   }
   for (const auto& [subscriber, wants_internal] : subscribers) {
     if (is_internal == wants_internal) {
-      self->send(subscriber, slice);
+      self->mail(slice).send(subscriber);
     }
   }
   unpersisted_events.push_back(std::move(slice));
@@ -53,7 +53,7 @@ void importer_state::handle_slice(table_slice&& slice) {
   slice.import_time(time::clock::now());
   on_process(slice);
   if (retention_policy.should_be_persisted(slice)) {
-    self->send(index, std::move(slice));
+    self->mail(std::move(slice)).send(index);
   }
 }
 
@@ -61,13 +61,6 @@ importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, index_actor index) {
   TENZIR_TRACE("importer {} {}", TENZIR_ARG(self->id()), TENZIR_ARG(dir));
-  if (auto ec = std::error_code{};
-      std::filesystem::exists(dir / "current_id_block", ec)) {
-    std::filesystem::remove(dir / "current_id_block", ec);
-  }
-  self->set_exit_handler([=](const caf::exit_msg& msg) {
-    self->quit(msg.reason);
-  });
   if (index) {
     self->state().index = std::move(index);
   }
@@ -78,16 +71,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->quit(std::move(policy.error()));
     return importer_actor::behavior_type::make_empty_behavior();
   }
-  self->set_down_handler([self](const caf::down_msg& msg) {
-    const auto subscriber
-      = std::remove_if(self->state().subscribers.begin(),
-                       self->state().subscribers.end(),
-                       [&](const auto& subscriber) {
-                         return subscriber.first.address() == msg.source;
-                       });
-    self->state().subscribers.erase(subscriber,
-                                    self->state().subscribers.end());
-  });
   // We call the metrics "ingest" to distinguish them from the "import" metrics;
   // these will disappear again in the future when we rewrite the database
   // component.
@@ -154,13 +137,26 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     },
     [self](atom::subscribe, receiver_actor<table_slice>& subscriber,
            bool internal) -> std::vector<table_slice> {
-      self->monitor(subscriber);
+      self->monitor(
+        subscriber, [self, source = subscriber->address()](const caf::error&) {
+          const auto subscriber
+            = std::remove_if(self->state().subscribers.begin(),
+                             self->state().subscribers.end(),
+                             [&](const auto& subscriber) {
+                               return subscriber.first.address() == source;
+                             });
+          self->state().subscribers.erase(subscriber,
+                                          self->state().subscribers.end());
+        });
       self->state().subscribers.emplace_back(std::move(subscriber), internal);
       return self->state().unpersisted_events;
     },
     // -- status_client_actor --------------------------------------------------
     [](atom::status, status_verbosity, duration) { //
       return record{};
+    },
+    [self](const caf::exit_msg& msg) {
+      self->quit(msg.reason);
     },
   };
 }

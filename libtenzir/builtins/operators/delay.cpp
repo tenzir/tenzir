@@ -35,8 +35,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
     auto start = start_;
@@ -103,7 +103,8 @@ public:
         if (delay > duration::zero()) {
           co_yield subslice(slice, begin, end);
           ctrl.self()
-            .request(alarm_clock, caf::infinite, delay)
+            .mail(delay)
+            .request(alarm_clock, caf::infinite)
             .await(
               [&]() {
                 begin = end;
@@ -121,8 +122,8 @@ public:
     }
   }
 
-  auto optimize(expression const&,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const&, event_order order) const
+    -> optimize_result override {
     return optimize_result::order_invariant(*this, order);
   }
 
@@ -153,8 +154,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
     auto start = start_;
@@ -202,7 +203,8 @@ public:
           if (delay > duration::zero()) {
             co_yield subslice(slice, begin, end);
             ctrl.self()
-              .request(alarm_clock, caf::infinite, delay)
+              .mail(delay)
+              .request(alarm_clock, caf::infinite)
               .await(
                 [&]() {
                   begin = end;
@@ -221,8 +223,8 @@ public:
     }
   }
 
-  auto optimize(expression const&,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const&, event_order order) const
+    -> optimize_result override {
     return optimize_result::order_invariant(*this, order);
   }
 
@@ -266,8 +268,8 @@ public:
 };
 
 class plugin2 final : public virtual operator_plugin2<delay_operator2> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto speed = std::optional<located<double>>{};
     auto start = std::optional<time>{};
     auto expr = ast::expression{};

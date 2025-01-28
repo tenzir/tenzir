@@ -69,7 +69,8 @@ public:
       total_events += slice.rows();
       inflight_batches += 1;
       ctrl.self()
-        .request(importer, caf::infinite, std::move(slice))
+        .mail(std::move(slice))
+        .request(importer, caf::infinite)
         .then(
           [&]() {
             inflight_batches -= 1;
@@ -92,7 +93,8 @@ public:
     }
     ctrl.set_waiting(true);
     ctrl.self()
-      .request(importer, caf::infinite, atom::flush_v)
+      .mail(atom::flush_v)
+      .request(importer, caf::infinite)
       .then(
         [&] {
           ctrl.set_waiting(false);

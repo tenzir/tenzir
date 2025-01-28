@@ -122,12 +122,13 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         .then(
           [self, response, endpoint = std::move(endpoint),
            handler](bool valid) mutable {
-            if (valid)
+            if (valid) {
               self->send(self, atom::internal_v, atom::request_v,
                          std::move(response), std::move(endpoint),
                          std::move(handler));
-            else
+            } else {
               response->abort(401, "invalid token\n", caf::error{});
+            }
           },
           [response](const caf::error& err) mutable {
             response->abort(500, "authentication error\n", err);
@@ -137,9 +138,10 @@ request_dispatcher_actor::behavior_type request_dispatcher(
            const rest_endpoint& endpoint, rest_handler_actor handler) {
       auto const& header = response->request()->header();
       auto query_params = parse_query_params(header.query());
-      if (!query_params)
+      if (!query_params) {
         return response->abort(400, "failed to parse query\n",
                                query_params.error());
+      }
       auto body_params = tenzir::http_parameter_map{};
       // POST requests can contain request parameters in their body in any
       // format supported by the server. The client indicates the data format
@@ -153,10 +155,11 @@ request_dispatcher_actor::behavior_type request_dispatcher(
               .value_or("application/json");
         if (content_type == "application/x-www-form-urlencoded") {
           query_params = parse_query_params(body);
-          if (!query_params)
+          if (!query_params) {
             return response->abort(
               400, "failed to parse query parameters from request body\n",
               query_params.error());
+          }
         } else if (content_type == "application/json") {
           auto const& json_body = !body.empty() ? body : "{}";
           auto json_params = http_parameter_map::from_json(json_body);
@@ -184,25 +187,28 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           // TODO: Attempt to parse lists in query parameters, as in
           // `?x=1,2,3&y=[a,b]`
           auto maybe_param = std::optional<tenzir::data>{};
-          if (auto query_param = query_params->get_param(name))
+          if (auto query_param = query_params->get_param(name)) {
             maybe_param = std::string{*query_param};
-          if (auto route_param = route_params.get_param(name))
+          }
+          if (auto route_param = route_params.get_param(name)) {
             maybe_param = std::string{*route_param};
-          if (!maybe_param)
+          }
+          if (!maybe_param) {
             continue;
+          }
           body_params.emplace(std::string{name}, std::move(*maybe_param));
         }
       }
       auto params = parse_endpoint_parameters(endpoint, body_params);
-      if (!params)
+      if (!params) {
         return response->abort(
           422, "failed to parse endpoint parameters: ", params.error());
+      }
       // Note that the handler should return a valid "error" response by itself
       // if possible (ie. invalid arguments), the error handler is to catch
       // timeouts and real internal errors.
-      self
-        ->request(handler, caf::infinite, atom::http_request_v,
-                  endpoint.endpoint_id, std::move(*params))
+      self->mail(atom::http_request_v, endpoint.endpoint_id, std::move(*params))
+        .request(handler, caf::infinite)
         .then(
           [response](rest_response& rsp) {
             auto&& body = std::move(rsp).release();
@@ -225,26 +231,30 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
   TENZIR_VERBOSE("setting up route {}", path);
   // The handler just injects the request into the actor system, the
   // actual processing starts in the request_dispatcher.
-  router->add_handler(
-    method, path,
-    [=, &self](request_handle_t req,
-               restinio::router::route_params_t route_params)
-      -> restinio::request_handling_status_t {
-      auto response = std::make_shared<restinio_response>(
-        std::move(req), std::move(route_params), config.enable_detailed_errors,
-        endpoint);
-      if (config.cors_allowed_origin)
-        response->add_header("Access-Control-Allow-Origin",
-                             *config.cors_allowed_origin);
-      for (auto const& [field, value] : config.response_headers)
-        response->add_header(field, value);
-      self->send(dispatcher, atom::request_v, std::move(response),
-                 std::move(endpoint), handler);
-      // TODO: Measure if always accepting introduces a noticeable
-      // overhead and if so whether we can reject immediately in
-      // some cases here.
-      return restinio::request_accepted();
-    });
+  router->add_handler(method, path,
+                      [=, &self](request_handle_t req,
+                                 restinio::router::route_params_t route_params)
+                        -> restinio::request_handling_status_t {
+                        auto response = std::make_shared<restinio_response>(
+                          std::move(req), std::move(route_params),
+                          config.enable_detailed_errors, endpoint);
+                        if (config.cors_allowed_origin) {
+                          response->add_header("Access-Control-Allow-Origin",
+                                               *config.cors_allowed_origin);
+                        }
+                        for (auto const& [field, value] :
+                             config.response_headers) {
+                          response->add_header(field, value);
+                        }
+                        self
+                          ->mail(atom::request_v, std::move(response),
+                                 std::move(endpoint), handler)
+                          .send(dispatcher);
+                        // TODO: Measure if always accepting introduces a
+                        // noticeable overhead and if so whether we can reject
+                        // immediately in some cases here.
+                        return restinio::request_accepted();
+                      });
 }
 
 // Set up a static handler that responds to all preflight requests
@@ -263,8 +273,9 @@ void setup_cors_preflight_handlers(std::unique_ptr<router_t>& router,
         = req->header().try_get_field("Access-Control-Request-Headers");
       auto allowed_headers
         = requested_headers ? *requested_headers : "Content-Type";
-      if (!requested_headers)
+      if (!requested_headers) {
         return req->create_response(restinio::status_bad_request()).done();
+      }
       return req->create_response(restinio::status_no_content())
         .append_header("Access-Control-Allow-Origin", allowed_origin)
         .append_header("Access-Control-Allow-Methods", "POST, GET")
@@ -283,25 +294,29 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
   auto data = tenzir::data{};
   // TODO: Implement a single `convert_and_validate()` function for going
   // from caf::settings -> record_type
-  if (!inv.arguments.empty())
+  if (!inv.arguments.empty()) {
     return caf::make_message(caf::make_error(
       ec::invalid_argument,
       fmt::format("unexpected positional args: {}", inv.arguments)));
+  }
   bool success = convert(web_options, data);
-  if (!success)
+  if (!success) {
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt parse options"));
+  }
   auto invalid
     = tenzir::validate(data, tenzir::plugins::web::configuration::schema(),
                        tenzir::validate::permissive);
-  if (invalid)
+  if (invalid) {
     return caf::make_message(caf::make_error(
       ec::invalid_argument, fmt::format("invalid options: {}", invalid)));
+  }
   web::configuration config;
   caf::error error = convert(data, config);
-  if (error)
+  if (error) {
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt convert options"));
+  }
   auto server_config = convert_and_validate(config);
   if (!server_config) {
     TENZIR_ERROR("failed to start server: {}", server_config.error());
@@ -343,8 +358,9 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
     // TODO: Monitor the handlers and re-spawn them if they go down.
   }
   // Set up implicit CORS preflight handlers for all endpoints if desired
-  if (server_config->cors_allowed_origin)
+  if (server_config->cors_allowed_origin) {
     setup_cors_preflight_handlers(router, *server_config->cors_allowed_origin);
+  }
   // Set up non-API routes.
   router->non_matched_request_handler([](auto req) {
     TENZIR_VERBOSE("404 not found: {} {}", req->header().method().c_str(),
@@ -372,25 +388,30 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
         // Catch the common mistake of sending a GET request to a POST endpoint.
         if (http_path.starts_with("/api")
             && std::find(api_routes.begin(), api_routes.end(), http_path)
-                 != api_routes.end())
+                 != api_routes.end()) {
           return req->create_response(restinio::status_not_found())
             .set_body("invalid request method\n")
             .done();
+        }
         auto path = std::filesystem::path{std::string{http_path}};
         TENZIR_DEBUG("serving static file {}", http_path);
         auto normalized_path
           = (webroot / path.relative_path()).lexically_normal();
-        if (ec)
+        if (ec) {
           return restinio::request_rejected();
-        if (!normalized_path.string().starts_with(webroot.string()))
+        }
+        if (!normalized_path.string().starts_with(webroot.string())) {
           return restinio::request_rejected();
+        }
         // Map e.g. /status -> /status.html on disk.
-        if (!exists(normalized_path) && !normalized_path.has_extension())
+        if (!exists(normalized_path) && !normalized_path.has_extension()) {
           normalized_path.replace_extension("html");
-        if (!exists(normalized_path))
+        }
+        if (!exists(normalized_path)) {
           return req->create_response(restinio::status_not_found())
             .set_body("404 not found\n")
             .done();
+        }
         auto extension = normalized_path.extension().string();
         auto sf = restinio::sendfile(normalized_path);
         auto const* mime_type = content_type_by_file_extension(extension);
@@ -435,8 +456,9 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
         TENZIR_ASSERT(msg.source == node);
         TENZIR_DEBUG("{} received DOWN from node", *self);
         stop = true;
-        if (msg.reason != caf::exit_reason::user_shutdown)
+        if (msg.reason != caf::exit_reason::user_shutdown) {
           err = std::move(msg.reason);
+        }
       },
       // Only called when running this command with `tenzir -N`.
       [&](atom::signal, int signal) {
@@ -458,8 +480,9 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
       },
     },
     server);
-  for (auto& handler : handlers)
+  for (auto& handler : handlers) {
     self->send_exit(handler, caf::exit_reason::user_shutdown);
+  }
   server_thread.join();
   return caf::make_message(std::move(err));
 }

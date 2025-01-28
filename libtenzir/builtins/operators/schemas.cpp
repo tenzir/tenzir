@@ -30,7 +30,8 @@ public:
     ctrl.set_waiting(true);
     auto schemas = std::unordered_set<type>{};
     ctrl.self()
-      .request(catalog, caf::infinite, atom::get_v)
+      .mail(atom::get_v)
+      .request(catalog, caf::infinite)
       .then(
         [&](std::vector<partition_synopsis_pair>& synopses) {
           for (const auto& [id, synopsis] : synopses) {

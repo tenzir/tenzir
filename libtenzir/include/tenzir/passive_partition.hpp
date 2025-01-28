@@ -97,6 +97,9 @@ struct passive_partition_state {
   /// The store to retrieve the data from.
   store_actor store = {};
 
+  /// Whether this actor is currently shutting down.
+  bool is_shutting_down = false;
+
   /// Actor handle of the node.
   node_actor::pointer node = {};
 

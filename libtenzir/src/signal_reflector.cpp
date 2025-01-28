@@ -42,7 +42,7 @@ signal_reflector_actor::behavior_type signal_reflector(
       }
       std::cerr << "\rinitiating graceful shutdown... (repeat request to "
                    "terminate immediately)\n";
-      self->send(self->state().handler, atom::signal_v, signum);
+      self->mail(atom::signal_v, signum).send(self->state().handler);
     },
     [self](atom::subscribe) {
       self->state().handler
