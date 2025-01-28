@@ -82,6 +82,9 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
                   cfg.implicit_events_source);
   cfg.tql2 = caf::get_or(inv.options, "tenzir.tql2", cfg.tql2);
+  cfg.silence_tql1_deprecation_notice
+    = caf::get_or(inv.options, "tenzir.silence-tql1-deprecation-notice",
+                  cfg.silence_tql1_deprecation_notice);
   cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
   auto filename = std::string{};
   auto content = std::string{};

@@ -25,6 +25,7 @@ struct exec_config {
   bool dump_diagnostics = false;
   bool dump_metrics = false;
   bool tql2 = false;
+  bool silence_tql1_deprecation_notice = false;
   bool strict = false;
 };
 
