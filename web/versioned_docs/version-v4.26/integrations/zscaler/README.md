@@ -62,7 +62,7 @@ After a web, firewall, or DNS feed has been configured, activate the changes as
 needed and test the feed. To test the connection:
 
 1. Go to *Administration* → *Nanolog Streaming Service* → *Cloud NSS Feeds*.
-2. Click the *Cloud icon*. This sends a test message to the Cribl receiver.
+2. Click the *Cloud icon*. This sends a test message to the Tenzir receiver.
 
 ## Use an NSS Feed to send events to Tenzir
 
