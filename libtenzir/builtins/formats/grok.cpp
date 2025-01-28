@@ -424,7 +424,7 @@ void pattern_store::add_single(std::string_view line, location loc,
   }
   auto parts = detail::split(line, " ", 1);
   if (parts.size() < 2) {
-    diagnostic::error("pattern definition should have the form `name pattern")
+    diagnostic::error("pattern definition should have the form `NAME PATTERN`")
       .primary(loc)
       .emit(dh);
   }

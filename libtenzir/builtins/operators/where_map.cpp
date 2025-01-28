@@ -289,18 +289,20 @@ auto make_where_map_function(function_plugin::invocation inv, session ctx,
       auto ms = tenzir::eval(args.expr, slice, ctx);
       TENZIR_ASSERT(not ms.parts().empty());
       /// TODO: Should the conflict resolution be exposed to the user?
-      auto [values, result, conflict] = ms.to_series(
+      auto [values, result, conflicts] = ms.to_series(
         multi_series::to_series_strategy::take_largest_null_rest);
       if (result != multi_series::to_series_result::status_t::ok) {
         // TODO: The error message is bad. It's difficult to explain.
+        auto kinds = std::set<type_kind>{};
+        for (const auto& c : conflicts) {
+          kinds.insert(c.kind());
+        }
         diagnostic::warning("expression evaluated to incompatible types")
           .primary(args.expr, "types `{}` are incompatible",
-                   fmt::join(conflict
-                               | std::ranges::views::transform(&type::kind),
-                             "`, `"))
+                   fmt::join(kinds, "`, `"))
           .emit(ctx);
         if (result == multi_series::to_series_result::status_t::fail) {
-          return series::null(null_type{}, eval.length());
+          return series::null(null_type{}, ms.length());
         }
       }
       switch (mode) {

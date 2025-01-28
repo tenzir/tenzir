@@ -349,7 +349,7 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    // TODO: Consider adding a `many` option to expect multiple json values.
+    // TODO: Consider adding a `many` option to expect multiple yaml values.
     auto parser = argument_parser2::function(name());
     parser.positional("x", expr, "string");
     auto msb_parser = multi_series_builder_argument_parser{};
@@ -382,7 +382,7 @@ public:
               return multi_series{builder.finalize()};
             },
             [&](const auto&) -> multi_series {
-              diagnostic::warning("`parse_json` expected `string`, got `{}`",
+              diagnostic::warning("`parse_yaml` expected `string`, got `{}`",
                                   arg.type.kind())
                 .primary(call)
                 .emit(ctx);

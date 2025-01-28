@@ -84,17 +84,14 @@ get all valid parts of the list mapped.
 ```tql
 let $pattern = "%{WORD:w} %{NUMBER:n}"
 
-from { l: ["hello", "world 42"] }
-l = l.map( str, str.parse_grok($pattern) )
+from {l: ["hello", "world 42"]}
+l = l.map(str, str.parse_grok($pattern))
 ```
 ```tql
 {
   l: [
     null,
-    {
-      w: "world",
-      n: 42,
-    },
+    { w: "world", n: 42, },
   ],
 }
 ```
@@ -109,29 +106,19 @@ JSON objects and one is a JSON list. While all three can be parsed as JSON by
 preferring the two `record`s over one `list`.
 
 ```tql
-from {
-  l: [
-    r#"{ "x": 0 }"#,
-    r#"{ "y": 0 }"#,
-    r#"[ 3 ]"#,
-  ],
-}
+from {l: [
+  r#"{ "x": 0 }"#,
+  r#"{ "y": 0 }"#,
+  r#"[ 3 ]"#,
+]}
 l = l.map(str, str.parse_json())
 ```
 ```tql
-{
-  l: [
-    {
-      x: 0,
-      y: null,
-    },
-    {
-      x: null,
-      y: 0,
-    },
-    null,
-  ],
-}
+{l: [
+  {x: 0, y: null},
+  {x: null, y: 0},
+  null,
+]}
 ```
 
 ## See Also

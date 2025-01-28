@@ -183,6 +183,7 @@ public:
           .note("check your field splitter")
           .emit(dh);
         // TODO: warn instead and just continue?
+        return;
       }
       line = tail;
     }
@@ -191,18 +192,20 @@ public:
   auto
   parse_strings(const arrow::StringArray& input,
                 diagnostic_handler& diagnostics) const -> std::vector<series> {
-    auto dh = transforming_diagnostic_handler{diagnostics, [](auto diag) {
-                                                diag.message = fmt::format(
-                                                  "parse_kv: {}", diag.message);
-                                                return diag;
-                                              }};
+    auto dh = transforming_diagnostic_handler{
+      diagnostics,
+      [](auto diag) {
+        diag.message = fmt::format("parse_kv: {}", diag.message);
+        return diag;
+      },
+    };
     auto builder = multi_series_builder{args_.msb_opts_, dh};
     for (auto&& line : values(string_type{}, input)) {
       if (not line) {
         builder.null();
         continue;
       }
-      parse_line(builder, diagnostics, *line);
+      parse_line(builder, dh, *line);
     }
     return builder.finalize();
   }

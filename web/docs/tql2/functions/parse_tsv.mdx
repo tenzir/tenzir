@@ -7,7 +7,7 @@ Parses a string as tab separated values.
 ```tql
 parse_tsv(input:string, header=list<string>|string,
          [list_sep:string, null_value:string,
-          auto_expand=bool, quotes=string,
+          auto_expand=bool, quotes=string, schema=string,
           selector=string, schema_only=bool, raw=bool, unflatten=string]) -> record
 ```
 
@@ -15,16 +15,20 @@ parse_tsv(input:string, header=list<string>|string,
 
 The `parse_tsv` function parses a string as [TSV](https://en.wikipedia.org/wiki/Tab-separated_values).
 
+### `input: string`
+
+The string to parse.
+
 ### `header = list<string>|string`
 
 A list of strings to be used as the column names, or a `string` to be parsed
 as the `header` for the parsed values.
 
-### `list_sep: string`
+### `list_sep = string (optional)`
 
 The string separating different elements in a list within a single field.
 
-### `null_value: string`
+### `null_value = string (optional)`
 
 The string denoting an absent value.
 

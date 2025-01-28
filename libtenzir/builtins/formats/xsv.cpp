@@ -122,10 +122,10 @@ struct xsv_parser_options {
   }
 };
 
-auto parse_header(std::string_view line, const xsv_parser_options& args,
-                  const detail::quoting_escaping_policy& quoting,
-                  diagnostic_handler& dh)
-  -> failure_or<std::vector<std::string>> {
+auto parse_header(
+  std::string_view line, location loc, const xsv_parser_options& args,
+  const detail::quoting_escaping_policy& quoting,
+  diagnostic_handler& dh) -> failure_or<std::vector<std::string>> {
   auto fields = std::vector<std::string>{};
   auto field_text = std::string_view{};
   while (auto split = quoting.split_at_unquoted(line, args.field_sep)) {
@@ -134,9 +134,7 @@ auto parse_header(std::string_view line, const xsv_parser_options& args,
   }
   fields.emplace_back(quoting.unquote_unescape(line));
   if (fields.empty() and not args.auto_expand) {
-    diagnostic::error("failed to parse header")
-      .note("from `{}`", args.name)
-      .emit(dh);
+    diagnostic::error("failed to parse header").primary(loc).emit(dh);
     return failure::promise();
   }
   return fields;
@@ -151,12 +149,12 @@ auto extract_header(ast::expression& header_expr,
   return match(
     header_data,
     [&](const std::string& s) -> ret_t {
-      return parse_header(s, opts, quoting_options, ctx);
+      return parse_header(s, header_expr.get_location(), opts, quoting_options,
+                          ctx);
     },
     [&](list& l) -> ret_t {
-      if (l.empty()) {
-        /// TODO error instead?
-        diagnostic::warning("`header` list is empty")
+      if (l.empty() and not opts.auto_expand) {
+        diagnostic::error("`header` list is empty")
           .primary(header_expr)
           .emit(ctx);
         return failure::promise();
@@ -346,8 +344,8 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       TRY(header,
           extract_header(*header_expression_, ret, quoting_options, ctx));
     } else if (header_string_) {
-      TRY(header,
-          parse_header(header_string_->inner, ret, quoting_options, ctx));
+      TRY(header, parse_header(header_string_->inner, header_string_->source,
+                               ret, quoting_options, ctx));
     }
     ret.header = std::move(header);
     return ret;
@@ -495,7 +493,7 @@ struct xsv_printer_impl {
 };
 
 auto parse_line(std::string_view line, std::vector<std::string>& fields,
-                const size_t original_field_count, auto r,
+                const size_t original_field_count, auto builder,
                 const xsv_parser_options& args, const size_t line_counter,
                 const detail::quoting_escaping_policy& quoting,
                 diagnostic_handler& dh) -> void {
@@ -509,7 +507,7 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
           .note("line {} has {} values, but should have {} values",
                 line_counter, field_idx, original_field_count)
           .emit(dh);
-        r.unflattened_field(fields[field_idx]).null();
+        builder.unflattened_field(fields[field_idx]).null();
         continue;
       } else {
         break;
@@ -543,7 +541,7 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
         break;
       }
     }
-    auto field = r.unflattened_field(fields[field_idx]);
+    auto field = builder.unflattened_field(fields[field_idx]);
     if (auto split = quoting.split_at_unquoted(line, args.field_sep)) {
       std::tie(field_text, line) = *split;
     } else {
@@ -579,7 +577,7 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
     }
   }
   for (; field_idx < fields.size(); ++field_idx) {
-    r.unflattened_field(fields[field_idx]).null();
+    builder.unflattened_field(fields[field_idx]).null();
   }
 }
 
@@ -609,8 +607,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       if (args.allow_comments && line->front() == '#') {
         continue;
       }
-      auto parsed_header
-        = parse_header(*line, args, quoting_options, ctrl.diagnostics());
+      auto parsed_header = parse_header(*line, location::unknown, args,
+                                        quoting_options, ctrl.diagnostics());
       if (not parsed_header) {
         co_return;
       } else {

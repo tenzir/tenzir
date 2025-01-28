@@ -7,7 +7,7 @@ Parses a string as delimiter separated values.
 ```tql
 parse_xsv(input:string, field_sep:string, list_sep:string, null_value:string,
           header=list<string>|string,
-         [auto_expand=bool, quotes=string,
+         [auto_expand=bool, quotes=string, schema=string,
           selector=string, schema_only=bool, raw=bool, unflatten=string]) -> record
 ```
 

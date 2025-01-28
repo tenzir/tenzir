@@ -25,5 +25,5 @@ warning: expression evaluated to incompatible types
   --> exec/list_map/resolve_largest.tql:10:17
    |
 10 | l = l.map( str, str.parse_json() )
-   |                 ~~~~~~~~~~~~~~~~ types `record`, `list` are incompatible
+   |                 ~~~~~~~~~~~~~~~~ types `list`, `record` are incompatible
    |

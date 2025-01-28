@@ -134,21 +134,21 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy)
   };
   groups.reserve(parts_.size());
   for (size_t i = 1; i < parts_.size(); ++i) {
-    auto& slice = parts_[i];
+    auto& part = parts_[i];
     // Check all groups.
     auto target_group = groups.size();
     for (auto& [group_index, group] : groups) {
-      if (group.type == slice.type) {
+      if (group.type == part.type) {
         part_groups[i] = group_index;
-        group.size += slice.length();
+        group.size += part.length();
         target_group = group_index;
         break;
       }
-      auto unified_type = unify(group.type, slice.type);
+      auto unified_type = unify(group.type, part.type);
       if (unified_type) {
         part_groups[i] = group_index;
         group.type = std::move(*unified_type);
-        group.size += slice.length();
+        group.size += part.length();
         target_group = group_index;
         break;
       }
@@ -170,22 +170,22 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy)
       continue;
     }
     // If we arrive here, it has to be a new group.
-    groups.try_emplace(groups.size(), slice.type, slice.length());
+    groups.try_emplace(groups.size(), part.type, part.length());
     // Potentially update the selected, i.e. largest group.
-    if (slice.length() > groups[selected_group_index].size) {
+    if (part.length() > groups[selected_group_index].size) {
       selected_group_index = target_group;
     }
   }
   auto b = series_builder{groups[selected_group_index].type};
   for (size_t i = 0; i < parts_.size(); ++i) {
-    auto& slice = parts_[i];
+    auto& part = parts_[i];
     if (part_groups[i] != selected_group_index) {
-      for (int64_t j = 0; j < slice.length(); ++j) {
+      for (int64_t j = 0; j < part.length(); ++j) {
         b.null();
       }
       continue;
     }
-    for (auto event : slice.values()) {
+    for (auto event : part.values()) {
       if (not b.try_data(event)) {
         return {{}, to_series_result::status_t::fail};
       }

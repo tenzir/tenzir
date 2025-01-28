@@ -16,12 +16,12 @@ the bytes as Key-Value pairs.
 
 Incoming strings are first split into fields according to `field_split`. This
 can be a regular expression. For example, the input `foo: bar, baz: 42` can be
-split into `foo: bar` and `baz: 42` with the `r",\s*"` (a comma, followed by any
-amount of whitespace) as the field splitter. Note that the matched separators
-are removed when splitting a string.
+split into `foo: bar` and `baz: 42` with the regular expression `r",\s*"`
+(a comma, followed by any amount of whitespace) as the field splitter.
+Note that the matched separators are removed when splitting a string.
 
 Afterwards, the extracted fields are split into their key and value by
-`<value_split>`, which can again be a regular expression. In our example,
+`value_split`, which can again be a regular expression. In our example,
 `r":\s*"` could be used to split `foo: bar` into the key `foo` and its value
 `bar`, and similarly `baz: 42` into `baz` and `42`. The result would thus be
 `{"foo": "bar", "baz": 42}`. If the regex matches multiple substrings, only the
@@ -42,18 +42,16 @@ The parser is aware of double-quotes (`"`). If the `field_split` or
 matches. This means that both the key and the value may be enclosed in
 double-quotes.
 
-For example, given `\s*,\s*` and `=`, the input
+For example, given `field_split` `\s*,\s*` and `value_split` `=`, the input
 
 ```
 "key"="nested = value",key2="value, and more"
 ```
 will parse as
-```json
+```tql
 {
-  "key": "nested = value"
-}
-{
-  "key2": "value, and more"
+  key: "nested = value",
+  key2: "value, and more",
 }
 ```
 
