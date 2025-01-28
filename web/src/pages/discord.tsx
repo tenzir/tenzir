@@ -4,7 +4,7 @@ import React from "react";
 const Element = () => {
   return (
     <ExternalLink
-      url={"https://discord.gg/xEyaRSMCPQ"}
+      url={"https://discord.gg/xqbDgVTCxZ"}
     />
   );
 };
