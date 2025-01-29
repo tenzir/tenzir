@@ -519,6 +519,7 @@ auto multi_series_builder::data_unparsed(std::string text) -> void {
       merging_builder_.data(text);
     }
   } else {
+    complete_last_event();
     builder_raw_.data_unparsed(std::move(text));
   }
 }

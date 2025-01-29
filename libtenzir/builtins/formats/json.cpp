@@ -197,15 +197,8 @@ public:
         return false;
       }
       auto value_parse_result = result::success;
-      // this guards the base series_builder currently used by tql2 parse_json
-      if constexpr (std::same_as<detail::multi_series_builder::record_generator,
-                                 decltype(builder)>) {
-        value_parse_result = parse_value(
-          val.value_unsafe(), builder.unflattened_field(key), depth + 1);
-      } else {
-        value_parse_result
-          = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
-      }
+      value_parse_result = parse_value(
+        val.value_unsafe(), builder.unflattened_field(key), depth + 1);
       if (value_parse_result != result::success) {
         return false;
       }
@@ -290,16 +283,17 @@ private:
         return result::success;
       }
       case simdjson::ondemand::number_type::big_integer: {
-        report_parse_err(val, "a big integer",
-                         fmt::format("value `{}` does not fit into 64bits",
-                                     truncate(val.raw_json_token())));
         // TODO is this a good idea?
         // from the users PoV this isnt an error/warning. its just a limitation
         // of the library/tenzir we could
         // * store null (current behaviour)
         // * store a double (i.e. as an approx value)
         // * store the value as a string
-        // builder.null();
+        report_parse_err(val, "a big integer",
+                         fmt::format("value `{}` does not fit into 64bits",
+                                     truncate(val.raw_json_token())));
+        /// We need this potential unpacking here, as `parse_json` may give us
+        /// an entire `document` which has a slightly different iterface
         auto raw = val.raw_json_token();
         if constexpr (std::same_as<decltype(raw), std::string_view>) {
           builder.data(std::string{raw});
@@ -322,22 +316,7 @@ private:
       report_parse_err(val, "a string");
       return result::failure_no_change;
     }
-    // TODO because of this it would be better to adapt the multi_series_builder
-    if constexpr (std::same_as<decltype(builder), builder_ref>) {
-      auto res = detail::data_builder::non_number_parser(
-        maybe_str.value_unsafe(), nullptr);
-      auto& [value, diag] = res;
-      if (diag) {
-        diag_.emit(std::move(*diag));
-      }
-      if (value) {
-        builder.data(std::move(*value));
-      } else {
-        builder.data(maybe_str.value_unsafe());
-      }
-    } else {
-      builder.data_unparsed(std::string{maybe_str.value_unsafe()});
-    }
+    builder.data_unparsed(std::string{maybe_str.value_unsafe()});
     return result::success;
   }
 
