@@ -27,23 +27,6 @@ namespace tenzir::plugins::every_cron {
 
 namespace {
 
-using alarm_clock_actor = caf::typed_actor<
-  // Waits for `delay` before returning.
-  auto(duration delay)->caf::result<void>>;
-
-auto make_alarm_clock(alarm_clock_actor::pointer self)
-  -> alarm_clock_actor::behavior_type {
-  return {
-    [self](duration delay) -> caf::result<void> {
-      auto rp = self->make_response_promise<void>();
-      detail::weak_run_delayed(self, delay, [rp]() mutable {
-        rp.deliver();
-      });
-      return rp;
-    },
-  };
-}
-
 template <typename T>
 concept scheduler_concept
   = requires(const T t, time::clock::time_point now, parser_interface& p) {
@@ -84,7 +67,6 @@ public:
   template <class Input, class Output>
   auto run(operator_input input, operator_control_plane& ctrl) const
     -> generator<Output> {
-    auto alarm_clock = ctrl.self().spawn(make_alarm_clock);
     auto next_run = scheduler_.next_after(time::clock::now());
     auto done = false;
     co_yield {};
@@ -137,15 +119,10 @@ public:
         continue;
       }
       next_run = scheduler_.next_after(next_run);
-      ctrl.self()
-        .mail(delta)
-        .request(alarm_clock, caf::infinite)
-        .await([]() { /*nop*/ },
-               [&](const caf::error& err) {
-                 diagnostic::error(err)
-                   .note("failed to wait for {} timeout", data{delta})
-                   .emit(ctrl.diagnostics());
-               });
+      ctrl.self().run_delayed_weak(delta, [&] {
+        ctrl.set_waiting(false);
+      });
+      ctrl.set_waiting(true);
       co_yield {};
     }
   }
