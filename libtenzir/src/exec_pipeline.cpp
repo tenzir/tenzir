@@ -312,6 +312,17 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
     auto success = exec2(std::move(content), dh, cfg, sys);
     return success ? caf::expected<void>{} : ec::silent;
   }
+  if (not cfg.silence_tql1_deprecation_notice) {
+    diagnostic::warning("TQL1 is deprecated and will be removed in the "
+                        "upcoming Tenzir Node v5.0 release")
+      .hint("set `TENZIR_TQL2=true` to always use TQL2")
+      .hint(
+        "use the `--tql2` command-line flag to enable TQL2 for this pipeline "
+        "only")
+      .hint("use the `legacy` operator to fall back to using TQL1 from TQL2")
+      .docs("https://docs.tenzir.com/tql2/operators/legacy")
+      .emit(dh);
+  }
   auto parsed = tql::parse(std::move(content), dh);
   if (not parsed) {
     return ec::silent;
