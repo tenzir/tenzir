@@ -372,43 +372,43 @@ public:
           .emit(ctx);
       }
     }
-    return function_use::make(
-      [this, subject_expr = std::move(subject_expr), begin = begin, end = end,
-       stride = stride](evaluator eval, session ctx) {
-        auto result_type = string_type{};
-        auto result_arrow_type
-          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
-        return map_series(eval(subject_expr), [&](series subject) {
-          auto f = detail::overload{
-            [&](const arrow::StringArray& array) {
-              auto options = arrow::compute::SliceOptions(
-                begin ? begin->inner : 0,
-                end ? end->inner : std::numeric_limits<int64_t>::max(),
-                stride ? stride->inner : 1);
-              auto result = arrow::compute::CallFunction("utf8_slice_codeunits",
-                                                         {array}, &options);
-              if (not result.ok()) {
-                diagnostic::warning("{}", result.status().ToString())
-                  .primary(subject_expr)
-                  .emit(ctx);
-                return series::null(result_type, subject.length());
-              }
-              return series{result_type, result.MoveValueUnsafe().make_array()};
-            },
-            [&](const arrow::NullArray& array) {
-              return series::null(result_type, array.length());
-            },
-            [&](const auto&) {
-              diagnostic::warning("`{}` expected `string`, but got `{}`",
-                                  name(), subject.type.kind())
+    return function_use::make([this, subject_expr = std::move(subject_expr),
+                               begin = begin, end = end,
+                               stride = stride](evaluator eval, session ctx) {
+      auto result_type = string_type{};
+      auto result_arrow_type
+        = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+      return map_series(eval(subject_expr), [&](series subject) {
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            auto options = arrow::compute::SliceOptions(
+              begin ? begin->inner : 0,
+              end ? end->inner : std::numeric_limits<int64_t>::max(),
+              stride ? stride->inner : 1);
+            auto result = arrow::compute::CallFunction("utf8_slice_codeunits",
+                                                       {array}, &options);
+            if (not result.ok()) {
+              diagnostic::warning("{}", result.status().ToString())
                 .primary(subject_expr)
                 .emit(ctx);
               return series::null(result_type, subject.length());
-            },
-          };
-          return match(*subject.array, f);
-        });
+            }
+            return series{result_type, result.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(result_type, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name(),
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          },
+        };
+        return match(*subject.array, f);
       });
+    });
   }
 };
 
@@ -438,7 +438,11 @@ public:
       check(b.Reserve(eval.length()));
       for (auto& subject : eval(subject_expr)) {
         for (auto&& value : subject.values()) {
-          auto f = detail::overload{
+          if (is<caf::none_t>(value)) {
+            check(b.AppendNull());
+            continue;
+          }
+          const auto f = detail::overload{
             [](std::string_view x) {
               return std::string{x};
             },
