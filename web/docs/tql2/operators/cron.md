@@ -56,8 +56,8 @@ Pull an endpoint on every 10th minute, Monday through Friday:
 ```tql
 cron "* */10 * * * MON-FRI" {
   from "https://example.org/api"
-  publish "api"
 }
+publish "api"
 ```
 
 ## See Also
