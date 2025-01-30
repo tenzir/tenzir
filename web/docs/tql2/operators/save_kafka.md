@@ -64,7 +64,7 @@ non-empty when specified.
 Available keys:
 - `region`: Region of the MSK Clusters. Must be specified when using IAM.
 - `assume_role`: Optional Role ARN to assume.
-- `session_name`: Optional session name to use when assume a role.
+- `session_name`: Optional session name to use when assuming a role.
 - `external_id`: Optional external id to use when assuming a role.
 
 The operator will try to get credentials in the following order:

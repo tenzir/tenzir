@@ -66,7 +66,7 @@ the given ARN.
 ```tql
 let $endpoints = ["indexer-1-url", "indexer-2-url"]
 
-load_kafka "ocsf-events", aws_iam={region: "us-east-2", assume_role: "arn"}
+load_kafka "ocsf-events", aws_iam={region: "us-east-2", assume_role: "arn:aws:iam::1234567890:role/my-msk-role"}
 read_json
 where severity_id >= 4 // High and above
 load_balance $endpoints {
