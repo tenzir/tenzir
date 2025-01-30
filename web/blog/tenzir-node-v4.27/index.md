@@ -78,19 +78,49 @@ The above pipeline reads OCSF events from MSK, assuming the role referenced by
 the provided ARN. The incoming data is then filtered for severity and sent to
 Splunk clusters in a load balanced fashion.
 
-## TQL2
-
-TODO: Maybe a general update on timeline for missing features?
-
 ## Charts, Retention and TLS
+
+This release also includes a number of other notable features for the Tenzir Node.
+
+### Charts
 
 This release brings over the family of familiar charting operators from TQL1
 with some new delightful features. The new operators allow you to group by
 different fields or choose a resolution for a time-series-like data and more!
 
-TODO: Mention the other changes
+We explore charting in more detail in our upcoming Tenzir Platform v1.8
+release blog post, so stay tuned.
 
-Stay tuned for our upcoming blog post for more details.
+### Retention
+
+Two new settings `tenzir.retention.metrics` and `tenzir.retention.diagnostics` that
+control the retention time of metrics and diagnostics.
+
+These settings are duration-valued and the Tenzir Node will automatically delete
+the internally stored metrics and diagnostics events after the configured amount
+of time has passed.
+
+### TLS
+
+We've added new options for establishing the connection to the Tenzir Platform
+that make it easier to use the Tenzir Node in self-hosted environments with
+private certificate authorities.
+
+The `tenzir.platform.cacert` option points to a file containing one or more
+CA certificates that are used for validating the certificate presented by
+the platform.
+
+The `tenzir.platform.skip-peer-verification` option can be enabled in order to
+connect to a Tenzir Platform instance that is using self-signed certificates.
+
+```sh
+TENZIR_PLATFORM__CACERT=/path/to/certificates.crt
+TENZIR_PLATFORM__SKIP_PEER_VERIFICATION=true/false
+```
+
+Note that these settings only apply to the connection made from
+the Tenzir Node to the Tenzir Platform on startup, and not to
+any outgoing HTTP connections made by individual pipelines.
 
 ## Let's Connect!
 
