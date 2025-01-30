@@ -6,7 +6,7 @@ Apache Kafka infrastructure and operations, making it easier for developers and
 DevOps managers to run Apache Kafka applications and Apache Kafka Connect
 connectors on AWS without becoming experts in operating Apache Kafka.
 
-## Sending and Receiving 
+## Sending and Receiving
 
 Tenzir's Kafka connectors `load_kafka` and `save_kafka` can be used to send and
 receive events from Amazon MSK Clusters.
