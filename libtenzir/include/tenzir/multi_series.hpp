@@ -16,6 +16,8 @@ namespace tenzir {
 /// A potentially heterogenous series type.
 class multi_series {
 public:
+  multi_series() = default;
+
   template <class Ty>
   explicit(false) multi_series(basic_series<Ty> s) {
     parts_.push_back(std::move(s));
@@ -92,6 +94,14 @@ public:
     return result;
   }
 
+  auto clear() -> void {
+    return parts_.clear();
+  }
+
+  auto append(series s) -> void {
+    parts_.push_back(std::move(s));
+  }
+
   // What to do on join conflict in `to_series`
   enum class to_series_strategy {
     // Fail the join
@@ -121,7 +131,7 @@ public:
   /// Checks are performed using `unify( type, type ) -> std::optional<type>`
   /// @ref multi_series::join_conflict_strategy
   auto to_series(to_series_strategy strategy
-                 = to_series_strategy::fail) -> to_series_result;
+                 = to_series_strategy::fail) const -> to_series_result;
 
 private:
   auto resolve(int64_t row) const

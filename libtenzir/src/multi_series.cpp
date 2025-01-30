@@ -111,14 +111,14 @@ auto map_series(multi_series x, multi_series y,
   });
 }
 
-auto multi_series::to_series(multi_series::to_series_strategy strategy)
+auto multi_series::to_series(multi_series::to_series_strategy strategy) const
   -> to_series_result {
   if (length() == 0) {
-    return to_series_result{{}, to_series_result::status_t::ok};
+    return {{}, to_series_result::status_t::ok};
   }
   if (length() == 1) {
-    return to_series_result{
-      std::move(parts_.front()),
+    return {
+      parts_.front(),
       to_series_result::status_t::ok,
     };
   }
@@ -133,15 +133,17 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy)
     {0, {parts_.front().type, parts_.front().length()}},
   };
   groups.reserve(parts_.size());
+  /// FIXME. This is merging null types early, which in turn means they will
+  /// always be part of the first group, potentially causing that group to be
+  /// larger than another group that didnt get the nulls.
   for (size_t i = 1; i < parts_.size(); ++i) {
     auto& part = parts_[i];
     // Check all groups.
-    auto target_group = groups.size();
+    part_groups[i] = groups.size();
     for (auto& [group_index, group] : groups) {
       if (group.type == part.type) {
         part_groups[i] = group_index;
         group.size += part.length();
-        target_group = group_index;
         break;
       }
       auto unified_type = unify(group.type, part.type);
@@ -149,31 +151,31 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy)
         part_groups[i] = group_index;
         group.type = std::move(*unified_type);
         group.size += part.length();
-        target_group = group_index;
         break;
+      } else if (strategy == to_series_strategy::fail) {
+        return {{}, to_series_result::status_t::fail, {group.type, part.type}};
       }
     }
-    part_groups[i] = target_group;
     // If we are going to take the first type anyways, there is no need to
     // update the rest.
     if (strategy == to_series_strategy::take_first_null_rest) {
       continue;
     }
     // Potentially update the selected, i.e. largest group.
-    if (target_group != groups.size()) {
+    if (part_groups[i] != groups.size()) {
       // Potentially update the selected (largest) group.
-      if (selected_group_index != target_group
-          and groups[selected_group_index].size < groups[target_group].size) {
-        selected_group_index = target_group;
+      if (selected_group_index != part_groups[i]
+          and groups[selected_group_index].size < groups[part_groups[i]].size) {
+        selected_group_index = part_groups[i];
       }
       // No need to create a new group, we found one.
       continue;
     }
     // If we arrive here, it has to be a new group.
-    groups.try_emplace(groups.size(), part.type, part.length());
+    groups.try_emplace(part_groups[i], part.type, part.length());
     // Potentially update the selected, i.e. largest group.
     if (part.length() > groups[selected_group_index].size) {
-      selected_group_index = target_group;
+      selected_group_index = part_groups[i];
     }
   }
   auto b = series_builder{groups[selected_group_index].type};

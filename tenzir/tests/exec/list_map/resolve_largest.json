@@ -21,9 +21,9 @@
     },
   ],
 }
-warning: expression evaluated to incompatible types
+warning: map expression evaluated to incompatible types
   --> exec/list_map/resolve_largest.tql:10:17
    |
 10 | l = l.map( str, str.parse_json() )
-   |                 ~~~~~~~~~~~~~~~~ types `list`, `record` are incompatible
+   |                 ~~~~~~~~~~~~~~~~ `list`, `record` are incompatible
    |

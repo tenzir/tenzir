@@ -1286,8 +1286,12 @@ public:
                   builder.null();
                   continue;
                 }
-                auto str = std::string{arg.Value(i)};
-                doc_parser doc_p = doc_parser(str, ctx);
+                const auto view = arg.Value(i);
+                if (view.empty()) {
+                  builder.null();
+                  continue;
+                }
+                auto str = std::string{view};
                 auto doc = parser.iterate(str);
                 if (doc.error()) {
                   diagnostic::warning("{}", error_message(doc.error()))
@@ -1296,6 +1300,7 @@ public:
                   builder.null();
                   continue;
                 }
+                doc_parser doc_p = doc_parser(str, ctx);
                 const auto result
                   = doc_p.parse_value(doc.value_unsafe(), builder, 0);
                 switch (result) {
