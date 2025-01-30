@@ -85,6 +85,20 @@ Available keys:
 - `session_name`: Optional session name to use when assume a role.
 - `external_id`: Optional external id to use when assuming a role.
 
+The operator will try to get credentials in the following order:
+1. Checks your environment variables for AWS Credentials.
+2. Checks your `$HOME/.aws/credentials` file for a profile and credentials
+3. Contacts and logs in to a trusted identity provider. The login information to
+   these providers can either be on the environment variables: `AWS_ROLE_ARN`,
+`AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_ROLE_SESSION_NAME` or on a profile in your
+`$HOME/.aws/credentials`.
+4. Checks for an external method set as part of a profile on `$HOME/.aws/config`
+   to generate or look up credentials that isn't directly supported by AWS.
+5. Contacts the ECS Task Role to request credentials if Environment variable
+   `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` has been set.
+6. Contacts the EC2 Instance Metadata service to request credentials if
+   `AWS_EC2_METADATA_DISABLED` is NOT set to ON.
+
 ## Examples
 
 ### Read 100 JSON messages from the topic `tenzir`

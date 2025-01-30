@@ -28,7 +28,7 @@ let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuv
 
 load_kafka "ocsf_events"
 read_ndjson
-where @name == "ocsf.network_activity"
+where class_uid == ocsf::class_uid("Network Activity")
 to_asl $s3_uri,
   region="eu-west-2",
   accountId="123456789012"
