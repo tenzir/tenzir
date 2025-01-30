@@ -93,12 +93,19 @@ release blog post, so stay tuned.
 
 ### Retention
 
-Two new settings `tenzir.retention.metrics` and `tenzir.retention.diagnostics` that
+Two new settings `tenzir.retention.metrics` and `tenzir.retention.diagnostics`
 control the retention time of metrics and diagnostics.
 
-These settings are duration-valued and the Tenzir Node will automatically delete
-the internally stored metrics and diagnostics events after the configured amount
-of time has passed.
+These options indicate for how long to store metrics and diagnostics, respectively.
+For example, the following configuration stores metrics for 30 days and diagnostics
+indefinitely:
+
+```yaml
+# /opt/tenzir/etc/tenzir/tenzir.yaml
+tenzir:
+  retention:
+    metrics: 30d
+```
 
 ### TLS
 
