@@ -29,27 +29,32 @@ and more.
 
 ### Examples
 
-#### Visualizing load
+#### Visualizing CPU load
 
-The following pipeline uses the `chart_area` operator to display the CPU metrics
-of the last 5 days, with the x axis representing time and the y axis having two
-separate graphs for mean and maximum load per interval that are computed directly
-from the data:
+The following pipeline uses an area chart to display the maximum and mean CPU
+Load for every 30 minute interval over the last 5 days, utilizing information
+from [CPU metrics](/tql2/operators/metrics#tenzirmetricscpu) emitted by the
+Tenzir Node:
 
 ```tql
 metrics "cpu"
 chart_area x=timestamp, y={"Avg. Load": mean(loadavg_1m), "Max. Load": max(loadavg_1m)},
           resolution=30min,
           x_min=now()-5d,
+          y_min=4,
           y_max=10
 ```
+
+Note the usage of `y_min` and `y_max` options to keep a stable view when the
+load might vary a lot.
 
 ![Node Load](node-load.png)
 
 #### Visualizing schema counts
 
-The following pipeline uses the `chart_pie` operator to show a pie chart of all
-events stored in the internal database of the Tenzir Node, grouped by schema name.
+The following pipeline shows a pie chart of all events stored in the internal
+database of the Tenzir Node. Each slice is labeled with the schema name and its
+size is proportional to the count of events stored with that schema.
 
 ```tql
 metrics "import"
