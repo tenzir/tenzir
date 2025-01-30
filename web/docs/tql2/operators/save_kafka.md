@@ -75,7 +75,7 @@ The operator will try to get credentials in the following order:
 `AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_ROLE_SESSION_NAME` or on a profile in your
 `$HOME/.aws/credentials`.
 4. Checks for an external method set as part of a profile on `$HOME/.aws/config`
-   to generate or look up credentials that isn't directly supported by AWS.
+   to generate or look up credentials that are not directly supported by AWS.
 5. Contacts the ECS Task Role to request credentials if Environment variable
    `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` has been set.
 6. Contacts the EC2 Instance Metadata service to request credentials if

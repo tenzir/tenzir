@@ -46,11 +46,11 @@ load_kafka "kafkaesque-data", aws_iam={region: "eu-west-1"}
 The above pipeline will try to fetch credentials from [various different
 locations](/next/tql2/operators/load_kafka#aws_iam--record-optional) including
 Instance Metadata Services. This means you can attach a role with the necessary
-permissions directly to an EC2 node and Tenzir will automatically pick it up.
+permissions directly to an EC2 instance and Tenzir will automatically pick it up.
 
 ### Assuming roles
 
-Roles can also be assumed by giving the `assume_role` parameter to the the `aws_iam` option.
+Roles can also be assumed by giving the `assume_role` parameter to the `aws_iam` option.
 
 ```tql
 save_kafka "topic", aws_iam={region: "eu-west-1", assume_role: "arn:aws:iam::1234567890:role/my-msk-role"}
