@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/detail/alarm_clock.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/fwd.hpp>
@@ -48,7 +47,6 @@ public:
   // we also want to be able to handle events as input.
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
     auto last_timestamp = std::chrono::steady_clock::now() - window_;
     auto bytes_per_window = bandwidth_per_second_ * window_.count();
     if (bytes_per_window == size_t{0}) {
@@ -78,23 +76,14 @@ public:
       // window.
       while (tail->size() > 0) {
         budget = 0;
-        ctrl.set_waiting(true);
-        ctrl.self()
-          .mail(duration_cast<caf::timespan>(window_))
-          .request(alarm_clock, caf::infinite)
-          .then(
-            [&]() {
-              ctrl.set_waiting(false);
-            },
-            [&ctrl](const caf::error& err) {
-              diagnostic::error("throttle operator failed to delay")
-                .note("encountered error: {}", err)
-                .emit(ctrl.diagnostics());
-            });
         std::tie(head, tail) = split_chunk(
           bytes, head_offset, static_cast<size_t>(bytes_per_window));
         head_offset += head->size();
-        co_yield {}; // Await the alarm clock.
+        ctrl.self().run_delayed_weak(duration_cast<duration>(window_), [&] {
+          ctrl.set_waiting(false);
+        });
+        ctrl.set_waiting(true);
+        co_yield {};
         co_yield std::move(head);
       }
       last_timestamp = std::chrono::steady_clock::now();
