@@ -669,6 +669,7 @@ jobs:
           # here is built specifically as input for the plugin CI jobs and not
           # suitable for general use.
           cmake -B "$BUILD_DIR" \
+            -DTENZIR_ENABLE_ASAN:BOOL="OFF" \
             -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
             -DCPACK_GENERATOR:STRING=TGZ \
