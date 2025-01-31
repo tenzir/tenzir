@@ -264,6 +264,7 @@ auto main(int argc, char** argv) -> int {
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
   auto sys = caf::actor_system{cfg};
+  sys.await_actors_before_shutdown(false);
   // The reflector scope variable cleans up the reflector on destruction.
   scope_linked<signal_reflector_actor> reflector{
     sys.spawn<caf::detached>(signal_reflector)};
@@ -305,6 +306,17 @@ auto main(int argc, char** argv) -> int {
   if (run_error) {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
+  }
+  // Wait for up to 60 seconds for all actors to exit, ignore the rest.
+  if (is_server) {
+    for (int i = 0; i < 600; ++i) {
+      if (sys.registry().running() == 0) {
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    }
+    TENZIR_WARN("Terminating with {} remaining actors",
+                sys.registry().running());
   }
   return EXIT_SUCCESS;
 }
