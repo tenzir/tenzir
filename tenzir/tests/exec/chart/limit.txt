@@ -11,7 +11,7 @@
   y: 2.0,
 }
 warning: got more than 3 data points
- --> exec/chart_limit.tql:2:13
+ --> exec/chart/limit.tql:2:13
   |
 2 | chart_bar x=x, y=y, x_min=2, _limit=3
   |             ~ 

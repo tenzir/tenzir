@@ -57,6 +57,7 @@ struct chart_args {
   std::optional<located<data>> y_min;
   std::optional<located<data>> y_max;
   std::optional<located<duration>> res;
+  std::optional<located<data>> fill;
   std::optional<location> x_log;
   std::optional<location> y_log;
   located<uint64_t> limit{100'000, location::unknown};
@@ -72,10 +73,10 @@ struct chart_args {
               f.field("group", x.group), f.field("x_min", x.x_min),
               f.field("x_max", x.x_max), f.field("y_min", x.y_min),
               f.field("y_max", x.y_max), f.field("res", x.res),
-              f.field("x_log", x.x_log), f.field("y_log", x.y_log),
-              f.field("limit", x.limit), f.field("filter", x.filter),
-              f.field("position", x.position), f.field("y_loc", x.y_loc),
-              f.field("op_loc", x.op_loc));
+              f.field("fill", x.fill), f.field("x_log", x.x_log),
+              f.field("y_log", x.y_log), f.field("limit", x.limit),
+              f.field("filter", x.filter), f.field("position", x.position),
+              f.field("y_loc", x.y_loc), f.field("op_loc", x.op_loc));
   }
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
@@ -85,6 +86,12 @@ struct chart_args {
         .hint("available positions: `grouped` (default) or `stacked`")
         .emit(dh);
       return failure::promise();
+    }
+    if (x_min) {
+      TRY(validate_xtype(x_min->value, dh));
+    }
+    if (x_max) {
+      TRY(validate_xtype(x_max->value, dh));
     }
     if (x_min and x_max) {
       const auto min_idx = x_min->value.inner.get_data().index();
@@ -104,6 +111,12 @@ struct chart_args {
         return failure::promise();
       }
     }
+    if (y_min) {
+      TRY(validate_ytype(*y_min, dh));
+    }
+    if (y_max) {
+      TRY(validate_ytype(*y_max, dh));
+    }
     if (y_min and y_max) {
       if (y_min->inner.get_data().index() != y_max->inner.get_data().index()) {
         diagnostic::error("`y_min` and `y_max` must have the same type")
@@ -120,6 +133,27 @@ struct chart_args {
         return failure::promise();
       }
     }
+    if (fill) {
+      if (not res) {
+        diagnostic::error("`fill` cannot be specified without `resolution`")
+          .primary(fill->source)
+          .emit(dh);
+        return failure::promise();
+      }
+      TRY(validate_ytype(*fill, dh));
+      if (y_min or y_max) {
+        const auto& type_idx = y_min ? y_min->inner.get_data().index()
+                                     : y_max->inner.get_data().index();
+        if (type_idx != fill->inner.get_data().index()) {
+          diagnostic::error("`fill` has a different type from `{}`",
+                            y_min ? "y_min" : "y_max")
+            .primary(fill->source)
+            .primary(y_min ? y_min->source : y_max->source)
+            .emit(dh);
+          return failure::promise();
+        }
+      }
+    }
     if (limit.inner > 100'000) {
       diagnostic::error("`limit` must be less than 100k")
         .primary(limit)
@@ -128,6 +162,53 @@ struct chart_args {
     }
     if (limit.inner == 0) {
       diagnostic::error("`limit` must be positive").primary(limit).emit(dh);
+      return failure::promise();
+    }
+    return {};
+  }
+
+  auto validate_xtype(const located<data>& d, diagnostic_handler& dh) const
+    -> failure_or<void> {
+    const auto t = type::infer(d.inner);
+    if (not t) {
+      diagnostic::error("failed to infer type of option").primary(d).emit(dh);
+      return failure::promise();
+    }
+    auto valid = t->kind()
+                   .is_any<int64_type, uint64_type, double_type, duration_type,
+                           time_type>();
+    // if (ty == chart_type::bar or ty == chart_type::pie) {
+    //   valid |= t->kind().is_any<null_type, ip_type, subnet_type,
+    //   string_type>();
+    // }
+    if (not valid) {
+      diagnostic::warning("limit cannot have type `{}`", t->kind())
+        .primary(d)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (res and not t->kind().is_any<time_type, duration_type>()) {
+      diagnostic::warning("cannot group type `{}` with resolution", t->kind())
+        .primary(d)
+        .primary(res->source)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  }
+
+  auto validate_ytype(const located<data>& d, diagnostic_handler& dh) const
+    -> failure_or<void> {
+    const auto t = type::infer(d.inner);
+    if (not t) {
+      diagnostic::error("failed to infer type of option").primary(d).emit(dh);
+      return failure::promise();
+    }
+    if (not t->kind()
+              .is_any<int64_type, uint64_type, double_type, duration_type>()) {
+      diagnostic::error("y-axis cannot have type `{}`", t->kind())
+        .primary(d)
+        .emit(dh);
       return failure::promise();
     }
     return {};
@@ -168,7 +249,7 @@ struct chart_args {
 auto to_double(data&& d) -> data {
   return match(
     d,
-    [](std::integral auto& d) -> data {
+    [](concepts::integer auto& d) -> data {
       return static_cast<double>(d);
     },
     [](auto& v) -> data {
@@ -281,13 +362,11 @@ public:
                 .primary(args_.group.value())
                 .note("using `\"null\"` instead")
                 .emit(dh);
-              return "null";
+              return *gnames.emplace("null").first;
             }
-            return "";
+            return *gnames.emplace("").first;
           }
-          auto&& [it, _]
-            = gnames.emplace(value_at(string_type{}, *gs.array, idx));
-          return *it;
+          return *gnames.emplace(value_at(string_type{}, *gs.array, idx)).first;
         });
         auto* newb = get_bucket(groups, plugins, x, group_name, s);
         if (b != newb) {
@@ -318,43 +397,64 @@ public:
       co_yield {};
       co_return;
     }
-    auto ynames = std::unordered_map<std::string, bool>{};
+    auto ynames = std::map<std::string, bool>{};
     auto b = series_builder{};
+    const auto make_yname = [&](std::string_view group, std::string_view y) {
+      if (not args_.group) {
+        return std::string{y};
+      }
+      if (args_.y.size() == 1) {
+        return std::string{group};
+      }
+      return fmt::format("{}_{}", group, y);
+    };
     const auto add_y = [&](std::string_view group, std::string_view y,
                            bool valid) -> const std::string& {
-      auto yname = std::invoke([&] {
-        if (not args_.group) {
-          return std::string{y};
-        }
-        if (args_.y.size() == 1) {
-          return std::string{group};
-        }
-        return fmt::format("{}_{}", group, y);
-      });
-      auto [it, _] = ynames.try_emplace(std::move(yname), valid);
+      auto [it, _] = ynames.try_emplace(make_yname(group, y), valid);
       it->second &= valid;
       return it->first;
+    };
+    const auto fill_value = args_.fill ? args_.fill->inner : data{};
+    const auto fill_at = [&](data x) {
+      auto r = b.record();
+      r.field(xpath).data(std::move(x));
+      for (const auto& gname : gnames) {
+        for (const auto& [y, _] : args_.y) {
+          r.field(make_yname(gname, y)).data(fill_value);
+        }
+      }
     };
     const auto insert = [&](data x, const grouped_bucket& groups) {
       auto r = b.record();
       r.field(xpath).data(std::move(x));
-      for (auto&& [name, bucket] : groups) {
-        for (auto&& [y, instance] : detail::zip_equal(args_.y, bucket)) {
+      if (args_.fill) {
+        for (const auto& gname : gnames) {
+          for (const auto& [y, _] : args_.y) {
+            r.field(make_yname(gname, y)).data(fill_value);
+          }
+        }
+      }
+      for (const auto& [name, bucket] : groups) {
+        for (const auto& [y, instance] : detail::zip_equal(args_.y, bucket)) {
           auto value = to_double(instance->get());
+          if (args_.fill and is<caf::none_t>(value)) {
+            continue;
+          }
           auto valid = validate_y(value, y.second.get_location(), dh);
           r.field(add_y(name, y.first, valid)).data(std::move(value));
         }
       }
     };
-    for (const data* prev = nullptr;
+    for (auto prev = std::optional<data>{};
          const auto& [x, gb] : groups | std::views::take(args_.limit.inner)) {
-      if (args_.ty == chart_type::line and args_.res) {
-        if (auto gap = find_gap(x, prev)) {
-          insert(std::move(gap).value(), {});
+      if (args_.res and (args_.ty == chart_type::line or args_.fill)) {
+        while (auto gap = find_gap(prev, x)) {
+          prev = gap.value();
+          fill_at(std::move(gap).value());
         }
       }
       insert(x, gb);
-      prev = &x;
+      prev = x;
     }
     auto slices = b.finish_as_table_slice("tenzir.chart");
     if (slices.size() > 1) {
@@ -541,12 +641,13 @@ public:
     }
   }
 
-  auto find_gap(const data& curr, const data* prev) const
+  auto find_gap(std::optional<data>& prev, const data& curr) const
     -> std::optional<data> {
     if (not prev) {
+      prev = curr;
       return std::nullopt;
     }
-    return match(
+    auto result = match(
       std::tie(curr, *prev),
       [&](const duration& c, const duration& p) -> std::optional<data> {
         if (c - p > args_.res->inner) {
@@ -563,11 +664,12 @@ public:
       [](const auto&, const auto&) -> std::optional<data> {
         TENZIR_UNREACHABLE();
       });
+    return result;
   }
 
   auto make_attributes(
     const std::string& xpath, std::deque<std::string>& ynums,
-    std::unordered_map<std::string, bool>& ynames,
+    std::map<std::string, bool>& ynames,
     const detail::stable_map<std::string_view, std::string>& limits) const
     -> std::vector<type::attribute_view> {
     auto attrs = std::vector<type::attribute_view>{
@@ -621,8 +723,17 @@ public:
 
   auto validate_y(const data& d, tenzir::location loc,
                   diagnostic_handler& dh) const -> bool {
-    if (args_.ty == chart_type::line and is<caf::none_t>(d)) {
-      return true;
+    if (is<caf::none_t>(d)) {
+      if (args_.ty == chart_type::line) {
+        return true;
+      }
+      TENZIR_ASSERT(not args_.fill);
+      diagnostic::warning("y-axis cannot have type `null`")
+        .primary(std::move(loc))
+        .note("skipping series")
+        .hint("consider specifying `fill`")
+        .emit(dh);
+      return false;
     }
     const auto ty = type::infer(d);
     if (not ty) {
@@ -733,6 +844,7 @@ class chart_plugin : public virtual operator_factory_plugin {
       p.named("y_min", args.y_min);
       p.named("y_max", args.y_max);
       p.named("resolution", args.res);
+      p.named("fill", args.fill);
       p.named("x_log", args.x_log);
       p.named("y_log", args.y_log);
     }
@@ -745,17 +857,20 @@ class chart_plugin : public virtual operator_factory_plugin {
     TRY(handle_y(args, y, ctx));
     if (x_min) {
       TRY(args.x_min,
-          handle_limit(args, ast::binary_op::geq, std::move(*x_min), ctx));
+          handle_xlimit(args, ast::binary_op::geq, std::move(*x_min), ctx));
     }
     if (x_max) {
       TRY(args.x_max,
-          handle_limit(args, ast::binary_op::leq, std::move(*x_max), ctx));
+          handle_xlimit(args, ast::binary_op::leq, std::move(*x_max), ctx));
     }
     if (args.y_min) {
       args.y_min->inner = to_double(std::move(args.y_min->inner));
     }
     if (args.y_max) {
       args.y_max->inner = to_double(std::move(args.y_max->inner));
+    }
+    if (args.fill) {
+      args.fill->inner = to_double(std::move(args.fill->inner));
     }
     TRY(args.validate(ctx));
     return std::make_unique<chart_operator2>(std::move(args));
@@ -819,8 +934,8 @@ class chart_plugin : public virtual operator_factory_plugin {
       });
   }
 
-  auto handle_limit(const chart_args& args, ast::binary_op op,
-                    located<data> limit, diagnostic_handler& dh) const
+  auto handle_xlimit(const chart_args& args, ast::binary_op op,
+                     located<data> limit, diagnostic_handler& dh) const
     -> failure_or<xlimit> {
     const auto& loc = limit.source;
     auto result = match(

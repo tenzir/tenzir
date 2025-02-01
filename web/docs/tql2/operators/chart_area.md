@@ -4,8 +4,8 @@ Visualizes events on an area chart.
 
 ```tql
 chart_area x=field, y=any, [x_min=any, x_max=any, y_min=any, y_max=any,
-                            resolution=duration, x_log=bool, y_log=bool,
-                            group=any, position=string]
+                            resolution=duration, fill=any, x_log=bool,
+                            y_log=bool, group=any, position=string]
 ```
 
 ## Description
@@ -57,6 +57,10 @@ bucket when `resolution` is specified.
 
 For example, if the resolution is set to `15min`, the `x` values are _floored_
 to create buckets of 15 minutes. Any aggregations specified act on that bucket.
+
+### `fill = any (optional)`
+
+Optional value to fill gaps and replace `null`s with.
 
 ### `x_log = bool (optional)`
 

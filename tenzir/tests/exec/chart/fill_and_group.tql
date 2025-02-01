@@ -1,0 +1,2 @@
+from {x: 1s, y:1, name: "a"}, {x:4s, y:2, name:"b"}
+chart_line x=x, y={y: sum(y), fill: sum(null)}, resolution=1s, group=name, fill=-5
