@@ -229,11 +229,17 @@ in {
           export LD_LIBRARY_PATH=$PWD/lib
           export DYLD_LIBRARY_PATH=$PWD/lib
         '';
+        cmakeFlags =
+          old.cmakeFlags
+          ++ [
+            "-DCAF_CXX_VERSION=20"
+          ];
       }
       // lib.optionalAttrs isStatic {
         cmakeFlags =
           old.cmakeFlags
           ++ [
+            "-DCAF_CXX_VERSION=20"
             "-DCAF_BUILD_STATIC=ON"
             "-DCAF_BUILD_STATIC_ONLY=ON"
             "-DCAF_ENABLE_TESTING=OFF"
