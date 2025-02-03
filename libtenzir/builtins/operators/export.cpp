@@ -157,7 +157,8 @@ struct bridge_state {
     const auto partition = self->spawn(
       passive_partition, info.uuid, filesystem,
       std::filesystem::path{fmt::format("index/{:l}", info.uuid)});
-    self->request(partition, caf::infinite, atom::query_v, std::move(ctx))
+    self->mail(atom::query_v, std::move(ctx))
+      .request(partition, caf::infinite)
       .then(
         [next](uint64_t) {
           next();
@@ -246,9 +247,6 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
   self->state().diagnostics_handler = std::move(diagnostics_handler);
   self->state().filesystem = std::move(filesystem);
   TENZIR_ASSERT(self->state().filesystem);
-  self->set_exit_handler([self](caf::exit_msg& msg) {
-    self->quit(std::move(msg.reason));
-  });
   if (not self->state().mode.internal) {
     detail::weak_run_delayed_loop(self, defaults::metrics_interval, [self] {
       self->state().emit_metrics();
@@ -260,9 +258,10 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
   self->state().importer_address = importer->address();
   self->state().unpersisted_events.emplace();
   self
-    ->request(importer, caf::infinite, atom::subscribe_v,
-              caf::actor_cast<receiver_actor<table_slice>>(self),
-              self->state().mode.internal)
+    ->mail(atom::subscribe_v,
+           caf::actor_cast<receiver_actor<table_slice>>(self),
+           self->state().mode.internal)
+    .request(importer, caf::infinite)
     .await(
       [self, mode](std::vector<table_slice>& unpersisted_events) {
         TENZIR_DEBUG("{} subscribed to importer", *self);
@@ -288,7 +287,8 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
     TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
                  "expression {}",
                  query_context.id, self->state().expr);
-    self->request(catalog, caf::infinite, atom::candidates_v, query_context)
+    self->mail(atom::candidates_v, query_context)
+      .request(catalog, caf::infinite)
       .then(
         [self, query_context](catalog_lookup_result& result) {
           self->state().checked_candidates = true;
@@ -369,6 +369,9 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
       self->state().buffer_rp = self->make_response_promise<table_slice>();
       return self->state().buffer_rp;
     },
+    [self](caf::exit_msg& msg) {
+      self->quit(std::move(msg.reason));
+    },
   };
 }
 
@@ -385,8 +388,8 @@ public:
     auto filesystem = filesystem_actor{};
     ctrl.set_waiting(true);
     ctrl.self()
-      .request(ctrl.node(), caf::infinite, atom::get_v, atom::label_v,
-               std::vector<std::string>{"filesystem"})
+      .mail(atom::get_v, atom::label_v, std::vector<std::string>{"filesystem"})
+      .request(ctrl.node(), caf::infinite)
       .then(
         [&](std::vector<caf::actor>& actors) {
           TENZIR_ASSERT(actors.size() == 1);
@@ -417,7 +420,8 @@ public:
       auto result = table_slice{};
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(bridge, caf::infinite, atom::get_v)
+        .mail(atom::get_v)
+        .request(bridge, caf::infinite)
         .then(
           [&](table_slice& slice) {
             ctrl.set_waiting(false);

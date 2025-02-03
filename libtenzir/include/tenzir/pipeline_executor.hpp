@@ -44,6 +44,9 @@ struct pipeline_executor_state {
   /// Indicates whether the pipeline is run in the background.
   bool is_hidden = {};
 
+  /// Determines whether the pipeline has been started.
+  bool is_started = {};
+
   auto start() -> caf::result<void>;
   auto pause() -> caf::result<void>;
   auto resume() -> caf::result<void>;

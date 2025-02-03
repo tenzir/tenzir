@@ -49,8 +49,9 @@ namespace {
 chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
   flatbuffers::FlatBufferBuilder synopsis_builder;
   const auto ps = pack(synopsis_builder, synopsis);
-  if (!ps)
+  if (!ps) {
     return {};
+  }
   fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
   ps_builder.add_partition_synopsis_type(
     fbs::partition_synopsis::PartitionSynopsis::legacy);
@@ -112,9 +113,8 @@ void serialize(
       .url = fmt::format("file://{}", *self->state().synopsis_path),
       .size = ps_chunk->size(),
     };
-    self
-      ->request(self->state().filesystem, caf::infinite, atom::write_v,
-                *self->state().synopsis_path, std::move(ps_chunk))
+    self->mail(atom::write_v, *self->state().synopsis_path, std::move(ps_chunk))
+      .request(self->state().filesystem, caf::infinite)
       .then(
         [=](atom::ok) {
           TENZIR_TRACE("{} persisted partition synopsis", *self);
@@ -137,9 +137,8 @@ void serialize(
     .size = (*partition)->size(),
   };
   // TODO: Add a proper timeout.
-  self
-    ->request(self->state().filesystem, caf::infinite, atom::write_v,
-              *self->state().persist_path, std::move(*partition))
+  self->mail(atom::write_v, *self->state().persist_path, std::move(*partition))
+    .request(self->state().filesystem, caf::infinite)
     .then(
       [=](atom::ok) {
         self->state().persistence_promise.deliver(self->state().data.synopsis);
@@ -175,7 +174,7 @@ void active_partition_state::handle_slice(table_slice x) {
   ids.append_bits(true, last - first);
   data.events += x.rows();
   data.synopsis.unshared().add(x, partition_capacity, synopsis_index_config);
-  self->send(store_builder, x);
+  self->mail(x).send(store_builder);
 }
 
 caf::expected<tenzir::chunk_ptr>
@@ -183,8 +182,9 @@ pack_full(const active_partition_state::serialization_data& x,
           const record_type& combined_schema) {
   flatbuffers::FlatBufferBuilder builder;
   auto uuid = pack(builder, x.id);
-  if (!uuid)
+  if (!uuid) {
     return uuid.error();
+  }
   std::vector<flatbuffers::Offset<fbs::value_index::LegacyQualifiedValueIndex>>
     indices;
   std::vector<tenzir::chunk_ptr> external_indices;
@@ -197,8 +197,9 @@ pack_full(const active_partition_state::serialization_data& x,
     auto external_idx = size_t{0};
     if (chunk) {
       auto compressed_chunk = chunk::compress(as_bytes(chunk));
-      if (!compressed_chunk)
+      if (!compressed_chunk) {
         return compressed_chunk.error();
+      }
       size = (*compressed_chunk)->size();
       // This threshold is an educated guess to keep tiny indices inline
       // to reduce additional page loads and huge indices out of the way.
@@ -214,12 +215,14 @@ pack_full(const active_partition_state::serialization_data& x,
       }
     }
     fbs::value_index::detail::LegacyValueIndexBuilder vbuilder(builder);
-    if (chunk)
+    if (chunk) {
       vbuilder.add_decompressed_size(chunk->size());
-    if (external_idx > 0)
+    }
+    if (external_idx > 0) {
       vbuilder.add_caf_0_18_external_container_idx(external_idx);
-    else
+    } else {
       vbuilder.add_caf_0_18_data(data);
+    }
     auto vindex = vbuilder.Finish();
     fbs::value_index::LegacyQualifiedValueIndexBuilder qbuilder(builder);
     qbuilder.add_field_name(fieldname);
@@ -236,8 +239,9 @@ pack_full(const active_partition_state::serialization_data& x,
   for (const auto& kv : x.type_ids) {
     auto name = builder.CreateString(kv.first);
     auto ids = fbs::serialize_bytes(builder, kv.second);
-    if (!ids)
+    if (!ids) {
       return ids.error();
+    }
     fbs::partition::detail::LegacyTypeIDsBuilder tids_builder(builder);
     tids_builder.add_name(name);
     tids_builder.add_ids(*ids);
@@ -246,8 +250,9 @@ pack_full(const active_partition_state::serialization_data& x,
   auto type_ids = builder.CreateVector(tids);
   // Serialize synopses.
   auto maybe_ps = pack(builder, *x.synopsis);
-  if (!maybe_ps)
+  if (!maybe_ps) {
     return maybe_ps.error();
+  }
   flatbuffers::Offset<fbs::partition::detail::StoreHeader> store_header = {};
   auto store_name = builder.CreateString(x.store_id);
   auto store_data = builder.CreateVector(
@@ -276,8 +281,9 @@ pack_full(const active_partition_state::serialization_data& x,
   // even if all indices are inline.
   fbs::flatbuffer_container_builder cbuilder;
   cbuilder.add(as_bytes(chunk));
-  for (auto const& index : external_indices)
+  for (auto const& index : external_indices) {
     cbuilder.add(as_bytes(index));
+  }
   auto container = std::move(cbuilder).finish(fbs::PartitionIdentifier());
   return std::move(container).dissolve();
 }
@@ -313,34 +319,6 @@ active_partition_actor::behavior_type active_partition(
   self->state().data.store_header = header;
   self->state().store_builder = builder;
   TENZIR_TRACE("{} spawned new active store at {}", *self, builder);
-  self->set_exit_handler([=](const caf::exit_msg& msg) {
-    TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self, msg.source,
-                 msg.reason);
-    // Delay shutdown if we're currently in the process of persisting.
-    if (self->state().persistence_promise.pending()) {
-      std::call_once(self->state().shutdown_once, [=] {
-        TENZIR_TRACE("{} delays partition shutdown because it is still "
-                     "writing to disk",
-                     *self);
-      });
-      using namespace std::chrono_literals;
-      // Ideally, we would use a self->delayed_delegate(self, ...) here, but CAF
-      // does not have this functionality. Since we do not care about the return
-      // value of the partition outselves, and the handler we delegate to
-      // already uses a response promise, we send the message anonymously. We
-      // also need to actor_cast self, since sending an exit message to a typed
-      // actor without using self->send_exit is not supported.
-      caf::delayed_anon_send(caf::actor_cast<caf::actor>(self), 100ms, msg);
-      return;
-    }
-    TENZIR_TRACE("{} shuts down after persisting partition state", *self);
-    if (msg.reason) {
-      self->quit(
-        diagnostic::error(msg.reason).note("via exit handler").to_error());
-      return;
-    }
-    self->quit();
-  });
   return {
     [self](atom::erase) -> caf::result<atom::done> {
       // Erase is sent by the disk monitor to erase this partition
@@ -363,7 +341,8 @@ active_partition_actor::behavior_type active_partition(
       self->state().synopsis_path = synopsis_path;
       self->state().persistence_promise
         = self->make_response_promise<partition_synopsis_ptr>();
-      self->request(self->state().store_builder, caf::infinite, atom::persist_v)
+      self->mail(atom::persist_v)
+        .request(self->state().store_builder, caf::infinite)
         .then(
           [self](resource& store_file) {
             self->state().data.synopsis.unshared().store_file
@@ -386,14 +365,44 @@ active_partition_actor::behavior_type active_partition(
       }
       auto resolved = resolve(*self->state().taxonomies, query_context.expr,
                               self->state().data.synopsis->schema);
-      if (!resolved)
+      if (!resolved) {
         return std::move(resolved.error());
+      }
       query_context.expr = std::move(*resolved);
-      return self->delegate(self->state().store_builder, atom::query_v,
-                            std::move(query_context));
+      return self->mail(atom::query_v, std::move(query_context))
+        .delegate(self->state().store_builder);
     },
     [](atom::status, status_verbosity, duration) {
       return record{};
+    },
+    [self](const caf::exit_msg& msg) {
+      TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self,
+                   msg.source, msg.reason);
+      // Delay shutdown if we're currently in the process of persisting.
+      if (self->state().persistence_promise.pending()) {
+        std::call_once(self->state().shutdown_once, [=] {
+          TENZIR_TRACE("{} delays partition shutdown because it is still "
+                       "writing to disk",
+                       *self);
+        });
+        using namespace std::chrono_literals;
+        // Ideally, we would use a self->delayed_delegate(self, ...) here, but
+        // CAF does not have this functionality. Since we do not care about the
+        // return value of the partition outselves, and the handler we delegate
+        // to already uses a response promise, we send the message anonymously.
+        // We also need to actor_cast self, since sending an exit message to a
+        // typed actor without using self->send_exit is not supported.
+        caf::anon_mail(msg).delay(100ms).send(
+          caf::actor_cast<caf::actor>(self));
+        return;
+      }
+      TENZIR_TRACE("{} shuts down after persisting partition state", *self);
+      if (msg.reason) {
+        self->quit(
+          diagnostic::error(msg.reason).note("via exit handler").to_error());
+        return;
+      }
+      self->quit();
     },
   };
 }

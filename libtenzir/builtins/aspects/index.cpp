@@ -42,8 +42,8 @@ public:
     auto [index] = std::move(*components);
     auto status = record{};
     ctrl.self()
-      .request(index, caf::infinite, atom::status_v, status_verbosity::debug,
-               duration::max())
+      .mail(atom::status_v, status_verbosity::debug, duration::max())
+      .request(index, caf::infinite)
       .await(
         [&](record& result) {
           status = std::move(result);

@@ -144,12 +144,6 @@ auto make_buffer(typename buffer_actor<Elements>::template stateful_pointer<
   self->state().policy = policy;
   self->state().metrics_handler = std::move(metrics_handler);
   self->state().diagnostics_handler = std::move(diagnostics_handler);
-  self->set_exit_handler([self](caf::exit_msg& msg) {
-    // The buffer actor is linked to both internal operators. We want to
-    // unconditionally shut down the buffer actor, even when the operator shuts
-    // down without an error.
-    self->quit(std::move(msg.reason));
-  });
   detail::weak_run_delayed_loop(self, defaults::metrics_interval, [self] {
     self->state().emit_metrics();
   });
@@ -159,6 +153,12 @@ auto make_buffer(typename buffer_actor<Elements>::template stateful_pointer<
     },
     [self](atom::read) -> caf::result<Elements> {
       return self->state().read();
+    },
+    [self](caf::exit_msg& msg) {
+      // The buffer actor is linked to both internal operators. We want to
+      // unconditionally shut down the buffer actor, even when the operator
+      // shuts down without an error.
+      self->quit(std::move(msg.reason));
     },
   };
 }
@@ -192,7 +192,8 @@ public:
       }
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(buffer, caf::infinite, atom::write_v, std::move(elements))
+        .mail(atom::write_v, std::move(elements))
+        .request(buffer, caf::infinite)
         .then(
           [&]() {
             ctrl.set_waiting(false);
@@ -292,7 +293,8 @@ public:
       TENZIR_ASSERT(size(elements) == 0);
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(buffer, caf::infinite, atom::read_v)
+        .mail(atom::read_v)
+        .request(buffer, caf::infinite)
         .then(
           [&](Elements& response) {
             ctrl.set_waiting(false);

@@ -100,12 +100,6 @@ jobs:
         uses: cachix/install-nix-action@v30
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Use Magic Nix Cache
-        if: runner.environment == 'github-hosted'
-        uses: DeterminateSystems/magic-nix-cache-action@v9
-        with:
-          # disables telemetry
-          diagnostic-endpoint: ""
       - name: Setup Cachix
         uses: cachix/cachix-action@v15
         with:

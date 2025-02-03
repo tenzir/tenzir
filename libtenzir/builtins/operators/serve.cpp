@@ -67,6 +67,7 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/record_batch.h>
+#include <caf/actor_addr.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -335,15 +336,12 @@ struct serve_manager_state {
   /// messages to the user.
   std::unordered_map<std::string, caf::error> expired_ids = {};
 
-  auto handle_down_msg(const caf::down_msg& msg) -> void {
+  auto handle_down_msg(const caf::actor_addr& source, const caf::error& err)
+    -> void {
     const auto found = std::ranges::find_if(ops, [&](const auto& op) {
-      return op.source == msg.source;
+      return op.source == source;
     });
-    if (found == ops.end()) {
-      TENZIR_WARN("{} received unepexted DOWN from {}: {}", *self, msg.source,
-                  msg.reason);
-      return;
-    }
+    TENZIR_ASSERT(found != ops.end());
     if (not found->continuation_token.empty()) {
       TENZIR_DEBUG("{} received premature DOWN for serve id {} with "
                    "continuation "
@@ -353,16 +351,16 @@ struct serve_manager_state {
     // We delay the actual removal because we support fetching the
     // last set of events again by reusing the last continuation token.
     found->done = true;
-    auto delete_serve = [this, source = msg.source, reason = msg.reason]() {
+    auto delete_serve = [this, source, err]() {
       const auto found = std::ranges::find_if(ops, [&](const auto& op) {
         return op.source == source;
       });
       if (found != ops.end()) {
-        expired_ids.emplace(found->serve_id, reason);
+        expired_ids.emplace(found->serve_id, err);
         if (not found->get_rps.empty()) {
           found->delayed_attempt.dispose();
           for (auto&& get_rp : std::exchange(found->get_rps, {})) {
-            get_rp.deliver(reason);
+            get_rp.deliver(err);
           }
         }
         ops.erase(found);
@@ -385,13 +383,18 @@ struct serve_manager_state {
       }
       ops.erase(found);
     }
+    const auto sender = caf::actor_cast<caf::actor>(self->current_sender());
+    TENZIR_ASSERT(sender);
+    const auto addr = sender->address();
     ops.push_back({
-      .source = self->current_sender()->address(),
+      .source = addr,
       .serve_id = serve_id,
       .continuation_token = "",
       .buffer_size = buffer_size,
     });
-    self->monitor(ops.back().source);
+    self->monitor(sender, [this, addr](const caf::error& err) {
+      handle_down_msg(addr, err);
+    });
     return {};
   }
 
@@ -559,9 +562,6 @@ auto serve_manager(
   serve_manager_actor::stateful_pointer<serve_manager_state> self)
   -> serve_manager_actor::behavior_type {
   self->state().self = self;
-  self->set_down_handler([self](const caf::down_msg& msg) {
-    self->state().handle_down_msg(msg);
-  });
   return {
     [self](atom::start, std::string& serve_id,
            uint64_t buffer_size) -> caf::result<void> {
@@ -621,7 +621,7 @@ struct serve_handler_state {
                                   fmt::format("{}; got parameters {}",
                                               serve_id.error(), params))};
     }
-    if (not *serve_id) {
+    if (not*serve_id) {
       return parse_error{
         .message = "serve_id must be specified",
         .detail = caf::make_error(ec::invalid_argument,
@@ -763,9 +763,10 @@ struct serve_handler_state {
     auto& request = std::get<serve_request>(maybe_request);
     auto rp = self->make_response_promise<rest_response>();
     self
-      ->request(serve_manager, caf::infinite, atom::get_v, request.serve_id,
-                request.continuation_token, request.limits.min_events,
-                request.limits.timeout, request.limits.max_events)
+      ->mail(atom::get_v, request.serve_id, request.continuation_token,
+             request.limits.min_events, request.limits.timeout,
+             request.limits.max_events)
+      .request(serve_manager, caf::infinite)
       .then(
         [rp](const std::tuple<std::string, std::vector<table_slice>>&
                result) mutable {
@@ -795,8 +796,9 @@ auto serve_handler(
   const node_actor& node) -> serve_handler_actor::behavior_type {
   self->state().self = self;
   self
-    ->request(node, caf::infinite, atom::get_v, atom::label_v,
-              std::vector<std::string>{"serve-manager"})
+    ->mail(atom::get_v, atom::label_v,
+           std::vector<std::string>{"serve-manager"})
+    .request(node, caf::infinite)
     .await(
       [self](std::vector<caf::actor>& actors) {
         TENZIR_ASSERT(actors.size() == 1);
@@ -835,8 +837,8 @@ public:
     // Register this operator at SERVE MANAGER actor using the serve_id.
     ctrl.set_waiting(true);
     ctrl.self()
-      .request(serve_manager, caf::infinite, atom::start_v, serve_id_,
-               buffer_size_)
+      .mail(atom::start_v, serve_id_, buffer_size_)
+      .request(serve_manager, caf::infinite)
       .then(
         [&]() {
           ctrl.set_waiting(false);
@@ -858,8 +860,8 @@ public:
       // Send slice to SERVE MANAGER.
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(serve_manager, caf::infinite, atom::put_v, serve_id_,
-                 std::move(slice))
+        .mail(atom::put_v, serve_id_, std::move(slice))
+        .request(serve_manager, caf::infinite)
         .then(
           [&]() {
             ctrl.set_waiting(false);
@@ -874,7 +876,8 @@ public:
     //  Wait until all events were fetched.
     ctrl.set_waiting(true);
     ctrl.self()
-      .request(serve_manager, caf::infinite, atom::stop_v, serve_id_)
+      .mail(atom::stop_v, serve_id_)
+      .request(serve_manager, caf::infinite)
       .then(
         [&]() {
           ctrl.set_waiting(false);
@@ -934,8 +937,9 @@ public:
     auto serve_manager = serve_manager_actor{};
     auto blocking = caf::scoped_actor{ctrl.self().system()};
     blocking
-      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::label_v,
-                std::vector<std::string>{"serve-manager"})
+      ->mail(atom::get_v, atom::label_v,
+             std::vector<std::string>{"serve-manager"})
+      .request(ctrl.node(), caf::infinite)
       .receive(
         [&](std::vector<caf::actor>& actors) {
           TENZIR_ASSERT(actors.size() == 1);
@@ -950,8 +954,9 @@ public:
     co_yield {};
     auto serves = list{};
     blocking
-      ->request(serve_manager, caf::infinite, atom::status_v,
-                status_verbosity::debug, duration{std::chrono::seconds{10}})
+      ->mail(atom::status_v, status_verbosity::debug,
+             duration{std::chrono::seconds{10}})
+      .request(serve_manager, caf::infinite)
       .receive(
         [&](record& response) {
           TENZIR_ASSERT(response.size() == 1);

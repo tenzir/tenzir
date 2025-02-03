@@ -41,11 +41,13 @@ namespace tenzir {
 
 namespace {
 void delegate_deferred_requests(passive_partition_state& state) {
-  for (auto&& [expr, rp] : std::exchange(state.deferred_evaluations, {}))
+  for (auto&& [expr, rp] : std::exchange(state.deferred_evaluations, {})) {
     rp.delegate(static_cast<partition_actor>(state.self), atom::query_v,
                 std::move(expr));
-  for (auto&& rp : std::exchange(state.deferred_erasures, {}))
+  }
+  for (auto&& rp : std::exchange(state.deferred_erasures, {})) {
     rp.delegate(static_cast<partition_actor>(state.self), atom::erase_v);
+  }
 }
 
 void deliver_error_to_deferred_requests(passive_partition_state& state,
@@ -64,17 +66,19 @@ caf::expected<tenzir::record_type>
 unpack_schema(const fbs::partition::LegacyPartition& partition) {
   if (auto const* data = partition.combined_schema_caf_0_17()) {
     auto lrt = legacy_record_type{};
-    if (auto error = fbs::deserialize_bytes(data, lrt))
+    if (auto error = fbs::deserialize_bytes(data, lrt)) {
       return error;
+    }
     return as<record_type>(type::from_legacy_type(lrt));
   }
   if (auto const* data = partition.schema()) {
     auto chunk = chunk::copy(as_bytes(*data));
     auto t = type{std::move(chunk)};
     auto* schema = try_as<record_type>(&t);
-    if (!schema)
+    if (!schema) {
       return caf::make_error(ec::format_error, "schema field contained "
                                                "unexpected type");
+    }
     return std::move(*schema);
   }
   return caf::make_error(ec::format_error, "missing 'schemas' field in "
@@ -100,35 +104,39 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
   if (const auto* data = index_fbs.caf_0_18_data()) {
     auto uncompressed_data = uncompress(*data);
     auto bytes = as_bytes(*uncompressed_data);
-    caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
+    caf::binary_deserializer sink{bytes.data(), bytes.size()};
     value_index_ptr state_ptr;
-    if (!sink.apply(state_ptr) || !state_ptr)
+    if (!sink.apply(state_ptr) || !state_ptr) {
       return {};
+    }
     return state_ptr;
   }
   if (const auto* data = index_fbs.caf_0_17_data()) {
     auto uncompressed_data = uncompress(*data);
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr)
+    if (!sink(state_ptr) || !state_ptr) {
       return {};
+    }
     return state_ptr;
   }
   if (auto ext_index = index_fbs.caf_0_17_external_container_idx()) {
     auto uncompressed_data = uncompress(container.get_raw(ext_index));
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr)
+    if (!sink(state_ptr) || !state_ptr) {
       return {};
+    }
     return state_ptr;
   }
   if (auto ext_index = index_fbs.caf_0_18_external_container_idx()) {
     auto uncompressed_data = uncompress(container.get_raw(ext_index));
     auto bytes = as_bytes(*uncompressed_data);
-    caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
+    caf::binary_deserializer sink{bytes.data(), bytes.size()};
     value_index_ptr state_ptr;
-    if (!sink.apply(state_ptr) || !state_ptr)
+    if (!sink.apply(state_ptr) || !state_ptr) {
       return {};
+    }
     return state_ptr;
   }
   return {};
@@ -138,13 +146,15 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
 indexer_actor passive_partition_state::indexer_at(size_t position) const {
   TENZIR_ASSERT(position < indexers.size());
   auto& indexer = indexers[position];
-  if (indexer)
+  if (indexer) {
     return indexer;
+  }
   // Deserialize the value index and spawn a passive_indexer lazily when it is
   // requested for the first time.
   const auto* qualified_index = flatbuffer->indexes()->Get(position);
-  if (!qualified_index || !qualified_index->index())
+  if (!qualified_index || !qualified_index->index()) {
     return {};
+  }
   if (auto value_index
       = unpack_value_index(*qualified_index->index(), *container)) {
     indexer = self->spawn(passive_indexer, id, std::move(value_index));
@@ -169,42 +179,51 @@ passive_partition_state::type_ids() const {
 caf::error unpack(const fbs::partition::LegacyPartition& partition,
                   passive_partition_state& state) {
   // Check that all fields exist.
-  if (!partition.uuid())
+  if (!partition.uuid()) {
     return caf::make_error(ec::format_error, //
                            "missing 'uuid' field in partition flatbuffer");
+  }
   auto const* store_header = partition.store();
   // If no store_id is set, use the global store for backwards compatibility.
-  if (store_header && !store_header->id())
+  if (store_header && !store_header->id()) {
     return caf::make_error(ec::format_error, //
                            "missing 'id' field in partition store header");
-  if (store_header && !store_header->data())
+  }
+  if (store_header && !store_header->data()) {
     return caf::make_error(ec::format_error, //
                            "missing 'data' field in partition store header");
+  }
   state.store_id = store_header->id()->str();
-  if (store_header && store_header->data())
+  if (store_header && store_header->data()) {
     state.store_header = std::span{
       reinterpret_cast<const std::byte*>(store_header->data()->data()),
       store_header->data()->size()};
+  }
   auto const* indexes = partition.indexes();
-  if (!indexes)
+  if (!indexes) {
     return caf::make_error(ec::format_error, //
                            "missing 'indexes' field in partition flatbuffer");
+  }
   for (auto const* qualified_index : *indexes) {
-    if (!qualified_index->field_name())
+    if (!qualified_index->field_name()) {
       return caf::make_error(ec::format_error, //
                              "missing field name in qualified index");
+    }
     auto const* index = qualified_index->index();
-    if (!index)
+    if (!index) {
       return caf::make_error(ec::format_error, //
                              "missing index field in qualified index");
+    }
   }
-  if (auto error = unpack(*partition.uuid(), state.id))
+  if (auto error = unpack(*partition.uuid(), state.id)) {
     return error;
+  }
   state.events = partition.events();
-  if (auto schema = unpack_schema(partition))
+  if (auto schema = unpack_schema(partition)) {
     state.combined_schema_ = std::move(*schema);
-  else
+  } else {
     return schema.error();
+  }
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
   if (state.combined_schema_->num_fields() < indexes->size()) {
@@ -224,18 +243,21 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
     auto const* name = type_ids_tuple->name();
     auto const* ids_data = type_ids_tuple->ids();
     auto& ids = state.type_ids_[name->str()];
-    if (auto error = fbs::deserialize_bytes(ids_data, ids))
+    if (auto error = fbs::deserialize_bytes(ids_data, ids)) {
       return error;
+    }
   }
   return caf::none;
 }
 
 caf::error
 unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& ps) {
-  if (!x.partition_synopsis())
+  if (!x.partition_synopsis()) {
     return caf::make_error(ec::format_error, "missing partition synopsis");
-  if (!x.type_ids())
+  }
+  if (!x.type_ids()) {
     return caf::make_error(ec::format_error, "missing type_ids");
+  }
   return unpack(*x.partition_synopsis(), ps);
 }
 
@@ -259,8 +281,9 @@ partition_chunk::get_flatbuffer(tenzir::chunk_ptr chunk) {
   } else if (flatbuffers::BufferHasIdentifier(
                chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
     auto container = fbs::flatbuffer_container(chunk);
-    if (!container)
+    if (!container) {
       return caf::make_error(ec::format_error, "invalid flatbuffer container");
+    }
     return container.as_flatbuffer<fbs::Partition>(0);
   } else {
     return caf::make_error(ec::format_error, "unknown identifier {}",
@@ -304,23 +327,26 @@ passive_partition_state::initialize_from_chunk(const tenzir::chunk_ptr& chunk) {
                chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
     this->partition_chunk = chunk;
     this->container = fbs::flatbuffer_container(chunk);
-    if (!this->container)
+    if (!this->container) {
       return caf::make_error(ec::format_error, "invalid flatbuffer container");
+    }
     auto partition = container->as_flatbuffer<fbs::Partition>(0);
-    if (partition->partition_type() != fbs::partition::Partition::legacy)
+    if (partition->partition_type() != fbs::partition::Partition::legacy) {
       return caf::make_error(
         ec::format_error,
         fmt::format("unknown partition version {}",
                     static_cast<uint8_t>(partition->partition_type())));
+    }
     this->flatbuffer = partition->partition_as_legacy();
   } else {
     return caf::make_error(ec::format_error,
                            "partition at contains unknown identifier {}",
                            flatbuffers::GetBufferIdentifier(chunk->data()));
   }
-  if (auto error = unpack(*flatbuffer, *this))
+  if (auto error = unpack(*flatbuffer, *this)) {
     return caf::make_error(
       ec::format_error, fmt::format("failed to unpack partition: {}", error));
+  }
   return {};
 }
 
@@ -332,52 +358,11 @@ partition_actor::behavior_type passive_partition(
   self->state().path = path;
   self->state().filesystem = std::move(filesystem);
   TENZIR_TRACEPOINT(passive_partition_spawned, id_string.c_str());
-  self->set_down_handler([=](const caf::down_msg& msg) {
-    if (msg.source != self->state().store.address()) {
-      TENZIR_TRACE("{} ignores DOWN from unexpected sender: {}", *self,
-                   msg.reason);
-      return;
-    }
-    TENZIR_ERROR("{} shuts down after DOWN from {} store: {}", *self,
-                 self->state().store_id, msg.reason);
-    self->quit(msg.reason);
-  });
-  self->set_exit_handler([=](const caf::exit_msg& msg) {
-    TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self, msg.source,
-                 msg.reason);
-    self->demonitor(self->state().store->address());
-    // Receiving an EXIT message does not need to coincide with the state
-    // being destructed, so we explicitly clear the vector to release the
-    // references.
-    // TODO: We must actor_cast to caf::actor here because 'terminate'
-    // operates on 'std::vector<caf::actor>' only. That should probably be
-    // generalized in the future.
-    auto indexers = std::vector<caf::actor>{};
-    indexers.reserve(self->state().indexers.size());
-    for (auto&& indexer : std::exchange(self->state().indexers, {})) {
-      indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
-    }
-    if (msg.reason != caf::exit_reason::user_shutdown) {
-      self->quit(msg.reason);
-      return;
-    }
-    // When the shutdown was requested by the user (as opposed to the partition
-    // just dropping out of the LRU cache), pro-actively remove the indexers.
-    terminate<policy::parallel>(self, std::move(indexers))
-      .then(
-        [=](atom::done) {
-          TENZIR_TRACE("{} shut down all indexers successfully", *self);
-          self->quit();
-        },
-        [=](const caf::error& err) {
-          TENZIR_ERROR("{} failed to shut down all indexers: {}", *self, err);
-          self->quit(err);
-        });
-  });
   // We send a "read" to the fs actor and upon receiving the result deserialize
   // the flatbuffer and switch to the "normal" partition behavior for responding
   // to queries.
-  self->request(self->state().filesystem, caf::infinite, atom::mmap_v, path)
+  self->mail(atom::mmap_v, path)
+    .request(self->state().filesystem, caf::infinite)
     .then(
       [=](chunk_ptr chunk) {
         TENZIR_TRACE("{} {}", *self, TENZIR_ARG(chunk));
@@ -417,7 +402,14 @@ partition_actor::behavior_type passive_partition(
           return;
         }
         self->state().store = *store;
-        self->monitor(self->state().store);
+        self->monitor(self->state().store, [=](caf::error err) {
+          if (self->state().is_shutting_down) {
+            return;
+          }
+          TENZIR_ERROR("{} shuts down after DOWN from {} store: {}", *self,
+                       self->state().store_id, err);
+          self->quit(std::move(err));
+        });
         // Delegate all deferred evaluations now that we have the partition chunk.
         delegate_deferred_requests(self->state());
       },
@@ -451,10 +443,11 @@ partition_actor::behavior_type passive_partition(
       // Don't bother with the indexers etc. if we already know the ids
       // we want to retrieve.
       if (!query_context.ids.empty()) {
-        if (query_context.expr != tenzir::expression{})
+        if (query_context.expr != tenzir::expression{}) {
           return caf::make_error(ec::invalid_argument, "query may only contain "
                                                        "either expression or "
                                                        "ids");
+        }
         rp.delegate(self->state().store, atom::query_v, query_context);
         return rp;
       }
@@ -467,7 +460,8 @@ partition_actor::behavior_type passive_partition(
         = detail::get_ids_for_evaluation(self->state().type_ids(), triples);
       auto eval = self->spawn(evaluator, query_context.expr, std::move(triples),
                               std::move(ids_for_evaluation));
-      self->request(eval, caf::infinite, atom::run_v)
+      self->mail(atom::run_v)
+        .request(eval, caf::infinite)
         .then(
           [self, rp,
            query_context = std::move(query_context)](const ids& hits) mutable {
@@ -503,9 +497,8 @@ partition_actor::behavior_type passive_partition(
       }
       TENZIR_TRACE("{} received an erase message and deletes {}", *self,
                    self->state().path);
-      self
-        ->request(self->state().filesystem, caf::infinite, atom::erase_v,
-                  self->state().path)
+      self->mail(atom::erase_v, self->state().path)
+        .request(self->state().filesystem, caf::infinite)
         .then([](atom::done) {},
               [self](const caf::error& err) {
                 TENZIR_WARN("{} failed to delete {}: {}; try deleting manually",
@@ -515,9 +508,8 @@ partition_actor::behavior_type passive_partition(
       for (const auto& kv : self->state().type_ids_) {
         all_ids |= kv.second;
       }
-      self
-        ->request(self->state().store, caf::infinite, atom::erase_v,
-                  std::move(all_ids))
+      self->mail(atom::erase_v, std::move(all_ids))
+        .request(self->state().store, caf::infinite)
         .then(
           [rp](uint64_t) mutable {
             rp.deliver(atom::done_v);
@@ -556,6 +548,38 @@ partition_actor::behavior_type passive_partition(
         result["memory-usage"] = *x + mem_indexers + sizeof(self->state());
       }
       return result;
+    },
+    [self](const caf::exit_msg& msg) {
+      TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self,
+                   msg.source, msg.reason);
+      self->state().is_shutting_down = true;
+      // Receiving an EXIT message does not need to coincide with the state
+      // being destructed, so we explicitly clear the vector to release the
+      // references.
+      // TODO: We must actor_cast to caf::actor here because 'terminate'
+      // operates on 'std::vector<caf::actor>' only. That should probably be
+      // generalized in the future.
+      auto indexers = std::vector<caf::actor>{};
+      indexers.reserve(self->state().indexers.size());
+      for (auto&& indexer : std::exchange(self->state().indexers, {})) {
+        indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
+      }
+      if (msg.reason != caf::exit_reason::user_shutdown) {
+        self->quit(msg.reason);
+        return;
+      }
+      // When the shutdown was requested by the user (as opposed to the partition
+      // just dropping out of the LRU cache), pro-actively remove the indexers.
+      terminate<policy::parallel>(self, std::move(indexers))
+        .then(
+          [=](atom::done) {
+            TENZIR_TRACE("{} shut down all indexers successfully", *self);
+            self->quit();
+          },
+          [=](const caf::error& err) {
+            TENZIR_ERROR("{} failed to shut down all indexers: {}", *self, err);
+            self->quit(err);
+          });
     },
   };
 }

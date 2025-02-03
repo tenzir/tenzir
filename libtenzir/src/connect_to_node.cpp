@@ -182,9 +182,9 @@ caf::expected<node_actor> connect_to_node(caf::scoped_actor& self) {
   // `get_node_endpoint()` will add a default value.
   TENZIR_ASSERT(node_endpoint->port.has_value());
   self
-    ->request(connector_actor, caf::infinite, atom::connect_v,
-              connect_request{node_endpoint->port->number(),
-                              node_endpoint->host})
+    ->mail(atom::connect_v,
+           connect_request{node_endpoint->port->number(), node_endpoint->host})
+    .request(connector_actor, caf::infinite)
     .receive(
       [&](node_actor& res) {
         result = std::move(res);
@@ -195,11 +195,9 @@ caf::expected<node_actor> connect_to_node(caf::scoped_actor& self) {
   if (not result) {
     return result;
   }
-  if (not *result) {
-    return caf::make_error(ec::system_error,
-                           "failed to connect to node: handle is invalid");
-  }
-  self->request(*result, timeout, atom::get_v, atom::version_v)
+  TENZIR_ASSERT(*result);
+  self->mail(atom::get_v, atom::version_v)
+    .request(*result, timeout)
     .receive(
       [&](record& remote_version) {
         // TODO

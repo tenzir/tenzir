@@ -35,7 +35,8 @@ public:
     auto response = std::optional<rest_response>{};
     const auto request_id = std::string{};
     ctrl.self()
-      .request(ctrl.node(), caf::infinite, atom::proxy_v, request, request_id)
+      .mail(atom::proxy_v, request, request_id)
+      .request(ctrl.node(), caf::infinite)
       .await(
         [&](rest_response& value) {
           response = std::move(value);

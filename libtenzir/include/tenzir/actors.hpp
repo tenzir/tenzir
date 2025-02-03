@@ -305,30 +305,36 @@ using component_plugin_actor = typed_actor_fwd<
   >::extend_with<status_client_actor>::unwrap;
 
 /// The receiving part of interface of an EXEC NODE actor.
-using exec_node_sink_actor = typed_actor_fwd<
-  // Push events.
-  auto(atom::push, table_slice events)->caf::result<void>,
-  // Push bytes.
-  auto(atom::push, chunk_ptr bytes)->caf::result<void>>::unwrap;
+struct exec_node_sink_actor_traits {
+  using signatures = caf::type_list<
+    // Push events.
+    auto(atom::push, table_slice events)->caf::result<void>,
+    // Push bytes.
+    auto(atom::push, chunk_ptr bytes)->caf::result<void>>;
+};
+using exec_node_sink_actor = caf::typed_actor<exec_node_sink_actor_traits>;
 
 /// The interface of a EXEC NODE actor.
-using exec_node_actor = typed_actor_fwd<
-  // Resume the internal event loop.
-  auto(atom::internal, atom::run)->caf::result<void>,
-  // Start an execution node. Returns after the operator has yielded for the
-  // first time.
-  auto(atom::start, std::vector<caf::actor> all_previous)->caf::result<void>,
-  // Pause the execution node. No-op if it was already paused.
-  auto(atom::pause)->caf::result<void>,
-  // Resume the execution node. No-op if it was not paused.
-  auto(atom::resume)->caf::result<void>,
-  // Emit a diagnostic through the exec node.
-  auto(diagnostic diag)->caf::result<void>,
-  // Uodate demand.
-  auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size)
-    ->caf::result<void>>
-  // Source.
-  ::extend_with<exec_node_sink_actor>::unwrap;
+struct exec_node_actor_traits {
+  using signatures = caf::type_list<
+    // Resume the internal event loop.
+    auto(atom::internal, atom::run)->caf::result<void>,
+    // Start an execution node. Returns after the operator has yielded for the
+    // first time.
+    auto(atom::start, std::vector<caf::actor> all_previous)->caf::result<void>,
+    // Pause the execution node. No-op if it was already paused.
+    auto(atom::pause)->caf::result<void>,
+    // Resume the execution node. No-op if it was not paused.
+    auto(atom::resume)->caf::result<void>,
+    // Emit a diagnostic through the exec node.
+    auto(diagnostic diag)->caf::result<void>,
+    // Uodate demand.
+    auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size)
+      ->caf::result<void>>
+    // Source.
+    ::append_from<exec_node_sink_actor_traits::signatures>;
+};
+using exec_node_actor = caf::typed_actor<exec_node_actor_traits>;
 
 /// The interface of the METRICS RECEIVER actor.
 using metrics_receiver_actor = typed_actor_fwd<
@@ -340,23 +346,26 @@ using metrics_receiver_actor = typed_actor_fwd<
   auto(operator_metric)->caf::result<void>>::unwrap;
 
 /// The interface of the NODE actor.
-using node_actor = typed_actor_fwd<
-  // Execute a REST endpoint on this node.
-  // Note that nodes connected via CAF trust each other completely,
-  // so this skips all authorization and access control mechanisms
-  // that come with HTTP(s).
-  auto(atom::proxy, http_request_description, std::string)
-    ->caf::result<rest_response>,
-  // Retrieve components by their label from the component registry.
-  auto(atom::get, atom::label, std::vector<std::string>)
-    ->caf::result<std::vector<caf::actor>>,
-  // Retrieve the version of the process running the NODE.
-  auto(atom::get, atom::version)->caf::result<record>,
-  // Spawn a set of execution nodes for a given pipeline. Does not start the
-  // execution nodes.
-  auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
-       metrics_receiver_actor, int index, bool is_hidden, uuid run_id)
-    ->caf::result<exec_node_actor>>::unwrap;
+struct node_actor_traits {
+  using signatures = caf::type_list<
+    // Execute a REST endpoint on this node.
+    // Note that nodes connected via CAF trust each other completely,
+    // so this skips all authorization and access control mechanisms
+    // that come with HTTP(s).
+    auto(atom::proxy, http_request_description, std::string)
+      ->caf::result<rest_response>,
+    // Retrieve components by their label from the component registry.
+    auto(atom::get, atom::label, std::vector<std::string>)
+      ->caf::result<std::vector<caf::actor>>,
+    // Retrieve the version of the process running the NODE.
+    auto(atom::get, atom::version)->caf::result<record>,
+    // Spawn a set of execution nodes for a given pipeline. Does not start the
+    // execution nodes.
+    auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
+         metrics_receiver_actor, int index, bool is_hidden, uuid run_id)
+      ->caf::result<exec_node_actor>>;
+};
+using node_actor = caf::typed_actor<node_actor_traits>;
 
 /// The interface of a PIPELINE EXECUTOR actor.
 using pipeline_executor_actor = typed_actor_fwd<

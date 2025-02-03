@@ -70,6 +70,7 @@ struct loader_args {
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
   located<std::vector<std::pair<std::string, std::string>>> options;
+  configuration::aws_iam_options aws;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
@@ -94,7 +95,7 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    auto cfg = configuration::make(config_);
+    auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
     if (!cfg) {
       ctrl.diagnostics().emit(
         diagnostic::error("failed to create configuration: {}", cfg.error())
@@ -139,7 +140,7 @@ public:
     }
     // Create the consumer.
     if (auto value = cfg->get("bootstrap.servers")) {
-      TENZIR_INFO("kafka connects to broker: {}", *value);
+      TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
     auto client = consumer::make(*cfg);
     if (!client) {
@@ -207,6 +208,7 @@ struct saver_args {
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
   located<std::vector<std::pair<std::string, std::string>>> options;
+  configuration::aws_iam_options aws;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
@@ -227,7 +229,7 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto cfg = configuration::make(config_);
+    auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
     if (!cfg) {
       TENZIR_ERROR("kafka failed to create configuration: {}", cfg.error());
       return cfg.error();
@@ -245,7 +247,7 @@ public:
       }
     }
     if (auto value = cfg->get("bootstrap.servers")) {
-      TENZIR_INFO("kafka connects to broker: {}", *value);
+      TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
     auto client = producer::make(*cfg);
     if (!client) {

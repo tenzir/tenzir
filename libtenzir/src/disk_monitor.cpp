@@ -61,12 +61,14 @@ bool operator<(const disk_monitor_state::blacklist_entry& lhs,
 }
 
 caf::error validate(const disk_monitor_config& config) {
-  if (config.step_size < 1)
+  if (config.step_size < 1) {
     return caf::make_error(ec::invalid_configuration, "step size must be "
                                                       "greater than zero");
-  if (config.low_water_mark > config.high_water_mark)
+  }
+  if (config.low_water_mark > config.high_water_mark) {
     return caf::make_error(ec::invalid_configuration, "low-water mark greater "
                                                       "than high-water mark");
+  }
   if (config.scan_binary) {
     if (config.scan_binary->empty()) {
       return caf::make_error(ec::invalid_configuration,
@@ -97,10 +99,12 @@ caf::expected<size_t> compute_dbdir_size(std::filesystem::path state_directory,
   TENZIR_VERBOSE("executing command '{}' to determine size of state_directory",
                  command);
   auto cmd_output = detail::execute_blocking(command);
-  if (!cmd_output)
+  if (!cmd_output) {
     return cmd_output.error();
-  if (cmd_output->back() == '\n')
+  }
+  if (cmd_output->back() == '\n') {
     cmd_output->pop_back();
+  }
   if (!parsers::count(*cmd_output, result.value())) {
     result = caf::make_error(ec::parse_error,
                              fmt::format("failed to interpret output "
@@ -129,11 +133,12 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
   self->state().config = config;
   self->state().state_directory = db_dir;
   self->state().index = std::move(index);
-  self->send(self, atom::ping_v);
+  self->mail(atom::ping_v).send(self);
   return {
     [self](atom::ping) {
-      self->delayed_send(self, self->state().config.scan_interval,
-                         atom::ping_v);
+      self->mail(atom::ping_v)
+        .delay(self->state().config.scan_interval)
+        .send(self);
       if (self->state().purging()) {
         TENZIR_DEBUG("{} ignores ping because a deletion is still in "
                      "progress",
@@ -154,9 +159,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       }
       TENZIR_VERBOSE("{} checks state-directory of size {}", *self, *size);
       if (*size > self->state().config.high_water_mark) {
-        self
-          ->request(static_cast<disk_monitor_actor>(self), caf::infinite,
-                    atom::erase_v)
+        self->mail(atom::erase_v)
+          .request(static_cast<disk_monitor_actor>(self), caf::infinite)
           .then(
             [=] {
               // nop
@@ -171,19 +175,22 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       auto err = std::error_code{};
       const auto index_dir = std::filesystem::directory_iterator(
         self->state().state_directory / "index", err);
-      if (err)
+      if (err) {
         return caf::make_error(ec::filesystem_error, //
                                fmt::format("failed to find index in "
                                            "state-directory at {}: {}",
                                            self->state().state_directory, err));
+      }
       // TODO(ch20006): Add some check on the overall structure on the db dir.
       std::vector<partition_diskstate> partitions;
       for (const auto& entry : index_dir) {
         auto partition = entry.path().filename().string();
-        if (partition == "index.bin")
+        if (partition == "index.bin") {
           continue;
-        if (entry.path().extension() == ".mdx")
+        }
+        if (entry.path().extension() == ".mdx") {
           continue;
+        }
         uuid id = {};
         if (!parsers::uuid(partition, id)) {
           TENZIR_VERBOSE("{} failed to find partition {}", *self, partition);
@@ -193,12 +200,13 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           std::error_code err{};
           const auto file_size = entry.file_size(err);
           const auto mtime = entry.last_write_time(err);
-          if (!err && file_size != static_cast<std::uintmax_t>(-1))
+          if (!err && file_size != static_cast<std::uintmax_t>(-1)) {
             partitions.push_back({id, file_size, mtime});
-          else
+          } else {
             TENZIR_WARN("{} failed to get file size and last write time for "
                         "partition {}",
                         *self, partition);
+          }
         }
       }
       if (partitions.empty()) {
@@ -246,7 +254,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                            *self, *size);
             if (*size > self->state().config.low_water_mark) {
               // Repeat until we're below the low water mark
-              self->send(self, atom::erase_v);
+              self->mail(atom::erase_v).send(self);
             }
           }
         }
@@ -255,9 +263,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         auto& partition = partitions.at(i);
         TENZIR_VERBOSE("{} erases partition {} from index", *self,
                        partition.id);
-        self
-          ->request(self->state().index, erase_timeout, atom::erase_v,
-                    partition.id)
+        self->mail(atom::erase_v, partition.id)
+          .request(self->state().index, erase_timeout)
           .then(
             [=](atom::done) {
               continuation();

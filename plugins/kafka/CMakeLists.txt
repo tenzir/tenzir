@@ -7,6 +7,7 @@ project(
 
 include(CTest)
 
+find_package(AWSSDK COMPONENTS core identity-management REQUIRED CONFIG)
 find_package(Tenzir REQUIRED)
 
 TenzirRegisterPlugin(
@@ -25,3 +26,5 @@ endif ()
 
 dependency_summary("rdkafka" RdKafka::rdkafka++ "Dependencies")
 target_link_libraries(kafka PUBLIC RdKafka::rdkafka++)
+
+target_link_libraries(kafka PUBLIC ${AWSSDK_LINK_LIBRARIES})

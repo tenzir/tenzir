@@ -33,8 +33,8 @@ using namespace std::string_literals;
 using namespace tenzir;
 
 template <class... Ts>
-  requires(!std::is_rvalue_reference_v<Ts> && ...) bool
-ldes(caf::byte_buffer& buf, Ts&... xs) {
+  requires(!std::is_rvalue_reference_v<Ts> && ...)
+bool ldes(caf::byte_buffer& buf, Ts&... xs) {
   return detail::legacy_deserialize(buf, xs...);
 }
 
@@ -359,7 +359,7 @@ struct custom {
 
 TEST(caf_optional) {
   caf::byte_buffer serialization_output;
-  caf::binary_serializer s{nullptr, serialization_output};
+  caf::binary_serializer s{serialization_output};
   auto in = std::optional<custom>{custom{"test str", 221}};
   REQUIRE(s.apply(in));
   auto out = std::optional<custom>{};
@@ -369,7 +369,7 @@ TEST(caf_optional) {
   // The empty optional should be also deserialized as empty one.
   in.reset();
   serialization_output.clear();
-  caf::binary_serializer s2{nullptr, serialization_output};
+  caf::binary_serializer s2{serialization_output};
   REQUIRE(s2.apply(in));
   // the out contains a set optional now so it should be reassigned to empty one
   // after deserialization
@@ -383,7 +383,7 @@ TEST(caf_config_value integer) {
   // variant
   auto legacy_integer_index = std::uint8_t{0u};
   caf::byte_buffer serialization_output;
-  caf::binary_serializer s{nullptr, serialization_output};
+  caf::binary_serializer s{serialization_output};
   REQUIRE(s.apply(legacy_integer_index) && s.apply(in));
   caf::config_value out;
   REQUIRE(ldes(serialization_output, out));
@@ -398,7 +398,7 @@ TEST(caf_config_value boolean) {
   // variant
   auto legacy_boolean_index = std::uint8_t{1u};
   caf::byte_buffer serialization_output;
-  caf::binary_serializer s{nullptr, serialization_output};
+  caf::binary_serializer s{serialization_output};
   REQUIRE(s.apply(legacy_boolean_index) && s.apply(in));
   caf::config_value out;
   REQUIRE(ldes(serialization_output, out));
@@ -413,7 +413,7 @@ TEST(caf_config_value real) {
   // variant
   auto legacy_real_index = std::uint8_t{2u};
   caf::byte_buffer serialization_output;
-  caf::binary_serializer s{nullptr, serialization_output};
+  caf::binary_serializer s{serialization_output};
   REQUIRE(s.apply(legacy_real_index) && s.apply(in));
   caf::config_value out;
   REQUIRE(ldes(serialization_output, out));
@@ -427,7 +427,7 @@ TEST(caf_config_value string) {
   // current config_value
   caf::config_value in{caf::config_value::string{"example_str"}};
   caf::byte_buffer serialization_output;
-  caf::binary_serializer s{nullptr, serialization_output};
+  caf::binary_serializer s{serialization_output};
   REQUIRE(s.apply(in));
   caf::config_value out;
   REQUIRE(ldes(serialization_output, out));

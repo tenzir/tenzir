@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/detail/alarm_clock.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/fwd.hpp>
@@ -23,8 +22,8 @@ namespace {
 
 using float_seconds = std::chrono::duration<double>;
 
-auto split_chunk(const chunk_ptr& in, size_t head_offset,
-                 size_t position) -> std::pair<chunk_ptr, chunk_ptr> {
+auto split_chunk(const chunk_ptr& in, size_t head_offset, size_t position)
+  -> std::pair<chunk_ptr, chunk_ptr> {
   if (head_offset >= in->size()) {
     return {chunk::make_empty(), chunk::make_empty()};
   }
@@ -48,7 +47,6 @@ public:
   // we also want to be able to handle events as input.
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
     auto last_timestamp = std::chrono::steady_clock::now() - window_;
     auto bytes_per_window = bandwidth_per_second_ * window_.count();
     if (bytes_per_window == size_t{0}) {
@@ -78,23 +76,14 @@ public:
       // window.
       while (tail->size() > 0) {
         budget = 0;
-        ctrl.set_waiting(true);
-        ctrl.self()
-          .request(alarm_clock, caf::infinite,
-                   duration_cast<caf::timespan>(window_))
-          .then(
-            [&]() {
-              ctrl.set_waiting(false);
-            },
-            [&ctrl](const caf::error& err) {
-              diagnostic::error("throttle operator failed to delay")
-                .note("encountered error: {}", err)
-                .emit(ctrl.diagnostics());
-            });
         std::tie(head, tail) = split_chunk(
           bytes, head_offset, static_cast<size_t>(bytes_per_window));
         head_offset += head->size();
-        co_yield {}; // Await the alarm clock.
+        ctrl.self().run_delayed_weak(duration_cast<duration>(window_), [&] {
+          ctrl.set_waiting(false);
+        });
+        ctrl.set_waiting(true);
+        co_yield {};
         co_yield std::move(head);
       }
       last_timestamp = std::chrono::steady_clock::now();
@@ -106,8 +95,8 @@ public:
     return "throttle";
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -153,8 +142,8 @@ public:
              : float_seconds{1});
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto bandwidth = located<uint64_t>{};
     auto window = std::optional<located<duration>>{};
     argument_parser2::operator_("throttle")

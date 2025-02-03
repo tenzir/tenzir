@@ -24,13 +24,16 @@ caf::error authenticator_state::initialize_from(chunk_ptr chunk) {
   // can just assert there presence below.
   auto fb = flatbuffer<fbs::ServerState, fbs::ServerStateIdentifier>::make(
     std::move(chunk));
-  if (!fb)
+  if (!fb) {
     return fb.error();
-  if ((*fb)->server_state_type() != fbs::server_state::ServerState::v0)
+  }
+  if ((*fb)->server_state_type() != fbs::server_state::ServerState::v0) {
     return caf::make_error(ec::format_error, "unknown state version");
+  }
   auto const* state = (*fb)->server_state_as_v0();
-  if (state == nullptr)
+  if (state == nullptr) {
     return caf::make_error(ec::format_error, "missing state");
+  }
   TENZIR_ASSERT(state->auth_tokens() != nullptr);
   using clock = std::chrono::system_clock;
   for (auto const* token : *state->auth_tokens()) {
@@ -116,9 +119,8 @@ caf::expected<authenticator_actor>
 get_authenticator(caf::scoped_actor& self, node_actor node,
                   caf::timespan timeout) {
   auto maybe_authenticator = caf::expected<caf::actor>{caf::error{}};
-  self
-    ->request(node, timeout, atom::get_v, atom::label_v,
-              std::vector<std::string>{"web"})
+  self->mail(atom::get_v, atom::label_v, std::vector<std::string>{"web"})
+    .request(node, timeout)
     .receive(
       [&](std::vector<caf::actor>& actors) {
         if (actors.empty()) {
@@ -136,8 +138,9 @@ get_authenticator(caf::scoped_actor& self, node_actor node,
       [&](caf::error& err) {
         maybe_authenticator = std::move(err);
       });
-  if (!maybe_authenticator)
+  if (!maybe_authenticator) {
     return maybe_authenticator.error();
+  }
   auto authenticator
     = caf::actor_cast<authenticator_actor>(std::move(*maybe_authenticator));
   return authenticator;
@@ -148,7 +151,8 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
               filesystem_actor fs) {
   self->state().path_ = std::filesystem::path{"plugins/web/authenticator.svs"};
   self->state().filesystem_ = fs;
-  self->request(fs, caf::infinite, atom::read_v, self->state().path_)
+  self->mail(atom::read_v, self->state().path_)
+    .request(fs, caf::infinite)
     .await(
       [self](chunk_ptr chunk) {
         auto error = self->state().initialize_from(std::move(chunk));
@@ -178,9 +182,8 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
                                            *self, state.error()));
       }
       auto rp = self->make_response_promise<token_t>();
-      self
-        ->request(self->state().filesystem_, caf::infinite, atom::write_v,
-                  self->state().path_, std::move(*state))
+      self->mail(atom::write_v, self->state().path_, std::move(*state))
+        .request(self->state().filesystem_, caf::infinite)
         .then(
           [rp, result = std::move(result)](atom::ok) mutable {
             // We deliberately delay delivering the generated token until it is

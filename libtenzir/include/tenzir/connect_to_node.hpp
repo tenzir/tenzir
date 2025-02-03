@@ -52,14 +52,15 @@ void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
     = self->spawn(tenzir::connector, details::get_retry_delay(opts),
                   details::get_deadline(timeout));
   self
-    ->request(connector, caf::infinite, atom::connect_v,
-              connect_request{node_endpoint->port->number(),
-                              node_endpoint->host})
+    ->mail(atom::connect_v,
+           connect_request{node_endpoint->port->number(), node_endpoint->host})
+    .request(connector, caf::infinite)
     .then(
       [=](node_actor& node) {
         // We must keep the connector alive until after this request is completed.
         (void)connector;
-        self->request(node, timeout, atom::get_v, atom::version_v)
+        self->mail(atom::get_v, atom::version_v)
+          .request(node, timeout)
           .then(
             [self, callback,
              node = std::move(node)](record& remote_version) mutable {

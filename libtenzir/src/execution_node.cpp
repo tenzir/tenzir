@@ -22,6 +22,9 @@
 
 #include <arrow/config.h>
 #include <arrow/util/byte_size.h>
+#include <caf/actor_addr.hpp>
+#include <caf/actor_from_state.hpp>
+#include <caf/anon_mail.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
@@ -120,40 +123,38 @@ struct exec_node_state;
 
 template <class Input, class Output>
 struct exec_node_diagnostic_handler final : public diagnostic_handler {
-  exec_node_diagnostic_handler(
-    exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> handle)
-    : self{self}, handle{std::move(handle)} {
+  exec_node_diagnostic_handler(exec_node_state<Input, Output>& state,
+                               receiver_actor<diagnostic> handle)
+    : state{state}, handle{std::move(handle)} {
   }
 
   void emit(diagnostic diag) override {
-    TENZIR_TRACE("{} {} emits diagnostic: {:?}", *self,
-                 self->state().op->name(), diag);
+    TENZIR_TRACE("{} {} emits diagnostic: {:?}", *state.self, state.op->name(),
+                 diag);
     if (diag.severity == severity::error) {
       throw std::move(diag);
     }
     if (deduplicator_.insert(diag)) {
-      self->send(handle, std::move(diag));
+      state.self->mail(std::move(diag)).send(handle);
     }
   }
 
 private:
-  exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self = {};
+  exec_node_state<Input, Output>& state;
   receiver_actor<diagnostic> handle = {};
   diagnostic_deduplicator deduplicator_;
 };
 
 template <class Input, class Output>
 struct exec_node_control_plane final : public operator_control_plane {
-  exec_node_control_plane(
-    exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> diagnostic_handler,
-    metrics_receiver_actor metric_receiver, uint64_t op_index,
-    bool has_terminal, bool is_hidden)
-    : state{self->state()},
+  exec_node_control_plane(exec_node_state<Input, Output>& state,
+                          receiver_actor<diagnostic> diagnostic_handler,
+                          metrics_receiver_actor metric_receiver,
+                          uint64_t op_index, bool has_terminal, bool is_hidden)
+    : state{state},
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
-          self, std::move(diagnostic_handler))},
+          state, std::move(diagnostic_handler))},
       metrics_receiver_{std::move(metric_receiver)},
       operator_index_{op_index},
       has_terminal_{has_terminal},
@@ -225,11 +226,136 @@ struct exec_node_control_plane final : public operator_control_plane {
 
 template <class Input, class Output>
 struct exec_node_state {
-  exec_node_state() = default;
-  exec_node_state(const exec_node_state&) = delete;
-  exec_node_state(exec_node_state&&) = delete;
-  exec_node_state& operator=(const exec_node_state&) = delete;
-  exec_node_state& operator=(exec_node_state&&) = delete;
+  exec_node_state(exec_node_actor::pointer self, operator_ptr op,
+                  const node_actor& node,
+                  const receiver_actor<diagnostic>& diagnostic_handler,
+                  const metrics_receiver_actor& metrics_receiver, int index,
+                  bool has_terminal, bool is_hidden, uuid run_id)
+    : self{self},
+      run_id{run_id},
+      op{std::move(op)},
+      metrics_receiver{metrics_receiver} {
+    auto read_config = [&](auto& key, std::string_view config, uint64_t min) {
+      key = caf::get_or(content(self->system().config()),
+                        fmt::format("tenzir.demand.{}", config), key);
+      key = caf::get_or(content(self->system().config()),
+                        fmt::format("tenzir.demand.{}.{}", config,
+                                    operator_type_name<Input>()),
+                        key);
+      key = std::max(min, key);
+    };
+    read_config(min_elements, "min-elements", 1);
+    read_config(max_elements, "max-elements", min_elements);
+    read_config(max_batches, "max-batches", 1);
+    auto time_starting_guard
+      = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
+    metrics.operator_index = index;
+    metrics.operator_name = this->op->name();
+    metrics.inbound_measurement.unit = operator_type_name<Input>();
+    metrics.outbound_measurement.unit = operator_type_name<Output>();
+    // We make an exception here for transformations, which are always considered
+    // internal as they cannot transport data outside of the pipeline.
+    metrics.internal = this->op->internal()
+                       and (std::is_same_v<Input, std::monostate>
+                            or std::is_same_v<Output, std::monostate>);
+    ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
+      *this, diagnostic_handler, metrics_receiver, index, has_terminal,
+      is_hidden);
+    // The node actor must be set when the operator is not a source.
+    TENZIR_ASSERT(node or (this->op->location() != operator_location::remote));
+    weak_node = node;
+  }
+
+  auto make_behavior() -> exec_node_actor::behavior_type {
+    if (self->getf(caf::scheduled_actor::is_detached_flag)) {
+      const auto name = fmt::format("tnz.{}", this->op->name());
+      caf::detail::set_thread_name(name.c_str());
+    }
+    self->set_exception_handler(
+      [this](const std::exception_ptr& exception) -> caf::error {
+        auto error = std::invoke([&] {
+          try {
+            std::rethrow_exception(exception);
+          } catch (diagnostic& diag) {
+            return std::move(diag).to_error();
+          } catch (const std::exception& err) {
+            return diagnostic::error("{}", err.what())
+              .note("unhandled exception in {} {}", *self, op->name())
+              .to_error();
+          } catch (...) {
+            return diagnostic::error("unhandled exception in {} {}", *self,
+                                     op->name())
+              .to_error();
+          }
+        });
+        if (start_rp.pending()) {
+          start_rp.deliver(std::move(error));
+          return ec::silent;
+        }
+        return error;
+      });
+    return {
+      [this](atom::internal, atom::run) -> caf::result<void> {
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        return internal_run();
+      },
+      [this](atom::start,
+             std::vector<caf::actor>& all_previous) -> caf::result<void> {
+        auto time_scheduled_guard
+          = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
+        return start(std::move(all_previous));
+      },
+      [this](atom::pause) -> caf::result<void> {
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        return pause();
+      },
+      [this](atom::resume) -> caf::result<void> {
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        return resume();
+      },
+      [this](diagnostic& diag) -> caf::result<void> {
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        ctrl->diagnostics().emit(std::move(diag));
+        return {};
+      },
+      [this](atom::push, table_slice& events) -> caf::result<void> {
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        if constexpr (std::is_same_v<Input, table_slice>) {
+          return push(std::move(events));
+        } else {
+          return caf::make_error(
+            ec::logic_error,
+            fmt::format("{} does not accept events as input", *self));
+        }
+      },
+      [this](atom::push, chunk_ptr& bytes) -> caf::result<void> {
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        if constexpr (std::is_same_v<Input, chunk_ptr>) {
+          return push(std::move(bytes));
+        } else {
+          return caf::make_error(
+            ec::logic_error,
+            fmt::format("{} does not accept bytes as input", *self));
+        }
+      },
+      [this](atom::pull, exec_node_sink_actor& sink,
+             uint64_t batch_size) -> caf::result<void> {
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        if constexpr (not std::is_same_v<Output, std::monostate>) {
+          return pull(std::move(sink), batch_size);
+        } else {
+          return caf::make_error(
+            ec::logic_error,
+            fmt::format("{} is a sink and must not be pulled from", *self));
+        }
+      },
+      [this](const caf::exit_msg& msg) -> caf::result<void> {
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+        handle_exit_msg(msg);
+        return {};
+      },
+    };
+  }
 
   static constexpr auto name = "exec-node";
 
@@ -335,7 +461,7 @@ struct exec_node_state {
       = std::chrono::duration_cast<duration>(now - start_time);
     metrics_copy.time_running
       = metrics_copy.time_total - metrics_copy.time_paused;
-    caf::anon_send(metrics_receiver, std::move(metrics_copy));
+    caf::anon_mail(std::move(metrics_copy)).send(metrics_receiver);
   }
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
@@ -355,12 +481,6 @@ struct exec_node_state {
                                            "not have a previous exec-node",
                                            *self));
       }
-      self->set_exit_handler([this](const caf::exit_msg& msg) {
-        TENZIR_DEBUG("{} {} got exit message from the next execution node or "
-                     "its executor with address {}: {}",
-                     *self, op->name(), msg.source, msg.reason);
-        on_error(msg.reason);
-      });
     } else {
       // The previous exec-node must be set when the operator is not a source.
       if (all_previous.empty()) {
@@ -373,33 +493,6 @@ struct exec_node_state {
         = caf::actor_cast<exec_node_actor>(std::move(all_previous.back()));
       all_previous.pop_back();
       self->link_to(previous);
-      self->set_exit_handler([this, prev_addr = previous.address()](
-                               const caf::exit_msg& msg) {
-        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-        // We got an exit message, which can mean one of four things:
-        // 1. The pipeline manager quit.
-        // 2. The next operator quit.
-        // 3. The previous operator quit gracefully.
-        // 4. The previous operator quit ungracefully.
-        // In cases (1-3) we need to shut down this operator unconditionally.
-        // For (4) we we need to treat the previous operator as offline.
-        if (msg.source != prev_addr) {
-          TENZIR_DEBUG("{} {} got exit message from the next execution node or "
-                       "its executor with address {}: {}",
-                       *self, op->name(), msg.source, msg.reason);
-          on_error(msg.reason);
-          return;
-        }
-        TENZIR_DEBUG("{} {} got exit message from previous execution node with "
-                     "address {}: {}",
-                     *self, op->name(), msg.source, msg.reason);
-        if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
-          on_error(msg.reason);
-          return;
-        }
-        previous = nullptr;
-        schedule_run(false);
-      });
     }
     // Instantiate the operator with its input type.
     {
@@ -445,9 +538,8 @@ struct exec_node_state {
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
       start_rp = self->make_response_promise<void>();
-      self
-        ->request(previous, caf::infinite, atom::start_v,
-                  std::move(all_previous))
+      self->mail(atom::start_v, std::move(all_previous))
+        .request(previous, caf::infinite)
         .then(
           [this]() {
             auto time_starting_guard
@@ -469,7 +561,8 @@ struct exec_node_state {
     }
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       TENZIR_DEBUG("{} {} delegates start to {}", *self, op->name(), previous);
-      return self->delegate(previous, atom::start_v, std::move(all_previous));
+      return self->mail(atom::start_v, std::move(all_previous))
+        .delegate(previous);
     }
     return {};
   }
@@ -547,8 +640,8 @@ struct exec_node_state {
         // control plane?
         demand->remaining -= output_size;
       }
-      self
-        ->request(demand->sink, caf::infinite, atom::push_v, std::move(output))
+      self->mail(atom::push_v, std::move(output))
+        .request(demand->sink, caf::infinite)
         .then(
           [this, output_size, should_quit]() {
             auto time_scheduled_guard
@@ -644,10 +737,10 @@ struct exec_node_state {
                  data{backoff});
     run_scheduled = true;
     if (backoff == duration::zero()) {
-      self->send(self, atom::internal_v, atom::run_v);
+      self->mail(atom::internal_v, atom::run_v).send(self);
     } else {
       backoff_disposable = detail::weak_run_delayed(self, backoff, [this] {
-        self->send(self, atom::internal_v, atom::run_v);
+        self->mail(atom::internal_v, atom::run_v).send(self);
       });
     }
   }
@@ -670,9 +763,9 @@ struct exec_node_state {
                  demand);
     issue_demand_inflight = true;
     self
-      ->request(previous, caf::infinite, atom::pull_v,
-                static_cast<exec_node_sink_actor>(self),
-                detail::narrow_cast<uint64_t>(demand))
+      ->mail(atom::pull_v, static_cast<exec_node_sink_actor>(self),
+             detail::narrow_cast<uint64_t>(demand))
+      .request(previous, caf::infinite)
       .then(
         [this, demand] {
           auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
@@ -789,149 +882,50 @@ struct exec_node_state {
     }
     self->quit(std::move(error));
   }
-};
 
-template <class Input, class Output>
-auto exec_node(
-  exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-  operator_ptr op, const node_actor& node,
-  const receiver_actor<diagnostic>& diagnostic_handler,
-  const metrics_receiver_actor& metrics_receiver, int index, bool has_terminal,
-  bool is_hidden, uuid run_id) -> exec_node_actor::behavior_type {
-  if (self->getf(caf::scheduled_actor::is_detached_flag)) {
-    const auto name = fmt::format("tnz.{}", op->name());
-    caf::detail::set_thread_name(name.c_str());
+  void handle_exit_msg(const caf::exit_msg& msg) {
+    if (not instance) {
+      if (msg.reason) {
+        self->quit(msg.reason);
+      }
+    }
+    if constexpr (std::is_same_v<Input, std::monostate>) {
+      TENZIR_DEBUG("{} {} got exit message from the next execution node or "
+                   "its executor with address {}: {}",
+                   *self, op->name(), msg.source, msg.reason);
+      on_error(msg.reason);
+      return;
+    } else {
+      if (not previous) {
+        return;
+      }
+      const auto prev_addr = previous->address();
+      // We got an exit message, which can mean one of four things:
+      // 1. The pipeline manager quit.
+      // 2. The next operator quit.
+      // 3. The previous operator quit gracefully.
+      // 4. The previous operator quit ungracefully.
+      // In cases (1-3) we need to shut down this operator unconditionally.
+      // For (4) we we need to treat the previous operator as offline.
+      if (msg.source != prev_addr) {
+        TENZIR_DEBUG("{} {} got exit message from the next execution node or "
+                     "its executor with address {}: {}",
+                     *self, op->name(), msg.source, msg.reason);
+        on_error(msg.reason);
+        return;
+      }
+      TENZIR_DEBUG("{} {} got exit message from previous execution node with "
+                   "address {}: {}",
+                   *self, op->name(), msg.source, msg.reason);
+      if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
+        on_error(msg.reason);
+        return;
+      }
+      previous = nullptr;
+      schedule_run(false);
+    }
   }
-  self->state().self = self;
-  self->state().run_id = run_id;
-  auto read_config = [&](auto& key, std::string_view config, uint64_t min) {
-    key = caf::get_or(content(self->system().config()),
-                      fmt::format("tenzir.demand.{}", config), key);
-    key = caf::get_or(content(self->system().config()),
-                      fmt::format("tenzir.demand.{}.{}", config,
-                                  operator_type_name<Input>()),
-                      key);
-    key = std::max(min, key);
-  };
-  read_config(self->state().min_elements, "min-elements", 1);
-  read_config(self->state().max_elements, "max-elements",
-              self->state().min_elements);
-  read_config(self->state().max_batches, "max-batches", 1);
-  self->state().op = std::move(op);
-  auto time_starting_guard = make_timer_guard(
-    self->state().metrics.time_scheduled, self->state().metrics.time_starting);
-  self->state().metrics_receiver = metrics_receiver;
-  self->state().metrics.operator_index = index;
-  self->state().metrics.operator_name = self->state().op->name();
-  self->state().metrics.inbound_measurement.unit = operator_type_name<Input>();
-  self->state().metrics.outbound_measurement.unit
-    = operator_type_name<Output>();
-  // We make an exception here for transformations, which are always considered
-  // internal as they cannot transport data outside of the pipeline.
-  self->state().metrics.internal
-    = self->state().op->internal()
-      and (std::is_same_v<Input, std::monostate>
-           or std::is_same_v<Output, std::monostate>);
-  self->state().ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self, diagnostic_handler, self->state().metrics_receiver, index,
-    has_terminal, is_hidden);
-  // The node actor must be set when the operator is not a source.
-  if (self->state().op->location() == operator_location::remote and not node) {
-    self->state().on_error(caf::make_error(
-      ec::logic_error,
-      fmt::format("{} runs a remote operator and must have a node", *self)));
-    return exec_node_actor::behavior_type::make_empty_behavior();
-  }
-  self->state().weak_node = node;
-  self->set_exception_handler(
-    [self](const std::exception_ptr& exception) -> caf::error {
-      auto error = std::invoke([&] {
-        try {
-          std::rethrow_exception(exception);
-        } catch (diagnostic& diag) {
-          return std::move(diag).to_error();
-        } catch (const std::exception& err) {
-          return diagnostic::error("{}", err.what())
-            .note("unhandled exception in {} {}", *self,
-                  self->state().op->name())
-            .to_error();
-        } catch (...) {
-          return diagnostic::error("unhandled exception in {} {}", *self,
-                                   self->state().op->name())
-            .to_error();
-        }
-      });
-      if (self->state().start_rp.pending()) {
-        self->state().start_rp.deliver(std::move(error));
-        return ec::silent;
-      }
-      return error;
-    });
-  return {
-    [self](atom::internal, atom::run) -> caf::result<void> {
-      auto time_scheduled_guard
-        = make_timer_guard(self->state().metrics.time_scheduled);
-      return self->state().internal_run();
-    },
-    [self](atom::start,
-           std::vector<caf::actor>& all_previous) -> caf::result<void> {
-      auto time_scheduled_guard
-        = make_timer_guard(self->state().metrics.time_scheduled,
-                           self->state().metrics.time_starting);
-      return self->state().start(std::move(all_previous));
-    },
-    [self](atom::pause) -> caf::result<void> {
-      auto time_scheduled_guard
-        = make_timer_guard(self->state().metrics.time_scheduled);
-      return self->state().pause();
-    },
-    [self](atom::resume) -> caf::result<void> {
-      auto time_scheduled_guard
-        = make_timer_guard(self->state().metrics.time_scheduled);
-      return self->state().resume();
-    },
-    [self](diagnostic& diag) -> caf::result<void> {
-      auto time_scheduled_guard
-        = make_timer_guard(self->state().metrics.time_scheduled);
-      self->state().ctrl->diagnostics().emit(std::move(diag));
-      return {};
-    },
-    [self](atom::push, table_slice& events) -> caf::result<void> {
-      auto time_scheduled_guard
-        = make_timer_guard(self->state().metrics.time_scheduled);
-      if constexpr (std::is_same_v<Input, table_slice>) {
-        return self->state().push(std::move(events));
-      } else {
-        return caf::make_error(ec::logic_error,
-                               fmt::format("{} does not accept events as input",
-                                           *self));
-      }
-    },
-    [self](atom::push, chunk_ptr& bytes) -> caf::result<void> {
-      auto time_scheduled_guard
-        = make_timer_guard(self->state().metrics.time_scheduled);
-      if constexpr (std::is_same_v<Input, chunk_ptr>) {
-        return self->state().push(std::move(bytes));
-      } else {
-        return caf::make_error(ec::logic_error,
-                               fmt::format("{} does not accept bytes as input",
-                                           *self));
-      }
-    },
-    [self](atom::pull, exec_node_sink_actor& sink,
-           uint64_t batch_size) -> caf::result<void> {
-      auto time_scheduled_guard
-        = make_timer_guard(self->state().metrics.time_scheduled);
-      if constexpr (not std::is_same_v<Output, std::monostate>) {
-        return self->state().pull(std::move(sink), batch_size);
-      } else {
-        return caf::make_error(
-          ec::logic_error,
-          fmt::format("{} is a sink and must not be pulled from", *self));
-      }
-    },
-  };
-}
+};
 
 } // namespace
 
@@ -961,13 +955,13 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       using output_type
         = std::conditional_t<std::is_void_v<Output>, std::monostate, Output>;
       auto result = self->spawn<SpawnOptions>(
-        exec_node<input_type, output_type>, std::move(op), std::move(node),
-        std::move(diagnostics_handler), std::move(metrics_receiver), index,
-        has_terminal, is_hidden, run_id);
+        caf::actor_from_state<exec_node_state<input_type, output_type>>,
+        std::move(op), std::move(node), std::move(diagnostics_handler),
+        std::move(metrics_receiver), index, has_terminal, is_hidden, run_id);
       return result;
     };
   };
-  return std::pair{
+  return std::pair {
     op->detached() ? std::visit(f.template operator()<caf::detached>(),
                                 input_type, *output_type)
                    : std::visit(f.template operator()<caf::no_spawn_options>(),

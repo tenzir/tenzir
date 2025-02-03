@@ -1,6 +1,6 @@
 ---
 tenzir:
-  abort-on-panic: 1
+  abort-on-panic: true
   automatic-rebuild: 0
   bare-mode: true
   exec:
@@ -11,4 +11,5 @@ tenzir:
       disable-timestamp-tags: true
   plugins:
     []
+  silence-tql1-deprecation-notice: true
 ...

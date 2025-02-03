@@ -1,0 +1,2 @@
+from {x: 1, y:1}, {x:5, y:2}, {x:6, y:5}, {x:3, y:3}, {x:4, y:4}
+chart_bar x=x, y=y, x_min=2, _limit=3

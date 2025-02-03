@@ -358,7 +358,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
   auto plugins_record = record{};
   if (global_config.contains("plugins")) {
     if (auto* plugins_entry = try_as<record>(&global_config.at("plugins"))) {
-      plugins_record = std::move(*plugins_entry);
+      plugins_record = *plugins_entry;
     }
   }
   TENZIR_DEBUG("collected {} global options for plugin initialization",

@@ -164,15 +164,14 @@ Operator | Description | Example
 [`write_yaml`](./operators/write_yaml.md) | Writes events as YAML | `write_yaml`
 [`write_zeek_tsv`](./operators/write_zeek_tsv.md) | Writes events as Zeek TSV | `write_zeek_tsv`
 
-<!--
 ## Charts
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`bar_chart`]() | All of this is TBD. |
-[`treemap`]() | |
-[`line_chart`]() | |
--->
+[`chart_area`](./operators/chart_area.md) | Visualizes events on an area chart | `chart_area …`
+[`chart_bar`](./operators/chart_bar.md) | Visualizes events on a bar chart | `chart_bar …`
+[`chart_line`](./operators/chart_line.md) | Visualizes events on a line chart | `chart_line …`
+[`chart_pie`](./operators/chart_pie.md) | Visualizes events on a pie chart | `chart_pie …`
 
 ## Connecting Pipelines
 

@@ -8,7 +8,6 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/detail/alarm_clock.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -35,9 +34,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
-    auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
     auto start = start_;
     const auto start_time = std::chrono::steady_clock::now();
@@ -102,17 +100,11 @@ public:
           / speed_);
         if (delay > duration::zero()) {
           co_yield subslice(slice, begin, end);
-          ctrl.self()
-            .request(alarm_clock, caf::infinite, delay)
-            .await(
-              [&]() {
-                begin = end;
-              },
-              [&ctrl, deadline = *element](const caf::error& err) {
-                diagnostic::error("failed to delay until `{}`: {}", deadline,
-                                  err)
-                  .emit(ctrl.diagnostics());
-              });
+          ctrl.self().run_delayed_weak(delay, [&] {
+            begin = end;
+            ctrl.set_waiting(false);
+          });
+          ctrl.set_waiting(true);
           co_yield {};
         }
         ++end;
@@ -121,8 +113,8 @@ public:
     }
   }
 
-  auto optimize(expression const&,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const&, event_order order) const
+    -> optimize_result override {
     return optimize_result::order_invariant(*this, order);
   }
 
@@ -153,9 +145,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
-    auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
     auto start = start_;
     const auto start_time = std::chrono::steady_clock::now();
@@ -201,17 +192,11 @@ public:
             / speed_);
           if (delay > duration::zero()) {
             co_yield subslice(slice, begin, end);
-            ctrl.self()
-              .request(alarm_clock, caf::infinite, delay)
-              .await(
-                [&]() {
-                  begin = end;
-                },
-                [&ctrl, deadline = *element](const caf::error& err) {
-                  diagnostic::error("failed to delay until `{}`: {}", deadline,
-                                    err)
-                    .emit(ctrl.diagnostics());
-                });
+            ctrl.self().run_delayed_weak(delay, [&] {
+              begin = end;
+              ctrl.set_waiting(false);
+            });
+            ctrl.set_waiting(true);
             co_yield {};
           }
           ++end;
@@ -221,8 +206,8 @@ public:
     }
   }
 
-  auto optimize(expression const&,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const&, event_order order) const
+    -> optimize_result override {
     return optimize_result::order_invariant(*this, order);
   }
 
@@ -266,8 +251,8 @@ public:
 };
 
 class plugin2 final : public virtual operator_plugin2<delay_operator2> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto speed = std::optional<located<double>>{};
     auto start = std::optional<time>{};
     auto expr = ast::expression{};

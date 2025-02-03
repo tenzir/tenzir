@@ -18,38 +18,46 @@
 namespace tenzir {
 
 template <class Policy>
+void handle_down_msg(terminator_actor::stateful_pointer<terminator_state> self,
+                     const caf::actor_addr& source, const caf::error&) {
+  // Remove actor from list of remaining actors.
+  TENZIR_DEBUG("{} received DOWN from actor {}", *self, source);
+  auto& remaining = self->state().remaining_actors;
+  auto pred = [=](auto& actor) {
+    return actor == source;
+  };
+  auto i = std::find_if(remaining.begin(), remaining.end(), pred);
+  TENZIR_ASSERT(i != remaining.end());
+  remaining.erase(i);
+  // Perform next action based on policy.
+  if constexpr (std::is_same_v<Policy, policy::sequential>) {
+    if (!remaining.empty()) {
+      auto& next = remaining.back();
+      TENZIR_DEBUG("{} terminates next actor {}", *self, next);
+      self->monitor(next,
+                    [self, source = next->address()](const caf::error& err) {
+                      handle_down_msg<Policy>(self, source, err);
+                    });
+      self->send_exit(next, caf::exit_reason::user_shutdown);
+      return;
+    }
+  } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
+    // nothing to do, all EXIT messages are in flight.
+    TENZIR_DEBUG("{} has {} actors remaining", *self, remaining.size());
+  } else {
+    static_assert(detail::always_false_v<Policy>, "unsupported policy");
+  }
+  if (remaining.empty()) {
+    TENZIR_DEBUG("{} terminated all actors", *self);
+    self->state().promise.deliver(atom::done_v);
+    self->quit(caf::exit_reason::user_shutdown);
+  }
+}
+
+template <class Policy>
 terminator_actor::behavior_type
 terminator(terminator_actor::stateful_pointer<terminator_state> self) {
   TENZIR_TRACE("terminator {}", TENZIR_ARG(self->id()));
-  self->set_down_handler([=](const caf::down_msg& msg) {
-    // Remove actor from list of remaining actors.
-    TENZIR_DEBUG("{} received DOWN from actor {}", *self, msg.source);
-    auto& remaining = self->state().remaining_actors;
-    auto pred = [=](auto& actor) { return actor == msg.source; };
-    auto i = std::find_if(remaining.begin(), remaining.end(), pred);
-    TENZIR_ASSERT(i != remaining.end());
-    remaining.erase(i);
-    // Perform next action based on policy.
-    if constexpr (std::is_same_v<Policy, policy::sequential>) {
-      if (!remaining.empty()) {
-        auto& next = remaining.back();
-        TENZIR_DEBUG("{} terminates next actor {}", *self, next);
-        self->monitor(next);
-        self->send_exit(next, caf::exit_reason::user_shutdown);
-        return;
-      }
-    } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
-      // nothing to do, all EXIT messages are in flight.
-      TENZIR_DEBUG("{} has {} actors remaining", *self, remaining.size());
-    } else {
-      static_assert(detail::always_false_v<Policy>, "unsupported policy");
-    }
-    if (remaining.empty()) {
-      TENZIR_DEBUG("{} terminated all actors", *self);
-      self->state().promise.deliver(atom::done_v);
-      self->quit(caf::exit_reason::user_shutdown);
-    }
-  });
   return {
     [self](atom::shutdown, const std::vector<caf::actor>& xs) {
       TENZIR_DEBUG("{} got request to terminate {} actors", *self, xs.size());
@@ -57,17 +65,20 @@ terminator(terminator_actor::stateful_pointer<terminator_state> self) {
       self->state().promise = self->make_response_promise<atom::done>();
       auto& remaining = self->state().remaining_actors;
       remaining.reserve(xs.size());
-      for (auto i = xs.rbegin(); i != xs.rend(); ++i)
-        if (!*i)
+      for (auto i = xs.rbegin(); i != xs.rend(); ++i) {
+        if (!*i) {
           TENZIR_DEBUG("{} skips termination of already exited actor at "
                        "position "
                        "{}",
                        *self, std::distance(xs.begin(), i.base()));
-        else
+        } else {
           remaining.push_back(*i);
-      if (remaining.size() < xs.size())
+        }
+      }
+      if (remaining.size() < xs.size()) {
         TENZIR_DEBUG("{} only needs to terminate {} actors", *self,
                      remaining.size());
+      }
       // Terminate early if there's nothing to do.
       if (remaining.empty()) {
         TENZIR_DEBUG("{} quits prematurely because all actors have "
@@ -87,14 +98,21 @@ terminator(terminator_actor::stateful_pointer<terminator_state> self) {
         // terminated actor, CAF dispatches the DOWN immediately.)
         auto& next = remaining.back();
         TENZIR_DEBUG("{} sends exit to {}", *self, next->id());
-        self->monitor(next);
+        self->monitor(next,
+                      [self, source = next->address()](const caf::error& err) {
+                        handle_down_msg<Policy>(self, source, err);
+                      });
         self->send_exit(next, caf::exit_reason::user_shutdown);
       } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
         // Terminate all actors.
         for (auto& x : xs) {
-          if (!x)
+          if (!x) {
             continue;
-          self->monitor(x);
+          }
+          self->monitor(x,
+                        [self, source = x->address()](const caf::error& err) {
+                          handle_down_msg<Policy>(self, source, err);
+                        });
           self->send_exit(x, caf::exit_reason::user_shutdown);
         }
       } else {

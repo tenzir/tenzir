@@ -120,8 +120,9 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
 }
 
 bool is_recoverable_error(const caf::error& err) {
-  if (err.category() != caf::type_id_v<caf::sec>)
+  if (err.category() != caf::type_id_v<caf::sec>) {
     return true;
+  }
   const auto err_code = std::underlying_type_t<caf::sec>{err.code()};
   auto err_enum = caf::sec{caf::sec::none};
   if (!caf::from_integer(err_code, err_enum)) {
@@ -135,11 +136,13 @@ bool is_recoverable_error(const caf::error& err) {
 
 std::optional<caf::timespan> calculate_remaining_time(
   const std::optional<std::chrono::steady_clock::time_point>& deadline) {
-  if (!deadline)
+  if (!deadline) {
     return caf::infinite;
+  }
   const auto now = std::chrono::steady_clock::now();
-  if (now >= *deadline)
+  if (now >= *deadline) {
     return std::nullopt;
+  }
   return *deadline - now;
 }
 
@@ -150,8 +153,9 @@ bool should_retry(const caf::error& err,
 }
 
 std::string format_time(caf::timespan timespan) {
-  if (caf::is_infinite(timespan))
+  if (caf::is_infinite(timespan)) {
     return "infinite";
+  }
   return fmt::to_string(data{timespan});
 }
 
@@ -172,15 +176,15 @@ connector_actor::behavior_type make_no_retry_behavior(
     [self, deadline](atom::connect,
                      connect_request request) -> caf::result<node_actor> {
       const auto remaining_time = calculate_remaining_time(deadline);
-      if (!remaining_time)
+      if (!remaining_time) {
         return caf::make_error(ec::timeout,
                                fmt::format("{} couldn't connect to node"
                                            "within a given deadline",
                                            *self));
+      }
       auto rp = self->make_response_promise<node_actor>();
-      self
-        ->request(self->state().middleman, *remaining_time, caf::connect_atom_v,
-                  request.host, request.port)
+      self->mail(caf::connect_atom_v, request.host, request.port)
+        .request(self->state().middleman, *remaining_time)
         .then(
           [rp, request](const caf::node_id&, caf::strong_actor_ptr& node,
                         const std::set<std::string>&) mutable {
@@ -208,40 +212,41 @@ connector(connector_actor::stateful_pointer<connector_state> self,
   self->state().middleman = self->system().has_openssl_manager()
                               ? self->system().openssl_manager().actor_handle()
                               : self->system().middleman().actor_handle();
-  if (!retry_delay)
+  if (!retry_delay) {
     return make_no_retry_behavior(std::move(self), deadline);
+  }
   return {
     [self, delay = *retry_delay, deadline](
       atom::connect, connect_request request) -> caf::result<node_actor> {
       const auto remaining_time = calculate_remaining_time(deadline);
-      if (!remaining_time)
+      if (!remaining_time) {
         return caf::make_error(ec::timeout,
                                fmt::format("{} couldn't connect to node "
                                            "within a given deadline",
                                            *self));
+      }
       TENZIR_INFO("client connects to {}:{}{}", request.host, request.port,
                   formatted_resolved_host_suffix(request.host));
       auto rp = self->make_response_promise<node_actor>();
-      auto handle_error
-        = [self, rp, request, delay, deadline](const caf::error& err) mutable {
-            const auto remaining_time = calculate_remaining_time(deadline);
-            if (should_retry(err, remaining_time, delay)) {
-              log_connection_failed(request, err, *remaining_time, delay);
-              detail::weak_run_delayed(
-                self, delay, [self, rp, request]() mutable {
-                  rp.delegate(static_cast<connector_actor>(self),
-                              atom::connect_v, std::move(request));
-                });
-            } else
-              rp.deliver(caf::make_error(
-                ec::system_error,
-                fmt::format("failed to connect to node at {}:{}: {}",
-                            request.host, request.port, std::move(err))));
-          };
+      auto handle_error = [self, rp, request, delay,
+                           deadline](const caf::error& err) mutable {
+        const auto remaining_time = calculate_remaining_time(deadline);
+        if (should_retry(err, remaining_time, delay)) {
+          log_connection_failed(request, err, *remaining_time, delay);
+          detail::weak_run_delayed(self, delay, [self, rp, request]() mutable {
+            rp.delegate(static_cast<connector_actor>(self), atom::connect_v,
+                        std::move(request));
+          });
+        } else {
+          rp.deliver(caf::make_error(
+            ec::system_error,
+            fmt::format("failed to connect to node at {}:{}: {}", request.host,
+                        request.port, std::move(err))));
+        }
+      };
 
-      self
-        ->request(self->state().middleman, *remaining_time, caf::connect_atom_v,
-                  request.host, request.port)
+      self->mail(caf::connect_atom_v, request.host, request.port)
+        .request(self->state().middleman, *remaining_time)
         .then(
           [rp, request, handle_error](const caf::node_id&,
                                       caf::strong_actor_ptr& node,

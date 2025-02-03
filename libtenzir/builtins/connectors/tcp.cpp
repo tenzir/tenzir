@@ -19,6 +19,7 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/version.hpp>
+#include <caf/anon_mail.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
@@ -202,40 +203,38 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
           self->state().metrics.handle
             = fmt::to_string(self->state().socket->native_handle());
           if (auto hdl = weak_hdl.lock()) {
-            caf::anon_send(
-              caf::actor_cast<caf::actor>(hdl),
-              caf::make_action([self, ec, endpoint
+            caf::anon_mail(caf::make_action([self, ec, endpoint
 #if TENZIR_MACOS
-                                ,
-                                fcntl_error
+                                             ,
+                                             fcntl_error
 #endif
             ]() mutable {
+              if (ec) {
+                return self->state().connection_rp.deliver(caf::make_error(
+                  ec::system_error,
+                  fmt::format("connection failed: {}", ec.message())));
+              }
+#if TENZIR_MACOS
+              if (fcntl_error) {
+                return self->state().connection_rp.deliver(*fcntl_error);
+              }
+#endif
+              if (self->state().tls_socket) {
+                self->state().tls_socket->handshake(
+                  boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::client,
+                  ec);
                 if (ec) {
                   return self->state().connection_rp.deliver(caf::make_error(
                     ec::system_error,
-                    fmt::format("connection failed: {}", ec.message())));
+                    fmt::format("TLS client handshake failed: {}",
+                                ERR_get_error())));
                 }
-#if TENZIR_MACOS
-                if (fcntl_error) {
-                  return self->state().connection_rp.deliver(*fcntl_error);
-                }
-#endif
-                if (self->state().tls_socket) {
-                  self->state().tls_socket->handshake(
-                    boost::asio::ssl::stream<
-                      boost::asio::ip::tcp::socket>::client,
-                    ec);
-                  if (ec) {
-                    return self->state().connection_rp.deliver(caf::make_error(
-                      ec::system_error,
-                      fmt::format("TLS client handshake failed: {}",
-                                  ERR_get_error())));
-                  }
-                }
-                TENZIR_VERBOSE("tcp connector connected to {}",
-                               endpoint.address().to_string());
-                return self->state().connection_rp.deliver();
-              }));
+              }
+              TENZIR_VERBOSE("tcp connector connected to {}",
+                             endpoint.address().to_string());
+              return self->state().connection_rp.deliver();
+            }))
+              .send(caf::actor_cast<caf::actor>(hdl));
           }
         });
       return self->state().connection_rp;
@@ -299,42 +298,41 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                             .to_error();
           }
           if (auto hdl = weak_hdl.lock()) {
-            caf::anon_send(
-              caf::actor_cast<caf::actor>(hdl),
-              caf::make_action(
-                [self, certfile, keyfile, ec, peer = std::move(peer),
-                 fcntl_error = std::move(fcntl_error)]() mutable {
-                  if (ec) {
-                    return self->state().connection_rp.deliver(caf::make_error(
-                      ec::system_error,
-                      fmt::format("failed to accept: {}", ec.message())));
-                  }
-                  if (fcntl_error) {
-                    return self->state().connection_rp.deliver(*fcntl_error);
-                  }
-                  self->state().socket.emplace(std::move(peer));
-                  if (!certfile.empty()) {
-                    self->state().ssl_ctx.emplace(
-                      boost::asio::ssl::context::tls_server);
-                    self->state().ssl_ctx->use_certificate_chain_file(certfile);
-                    self->state().ssl_ctx->use_private_key_file(
-                      keyfile, boost::asio::ssl::context::pem);
-                    self->state().ssl_ctx->set_verify_mode(
-                      boost::asio::ssl::verify_none);
-                    self->state().tls_socket.emplace(*self->state().socket,
-                                                     *self->state().ssl_ctx);
-                    auto server_context = boost::asio::ssl::stream<
-                      boost::asio::ip::tcp::socket>::server;
-                    self->state().tls_socket->handshake(server_context, ec);
-                    if (ec) {
-                      return self->state().connection_rp.deliver(
-                        caf::make_error(ec::system_error,
-                                        fmt::format("TLS handshake failed: {}",
-                                                    ec.message())));
-                    }
-                  }
-                  return self->state().connection_rp.deliver();
-                }));
+            caf::anon_mail(caf::make_action([self, certfile, keyfile, ec,
+                                             peer = std::move(peer),
+                                             fcntl_error = std::move(
+                                               fcntl_error)]() mutable {
+              if (ec) {
+                return self->state().connection_rp.deliver(caf::make_error(
+                  ec::system_error,
+                  fmt::format("failed to accept: {}", ec.message())));
+              }
+              if (fcntl_error) {
+                return self->state().connection_rp.deliver(*fcntl_error);
+              }
+              self->state().socket.emplace(std::move(peer));
+              if (!certfile.empty()) {
+                self->state().ssl_ctx.emplace(
+                  boost::asio::ssl::context::tls_server);
+                self->state().ssl_ctx->use_certificate_chain_file(certfile);
+                self->state().ssl_ctx->use_private_key_file(
+                  keyfile, boost::asio::ssl::context::pem);
+                self->state().ssl_ctx->set_verify_mode(
+                  boost::asio::ssl::verify_none);
+                self->state().tls_socket.emplace(*self->state().socket,
+                                                 *self->state().ssl_ctx);
+                auto server_context = boost::asio::ssl::stream<
+                  boost::asio::ip::tcp::socket>::server;
+                self->state().tls_socket->handshake(server_context, ec);
+                if (ec) {
+                  return self->state().connection_rp.deliver(caf::make_error(
+                    ec::system_error,
+                    fmt::format("TLS handshake failed: {}", ec.message())));
+                }
+              }
+              return self->state().connection_rp.deliver();
+            }))
+              .send(caf::actor_cast<caf::actor>(hdl));
           }
         });
       return self->state().connection_rp;
@@ -360,23 +358,22 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
             if (auto hdl = weak_hdl.lock()) {
               // TODO: Potential optimization: We could at this point already
               // eagerly start the next read.
-              caf::anon_send(
-                caf::actor_cast<caf::actor>(hdl),
-                caf::make_action([self, ec, length] {
-                  if (ec) {
-                    return self->state().read_rp.deliver(caf::make_error(
-                      ec::system_error, fmt::format("failed to read "
-                                                    "from TCP socket: "
-                                                    "{}",
-                                                    ec.message())));
-                  }
-                  self->state().metrics.reads++;
-                  self->state().metrics.bytes_read += length;
-                  self->state().read_buffer.resize(length);
-                  self->state().read_buffer.shrink_to_fit();
-                  return self->state().read_rp.deliver(
-                    chunk::make(std::exchange(self->state().read_buffer, {})));
-                }));
+              caf::anon_mail(caf::make_action([self, ec, length] {
+                if (ec) {
+                  return self->state().read_rp.deliver(caf::make_error(
+                    ec::system_error, fmt::format("failed to read "
+                                                  "from TCP socket: "
+                                                  "{}",
+                                                  ec.message())));
+                }
+                self->state().metrics.reads++;
+                self->state().metrics.bytes_read += length;
+                self->state().read_buffer.resize(length);
+                self->state().read_buffer.shrink_to_fit();
+                return self->state().read_rp.deliver(
+                  chunk::make(std::exchange(self->state().read_buffer, {})));
+              }))
+                .send(caf::actor_cast<caf::actor>(hdl));
             }
           };
       auto asio_buffer
@@ -406,27 +403,27 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                        weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
                         boost::system::error_code ec, size_t length) {
         if (auto hdl = weak_hdl.lock()) {
-          caf::anon_send(caf::actor_cast<caf::actor>(hdl),
-                         caf::make_action([self, chunk, ec, length] {
-                           if (ec) {
-                             self->state().write_rp.deliver(caf::make_error(
-                               ec::system_error,
-                               fmt::format("failed to write to TCP socket: {}",
-                                           ec.message())));
-                             return;
-                           }
-                           self->state().metrics.writes++;
-                           self->state().metrics.bytes_written += length;
-                           if (length < chunk->size()) {
-                             auto remainder = chunk->slice(length);
-                             self->state().write_rp.delegate(
-                               static_cast<tcp_bridge_actor>(self),
-                               atom::write_v, std::move(remainder));
-                             return;
-                           }
-                           TENZIR_ASSERT(length == chunk->size());
-                           self->state().write_rp.deliver();
-                         }));
+          caf::anon_mail(caf::make_action([self, chunk, ec, length] {
+            if (ec) {
+              self->state().write_rp.deliver(
+                caf::make_error(ec::system_error,
+                                fmt::format("failed to write to TCP socket: {}",
+                                            ec.message())));
+              return;
+            }
+            self->state().metrics.writes++;
+            self->state().metrics.bytes_written += length;
+            if (length < chunk->size()) {
+              auto remainder = chunk->slice(length);
+              self->state().write_rp.delegate(
+                static_cast<tcp_bridge_actor>(self), atom::write_v,
+                std::move(remainder));
+              return;
+            }
+            TENZIR_ASSERT(length == chunk->size());
+            self->state().write_rp.deliver();
+          }))
+            .send(caf::actor_cast<caf::actor>(hdl));
         }
       };
       auto asio_buffer = boost::asio::buffer(chunk->data(), chunk->size());
@@ -533,8 +530,8 @@ public:
       do {
         if (args.connect) {
           ctrl.self()
-            .request(tcp_bridge, caf::infinite, atom::connect_v, args.tls,
-                     false, args.hostname, args.port)
+            .mail(atom::connect_v, args.tls, false, args.hostname, args.port)
+            .request(tcp_bridge, caf::infinite)
             .await(
               [&]() {
                 // nop
@@ -545,9 +542,10 @@ public:
               });
         } else {
           ctrl.self()
-            .request(tcp_bridge, caf::infinite, atom::accept_v, args.hostname,
-                     args.port, args.tls_certfile.value_or(std::string{}),
-                     args.tls_keyfile.value_or(std::string{}))
+            .mail(atom::accept_v, args.hostname, args.port,
+                  args.tls_certfile.value_or(std::string{}),
+                  args.tls_keyfile.value_or(std::string{}))
+            .request(tcp_bridge, caf::infinite)
             .await(
               [&]() {
                 // nop
@@ -564,7 +562,8 @@ public:
         while (running) {
           constexpr auto buffer_size = uint64_t{65'536};
           ctrl.self()
-            .request(tcp_bridge, caf::infinite, atom::read_v, buffer_size)
+            .mail(atom::read_v, buffer_size)
+            .request(tcp_bridge, caf::infinite)
             .await(
               [&](chunk_ptr& chunk) {
                 result = std::move(chunk);
@@ -648,8 +647,9 @@ public:
 
     if (not args_.listen) {
       ctrl.self()
-        .request(tcp_bridge, caf::infinite, atom::connect_v, args_.tls,
-                 args_.skip_peer_verification, args_.hostname, args_.port)
+        .mail(atom::connect_v, args_.tls, args_.skip_peer_verification,
+              args_.hostname, args_.port)
+        .request(tcp_bridge, caf::infinite)
         .await(
           [&]() {
             // nop
@@ -660,9 +660,10 @@ public:
           });
     } else {
       ctrl.self()
-        .request(tcp_bridge, caf::infinite, atom::accept_v, args_.hostname,
-                 args_.port, args_.tls_certfile.value_or(std::string{}),
-                 args_.tls_keyfile.value_or(std::string{}))
+        .mail(atom::accept_v, args_.hostname, args_.port,
+              args_.tls_certfile.value_or(std::string{}),
+              args_.tls_keyfile.value_or(std::string{}))
+        .request(tcp_bridge, caf::infinite)
         .await(
           [&]() {
             // nop
@@ -677,7 +678,8 @@ public:
         return;
       }
       ctrl.self()
-        .request(tcp_bridge, caf::infinite, atom::write_v, std::move(chunk))
+        .mail(atom::write_v, std::move(chunk))
+        .request(tcp_bridge, caf::infinite)
         .await(
           [&]() {
             // nop

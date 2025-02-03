@@ -156,4 +156,10 @@ auto resolve_entities(ast::expression& expr, session ctx) -> failure_or<void> {
   return resolver.get_failure();
 }
 
+auto resolve_entities(ast::function_call& fc, session ctx) -> failure_or<void> {
+  auto resolver = entity_resolver{ctx};
+  resolver.visit(fc);
+  return resolver.get_failure();
+}
+
 } // namespace tenzir
