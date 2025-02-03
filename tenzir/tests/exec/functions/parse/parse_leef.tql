@@ -1,0 +1,3 @@
+from { x: "LEEF:1.0|Vendor|Product|Version|EventID|key=value" },
+  { x: "failure" }
+y = x.parse_leef()

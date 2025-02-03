@@ -1,0 +1,18 @@
+{
+  input: "1,2,3",
+  output: {
+    a: 1,
+    b: 2,
+    c: 3,
+  },
+}
+{
+  input: "failure",
+  output: {
+    a: "failure",
+    b: null,
+    c: null,
+  },
+}
+warning: xsv parser found too few values in a line
+ = note: line 0 has 1 values, but should have 3 values

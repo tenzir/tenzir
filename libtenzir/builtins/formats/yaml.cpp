@@ -38,7 +38,7 @@ namespace {
 constexpr auto document_end_marker = "...";
 constexpr auto document_start_marker = "---";
 
-auto parse_node(auto guard, const YAML::Node& node,
+auto parse_node(auto&& guard, const YAML::Node& node,
                 diagnostic_handler& diag) -> void {
   switch (node.Type()) {
     case YAML::NodeType::Undefined: {
@@ -77,20 +77,19 @@ auto parse_node(auto guard, const YAML::Node& node,
 };
 
 auto load_document(multi_series_builder& msb, const std::string& document,
-                   diagnostic_handler& diag) -> void {
+                   bool must_be_map, diagnostic_handler& diag) -> void {
   bool added_event = false;
   try {
     auto node = YAML::Load(document);
-    if (not node.IsMap()) {
+    if (not node.IsDefined()) {
+      diagnostic::warning("document is not valid").emit(diag);
+      return;
+    }
+    if (must_be_map and not node.IsMap()) {
       diagnostic::warning("document is not a map").emit(diag);
       return;
     }
-    auto record = msb.record();
-    added_event = true;
-    for (const auto& element : node) {
-      const auto& name = element.first.as<std::string>();
-      parse_node(record.unflattened_field(name), element.second, diag);
-    }
+    return parse_node(msb, node, diag);
   } catch (const YAML::Exception& err) {
     diagnostic::warning("failed to load YAML document: {}", err.what())
       .emit(diag);
@@ -129,13 +128,13 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       if (document.empty()) {
         continue;
       }
-      load_document(msb, document, diag);
+      load_document(msb, document, true, diag);
       document.clear();
       continue;
     }
     if (*line == document_start_marker) {
       if (not document.empty()) {
-        load_document(msb, document, diag);
+        load_document(msb, document, true, diag);
         document.clear();
       }
       continue;
@@ -143,7 +142,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     fmt::format_to(std::back_inserter(document), "{}\n", *line);
   }
   if (not document.empty()) {
-    load_document(msb, document, diag);
+    load_document(msb, document, true, diag);
     document.clear();
   }
   for (auto& slice : msb.finalize_as_table_slice()) {
@@ -377,7 +376,7 @@ public:
                   builder.null();
                   continue;
                 }
-                load_document(builder, arg.GetString(i), ctx);
+                load_document(builder, arg.GetString(i), false, ctx);
               }
               return multi_series{builder.finalize()};
             },

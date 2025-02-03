@@ -22,7 +22,7 @@ The string to parse.
 ## Examples
 
 ```tql
-from { x = "LEEF:1.0|Vendor|Product|Version|EventID|key=value" }
+from { x: "LEEF:1.0|Vendor|Product|Version|EventID|key=value" }
 y = x.parse_leef()
 ```
 ```tql

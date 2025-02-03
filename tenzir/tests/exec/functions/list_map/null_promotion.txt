@@ -8,7 +8,7 @@
   ],
 }
 warning: grok parser: pattern could not be matched
- --> exec/list_map/null_promotion.tql:4:32
+ --> exec/functions/list_map/null_promotion.tql:4:32
   |
 4 | l = l.map( str, str.parse_grok($pattern) )
   |                                ~~~~~~~~ 

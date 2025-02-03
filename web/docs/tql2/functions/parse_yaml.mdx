@@ -2,16 +2,16 @@ import CommonOptions from './_common_parsing_options.mdx';
 
 # parse_yaml
 
-Parses a string as a YAML.
+Parses a string as a YAML value.
 
 ```tql
 parse_yaml(input:string, [schema=string, selector=string, schema_only=bool,
-           raw=bool, unflatten=string]) -> record
+           raw=bool, unflatten=string]) -> any
 ```
 
 ## Description
 
-The `parse_yaml` function parses a string as a YAML.
+The `parse_yaml` function parses a string as a YAML value.
 
 ### `input: string`
 
@@ -21,7 +21,7 @@ The string to parse.
 
 ## Examples
 
-### Parse a YAML map
+### Parse a YAML map containing a list
 
 ```tql
 from { x: r#"yarp:

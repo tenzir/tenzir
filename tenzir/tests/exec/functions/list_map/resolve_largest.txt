@@ -21,9 +21,10 @@
     },
   ],
 }
-warning: map expression evaluated to incompatible types
-  --> exec/list_map/resolve_largest.tql:10:17
+warning: `expr` must evaluate to compatible types within the same list
+  --> exec/functions/list_map/resolve_largest.tql:10:17
    |
 10 | l = l.map( str, str.parse_json() )
    |                 ~~~~~~~~~~~~~~~~ `list`, `record` are incompatible
    |
+   = note: all entries that are not compatible with `record` will be `null`

@@ -113,7 +113,7 @@ public:
   };
 
   struct to_series_result {
-    enum class status_t {
+    enum class status {
       // join succeeded
       ok,
       // join succeeded, but nulled out some values
@@ -122,7 +122,7 @@ public:
       fail,
     };
     tenzir::series series;
-    status_t status;
+    enum status status;
     std::vector<type> conflicting_types{};
   };
 

@@ -1,0 +1,4 @@
+let $pattern_definitions = { MY_WORD: ".*" }
+let $pattern = "%{IP:client} %{MY_WORD} %{URIPATHPARAM:req} %{NUMBER:bytes} %{NUMBER:dur}"
+from { input: "55.3.244.1 GET /index.html 15824 0.043" }, { input: "this will be null"}
+output = input.parse_grok($pattern, pattern_definitions=$pattern_definitions)

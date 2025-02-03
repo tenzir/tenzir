@@ -114,12 +114,12 @@ auto map_series(multi_series x, multi_series y,
 auto multi_series::to_series(multi_series::to_series_strategy strategy) const
   -> to_series_result {
   if (length() == 0) {
-    return {{}, to_series_result::status_t::ok};
+    return {{}, to_series_result::status::ok};
   }
   if (length() == 1) {
     return {
       parts_.front(),
-      to_series_result::status_t::ok,
+      to_series_result::status::ok,
     };
   }
   auto selected_group_index = size_t{0};
@@ -153,7 +153,7 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy) const
         group.size += part.length();
         break;
       } else if (strategy == to_series_strategy::fail) {
-        return {{}, to_series_result::status_t::fail, {group.type, part.type}};
+        return {{}, to_series_result::status::fail, {group.type, part.type}};
       }
     }
     // If we are going to take the first type anyways, there is no need to
@@ -189,7 +189,7 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy) const
     }
     for (auto event : part.values()) {
       if (not b.try_data(event)) {
-        return {{}, to_series_result::status_t::fail};
+        return {{}, to_series_result::status::fail};
       }
     }
   }
@@ -200,13 +200,13 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy) const
     }
     return {
       b.finish_assert_one_array(),
-      to_series_result::status_t::conflict,
+      to_series_result::status::conflict,
       std::move(conflicting_types),
     };
   }
   return {
     b.finish_assert_one_array(),
-    to_series_result::status_t::ok,
+    to_series_result::status::ok,
   };
 }
 

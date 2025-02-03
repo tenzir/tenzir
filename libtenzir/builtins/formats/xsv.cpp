@@ -1035,6 +1035,7 @@ class parse_xsv : public function_plugin {
                      session ctx) const -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto parser = argument_parser2::function(name());
+    parser.positional("input", input, "string");
     auto opt_parser = xsv_common_parser_options_parser{name()};
     opt_parser.add_to_parser(parser, false, true);
     TRY(parser.parse(inv, ctx));

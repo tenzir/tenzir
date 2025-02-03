@@ -1,0 +1,18 @@
+{
+  x: "LEEF:1.0|Vendor|Product|Version|EventID|key=value",
+  y: {
+    leef_version: "1.0",
+    vendor: "Vendor",
+    product_name: "Product",
+    product_version: "Version",
+    attributes: {
+      key: "value",
+    },
+  },
+}
+{
+  x: "failure",
+  y: null,
+}
+warning: invalid LEEF event
+ = hint: LEEF events start with LEEF:$VERSION|...

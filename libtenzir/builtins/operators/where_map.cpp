@@ -38,8 +38,6 @@
 #include <arrow/util/bitmap_writer.h>
 #include <caf/expected.hpp>
 
-#define TENZIR_LIST_MAP_DEBUG 0
-
 namespace tenzir::plugins::where {
 
 namespace {
@@ -342,6 +340,68 @@ auto make_where_function(function_plugin::invocation inv,
   });
 }
 
+struct where_result_part {
+  struct part_slice_info {
+    size_t part{};
+    size_t slice_start{};
+    size_t slice_end{};
+
+    auto size() const -> size_t {
+      return slice_end - slice_start;
+    }
+  };
+  std::vector<part_slice_info> slices{};
+  arrow::Int32Builder offset_builder{};
+  arrow::TypedBufferBuilder<bool> null_builder{};
+  int64_t null_count = 0;
+  int64_t event_count = 0;
+
+  auto physical_size() const -> size_t {
+    if (slices.empty()) {
+      return 0;
+    }
+    TENZIR_ASSERT(slices.size() == 1);
+    return slices.front().size();
+  }
+
+  auto add_null() -> void {
+    ++event_count;
+    ++null_count;
+    check(null_builder.Append(false));
+    if (offset_builder.length() == 0) {
+      check(offset_builder.Append(0));
+    }
+    check(offset_builder.Append(
+      offset_builder.GetValue(offset_builder.length() - 1)));
+  }
+
+  auto add_empty() -> void {
+    ++event_count;
+    check(null_builder.Append(true));
+    if (offset_builder.length() == 0) {
+      check(offset_builder.Append(0));
+    }
+    check(offset_builder.Append(
+      offset_builder.GetValue(offset_builder.length() - 1)));
+  }
+
+  auto add_list(size_t current_part_index, int64_t n) -> void {
+    ++event_count;
+    check(null_builder.Append(true));
+    if (offset_builder.length() == 0) {
+      check(offset_builder.Append(0));
+    }
+    check(offset_builder.Append(
+      offset_builder.GetValue(offset_builder.length() - 1) + n));
+    if (slices.empty()) {
+      slices.emplace_back(current_part_index, 0, n);
+      return;
+    }
+    TENZIR_ASSERT(current_part_index == slices.back().part);
+    slices.back().slice_end += n;
+  }
+};
+
 auto make_map_function(function_plugin::invocation inv,
                        session ctx) -> failure_or<function_ptr> {
   auto args = arguments{};
@@ -385,13 +445,10 @@ auto make_map_function(function_plugin::invocation inv,
       slice = assign(args.capture, list_values, slice, ctx);
       auto ms = tenzir::eval(args.expr, slice, ctx);
       TENZIR_ASSERT(not ms.parts().empty());
-      /// If there were no conflicts in the result, we are in the happy case
-      /// Here we just need to take that slice and re-join it with the offsets
-      /// from the input.
+      // If there were no conflicts in the result, we are in the happy case
+      // Here we just need to take that slice and re-join it with the offsets
+      // from the input.
       const auto n_parts = ms.parts().size();
-#if TENZIR_LIST_MAP_DEBUG == 1
-      TENZIR_WARN("field_list: {}", field_list->array->ToString());
-#endif
       if (n_parts == 1) {
         auto& values = ms.parts().front();
         return series{
@@ -403,96 +460,30 @@ auto make_map_function(function_plugin::invocation inv,
             field_list->array->offset()),
         };
       }
-#if TENZIR_LIST_MAP_DEBUG == 1
-      for (auto& e : ms.parts()) {
-        TENZIR_WARN("ms part: {}", e.array->ToString());
-      }
-#endif
-      /// If there is more than one part, we need to rebuild batches by merging
-      /// the parts that should be part of the same event/list and splitting
-      /// others.
-      ///
-      /// The strategy is:
-      /// * Iterate all events of the input
-      ///    * collect the largest possible slices of `ms` and the offsets we
-      ///      would have in those slices
-      ///    * Conflicts within a list are detected by keeping track of a
-      ///      `running_ms_offset` and comparing that against the current
-      ///      `field_offset`.
-      ///    * If there is a conflict, we collect slices of multiple parts
-      ///    * Those slices get merged in the end
-      /// Every part of the result is made up of one or more slices that need
-      /// to be merged and an offset builder
-      /// TODO:
-      /// * In the spirit of creating the largest possible batches, the
-      ///   implementation causes null lists and empty lists to be changed to
-      ///   the type of the next/previous non-empty list. That is not entirely
-      ///   correct, but seems like an acceptable tradeoff.
-      /// * we could do the slicing early instead of storing indices to slice by
-      /// * strictly speaking the entire `result_assembly_info` isn't necessary,
-      ///   but it greatly reduces confusion.
-      struct result_part {
-        struct part_slice_info {
-          size_t part{};
-          size_t slice_start{};
-          size_t slice_end{};
-
-          auto size() const -> size_t {
-            return slice_end - slice_start;
-          }
-        };
-        std::vector<part_slice_info> slices{};
-        arrow::Int32Builder offset_builder{};
-        arrow::TypedBufferBuilder<bool> null_builder{};
-        int64_t null_count = 0;
-        int64_t event_count = 0;
-
-        auto physical_size() const -> size_t {
-          if (slices.empty()) {
-            return 0;
-          }
-          TENZIR_ASSERT(slices.size() == 1);
-          return slices.front().size();
-        }
-
-        auto add_null() -> void {
-          ++event_count;
-          ++null_count;
-          check(null_builder.Append(false));
-          if (offset_builder.length() == 0) {
-            check(offset_builder.Append(0));
-          }
-          check(offset_builder.Append(
-            offset_builder.GetValue(offset_builder.length() - 1)));
-        }
-
-        auto add_empty() -> void {
-          ++event_count;
-          check(null_builder.Append(true));
-          if (offset_builder.length() == 0) {
-            check(offset_builder.Append(0));
-          }
-          check(offset_builder.Append(
-            offset_builder.GetValue(offset_builder.length() - 1)));
-        }
-
-        auto add_list(size_t current_part_index, int64_t n) -> void {
-          ++event_count;
-          check(null_builder.Append(true));
-          if (offset_builder.length() == 0) {
-            check(offset_builder.Append(0));
-          }
-          check(offset_builder.Append(
-            offset_builder.GetValue(offset_builder.length() - 1) + n));
-          if (slices.empty()) {
-            slices.emplace_back(current_part_index, 0, n);
-            return;
-          }
-          TENZIR_ASSERT(current_part_index == slices.back().part);
-          slices.back().slice_end += n;
-        }
-      };
-      auto result_assembly_info = std::vector<result_part>{};
+      // If there is more than one part, we need to rebuild batches by merging
+      // the parts that should be part of the same event/list and splitting
+      // others.
+      //
+      // The strategy is:
+      // * Iterate all events of the input
+      //    * collect the largest possible slices of `ms` and the offsets we
+      //      would have in those slices
+      //    * Conflicts within a list are detected by keeping track of a
+      //      `running_ms_offset` and comparing that against the current
+      //      `field_offset`.
+      //    * If there is a conflict, we collect slices of multiple parts
+      //    * Those slices get merged in the end
+      // Every part of the result is made up of one or more slices that need
+      // to be merged and an offset builder
+      // TODO:
+      // * In the spirit of creating the largest possible batches, the
+      //   implementation causes null lists and empty lists to be changed to
+      //   the type of the next/previous non-empty list. That is not entirely
+      //   correct, but seems like an acceptable tradeoff.
+      // * we could do the slicing early instead of storing indices to slice by
+      // * strictly speaking the entire `result_assembly_info` isn't necessary,
+      //   but it greatly reduces confusion.
+      auto result_assembly_info = std::vector<where_result_part>{};
       result_assembly_info.reserve(3);
       // Putting this starting info in early, allows us to safely use `back()`
       result_assembly_info.emplace_back();
@@ -620,54 +611,32 @@ auto make_map_function(function_plugin::invocation inv,
         TENZIR_ASSERT(p.null_builder.length() > 0);
         TENZIR_ASSERT(p.offset_builder.length() != 1);
         to_merge.clear();
-#if TENZIR_LIST_MAP_DEBUG == 1
-        TENZIR_WARN("==== PART: {} ====", i);
-        TENZIR_WARN("events: {}; nulls: {}; bitmap_length: {}; "
-                    "offsets.length: {}",
-                    p.event_count, p.null_count, p.null_builder.length(),
-                    p.offset_builder.length());
-#endif
         for (auto& [idx, start, end] : p.slices) {
-#if TENZIR_LIST_MAP_DEBUG == 1
-          TENZIR_WARN("\t\tslice {} {} {}", idx, start, end);
-#endif
           to_merge.append(ms.part(idx).slice(start, end));
         }
         auto [merged_series, merge_status, conflicts] = to_merge.to_series(
           multi_series::to_series_strategy::take_largest_null_rest);
         TENZIR_ASSERT(merge_status
-                      != multi_series::to_series_result::status_t::fail);
+                      != multi_series::to_series_result::status::fail);
         auto offsets = check(p.offset_builder.Finish());
         auto validity = check(p.null_builder.FinishWithLength(p.event_count));
-#if TENZIR_LIST_MAP_DEBUG == 1
-        auto validity_print = std::string{};
-        for (auto i = int64_t{}; i < validity->size(); ++i) {
-          auto byte = validity->data()[i];
-          for (auto j = 0; j < 8; ++j) {
-            validity_print += (byte >> j) ? '1' : '0';
-          }
-        }
-        TENZIR_WARN(" offsets: {}", offsets->ToString());
-        TENZIR_WARN(" validity: {}", validity_print);
-#endif
         result.emplace_back(list_type{merged_series.type},
                             check(arrow::ListArray::FromArrays(
                               *offsets, *merged_series.array,
                               arrow::default_memory_pool(), std::move(validity),
                               p.null_count)));
-#if TENZIR_LIST_MAP_DEBUG == 1
-        TENZIR_WARN(" result: {} {}", result.back().length(),
-                    result.back().array->ToString());
-#endif
-        if (merge_status != multi_series::to_series_result::status_t::ok) {
-          // TODO: The error message is bad. It's difficult to explain.
+        if (merge_status != multi_series::to_series_result::status::ok) {
           auto kinds = std::set<type_kind>{};
           for (const auto& c : conflicts) {
             kinds.insert(c.kind());
           }
-          diagnostic::warning("map expression evaluated to incompatible types")
+          diagnostic::warning(
+            "`expr` must evaluate to compatible types within the same list")
             .primary(args.expr, "`{}` are incompatible",
                      fmt::join(kinds, "`, `"))
+            .note("all entries that are not compatible with `{}` will be "
+                  "`null`",
+                  merged_series.type.kind())
             .emit(ctx);
         }
       }
@@ -675,7 +644,6 @@ auto make_map_function(function_plugin::invocation inv,
     });
   });
 }
-#undef TENZIR_LIST_MAP_DEBUG
 
 using where_assert_plugin = operator_inspection_plugin<where_assert_operator>;
 
