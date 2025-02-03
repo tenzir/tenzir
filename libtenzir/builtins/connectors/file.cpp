@@ -614,6 +614,28 @@ public:
   }
 };
 
+class load_stdin_plugin final : public operator_plugin2<load_file_operator> {
+public:
+  auto name() const -> std::string override {
+    return "load_stdin";
+  }
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto timeout = std::optional<located<duration>>{};
+    TRY(argument_parser2::operator_(name())
+          .named("timeout", timeout)
+          .parse(inv, ctx));
+    auto args = loader_args{};
+    args.path = located{"-", inv.self.get_location()};
+    if (timeout) {
+      args.timeout = located{
+        std::chrono::duration_cast<std::chrono::milliseconds>(timeout->inner),
+        timeout->source};
+    }
+    return std::make_unique<load_file_operator>(std::move(args));
+  }
+};
+
 class save_file_operator final : public crtp_operator<save_file_operator> {
 public:
   save_file_operator() = default;
@@ -659,8 +681,8 @@ private:
 
 class save_file_plugin final : public operator_plugin2<save_file_operator> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     TRY(argument_parser2::operator_("save_file")
           .positional("path", args.path)
@@ -684,6 +706,21 @@ public:
 
   auto save_properties() const -> save_properties_t override {
     return {.schemes = {"file"}};
+  }
+};
+
+class save_stdout_plugin final : public operator_plugin2<save_file_operator> {
+public:
+  auto name() const -> std::string override {
+    return "save_stdout";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
+    auto args = saver_args{};
+    args.path = located{"-", inv.self.get_location()};
+    return std::make_unique<save_file_operator>(std::move(args));
   }
 };
 
@@ -741,5 +778,7 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::load_file_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::save_file_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::load_stdin_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::save_stdout_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdin_::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdout_::plugin)
