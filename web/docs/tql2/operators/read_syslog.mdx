@@ -25,23 +25,26 @@ Here's an example of a syslog message in RFC 5424 format:
 
 With this input, the parser will produce the following output, with the schema name `syslog.rfc5424`:
 
-```json
+```tql
 {
-  "facility": 20,
-  "severity": 5,
-  "version": 8,
-  "timestamp": "2023-10-11T22:14:15.003000",
-  "hostname": "mymachineexamplecom",
-  "app_name": "evntslog",
-  "process_id": "1370",
-  "message_id": "ID47",
-  "structured_data": {
-    "exampleSDID@32473": {
-      "eventSource": "Application",
-      "eventID": 1011
-    }
+  input: "<165>8 2023-10-11T22:14:15.003Z mymachineexamplecom evntslog 1370 ID47 [exampleSDID@32473 eventSource=\"Application\" eventID=\"1011\"] Event log entry",
+  output: {
+    facility: 20,
+    severity: 5,
+    version: 8,
+    timestamp: 2023-10-11T22:14:15.003Z,
+    hostname: "mymachineexamplecom",
+    app_name: "evntslog",
+    process_id: "1370",
+    message_id: "ID47",
+    structured_data: {
+      "exampleSDID@32473": {
+        eventSource: "Application",
+        eventID: 1011,
+      },
+    },
+    message: "Event log entry",
   },
-  "message": "Event log entry"
 }
 ```
 
@@ -96,3 +99,7 @@ read_syslog
   content: "pam_unix(cron:session): session closed for user root"
 }
 ```
+
+## See Also
+
+[`parse_syslog`](../functions/parse_syslog.mdx)

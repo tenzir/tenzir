@@ -469,9 +469,8 @@ public:
   }
 
   static auto
-  finish_single(row_type& row, multi_series_builder& builder) -> bool {
+  finish_single(message_type& msg, multi_series_builder& builder) -> bool {
     auto r = builder.record();
-    auto& msg = row.parsed;
     r.exact_field("facility").data(msg.hdr.facility);
     r.exact_field("severity").data(msg.hdr.severity);
     r.exact_field("version").data(msg.hdr.version);
@@ -483,6 +482,11 @@ public:
     r.exact_field("structured_data").data(std::move(msg.data));
     r.exact_field("message").data(std::move(msg.msg));
     return true;
+  }
+
+  static auto
+  finish_single(row_type& row, multi_series_builder& builder) -> bool {
+    return finish_single(row.parsed, builder);
   }
   std::vector<row_type> rows_{};
 };
@@ -507,8 +511,7 @@ public:
   }
 
   static auto
-  finish_single(row_type& row, multi_series_builder& builder) -> bool {
-    auto& msg = row.parsed;
+  finish_single(message_type& msg, multi_series_builder& builder) -> bool {
     auto r = builder.record();
     r.exact_field("facility").data(msg.facility);
     r.exact_field("severity").data(msg.severity);
@@ -523,6 +526,11 @@ public:
     //   return false;
     // }
     return true;
+  }
+
+  static auto
+  finish_single(row_type& row, multi_series_builder& builder) -> bool {
+    return finish_single(row.parsed, builder);
   }
 
   std::vector<row_type> rows_{};
@@ -759,8 +767,78 @@ class read_syslog final
   }
 };
 
+class parse_syslog final : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.parse_syslog";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    // TODO: Consider adding a `many` option to expect multiple json values.
+    auto parser = argument_parser2::function(name());
+    parser.positional("input", expr, "string");
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
+    return function_use::make(
+      [call = inv.call.get_location(), msb_opts = std::move(msb_opts),
+       expr = std::move(expr)](evaluator eval, session ctx) {
+        return map_series(eval(expr), [&](series arg) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray&) -> multi_series {
+              return arg;
+            },
+            [&](const arrow::StringArray& arg) -> multi_series {
+              auto msb = multi_series_builder{msb_opts, ctx};
+              auto msg = message{};
+              auto legacy_msg = legacy_message{};
+              for (int64_t i = 0; i < arg.length(); ++i) {
+                if (arg.IsNull(i)) {
+                  msb.null();
+                  continue;
+                }
+                auto v = arg.Value(i);
+                auto f = v.begin();
+                auto l = v.end();
+                if (auto parser = message_parser{}; parser(f, l, msg)) {
+                  // This line is a valid new-RFC (5424) syslog message.
+                  // Store it in the builder
+                  TENZIR_ASSERT(syslog_builder::finish_single(msg, msb));
+                } else if (auto legacy_parser = legacy_message_parser{};
+                           legacy_parser(f, l, legacy_msg)) {
+                  // Same as above, except it's an old-RFC (3164) syslog
+                  TENZIR_ASSERT(
+                    legacy_syslog_builder::finish_single(legacy_msg, msb));
+                } else {
+                  diagnostic::warning("`input` is not valid syslog")
+                    .primary(expr.get_location())
+                    .emit(ctx);
+                  msb.null();
+                }
+              }
+              return multi_series{msb.finalize()};
+            },
+            [&](const auto&) -> multi_series {
+              diagnostic::warning("`parse_syslog` expected `string`, got `{}`",
+                                  arg.type.kind())
+                .primary(call)
+                .emit(ctx);
+              return series::null(null_type{}, arg.length());
+            },
+          };
+          return match(*arg.array, f);
+        });
+      });
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::syslog
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::syslog::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::syslog::read_syslog)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::syslog::parse_syslog)

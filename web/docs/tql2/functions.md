@@ -150,6 +150,7 @@ Function | Description | Example
 [`parse_kv`](functions/parse_kv.mdx) | Parses a string as Key-Value paris | `string.parse_kv()`
 [`parse_leef`](functions/parse_leef.mdx) | Parses a string as a LEEF message | `string.parse_leef()`
 [`parse_ssv`](functions/parse_ssv.mdx) | Parses a string as SSV  | `string.parse_ssv(header=["a","b"])`
+[`parse_syslog`](functions/parse_syslog.mdx) | Parses a string as a Syslog message  | `string.parse_syslog()`
 [`parse_tsv`](functions/parse_tsv.mdx) | Parses a string as TSV  | `string.parse_tsv(header=["a","b"])`
 [`parse_xsv`](functions/parse_xsv.mdx) | Parses a string as XSV | `string.parse_xsv(",", ";", "", header=["a","b"])`
 [`parse_yaml`](functions/parse_yaml.mdx) | Parses a string as YAML | `string.parse_yaml()`
