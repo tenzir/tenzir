@@ -758,8 +758,9 @@ caf::expected<std::string> to_json(const data& x, json_printer_options opts) {
   auto p = json_printer{opts};
   std::string str;
   auto out = std::back_inserter(str);
-  if (p.print(out, x))
+  if (p.print(out, x)) {
     return str;
+  }
   return caf::make_error(ec::parse_error, "cannot convert to json");
 }
 

@@ -471,8 +471,7 @@ public:
       auto string = std::string{};
       auto out = std::back_inserter(string);
       auto success
-        = printer.print(out, value_at(arrays[discriminant].type,
-                                      *arrays[discriminant].array, offset));
+        = printer.print(out, view_at(*arrays[discriminant].array, offset));
       TENZIR_ASSERT(success);
       check(builder.Append(string));
       variant_offsets[discriminant] += 1;

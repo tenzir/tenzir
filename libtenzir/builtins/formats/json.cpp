@@ -866,7 +866,7 @@ public:
         auto buffer = std::vector<char>{};
         auto resolved_slice = resolve_enumerations(slice);
         auto out_iter = std::back_inserter(buffer);
-        auto rows = resolved_slice.values();
+        auto rows = values3(resolved_slice);
         auto row = rows.begin();
         if (not arrays_of_objects) {
           for (; row != rows.end(); ++row) {

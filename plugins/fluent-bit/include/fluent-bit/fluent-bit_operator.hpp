@@ -798,8 +798,7 @@ public:
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto it = std::back_inserter(event);
-      for (const auto& row :
-           values(as<record_type>(resolved_slice.schema()), *array)) {
+      for (const auto& row : values3(*array)) {
         TENZIR_ASSERT(row);
         auto printer = json_printer{{
           .oneline = true,
