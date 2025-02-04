@@ -500,7 +500,7 @@ RUN if [ "$(uname -m)" = "x86_64" ]; then \
       apt-get -y --no-install-recommends install \
         ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
       apt-get update && \
-      apt-get -y --no-install-recommends install libadbc-driver-manager103 libadbc-driver-snowflake103 && \
+      apt-get -y --no-install-recommends install libadbc-driver-manager104 libadbc-driver-snowflake104 && \
       snowflake_sopath="$(ldconfig -p | grep snowflake | grep -o '[^ ]*$')"; echo ${snowflake_sopath}; ln -s ${snowflake_sopath} ${snowflake_sopath%.*} && \
       rm -rf /var/lib/apt/lists/*; \
     fi
