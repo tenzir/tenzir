@@ -8,6 +8,8 @@ dir=$(dirname "$(readlink -f "$0")")
 toplevel=$(git -C "${dir}" rev-parse --show-toplevel)
 mainroot="$(git -C "${dir}" rev-parse --path-format=absolute --show-toplevel)"
 
+set -x
+
 get-submodule-rev() {
   local _submodule="$1"
   git -C "${toplevel}" submodule status -- "${_submodule}" | cut -c2- | cut -d' ' -f 1
@@ -24,7 +26,10 @@ update-source-github() {
   _rev="$(get-submodule-rev "${_submodule}")"
   if [[ "${_version}" == "" ]]; then
     git -C "${toplevel}" submodule update --init "${_submodule}"
-    git -C "${_path}" fetch --tags
+    local _upstream
+    _upstream="$(curl https://api.github.com/repos/tenzir/actor-framework | jq -r .parent.html_url)"
+    git -C "${_path}" remote add upstream "${_upstream}"
+    git -C "${_path}" fetch --tags --all
     _version="$(git -C "${_path}" describe --tag)"
   fi
 
@@ -59,5 +64,7 @@ update-source() {
     exit 1
   fi
 }
+
+git config --list --show-origin
 
 update-source caf "libtenzir/aux/caf"
