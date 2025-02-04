@@ -152,9 +152,6 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
       state_.schema = type::from_arrow(*state_.record_batch->schema());
     }
     TENZIR_ASSERT(is<record_type>(state_.schema));
-    state_.flat_columns = index_column_arrays(state_.record_batch);
-    TENZIR_ASSERT_EXPENSIVE(state_.flat_columns.size()
-                            == as<record_type>(state_.schema).num_leaves());
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
@@ -190,7 +187,7 @@ template <class FlatBuffer>
 table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     if (auto&& batch = record_batch()) {
-      return state_.flat_columns.size();
+      return state_.get_flat_columns().size();
     }
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
@@ -216,7 +213,7 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
   id offset, table_slice::size_type column, value_index& index) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     if (auto&& batch = record_batch()) {
-      auto&& array = state_.flat_columns[column];
+      auto&& array = state_.get_flat_columns()[column];
       const auto& schema = as<record_type>(this->schema());
       auto type = schema.field(schema.resolve_flat_index(column)).type;
       for (size_t row = 0; auto&& value : values(type, *array)) {
@@ -237,7 +234,7 @@ data_view
 arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                   table_slice::size_type column) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
-    auto&& array = state_.flat_columns[column];
+    auto&& array = state_.get_flat_columns()[column];
     const auto& schema = as<record_type>(this->schema());
     auto offset = schema.resolve_flat_index(column);
     return value_at(schema.field(offset).type, *array, row);
@@ -257,7 +254,7 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
         .field(as<record_type>(this->schema()).resolve_flat_index(column))
         .type,
       t));
-    auto&& array = state_.flat_columns[column];
+    auto&& array = state_.get_flat_columns()[column];
     return value_at(t, *array, row);
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
@@ -470,6 +467,9 @@ transform_columns(type schema,
 table_slice
 transform_columns(const table_slice& slice,
                   const std::vector<indexed_transformation>& transformations) {
+  if (transformations.empty()) {
+    return slice;
+  }
   if (slice.rows() == 0) {
     return {};
   }
@@ -668,5 +668,16 @@ auto make_struct_array(
 
 /// Explicit template instantiations for all Arrow encoding versions.
 template class arrow_table_slice<fbs::table_slice::arrow::v2>;
+
+auto arrow_table_slice_state<fbs::table_slice::arrow::v2>::get_flat_columns()
+  const -> const arrow::ArrayVector& {
+  auto guard = std::unique_lock{flat_columns_mutex};
+  if (not flat_columns) {
+    flat_columns = index_column_arrays(record_batch);
+    TENZIR_ASSERT_EXPENSIVE(flat_columns->size()
+                            == as<record_type>(schema).num_leaves());
+  }
+  return *flat_columns;
+}
 
 } // namespace tenzir

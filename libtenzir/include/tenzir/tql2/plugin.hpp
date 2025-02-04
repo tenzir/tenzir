@@ -209,6 +209,10 @@ public:
                                     : NameOverride.str());
   }
 
+  auto detached() const -> bool override {
+    return true;
+  }
+
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {

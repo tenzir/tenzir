@@ -742,6 +742,7 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
+    caf::detail::set_thread_name("PARSER");
     switch (args_.split_mode) {
       case split_at::newline: {
         return parser_loop(split_at_crlf(std::move(input)),
@@ -866,7 +867,7 @@ public:
         auto buffer = std::vector<char>{};
         auto resolved_slice = resolve_enumerations(slice);
         auto out_iter = std::back_inserter(buffer);
-        auto rows = resolved_slice.values();
+        auto rows = values3(resolved_slice);
         auto row = rows.begin();
         if (not arrays_of_objects) {
           for (; row != rows.end(); ++row) {
@@ -1115,9 +1116,14 @@ public:
     return "tql2.write_json";
   }
 
+  auto detached() const -> bool override {
+    return true;
+  }
+
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     // TODO: Expose a better API for this.
+    caf::detail::set_thread_name("PRINTER");
     auto printer = printer_.instantiate(type{}, ctrl);
     TENZIR_ASSERT(printer);
     TENZIR_ASSERT(*printer);

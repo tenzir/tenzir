@@ -18,6 +18,7 @@
 #include <arrow/type_fwd.h>
 
 #include <memory>
+#include <mutex>
 
 namespace tenzir {
 
@@ -36,7 +37,10 @@ struct arrow_table_slice_state<fbs::table_slice::arrow::v2> {
   std::shared_ptr<arrow::RecordBatch> record_batch;
 
   /// Mapping from column offset to nested Arrow array
-  arrow::ArrayVector flat_columns;
+  mutable std::optional<arrow::ArrayVector> flat_columns;
+  mutable std::mutex flat_columns_mutex;
+
+  auto get_flat_columns() const -> const arrow::ArrayVector&;
 
   /// Whether the record batch points to outside data.
   bool is_serialized;
