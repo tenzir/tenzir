@@ -2374,11 +2374,6 @@
     content-type "^1.0.5"
     tslib "^2.5.0"
 
-"@tenzir/vscode-tql@^0.0.3":
-  version "0.0.3"
-  resolved "https://registry.yarnpkg.com/@tenzir/vscode-tql/-/vscode-tql-0.0.3.tgz#b7966da2d3c6ddd4d8143d43bec85026fee54388"
-  integrity sha512-koicc+Q+dWAOkQM1kAa7JWBLBYhK8XLDshK6onPsgkCPm7C4haJPXjm6WNeTMw+DvOS8amOaHClpWHpza7AGkg==
-
 "@trysound/sax@0.2.0":
   version "0.2.0"
   resolved "https://registry.yarnpkg.com/@trysound/sax/-/sax-0.2.0.tgz#cccaab758af56761eb7bf37af6f03f326dd798ad"
@@ -9816,6 +9811,11 @@ vfile@^6.0.0:
   dependencies:
     "@types/unist" "^3.0.0"
     vfile-message "^4.0.0"
+
+vscode-tql@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/vscode-tql/-/vscode-tql-1.0.0.tgz#cc4ce4be4b63c8f9d9a8ab60523240db147843de"
+  integrity sha512-ottmcc79dJYZao/zgjKF85AXMdEkb2l3B7JafZge7gj424KihhJR7RAWrH4Lzq3goemSZDuUrczS27YJ6gIXeA==
 
 wait-on@^6.0.1:
   version "6.0.1"
