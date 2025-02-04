@@ -105,8 +105,10 @@ request_dispatcher_actor::behavior_type request_dispatcher(
            rest_endpoint& endpoint, rest_handler_actor handler) {
       // Skip authentication if its not required.
       if (!self->state().server_config.require_authentication) {
-        self->send(self, atom::internal_v, atom::request_v, std::move(response),
-                   std::move(endpoint), std::move(handler));
+        self
+          ->mail(atom::internal_v, atom::request_v, std::move(response),
+                 std::move(endpoint), std::move(handler))
+          .send(self);
         return;
       }
       // Ask the authenticator to validate the passed token.
@@ -116,16 +118,16 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         response->abort(401, "missing header X-Tenzir-Token\n", caf::error{});
         return;
       }
-      self
-        ->request(self->state().authenticator, caf::infinite, atom::validate_v,
-                  *token)
+      self->mail(atom::validate_v, *token)
+        .request(self->state().authenticator, caf::infinite)
         .then(
           [self, response, endpoint = std::move(endpoint),
            handler](bool valid) mutable {
             if (valid) {
-              self->send(self, atom::internal_v, atom::request_v,
-                         std::move(response), std::move(endpoint),
-                         std::move(handler));
+              self
+                ->mail(atom::internal_v, atom::request_v, std::move(response),
+                       std::move(endpoint), std::move(handler))
+                .send(self);
             } else {
               response->abort(401, "invalid token\n", caf::error{});
             }
