@@ -467,6 +467,9 @@ transform_columns(type schema,
 table_slice
 transform_columns(const table_slice& slice,
                   const std::vector<indexed_transformation>& transformations) {
+  if (transformations.empty()) {
+    return slice;
+  }
   if (slice.rows() == 0) {
     return {};
   }
