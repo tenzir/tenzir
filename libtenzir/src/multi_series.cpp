@@ -133,9 +133,12 @@ auto multi_series::to_series(multi_series::to_series_strategy strategy) const
     {0, {parts_.front().type, parts_.front().length()}},
   };
   groups.reserve(parts_.size());
-  /// FIXME. This is merging null types early, which in turn means they will
-  /// always be part of the first group, potentially causing that group to be
-  /// larger than another group that didnt get the nulls.
+  /// FIXME. This does not actually find the largest group in general. Given [A,
+  /// B, C, C], where [A,B] and [A,C] can be merged, this would creates [A+B,
+  /// A+B, null, null] because the merging of A and B happens early. The correct
+  /// *largest* merge would be [A+C, null, A+C, A+C].
+  /// However, this requires a full fledged combinatoric explosion check, which
+  /// currently does not seem necessary of advisable.
   for (size_t i = 1; i < parts_.size(); ++i) {
     auto& part = parts_[i];
     // Check all groups.

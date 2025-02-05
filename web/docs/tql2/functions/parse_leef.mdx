@@ -22,21 +22,24 @@ The string to parse.
 ## Examples
 
 ```tql
-from { x: "LEEF:1.0|Vendor|Product|Version|EventID|key=value" }
-y = x.parse_leef()
+from { input: "LEEF:1.0|Microsoft|MSExchange|2016|15345|src=10.50.1.1	dst=2.10.20.20	spt=1200" }
+output = input.parse_leef()
 ```
 ```tql
 {
-  x: "LEEF:1.0|Vendor|Product|Version|EventID|key=value",
-  y: {
-    "leef_version": "1.0",
-    "vendor": "Microsoft",
-    "product_name": "MSExchange",
-    "product_version": "2016",
-    "attributes": {
-      "key": "value",
-    }
-  }
+  input: "LEEF:1.0|Microsoft|MSExchange|2016|15345|src=10.50.1.1\tdst=2.10.20.20\tspt=1200",
+  output: {
+    leef_version: "1.0",
+    vendor: "Microsoft",
+    product_name: "MSExchange",
+    product_version: "2016",
+    event_class_id: "15345",
+    attributes: {
+      src: 10.50.1.1,
+      dst: 2.10.20.20,
+      spt: 1200,
+    },
+  },
 }
 ```
 

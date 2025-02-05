@@ -3,5 +3,7 @@ from { x: r#"yarp:
   - larp"# },
   { x: "norp -dorp" },
   { x: "42" },
+  { x: "42.0" },
+  { x: "true" },
   { x: "-" }
 x = x.parse_yaml()

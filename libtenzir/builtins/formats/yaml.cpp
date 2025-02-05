@@ -38,6 +38,16 @@ namespace {
 constexpr auto document_end_marker = "...";
 constexpr auto document_start_marker = "---";
 
+template <typename T>
+auto try_as(const YAML::Node& node, auto&& guard) -> bool {
+  auto value = T{};
+  if (YAML::convert<T>::decode(node, value)) {
+    guard.data(value);
+    return true;
+  }
+  return false;
+}
+
 auto parse_node(auto&& guard, const YAML::Node& node,
                 diagnostic_handler& diag) -> void {
   switch (node.Type()) {
@@ -50,8 +60,16 @@ auto parse_node(auto&& guard, const YAML::Node& node,
       return;
     }
     case YAML::NodeType::Scalar: {
-      if (auto as_bool = bool{}; YAML::convert<bool>::decode(node, as_bool)) {
-        guard.data(as_bool);
+      if (try_as<bool>(node, guard)) {
+        return;
+      }
+      if (try_as<int64_t>(node, guard)) {
+        return;
+      }
+      if (try_as<uint64_t>(node, guard)) {
+        return;
+      }
+      if (try_as<double>(node, guard)) {
         return;
       }
       const auto& value_str = node.Scalar();

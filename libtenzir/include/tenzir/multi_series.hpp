@@ -109,7 +109,9 @@ public:
     // Take the first type, null the mismatches
     take_first_null_rest,
     // Try to from the largest join, null the mismatches
-    take_largest_null_rest,
+    // This does not find the truly largest merge, but only optimistically goes
+    // from the start, merging eagerly.
+    take_largest_from_start_null_rest,
   };
 
   struct to_series_result {
