@@ -60,22 +60,32 @@ class record_view3 {
 public:
   class iterator {
   public:
-    const arrow::StructArray& array;
+    using difference_type = void;
+    using value_type = std::pair<std::string_view, data_view3>;
+    using pointer = void;
+    using reference = value_type&;
+    using iterator_category = std::input_iterator_tag;
+
+    const arrow::StructArray* array;
     int64_t index;
     int field;
 
-    auto operator*() const -> std::pair<std::string_view, data_view3>;
+    auto operator*() const -> value_type;
 
     auto operator++() -> iterator& {
-      TENZIR_ASSERT(field < array.num_fields());
+      TENZIR_ASSERT(field < array->num_fields());
       ++field;
       return *this;
     }
 
-    auto operator!=(iterator other) const -> bool {
-      TENZIR_ASSERT(&array == &other.array);
+    auto operator==(iterator other) const -> bool {
+      TENZIR_ASSERT(array == other.array);
       TENZIR_ASSERT(index == other.index);
-      return field != other.field;
+      return field == other.field;
+    }
+
+    auto operator!=(iterator other) const -> bool {
+      return !(*this == other);
     }
   };
 
@@ -85,11 +95,11 @@ public:
   }
 
   auto begin() const -> iterator {
-    return iterator{array_, index_, 0};
+    return iterator{&array_, index_, 0};
   }
 
   auto end() const -> iterator {
-    return iterator{array_, index_, array_.num_fields()};
+    return iterator{&array_, index_, array_.num_fields()};
   }
 
 private:
@@ -106,22 +116,32 @@ class list_view3 {
 public:
   class iterator {
   public:
-    const arrow::ListArray& array;
+    using difference_type = void;
+    using value_type = data_view3;
+    using pointer = void;
+    using reference = value_type&;
+    using iterator_category = std::input_iterator_tag;
+
+    const arrow::ListArray* array;
     int64_t index;
     int64_t offset;
 
-    auto operator*() const -> data_view3;
+    auto operator*() const -> value_type;
 
     auto operator++() -> iterator& {
-      TENZIR_ASSERT(offset < array.value_offset(index + 1));
+      TENZIR_ASSERT(offset < array->value_offset(index + 1));
       ++offset;
       return *this;
     }
 
-    auto operator!=(iterator other) const -> bool {
-      TENZIR_ASSERT(&array == &other.array);
+    auto operator==(iterator other) const -> bool {
+      TENZIR_ASSERT(array == other.array);
       TENZIR_ASSERT(index == other.index);
-      return offset != other.offset;
+      return offset == other.offset;
+    }
+
+    auto operator!=(iterator other) const -> bool {
+      return !(*this == other);
     }
   };
 
@@ -131,11 +151,11 @@ public:
   }
 
   auto begin() const -> iterator {
-    return iterator{array_, index_, array_.value_offset(index_)};
+    return iterator{&array_, index_, array_.value_offset(index_)};
   }
 
   auto end() const -> iterator {
-    return iterator{array_, index_, array_.value_offset(index_ + 1)};
+    return iterator{&array_, index_, array_.value_offset(index_ + 1)};
   }
 
 private:
@@ -149,17 +169,17 @@ private:
 };
 
 inline auto list_view3::iterator::operator*() const -> data_view3 {
-  TENZIR_ASSERT(offset < array.values()->length());
-  TENZIR_ASSERT(offset < array.value_offset(index + 1));
-  return view_at(*array.values(), offset);
+  TENZIR_ASSERT(offset < array->values()->length());
+  TENZIR_ASSERT(offset < array->value_offset(index + 1));
+  return view_at(*array->values(), offset);
 }
 
 inline auto record_view3::iterator::operator*() const
   -> std::pair<std::string_view, data_view3> {
-  TENZIR_ASSERT(field < array.num_fields());
+  TENZIR_ASSERT(field < array->num_fields());
   return {
-    array.type()->field(field)->name(),
-    view_at(*array.field(field), index),
+    array->type()->field(field)->name(),
+    view_at(*array->field(field), index),
   };
 }
 
