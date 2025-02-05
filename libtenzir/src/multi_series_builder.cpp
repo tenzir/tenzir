@@ -497,6 +497,33 @@ auto multi_series_builder::yield_ready_as_table_slice()
     yield_ready(), settings_.default_schema_name);
 }
 
+auto multi_series_builder::data(tenzir::data value) -> void {
+  if (uses_merging_builder()) {
+    return merging_builder_.data(value);
+  } else {
+    complete_last_event();
+    return builder_raw_.data(std::move(value));
+  }
+}
+
+auto multi_series_builder::data_unparsed(std::string text) -> void {
+  if (uses_merging_builder()) {
+    auto res = builder_raw_.parser_(text, nullptr);
+    auto& [value, diag] = res;
+    if (diag) {
+      dh_.emit(std::move(*diag));
+    }
+    if (value) {
+      merging_builder_.data(std::move(*value));
+    } else {
+      merging_builder_.data(text);
+    }
+  } else {
+    complete_last_event();
+    builder_raw_.data_unparsed(std::move(text));
+  }
+}
+
 auto multi_series_builder::record() -> record_generator {
   if (uses_merging_builder()) {
     return record_generator{this, merging_builder_.record()};

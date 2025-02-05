@@ -38,7 +38,17 @@ namespace {
 constexpr auto document_end_marker = "...";
 constexpr auto document_start_marker = "---";
 
-auto parse_node(auto guard, const YAML::Node& node,
+template <typename T>
+auto try_as(const YAML::Node& node, auto&& guard) -> bool {
+  auto value = T{};
+  if (YAML::convert<T>::decode(node, value)) {
+    guard.data(value);
+    return true;
+  }
+  return false;
+}
+
+auto parse_node(auto&& guard, const YAML::Node& node,
                 diagnostic_handler& diag) -> void {
   switch (node.Type()) {
     case YAML::NodeType::Undefined: {
@@ -50,8 +60,16 @@ auto parse_node(auto guard, const YAML::Node& node,
       return;
     }
     case YAML::NodeType::Scalar: {
-      if (auto as_bool = bool{}; YAML::convert<bool>::decode(node, as_bool)) {
-        guard.data(as_bool);
+      if (try_as<bool>(node, guard)) {
+        return;
+      }
+      if (try_as<int64_t>(node, guard)) {
+        return;
+      }
+      if (try_as<uint64_t>(node, guard)) {
+        return;
+      }
+      if (try_as<double>(node, guard)) {
         return;
       }
       const auto& value_str = node.Scalar();
@@ -76,21 +94,20 @@ auto parse_node(auto guard, const YAML::Node& node,
   }
 };
 
-auto load_document(multi_series_builder& msb, std::string&& document,
-                   diagnostic_handler& diag) -> void {
+auto load_document(multi_series_builder& msb, const std::string& document,
+                   bool must_be_map, diagnostic_handler& diag) -> void {
   bool added_event = false;
   try {
     auto node = YAML::Load(document);
-    if (not node.IsMap()) {
+    if (not node.IsDefined()) {
+      diagnostic::warning("document is not valid").emit(diag);
+      return;
+    }
+    if (must_be_map and not node.IsMap()) {
       diagnostic::warning("document is not a map").emit(diag);
       return;
     }
-    auto record = msb.record();
-    added_event = true;
-    for (const auto& element : node) {
-      const auto& name = element.first.as<std::string>();
-      parse_node(record.unflattened_field(name), element.second, diag);
-    }
+    return parse_node(msb, node, diag);
   } catch (const YAML::Exception& err) {
     diagnostic::warning("failed to load YAML document: {}", err.what())
       .emit(diag);
@@ -129,19 +146,22 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       if (document.empty()) {
         continue;
       }
-      load_document(msb, std::exchange(document, {}), diag);
+      load_document(msb, document, true, diag);
+      document.clear();
       continue;
     }
     if (*line == document_start_marker) {
       if (not document.empty()) {
-        load_document(msb, std::exchange(document, {}), diag);
+        load_document(msb, document, true, diag);
+        document.clear();
       }
       continue;
     }
     fmt::format_to(std::back_inserter(document), "{}\n", *line);
   }
   if (not document.empty()) {
-    load_document(msb, std::exchange(document, {}), diag);
+    load_document(msb, document, true, diag);
+    document.clear();
   }
   for (auto& slice : msb.finalize_as_table_slice()) {
     co_yield std::move(slice);
@@ -337,6 +357,61 @@ class read_yaml final
   }
 };
 
+class parse_yaml final : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.parse_yaml";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    // TODO: Consider adding a `many` option to expect multiple yaml values.
+    auto parser = argument_parser2::function(name());
+    parser.positional("x", expr, "string");
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
+    return function_use::make(
+      [call = inv.call.get_location(), msb_opts = std::move(msb_opts),
+       expr = std::move(expr)](evaluator eval, session ctx) {
+        return map_series(eval(expr), [&](series arg) {
+          auto f = detail::overload{
+            [&](const arrow::NullArray&) -> multi_series {
+              return arg;
+            },
+            [&](const arrow::StringArray& arg) -> multi_series {
+              auto builder = multi_series_builder{
+                msb_opts,
+                ctx,
+                modules::schemas(),
+                detail::data_builder::non_number_parser,
+              };
+              for (int64_t i = 0; i < arg.length(); ++i) {
+                if (arg.IsNull(i)) {
+                  builder.null();
+                  continue;
+                }
+                load_document(builder, arg.GetString(i), false, ctx);
+              }
+              return multi_series{builder.finalize()};
+            },
+            [&](const auto&) -> multi_series {
+              diagnostic::warning("`parse_yaml` expected `string`, got `{}`",
+                                  arg.type.kind())
+                .primary(call)
+                .emit(ctx);
+              return series::null(null_type{}, arg.length());
+            },
+          };
+          return match(*arg.array, f);
+        });
+      });
+  }
+};
+
 class write_yaml final
   : public virtual operator_plugin2<writer_adapter<yaml_printer>> {
   auto
@@ -355,4 +430,5 @@ class write_yaml final
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::yaml_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::read_yaml)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::parse_yaml)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::write_yaml)

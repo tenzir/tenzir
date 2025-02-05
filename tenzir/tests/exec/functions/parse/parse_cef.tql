@@ -1,0 +1,3 @@
+from { x: "CEF:0|Cynet|Cynet 360|4.5.4.22139|0|Memory Pattern - Cobalt Strike Beacon ReflectiveLoader|8|key=value" },
+  { x: "failure" }
+y = x.parse_cef()

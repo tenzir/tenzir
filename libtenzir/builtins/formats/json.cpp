@@ -173,8 +173,8 @@ public:
       parsed_lines_{parsed_lines} {
   }
 
-  [[nodiscard]] auto parse_object(simdjson::ondemand::value v, auto builder,
-                                  size_t depth = 0u) -> bool {
+  [[nodiscard]] auto
+  parse_object(auto&& v, auto builder, size_t depth = 0u) -> bool {
     auto obj = v.get_object();
     if (obj.error()) {
       report_parse_err(v, "object");
@@ -197,15 +197,8 @@ public:
         return false;
       }
       auto value_parse_result = result::success;
-      // this guards the base series_builder currently used by tql2 parse_json
-      if constexpr (std::same_as<detail::multi_series_builder::record_generator,
-                                 decltype(builder)>) {
-        value_parse_result = parse_value(
-          val.value_unsafe(), builder.unflattened_field(key), depth + 1);
-      } else {
-        value_parse_result
-          = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
-      }
+      value_parse_result = parse_value(
+        val.value_unsafe(), builder.unflattened_field(key), depth + 1);
       if (value_parse_result != result::success) {
         return false;
       }
@@ -213,8 +206,8 @@ public:
     return true;
   }
 
-  [[nodiscard]] auto parse_value(simdjson::ondemand::value val, auto builder,
-                                 size_t depth) -> result {
+  [[nodiscard]] auto
+  parse_value(auto&& val, auto&& builder, size_t depth) -> result {
     TENZIR_ASSERT(depth <= defaults::max_recursion,
                   "nesting too deep in JSON parser");
     auto type = val.type();
@@ -253,8 +246,7 @@ public:
   }
 
 private:
-  [[nodiscard]] auto
-  parse_number(simdjson::ondemand::value val, auto builder) -> result {
+  [[nodiscard]] auto parse_number(auto&& val, auto&& builder) -> result {
     auto kind = simdjson::ondemand::number_type{};
     auto result = val.get_number_type();
     if (result.error()) {
@@ -291,51 +283,45 @@ private:
         return result::success;
       }
       case simdjson::ondemand::number_type::big_integer: {
-        report_parse_err(val, "a big integer",
-                         fmt::format("value `{}` does not fit into 64bits",
-                                     truncate(val.raw_json_token())));
         // TODO is this a good idea?
         // from the users PoV this isnt an error/warning. its just a limitation
         // of the library/tenzir we could
         // * store null (current behaviour)
         // * store a double (i.e. as an approx value)
         // * store the value as a string
-        // builder.null();
-        builder.data(std::string{val.raw_json_token()});
+        report_parse_err(val, "a big integer",
+                         fmt::format("value `{}` does not fit into 64bits",
+                                     truncate(val.raw_json_token())));
+        /// We need this potential unpacking here, as `parse_json` may give us
+        /// an entire `document` which has a slightly different iterface
+        auto raw = val.raw_json_token();
+        if constexpr (std::same_as<decltype(raw), std::string_view>) {
+          builder.data(std::string{raw});
+        } else {
+          if (raw.error()) {
+            builder.null();
+          } else {
+            builder.data(std::string{raw.value_unsafe()});
+          }
+        }
         return result::success;
       }
     }
     TENZIR_UNREACHABLE();
   }
 
-  [[nodiscard]] auto
-  parse_string(simdjson::ondemand::value val, auto builder) -> result {
+  [[nodiscard]] auto parse_string(auto&& val, auto&& builder) -> result {
     auto maybe_str = val.get_string();
     if (maybe_str.error()) {
       report_parse_err(val, "a string");
       return result::failure_no_change;
     }
-    // TODO because of this it would be better to adapt the multi_series_builder
-    if constexpr (std::same_as<decltype(builder), builder_ref>) {
-      auto res = detail::data_builder::non_number_parser(
-        maybe_str.value_unsafe(), nullptr);
-      auto& [value, diag] = res;
-      if (diag) {
-        diag_.emit(std::move(*diag));
-      }
-      if (value) {
-        builder.data(std::move(*value));
-      } else {
-        builder.data(maybe_str.value_unsafe());
-      }
-    } else {
-      builder.data_unparsed(std::string{maybe_str.value_unsafe()});
-    }
+    builder.data_unparsed(std::string{maybe_str.value_unsafe()});
     return result::success;
   }
 
-  [[nodiscard]] auto parse_array(simdjson::ondemand::array arr, auto builder,
-                                 size_t depth) -> bool {
+  [[nodiscard]] auto
+  parse_array(auto&& arr, auto builder, size_t depth) -> bool {
     auto written_once = false;
     for (auto element : arr) {
       if (element.error()) {
@@ -1271,63 +1257,68 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
-    // TODO: Consider adding a `precise` option (this needs evaluator support).
-    TRY(argument_parser2::function("parse_json")
-          .positional("x", expr, "string")
-          .parse(inv, ctx));
+    auto parser = argument_parser2::function(name());
+    parser.positional("x", expr, "string");
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
     return function_use::make(
-      [call = inv.call.get_location(), expr = std::move(expr)](evaluator eval,
-                                                               session ctx) {
+      [call = inv.call.get_location(), msb_opts = std::move(msb_opts),
+       expr = std::move(expr)](evaluator eval, session ctx) {
         return map_series(eval(expr), [&](series arg) {
           auto f = detail::overload{
-            [&](const arrow::NullArray&) {
+            [&](const arrow::NullArray&) -> multi_series {
               return arg;
             },
-            [&](const arrow::StringArray& arg) {
+            [&](const arrow::StringArray& arg) -> multi_series {
               auto parser = simdjson::ondemand::parser{};
-              auto b = series_builder{};
+              /// TODO: consider keeping this builder alive
+              auto builder = multi_series_builder{
+                msb_opts,
+                ctx,
+                modules::schemas(),
+                detail::data_builder::non_number_parser,
+              };
               for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
-                  b.null();
+                  builder.null();
                   continue;
                 }
-                auto str = std::string{arg.Value(i)};
-                doc_parser doc_p = doc_parser(str, ctx);
+                const auto view = arg.Value(i);
+                if (view.empty()) {
+                  builder.null();
+                  continue;
+                }
+                auto str = std::string{view};
                 auto doc = parser.iterate(str);
                 if (doc.error()) {
                   diagnostic::warning("{}", error_message(doc.error()))
                     .primary(call)
                     .emit(ctx);
-                  b.null();
+                  builder.null();
                   continue;
                 }
+                doc_parser doc_p = doc_parser(str, ctx);
                 const auto result
-                  = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
+                  = doc_p.parse_value(doc.value_unsafe(), builder, 0);
                 switch (result) {
                   case doc_parser::result::failure_with_write:
-                    b.remove_last();
+                    builder.remove_last();
                     [[fallthrough]];
                   case doc_parser::result::failure_no_change:
                     diagnostic::warning("could not parse json")
                       .primary(call)
                       .emit(ctx);
-                    b.null();
+                    builder.null();
                     break;
                   case doc_parser::result::success: /*no op*/;
                 }
               }
-              auto result = b.finish();
-              // TODO: Consider whether we need heterogeneous for this. If so,
-              // then we must extend the evaluator accordingly.
-              if (result.size() != 1) {
-                diagnostic::warning("got incompatible JSON values")
-                  .primary(call)
-                  .emit(ctx);
-                return series::null(null_type{}, arg.length());
-              }
-              return std::move(result[0]);
+              return multi_series{builder.finalize()};
             },
-            [&](const auto&) {
+            [&](const auto&) -> multi_series {
               diagnostic::warning("`parse_json` expected `string`, got `{}`",
                                   arg.type.kind())
                 .primary(call)
@@ -1418,7 +1409,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_ndjson_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_gelf_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_zeek_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_suricata_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{false})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{true})
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)

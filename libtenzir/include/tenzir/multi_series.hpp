@@ -16,6 +16,8 @@ namespace tenzir {
 /// A potentially heterogenous series type.
 class multi_series {
 public:
+  multi_series() = default;
+
   template <class Ty>
   explicit(false) multi_series(basic_series<Ty> s) {
     parts_.push_back(std::move(s));
@@ -92,6 +94,47 @@ public:
     return result;
   }
 
+  auto clear() -> void {
+    return parts_.clear();
+  }
+
+  auto append(series s) -> void {
+    parts_.push_back(std::move(s));
+  }
+
+  // What to do on join conflict in `to_series`
+  enum class to_series_strategy {
+    // Fail the join
+    fail,
+    // Take the first type, null the mismatches
+    take_first_null_rest,
+    // Try to from the largest join, null the mismatches
+    // This does not find the truly largest merge, but only optimistically goes
+    // from the start, merging eagerly.
+    take_largest_from_start_null_rest,
+  };
+
+  struct to_series_result {
+    enum class status {
+      // join succeeded
+      ok,
+      // join succeeded, but nulled out some values
+      conflict,
+      // join failed
+      fail,
+    };
+    tenzir::series series;
+    enum status status;
+    std::vector<type> conflicting_types{};
+  };
+
+  /// Tries to join a `multi_series` into a single `series` by performing type
+  /// unification, using a `series_builder`.
+  /// Checks are performed using `unify( type, type ) -> std::optional<type>`
+  /// @ref multi_series::join_conflict_strategy
+  auto to_series(to_series_strategy strategy
+                 = to_series_strategy::fail) const -> to_series_result;
+
 private:
   auto resolve(int64_t row) const
     -> std::pair<std::reference_wrapper<const series>, int64_t> {
@@ -149,5 +192,4 @@ auto map_series(multi_series x,
 auto map_series(multi_series x, multi_series y,
                 detail::function_view<auto(series, series)->multi_series> f)
   -> multi_series;
-
 } // namespace tenzir

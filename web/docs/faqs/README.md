@@ -210,7 +210,7 @@ what level it should be.
 3. **Fluent Bit**. Tenzir ships with all of Fluent Bit's
    [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs], since the Fluent
    Bit library is baked into every Tenzir binary. Use the
-   [`from_fluent_bit`](tql2/operators/from_fluent_bit.md) operator to get events
+   [`from_fluent_bit`](tql2/operators/from_fluent_bit.mdx) operator to get events
    from Fluent Bit and the `to_fluent_bit`(tql2/operators/to_fluent_bit.md)
    operator to send events to Fluent Bit.
 

@@ -15,6 +15,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@akopyl/docusaurus-toc-patcher": "^0.1.0",
     "@docusaurus/core": "^2.4.1",
     "@docusaurus/plugin-client-redirects": "^2.4.1",
     "@docusaurus/plugin-sitemap": "^2.4.1",

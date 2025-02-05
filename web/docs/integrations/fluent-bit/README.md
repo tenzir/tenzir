@@ -2,7 +2,7 @@
 
 [Fluent Bit](https://fluentbit.io) is a an open source observability
 pipeline. Tenzir embeds Fluent Bit, exposing all its [inputs][inputs] via
-[`from_fluent_bit`](tql2/operators/from_fluent_bit.md) and
+[`from_fluent_bit`](tql2/operators/from_fluent_bit.mdx) and
 [outputs][outputs] via [`to_fluent_bit`](tql2/operators/to_fluent_bit.md)
 
 This makes Tenzir effectively a superset of Fluent Bit.
@@ -33,7 +33,7 @@ An invocation of the `fluent-bit` commandline utility
 fluent-bit -o input_plugin -p key1=value1 -p key2=value2 -p…
 ```
 
-translates to Tenzir's [`from_fluent_bit`](tql2/operators/from_fluent_bit.md)
+translates to Tenzir's [`from_fluent_bit`](tql2/operators/from_fluent_bit.mdx)
 operator as follows:
 
 ```tql
