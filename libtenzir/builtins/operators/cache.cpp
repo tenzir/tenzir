@@ -8,7 +8,6 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/flat_map.hpp>
-#include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -23,7 +22,7 @@ namespace tenzir::plugins::cache {
 
 namespace {
 
-struct cache_traits {
+struct cache_actor_traits {
   using signatures = caf::type_list<
     // Check if the cache already has a writer.
     auto(atom::write, atom::ok)->caf::result<bool>,
@@ -33,41 +32,20 @@ struct cache_traits {
     auto(atom::read)->caf::result<table_slice>>;
 };
 
-using cache_actor = caf::typed_actor<cache_traits>;
+using cache_actor = caf::typed_actor<cache_actor_traits>;
 
-struct cache_state {
-  static constexpr auto name = "cache";
+class cache {
+public:
+  [[maybe_unused]] static constexpr auto name = "cache";
 
-  cache_actor::pointer self = {};
-
-  shared_diagnostic_handler diagnostics = {};
-
-  located<uint64_t> capacity = {};
-  uint64_t cache_size = {};
-  std::vector<table_slice> cache = {};
-
-  caf::actor_addr writer = {};
-  bool done = {};
-
-  duration read_timeout = {};
-  duration write_timeout = {};
-  caf::disposable on_read_timeout = {};
-  caf::disposable on_write_timeout = {};
-
-  struct reader {
-    size_t offset = {};
-    caf::typed_response_promise<table_slice> rp = {};
-  };
-  detail::flat_map<caf::actor_addr, reader> readers = {};
-
-  cache_state(cache_actor::pointer self, shared_diagnostic_handler diagnostics,
-              located<uint64_t> capacity, duration read_timeout,
-              duration write_timeout)
-    : self{self},
-      diagnostics{std::move(diagnostics)},
-      capacity{capacity},
-      read_timeout{read_timeout},
-      write_timeout{write_timeout} {
+  cache(cache_actor::pointer self, shared_diagnostic_handler diagnostics,
+        located<uint64_t> capacity, duration read_timeout,
+        duration write_timeout)
+    : self_{self},
+      diagnostics_{std::move(diagnostics)},
+      capacity_{capacity},
+      read_timeout_{read_timeout},
+      write_timeout_{write_timeout} {
   }
 
   auto make_behavior() -> cache_actor::behavior_type {
@@ -84,101 +62,124 @@ struct cache_state {
     };
   }
 
+private:
   auto reset_read_timeout() -> void {
-    TENZIR_ASSERT(read_timeout > duration::zero());
-    on_read_timeout.dispose();
-    on_read_timeout = detail::weak_run_delayed(self, read_timeout, [this] {
-      self->quit(diagnostic::error("cache expired").to_error());
+    TENZIR_ASSERT(read_timeout_ > duration::zero());
+    on_read_timeout_.dispose();
+    on_read_timeout_ = self_->run_delayed_weak(read_timeout_, [this] {
+      self_->quit(diagnostic::error("cache expired").to_error());
     });
   }
 
   auto set_write_timeout() -> void {
-    if (write_timeout == duration::zero()) {
+    if (write_timeout_ == duration::zero()) {
       return;
     }
-    TENZIR_ASSERT(write_timeout > duration::zero());
-    on_write_timeout.dispose();
-    on_write_timeout = detail::weak_run_delayed(self, write_timeout, [this] {
-      self->quit(diagnostic::error("cache expired").to_error());
+    TENZIR_ASSERT(write_timeout_ > duration::zero());
+    on_write_timeout_.dispose();
+    on_write_timeout_ = self_->run_delayed_weak(write_timeout_, [this] {
+      self_->quit(diagnostic::error("cache expired").to_error());
     });
   }
 
   auto write_ok() -> caf::result<bool> {
-    return writer;
+    return writer_;
   }
 
   auto write(table_slice events) -> caf::result<bool> {
     TENZIR_ASSERT(events.rows() > 0);
-    const auto sender = self->current_sender();
+    const auto sender = self_->current_sender();
     TENZIR_ASSERT(sender);
-    if (not writer) {
-      writer = sender->address();
-      self->monitor(sender, [this](const caf::error&) {
-        TENZIR_ASSERT(not done);
-        done = true;
+    if (not writer_) {
+      writer_ = sender->address();
+      self_->monitor(sender, [this](const caf::error&) {
+        TENZIR_ASSERT(not done_);
+        done_ = true;
         reset_read_timeout();
         // We ignore error messages because they do not matter to the readers.
-        for (auto& [_, reader] : readers) {
-          if (reader.offset == cache.size() and reader.rp.pending()) {
+        for (auto& [_, reader] : readers_) {
+          if (reader.offset == cached_events_.size() and reader.rp.pending()) {
             reader.rp.deliver(table_slice{});
           }
         }
       });
       set_write_timeout();
-    } else if (writer != sender->address()) {
+    } else if (writer_ != sender->address()) {
       return false;
     }
     auto exceeded_capacity = false;
-    if (cache_size + events.rows() > capacity.inner) {
-      events = head(std::move(events), capacity.inner - cache_size);
+    if (cache_size_ + events.rows() > capacity_.inner) {
+      events = head(std::move(events), capacity_.inner - cache_size_);
       diagnostic::warning("cache exceeded capacity")
-        .primary(capacity.source)
-        .emit(diagnostics);
+        .primary(capacity_.source)
+        .emit(diagnostics_);
       exceeded_capacity = true;
       if (events.rows() == 0) {
         return false;
       }
     }
-    cache_size += events.rows();
-    cache.push_back(std::move(events));
-    for (auto& [_, reader] : readers) {
+    cache_size_ += events.rows();
+    cached_events_.push_back(std::move(events));
+    for (auto& [_, reader] : readers_) {
       if (not reader.rp.pending()) {
-        TENZIR_ASSERT(reader.offset < cache.size());
+        TENZIR_ASSERT(reader.offset < cached_events_.size());
         continue;
       }
-      reader.rp.deliver(cache[reader.offset++]);
-      TENZIR_ASSERT(reader.offset == cache.size());
+      reader.rp.deliver(cached_events_[reader.offset++]);
+      TENZIR_ASSERT(reader.offset == cached_events_.size());
     }
     return not exceeded_capacity;
   }
 
   auto read() -> caf::result<table_slice> {
-    if (done) {
+    if (done_) {
       reset_read_timeout();
     }
-    const auto sender = self->current_sender();
+    const auto sender = self_->current_sender();
     TENZIR_ASSERT(sender);
-    auto& reader = readers[sender->address()];
+    auto& reader = readers_[sender->address()];
     TENZIR_ASSERT(not reader.rp.pending());
-    TENZIR_ASSERT(reader.offset <= cache.size());
+    TENZIR_ASSERT(reader.offset <= cached_events_.size());
     if (reader.offset == 0) {
-      self->monitor(sender, [this, sender](const caf::error&) {
-        const auto erased = readers.erase(sender);
+      self_->monitor(sender, [this, sender](const caf::error&) {
+        const auto erased = readers_.erase(sender);
         TENZIR_ASSERT(erased == 1);
       });
     }
-    if (reader.offset == cache.size()) {
-      if (done) {
+    if (reader.offset == cached_events_.size()) {
+      if (done_) {
         return table_slice{};
       }
-      reader.rp = self->make_response_promise<table_slice>();
+      reader.rp = self_->make_response_promise<table_slice>();
       return reader.rp;
     }
-    return cache[reader.offset++];
+    return cached_events_[reader.offset++];
   }
+
+  struct reader {
+    size_t offset = {};
+    caf::typed_response_promise<table_slice> rp = {};
+  };
+
+  cache_actor::pointer self_ = {};
+
+  shared_diagnostic_handler diagnostics_ = {};
+
+  located<uint64_t> capacity_ = {};
+  uint64_t cache_size_ = {};
+  std::vector<table_slice> cached_events_ = {};
+
+  caf::actor_addr writer_ = {};
+  bool done_ = {};
+  detail::flat_map<caf::actor_addr, reader> readers_ = {};
+
+  duration read_timeout_ = {};
+  duration write_timeout_ = {};
+  caf::disposable on_read_timeout_ = {};
+  caf::disposable on_write_timeout_ = {};
 };
 
-struct cache_manager_traits {
+struct cache_manager_actor_traits {
   using signatures = caf::type_list<
     // Get the cache.
     auto(atom::get, std::string id, bool exclusive)->caf::result<caf::actor>,
@@ -186,19 +187,16 @@ struct cache_manager_traits {
     auto(atom::create, std::string id, bool exclusive,
          shared_diagnostic_handler diagnostics, uint64_t capacity,
          location capacity_loc, duration read_timeout, duration write_timeout)
-      ->caf::result<caf::actor>>;
+      ->caf::result<caf::actor>>::append_from<component_plugin_actor::signatures>;
 };
 
-using cache_manager_actor
-  = caf::typed_actor<cache_manager_traits>::extend_with<component_plugin_actor>;
+using cache_manager_actor = caf::typed_actor<cache_manager_actor_traits>;
 
-struct cache_manager_state {
-  static constexpr auto name = "cache-manager";
+class cache_manager {
+public:
+  [[maybe_unused]] static constexpr auto name = "cache-manager";
 
-  cache_manager_actor::pointer self = {};
-  std::unordered_map<std::string, cache_actor> caches = {};
-
-  explicit cache_manager_state(cache_manager_actor::pointer self) : self{self} {
+  explicit cache_manager(cache_manager_actor::pointer self) : self_{self} {
   }
 
   auto make_behavior() -> cache_manager_actor::behavior_type {
@@ -220,6 +218,7 @@ struct cache_manager_state {
     };
   }
 
+private:
   auto check_exclusive(const cache_actor& cache, bool exclusive) const
     -> caf::result<caf::actor> {
     TENZIR_ASSERT(cache);
@@ -227,8 +226,8 @@ struct cache_manager_state {
     if (not exclusive) {
       return handle;
     }
-    auto rp = self->make_response_promise<caf::actor>();
-    self->mail(atom::write_v, atom::ok_v)
+    auto rp = self_->make_response_promise<caf::actor>();
+    self_->mail(atom::write_v, atom::ok_v)
       .request(cache, caf::infinite)
       .then(
         [rp, handle = std::move(handle)](bool has_writer) mutable {
@@ -243,37 +242,40 @@ struct cache_manager_state {
   }
 
   auto get(std::string id, bool exclusive) -> caf::result<caf::actor> {
-    auto cache = caches.find(id);
-    if (cache == caches.end()) {
+    const auto it = caches_.find(id);
+    if (it == caches_.end()) {
       return diagnostic::error("cache `{}` does not exist", id).to_error();
     }
-    return check_exclusive(cache->second, exclusive);
+    return check_exclusive(it->second, exclusive);
   }
 
   auto create(std::string id, bool exclusive,
               shared_diagnostic_handler diagnostics, located<uint64_t> capacity,
               duration read_timeout, duration write_timeout)
     -> caf::result<caf::actor> {
-    auto cache = caches.find(id);
-    if (cache == caches.end()) {
-      auto handle = self->spawn(caf::actor_from_state<cache_state>,
-                                std::move(diagnostics), capacity, read_timeout,
-                                write_timeout);
-      self->monitor(handle,
-                    [this, source = handle->address()](const caf::error&) {
-                      for (const auto& [id, handle] : caches) {
-                        if (handle.address() == source) {
-                          caches.erase(id);
-                          return;
-                        }
-                      }
-                      TENZIR_UNREACHABLE();
-                    });
+    const auto it = caches_.find(id);
+    if (it == caches_.end()) {
+      auto handle
+        = self_->spawn(caf::actor_from_state<cache>, std::move(diagnostics),
+                       capacity, read_timeout, write_timeout);
+      self_->monitor(handle,
+                     [this, source = handle->address()](const caf::error&) {
+                       for (const auto& [id, handle] : caches_) {
+                         if (handle.address() == source) {
+                           caches_.erase(id);
+                           return;
+                         }
+                       }
+                       TENZIR_UNREACHABLE();
+                     });
       return caf::actor_cast<caf::actor>(
-        caches.emplace_hint(cache, std::move(id), std::move(handle))->second);
+        caches_.emplace_hint(it, std::move(id), std::move(handle))->second);
     }
-    return check_exclusive(cache->second, exclusive);
+    return check_exclusive(it->second, exclusive);
   }
+
+  cache_manager_actor::pointer self_ = {};
+  std::unordered_map<std::string, cache_actor> caches_ = {};
 };
 
 class write_cache_operator final : public operator_base {
@@ -595,7 +597,7 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> self) const
     -> component_plugin_actor override {
-    return self->spawn<caf::linked>(caf::actor_from_state<cache_manager_state>);
+    return self->spawn<caf::linked>(caf::actor_from_state<cache_manager>);
   }
 
   auto signature() const -> operator_signature override {
