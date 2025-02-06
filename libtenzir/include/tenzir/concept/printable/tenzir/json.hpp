@@ -104,8 +104,16 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view3<std::string> x) -> bool {
-      out_ = fmt::format_to(out_, options_.style.string, "{}",
-                            detail::json_escape(x));
+      // TODO: Color.
+      *out_++ = '"';
+      auto f = x.begin();
+      auto l = x.end();
+      while (f != l) {
+        detail::json_escaper(f, out_);
+      }
+      *out_++ = '"';
+      // out_ = fmt::format_to(out_, options_.style.string, "{}",
+      //                       detail::json_escape(x));
       return true;
     }
 
