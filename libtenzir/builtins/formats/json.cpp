@@ -768,6 +768,7 @@ private:
 
 struct printer_args {
   std::optional<location> compact_output;
+  std::optional<location> null_delimited;
   std::optional<location> color_output;
   std::optional<location> monochrome_output;
   std::optional<location> omit_all;
@@ -783,6 +784,7 @@ struct printer_args {
     return f.object(x)
       .pretty_name("printer_args")
       .fields(f.field("compact_output", x.compact_output),
+              f.field("null_delimited", x.null_delimited),
               f.field("color_output", x.color_output),
               f.field("monochrome_output", x.monochrome_output),
               f.field("omit_empty", x.omit_all),
@@ -809,6 +811,7 @@ public:
   auto instantiate(type, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     const auto compact = !!args_.compact_output;
+    const auto null_delimited = !!args_.null_delimited;
     auto style = default_style();
     if (args_.monochrome_output) {
       style = no_style();
@@ -830,7 +833,7 @@ public:
                                                  ? "application/x-ndjson"
                                                  : "application/json"};
     return printer_instance::make(
-      [compact, style, omit_null_fields, omit_nulls_in_lists,
+      [compact, null_delimited, style, omit_null_fields, omit_nulls_in_lists,
        omit_empty_objects, omit_empty_lists, arrays_of_objects, tql = args_.tql,
        meta = std::move(meta)](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
@@ -858,7 +861,11 @@ public:
           for (; row != rows.end(); ++row) {
             const auto ok = printer.print(out_iter, *row);
             TENZIR_ASSERT(ok);
-            out_iter = fmt::format_to(out_iter, "\n");
+            if (null_delimited) {
+              out_iter = fmt::format_to(out_iter, "\0");
+            } else {
+              out_iter = fmt::format_to(out_iter, "\n");
+            }
           }
         } else {
           out_iter = fmt::format_to(out_iter, "[");
@@ -1370,6 +1377,29 @@ public:
   bool tql_ = false;
 };
 
+class write_gelf_plugin final : public virtual operator_plugin2<write_json> {
+public:
+  auto name() const -> std::string override {
+    return "write_gelf";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = printer_args{};
+    args.compact_output = location::unknown;
+    args.null_delimited = location::unknown;
+    TRY(argument_parser2::operator_(name())
+          .named("color", args.color_output)
+          .named("strip", args.omit_all)
+          .named("strip_null_fields", args.omit_null_fields)
+          .named("strip_nulls_in_lists", args.omit_nulls_in_lists)
+          .named("strip_empty_records", args.omit_empty_objects)
+          .named("strip_empty_lists", args.omit_empty_lists)
+          .parse(inv, ctx));
+    return std::make_unique<write_json>(args);
+  }
+};
+
 class write_ndjson_plugin final : public virtual operator_plugin2<write_json> {
 public:
   auto name() const -> std::string override {
@@ -1412,4 +1442,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_suricata_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{false})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{true})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_gelf_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)
