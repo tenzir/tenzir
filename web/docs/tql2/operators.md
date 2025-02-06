@@ -152,6 +152,7 @@ Operator | Description | Example
 [`write_bitz`](./operators/write_bitz.md) | Writes events as Tenzir's internal wire format | `write_bitz`
 [`write_csv`](./operators/write_csv.md) | Writes events as CSV | `write_csv`
 [`write_feather`](./operators/write_feather.md) | Writes events as Feather | `write_feather`
+[`write_gelf`](./operators/write_gelf.md) | Writes events as NULL-Delimited JSON | `write_gelf`
 [`write_json`](./operators/write_json.md) | Writes events as JSON | `write_json`
 [`write_ndjson`](./operators/write_ndjson.md) | Writes events as Newline-Delimited JSON | `write_ndjson`
 [`write_lines`](./operators/write_lines.md) | Writes events as lines | `write_lines`
