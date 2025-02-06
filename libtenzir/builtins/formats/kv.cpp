@@ -384,3 +384,4 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::kv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::read_kv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::parse_kv)
