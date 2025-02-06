@@ -104,7 +104,16 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view3<std::string> x) -> bool {
-      // TODO: Color.
+      // TODO: Color is a terrible hack atm.
+      char buff[100]{};
+      const auto e = fmt::format_to(buff, options_.style.string, "A");
+      TENZIR_ASSERT(std::less<>{}(e, std::end(buff)));
+      auto pos = buff;
+      for (; *pos != 'A'; ++pos) {
+        *out_++ = *pos;
+      }
+      TENZIR_ASSERT(std::less<>{}(pos, std::end(buff)));
+      TENZIR_ASSERT(std::less<>{}(pos, e));
       *out_++ = '"';
       auto f = x.begin();
       auto l = x.end();
@@ -112,8 +121,9 @@ struct json_printer : printer_base<json_printer> {
         detail::json_escaper(f, out_);
       }
       *out_++ = '"';
-      // out_ = fmt::format_to(out_, options_.style.string, "{}",
-      //                       detail::json_escape(x));
+      for (++pos; pos != e; ++pos) {
+        *out_++ = *pos;
+      }
       return true;
     }
 
