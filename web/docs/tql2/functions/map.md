@@ -75,7 +75,7 @@ answers = answers.map(x, {hostname: x.rrname, ip: x.rdata})
 
 ### Null values
 
-In the below example, the first entry does not match the given GROK pattern,
+In the below example, the first entry does not match the given grok pattern,
 causing `parse_grok` to emit a `null`.
 
 `map` will promote `null` values to typed null values, allowing you to still

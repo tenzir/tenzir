@@ -71,8 +71,8 @@ apt-get update
 # arrow itself: https://github.com/apache/arrow/pull/36836.
 if [ "$(uname -m)" == "x86_64" ]; then
   apt-get -y --no-install-recommends install -o 'Acquire::Retries=3' \
-    libadbc-driver-snowflake-dev \
-    libadbc-driver-manager-dev
+    libadbc-driver-snowflake-dev=16-1 \
+    libadbc-driver-manager-dev=16-1
 fi
 rm ./"apache-arrow-apt-source-latest-${codename}.deb"
 

@@ -145,7 +145,7 @@ Function | Description | Example
 :--------|:-------------|:-------
 [`parse_cef`](functions/parse_cef.mdx) | Parses a string as a CEF message  | `string.parse_cef()`
 [`parse_csv`](functions/parse_csv.mdx) | Parses a string as CSV  | `string.parse_csv(header=["a","b"])`
-[`parse_grok`](functions/parse_grok.mdx) | Parses a string following a GROK pattern | `string.parse_grok("%{IP:client} …")`
+[`parse_grok`](functions/parse_grok.mdx) | Parses a string following a grok pattern | `string.parse_grok("%{IP:client} …")`
 [`parse_json`](functions/parse_json.mdx) | Parses a string as a JSON value | `string.parse_json()`
 [`parse_kv`](functions/parse_kv.mdx) | Parses a string as Key-Value paris | `string.parse_kv()`
 [`parse_leef`](functions/parse_leef.mdx) | Parses a string as a LEEF message | `string.parse_leef()`

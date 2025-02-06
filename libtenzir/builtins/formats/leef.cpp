@@ -237,6 +237,7 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
   r.field("vendor").data(std::move(fields[1]));
   r.field("product_name").data(std::move(fields[2]));
   r.field("product_version").data(std::move(fields[3]));
+  r.field("event_class_id").data(std::move(fields[4]));
 
   auto d = parse_attributes(delimiter, fields[num_fields],
                             r.field("attributes").record(), quoting);

@@ -408,7 +408,7 @@ void pattern_store::add_single(std::string_view key, std::string pat,
     = patterns.insert_or_assign(std::string{key}, pattern{std::move(pat), loc});
   if (not inserted) {
     diagnostic::warning(
-      "GROK pattern `{}` is already defined and will be overwritten", key)
+      "grok pattern `{}` is already defined and will be overwritten", key)
       .primary(loc)
       .emit(dh);
   }

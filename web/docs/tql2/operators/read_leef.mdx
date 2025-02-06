@@ -39,29 +39,31 @@ LEEF:2.0|Lancope|StealthWatch|1.0|41|^|src=10.0.1.8^dst=10.0.0.5^sev=5^srcPort=8
 Tenzir translates the event attributes into a nested record, where the key-value
 pairs map to record fields. Here is an example of the parsed events from above:
 
-```json
+```tql
 {
-  "leef_version": "1.0",
-  "vendor": "Microsoft",
-  "product_name": "MSExchange",
-  "product_version": "2016",
-  "attributes": {
-    "src": "10.50.1.1",
-    "dst": "2.10.20.20",
-    "spt": 1200,
+  leef_version: "1.0",
+  vendor: "Microsoft",
+  product_name: "MSExchange",
+  product_version: "2016",
+  event_class_id: "15345",
+  attributes: {
+    src: 10.50.1.1,
+    dst: 2.10.20.20,
+    spt: 1200,
   }
 }
 {
-  "leef_version": "2.0",
-  "vendor": "Lancope",
-  "product_name": "StealthWatch",
-  "product_version": "1.0",
-  "attributes": {
-    "src": "10.0.1.8",
-    "dst": "10.0.0.5",
-    "sev": 5,
-    "srcPort": 81,
-    "dstPort": 21
+  leef_version: "2.0",
+  vendor: "Lancope",
+  product_name: "StealthWatch",
+  product_version: "1.0",
+  event_class_id: "41",
+  attributes: {
+    src: 10.0.1.8,
+    dst: 10.0.0.5,
+    sev: 5,
+    srcPort: 81,
+    dstPort: 21
   }
 }
 ```

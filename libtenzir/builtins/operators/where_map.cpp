@@ -615,7 +615,7 @@ auto make_map_function(function_plugin::invocation inv,
           to_merge.append(ms.part(idx).slice(start, end));
         }
         auto [merged_series, merge_status, conflicts] = to_merge.to_series(
-          multi_series::to_series_strategy::take_largest_null_rest);
+          multi_series::to_series_strategy::take_largest_from_start_null_rest);
         TENZIR_ASSERT(merge_status
                       != multi_series::to_series_result::status::fail);
         auto offsets = check(p.offset_builder.Finish());
@@ -626,17 +626,32 @@ auto make_map_function(function_plugin::invocation inv,
                               arrow::default_memory_pool(), std::move(validity),
                               p.null_count)));
         if (merge_status != multi_series::to_series_result::status::ok) {
+          /// This produces prettier error messages for the common case
           auto kinds = std::set<type_kind>{};
           for (const auto& c : conflicts) {
             kinds.insert(c.kind());
           }
+          auto primary = std::string{};
+          auto note = std::string{};
+          if (kinds.size() == 1) {
+            primary = fmt::format("`{}` are incompatible",
+                                  fmt::join(conflicts, "`, `"));
+            note = fmt::format("all entries that are not compatible with `{}` "
+                               "will be "
+                               "`null`",
+                               merged_series.type);
+          } else {
+            primary
+              = fmt::format("`{}` are incompatible", fmt::join(kinds, "`, `"));
+            note = fmt::format("all entries that are not compatible with `{}` "
+                               "will be "
+                               "`null`",
+                               merged_series.type.kind());
+          }
           diagnostic::warning(
             "`expr` must evaluate to compatible types within the same list")
-            .primary(args.expr, "`{}` are incompatible",
-                     fmt::join(kinds, "`, `"))
-            .note("all entries that are not compatible with `{}` will be "
-                  "`null`",
-                  merged_series.type.kind())
+            .primary(args.expr, primary)
+            .note(note)
             .emit(ctx);
         }
       }

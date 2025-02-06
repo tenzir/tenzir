@@ -18,3 +18,8 @@
   y: null,
 }
 warning: incorrect field count in CEF event
+ --> exec/functions/parse/parse_cef.tql:3:5
+  |
+3 | y = x.parse_cef()
+  |     ~~~~~~~~~~~~~ 
+  |
