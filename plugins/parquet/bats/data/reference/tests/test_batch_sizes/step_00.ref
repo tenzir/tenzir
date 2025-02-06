@@ -1,5 +1,5 @@
 {
-  "events": 8462,
-  "schema_id": "a98a7bd5120c4485",
+  "events": 8462, 
+  "schema_id": "a98a7bd5120c4485", 
   "schema": "zeek.conn"
 }

@@ -1,14 +1,14 @@
 {
-  input: "55.3.244.1 GET /index.html 15824 0.043",
+  input: "55.3.244.1 GET /index.html 15824 0.043", 
   output: {
-    client: 55.3.244.1,
-    req: "/index.html",
-    bytes: 15824,
+    client: 55.3.244.1, 
+    req: "/index.html", 
+    bytes: 15824, 
     dur: 0.043,
   },
 }
 {
-  input: "this will be null",
+  input: "this will be null", 
   output: null,
 }
 warning: grok parser: pattern could not be matched

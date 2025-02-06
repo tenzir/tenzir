@@ -1,16 +1,16 @@
 {
-  input: "1,2,3",
+  input: "1,2,3", 
   output: {
-    a: 1,
-    b: 2,
+    a: 1, 
+    b: 2, 
     c: 3,
   },
 }
 {
-  input: "failure",
+  input: "failure", 
   output: {
-    a: "failure",
-    b: null,
+    a: "failure", 
+    b: null, 
     c: null,
   },
 }

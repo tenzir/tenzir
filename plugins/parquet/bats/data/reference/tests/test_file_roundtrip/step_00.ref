@@ -1,12 +1,12 @@
 {
-  "proto": "udp",
+  "proto": "udp", 
   "count": 5306
 }
 {
-  "proto": "tcp",
+  "proto": "tcp", 
   "count": 3135
 }
 {
-  "proto": "icmp",
+  "proto": "icmp", 
   "count": 21
 }

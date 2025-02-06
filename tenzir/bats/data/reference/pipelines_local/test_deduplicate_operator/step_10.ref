@@ -1,5 +1,5 @@
-{"a": 1, "b": 2, "tag": 1}
-{"b": "reset", "tag": 2}
+{"a":1,"b":2,"tag":1}
+{"b":"reset","tag":2}
 warning: field `a` not found
  --> <input>:1:17
   |

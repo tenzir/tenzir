@@ -1,4 +1,4 @@
 {
-  "schema": "cef.event",
+  "schema": "cef.event", 
   "sum(events)": 50
 }

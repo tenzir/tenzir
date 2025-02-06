@@ -1,27 +1,27 @@
 {
-  input: "1",
+  input: "1", 
   output: 1,
 }
 {
-  input: "\"string\"",
+  input: "\"string\"", 
   output: "string",
 }
 {
-  input: "{ \"a\": 42, \"b\": \"text\"}",
+  input: "{ \"a\": 42, \"b\": \"text\"}", 
   output: {
-    a: 42,
+    a: 42, 
     b: "text",
   },
 }
 {
-  input: "[0,1]",
+  input: "[0,1]", 
   output: [
-    0,
+    0, 
     1,
   ],
 }
 {
-  input: "failure",
+  input: "failure", 
   output: null,
 }
 warning: failed to parse a boolean value in the JSON document

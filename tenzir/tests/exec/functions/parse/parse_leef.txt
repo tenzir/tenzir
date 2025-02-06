@@ -1,20 +1,20 @@
 {
-  input: "LEEF:1.0|Microsoft|MSExchange|2016|15345|src=10.50.1.1\tdst=2.10.20.20\tspt=1200",
+  input: "LEEF:1.0|Microsoft|MSExchange|2016|15345|src=10.50.1.1\tdst=2.10.20.20\tspt=1200", 
   output: {
-    leef_version: "1.0",
-    vendor: "Microsoft",
-    product_name: "MSExchange",
-    product_version: "2016",
-    event_class_id: "15345",
+    leef_version: "1.0", 
+    vendor: "Microsoft", 
+    product_name: "MSExchange", 
+    product_version: "2016", 
+    event_class_id: "15345", 
     attributes: {
-      src: 10.50.1.1,
-      dst: 2.10.20.20,
+      src: 10.50.1.1, 
+      dst: 2.10.20.20, 
       spt: 1200,
     },
   },
 }
 {
-  input: "failure",
+  input: "failure", 
   output: null,
 }
 warning: invalid LEEF event
