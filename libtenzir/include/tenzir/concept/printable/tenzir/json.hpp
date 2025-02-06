@@ -197,12 +197,20 @@ struct json_printer : printer_base<json_printer> {
         out_ = fmt::format_to(out_, options_.style.object, "{{");
         indent();
         newline();
-        out_ = fmt::format_to(out_, options_.style.field, "\"key\": ");
+        if (options_.oneline) {
+          out_ = fmt::format_to(out_, options_.style.field, "\"key\":");
+        } else {
+          out_ = fmt::format_to(out_, options_.style.field, "\"key\": ");
+        }
         if (!match(element.first, *this))
           return false;
         separator();
         newline();
-        out_ = fmt::format_to(out_, options_.style.field, "\"value\": ");
+        if (options_.oneline) {
+          out_ = fmt::format_to(out_, options_.style.field, "\"value\":");
+        } else {
+          out_ = fmt::format_to(out_, options_.style.field, "\"value\": ");
+        }
         if (!match(element.second, *this))
           return false;
         dedent();
@@ -245,7 +253,11 @@ struct json_printer : printer_base<json_printer> {
           out_ = fmt::format_to(out_, options_.style.field, "{}",
                                 detail::json_escape(key));
         }
-        out_ = fmt::format_to(out_, options_.style.colon, ": ");
+        if (options_.oneline) {
+          out_ = fmt::format_to(out_, options_.style.colon, ":");
+        } else {
+          out_ = fmt::format_to(out_, options_.style.colon, ": ");
+        }
         if (!match(value, *this)) {
           return false;
         }
@@ -316,10 +328,11 @@ struct json_printer : printer_base<json_printer> {
     }
 
     void separator() noexcept {
-      if (options_.oneline)
-        out_ = fmt::format_to(out_, options_.style.comma, ", ");
-      else
+      if (options_.oneline) {
         out_ = fmt::format_to(out_, options_.style.comma, ",");
+      } else {
+        out_ = fmt::format_to(out_, options_.style.comma, ", ");
+      }
     }
 
     void newline() noexcept {
