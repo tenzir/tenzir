@@ -37,6 +37,8 @@ auto format_metric(const operator_metric& metric) -> std::string {
   }
   it = fmt::format_to(it, "\n");
   it = fmt::format_to(it, "{}total: {}\n", indent, data{metric.time_total});
+  it = fmt::format_to(it, "{}time-to-first-input: {}\n", indent,
+                      data{metric.time_to_first_input});
   it = fmt::format_to(it, "{}scheduled: {} ({:.2f}%)\n", indent,
                       data{metric.time_scheduled},
                       100.0 * static_cast<double>(metric.time_scheduled.count())
