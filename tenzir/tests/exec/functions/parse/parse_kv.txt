@@ -1,0 +1,28 @@
+{
+  input: "surname: John, family_name: Smith, date_of_birth: 1995-05-26",
+  output: {
+    surname: "John",
+    family_name: "Smith",
+    date_of_birth: 1995-05-26T00:00:00Z,
+  },
+}
+{
+  input: "surname: Tom, family_name: Cat",
+  output: {
+    surname: "Tom",
+    family_name: "Cat",
+  },
+}
+{
+  input: "surname: Jerry, family_name: Mouse",
+  output: {
+    surname: "Jerry",
+    family_name: "Mouse",
+  },
+}
+{
+  input: "failure",
+  output: {
+    failure: "",
+  },
+}

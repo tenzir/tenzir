@@ -1,0 +1,5 @@
+from { input: "surname: John, family_name: Smith, date_of_birth: 1995-05-26"},
+  { input: "surname: Tom, family_name: Cat"},
+  { input: "surname: Jerry, family_name: Mouse"},
+  { input: "failure"}
+output = input.parse_kv(r"\s*,\s*", r"\s*:\s*")
