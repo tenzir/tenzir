@@ -166,7 +166,7 @@ public:
     return parse_loop(to_lines(std::move(input)), ctrl, *this);
   }
 
-  auto parse_line(multi_series_builder& builder, operator_control_plane& ctrl,
+  auto parse_line(multi_series_builder& builder, diagnostic_handler& dh,
                   std::string_view line) const -> void {
     auto event = builder.record();
     while (not line.empty()) {
@@ -181,30 +181,40 @@ public:
       if (line == tail) {
         diagnostic::error("`kv` did not make progress")
           .note("check your field splitter")
-          .emit(ctrl.diagnostics());
+          .emit(dh);
         // TODO: warn instead and just continue?
+        return;
       }
       line = tail;
     }
   }
 
-  auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                     operator_control_plane& ctrl) const
-    -> std::vector<series> override {
+  auto
+  parse_strings(const arrow::StringArray& input,
+                diagnostic_handler& diagnostics) const -> std::vector<series> {
     auto dh = transforming_diagnostic_handler{
-      ctrl.diagnostics(), [](auto diag) {
+      diagnostics,
+      [](auto diag) {
         diag.message = fmt::format("parse_kv: {}", diag.message);
         return diag;
-      }};
+      },
+    };
     auto builder = multi_series_builder{args_.msb_opts_, dh};
-    for (auto&& line : values(string_type{}, *input)) {
+    for (auto&& line : values(string_type{}, input)) {
       if (not line) {
         builder.null();
         continue;
       }
-      parse_line(builder, ctrl, *line);
+      parse_line(builder, dh, *line);
     }
     return builder.finalize();
+  }
+
+  auto parse_strings(std::shared_ptr<arrow::StringArray> input,
+                     operator_control_plane& ctrl) const
+    -> std::vector<series> override {
+    TENZIR_ASSERT(input);
+    return parse_strings(*input, ctrl.diagnostics());
   }
 
   friend auto inspect(auto& f, kv_parser& x) -> bool {
@@ -233,7 +243,7 @@ auto parse_loop(generator<std::optional<std::string_view>> input,
     for (auto&& slice : builder.yield_ready_as_table_slice()) {
       co_yield std::move(slice);
     }
-    parser.parse_line(builder, ctrl, *line);
+    parser.parse_line(builder, ctrl.diagnostics(), *line);
   }
   for (auto&& slice : builder.finalize_as_table_slice()) {
     co_yield std::move(slice);
@@ -308,9 +318,64 @@ public:
     return std::make_unique<parser_adapter<kv_parser>>(kv_parser{{
       std::move(opts),
       std::move(quoting),
-      splitter{*field_split},
-      splitter{*value_split},
+      splitter{std::move(*field_split)},
+      splitter{std::move(*value_split)},
     }});
+  }
+};
+
+class parse_kv : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "parse_kv";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+    auto parser = argument_parser2::function(name());
+    auto field_split = std::optional<located<std::string>>{
+      std::in_place,
+      "\\s",
+      location::unknown,
+    };
+    auto value_split = std::optional<located<std::string>>{
+      std::in_place,
+      "=",
+      location::unknown,
+    };
+    auto quoting = detail::quoting_escaping_policy{};
+    parser.positional("input", input, "string");
+    parser.positional("field_split", field_split);
+    parser.positional("value_split", value_split);
+    parser.named_optional("quotes", quoting.quotes);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
+    return function_use::make([input = std::move(input),
+                               parser = kv_parser{{
+                                 std::move(msb_opts),
+                                 std::move(quoting),
+                                 splitter{std::move(*field_split)},
+                                 splitter{std::move(*value_split)},
+                               }}](evaluator eval, session ctx) {
+      return map_series(eval(input), [&](series values) -> multi_series {
+        if (values.type.kind().is<null_type>()) {
+          return values;
+        }
+        auto strings = try_as<arrow::StringArray>(&*values.array);
+        if (not strings) {
+          diagnostic::warning("expected `string`, got `{}`", values.type.kind())
+            .primary(input)
+            .emit(ctx);
+          return series::null(null_type{}, values.length());
+        }
+        auto output = parser.parse_strings(*strings, ctx.dh());
+        return multi_series{std::move(output)};
+      });
+    });
   }
 };
 } // namespace

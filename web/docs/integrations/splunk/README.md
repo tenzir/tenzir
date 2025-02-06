@@ -31,7 +31,7 @@ For more details, see the documentation for the
 
 To send data to a Tenzir pipeline instead of Splunk, you can open a Splunk [HTTP
 Event Collector (HEC)][hec] endpoint using the
-[`from_fluent_bit`](../../tql2/operators/from_fluent_bit.md) source operator.
+[`from_fluent_bit`](../../tql2/operators/from_fluent_bit.mdx) source operator.
 
 For example, to onboard all data into a Tenzir node instead of Splunk, point
 your data source to the IP address of the Tenzir node at port 9880 by deploying

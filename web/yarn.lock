@@ -2,6 +2,20 @@
 # yarn lockfile v1
 
 
+"@akopyl/docusaurus-toc-patcher@^0.1.0":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@akopyl/docusaurus-toc-patcher/-/docusaurus-toc-patcher-0.1.0.tgz#beffc0b9f84bec356e2eaeab06401d031d088f61"
+  integrity sha512-KNBZsYidY2z2lQWCv/TgIQJLASFQKf2NQgOXkYOWdIzpfQ/rtWIIoZZXbzfyoXNRU3iwRkeqVWOHfjIPXmWP8A==
+  dependencies:
+    "@babel/parser" "^7.18.8"
+    "@babel/traverse" "^7.18.8"
+    escape-html "^1.0.3"
+    mdast-util-to-string "^2.0.0"
+    stringify-object "^3.3.0"
+    unified "^9.2.2"
+    unist-util-visit "^2.0.3"
+    webpack "^5.73.0"
+
 "@algolia/autocomplete-core@1.7.4":
   version "1.7.4"
   resolved "https://registry.yarnpkg.com/@algolia/autocomplete-core/-/autocomplete-core-1.7.4.tgz#85ff36b2673654a393c8c505345eaedd6eaa4f70"

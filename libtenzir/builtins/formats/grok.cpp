@@ -14,6 +14,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <string_view>
@@ -128,26 +129,45 @@ struct pattern {
 struct pattern_store : public caf::ref_counted {
   pattern_store() = default;
 
-  explicit pattern_store(std::span<const std::string_view> input) {
-    add(input);
+  explicit pattern_store(std::span<const std::string_view> input, location loc,
+                         diagnostic_handler& dh) {
+    add_multiple(input, loc, dh);
   }
 
   auto copy() const -> pattern_store* {
     return new pattern_store{patterns};
   }
 
-  void add(std::span<const std::string_view> input) {
+  void add_multiple(std::span<const std::string_view> input, location loc,
+                    diagnostic_handler& dh) {
     for (auto&& in : input) {
       for (auto&& line : detail::split(in, "\n")) {
-        parse_line(line);
+        add_single(line, loc, dh);
       }
     }
     resolve_all();
   }
 
-  void add(std::string_view input) {
+  void add_multiple(tenzir::record r, location loc, diagnostic_handler& dh) {
+    for (auto& [k, v] : r) {
+      if (auto* pv = try_as<std::string>(v)) {
+        add_single(k, std::move(*pv), loc, dh);
+      } else {
+        auto t = type::infer(v);
+        diagnostic::error(
+          "pattern definition must be a record `string: string`")
+          .primary(loc, "pattern `{}` was type `{}`", k,
+                   t ? t->kind() : type_kind{})
+          .emit(dh);
+      }
+    }
+    resolve_all();
+  }
+
+  void
+  add_multiple(std::string_view input, location loc, diagnostic_handler& dh) {
     for (auto&& line : detail::split(input, "\n")) {
-      parse_line(line);
+      add_single(line, loc, dh);
     }
     resolve_all();
   }
@@ -172,7 +192,9 @@ private:
     : patterns(other) {
   }
 
-  void parse_line(std::string_view line);
+  void add_single(std::string_view line, location loc, diagnostic_handler& dh);
+  void add_single(std::string_view key, std::string pattern, location loc,
+                  diagnostic_handler& dh);
 };
 
 void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
@@ -380,7 +402,20 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
   }
 }
 
-void pattern_store::parse_line(std::string_view line) {
+void pattern_store::add_single(std::string_view key, std::string pat,
+                               location loc, diagnostic_handler& dh) {
+  const auto [it, inserted]
+    = patterns.insert_or_assign(std::string{key}, pattern{std::move(pat), loc});
+  if (not inserted) {
+    diagnostic::warning(
+      "grok pattern `{}` is already defined and will be overwritten", key)
+      .primary(loc)
+      .emit(dh);
+  }
+}
+
+void pattern_store::add_single(std::string_view line, location loc,
+                               diagnostic_handler& dh) {
   if (line.empty()) {
     return;
   }
@@ -388,14 +423,18 @@ void pattern_store::parse_line(std::string_view line) {
     return;
   }
   auto parts = detail::split(line, " ", 1);
-  TENZIR_ASSERT(not patterns.contains(std::string{parts[0]}));
-  patterns.emplace(std::string{parts[0]}, std::string{parts[1]});
+  if (parts.size() < 2) {
+    diagnostic::error("pattern definition should have the form `NAME PATTERN`")
+      .primary(loc)
+      .emit(dh);
+  }
+  return add_single(parts[0], std::string{parts[1]}, loc, dh);
 }
 
-auto& get_builtin_pattern_store() {
+auto& get_builtin_pattern_store(diagnostic_handler& dh) {
   // Using CoW to avoid copying the builtin patterns unless we need to
   static auto store = caf::make_copy_on_write<pattern_store>(
-    std::span{builtin_patterns_strings});
+    std::span{builtin_patterns_strings}, location::unknown, dh);
   return store;
 }
 
@@ -407,22 +446,29 @@ class grok_parser final : public plugin_parser {
 public:
   grok_parser() = default;
 
-  grok_parser(std::optional<std::string> pattern_definitions,
+  using pattern_definitions_type
+    = std::optional<std::variant<located<std::string>, located<record>>>;
+
+  grok_parser(pattern_definitions_type pattern_definitions,
               located<std::string> pattern, bool indexed_captures,
-              bool include_unnamed, multi_series_builder::options opts)
-    : patterns_{get_builtin_pattern_store()},
+              bool include_unnamed, multi_series_builder::options opts,
+              diagnostic_handler& dh)
+    : patterns_{get_builtin_pattern_store(dh)},
       input_pattern_{std::move(pattern)},
       indexed_captures_{indexed_captures},
       include_unnamed_{include_unnamed},
       opts_{std::move(opts)} {
     if (pattern_definitions) {
-      patterns_.unshared().add(*pattern_definitions);
+      match(*pattern_definitions, [&](auto& def) {
+        patterns_.unshared().add_multiple(std::move(def.inner), def.source, dh);
+      });
     }
     TENZIR_ASSERT_EXPENSIVE(std::ranges::all_of(
       patterns_->patterns | std::views::values, [](const auto& p) -> bool {
         return p.resolved_pattern.has_value();
       }));
     input_pattern_.resolve(*patterns_, false);
+    TENZIR_ASSERT(input_pattern_.resolved_pattern);
   }
 
   auto name() const -> std::string override {
@@ -626,7 +672,7 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser
       = argument_parser{"grok", "https://docs.tenzir.com/operators/grok"};
-    auto pattern_definitions = std::optional<std::string>{};
+    auto pattern_definitions = std::optional<located<std::string>>{};
     auto raw_pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
@@ -648,9 +694,35 @@ public:
     return std::make_unique<grok_parser>(std::move(pattern_definitions),
                                          std::move(raw_pattern),
                                          indexed_captures, include_unnamed,
-                                         std::move(*msb_opts));
+                                         std::move(*msb_opts), dh);
   }
 };
+
+auto extract_pattern_definitions(std::optional<ast::expression> expr,
+                                 session ctx)
+  -> failure_or<grok_parser::pattern_definitions_type> {
+  if (not expr) {
+    return grok_parser::pattern_definitions_type{};
+  }
+  TRY(auto d, const_eval(*expr, ctx));
+  auto loc = expr->get_location();
+  return match(
+    d,
+    [&](std::string& s) -> failure_or<grok_parser::pattern_definitions_type> {
+      return located{std::move(s), loc};
+    },
+    [&](record& r) -> failure_or<grok_parser::pattern_definitions_type> {
+      return located{std::move(r), loc};
+    },
+    [&](const auto& v) -> failure_or<grok_parser::pattern_definitions_type> {
+      auto t = type::infer(v);
+      diagnostic::error("`pattern_definitions` must be `{}` or `{}`",
+                        type{string_type{}}.kind(), type{record_type{}}.kind())
+        .primary(loc, "got `{}`", t ? t->kind() : type_kind{})
+        .emit(ctx);
+      return failure::promise();
+    });
+}
 
 class read_grok_plugin : public operator_plugin2<parser_adapter<grok_parser>> {
 public:
@@ -661,12 +733,13 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
-    auto pattern_definitions = std::optional<std::string>{};
+    auto pattern_definitions_expression = std::optional<ast::expression>{};
     auto raw_pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
     parser.positional("pattern", raw_pattern);
-    parser.named("pattern_definitions", pattern_definitions);
+    parser.named("pattern_definitions", pattern_definitions_expression,
+                 "record|string");
     parser.named("indexed_captures", indexed_captures);
     parser.named("include_unnamed", include_unnamed);
     auto msb_parser = multi_series_builder_argument_parser{};
@@ -674,13 +747,12 @@ public:
     TRY(parser.parse(inv, ctx));
     TRY(auto opts, msb_parser.get_options(ctx));
     opts.settings.default_schema_name = "tenzir.grok";
+    TRY(auto pattern_definitions,
+        extract_pattern_definitions(std::move(pattern_definitions_expression),
+                                    ctx));
     return std::make_unique<parser_adapter<grok_parser>>(grok_parser{
-      std::move(pattern_definitions),
-      std::move(raw_pattern),
-      indexed_captures,
-      include_unnamed,
-      std::move(opts),
-    });
+      std::move(pattern_definitions), std::move(raw_pattern), indexed_captures,
+      include_unnamed, std::move(opts), ctx.dh()});
   }
 };
 
@@ -696,44 +768,49 @@ public:
     auto pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
-    TRY(argument_parser2::function("grok")
-          .positional("input", input, "string")
-          .positional("pattern", pattern)
-          .named("indexed_captures", indexed_captures)
-          .named("include_unnamed", include_unnamed)
-          .parse(inv, ctx));
-    auto parser = grok_parser{
-      std::nullopt,
+    auto pattern_definitions_expression = std::optional<ast::expression>{};
+
+    auto parser = argument_parser2::function("parse_grok");
+    parser.positional("input", input, "string");
+    parser.positional("pattern", pattern);
+    parser.named("pattern_definitions", pattern_definitions_expression,
+                 "record|string");
+    parser.named("indexed_captures", indexed_captures);
+    parser.named("include_unnamed", include_unnamed);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto pattern_definitions,
+        extract_pattern_definitions(std::move(pattern_definitions_expression),
+                                    ctx));
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
+    auto p = grok_parser{
+      std::move(pattern_definitions),
       std::move(pattern),
       indexed_captures,
       include_unnamed,
-      multi_series_builder::options{},
+      std::move(msb_opts),
+      ctx.dh(),
     };
-    return function_use::make([input = std::move(input),
-                               parser = std::move(parser)](evaluator eval,
-                                                           session ctx) {
-      return map_series(eval(input), [&](series values) {
-        if (values.type.kind().is<null_type>()) {
-          return values;
-        }
-        auto strings = try_as<arrow::StringArray>(&*values.array);
-        if (not strings) {
-          diagnostic::warning("expected string, got `{}`", values.type.kind())
-            .primary(input)
-            .emit(ctx);
-          return series::null(null_type{}, eval.length());
-        }
-        auto output = parser.parse_strings(*strings, ctx.dh());
-        // TODO: Evaluator can only handle single type atm.
-        if (output.size() != 1) {
-          diagnostic::warning("varying type within batch is not yet supported")
-            .primary(input)
-            .emit(ctx);
-          return series::null(null_type{}, eval.length());
-        }
-        return std::move(output[0]);
+    return function_use::make(
+      [input = std::move(input),
+       parser = std::move(p)](evaluator eval, session ctx) -> multi_series {
+        return map_series(eval(input), [&](series values) -> multi_series {
+          if (values.type.kind().is<null_type>()) {
+            return values;
+          }
+          auto strings = try_as<arrow::StringArray>(&*values.array);
+          if (not strings) {
+            diagnostic::warning("expected string, got `{}`", values.type.kind())
+              .primary(input)
+              .emit(ctx);
+            return series::null(null_type{}, values.length());
+          }
+          auto output = parser.parse_strings(*strings, ctx.dh());
+          return multi_series{std::move(output)};
+        });
       });
-    });
   }
 };
 

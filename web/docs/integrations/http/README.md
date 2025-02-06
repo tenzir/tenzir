@@ -23,7 +23,7 @@ The URL schemes `http://` and `https://` dispatch to
 
 Since the majority of HTTP activity uses JSON-encoded request/response
 bodies, you do not need to provide a separate pipeline argument with
-[`read_json`](../../tql2/operators/read_json.md) and
+[`read_json`](../../tql2/operators/read_json.mdx) and
 [`write_ndjson`](../../tql2/operators/write_ndjson.md).
 :::
 
@@ -48,5 +48,5 @@ from {
   x: 42,
   y: "foo",
 }
-to "http://example.com:8888/api" 
+to "http://example.com:8888/api"
 ```

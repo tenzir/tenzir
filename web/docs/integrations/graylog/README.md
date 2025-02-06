@@ -60,7 +60,7 @@ from "tcp://1.2.3.4:5678" {
 This pipelines opens a listening socket at IP address 1.2.3.4 at port 5678 via
 [`from`](../../tql2/operators/from.md) and then spawns a nested pipeline per
 accepted connection, each of which reads a stream of GELF messages using
-[`read_gelf`](../../tql2/operators/read_gelf.md). Graylog will connect to
+[`read_gelf`](../../tql2/operators/read_gelf.mdx). Graylog will connect to
 this socket, based on the reconnect interval that you configured in the output
 (by default 500ms).
 

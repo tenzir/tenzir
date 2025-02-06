@@ -28,7 +28,7 @@ to_fluent_bit "plugin", options={key1: value1, key2:value2, …}
 ```
 
 :::tip Read from Fluent Bit
-You can acquire events from Fluent Bit using the [`from_fluent_bit` operator](from_fluent_bit.md).
+You can acquire events from Fluent Bit using the [`from_fluent_bit` operator](from_fluent_bit.mdx).
 :::
 
 ### `plugin: string`

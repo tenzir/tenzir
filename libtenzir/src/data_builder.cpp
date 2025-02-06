@@ -56,6 +56,10 @@ auto data_builder::list() -> detail::data_builder::node_list* {
   return root_.list();
 }
 
+auto data_builder::data_unparsed(std::string text) -> void {
+  return root_.data_unparsed(std::move(text));
+}
+
 auto data_builder::find_field_raw(std::string_view key)
   -> detail::data_builder::node_object* {
   if (auto r = root_.get_if<detail::data_builder::node_record>()) {

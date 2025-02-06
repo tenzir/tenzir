@@ -144,6 +144,7 @@ async function createConfig() {
             showLastUpdateAuthor: false,
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
             rehypePlugins: [[rehypePrettyCode, rehypePrettyCodeOptions]],
+            remarkPlugins: [[require('@akopyl/docusaurus-toc-patcher'), {} ]]
           },
           blog: {
             blogTitle: 'Blog',

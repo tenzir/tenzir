@@ -135,16 +135,19 @@ auto parse_extension(std::string_view extension, auto builder,
   return {};
 }
 
-[[nodiscard]] auto parse_line(std::string_view line, auto& msb,
+[[nodiscard]] auto parse_line(std::string_view line, location loc, auto& msb,
                               const detail::quoting_escaping_policy& quoting)
   -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() < 7 or fields.size() > 8) {
-    return diagnostic::warning("incorrect field count in CEF event").done();
+    return diagnostic::warning("incorrect field count in CEF event")
+      .primary(loc)
+      .done();
   }
   if (not fields[0].starts_with("CEF:")) {
     return diagnostic::warning("invalid CEF header")
+      .primary(loc)
       .note("header does not start with `CEF:`")
       .done();
   }
@@ -153,6 +156,7 @@ auto parse_extension(std::string_view extension, auto builder,
     fields[0].c_str() + 4, fields[0].c_str() + fields[0].size(), version);
   if (ec != std::errc{}) {
     return diagnostic::warning("invalid CEF header")
+      .primary(loc)
       .note("failed to parse CEF version")
       .done();
   }
@@ -175,7 +179,8 @@ auto parse_extension(std::string_view extension, auto builder,
 }
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
-                diagnostic_handler& diag, multi_series_builder::options options)
+                diagnostic_handler& diag, location loc,
+                multi_series_builder::options options)
   -> generator<table_slice> {
   size_t line_counter = 0;
   auto dh = transforming_diagnostic_handler{
@@ -207,7 +212,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       TENZIR_DEBUG("CEF parser ignored empty line");
       continue;
     }
-    auto d = parse_line(*line, msb, quoting);
+    auto d = parse_line(*line, loc, msb, quoting);
     if (d) {
       dh.emit(std::move(*d));
     }
@@ -238,14 +243,17 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), options_);
+    return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), loc_,
+                      options_);
   }
 
   friend auto inspect(auto& f, cef_parser& x) -> bool {
-    return f.apply(x.options_);
+    return f.object(x).fields(f.field("loc", x.loc_),
+                              f.field("options", x.options_));
   }
 
 private:
+  location loc_;
   multi_series_builder::options options_;
 };
 
@@ -295,19 +303,24 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(name())
-          .positional("x", expr, "string")
-          .parse(inv, ctx));
-    return function_use::make(
-      [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
-        return map_series(eval(expr), [&](series arg) {
-          auto f = detail::overload{
+    auto parser = argument_parser2::function(name());
+    parser.positional("x", expr, "string");
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_policy_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true, false);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto msb_opts, msb_parser.get_options(ctx));
+    return function_use::make([call = inv.call.get_location(),
+                               msb_opts = std::move(msb_opts),
+                               expr = std::move(expr)](auto eval, session ctx) {
+      return map_series(eval(expr), [&](series arg) {
+        auto f
+          = detail::overload{
             [&](const arrow::NullArray&) {
               return multi_series{arg};
             },
             [&](const arrow::StringArray& arg) {
-              // TODO: Use multi-series builder here.
-              auto b = series_builder{};
+              auto b = multi_series_builder{msb_opts, ctx};
               auto quoting = detail::quoting_escaping_policy{
                 .unescape_operation = unescape,
               };
@@ -316,13 +329,13 @@ public:
                   b.null();
                   continue;
                 }
-                auto diag = parse_line(*string, b, quoting);
+                auto diag = parse_line(*string, call, b, quoting);
                 if (diag) {
                   ctx.dh().emit(std::move(*diag));
                   b.null();
                 }
               }
-              return multi_series{b.finish()};
+              return multi_series{b.finalize()};
             },
             [&](const auto&) -> multi_series {
               diagnostic::warning("`parse_cef` expected `string`, got `{}`",
@@ -332,9 +345,9 @@ public:
               return series::null(null_type{}, arg.length());
             },
           };
-          return match(*arg.array, f);
-        });
+        return match(*arg.array, f);
       });
+    });
   }
 };
 

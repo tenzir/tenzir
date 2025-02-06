@@ -93,6 +93,11 @@ def run_simple_test(
     except subprocess.TimeoutExpired:
         fail(test)
         return False
+    except subprocess.CalledProcessError as e :
+        with stdout_lock :
+            fail(test)
+            print(f"└─▶ \033[31msubprocess error \"{e}\":\033[0m")
+        return False
     if test.read_bytes().startswith(b"// error") == good:
         with stdout_lock:
             fail(test)
@@ -109,7 +114,9 @@ def run_simple_test(
             f.write(output)
     else:
         if not ref_path.exists():
-            fail(test)
+            with stdout_lock:
+                fail(test)
+                print(f"└─▶ \033[31mFailed to find ref file: \"{ref_path}\"\033[0m")
             return False
         expected = ref_path.read_bytes()
         if expected != output:

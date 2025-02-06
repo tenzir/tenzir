@@ -1,0 +1,6 @@
+from {input: "1"},
+  { input: r#""string""#},
+  { input: r#"{ "a": 42, "b": "text"}"# },
+  { input: "[0,1]" },
+  { input: "failure" }
+output = input.parse_json()
