@@ -186,6 +186,7 @@ struct [[nodiscard]] operator_metric {
   operator_measurement inbound_measurement = {};
   operator_measurement outbound_measurement = {};
   duration time_starting = {};
+  duration time_to_first_input = {};
   duration time_processing = {};
   duration time_scheduled = {};
   duration time_total = {};
@@ -206,6 +207,7 @@ struct [[nodiscard]] operator_metric {
       f.field("operator_index", x.operator_index),
       f.field("operator_name", x.operator_name),
       f.field("time_starting", x.time_starting),
+      f.field("time_to_first_input", x.time_to_first_input),
       f.field("time_processing", x.time_processing),
       f.field("time_scheduled", x.time_scheduled),
       f.field("time_total", x.time_total),

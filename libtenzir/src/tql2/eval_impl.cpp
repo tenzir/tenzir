@@ -428,12 +428,13 @@ auto evaluator::input_or_throw(into_location location) -> const table_slice& {
 }
 
 auto evaluator::to_series(const data& x) const -> series {
-  // TODO: This is overkill.
   auto b = series_builder{};
-  for (auto i = int64_t{0}; i < length_; ++i) {
-    b.data(x);
-  }
-  return b.finish_assert_one_array();
+  b.data(x);
+  auto s = b.finish_assert_one_array();
+  return series{
+    std::move(s.type),
+    check(arrow::MakeArrayFromScalar(*check(s.array->GetScalar(0)), length_)),
+  };
 }
 
 } // namespace tenzir

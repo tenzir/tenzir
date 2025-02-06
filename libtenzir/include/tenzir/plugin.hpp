@@ -402,6 +402,10 @@ public:
     (void)order;
     return nullptr;
   }
+
+  virtual auto idle_after() const -> duration {
+    return duration::zero();
+  }
 };
 
 /// @see operator_parser_plugin

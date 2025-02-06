@@ -1146,7 +1146,12 @@ struct exec_node_state {
   auto push(Input input) -> caf::result<void>
     requires(not std::is_same_v<Input, std::monostate>)
   {
+    if (metrics.time_to_first_input == duration::zero()) {
+      metrics.time_to_first_input
+        = std::chrono::steady_clock::now() - start_time;
+    }
     const auto input_size = size(input);
+    TENZIR_ASSERT(input_size > 0);
     TENZIR_TRACE("{} {} received {} elements from upstream", *self, op->name(),
                  input_size);
     metrics.inbound_measurement.num_elements += input_size;
