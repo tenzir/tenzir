@@ -9,7 +9,7 @@
   versions = import ./names.nix;
   f = name:
     callPackage ./generic.nix {
-      inherit name;
+      name = "tenzir-plugin-${name}";
       src = "${tenzir-plugins}/${name}";
       inherit tenzir;
     };

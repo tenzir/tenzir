@@ -37,7 +37,7 @@ macro (create_tenzir_symlink name)
   # different depending on whether the CMAKE_INSTALL_BINDIR is set to an
   # absolute path or not. We emulate this behavior for the symlinks here so they
   # will always end up in the same location.
-  if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
+  if (NOT IS_ABSOLUTE "${CMAKE_INSTALL_BINDIR}")
     install(
       CODE "
       execute_process(COMMAND

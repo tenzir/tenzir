@@ -39,7 +39,7 @@ if (NOT tsl-robin-map_FOUND)
     COMMENT "Linking tsl-robin-map targets")
   install(
     EXPORT tsl-robin-mapTargets
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/tenzir"
+    DESTINATION "${TENZIR_INSTALL_CMAKEDIR}/tenzir"
     NAMESPACE tsl::
     COMPONENT Development)
   string(APPEND TENZIR_EXTRA_TARGETS_FILES
@@ -467,6 +467,8 @@ if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs_relocatable.cpp.in"
     "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
+  file(READ "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" installdirs)
+  message(STATUS "installdirs:\n${installdirs}")
 else ()
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
                  "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
@@ -540,7 +542,7 @@ endif ()
 install(
   TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson} ${_tenzir_bundled_pfs}
   EXPORT TenzirTargets
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
+  ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 

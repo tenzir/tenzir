@@ -37,7 +37,7 @@ macro (TenzirNormalizeInstallDirs)
           "LOCALSTATE"
           "RUNSTATE"
           "LIB"
-          "INCLUDE"
+          # "INCLUDE" <- deliberately omitted
           # "OLDINCLUDE" <- deliberately omitted
           "DATAROOT"
           "DATA"
@@ -52,19 +52,26 @@ macro (TenzirNormalizeInstallDirs)
     if (IS_ABSOLUTE "${CMAKE_INSTALL_${_install}DIR}")
       string(
         REGEX
-        REPLACE "^${CMAKE_INSTALL_PREFIX}/" "" "CMAKE_INSTALL_${_install}DIR"
-                "${CMAKE_INSTALL_FULL_${_install}DIR}")
+        REPLACE "^${CMAKE_INSTALL_PREFIX}/" ""
+                "CMAKE_INSTALL_RELATIVE_${_install}DIR"
+                "${CMAKE_INSTALL_${_install}DIR}")
+    else ()
+      set(CMAKE_INSTALL_RELATIVE_${_install}DIR
+          "${CMAKE_INSTALL_${_install}DIR}")
     endif ()
-    # If the path is still absolute, e.g., because the full install dirs did
-    # were not subdirectories if the install prefix, give up and error. Nothing
-    # we can do here.
-    if (IS_ABSOLUTE "${CMAKE_INSTALL_${_install}DIR}")
+  endforeach ()
+  foreach (_install IN ITEMS "LIBEXEC" "SYSCONF" "LIB" "DATA")
+    # If the path is still absolute, e.g., because the full install dirs were
+    # not subdirectories if the install prefix, give up and error. Nothing we
+    # can do here.
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_RELATIVE_${_install}DIR}")
       message(
         FATAL_ERROR
           "CMAKE_INSTALL_${_install}DIR must not be an absolute path for relocatable installations."
       )
     endif ()
   endforeach ()
+  unset(_install)
   # For the docdir especially, lowercase the project name.
   if ("${CMAKE_INSTALL_DOCDIR}" STREQUAL
       "${CMAKE_INSTALL_DATAROOTDIR}/doc/${PROJECT_NAME}")
@@ -74,7 +81,6 @@ macro (TenzirNormalizeInstallDirs)
         "${CMAKE_INSTALL_FULL_DATAROOTDIR}/doc/${_name}")
     unset(_name)
   endif ()
-  unset(_install)
 endmacro ()
 
 # A replacement for target_link_libraries that links static libraries using
