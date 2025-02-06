@@ -39,6 +39,7 @@
 #include <fmt/format.h>
 
 #include <chrono>
+#include <queue>
 #include <simdjson.h>
 #include <string_view>
 
@@ -1109,7 +1110,8 @@ class write_json final : public crtp_operator<write_json> {
 public:
   write_json() = default;
 
-  explicit write_json(printer_args args) : printer_{std::move(args)} {
+  explicit write_json(printer_args args, size_t n_jobs)
+    : n_jobs_{n_jobs}, printer_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
@@ -1120,6 +1122,122 @@ public:
     return true;
   }
 
+  struct input_t {
+    size_t index;
+    table_slice slice;
+  };
+
+  auto
+  parallel_operator(generator<table_slice> input,
+                    operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    // TODO: Expose a better API for this.
+    caf::detail::set_thread_name("PRINTER");
+    auto inputs_mut = std::mutex{};
+    auto inputs = std::queue<input_t>{};
+    auto inputs_cv = std::condition_variable{};
+    auto outputs_mut = std::mutex{};
+    auto outputs = std::unordered_map<size_t, std::vector<chunk_ptr>>{};
+    auto input_index = size_t{0};
+    auto output_index = size_t{0};
+    auto work = [&]() {
+      auto printer = printer_.instantiate(type{}, ctrl);
+      TENZIR_ASSERT(printer);
+      TENZIR_ASSERT(*printer);
+      while (true) {
+        auto inputs_lock = std::unique_lock{inputs_mut};
+        inputs_cv.wait(inputs_lock, [&]() {
+          return not inputs.empty();
+        });
+        if (inputs.front().slice.rows() == 0) {
+          return;
+        }
+        auto my_work = std::move(inputs.front());
+        inputs.pop();
+        inputs_lock.unlock();
+        auto result = std::vector<chunk_ptr>{};
+        for (auto&& chunk : (*printer)->process(std::move(my_work.slice))) {
+          result.emplace_back(std::move(chunk));
+        }
+        auto output_lock = std::scoped_lock{outputs_mut};
+        auto [it, success]
+          = outputs.try_emplace(my_work.index, std::move(result));
+        TENZIR_ASSERT(success);
+      }
+    };
+    auto pool = std::vector<std::thread>(n_jobs_);
+    for (auto& t : pool) {
+      t = std::thread{work};
+    }
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      {
+        auto input_lock = std::unique_lock{inputs_mut};
+        while (inputs.size() > 1.5 * n_jobs_) {
+          input_lock.unlock();
+          co_yield {};
+          input_lock.lock();
+        }
+        /// TODO actually cut the slice
+        inputs.emplace(input_index, std::move(slice));
+        ++input_index;
+        inputs_cv.notify_one();
+      }
+      {
+        auto output_lock = std::scoped_lock{outputs_mut};
+        if (not ordered_) {
+          for (auto& [_, chunks] : outputs) {
+            for (auto& c : chunks) {
+              co_yield std::move(c);
+            }
+          }
+          outputs.clear();
+        } else {
+          for (; true; ++output_index) {
+            auto it = outputs.find(output_index);
+            if (it != outputs.end()) {
+              for (auto& c : it->second) {
+                co_yield std::move(c);
+              }
+              outputs.erase(it);
+              continue;
+            }
+            break;
+          }
+        }
+      }
+    }
+    {
+      auto input_lock = std::scoped_lock{inputs_mut};
+      inputs.emplace(input_index, table_slice{});
+      inputs_cv.notify_all();
+    }
+    for (auto& t : pool) {
+      t.join();
+    }
+    TENZIR_ASSERT(inputs.size() == 1);
+    TENZIR_ASSERT(inputs.front().index == input_index);
+    auto output_lock = std::scoped_lock{outputs_mut};
+    if (not ordered_) {
+      for (auto& [_, chunks] : outputs) {
+        for (auto& c : chunks) {
+          co_yield std::move(c);
+        }
+      }
+      outputs.clear();
+    } else {
+      for (; output_index < input_index; ++output_index) {
+        auto it = outputs.find(output_index);
+        TENZIR_ASSERT(it != outputs.end());
+        for (auto& c : it->second) {
+          co_yield std::move(c);
+        }
+      }
+    }
+  }
+
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     // TODO: Expose a better API for this.
@@ -1127,14 +1245,19 @@ public:
     auto printer = printer_.instantiate(type{}, ctrl);
     TENZIR_ASSERT(printer);
     TENZIR_ASSERT(*printer);
+    if (n_jobs_ > 1) {
+      for (auto&& o : parallel_operator(std::move(input), ctrl)) {
+        co_yield std::move(o);
+      }
+      co_return;
+    }
     for (auto&& slice : input) {
-      auto yielded = false;
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
       for (auto&& chunk : (*printer)->process(slice)) {
         co_yield std::move(chunk);
-        yielded = true;
-      }
-      if (not yielded) {
-        co_yield {};
       }
     }
     for (auto&& chunk : (*printer)->finish()) {
@@ -1145,14 +1268,19 @@ public:
   auto optimize(expression const& filter,
                 event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
+    auto replacement = std::make_unique<write_json>(*this);
+    replacement->ordered_ = order == event_order::ordered;
+    return optimize_result{std::nullopt, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, write_json& x) -> bool {
-    return f.apply(x.printer_);
+    return f.object(x).fields(f.field("n_jobs", x.n_jobs_),
+                              f.field("printer", x.printer_));
   }
 
 private:
+  bool ordered_ = true;
+  size_t n_jobs_;
   json_printer printer_;
 };
 
@@ -1360,6 +1488,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
+    auto n_jobs = size_t{};
     args.tql = tql_;
     auto parser = argument_parser2::operator_("write_json");
     parser.named("color", args.color_output);
@@ -1368,11 +1497,12 @@ public:
     parser.named("strip_nulls_in_lists", args.omit_nulls_in_lists);
     parser.named("strip_empty_records", args.omit_empty_objects);
     parser.named("strip_empty_lists", args.omit_empty_lists);
+    parser.named_optional("_jobs", n_jobs);
     if (tql_) {
       parser.named("compact", args.compact_output);
     }
     TRY(parser.parse(inv, ctx));
-    return std::make_unique<write_json>(args);
+    return std::make_unique<write_json>(args, n_jobs);
   }
 
   auto write_properties() const -> write_properties_t override {
@@ -1395,6 +1525,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.compact_output = location::unknown;
+    auto n_jobs = size_t{};
     TRY(argument_parser2::operator_(name())
           .named("color", args.color_output)
           .named("strip", args.omit_all)
@@ -1402,8 +1533,9 @@ public:
           .named("strip_nulls_in_lists", args.omit_nulls_in_lists)
           .named("strip_empty_records", args.omit_empty_objects)
           .named("strip_empty_lists", args.omit_empty_lists)
+          .named_optional("_jobs", n_jobs)
           .parse(inv, ctx));
-    return std::make_unique<write_json>(args);
+    return std::make_unique<write_json>(args, n_jobs);
   }
 
   auto write_properties() const -> write_properties_t override {
