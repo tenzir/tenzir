@@ -838,6 +838,7 @@ auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
   // TODO: We assume here that we can reorder outputs. However, even if we
   // maintain the order if we are not allowed to reorder, the output can
   // slightly change because we use separate builders.
+  args.builder_options.settings.ordered = false;
   // We use a single input queue to communicate with all worker threads. Putting
   // the empty vector in here tells the thread to stop.
   auto inputs = std::deque<std::vector<chunk_ptr>>{};
@@ -851,11 +852,10 @@ auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
   // possible within the constraints of the current implementation.
   auto outputs = std::deque<table_slice>{};
   auto outputs_mutex = std::mutex{};
-  auto work = [&] {
+  auto work = [&](shared_diagnostic_handler dh) {
     caf::detail::set_thread_name("read_work");
     // We reuse the parser throughout all iterations.
-    auto parser = ndjson_parser{args.parser_name, ctrl.diagnostics(),
-                                args.builder_options};
+    auto parser = ndjson_parser{args.parser_name, dh, args.builder_options};
     while (true) {
       auto inputs_lock = std::unique_lock{inputs_mutex};
       inputs_cv.wait(inputs_lock, [&] {
@@ -893,7 +893,7 @@ auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
   TENZIR_ASSERT(args.jobs > 0);
   auto threads = std::vector<std::thread>{};
   for (auto i = uint64_t{0}; i < args.jobs; ++i) {
-    threads.emplace_back(work);
+    threads.emplace_back(work, ctrl.shared_diagnostics());
   }
   // With the current execution model, the generator can be destroyed at any
   // yield. Because we are running threads, we need to protect against that.
