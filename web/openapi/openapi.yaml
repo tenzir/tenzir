@@ -45,7 +45,7 @@ components:
           type: string
           description: "A duration string specifying the maximum time for this pipeline to\nexist. No value means the pipeline is allowed to exist forever.\nThis parameter must be defined if the `hidden` parameter is true.\n"
           default: null
-          example: 5.0m
+          example: 5min
         autostart:
           $ref: "#/components/schemas/PipelineAutostart"
         autodelete:
@@ -53,8 +53,8 @@ components:
         retry_delay:
           type: string
           description: "A duration string specifying the minimum time between automatic restarts\nof a pipeline when an error occurs. Takes no effect if restarting on\nfailure is disabled.\n"
-          default: 1.0m
-          example: 500.0ms
+          default: 1min
+          example: 500ms
         unstoppable:
           type: boolean
           description: "A flag specifying whether this pipeline is unstoppable.\nUnstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.\n"
@@ -118,11 +118,11 @@ components:
             cache_read_timeout:
               type: string
               description: "The time to live of the cache. Resets when reading from the cache.\n"
-              example: 1.0m
+              example: 1min
             cache_write_timeout:
               type: string
               description: "The maximum time to live of the cache. Unlike the `cache_read_timeout`\nparameter, this does not reset when reading from the cache.\n"
-              example: 1.0h
+              example: 1h
             serve_id:
               type: string
               description: The identifier for the `serve` operator.
@@ -245,7 +245,7 @@ components:
         retry_delay:
           type: string
           description: "A duration string specifying the minimum time between automatic restarts\nof a pipeline when an error occurs. Takes no effect if restarting on\nfailure is disabled.\n"
-          example: 10.0s
+          example: 10s
         autostart:
           $ref: "#/components/schemas/PipelineAutostart"
         autodelete:
@@ -253,11 +253,11 @@ components:
         ttl:
           type: string
           description: If a TTL exists for this pipeline, the TTL as a duration string.
-          example: 2.0m
+          example: 2min
         remaining_ttl:
           type: string
           description: If a TTL exists for this pipeline, the remaining TTL as a duration string.
-          example: 10.0s
+          example: 10s
     PipelineLabel:
       type: object
       properties:
@@ -542,7 +542,7 @@ paths:
                 retry_delay:
                   type: string
                   description: "A duration string specifying the minimum time between automatic restarts\nof a pipeline when an error occurs. Takes no effect if restarting on\nfailure is disabled.\n"
-                  example: 500.0ms
+                  example: 500ms
                 unstoppable:
                   type: boolean
                   description: "A flag specifying whether this pipeline is unstoppable.\nUnstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.\n"
@@ -605,8 +605,8 @@ paths:
                   description: Wait for this number of events before returning.
                 timeout:
                   type: string
-                  example: 200.0ms
-                  default: 5.0s
+                  example: 200ms
+                  default: 5s
                   description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 10 seconds.
       responses:
         200:
@@ -620,6 +620,10 @@ paths:
                     type: string
                     description: A token to access the next pipeline data batch, null if the pipeline is completed.
                     example: 340ce2j
+                  state:
+                    type: string
+                    description: The state of the corresponding pipeline at the time of the request. One of `running`, `completed`, or `failed`.
+                    example: running
                   schemas:
                     type: array
                     items:
@@ -676,13 +680,13 @@ paths:
                     example:
                       - schema_id: c631d301e4b18f4
                         data:
-                          timestamp: 2023-04-26T12:00:00.000000
+                          timestamp: 2023-04-26T12:00:00Z
                           schema: zeek.conn
                           schema_id: ab2371bas235f1
                           events: 50
                       - schema_id: c631d301e4b18f4
                         data:
-                          timestamp: 2023-04-26T12:05:00.000000
+                          timestamp: 2023-04-26T12:05:00Z
                           schema: suricata.dns
                           schema_id: cd4771bas235f1
                           events: 50

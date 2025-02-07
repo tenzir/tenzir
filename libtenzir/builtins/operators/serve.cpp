@@ -76,6 +76,8 @@
 
 namespace tenzir::plugins::serve {
 
+TENZIR_ENUM(serve_state, running, completed, failed);
+
 namespace {
 
 constexpr auto SERVE_ENDPOINT_ID = 0;
@@ -129,6 +131,10 @@ constexpr auto SPEC_V0 = R"_(
                   type: string
                   description: A token to access the next pipeline data batch, null if the pipeline is completed.
                   example: "340ce2j"
+                state:
+                  type: string
+                  description: The state of the corresponding pipeline at the time of the request. One of `running`, `completed`, or `failed`.
+                  example: "running"
                 schemas:
                   type: array
                   items:
@@ -690,8 +696,8 @@ struct serve_handler_state {
   }
 
   static auto create_response(const std::string& next_continuation_token,
-                              const std::vector<table_slice>& results)
-    -> std::string {
+                              const std::vector<table_slice>& results,
+                              serve_state state) -> std::string {
     auto printer = json_printer{{
       .indentation = 0,
       .oneline = true,
@@ -699,9 +705,12 @@ struct serve_handler_state {
     }};
     auto result
       = next_continuation_token.empty()
-          ? std::string{R"({"next_continuation_token":null,"events":[)"}
-          : fmt::format(R"({{"next_continuation_token":"{}","events":[)",
-                        next_continuation_token);
+          ? fmt::format(
+              R"({{"next_continuation_token":null,"state":"{}","events":[)",
+              state)
+          : fmt::format(
+              R"({{"next_continuation_token":"{}","state":"{}","events":[)",
+              next_continuation_token, state);
     auto out_iter = std::back_inserter(result);
     auto seen_schemas = std::unordered_set<type>{};
     bool first = true;
@@ -774,8 +783,11 @@ struct serve_handler_state {
       .then(
         [rp](const std::tuple<std::string, std::vector<table_slice>>&
                result) mutable {
-          rp.deliver(rest_response::from_json_string(
-            create_response(std::get<0>(result), std::get<1>(result))));
+          const auto& [continuation_token, results] = result;
+          rp.deliver(rest_response::from_json_string(create_response(
+            continuation_token, results,
+            continuation_token.empty() ? serve_state::completed
+                                       : serve_state::running)));
         },
         [rp](const caf::error& err) mutable {
           if (err == caf::exit_reason::user_shutdown
@@ -785,8 +797,10 @@ struct serve_handler_state {
             // an internal error from the /serve endpoint, but rather report
             // that we're done. The user must get the diagnostic from the
             // `diagnostics` operator.
-            rp.deliver(
-              rest_response::from_json_string(create_response({}, {})));
+            rp.deliver(rest_response::from_json_string(create_response(
+              {}, {},
+              err == caf::exit_reason::user_shutdown ? serve_state::completed
+                                                     : serve_state::failed)));
             return;
           }
           rp.deliver(rest_response::make_error(400, fmt::to_string(err), {}));
