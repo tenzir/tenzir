@@ -81,6 +81,7 @@ Operator | Description | Example
 [`load_kafka`](./operators/load_kafka.md) | Receives bytes from an Apache Kafka topic | `load_kafka topic="example"`
 [`load_nic`](./operators/load_nic.md) | Receives bytes from a Network Interface Card | `load_nic "eth0"`
 [`load_s3`](./operators/load_s3.md) | Receives bytes from an Amazon S3 object | `load_s3 "s3://my-bucket/obj.csv"`
+[`load_stdin`](./operators/load_stdin.md) | Receives bytes standard input | `load_stdin`
 [`load_sqs`](./operators/load_sqs.md) | Receives bytes from an Amazon SQS queue | `load_sqs "sqs://tenzir"`
 [`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
 [`load_udp`](./operators/load_udp.md) | Loads bytes from a UDP socket | `load_udp "0.0.0.0:8090"`
@@ -114,6 +115,7 @@ Operator | Description | Example
 [`save_http`](./operators/save_http.md) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
 [`save_kafka`](./operators/save_kafka.md) | Saves incoming bytes to an Apache Kafka topic | `save_kafka topic="example"`
 [`save_s3`](./operators/save_s3.md) | Saves incoming bytes to an Amazon S3 object | `save_s3 "s3://my-bucket/obj.csv"`
+[`save_stdout`](./operators/save_stdout.md) | Saves incoming bytes to standard output | `save_stdout`
 [`save_sqs`](./operators/save_sqs.md) | Saves incoming bytes to an Amazon SQS queue | `save_sqs "sqs://tenzir"`
 [`save_tcp`](./operators/save_tcp.md) | Saves incoming bytes to a TCP or TLS connection | `save_tcp "0.0.0.0:8090", tls=true`
 [`save_udp`](./operators/save_udp.md) | Saves incoming bytes to a UDP socket | `save_udp "0.0.0.0:8090"`

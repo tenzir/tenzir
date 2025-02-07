@@ -37,3 +37,7 @@ combined with `append=true`.
 ```tql
 save_file "/tmp/out.txt"
 ```
+
+## See Also
+
+[`load_file`](load_file.md), [`save_stdout`](save_stdout.md)

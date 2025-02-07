@@ -47,3 +47,7 @@ processing forward.
 ```tql
 load_file "example.txt"
 ```
+
+## See Also
+
+[`save_file`](save_file.md), [`load_stdin`](load_stdin.md)
