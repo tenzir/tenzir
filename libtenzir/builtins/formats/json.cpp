@@ -1388,8 +1388,17 @@ public:
     table_slice slice;
   };
 
+  auto detached() const -> bool override {
+    return n_jobs_ > 0;
+  }
+
+  auto idle_after() const -> duration override {
+    return n_jobs_ == 0 ? duration::zero() : duration::max();
+  }
+
   auto
   parallel_operator(generator<table_slice> input) const -> generator<chunk_ptr> {
+    caf::detail::set_thread_name("write_json");
     auto inputs_mut = std::mutex{};
     auto inputs = std::deque<input_t>{};
     auto inputs_cv = std::condition_variable{};
@@ -1398,6 +1407,7 @@ public:
     auto input_index = size_t{0};
     auto output_index = size_t{0};
     auto work = [&]() {
+      caf::detail::set_thread_name("write_work");
       auto printer = printer_.instantiate_impl();
       TENZIR_ASSERT(printer);
       TENZIR_ASSERT(*printer);
@@ -1520,7 +1530,7 @@ public:
     auto printer = printer_.instantiate(type{}, ctrl);
     TENZIR_ASSERT(printer);
     TENZIR_ASSERT(*printer);
-    if (n_jobs_ > 1) {
+    if (n_jobs_ > 0) {
       for (auto&& o : parallel_operator(std::move(input))) {
         co_yield std::move(o);
       }
