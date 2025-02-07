@@ -7,7 +7,7 @@ Sends events to a Splunk [HTTP Event Collector (HEC)][hec].
 ```tql
 to_splunk url:string, hec_token=string,
           [host=string, source=string, sourcetype=expr, index=expr,
-          cacert=string, certfile=string, keyfile=string,
+          tls=bool, cacert=string, certfile=string, keyfile=string,
           skip_peer_verification=bool, print_nulls=bool,
           max_content_length=int, buffer_timeout=duration, compress=bool]
 ```
@@ -63,6 +63,13 @@ An optional expression for the [Splunk
 If you do not provide this option, Splunk will use the default index.
 
 **NB**: HEC silently drops events with an invalid `index`.
+
+### `tls = bool (optional)`
+
+Enables TLS.
+
+If the URL scheme is `https`, or any of the other TLS related
+options are set, the option defaults to `true`, otherwise it is `false`.
 
 ### `cacert = string (optional)`
 

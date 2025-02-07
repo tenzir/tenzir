@@ -4,9 +4,9 @@ Sends events to an OpenSearch-compatible Bulk API.
 
 ```tql
 to_opensearch url:string, action=string, [index=string, id=string, doc=record,
-    user=string, passwd=string, skip_peer_verification=bool, cacert=string,
-    certfile=string, keyfile=string, include_nulls=bool, max_content_length=int,
-    buffer_timeout=duration, compress=bool]
+    user=string, passwd=string, tls=bool, skip_peer_verification=bool,
+    cacert=string, certfile=string, keyfile=string, include_nulls=bool,
+    max_content_length=int, buffer_timeout=duration, compress=bool]
 ```
 
 ## Description
@@ -62,6 +62,13 @@ Optional user for HTTP Basic Authentication.
 ### `passwd = string (optional)`
 
 Optional password for HTTP Basic Authentication.
+
+### `tls = bool (optional)`
+
+Enables TLS.
+
+If the URL scheme is `https`, or any of the other TLS related
+options are set, the option defaults to `true`, otherwise it is `false`.
 
 ### `skip_peer_verification = bool (optional)`
 
