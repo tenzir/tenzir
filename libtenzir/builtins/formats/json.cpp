@@ -1082,8 +1082,8 @@ public:
     return "json";
   }
 
-  auto instantiate(type, operator_control_plane&) const
-    -> caf::expected<std::unique_ptr<printer_instance>> override {
+  auto
+  instantiate_impl() const -> caf::expected<std::unique_ptr<printer_instance>> {
     const auto compact = !!args_.compact_output;
     auto style = default_style();
     if (args_.monochrome_output) {
@@ -1154,6 +1154,11 @@ public:
         auto chunk = chunk::make(std::move(buffer), meta);
         co_yield std::move(chunk);
       });
+  }
+
+  auto instantiate(type, operator_control_plane&) const
+    -> caf::expected<std::unique_ptr<printer_instance>> override {
+    return instantiate_impl();
   }
 
   auto allows_joining() const -> bool override {
@@ -1378,18 +1383,13 @@ public:
     return "tql2.write_json";
   }
 
-  auto detached() const -> bool override {
-    return true;
-  }
-
   struct input_t {
     uint64_t index;
     table_slice slice;
   };
 
   auto
-  parallel_operator(generator<table_slice> input,
-                    operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  parallel_operator(generator<table_slice> input) const -> generator<chunk_ptr> {
     auto inputs_mut = std::mutex{};
     auto inputs = std::deque<input_t>{};
     auto inputs_cv = std::condition_variable{};
@@ -1398,7 +1398,7 @@ public:
     auto input_index = size_t{0};
     auto output_index = size_t{0};
     auto work = [&]() {
-      auto printer = printer_.instantiate(type{}, ctrl);
+      auto printer = printer_.instantiate_impl();
       TENZIR_ASSERT(printer);
       TENZIR_ASSERT(*printer);
       while (true) {
@@ -1423,6 +1423,7 @@ public:
         TENZIR_ASSERT(success);
       }
     };
+    TENZIR_ASSERT(n_jobs_ > 0);
     auto pool = std::vector<std::thread>(n_jobs_);
     for (auto& t : pool) {
       t = std::thread{work};
@@ -1516,13 +1517,11 @@ public:
 
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    // TODO: Expose a better API for this.
-    caf::detail::set_thread_name("PRINTER");
     auto printer = printer_.instantiate(type{}, ctrl);
     TENZIR_ASSERT(printer);
     TENZIR_ASSERT(*printer);
     if (n_jobs_ > 1) {
-      for (auto&& o : parallel_operator(std::move(input), ctrl)) {
+      for (auto&& o : parallel_operator(std::move(input))) {
         co_yield std::move(o);
       }
       co_return;
