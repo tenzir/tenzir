@@ -366,6 +366,10 @@ struct serve_manager_state {
         ops.erase(found);
       }
     };
+    if (err) {
+      delete_serve();
+      return;
+    }
     detail::weak_run_delayed(self, defaults::api::serve::retention_time,
                              delete_serve);
   }
