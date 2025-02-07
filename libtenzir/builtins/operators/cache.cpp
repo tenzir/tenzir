@@ -7,20 +7,40 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
+#include <tenzir/data.hpp>
 #include <tenzir/detail/flat_map.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/error.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>
 
+#include <arrow/util/byte_size.h>
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
+#include <caf/async/spsc_buffer.hpp>
+#include <caf/scheduled_actor/flow.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <algorithm>
+#include <numeric>
+#include <utility>
+
 namespace tenzir::plugins::cache {
 
+// NOTE: The sort order of the state is relied upon for cache eviction.
+TENZIR_ENUM(cache_state, failed, closed, open);
+
 namespace {
+
+struct cache_update {
+  uint64_t approx_bytes = {};
+  cache_state state = {};
+};
 
 struct cache_actor_traits {
   using signatures = caf::type_list<
@@ -40,12 +60,24 @@ public:
 
   cache(cache_actor::pointer self, shared_diagnostic_handler diagnostics,
         located<uint64_t> capacity, duration read_timeout,
-        duration write_timeout)
+        duration write_timeout,
+        caf::async::producer_resource<cache_update> update_producer)
     : self_{self},
       diagnostics_{std::move(diagnostics)},
       capacity_{capacity},
+      update_multicaster_{self_},
       read_timeout_{read_timeout},
       write_timeout_{write_timeout} {
+    update_multicaster_
+      .as_observable()
+      // We report the first value immediately...
+      .take(1)
+      .merge(
+        // ... followed by one every second...
+        update_multicaster_.as_observable().sample(std::chrono::seconds{1}),
+        // ... and then end with the last value.
+        update_multicaster_.as_observable().take_last(1))
+      .subscribe(std::move(update_producer));
   }
 
   auto make_behavior() -> cache_actor::behavior_type {
@@ -53,7 +85,7 @@ public:
       [this](atom::write, atom::ok) -> caf::result<bool> {
         return write_ok();
       },
-      [this](atom::write, table_slice& events) -> caf::result<bool> {
+      [this](atom::write, table_slice events) -> caf::result<bool> {
         return write(std::move(events));
       },
       [this](atom::read) -> caf::result<table_slice> {
@@ -92,9 +124,14 @@ private:
     TENZIR_ASSERT(sender);
     if (not writer_) {
       writer_ = sender->address();
-      self_->monitor(sender, [this](const caf::error&) {
+      self_->monitor(sender, [this](const caf::error& err) {
         TENZIR_ASSERT(not done_);
         done_ = true;
+        update_multicaster_.push(cache_update{
+          .approx_bytes = byte_size_,
+          .state = err ? cache_state::failed : cache_state::closed,
+        });
+        update_multicaster_.close();
         reset_read_timeout();
         // We ignore error messages because they do not matter to the readers.
         for (auto& [_, reader] : readers_) {
@@ -119,6 +156,15 @@ private:
       }
     }
     cache_size_ += events.rows();
+    // Calculate the byte size of any referenced Arrow buffers
+    byte_size_ += detail::narrow_cast<uint64_t>(
+      check(arrow::util::ReferencedBufferSize(*to_record_batch(events))));
+    if (update_multicaster_.buffered() == 0) {
+      update_multicaster_.push(cache_update{
+        .approx_bytes = byte_size_,
+        .state = cache_state::open,
+      });
+    }
     cached_events_.push_back(std::move(events));
     for (auto& [_, reader] : readers_) {
       if (not reader.rp.pending()) {
@@ -169,6 +215,9 @@ private:
   uint64_t cache_size_ = {};
   std::vector<table_slice> cached_events_ = {};
 
+  uint64_t byte_size_ = {};
+  caf::flow::multicaster<cache_update> update_multicaster_;
+
   caf::actor_addr writer_ = {};
   bool done_ = {};
   detail::flat_map<caf::actor_addr, reader> readers_ = {};
@@ -196,17 +245,24 @@ class cache_manager {
 public:
   [[maybe_unused]] static constexpr auto name = "cache-manager";
 
-  explicit cache_manager(cache_manager_actor::pointer self) : self_{self} {
+  explicit cache_manager(cache_manager_actor::pointer self,
+                         uint64_t cache_capacity)
+    : self_{self}, cache_capacity_{cache_capacity} {
   }
 
   auto make_behavior() -> cache_manager_actor::behavior_type {
+    // Every 30 seconds, we check the total size of all caches, and evict the
+    // oldest if we've gone over the limit.
+    detail::weak_run_delayed_loop(self_, std::chrono::seconds{30}, [this] {
+      check_total_size();
+    });
     return {
-      [this](atom::get, std::string& id,
+      [this](atom::get, std::string id,
              bool exclusive) -> caf::result<caf::actor> {
         return get(std::move(id), exclusive);
       },
-      [this](atom::create, std::string& id, bool exclusive,
-             shared_diagnostic_handler& diagnostics, uint64_t capacity,
+      [this](atom::create, std::string id, bool exclusive,
+             shared_diagnostic_handler diagnostics, uint64_t capacity,
              location capacity_loc, duration read_timeout,
              duration write_timeout) -> caf::result<caf::actor> {
         return create(std::move(id), exclusive, std::move(diagnostics),
@@ -246,7 +302,7 @@ private:
     if (it == caches_.end()) {
       return diagnostic::error("cache `{}` does not exist", id).to_error();
     }
-    return check_exclusive(it->second, exclusive);
+    return check_exclusive(it->second.handle, exclusive);
   }
 
   auto create(std::string id, bool exclusive,
@@ -255,27 +311,80 @@ private:
     -> caf::result<caf::actor> {
     const auto it = caches_.find(id);
     if (it == caches_.end()) {
-      auto handle
-        = self_->spawn(caf::actor_from_state<cache>, std::move(diagnostics),
-                       capacity, read_timeout, write_timeout);
-      self_->monitor(handle,
-                     [this, source = handle->address()](const caf::error&) {
-                       for (const auto& [id, handle] : caches_) {
-                         if (handle.address() == source) {
-                           caches_.erase(id);
-                           return;
-                         }
-                       }
-                       TENZIR_UNREACHABLE();
-                     });
+      auto [byte_size_consumer, byte_size_producer]
+        = caf::async::make_spsc_buffer_resource<cache_update>();
+      self_->make_observable()
+        .from_resource(std::move(byte_size_consumer))
+        .for_each([this, id](cache_update update) {
+          const auto it = caches_.find(id);
+          TENZIR_ASSERT(it != caches_.end());
+          it->second.update = std::move(update);
+        });
+      auto handle = self_->spawn(caf::actor_from_state<cache>,
+                                 std::move(diagnostics), capacity, read_timeout,
+                                 write_timeout, std::move(byte_size_producer));
+      auto monitor
+        = self_->monitor(handle, [this, id](const caf::error&) mutable {
+            const auto it = caches_.find(id);
+            TENZIR_ASSERT(it != caches_.end());
+            caches_.erase(it);
+          });
       return caf::actor_cast<caf::actor>(
-        caches_.emplace_hint(it, std::move(id), std::move(handle))->second);
+        caches_
+          .emplace_hint(it, std::move(id),
+                        managed_cache{std::move(handle), std::move(monitor)})
+          ->second.handle);
     }
-    return check_exclusive(it->second, exclusive);
+    return check_exclusive(it->second.handle, exclusive);
   }
 
+  auto check_total_size() -> void {
+    // Check the total size of the buffers, and if we're over the limit, expire
+    // the oldest to make room for new ones.
+    auto total
+      = std::transform_reduce(caches_.begin(), caches_.end(), uint64_t{},
+                              std::plus{}, [](const auto& cache) {
+                                return cache.second.update.approx_bytes;
+                              });
+    while (total > cache_capacity_) {
+      const auto oldest = std::ranges::min_element(
+        caches_, std::ranges::less{}, [](const auto& cache) {
+          return cache.second.created_at;
+        });
+      TENZIR_ASSERT(oldest != caches_.end());
+      TENZIR_DEBUG("{} rotates cache `{}` after exceeding capacity of {} to "
+                   "reduce total cache size from {} to {}",
+                   *self_, oldest->first, oldest->second.handle,
+                   cache_capacity_, total,
+                   total - oldest->second.update.approx_bytes);
+      total -= oldest->second.update.approx_bytes;
+      oldest->second.monitor.dispose();
+      self_->send_exit(oldest->second.handle,
+                       diagnostic::error("cache rotated").to_error());
+      caches_.erase(oldest);
+    }
+  }
+
+  struct managed_cache {
+    managed_cache(cache_actor handle, caf::disposable monitor)
+      : handle{std::move(handle)}, monitor{std::move(monitor)} {
+    }
+
+    cache_actor handle = {};
+    caf::disposable monitor = {};
+    cache_update update = {};
+    std::chrono::steady_clock::time_point created_at
+      = std::chrono::steady_clock::now();
+
+    auto operator<(const managed_cache& other) const -> bool {
+      return std::tie(update.state, created_at, handle)
+             < std::tie(other.update.state, other.created_at, other.handle);
+    }
+  };
+
   cache_manager_actor::pointer self_ = {};
-  std::unordered_map<std::string, cache_actor> caches_ = {};
+  const uint64_t cache_capacity_ = {};
+  std::unordered_map<std::string, managed_cache> caches_ = {};
 };
 
 class write_cache_operator final : public operator_base {
@@ -587,6 +696,25 @@ class cache_plugin final : public virtual operator_factory_plugin,
                            public virtual operator_parser_plugin,
                            public virtual component_plugin {
 public:
+  auto initialize(const record& global_config, const record& plugin_config)
+    -> caf::error override {
+    TENZIR_UNUSED(plugin_config);
+    using namespace si_literals;
+    TRY(cache_lifetime_, try_get_or(global_config, "tenzir.cache.lifetime",
+                                    std::chrono::minutes{10}));
+    if (cache_lifetime_ <= duration::zero()) {
+      return diagnostic::error("cache lifetime must be greater than zero")
+        .to_error();
+    }
+    TRY(cache_capacity_,
+        try_get_or(global_config, "tenzir.cache.capacity", 1_Gi));
+    if (cache_capacity_ < 64_Mi) {
+      return diagnostic::error("cache capacity must be at least 64 MiB")
+        .to_error();
+    }
+    return {};
+  }
+
   auto name() const -> std::string override {
     return "cache";
   };
@@ -597,7 +725,8 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> self) const
     -> component_plugin_actor override {
-    return self->spawn<caf::linked>(caf::actor_from_state<cache_manager>);
+    return self->spawn<caf::linked>(caf::actor_from_state<cache_manager>,
+                                    cache_capacity_);
   }
 
   auto signature() const -> operator_signature override {
@@ -631,10 +760,10 @@ public:
         .throw_();
     }
     if (not capacity) {
-      capacity.emplace(defaults::max_partition_size, location::unknown);
+      capacity.emplace(std::numeric_limits<uint64_t>::max(), location::unknown);
     }
     if (not read_timeout) {
-      read_timeout.emplace(std::chrono::minutes{1}, location::unknown);
+      read_timeout.emplace(cache_lifetime_, location::unknown);
     } else if (read_timeout->inner <= duration::zero()) {
       diagnostic::error("read timeout must be a positive duration")
         .primary(read_timeout->source)
@@ -688,14 +817,15 @@ public:
       failed = true;
     }
     if (not capacity) {
-      capacity.emplace(defaults::max_partition_size, inv.self.get_location());
+      capacity.emplace(std::numeric_limits<uint64_t>::max(),
+                       inv.self.get_location());
     } else if (mode and mode->inner == "read") {
       diagnostic::warning("ignoring argument `capacity` in `read` mode")
         .primary(capacity->source)
         .emit(ctx);
     }
     if (not read_timeout) {
-      read_timeout.emplace(std::chrono::minutes{1}, inv.self.get_location());
+      read_timeout.emplace(cache_lifetime_, inv.self.get_location());
     } else if (mode and mode->inner == "read") {
       diagnostic::warning("ignoring argument `read_timeout` in `read` mode")
         .primary(read_timeout->source)
@@ -735,6 +865,10 @@ public:
     TENZIR_ASSERT(mode->inner == "read");
     return std::make_unique<read_cache_operator>(std::move(id));
   }
+
+private:
+  duration cache_lifetime_ = {};
+  uint64_t cache_capacity_ = {};
 };
 
 using write_cache_plugin = operator_inspection_plugin<write_cache_operator>;

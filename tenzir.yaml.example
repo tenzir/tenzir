@@ -32,6 +32,18 @@ tenzir:
     # diagnostics in the Tenzir Platform.
     #diagnostics: 30d
 
+  # Configure the behavior of the `cache` operator. The Tenzir Platform uses the
+  # cache operator to store and retrieve data efficiently.
+  cache:
+    # Specifies the default write-timeout for the `cache` operator.
+    #lifetime: 10min
+
+    # Specifies an upper bound for the total memory usage in bytes across all
+    # caches in a node. If the memory usage exceeds this limit, the node will
+    # start evicting caches to make room for new data. The node requires a
+    # minimum total cache capacity of 64MiB.
+    #capacity: 1Gi
+
   # Always use TQL2 for pipelines.
   #tql2: false
 
