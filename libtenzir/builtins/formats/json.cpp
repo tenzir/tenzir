@@ -1130,10 +1130,8 @@ public:
   auto
   parallel_operator(generator<table_slice> input,
                     operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    // TODO: Expose a better API for this.
-    caf::detail::set_thread_name("PRINTER");
     auto inputs_mut = std::mutex{};
-    auto inputs = std::queue<input_t>{};
+    auto inputs = std::deque<input_t>{};
     auto inputs_cv = std::condition_variable{};
     auto outputs_mut = std::mutex{};
     auto outputs = std::unordered_map<size_t, std::vector<chunk_ptr>>{};
@@ -1148,11 +1146,12 @@ public:
         inputs_cv.wait(inputs_lock, [&]() {
           return not inputs.empty();
         });
+        // An empty slice is our sentinel to shut down.
         if (inputs.front().slice.rows() == 0) {
           return;
         }
         auto my_work = std::move(inputs.front());
-        inputs.pop();
+        inputs.pop_front();
         inputs_lock.unlock();
         auto result = std::vector<chunk_ptr>{};
         for (auto&& chunk : (*printer)->process(std::move(my_work.slice))) {
@@ -1168,20 +1167,33 @@ public:
     for (auto& t : pool) {
       t = std::thread{work};
     }
+    auto guard = detail::scope_guard{[&]() noexcept {
+      auto inputs_lock = std::unique_lock{inputs_mut};
+      // We clear the inputs here because we don't care about the output anymore.
+      inputs.clear();
+      inputs.emplace_back(input_index, table_slice{});
+      inputs_lock.unlock();
+      inputs_cv.notify_all();
+      for (auto& t : pool) {
+        t.join();
+      }
+    }};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
       {
+        // Create some sort of backpressure.
         auto input_lock = std::unique_lock{inputs_mut};
         while (inputs.size() > 1.5 * n_jobs_) {
           input_lock.unlock();
           co_yield {};
           input_lock.lock();
         }
-        /// TODO actually cut the slice
-        inputs.emplace(input_index, std::move(slice));
+        // TODO Consider actually cutting the slice to ensure more balanced
+        // dispatching.
+        inputs.emplace_back(input_index, std::move(slice));
         ++input_index;
         inputs_cv.notify_one();
       }
@@ -1209,14 +1221,18 @@ public:
         }
       }
     }
+    guard.disable();
     {
+      // Emplace an empty sentinel into the queue and wake up all workers
       auto input_lock = std::scoped_lock{inputs_mut};
-      inputs.emplace(input_index, table_slice{});
+      inputs.emplace_back(input_index, table_slice{});
       inputs_cv.notify_all();
     }
+    // wait for the workers to finish
     for (auto& t : pool) {
       t.join();
     }
+    // Only the sentinel should remain
     TENZIR_ASSERT(inputs.size() == 1);
     TENZIR_ASSERT(inputs.front().index == input_index);
     auto output_lock = std::scoped_lock{outputs_mut};
