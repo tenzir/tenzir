@@ -3,7 +3,7 @@
 
 const path = require('node:path');
 
-const tqlGrammar = require("@tenzir/vscode-tql/syntaxes/tql.tmLanguage.json");
+const tqlGrammar = require("vscode-tql/syntaxes/tql.tmLanguage.json");
 
 async function createConfig() {
   const rehypePrettyCode = (await import('rehype-pretty-code')).default;
