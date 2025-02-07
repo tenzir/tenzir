@@ -1110,7 +1110,7 @@ class write_json final : public crtp_operator<write_json> {
 public:
   write_json() = default;
 
-  explicit write_json(printer_args args, size_t n_jobs)
+  explicit write_json(printer_args args, uint64_t n_jobs)
     : n_jobs_{n_jobs}, printer_{std::move(args)} {
   }
 
@@ -1123,7 +1123,7 @@ public:
   }
 
   struct input_t {
-    size_t index;
+    uint64_t index;
     table_slice slice;
   };
 
@@ -1296,7 +1296,7 @@ public:
 
 private:
   bool ordered_ = true;
-  size_t n_jobs_;
+  uint64_t n_jobs_;
   json_printer printer_;
 };
 
@@ -1504,7 +1504,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
-    auto n_jobs = size_t{};
+    auto n_jobs = uint64_t{};
     args.tql = tql_;
     auto parser = argument_parser2::operator_("write_json");
     parser.named("color", args.color_output);
