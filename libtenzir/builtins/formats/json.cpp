@@ -38,8 +38,7 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
-#include <chrono>
-#include <queue>
+#include <deque>
 #include <simdjson.h>
 #include <string_view>
 
@@ -1290,7 +1289,8 @@ public:
   }
 
   friend auto inspect(auto& f, write_json& x) -> bool {
-    return f.object(x).fields(f.field("n_jobs", x.n_jobs_),
+    return f.object(x).fields(f.field("ordered", x.ordered_),
+                              f.field("n_jobs", x.n_jobs_),
                               f.field("printer", x.printer_));
   }
 

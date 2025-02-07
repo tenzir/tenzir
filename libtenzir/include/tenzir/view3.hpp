@@ -6,12 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/arrow_utils.hpp"
+#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
-
-// TODO:
-#include "tenzir/series_builder.hpp"
 
 #include <arrow/array.h>
 
@@ -53,8 +50,6 @@ template <>
 struct view_trait3<data> {
   using type = data_view3;
 };
-
-auto view_at(const arrow::Array& x, int64_t i) -> data_view3;
 
 class record_view3 {
 public:
@@ -168,22 +163,7 @@ private:
   int64_t index_;
 };
 
-inline auto list_view3::iterator::operator*() const -> data_view3 {
-  TENZIR_ASSERT(offset < array->values()->length());
-  TENZIR_ASSERT(offset < array->value_offset(index + 1));
-  return view_at(*array->values(), offset);
-}
-
-inline auto record_view3::iterator::operator*() const
-  -> std::pair<std::string_view, data_view3> {
-  TENZIR_ASSERT(field < array->num_fields());
-  return {
-    array->type()->field(field)->name(),
-    view_at(*array->field(field), index),
-  };
-}
-
-template <class T>
+template <std::derived_from<arrow::Array> T>
 auto view_at(const T& x, int64_t i)
   -> std::optional<view3<type_to_data_t<type_from_arrow_t<T>>>> {
   TENZIR_ASSERT(0 <= i);
@@ -199,21 +179,6 @@ auto view_at(const T& x, int64_t i)
     static_assert(not std::same_as<T, arrow::MapArray>);
     return value_at(type_from_arrow_t<T>{}, x, i);
   }
-
-  // return match(
-  //   x,
-  //   [&](const arrow::StructArray& x) -> data_view3 {
-  //     return record_view3::from_valid(x, i);
-  //   },
-  //   [&](const arrow::ListArray&) -> data_view3 {
-  //     TENZIR_TODO();
-  //   },
-  //   [&](const arrow::MapArray&) -> data_view3 {
-  //     TENZIR_UNREACHABLE();
-  //   },
-  //   [&]<class T>(const T& x) -> data_view3 {
-  //     return value_at(type_from_arrow_t<T>{}, x, i);
-  //   });
 }
 
 inline auto view_at(const arrow::Array& x, int64_t i) -> data_view3 {
@@ -230,12 +195,36 @@ inline auto view_at(const arrow::Array& x, int64_t i) -> data_view3 {
     });
 }
 
+inline auto list_view3::iterator::operator*() const -> data_view3 {
+  TENZIR_ASSERT(offset < array->values()->length());
+  TENZIR_ASSERT(offset < array->value_offset(index + 1));
+  return view_at(*array->values(), offset);
+}
+
+inline auto record_view3::iterator::operator*() const
+  -> std::pair<std::string_view, data_view3> {
+  TENZIR_ASSERT(field < array->num_fields());
+  return {
+    array->type()->field(field)->name(),
+    view_at(*array->field(field), index),
+  };
+}
+
 template <std::same_as<arrow::Array> T>
 auto values3(const T& array) -> generator<data_view3> {
-  for (auto i = int64_t{0}; i < array.length(); ++i) {
-    // TODO: Transpose.
-    co_yield view_at(array, i);
-  }
+  return match(
+    array,
+    [&](const auto& x) -> generator<data_view3> {
+      for (auto i = int64_t{0}; i < array.length(); ++i) {
+        if (auto v = view_at(x, i)) {
+          co_yield *v;
+        }
+        co_yield caf::none;
+      }
+    },
+    [&](const arrow::MapArray&) -> generator<data_view3> {
+      TENZIR_UNREACHABLE();
+    });
 }
 
 template <std::derived_from<arrow::Array> T>
@@ -246,13 +235,8 @@ auto values3(const T& array)
   }
 }
 
-inline auto values3(const table_slice& x) -> generator<record_view3> {
-  auto array = check(to_record_batch(x)->ToStructArray());
-  for (auto row : values3(*array)) {
-    TENZIR_ASSERT(row);
-    co_yield *row;
-  }
-}
+class table_slice;
+auto values3(const table_slice& x) -> generator<record_view3>;
 
 class view_wrapper {
 public:
@@ -269,10 +253,6 @@ private:
   std::shared_ptr<arrow::Array> array_;
 };
 
-inline auto make_view_wrapper(data_view2 x) -> view_wrapper {
-  auto b = series_builder{};
-  b.data(std::move(x));
-  return view_wrapper{b.finish_assert_one_array().array};
-}
+auto make_view_wrapper(data_view2 x) -> view_wrapper;
 
 } // namespace tenzir

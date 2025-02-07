@@ -25,7 +25,6 @@ namespace tenzir {
 class builder_ref;
 class record_ref;
 class series_builder;
-struct data_view2;
 
 namespace detail {
 
@@ -162,33 +161,6 @@ private:
   std::unique_ptr<detail::series_builder_impl> impl_;
 
   friend class builder_ref;
-};
-
-/// A temporary alternative to `data_view`.
-///
-/// Unlike `data_view`, this type is based on `std::variant` and is more
-/// convenient to use as a parameter.
-///
-/// TODO: Consider eventually retiring the current `data_view`, perhaps
-/// replacing it with an implementation that does not use ref-counts internally.
-struct data_view2
-  : detail::tl_apply_t<detail::tl_map_t<data::types, view_trait>, variant> {
-  using variant::variant;
-
-  explicit(false) data_view2(const data& x) : data_view2(make_view(x)) {
-  }
-
-  explicit(false) data_view2(data_view x) {
-    tenzir::match(std::move(x), [&](auto x) {
-      emplace<decltype(x)>(std::move(x));
-    });
-  }
-
-  explicit(false) data_view2(const record& x) : variant{make_view(x)} {
-  }
-
-  explicit(false) data_view2(const list& x) : variant{make_view(x)} {
-  }
 };
 
 namespace detail {
