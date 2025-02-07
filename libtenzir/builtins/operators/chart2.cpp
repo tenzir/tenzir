@@ -37,11 +37,13 @@ using plugins_map
 
 struct xlimit {
   located<data> value;
+  data rounded;
   expression legacy_expr;
   ast::expression expr;
 
   friend auto inspect(auto& f, xlimit& x) -> bool {
     return f.object(x).fields(f.field("value", x.value),
+                              f.field("rounded", x.rounded),
                               f.field("legacy_expr", x.legacy_expr),
                               f.field("expr", x.expr));
   }
@@ -289,10 +291,10 @@ public:
     };
     auto args = args_;
     if (filter != trivially_true_expression()) {
-      // auto combined
-      //   = normalize_and_validate(conjunction{std::move(args.filter), filter});
-      // TENZIR_ASSERT(combined);
-      // args.filter = std::move(combined).value();
+      auto combined
+        = normalize_and_validate(conjunction{std::move(args.filter), filter});
+      TENZIR_ASSERT(combined);
+      args.filter = std::move(combined).value();
     }
     // NOTE: This should technically be `ordered` but since most of our useful
     // aggregations currently are commutative, we can get away with this.
@@ -440,11 +442,25 @@ public:
           if (args_.fill and is<caf::none_t>(value)) {
             continue;
           }
-          auto valid = validate_y(value, y.second.get_location(), dh);
+          auto valid = validate_y(value, make_yname(name, y.first),
+                                  y.second.get_location(), dh);
           r.field(add_y(name, y.first, valid)).data(std::move(value));
         }
       }
     };
+    if (args_.x_min and args_.res
+        and (args_.ty == chart_type::line or args_.fill)) {
+      TENZIR_ASSERT(not groups.empty());
+      auto min = std::optional{args_.x_min->rounded};
+      const auto& first = groups.begin()->first;
+      if (*min != first) {
+        fill_at(*min);
+      }
+      while (auto gap = find_gap(min, first)) {
+        min = gap.value();
+        fill_at(std::move(gap).value());
+      }
+    }
     for (auto prev = std::optional<data>{};
          const auto& [x, gb] : groups | std::views::take(args_.limit.inner)) {
       if (args_.res and (args_.ty == chart_type::line or args_.fill)) {
@@ -455,6 +471,19 @@ public:
       }
       insert(x, gb);
       prev = x;
+    }
+    if (args_.x_max and args_.res
+        and (args_.ty == chart_type::line or args_.fill)) {
+      TENZIR_ASSERT(not groups.empty());
+      auto last = std::optional{groups.rbegin()->first};
+      const auto& max = args_.x_max->rounded;
+      while (auto gap = find_gap(last, max)) {
+        last = gap.value();
+        fill_at(std::move(gap).value());
+      }
+      if (*last != max) {
+        fill_at(max);
+      }
     }
     auto slices = b.finish_as_table_slice("tenzir.chart");
     if (slices.size() > 1) {
@@ -721,7 +750,7 @@ public:
     return true;
   }
 
-  auto validate_y(const data& d, tenzir::location loc,
+  auto validate_y(const data& d, std::string_view yname, tenzir::location loc,
                   diagnostic_handler& dh) const -> bool {
     if (is<caf::none_t>(d)) {
       if (args_.ty == chart_type::line) {
@@ -730,7 +759,7 @@ public:
       TENZIR_ASSERT(not args_.fill);
       diagnostic::warning("y-axis cannot have type `null`")
         .primary(std::move(loc))
-        .note("skipping series")
+        .note(fmt::format("skipping {}", yname))
         .hint("consider specifying `fill`")
         .emit(dh);
       return false;
@@ -739,7 +768,7 @@ public:
     if (not ty) {
       diagnostic::warning("failed to infer type of `y`")
         .primary(std::move(loc))
-        .note("skipping series")
+        .note(fmt::format("skipping {}", yname))
         .emit(dh);
       return false;
     }
@@ -747,7 +776,7 @@ public:
               .is_any<int64_type, uint64_type, double_type, duration_type>()) {
       diagnostic::warning("y-axis cannot have type `{}`", ty->kind())
         .primary(std::move(loc))
-        .note("skipping series")
+        .note(fmt::format("skipping {}", yname))
         .emit(dh);
       return false;
     }
@@ -757,7 +786,7 @@ public:
       if (not lty) {
         diagnostic::warning("failed to infer type of limit")
           .primary(args_.y_min ? args_.y_min->source : args_.y_max->source)
-          .note("skipping series")
+          .note(fmt::format("skipping {}", yname))
           .emit(dh);
         return false;
       }
@@ -766,7 +795,7 @@ public:
                             "`{}`",
                             lty->kind(), ty->kind())
           .primary(args_.y_min ? args_.y_min->source : args_.y_max->source)
-          .note("skipping series")
+          .note(fmt::format("skipping {}", yname))
           .emit(dh);
         return false;
       }
@@ -884,6 +913,18 @@ class chart_plugin : public virtual operator_factory_plugin {
     return match(
       y,
       [&](ast::record& rec) -> failure_or<void> {
+        if (args.ty == chart_type::pie and rec.items.size() != 1) {
+          diagnostic::error("`{}` requires exactly one value", name())
+            .primary(y)
+            .emit(ctx);
+          return failure::promise();
+        }
+        if (rec.items.empty()) {
+          diagnostic::error("`{}` requires at least one value", name())
+            .primary(y)
+            .emit(ctx);
+          return failure::promise();
+        }
         for (auto& i : rec.items) {
           auto* field = try_as<ast::record::field>(i);
           if (not field) {
@@ -915,7 +956,7 @@ class chart_plugin : public virtual operator_factory_plugin {
         return {};
       },
       [&](ast::function_call& call) -> failure_or<void> {
-        args.y["y"] = std::move(call);
+        args.y[args.ty == chart_type::pie ? "value" : "y"] = std::move(call);
         return {};
       },
       [&](auto&) -> failure_or<void> {
@@ -929,7 +970,7 @@ class chart_plugin : public virtual operator_factory_plugin {
         const auto loc = y.get_location();
         auto result = ast::function_call{entity, {std::move(y)}, loc, false};
         TENZIR_ASSERT(resolve_entities(result, ctx));
-        args.y["y"] = std::move(result);
+        args.y[args.ty == chart_type::pie ? "value" : "y"] = std::move(result);
         return {};
       });
   }
@@ -989,6 +1030,7 @@ class chart_plugin : public virtual operator_factory_plugin {
     auto&& [legacy, remainder] = split_legacy_expression(expr);
     return xlimit{
       std::move(limit),
+      c.as_data(),
       std::move(legacy),
       std::move(remainder),
     };

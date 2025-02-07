@@ -1,4 +1,12 @@
 {
+  x: 0ns,
+  y: null,
+}
+{
+  x: 5s,
+  y: null,
+}
+{
   x: 10s,
   y: 2.0,
 }
@@ -9,4 +17,36 @@
 {
   x: 20s,
   y: 1.0,
+}
+{
+  x: 25s,
+  y: null,
+}
+{
+  x: 30s,
+  y: null,
+}
+{
+  x: 35s,
+  y: null,
+}
+{
+  x: 40s,
+  y: null,
+}
+{
+  x: 45s,
+  y: null,
+}
+{
+  x: 50s,
+  y: null,
+}
+{
+  x: 55s,
+  y: null,
+}
+{
+  x: 1min,
+  y: null,
 }

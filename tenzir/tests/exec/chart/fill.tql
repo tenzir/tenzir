@@ -1,2 +1,2 @@
 from {x: 1s}, {x: 2s, y: 4s}, {x: 9s, y: null}, {x: 10s, y: 13s}
-chart_area x=x, y=sum(y), resolution=2s, x_min=2s, fill=0s
+chart_area x=x, y=sum(y), resolution=2s, x_min=0s, x_max=15s, fill=0s

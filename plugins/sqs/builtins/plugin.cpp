@@ -51,6 +51,9 @@ public:
         .emit(ctx);
       return failure::promise();
     }
+    if (args.queue.inner.starts_with("sqs://")) {
+      args.queue.inner.erase(0, 6);
+    }
     // HACK: The connector args should probably just take a duration instead.
     if (dur) {
       args.poll_time
