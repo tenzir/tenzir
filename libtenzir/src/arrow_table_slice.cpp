@@ -8,6 +8,7 @@
 
 #include "tenzir/arrow_table_slice.hpp"
 
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/config.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
@@ -662,6 +663,308 @@ auto make_struct_array(
   }
   return make_struct_array(length, std::move(null_bitmap), field_types,
                            field_arrays);
+}
+
+namespace {
+
+namespace arrow_ext {
+
+using namespace arrow;
+
+// This is copied and adapted from Arrow.
+struct GetByteRangesArray {
+  GetByteRangesArray(const ArrayData& input, int64_t offset, int64_t length)
+    : input{input}, offset{offset}, length{length} {
+  }
+
+  const ArrayData& input;
+  int64_t offset;
+  int64_t length;
+
+  // UInt64Builder* range_starts;
+  // UInt64Builder* range_offsets;
+  // UInt64Builder* range_lengths;
+  uint64_t total_length = 0;
+
+  Status VisitBitmap(const std::shared_ptr<Buffer>& buffer) {
+    if (buffer) {
+      // uint64_t data_start = reinterpret_cast<uint64_t>(buffer->data());
+      // RETURN_NOT_OK(range_starts->Append(data_start));
+      // RETURN_NOT_OK(range_offsets->Append(bit_util::RoundDown(offset, 8) /
+      // 8)); RETURN_NOT_OK(
+      //   range_lengths->Append(bit_util::CoveringBytes(offset, length)));
+      total_length += bit_util::CoveringBytes(offset, length);
+    }
+    return Status::OK();
+  }
+
+  Status
+  VisitFixedWidthArray(const Buffer& buffer, const FixedWidthType& type) {
+    // uint64_t data_start = reinterpret_cast<uint64_t>(buffer.data());
+    uint64_t offset_bits = offset * type.bit_width();
+    uint64_t offset_bytes
+      = bit_util::RoundDown(static_cast<int64_t>(offset_bits), 8) / 8;
+    uint64_t end_byte
+      = bit_util::RoundUp(
+          static_cast<int64_t>(offset_bits + (length * type.bit_width())), 8)
+        / 8;
+    uint64_t length_bytes = (end_byte - offset_bytes);
+    // RETURN_NOT_OK(range_starts->Append(data_start));
+    // RETURN_NOT_OK(range_offsets->Append(offset_bytes));
+    total_length += length_bytes;
+    // return range_lengths->Append(length_bytes);
+    return Status::OK();
+  }
+
+  Status Visit(const FixedWidthType& type) {
+    static_assert(sizeof(uint8_t*) <= sizeof(uint64_t),
+                  "Undefined behavior if pointer larger than uint64_t");
+    RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
+    RETURN_NOT_OK(VisitFixedWidthArray(*input.buffers[1], type));
+    if (input.dictionary) {
+      // This is slightly imprecise because we always assume the entire
+      // dictionary is referenced.  If this array has an offset it may only be
+      // referencing a portion of the dictionary
+      GetByteRangesArray dict_visitor{
+        *input.dictionary,
+        input.dictionary->offset,
+        input.dictionary->length,
+      };
+      RETURN_NOT_OK(VisitTypeInline(*input.dictionary->type, &dict_visitor));
+      total_length += dict_visitor.total_length;
+    }
+    return Status::OK();
+  }
+
+  Status Visit(const NullType& type) const {
+    return Status::OK();
+  }
+
+  template <typename BaseBinaryType>
+  Status VisitBaseBinary(const BaseBinaryType& type) {
+    using offset_type = typename BaseBinaryType::offset_type;
+    RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
+
+    const Buffer& offsets_buffer = *input.buffers[1];
+    // RETURN_NOT_OK(
+    //   range_starts->Append(reinterpret_cast<uint64_t>(offsets_buffer.data())));
+    // RETURN_NOT_OK(range_offsets->Append(sizeof(offset_type) * offset));
+    // RETURN_NOT_OK(range_lengths->Append(sizeof(offset_type) * length));
+    total_length += sizeof(offset_type) * length;
+
+    const offset_type* offsets = input.GetValues<offset_type>(1, offset);
+    const Buffer& values = *input.buffers[2];
+    offset_type start = offsets[0];
+    offset_type end = offsets[length];
+    // RETURN_NOT_OK(
+    //   range_starts->Append(reinterpret_cast<uint64_t>(values.data())));
+    // RETURN_NOT_OK(range_offsets->Append(static_cast<uint64_t>(start)));
+    total_length += static_cast<uint64_t>(end - start);
+    return Status::OK();
+  }
+
+  Status Visit(const BinaryType& type) {
+    return VisitBaseBinary(type);
+  }
+
+  Status Visit(const LargeBinaryType& type) {
+    return VisitBaseBinary(type);
+  }
+
+  template <typename BaseListType>
+  Status VisitBaseList(const BaseListType& type) {
+    using offset_type = typename BaseListType::offset_type;
+    RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
+
+    const Buffer& offsets_buffer = *input.buffers[1];
+    // RETURN_NOT_OK(
+    //   range_starts->Append(reinterpret_cast<uint64_t>(offsets_buffer.data())));
+    // RETURN_NOT_OK(range_offsets->Append(sizeof(offset_type) * offset));
+    // RETURN_NOT_OK(range_lengths->Append(sizeof(offset_type) * length));
+    total_length += sizeof(offset_type) * length;
+
+    const offset_type* offsets = input.GetValues<offset_type>(1, offset);
+    int64_t start = static_cast<int64_t>(offsets[0]);
+    int64_t end = static_cast<int64_t>(offsets[length]);
+    GetByteRangesArray child{
+      *input.child_data[0],
+      start,
+      end - start,
+    };
+    RETURN_NOT_OK(VisitTypeInline(*type.value_type(), &child));
+    total_length += child.total_length;
+    return Status::OK();
+  }
+
+  Status Visit(const ListType& type) {
+    return VisitBaseList(type);
+  }
+
+  Status Visit(const LargeListType& type) {
+    return VisitBaseList(type);
+  }
+
+  Status Visit(const FixedSizeListType& type) {
+    RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
+    GetByteRangesArray child{
+      *input.child_data[0],
+      offset * type.list_size(),
+      length * type.list_size(),
+    };
+    RETURN_NOT_OK(VisitTypeInline(*type.value_type(), &child));
+    total_length += child.total_length;
+    return Status::OK();
+  }
+
+  Status Visit(const StructType& type) {
+    for (int i = 0; i < type.num_fields(); i++) {
+      GetByteRangesArray child{
+        *input.child_data[i],
+        offset + input.child_data[i]->offset,
+        length,
+      };
+      RETURN_NOT_OK(VisitTypeInline(*type.field(i)->type(), &child));
+      total_length += child.total_length;
+    }
+    return Status::OK();
+  }
+
+  Status Visit(const DenseUnionType& type) {
+    // Skip validity map for DenseUnionType
+    // Types buffer is always int8
+    RETURN_NOT_OK(VisitFixedWidthArray(
+      *input.buffers[1], *std::dynamic_pointer_cast<FixedWidthType>(int8())));
+    // Offsets buffer is always int32
+    RETURN_NOT_OK(VisitFixedWidthArray(
+      *input.buffers[2], *std::dynamic_pointer_cast<FixedWidthType>(int32())));
+
+    // We have to loop through the types buffer to figure out the correct
+    // offset / length being referenced in the child arrays
+    std::vector<int64_t> lengths_per_type(type.type_codes().size());
+    std::vector<int64_t> offsets_per_type(type.type_codes().size());
+    const int8_t* type_codes = input.GetValues<int8_t>(1, 0);
+    for (const int8_t* it = type_codes; it != type_codes + offset; it++) {
+      TENZIR_ASSERT(type.child_ids()[static_cast<std::size_t>(*it)]
+                    != UnionType::kInvalidChildId);
+      offsets_per_type[type.child_ids()[static_cast<std::size_t>(*it)]]++;
+    }
+    for (const int8_t* it = type_codes + offset;
+         it != type_codes + offset + length; it++) {
+      TENZIR_ASSERT(type.child_ids()[static_cast<std::size_t>(*it)]
+                    != UnionType::kInvalidChildId);
+      lengths_per_type[type.child_ids()[static_cast<std::size_t>(*it)]]++;
+    }
+
+    for (int i = 0; i < type.num_fields(); i++) {
+      GetByteRangesArray child{
+        *input.child_data[i], offsets_per_type[i] + input.child_data[i]->offset,
+        lengths_per_type[i]};
+      RETURN_NOT_OK(VisitTypeInline(*type.field(i)->type(), &child));
+      total_length += child.total_length;
+    }
+
+    return Status::OK();
+  }
+
+  Status Visit(const SparseUnionType& type) {
+    // Skip validity map for SparseUnionType
+    // Types buffer is always int8
+    RETURN_NOT_OK(VisitFixedWidthArray(
+      *input.buffers[1], *std::dynamic_pointer_cast<FixedWidthType>(int8())));
+
+    for (int i = 0; i < type.num_fields(); i++) {
+      GetByteRangesArray child{
+        *input.child_data[i],
+        offset + input.child_data[i]->offset,
+        length,
+      };
+      RETURN_NOT_OK(VisitTypeInline(*type.field(i)->type(), &child));
+      total_length += child.total_length;
+    }
+
+    return Status::OK();
+  }
+
+  Status Visit(const RunEndEncodedType& type) const {
+    TENZIR_UNREACHABLE();
+    // auto [phys_offset, phys_length]
+    //   = ree_util::FindPhysicalRange(input, offset, length);
+    // for (int i = 0; i < type.num_fields(); i++) {
+    //   GetByteRangesArray child{*input.child_data[i],
+    //                            /*offset=*/input.child_data[i]->offset
+    //                              + phys_offset,
+    //                            /*length=*/phys_length,
+    //                            range_starts,
+    //                            range_offsets,
+    //                            range_lengths};
+    //   RETURN_NOT_OK(VisitTypeInline(*type.field(i)->type(), &child));
+    // }
+    // return Status::OK();
+  }
+
+  Status Visit(const ExtensionType& extension_type) {
+    GetByteRangesArray storage{
+      input,
+      offset,
+      length,
+    };
+    RETURN_NOT_OK(VisitTypeInline(*extension_type.storage_type(), &storage));
+    total_length += storage.total_length;
+    return Status::OK();
+  }
+
+  Status Visit(const DataType& type) const {
+    return Status::TypeError("Extracting byte ranges not supported for type ",
+                             type.ToString());
+  }
+
+  static std::shared_ptr<DataType> RangesType() {
+    return struct_({field("start", uint64()), field("offset", uint64()),
+                    field("length", uint64())});
+  }
+
+  // Result<std::shared_ptr<Array>> MakeRanges() const {
+  //   // std::shared_ptr<Array> range_starts_arr, range_offsets_arr,
+  //   //   range_lengths_arr;
+  //   // RETURN_NOT_OK(range_starts->Finish(&range_starts_arr));
+  //   // RETURN_NOT_OK(range_offsets->Finish(&range_offsets_arr));
+  //   // RETURN_NOT_OK(range_lengths->Finish(&range_lengths_arr));
+  //   return StructArray::Make(
+  //     {range_starts_arr, range_offsets_arr, range_lengths_arr},
+  //     {field("start", uint64()), field("offset", uint64()),
+  //      field("length", uint64())});
+  // }
+
+  static Result<uint64_t> Exec(const ArrayData& input) {
+    GetByteRangesArray self{
+      input,
+      input.offset,
+      input.length,
+    };
+    RETURN_NOT_OK(VisitTypeInline(*input.type, &self));
+    return self.total_length;
+  }
+};
+
+} // namespace arrow_ext
+
+} // namespace
+
+template <class Flatbuffer>
+auto arrow_table_slice<Flatbuffer>::approx_bytes() const -> uint64_t {
+  if (state_.approx_bytes_ == std::numeric_limits<uint64_t>::max()) {
+    state_.approx_bytes_ = std::invoke([&]() -> uint64_t {
+      if (state_.record_batch->num_rows() == 0) {
+        return 0;
+      }
+      auto total_size = uint64_t{0};
+      for (auto& array : state_.record_batch->column_data()) {
+        total_size += check(arrow_ext::GetByteRangesArray::Exec(*array));
+      }
+      return total_size;
+    });
+  }
+  return state_.approx_bytes_;
 }
 
 // -- template machinery -------------------------------------------------------
