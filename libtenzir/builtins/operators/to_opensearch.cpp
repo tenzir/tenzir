@@ -31,6 +31,7 @@ struct opensearch_args {
   std::optional<ast::expression> id;
   std::optional<std::string> user;
   std::optional<std::string> passwd;
+  std::optional<located<bool>> tls;
   std::optional<location> skip_peer_verification;
   std::optional<located<std::string>> cacert;
   std::optional<located<std::string>> certfile;
@@ -52,6 +53,7 @@ struct opensearch_args {
       .named("doc", doc, "record")
       .named("user", user)
       .named("passwd", passwd)
+      .named("tls", tls)
       .named("skip_peer_verification", skip_peer_verification)
       .named("cacert", cacert)
       .named("certfile", certfile)
@@ -69,7 +71,25 @@ struct opensearch_args {
       diagnostic::error("failed to parse url").primary(url).emit(dh);
       return failure::promise();
     }
-    if (not v->segments().empty() and v->segments().back() != "_bulk") {
+    auto tls_logic
+      = [&](auto& thing, std::string_view name) -> failure_or<void> {
+      if (tls and not tls->inner and thing) {
+        diagnostic::error("`{}` requires TLS", name)
+          .primary(tls->source, "TLS is disabled")
+          .primary(*thing)
+          .emit(dh);
+        return failure::promise();
+      }
+      if (thing and not tls) {
+        tls = located{true, into_location{*thing}};
+      }
+      return {};
+    };
+    TRY(tls_logic(skip_peer_verification, "skip_peer_verification"));
+    TRY(tls_logic(cacert, "cacert"));
+    TRY(tls_logic(certfile, "certfile"));
+    TRY(tls_logic(keyfile, "keyfile"));
+    if (v->segments().empty() or v->segments().back() != "_bulk") {
       auto u = boost::urls::url{*v};
       u.segments().push_back("_bulk");
       url.inner = fmt::to_string(u);
@@ -112,12 +132,14 @@ struct opensearch_args {
       f.field("url", x.url), f.field("index", x.index),
       f.field("action", x.action), f.field("doc", x.doc), f.field("id", x.id),
       f.field("user", x.user), f.field("passwd", x.passwd),
+      f.field("tls", x.tls),
       f.field("skip_peer_verification", x.skip_peer_verification),
       f.field("cacert", x.cacert), f.field("certfile", x.certfile),
       f.field("keyfile", x.keyfile), f.field("include_nulls", x.include_nulls),
       f.field("max_content_length", x.max_content_length),
       f.field("buffer_timeout", x.buffer_timeout),
-      f.field("compress", x.compress), f.field("_debug_curl", x._debug_curl));
+      f.field("compress", x.compress), f.field("_debug_curl", x._debug_curl),
+      f.field("operator_location", x.operator_location));
   }
 };
 
@@ -340,6 +362,10 @@ public:
     };
     set_assert(CURLOPT_POST, 1);
     set_assert(CURLOPT_URL, args_.url.inner);
+    if (args_.tls) {
+      set_assert(CURLOPT_USE_SSL,
+                 args_.tls->inner ? CURLUSESSL_ALL : CURLUSESSL_NONE);
+    }
     set_assert(CURLOPT_SSL_VERIFYPEER, args_.skip_peer_verification ? 0 : 1);
     set_assert(CURLOPT_VERBOSE, args_._debug_curl);
     return req;
@@ -520,6 +546,7 @@ struct plugin : public virtual operator_plugin2<opensearch_operator> {
     auto args = opensearch_args{};
     auto p = argument_parser2::operator_(name());
     args.add_to(p);
+    args.operator_location = inv.self.get_location();
     TRY(p.parse(inv, ctx));
     if (not args.validate(ctx)) {
       return failure::promise();
