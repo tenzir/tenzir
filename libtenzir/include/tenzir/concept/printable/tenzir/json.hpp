@@ -139,10 +139,6 @@ struct json_printer : printer_base<json_printer> {
       }
     }
 
-    // auto operator()(view3<pattern> x) -> bool {
-    //   return (*this)(x.string());
-    // }
-
     auto operator()(view3<ip> x) -> bool {
       if (options_.tql) {
         out_ = fmt::format_to(out_, options_.style.ip, "{}", to_string(x));
@@ -199,47 +195,6 @@ struct json_printer : printer_base<json_printer> {
       return true;
     }
 
-    // auto operator()(const view3<map>& x) -> bool {
-    //   bool printed_once = false;
-    //   out_ = fmt::format_to(out_, options_.style.array, "[");
-    //   for (const auto& element : x) {
-    //     if (should_skip(element.second, false)) {
-    //       continue;
-    //     }
-    //     if (!printed_once) {
-    //       indent();
-    //       newline();
-    //       printed_once = true;
-    //     } else {
-    //       separator();
-    //       newline();
-    //     }
-    //     out_ = fmt::format_to(out_, options_.style.object, "{{");
-    //     indent();
-    //     newline();
-    //     out_ = fmt::format_to(out_, options_.style.field, "\"key\": ");
-    //     if (!match(element.first, *this)) {
-    //       return false;
-    //     }
-    //     separator();
-    //     newline();
-    //     out_ = fmt::format_to(out_, options_.style.field, "\"value\": ");
-    //     if (!match(element.second, *this)) {
-    //       return false;
-    //     }
-    //     dedent();
-    //     newline();
-    //     out_ = fmt::format_to(out_, options_.style.object, "}}");
-    //   }
-    //   if (printed_once) {
-    //     trailing_comma();
-    //     dedent();
-    //     newline();
-    //   }
-    //   out_ = fmt::format_to(out_, options_.style.array, "]");
-    //   return true;
-    // }
-
     auto operator()(view3<record> x) -> bool {
       bool printed_once = false;
       out_ = fmt::format_to(out_, options_.style.object, "{{");
@@ -295,14 +250,6 @@ struct json_printer : printer_base<json_printer> {
           return should_skip(y, true);
         });
       }
-      // if (options_.omit_empty_maps && is<view3<map>>(x)) {
-      //   const auto& ys = as<view3<map>>(x);
-      //   return std::all_of(ys.begin(), ys.end(),
-      //                      [this](const view3<map>::view_type::value_type& y)
-      //                      {
-      //                        return should_skip(y.second, false);
-      //                      });
-      // }
       if (options_.omit_empty_records && is<view3<record>>(x)) {
         const auto& ys = as<view3<record>>(x);
         return std::all_of(ys.begin(), ys.end(), [this](const auto& y) {
@@ -364,24 +311,6 @@ struct json_printer : printer_base<json_printer> {
   auto print(Iterator& out, T&& x) const -> bool {
     return print(out, make_view_wrapper(std::forward<T>(x)));
   }
-
-  // template <class Iterator, class T>
-  //   requires detail::tl_contains<view3<data>::types, T>::value
-  // auto print(Iterator& out, const T& d) const -> bool {
-  //   return print_visitor{out, options_}(d);
-  // }
-
-  // template <class Iterator>
-  // auto print(Iterator& out, const data& d) const -> bool {
-  //   return print(out, make_view(d));
-  // }
-
-  // template <class Iterator, class T>
-  //   requires(!detail::tl_contains<view3<data>::types, T>::value
-  //            && detail::tl_contains<data::types, T>::value)
-  // auto print(Iterator& out, const T& d) const -> bool {
-  //   return print(out, make_view(d));
-  // }
 
 private:
   json_printer_options options_ = {};
