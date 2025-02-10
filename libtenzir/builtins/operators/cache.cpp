@@ -59,12 +59,13 @@ public:
   [[maybe_unused]] static constexpr auto name = "cache";
 
   cache(cache_actor::pointer self, shared_diagnostic_handler diagnostics,
-        located<uint64_t> capacity, duration read_timeout,
-        duration write_timeout,
+        located<uint64_t> capacity, uint64_t max_byte_size,
+        duration read_timeout, duration write_timeout,
         caf::async::producer_resource<cache_update> update_producer)
     : self_{self},
       diagnostics_{std::move(diagnostics)},
       capacity_{capacity},
+      max_byte_size_{max_byte_size},
       update_multicaster_{self_},
       read_timeout_{read_timeout},
       write_timeout_{write_timeout} {
@@ -157,14 +158,22 @@ private:
     }
     cache_size_ += events.rows();
     // Calculate the byte size of any referenced Arrow buffers
+    // TODO: Use `table_slice::approx_bytes` instead.
     byte_size_ += detail::narrow_cast<uint64_t>(
       check(arrow::util::ReferencedBufferSize(*to_record_batch(events))));
-    if (update_multicaster_.buffered() == 0) {
-      update_multicaster_.push(cache_update{
-        .approx_bytes = byte_size_,
-        .state = cache_state::open,
-      });
+    // If a single cache exceeds the total capacity, we stop short of adding the
+    // batch of events that'd make it go over the limit. This is better than
+    // being evicted immediately.
+    if (byte_size_ > max_byte_size_ and not exceeded_capacity) {
+      diagnostic::warning("cache exceeded total capacity in bytes")
+        .hint("consider increasing `tenzir.cache.capacity` option")
+        .emit(diagnostics_);
+      return false;
     }
+    update_multicaster_.push(cache_update{
+      .approx_bytes = byte_size_,
+      .state = cache_state::open,
+    });
     cached_events_.push_back(std::move(events));
     for (auto& [_, reader] : readers_) {
       if (not reader.rp.pending()) {
@@ -216,6 +225,7 @@ private:
   std::vector<table_slice> cached_events_ = {};
 
   uint64_t byte_size_ = {};
+  const uint64_t max_byte_size_;
   caf::flow::multicaster<cache_update> update_multicaster_;
 
   caf::actor_addr writer_ = {};
@@ -320,9 +330,10 @@ private:
           TENZIR_ASSERT(it != caches_.end());
           it->second.update = std::move(update);
         });
-      auto handle = self_->spawn(caf::actor_from_state<cache>,
-                                 std::move(diagnostics), capacity, read_timeout,
-                                 write_timeout, std::move(byte_size_producer));
+      auto handle
+        = self_->spawn(caf::actor_from_state<cache>, std::move(diagnostics),
+                       capacity, cache_capacity_, read_timeout, write_timeout,
+                       std::move(byte_size_producer));
       auto monitor
         = self_->monitor(handle, [this, id](const caf::error&) mutable {
             const auto it = caches_.find(id);
