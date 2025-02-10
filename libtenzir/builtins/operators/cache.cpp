@@ -59,13 +59,13 @@ public:
   [[maybe_unused]] static constexpr auto name = "cache";
 
   cache(cache_actor::pointer self, shared_diagnostic_handler diagnostics,
-        located<uint64_t> capacity, uint64_t max_byte_size,
-        duration read_timeout, duration write_timeout,
+        located<uint64_t> max_events, uint64_t max_bytes, duration read_timeout,
+        duration write_timeout,
         caf::async::producer_resource<cache_update> update_producer)
     : self_{self},
       diagnostics_{std::move(diagnostics)},
-      capacity_{capacity},
-      max_byte_size_{max_byte_size},
+      max_events_{max_events},
+      max_bytes_{max_bytes},
       update_multicaster_{self_},
       read_timeout_{read_timeout},
       write_timeout_{write_timeout} {
@@ -146,10 +146,10 @@ private:
       return false;
     }
     auto exceeded_capacity = false;
-    if (cache_size_ + events.rows() > capacity_.inner) {
-      events = head(std::move(events), capacity_.inner - cache_size_);
+    if (cache_size_ + events.rows() > max_events_.inner) {
+      events = head(std::move(events), max_events_.inner - cache_size_);
       diagnostic::warning("cache exceeded capacity")
-        .primary(capacity_.source)
+        .primary(max_events_.source)
         .emit(diagnostics_);
       exceeded_capacity = true;
       if (events.rows() == 0) {
@@ -164,7 +164,7 @@ private:
     // If a single cache exceeds the total capacity, we stop short of adding the
     // batch of events that'd make it go over the limit. This is better than
     // being evicted immediately.
-    if (byte_size_ > max_byte_size_ and not exceeded_capacity) {
+    if (byte_size_ > max_bytes_ and not exceeded_capacity) {
       diagnostic::warning("cache exceeded total capacity in bytes")
         .hint("consider increasing `tenzir.cache.capacity` option")
         .emit(diagnostics_);
@@ -220,12 +220,12 @@ private:
 
   shared_diagnostic_handler diagnostics_ = {};
 
-  located<uint64_t> capacity_ = {};
+  located<uint64_t> max_events_ = {};
   uint64_t cache_size_ = {};
   std::vector<table_slice> cached_events_ = {};
 
   uint64_t byte_size_ = {};
-  const uint64_t max_byte_size_;
+  const uint64_t max_bytes_;
   caf::flow::multicaster<cache_update> update_multicaster_;
 
   caf::actor_addr writer_ = {};
@@ -255,9 +255,8 @@ class cache_manager {
 public:
   [[maybe_unused]] static constexpr auto name = "cache-manager";
 
-  explicit cache_manager(cache_manager_actor::pointer self,
-                         uint64_t cache_capacity)
-    : self_{self}, cache_capacity_{cache_capacity} {
+  explicit cache_manager(cache_manager_actor::pointer self, uint64_t max_events)
+    : self_{self}, max_bytes_{max_events} {
   }
 
   auto make_behavior() -> cache_manager_actor::behavior_type {
@@ -315,10 +314,10 @@ private:
     return check_exclusive(it->second.handle, exclusive);
   }
 
-  auto create(std::string id, bool exclusive,
-              shared_diagnostic_handler diagnostics, located<uint64_t> capacity,
-              duration read_timeout, duration write_timeout)
-    -> caf::result<caf::actor> {
+  auto
+  create(std::string id, bool exclusive, shared_diagnostic_handler diagnostics,
+         located<uint64_t> max_events, duration read_timeout,
+         duration write_timeout) -> caf::result<caf::actor> {
     const auto it = caches_.find(id);
     if (it == caches_.end()) {
       auto [byte_size_consumer, byte_size_producer]
@@ -332,7 +331,7 @@ private:
         });
       auto handle
         = self_->spawn(caf::actor_from_state<cache>, std::move(diagnostics),
-                       capacity, cache_capacity_, read_timeout, write_timeout,
+                       max_events, max_bytes_, read_timeout, write_timeout,
                        std::move(byte_size_producer));
       auto monitor
         = self_->monitor(handle, [this, id](const caf::error&) mutable {
@@ -357,7 +356,7 @@ private:
                               std::plus{}, [](const auto& cache) {
                                 return cache.second.update.approx_bytes;
                               });
-    while (total > cache_capacity_) {
+    while (total > max_bytes_) {
       const auto oldest = std::ranges::min_element(
         caches_, std::ranges::less{}, [](const auto& cache) {
           return cache.second.created_at;
@@ -365,9 +364,8 @@ private:
       TENZIR_ASSERT(oldest != caches_.end());
       TENZIR_DEBUG("{} rotates cache `{}` after exceeding capacity of {} to "
                    "reduce total cache size from {} to {}",
-                   *self_, oldest->first, oldest->second.handle,
-                   cache_capacity_, total,
-                   total - oldest->second.update.approx_bytes);
+                   *self_, oldest->first, oldest->second.handle, max_bytes_,
+                   total, total - oldest->second.update.approx_bytes);
       total -= oldest->second.update.approx_bytes;
       oldest->second.monitor.dispose();
       self_->send_exit(oldest->second.handle,
@@ -394,7 +392,7 @@ private:
   };
 
   cache_manager_actor::pointer self_ = {};
-  const uint64_t cache_capacity_ = {};
+  const uint64_t max_bytes_ = {};
   std::unordered_map<std::string, managed_cache> caches_ = {};
 };
 
@@ -403,11 +401,11 @@ public:
   write_cache_operator() = default;
 
   explicit write_cache_operator(located<std::string> id,
-                                located<uint64_t> capacity,
+                                located<uint64_t> max_events,
                                 duration read_timeout, duration write_timeout)
     : id_{std::move(id)},
       sink_{true},
-      capacity_{capacity},
+      max_events_{max_events},
       read_timeout_{read_timeout},
       write_timeout_{write_timeout} {
   }
@@ -427,8 +425,9 @@ public:
       ctrl.set_waiting(true);
       ctrl.self()
         .mail(atom::create_v, id_.inner,
-              /* exclusive */ true, ctrl.shared_diagnostics(), capacity_.inner,
-              capacity_.source, read_timeout_, write_timeout_)
+              /* exclusive */ true, ctrl.shared_diagnostics(),
+              max_events_.inner, max_events_.source, read_timeout_,
+              write_timeout_)
         .request(cache_manager, caf::infinite)
         .then(
           [&](caf::actor& handle) {
@@ -545,7 +544,7 @@ public:
 
   friend auto inspect(auto& f, write_cache_operator& x) -> bool {
     return f.object(x).fields(f.field("id", x.id_), f.field("sink", x.sink_),
-                              f.field("capacity", x.capacity_),
+                              f.field("max_events", x.max_events_),
                               f.field("read_timeout", x.read_timeout_),
                               f.field("write_timeout", x.write_timeout_));
   }
@@ -553,7 +552,7 @@ public:
 private:
   located<std::string> id_ = {};
   bool sink_ = {};
-  located<uint64_t> capacity_ = {};
+  located<uint64_t> max_events_ = {};
   duration read_timeout_ = {};
   duration write_timeout_ = {};
 };
@@ -567,10 +566,10 @@ public:
   }
 
   explicit read_cache_operator(located<std::string> id,
-                               located<uint64_t> capacity,
+                               located<uint64_t> max_events,
                                duration read_timeout, duration write_timeout)
     : id_{std::move(id)},
-      capacity_{capacity},
+      max_events_{max_events},
       read_timeout_{read_timeout},
       write_timeout_{write_timeout} {
   }
@@ -589,8 +588,8 @@ public:
                  .request(cache_manager, caf::infinite)
              : ctrl.self()
                  .mail(atom::create_v, id_.inner, /* exclusive */ false,
-                       ctrl.shared_diagnostics(), capacity_.inner,
-                       capacity_.source, read_timeout_, write_timeout_)
+                       ctrl.shared_diagnostics(), max_events_.inner,
+                       max_events_.source, read_timeout_, write_timeout_)
                  .request(cache_manager, caf::infinite))
       .then(
         [&](caf::actor& handle) {
@@ -690,7 +689,7 @@ public:
   friend auto inspect(auto& f, read_cache_operator& x) -> bool {
     return f.object(x).fields(f.field("id", x.id_),
                               f.field("source", x.source_),
-                              f.field("capacity", x.capacity_),
+                              f.field("max_events", x.max_events_),
                               f.field("read_timeout", x.read_timeout_),
                               f.field("write_timeout", x.write_timeout_));
   }
@@ -698,7 +697,7 @@ public:
 private:
   located<std::string> id_ = {};
   bool source_ = {};
-  located<uint64_t> capacity_ = {};
+  located<uint64_t> max_events_ = {};
   duration read_timeout_ = {};
   duration write_timeout_ = {};
 };
