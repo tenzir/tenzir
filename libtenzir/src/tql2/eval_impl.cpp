@@ -296,7 +296,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             auto v = value_at(field.type, *field.array, i);
             b.data(v);
           } else {
-            if (std::ranges::find(not_found, name) != not_found.end()) {
+            if (std::ranges::find(not_found, name) == not_found.end()) {
               diagnostic::warning("record does not have field '{}'", name)
                 .primary(x.index)
                 .emit(ctx_);

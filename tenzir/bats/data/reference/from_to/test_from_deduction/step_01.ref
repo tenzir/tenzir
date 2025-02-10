@@ -20,6 +20,7 @@
       }
     },
     arrays_of_objects: false,
-    mode: "none"
+    mode: "none",
+    jobs: 0
   }
 ]

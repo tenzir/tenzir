@@ -642,8 +642,6 @@ TEST(parseable - overwriting with self reference) {
         },
       },
     };
-    fmt::println("{}", fmt::join(bar.names(), ", "));
-    fmt::println("{}", fmt::join(expected.names(), ", "));
     CHECK_EQUAL(bar, expected);
   }
 }
