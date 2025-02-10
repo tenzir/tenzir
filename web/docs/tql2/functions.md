@@ -164,6 +164,26 @@ Function | Description | Example
 [`now`](functions/now.md) | Gets the current wallclock time | `now()`
 [`since_epoch`](functions/since_epoch.md) | Turns a time into a duration since the Unix epoch | `since_epoch(2021-02-24)`
 [`parse_time`](functions/parse_time.md) | Parses a timestamp following a given format | `"10/11/2012".parse_time("%d/%m/%Y")`
+[`years`](functions/years.mdx) | Converts a number to equivalent years | `years(100)`
+[`months`](functions/months.mdx) | Converts a number to equivalent months | `months(100)`
+[`weeks`](functions/weeks.mdx) | Converts a number to equivalent weeks | `weeks(100)`
+[`days`](functions/days.mdx) | Converts a number to equivalent days | `days(100)`
+[`hours`](functions/hours.mdx) | Converts a number to equivalent hours | `hours(100)`
+[`minutes`](functions/minutes.mdx) | Converts a number to equivalent minutes | `minutes(100)`
+[`seconds`](functions/seconds.mdx) | Converts a number to equivalent seconds | `seconds(100)`
+[`milliseconds`](functions/milliseconds.mdx) | Converts a number to equivalent milliseconds | `milliseconds(100)`
+[`microseconds`](functions/microseconds.mdx) | Converts a number to equivalent microseconds | `microseconds(100)`
+[`nanoseconds`](functions/nanoseconds.mdx) | Converts a number to equivalent nanoseconds | `nanoseconds(100)`
+[`count_years`](functions/count_years.mdx) | Counts the number of years in a duration | `count_years(100d)`
+[`count_months`](functions/count_months.mdx) | Counts the number of months in a duration | `count_months(100d)`
+[`count_weeks`](functions/count_weeks.mdx) | Counts the number of weeks in a duration | `count_weeks(100d)`
+[`count_days`](functions/count_days.mdx) | Counts the number of days in a duration | `count_days(100d)`
+[`count_hours`](functions/count_hours.mdx) | Counts the number of hours in a duration | `count_hours(100d)`
+[`count_minutes`](functions/count_minutes.mdx) | Counts the number of minutes in a duration | `count_minutes(100d)`
+[`count_seconds`](functions/count_seconds.mdx) | Counts the number of seconds in a duration | `count_seconds(100d)`
+[`count_milliseconds`](functions/count_milliseconds.mdx) | Counts the number of milliseconds in a duration | `count_milliseconds(100d)`
+[`count_microseconds`](functions/count_microseconds.mdx) | Counts the number of microseconds in a duration | `count_microseconds(100d)`
+[`count_nanoseconds`](functions/count_nanoseconds.mdx) | Counts the number of nanoseconds in a duration | `count_nanoseconds(100d)`
 <!--
 This is hidden because there is an issue with the timezone DB.
 [`format_time`](functions/format_time.md) | Format a timestamp following a given format | `2012-11-10.format_time("%d/%m/%Y")`
