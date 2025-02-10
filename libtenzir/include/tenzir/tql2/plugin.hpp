@@ -210,7 +210,7 @@ public:
   }
 
   auto detached() const -> bool override {
-    return true;
+    return parser_.detached();
   }
 
   auto idle_after() const -> duration override {

@@ -681,18 +681,10 @@ struct GetByteRangesArray {
   int64_t offset;
   int64_t length;
 
-  // UInt64Builder* range_starts;
-  // UInt64Builder* range_offsets;
-  // UInt64Builder* range_lengths;
   uint64_t total_length = 0;
 
   Status VisitBitmap(const std::shared_ptr<Buffer>& buffer) {
     if (buffer) {
-      // uint64_t data_start = reinterpret_cast<uint64_t>(buffer->data());
-      // RETURN_NOT_OK(range_starts->Append(data_start));
-      // RETURN_NOT_OK(range_offsets->Append(bit_util::RoundDown(offset, 8) /
-      // 8)); RETURN_NOT_OK(
-      //   range_lengths->Append(bit_util::CoveringBytes(offset, length)));
       total_length += bit_util::CoveringBytes(offset, length);
     }
     return Status::OK();
@@ -700,7 +692,7 @@ struct GetByteRangesArray {
 
   Status
   VisitFixedWidthArray(const Buffer& buffer, const FixedWidthType& type) {
-    // uint64_t data_start = reinterpret_cast<uint64_t>(buffer.data());
+    (void)buffer;
     uint64_t offset_bits = offset * type.bit_width();
     uint64_t offset_bytes
       = bit_util::RoundDown(static_cast<int64_t>(offset_bits), 8) / 8;
@@ -709,10 +701,7 @@ struct GetByteRangesArray {
           static_cast<int64_t>(offset_bits + (length * type.bit_width())), 8)
         / 8;
     uint64_t length_bytes = (end_byte - offset_bytes);
-    // RETURN_NOT_OK(range_starts->Append(data_start));
-    // RETURN_NOT_OK(range_offsets->Append(offset_bytes));
     total_length += length_bytes;
-    // return range_lengths->Append(length_bytes);
     return Status::OK();
   }
 
@@ -737,28 +726,21 @@ struct GetByteRangesArray {
   }
 
   Status Visit(const NullType& type) const {
+    (void)type;
     return Status::OK();
   }
 
   template <typename BaseBinaryType>
   Status VisitBaseBinary(const BaseBinaryType& type) {
+    (void)type;
     using offset_type = typename BaseBinaryType::offset_type;
     RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
 
-    const Buffer& offsets_buffer = *input.buffers[1];
-    // RETURN_NOT_OK(
-    //   range_starts->Append(reinterpret_cast<uint64_t>(offsets_buffer.data())));
-    // RETURN_NOT_OK(range_offsets->Append(sizeof(offset_type) * offset));
-    // RETURN_NOT_OK(range_lengths->Append(sizeof(offset_type) * length));
     total_length += sizeof(offset_type) * length;
 
     const offset_type* offsets = input.GetValues<offset_type>(1, offset);
-    const Buffer& values = *input.buffers[2];
     offset_type start = offsets[0];
     offset_type end = offsets[length];
-    // RETURN_NOT_OK(
-    //   range_starts->Append(reinterpret_cast<uint64_t>(values.data())));
-    // RETURN_NOT_OK(range_offsets->Append(static_cast<uint64_t>(start)));
     total_length += static_cast<uint64_t>(end - start);
     return Status::OK();
   }
@@ -776,11 +758,6 @@ struct GetByteRangesArray {
     using offset_type = typename BaseListType::offset_type;
     RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
 
-    const Buffer& offsets_buffer = *input.buffers[1];
-    // RETURN_NOT_OK(
-    //   range_starts->Append(reinterpret_cast<uint64_t>(offsets_buffer.data())));
-    // RETURN_NOT_OK(range_offsets->Append(sizeof(offset_type) * offset));
-    // RETURN_NOT_OK(range_lengths->Append(sizeof(offset_type) * length));
     total_length += sizeof(offset_type) * length;
 
     const offset_type* offsets = input.GetValues<offset_type>(1, offset);
@@ -886,20 +863,8 @@ struct GetByteRangesArray {
   }
 
   Status Visit(const RunEndEncodedType& type) const {
+    (void)type;
     TENZIR_UNREACHABLE();
-    // auto [phys_offset, phys_length]
-    //   = ree_util::FindPhysicalRange(input, offset, length);
-    // for (int i = 0; i < type.num_fields(); i++) {
-    //   GetByteRangesArray child{*input.child_data[i],
-    //                            /*offset=*/input.child_data[i]->offset
-    //                              + phys_offset,
-    //                            /*length=*/phys_length,
-    //                            range_starts,
-    //                            range_offsets,
-    //                            range_lengths};
-    //   RETURN_NOT_OK(VisitTypeInline(*type.field(i)->type(), &child));
-    // }
-    // return Status::OK();
   }
 
   Status Visit(const ExtensionType& extension_type) {
@@ -922,18 +887,6 @@ struct GetByteRangesArray {
     return struct_({field("start", uint64()), field("offset", uint64()),
                     field("length", uint64())});
   }
-
-  // Result<std::shared_ptr<Array>> MakeRanges() const {
-  //   // std::shared_ptr<Array> range_starts_arr, range_offsets_arr,
-  //   //   range_lengths_arr;
-  //   // RETURN_NOT_OK(range_starts->Finish(&range_starts_arr));
-  //   // RETURN_NOT_OK(range_offsets->Finish(&range_offsets_arr));
-  //   // RETURN_NOT_OK(range_lengths->Finish(&range_lengths_arr));
-  //   return StructArray::Make(
-  //     {range_starts_arr, range_offsets_arr, range_lengths_arr},
-  //     {field("start", uint64()), field("offset", uint64()),
-  //      field("length", uint64())});
-  // }
 
   static Result<uint64_t> Exec(const ArrayData& input) {
     GetByteRangesArray self{

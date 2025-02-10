@@ -270,8 +270,6 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
 auto assign(const ast::simple_selector& left, series right,
             const table_slice& input, diagnostic_handler& dh,
             assign_position position) -> table_slice {
-  auto record_batch = to_record_batch(input);
-  // auto array = record_batch->ToStructArray().ValueOrDie();
   auto result
     = assign(left.path(), std::move(right), series{input}, dh, position);
   auto* rec_ty = try_as<record_type>(result.type);
@@ -284,7 +282,7 @@ auto assign(const ast::simple_selector& left, series right,
   }
   result.type.assign_metadata(input.schema());
   auto schema = arrow::schema(result.array->type()->fields(),
-                              record_batch->schema()->metadata());
+                              to_record_batch(input)->schema()->metadata());
   auto slice = table_slice{
     arrow::RecordBatch::Make(std::move(schema), result.length(),
                              as<arrow::StructArray>(*result.array).fields()),

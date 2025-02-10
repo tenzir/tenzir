@@ -406,6 +406,10 @@ public:
   virtual auto idle_after() const -> duration {
     return duration::zero();
   }
+
+  virtual auto detached() const -> bool {
+    return false;
+  }
 };
 
 /// @see operator_parser_plugin

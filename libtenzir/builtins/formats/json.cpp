@@ -834,7 +834,6 @@ auto split_for_parallelization(generator<chunk_ptr> input)
 auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
                         operator_control_plane& ctrl)
   -> generator<table_slice> {
-  caf::detail::set_thread_name("read_json");
   // TODO: We assume here that we can reorder outputs. However, even if we
   // maintain the order if we are not allowed to reorder, the output can
   // slightly change because we use separate builders.
@@ -1032,6 +1031,10 @@ public:
 
   auto idle_after() const -> duration override {
     return args_.jobs == 0 ? duration::zero() : duration::max();
+  }
+
+  auto detached() const -> bool override {
+    return args_.jobs > 0;
   }
 
   friend auto inspect(auto& f, json_parser& x) -> bool {
@@ -1396,9 +1399,8 @@ public:
     return n_jobs_ == 0 ? duration::zero() : duration::max();
   }
 
-  auto
-  parallel_operator(generator<table_slice> input) const -> generator<chunk_ptr> {
-    caf::detail::set_thread_name("write_json");
+  auto parallel_operator(generator<table_slice> input) const
+    -> generator<chunk_ptr> {
     auto inputs_mut = std::mutex{};
     auto inputs = std::deque<input_t>{};
     auto inputs_cv = std::condition_variable{};
