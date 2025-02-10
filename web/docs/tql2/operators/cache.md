@@ -1,10 +1,8 @@
 # cache
 
-:::warning Expert Operator
-We designed the `cache` operator for under-the-hood use of the Tenzir Platform
-on [app.tenzir.com](https://app.tenzir.com). We generally recommend not using
-the operator by yourself, but rather relying on the Tenzir Platform to
-automatically manage caches for you.
+:::info Used by the Tenzir Platform
+The Tenzir Platform heavily relies on the `cache` operator to make data access
+faster and more reliable in both the Explorer and on Dashboards.
 :::
 
 An in-memory cache shared between pipelines.
@@ -21,6 +19,25 @@ have a user-provided unique ID.
 The first pipeline to use a cache writes into the cache. All further pipelines
 using the same cache will read from the cache instead of executing the operators
 before the `cache` operator in the same pipeline.
+
+:::tip Cache Policy
+Set the `tenzir.cache` configuration section controls how caches behave in
+Tenzir Nodes:
+- `tenzir.cache.lifetime` sets the default write timeout for newly created
+  caches.
+- `tenzir.cache.capacity` sets an upper bound for the estimated total memory
+  usage in bytes across all caches in a node. If the memory usage exceeds this
+  limit, the node will start evicting caches to make room for new data. This
+  eviction process happens at most once every 30 seconds. The node requires a
+  minimum total cache capacity of 64MiB.
+
+```yaml
+tenzir:
+  cache:
+    lifetime: 10min
+    capacity: 1Gi
+```
+:::
 
 ### `id: string`
 
@@ -46,7 +63,7 @@ Defaults to `"readwrite"`.
 Stores how many events the cache can hold. Caches stop accepting events if the
 capacity is reached and emit a warning.
 
-Defaults to `4Mi`.
+Defaults to unlimited.
 
 ### `read_timeout = duration (optional)`
 
@@ -54,7 +71,8 @@ Defines the maximum inactivity time until the cache is evicted from memory. The
 timer starts when writing the cache completes (or runs into the capacity limit),
 and resets whenever the cache is read from.
 
-Defaults to `1min`.
+Defaults to `10min`, or the value specified in the `tenzir.cache.lifetme`
+option.
 
 ### `write_timeout = duration (optional)`
 
