@@ -53,8 +53,9 @@ and have built a new framework that makes emitting custom metrics from operators
 a breeze.
 
 :::tip Want to learn more?
-Take a look at the [`metrics` operator's documentation](/v4.24/operators/metrics),
-which details all the available metrics and their schema.
+Take a look at the [`metrics` operator's
+documentation](/tql2/operators/metrics), which details all the available metrics
+and their schema.
 :::
 
 ## Play With TQL2

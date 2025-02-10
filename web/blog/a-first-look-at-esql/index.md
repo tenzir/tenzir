@@ -35,8 +35,7 @@ post about Splunk's Search Processing Language
 (SPL)](/blog/tenzir-for-splunk-users), we briefly mentioned why SQL might not be
 the best choice for analysts, and why thinking about one operator at a time
 provides an easier user experience. Second, we'd like to look under the hood of
-ES|QL to compare and reflect on our own [Tenzir Query Language
-(TQL)](/v4.24/language).
+ES|QL to compare and reflect on our own Tenzir Query Language (TQL).
 
 ## Walk-through by Example
 

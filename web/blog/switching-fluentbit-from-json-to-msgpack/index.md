@@ -6,8 +6,8 @@ tags: [fluent-bit, json, msgpack, performance]
 comments: true
 ---
 
-We re-wired Tenzir's [`fluent-bit`](/v4.24/operators/fluent-bit) operator and
-introduced a significant performance boost as a side effect: A 3–5x gain for
+We re-wired Tenzir's [`fluent-bit`](/tql2/operators/from_fluent_bit) operator
+and introduced a significant performance boost as a side effect: A 3–5x gain for
 throughput in events per second (EPS) and 4–8x improvement of latency in terms
 of processing time.
 
@@ -49,8 +49,8 @@ tenzir --dump-metrics 'fluent-bit stdin | head 10M | discard' < eve.json
 ```
 
 Adding `--dump-metrics` adds detailed per-operator metrics that help us
-understand where operators spend their time. The [`head`](/v4.24/operators/head)
-operator take the first 10 million events, and [`discard`](/v4.24/operators/discard)
+understand where operators spend their time. The [`head`](/tql2/operators/head)
+operator take the first 10 million events, and [`discard`](/tql2/operators/discard)
 simply drops its input. The `eve.json` input into the `tenzir` binary is from
 our Suricata dataset that we use in the [user guides](/usage). We measured
 ran our measurements on a 2021 Apple MacBook Pro M1 Max, as well as on a Manjaro
@@ -70,12 +70,13 @@ bit explaining the difference.
 
 ## Summary
 
-We switched from JSON to MsgPack for our [`fluent-bit`](/v4.24/operators/fluent-bit)
-source operator. This removed one round-trip of printing JSON (in Fluent Bit)
-and parsing JSON (in Tenzir). We were surprised to see that this change resulted
-in such substantial performance improvements. As a result, you can now run many
-more Fluent Bit ingestion pipelines in parallel at a single node with the same
-resources, or vertically scale your Fluent Bit pipeline to new limits.
+We switched from JSON to MsgPack for our
+[`fluent-bit`](/tql2/operators/from_fluent_bit) source operator. This removed
+one round-trip of printing JSON (in Fluent Bit) and parsing JSON (in Tenzir). We
+were surprised to see that this change resulted in such substantial performance
+improvements. As a result, you can now run many more Fluent Bit ingestion
+pipelines in parallel at a single node with the same resources, or vertically
+scale your Fluent Bit pipeline to new limits.
 
 :::tip Acknowledgements
 Thanks to Christoph Lobmeyer and Yannik Meinhardt for reporting this issue! 🙏
