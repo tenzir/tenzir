@@ -11,6 +11,7 @@
 #include <tenzir/collect.hpp>
 #include <tenzir/detail/enumerate.hpp>
 #include <tenzir/detail/zip_iterator.hpp>
+#include <tenzir/multi_series_builder.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/eval_impl.hpp>
@@ -259,56 +260,63 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
           return null();
         }
         auto& s = as<arrow::StructArray>(*value.array);
-        // Keeps a track of the current series type we are building.
-        // TODO: Remove when we have heterogeneous evaluator.
-        // TODO: Refactor the diagnostics out of the loop.
-        auto sty = std::optional<type>{};
         auto b = series_builder{};
+        auto result = std::vector<series>{};
+        auto last_type = type{null_type{}};
+        auto not_found = std::vector<std::string>{};
+        auto field_map = detail::heterogeneous_string_hashmap<series>{};
+        auto warn_null_record = false;
+        auto warn_null_index = false;
+        for (auto [i, field] : detail::enumerate<int>(ty->fields())) {
+          auto [_, inserted] = field_map.try_emplace(std::string{field.name},
+                                                     field.type, s.field(i));
+          TENZIR_ASSERT(inserted);
+        }
         for (auto i = int64_t{}; i < s.length(); ++i) {
           if (s.IsNull(i)) {
             b.null();
-            diagnostic::warning("tried to access field of `null`")
-              .primary(x.expr)
-              .emit(ctx_);
+            warn_null_record = true;
             continue;
           }
           if (str->array->IsNull(i)) {
+            warn_null_index = true;
             b.null();
-            diagnostic::warning("cannot use `null` as index")
-              .primary(x.index)
-              .emit(ctx_);
             continue;
           }
           auto name = value_at(string_type{}, *str->array, i);
-          auto found = false;
-          for (auto [j, field] : detail::enumerate<size_t>(ty->fields())) {
-            if (field.name == name) {
-              found = true;
-              auto [_, v] = value_at(*ty, s, i)->at(j);
-              if (sty and sty != field.type) {
-                b.null();
-                diagnostic::warning("indexing resulting in different types is "
-                                    "currently not supported")
-                  .primary(x, fmt::format("expected `{}`, got `{}`",
-                                          sty.value(), field.type))
-                  .emit(ctx_);
-                break;
+          if (auto it = field_map.find(name); it != field_map.end()) {
+            auto& field = it->second;
+            if (field.type.kind().is_not<null_type>()
+                and field.type != last_type) {
+              if (last_type.kind().is_not<null_type>()) {
+                result.push_back(b.finish_assert_one_array());
               }
-              b.data(v);
-              if (not sty) {
-                sty = b.type();
-              }
-              break;
+              last_type = field.type;
             }
-          }
-          if (not found) {
-            diagnostic::warning("record does not have field '{}'", name)
-              .primary(x.index)
-              .emit(ctx_);
+            auto v = value_at(field.type, *field.array, i);
+            b.data(v);
+          } else {
+            if (std::ranges::find(not_found, name) == not_found.end()) {
+              diagnostic::warning("record does not have field '{}'", name)
+                .primary(x.index)
+                .emit(ctx_);
+              not_found.emplace_back(name);
+            }
             b.null();
           }
         }
-        return b.finish_assert_one_array();
+        if (warn_null_record) {
+          diagnostic::warning("tried to access field of `null`")
+            .primary(x.expr)
+            .emit(ctx_);
+        }
+        if (warn_null_index) {
+          diagnostic::warning("cannot use `null` as index")
+            .primary(x.index)
+            .emit(ctx_);
+        }
+        result.push_back(b.finish_assert_one_array());
+        return multi_series{result};
       }
       if (auto number = index.as<int64_type>()) {
         auto list = value.as<list_type>();
@@ -417,13 +425,54 @@ auto evaluator::input_or_throw(into_location location) -> const table_slice& {
   return *input_;
 }
 
+namespace {
+
+auto contains_extension_type(const data& x) -> bool {
+  return match(
+    x,
+    [](const record& x) {
+      for (auto& y : x) {
+        if (contains_extension_type(y.second)) {
+          return true;
+        }
+      }
+      return false;
+    },
+    [](const list& x) {
+      for (auto& y : x) {
+        if (contains_extension_type(y)) {
+          return true;
+        }
+      }
+      return false;
+    },
+    []<class T>(const T&) -> bool {
+      if constexpr (concepts::one_of<T, map, pattern>) {
+        TENZIR_UNREACHABLE();
+      } else {
+        return extension_type<data_to_type_t<T>>;
+      }
+    });
+}
+
+} // namespace
+
 auto evaluator::to_series(const data& x) const -> series {
-  // TODO: This is overkill.
-  auto b = series_builder{};
-  for (auto i = int64_t{0}; i < length_; ++i) {
-    b.data(x);
+  if (contains_extension_type(x)) {
+    // We currently cannot convert extension types to scalars.
+    auto b = series_builder{};
+    for (auto i = int64_t{0}; i < length_; ++i) {
+      b.data(x);
+    }
+    return b.finish_assert_one_array();
   }
-  return b.finish_assert_one_array();
+  auto b = series_builder{};
+  b.data(x);
+  auto s = b.finish_assert_one_array();
+  return series{
+    std::move(s.type),
+    check(arrow::MakeArrayFromScalar(*check(s.array->GetScalar(0)), length_)),
+  };
 }
 
 } // namespace tenzir

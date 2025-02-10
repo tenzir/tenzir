@@ -74,7 +74,12 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
   // assignment `foo.qux = 42`. This is consistent with the behavior for when
   // `foo` is of type `null` or does not exist. Also, simply using `.fields()`
   // here would not propagate the `null` values from the parent record.
-  auto new_field_arrays = array.Flatten().ValueOrDie();
+  auto new_field_arrays = std::invoke([&] {
+    if (array.null_count() == 0) {
+      return array.fields();
+    }
+    return array.Flatten().ValueOrDie();
+  });
   auto index = std::optional<size_t>{};
   for (auto [i, field] : detail::enumerate(new_ty_fields)) {
     if (field.name == left[0].name) {
@@ -265,7 +270,6 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
 auto assign(const ast::simple_selector& left, series right,
             const table_slice& input, diagnostic_handler& dh,
             assign_position position) -> table_slice {
-  auto array = to_record_batch(input)->ToStructArray().ValueOrDie();
   auto result
     = assign(left.path(), std::move(right), series{input}, dh, position);
   auto* rec_ty = try_as<record_type>(result.type);
@@ -277,10 +281,12 @@ auto assign(const ast::simple_selector& left, series right,
     result = {record_type{}, make_struct_array(result.length(), nullptr, {})};
   }
   result.type.assign_metadata(input.schema());
+  auto schema = arrow::schema(result.array->type()->fields(),
+                              to_record_batch(input)->schema()->metadata());
   auto slice = table_slice{
-    arrow::RecordBatch::Make(result.type.to_arrow_schema(), result.length(),
+    arrow::RecordBatch::Make(std::move(schema), result.length(),
                              as<arrow::StructArray>(*result.array).fields()),
-    result.type,
+    std::move(result.type),
   };
   slice.import_time(input.import_time());
   return slice;

@@ -1,6 +1,10 @@
 [
   tql2.write_json {
-    tql: false
+    ordered: true,
+    n_jobs: 0,
+    printer: {
+      tql: false
+    }
   },
   tql2.save_file {
     path: "example.json" @ 3..17

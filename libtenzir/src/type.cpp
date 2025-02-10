@@ -1035,7 +1035,8 @@ void type::assign_metadata(const type& other) noexcept {
   const auto name = other.name();
   if (name.empty() && !other.has_attributes())
     return;
-  const auto nested_bytes = as_bytes(table_);
+  const auto pruned = prune();
+  const auto nested_bytes = as_bytes(pruned);
   const auto reserved_size = [&]() noexcept {
     // The total length is made up from the following terms:
     // - 52 bytes FlatBuffers table framing

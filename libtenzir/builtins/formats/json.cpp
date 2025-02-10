@@ -38,7 +38,7 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
-#include <chrono>
+#include <deque>
 #include <simdjson.h>
 #include <string_view>
 
@@ -663,10 +663,10 @@ private:
   simdjson::ondemand::document_stream stream_;
 };
 
-template <class GeneratorValue>
+template <class Parser, class GeneratorValue>
+  requires std::derived_from<std::remove_cvref_t<Parser>, parser_base>
 auto parser_loop(generator<GeneratorValue> json_chunk_generator,
-                 std::derived_from<parser_base> auto parser_impl)
-  -> generator<table_slice> {
+                 Parser parser_impl) -> generator<table_slice> {
   for (auto chunk : json_chunk_generator) {
     // get all events that are ready (timeout, batch size, ordered mode
     // constraints)
@@ -697,6 +697,7 @@ struct parser_args {
   multi_series_builder::options builder_options = {};
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
+  uint64_t jobs = 0;
 
   friend auto inspect(auto& f, parser_args& x) {
     return f.object(x)
@@ -704,9 +705,277 @@ struct parser_args {
       .fields(f.field("parser_name", x.parser_name),
               f.field("builder_options", x.builder_options),
               f.field("arrays_of_objects", x.arrays_of_objects),
-              f.field("mode", x.split_mode));
+              f.field("mode", x.split_mode), f.field("jobs", x.jobs));
   }
 };
+
+/// Split the incoming byte stream at newlines such that the concatenation of
+/// each resulting chunk vector is a self-contained unit for parallelization.
+///
+/// Only yields an empty vector if the input yielded an empty chunk, which means
+/// that the operator's input buffer is exhausted.
+auto split_for_parallelization(generator<chunk_ptr> input)
+  -> generator<std::vector<chunk_ptr>> {
+  // Split at the next newline after the given number of bytes.
+  constexpr auto split_after_size = size_t{1'000'000};
+  // The duration after which to yield incoming lines at the latest.
+  constexpr auto timeout = defaults::import::batch_timeout;
+  // Accumulates all chunks that should be part of the next chunk group. This is
+  // for example needed in case the last newline is in the middle of a batch.
+  auto current = std::vector<chunk_ptr>{};
+  // The total size of all batches in `current`.
+  auto current_size = size_t{0};
+  auto next_timeout = time::clock::now() + timeout;
+  auto pop_before_last_linebreak
+    = [&]() -> std::optional<std::vector<chunk_ptr>> {
+    // We have to search all chunks here because the last newline is not
+    // necessarily in the last chunk.
+    for (auto& chunk : std::views::reverse(current)) {
+      auto bytes = as_bytes(chunk);
+      for (const auto& byte : std::views::reverse(bytes)) {
+        if (byte == std::byte{'\n'}) {
+          auto end = detail::narrow<size_t>(&byte - bytes.data());
+          auto rest = std::vector<chunk_ptr>{};
+          // Move the remainder of the chunk where the newline is in.
+          if (end + 1 != bytes.size()) {
+            rest.push_back(chunk->slice(end + 1, bytes.size()));
+          }
+          if (end != 0) {
+            chunk = chunk->slice(0, end);
+          }
+          // Move the subsequent chunks.
+          auto chunk_index = &chunk - current.data();
+          rest.insert(rest.end(),
+                      std::move_iterator{current.begin() + chunk_index + 1},
+                      std::move_iterator{current.end()});
+          current.erase(current.begin() + chunk_index + 1, current.end());
+          // Return everything up the newline and continue with the rest.
+          auto result = std::move(current);
+          current = std::move(rest);
+          current_size = 0;
+          for (auto& chunk : current) {
+            current_size += chunk->size();
+          }
+          return result;
+        }
+      }
+    }
+    return std::nullopt;
+  };
+  for (auto&& chunk : input) {
+    auto now = time::clock::now();
+    if (now > next_timeout) {
+      if (auto pop = pop_before_last_linebreak()) {
+        co_yield std::move(*pop);
+      }
+      // Even if we couldn't pop anything, we still reset the timeout to prevent
+      // looping there over and over again.
+      next_timeout = now + timeout;
+    }
+    if (not chunk) {
+      // This means that the operator has no more input. We propagate that
+      // information up by yielding an empty vector.
+      co_yield {};
+      continue;
+    }
+    TENZIR_ASSERT(chunk->size() != 0);
+    if (current.empty()) {
+      next_timeout = now + timeout;
+    }
+    // If we are under our splitting minimum, we just have to insert the batch.
+    if (current_size + chunk->size() < split_after_size
+        and now < next_timeout) {
+      current.push_back(std::move(chunk));
+      current_size += current.back()->size();
+      continue;
+    }
+    // Otherwise, we find the last linebreak and yield everything before that.
+    auto yielded = false;
+    auto bytes = as_bytes(chunk);
+    for (const auto& byte : std::views::reverse(bytes)) {
+      // This handles both LF and CRLF. In the latter case, the CR becomes part
+      // of the chunk but is ignored later.
+      if (byte == std::byte{'\n'}) {
+        auto end = detail::narrow<size_t>(&byte - bytes.data());
+        if (end != 0) {
+          current.push_back(chunk->slice(0, end));
+          current_size += current.back()->size();
+        }
+        co_yield std::move(current);
+        yielded = true;
+        current.clear();
+        current_size = 0;
+        // Remember the rest of the current chunk, if there is any.
+        if (end + 1 != bytes.size()) {
+          current.push_back(chunk->slice(end + 1, bytes.size()));
+          current_size += current.back()->size();
+        }
+        next_timeout = now + timeout;
+        break;
+      }
+    }
+    // If there was no linebreak, we have to insert the entire chunk.
+    if (not yielded) {
+      current.push_back(std::move(chunk));
+      current_size += current.back()->size();
+      // We do not yield here. Instead, we decided to very quickly drain the
+      // input buffer if there are no newlines in the current input buffer. Once
+      // it is drained, we get an empty chunk, which then leads to a yield.
+    }
+  }
+  // There can be remaining chunks if the last one didn't end with a newline.
+  if (not current.empty()) {
+    co_yield std::move(current);
+  }
+}
+
+/// Parse the incoming NDJSON byte stream in multiple threads.
+///
+/// The current implementation always assumes that it can reorder the output.
+auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
+                        operator_control_plane& ctrl)
+  -> generator<table_slice> {
+  // TODO: We assume here that we can reorder outputs. However, even if we
+  // maintain the order if we are not allowed to reorder, the output can
+  // slightly change because we use separate builders.
+  args.builder_options.settings.ordered = false;
+  // We use a single input queue to communicate with all worker threads. Putting
+  // the empty vector in here tells the thread to stop.
+  auto inputs = std::deque<std::vector<chunk_ptr>>{};
+  auto inputs_mutex = std::mutex{};
+  auto inputs_cv = std::condition_variable{};
+  // All worker threads write to the same output queue. Note that there is no
+  // condition variable for the output. This is because we need to run the
+  // distributing thread if we get new input from the preceding operator. We
+  // would thus need to block on a combination of getting new input and
+  // receiving output from one of our workers, but that doesn't seem to be
+  // possible within the constraints of the current implementation.
+  auto outputs = std::deque<table_slice>{};
+  auto outputs_mutex = std::mutex{};
+  auto work = [&](shared_diagnostic_handler dh) {
+    caf::detail::set_thread_name("read_work");
+    // We reuse the parser throughout all iterations.
+    auto parser = ndjson_parser{args.parser_name, dh, args.builder_options};
+    while (true) {
+      auto inputs_lock = std::unique_lock{inputs_mutex};
+      inputs_cv.wait(inputs_lock, [&] {
+        return not inputs.empty();
+      });
+      auto stop = inputs.front().empty();
+      if (stop) {
+        // We intentionally don't pop the element so that the other threads can
+        // also get to see it.
+        return;
+      }
+      auto input = std::move(inputs.front());
+      inputs.pop_front();
+      inputs_lock.unlock();
+      auto parsed = parser_loop<ndjson_parser&>(
+        split_at_crlf(std::invoke(
+          [](std::vector<chunk_ptr> input) -> generator<chunk_ptr> {
+            for (auto& chunk : input) {
+              co_yield std::move(chunk);
+            }
+          },
+          std::move(input))),
+        parser);
+      for (auto slice : parsed) {
+        if (slice.rows() == 0) {
+          // We don't care, because our input is already fully there.
+          continue;
+        }
+        auto outputs_lock = std::unique_lock{outputs_mutex};
+        outputs.push_back(std::move(slice));
+      }
+    }
+  };
+  // Set up the threads.
+  TENZIR_ASSERT(args.jobs > 0);
+  auto threads = std::vector<std::thread>{};
+  for (auto i = uint64_t{0}; i < args.jobs; ++i) {
+    threads.emplace_back(work, ctrl.shared_diagnostics());
+  }
+  // With the current execution model, the generator can be destroyed at any
+  // yield. Because we are running threads, we need to protect against that.
+  auto guard = detail::scope_guard{[&]() noexcept {
+    auto inputs_lock = std::unique_lock{inputs_mutex};
+    // We clear the inputs here because we don't care about the output anymore.
+    inputs.clear();
+    inputs.emplace_back();
+    inputs_lock.unlock();
+    inputs_cv.notify_all();
+    for (auto& thread : threads) {
+      thread.join();
+    }
+  }};
+  auto pop_output = [&]() -> std::optional<table_slice> {
+    auto outputs_lock = std::unique_lock{outputs_mutex};
+    if (outputs.empty()) {
+      return std::nullopt;
+    }
+    auto output = std::move(outputs.front());
+    outputs.pop_front();
+    return output;
+  };
+  for (auto split : split_for_parallelization(std::move(input))) {
+    auto yielded = false;
+    if (split.empty()) {
+      // We got a signal that there is no more input. Thus, we'd like to sleep.
+      while (auto output = pop_output()) {
+        co_yield std::move(*output);
+        yielded = true;
+      }
+      // If we had some output above, we already gave the execution node a
+      // chance to refill our input buffer. Hence, we directly try again.
+      if (not yielded) {
+        co_yield {};
+      }
+      continue;
+    }
+    auto inputs_lock = std::unique_lock{inputs_mutex};
+    // If this is already too full, wait for a bit to provide backpressure.
+    while (inputs.size() > 3 * args.jobs) {
+      inputs_lock.unlock();
+      while (auto output = pop_output()) {
+        co_yield std::move(*output);
+        yielded = true;
+      }
+      if (not yielded) {
+        co_yield {};
+      }
+      inputs_lock.lock();
+    }
+    inputs.push_back(std::move(split));
+    inputs_lock.unlock();
+    inputs_cv.notify_one();
+    while (auto output = pop_output()) {
+      co_yield std::move(*output);
+      yielded = true;
+    }
+    if (not yielded) {
+      co_yield {};
+    }
+  }
+  // Once we reach this, the task of joining the threads is not longer handled
+  // by the guard. Note that no yield come in between this and joining the
+  // threads, so we can be sure that we join all threads before the next yield.
+  guard.disable();
+  auto inputs_lock = std::unique_lock{inputs_mutex};
+  inputs.emplace_back();
+  inputs_lock.unlock();
+  inputs_cv.notify_all();
+  // Wait for completion.
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  // Should be done now.
+  TENZIR_ASSERT(inputs.size() == 1);
+  TENZIR_ASSERT(inputs[0].empty());
+  // Yield the remaining outputs.
+  for (auto& output : outputs) {
+    co_yield std::move(output);
+  }
+}
 
 class json_parser final : public plugin_parser {
 public:
@@ -730,6 +999,9 @@ public:
     -> std::optional<generator<table_slice>> override {
     switch (args_.split_mode) {
       case split_at::newline: {
+        if (args_.jobs > 0) {
+          return parse_parallelized(std::move(input), args_, ctrl);
+        }
         return parser_loop(split_at_crlf(std::move(input)),
                            ndjson_parser{
                              args_.parser_name,
@@ -756,6 +1028,14 @@ public:
     }
     TENZIR_UNREACHABLE();
     return {};
+  }
+
+  auto idle_after() const -> duration override {
+    return args_.jobs == 0 ? duration::zero() : duration::max();
+  }
+
+  auto detached() const -> bool override {
+    return args_.jobs > 0;
   }
 
   friend auto inspect(auto& f, json_parser& x) -> bool {
@@ -806,8 +1086,8 @@ public:
     return "json";
   }
 
-  auto instantiate(type, operator_control_plane&) const
-    -> caf::expected<std::unique_ptr<printer_instance>> override {
+  auto
+  instantiate_impl() const -> caf::expected<std::unique_ptr<printer_instance>> {
     const auto compact = !!args_.compact_output;
     auto style = default_style();
     if (args_.monochrome_output) {
@@ -852,7 +1132,7 @@ public:
         auto buffer = std::vector<char>{};
         auto resolved_slice = resolve_enumerations(slice);
         auto out_iter = std::back_inserter(buffer);
-        auto rows = resolved_slice.values();
+        auto rows = values3(resolved_slice);
         auto row = rows.begin();
         if (not arrays_of_objects) {
           for (; row != rows.end(); ++row) {
@@ -878,6 +1158,11 @@ public:
         auto chunk = chunk::make(std::move(buffer), meta);
         co_yield std::move(chunk);
       });
+  }
+
+  auto instantiate(type, operator_control_plane&) const
+    -> caf::expected<std::unique_ptr<printer_instance>> override {
+    return instantiate_impl();
   }
 
   auto allows_joining() const -> bool override {
@@ -1094,27 +1379,173 @@ class write_json final : public crtp_operator<write_json> {
 public:
   write_json() = default;
 
-  explicit write_json(printer_args args) : printer_{std::move(args)} {
+  explicit write_json(printer_args args, uint64_t n_jobs)
+    : n_jobs_{n_jobs}, printer_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
     return "tql2.write_json";
   }
 
+  struct input_t {
+    uint64_t index;
+    table_slice slice;
+  };
+
+  auto detached() const -> bool override {
+    return n_jobs_ > 0;
+  }
+
+  auto idle_after() const -> duration override {
+    return n_jobs_ == 0 ? duration::zero() : duration::max();
+  }
+
+  auto parallel_operator(generator<table_slice> input) const
+    -> generator<chunk_ptr> {
+    auto inputs_mut = std::mutex{};
+    auto inputs = std::deque<input_t>{};
+    auto inputs_cv = std::condition_variable{};
+    auto outputs_mut = std::mutex{};
+    auto outputs = std::unordered_map<size_t, std::vector<chunk_ptr>>{};
+    auto input_index = size_t{0};
+    auto output_index = size_t{0};
+    auto work = [&]() {
+      caf::detail::set_thread_name("write_work");
+      auto printer = printer_.instantiate_impl();
+      TENZIR_ASSERT(printer);
+      TENZIR_ASSERT(*printer);
+      while (true) {
+        auto inputs_lock = std::unique_lock{inputs_mut};
+        inputs_cv.wait(inputs_lock, [&]() {
+          return not inputs.empty();
+        });
+        // An empty slice is our sentinel to shut down.
+        if (inputs.front().slice.rows() == 0) {
+          return;
+        }
+        auto my_work = std::move(inputs.front());
+        inputs.pop_front();
+        inputs_lock.unlock();
+        auto result = std::vector<chunk_ptr>{};
+        for (auto&& chunk : (*printer)->process(std::move(my_work.slice))) {
+          result.emplace_back(std::move(chunk));
+        }
+        auto output_lock = std::scoped_lock{outputs_mut};
+        auto [it, success]
+          = outputs.try_emplace(my_work.index, std::move(result));
+        TENZIR_ASSERT(success);
+      }
+    };
+    TENZIR_ASSERT(n_jobs_ > 0);
+    auto pool = std::vector<std::thread>(n_jobs_);
+    for (auto& t : pool) {
+      t = std::thread{work};
+    }
+    auto guard = detail::scope_guard{[&]() noexcept {
+      auto inputs_lock = std::unique_lock{inputs_mut};
+      // We clear the inputs here because we don't care about the output anymore.
+      inputs.clear();
+      inputs.emplace_back(input_index, table_slice{});
+      inputs_lock.unlock();
+      inputs_cv.notify_all();
+      for (auto& t : pool) {
+        t.join();
+      }
+    }};
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      {
+        // Create some sort of backpressure.
+        auto input_lock = std::unique_lock{inputs_mut};
+        while (inputs.size() > 1.5 * n_jobs_) {
+          input_lock.unlock();
+          co_yield {};
+          input_lock.lock();
+        }
+        // TODO Consider actually cutting the slice to ensure more balanced
+        // dispatching.
+        inputs.emplace_back(input_index, std::move(slice));
+        ++input_index;
+        inputs_cv.notify_one();
+      }
+      {
+        auto output_lock = std::scoped_lock{outputs_mut};
+        if (not ordered_) {
+          for (auto& [_, chunks] : outputs) {
+            for (auto& c : chunks) {
+              co_yield std::move(c);
+            }
+          }
+          outputs.clear();
+        } else {
+          for (; true; ++output_index) {
+            auto it = outputs.find(output_index);
+            if (it != outputs.end()) {
+              for (auto& c : it->second) {
+                co_yield std::move(c);
+              }
+              outputs.erase(it);
+              continue;
+            }
+            break;
+          }
+        }
+      }
+    }
+    guard.disable();
+    {
+      // Emplace an empty sentinel into the queue and wake up all workers
+      auto input_lock = std::scoped_lock{inputs_mut};
+      inputs.emplace_back(input_index, table_slice{});
+      inputs_cv.notify_all();
+    }
+    // wait for the workers to finish
+    for (auto& t : pool) {
+      t.join();
+    }
+    // Only the sentinel should remain
+    TENZIR_ASSERT(inputs.size() == 1);
+    TENZIR_ASSERT(inputs.front().index == input_index);
+    auto output_lock = std::scoped_lock{outputs_mut};
+    if (not ordered_) {
+      for (auto& [_, chunks] : outputs) {
+        for (auto& c : chunks) {
+          co_yield std::move(c);
+        }
+      }
+      outputs.clear();
+    } else {
+      for (; output_index < input_index; ++output_index) {
+        auto it = outputs.find(output_index);
+        TENZIR_ASSERT(it != outputs.end());
+        for (auto& c : it->second) {
+          co_yield std::move(c);
+        }
+      }
+    }
+  }
+
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    // TODO: Expose a better API for this.
     auto printer = printer_.instantiate(type{}, ctrl);
     TENZIR_ASSERT(printer);
     TENZIR_ASSERT(*printer);
+    if (n_jobs_ > 0) {
+      for (auto&& o : parallel_operator(std::move(input))) {
+        co_yield std::move(o);
+      }
+      co_return;
+    }
     for (auto&& slice : input) {
-      auto yielded = false;
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
       for (auto&& chunk : (*printer)->process(slice)) {
         co_yield std::move(chunk);
-        yielded = true;
-      }
-      if (not yielded) {
-        co_yield {};
       }
     }
     for (auto&& chunk : (*printer)->finish()) {
@@ -1125,14 +1556,20 @@ public:
   auto optimize(expression const& filter,
                 event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
+    auto replacement = std::make_unique<write_json>(*this);
+    replacement->ordered_ = order == event_order::ordered;
+    return optimize_result{std::nullopt, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, write_json& x) -> bool {
-    return f.apply(x.printer_);
+    return f.object(x).fields(f.field("ordered", x.ordered_),
+                              f.field("n_jobs", x.n_jobs_),
+                              f.field("printer", x.printer_));
   }
 
 private:
+  bool ordered_ = true;
+  uint64_t n_jobs_;
   json_printer printer_;
 };
 
@@ -1172,11 +1609,14 @@ public:
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
+    auto jobs = uint64_t{0};
+    parser.named_optional("_jobs", jobs);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     auto args = parser_args{"ndjson"};
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     args.split_mode = split_at::newline;
+    args.jobs = jobs;
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }
@@ -1345,6 +1785,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
+    auto n_jobs = uint64_t{};
     args.tql = tql_;
     auto parser = argument_parser2::operator_("write_json");
     parser.named("color", args.color_output);
@@ -1353,11 +1794,12 @@ public:
     parser.named("strip_nulls_in_lists", args.omit_nulls_in_lists);
     parser.named("strip_empty_records", args.omit_empty_objects);
     parser.named("strip_empty_lists", args.omit_empty_lists);
+    parser.named_optional("_jobs", n_jobs);
     if (tql_) {
       parser.named("compact", args.compact_output);
     }
     TRY(parser.parse(inv, ctx));
-    return std::make_unique<write_json>(args);
+    return std::make_unique<write_json>(args, n_jobs);
   }
 
   auto write_properties() const -> write_properties_t override {
@@ -1380,6 +1822,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.compact_output = location::unknown;
+    auto n_jobs = uint64_t{};
     TRY(argument_parser2::operator_(name())
           .named("color", args.color_output)
           .named("strip", args.omit_all)
@@ -1387,8 +1830,9 @@ public:
           .named("strip_nulls_in_lists", args.omit_nulls_in_lists)
           .named("strip_empty_records", args.omit_empty_objects)
           .named("strip_empty_lists", args.omit_empty_lists)
+          .named_optional("_jobs", n_jobs)
           .parse(inv, ctx));
-    return std::make_unique<write_json>(args);
+    return std::make_unique<write_json>(args, n_jobs);
   }
 
   auto write_properties() const -> write_properties_t override {

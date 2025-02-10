@@ -1579,10 +1579,15 @@ using type_to_arrow_builder_t = typename type_to_arrow_builder<T>::type;
 /// @related type_to_arrow_scalar
 /// @related type_to_arrow_builder
 template <class T>
-struct type_from_arrow : type_from_arrow<typename T::TypeClass> {};
+struct type_from_arrow {};
 
 template <class T>
-  requires(std::is_base_of_v<arrow::DataType, T>)
+  requires(requires { typename T::TypeClass; }
+           and not std::derived_from<T, arrow::ArrayBuilder>)
+struct type_from_arrow<T> : type_from_arrow<typename T::TypeClass> {};
+
+template <class T>
+  requires std::derived_from<T, arrow::DataType>
 struct type_from_arrow<T>
   : detail::tl_at<
       concrete_types,
@@ -1590,7 +1595,7 @@ struct type_from_arrow<T>
                           T>::value> {};
 
 template <class T>
-  requires(std::is_base_of_v<arrow::ArrayBuilder, T>)
+  requires std::derived_from<T, arrow::ArrayBuilder>
 struct type_from_arrow<T>
   : detail::tl_at<
       concrete_types,

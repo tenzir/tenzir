@@ -1,6 +1,10 @@
 [
   tql2.write_json {
-    tql: false
+    ordered: true,
+    n_jobs: 0,
+    printer: {
+      tql: false
+    }
   },
   compress {
     type: "gzip" @ 0..0,

@@ -632,7 +632,16 @@ TEST(parseable - overwriting with self reference) {
     };
     CHECK_EQUAL(foo, expected);
     auto bar = unbox(sch.find("bar"));
-    expected.assign_metadata(type{"bar", type{}});
+    expected = type{
+      "bar",
+      type{
+        "foo",
+        record_type{
+          {"x", uint64_type{}},
+          {"y", string_type{}},
+        },
+      },
+    };
     CHECK_EQUAL(bar, expected);
   }
 }

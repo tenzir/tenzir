@@ -209,6 +209,14 @@ public:
                                     : NameOverride.str());
   }
 
+  auto detached() const -> bool override {
+    return parser_.detached();
+  }
+
+  auto idle_after() const -> duration override {
+    return parser_.idle_after();
+  }
+
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {

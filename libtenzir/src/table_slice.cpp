@@ -1246,4 +1246,16 @@ auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice {
   return out;
 }
 
+auto table_slice::approx_bytes() const -> uint64_t {
+  auto f = detail::overload{
+    []() -> uint64_t {
+      return 0;
+    },
+    [&](const auto& encoded) {
+      return state(encoded, state_)->approx_bytes();
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
+}
+
 } // namespace tenzir

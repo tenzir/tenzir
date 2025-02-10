@@ -9,6 +9,7 @@
 #include "tenzir/execution_node.hpp"
 
 #include "tenzir/actors.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/scope_guard.hpp"
@@ -87,31 +88,11 @@ auto make_timer_guard(Duration&... elapsed) {
     });
 }
 
-// Return an underestimate for the total number of referenced bytes for a vector
-// of table slices, excluding the schema and disregarding any overlap or custom
-// information from extension types.
+// Return an underestimate for the total number of referenced bytes for a
+// vector of table slices, excluding the schema and disregarding any overlap
+// or custom information from extension types.
 auto approx_bytes(const table_slice& events) -> uint64_t {
-  if (events.rows() == 0) {
-    return 0;
-  }
-  auto record_batch = to_record_batch(events);
-  TENZIR_ASSERT(record_batch);
-  // Note that this function can sometimes fail. Because we ultimately want to
-  // return an underestimate for the value of bytes, we silently fall back to
-  // a value of zero if the referenced buffer size cannot be measured.
-  //
-  // As a consequence, the result of this function can be off by a large
-  // margin. It never overestimates, but sometimes the result is a lot smaller
-  // than you would think and also a lot smaller than it should be.
-  //
-  // We opted to use the built-in Arrow solution here hoping that it will be
-  // improved upon in the future upsrream, rather than us having to roll our
-  // own.
-  //
-  // We cannot feasibly warn for failure here as that would cause a lot of
-  // noise.
-  return detail::narrow_cast<uint64_t>(
-    arrow::util::ReferencedBufferSize(*record_batch).ValueOr(0));
+  return events.approx_bytes();
 }
 
 auto approx_bytes(const chunk_ptr& bytes) -> uint64_t {
@@ -396,7 +377,7 @@ struct exec_node_state {
   exec_node_actor previous = {};
 
   /// The inbound buffer.
-  std::vector<Input> inbound_buffer = {};
+  std::deque<Input> inbound_buffer = {};
   uint64_t inbound_buffer_size = {};
 
   /// The currently open demand.
@@ -698,7 +679,7 @@ struct exec_node_state {
       }
       consumed_input = true;
       auto input = std::move(inbound_buffer.front());
-      inbound_buffer.erase(inbound_buffer.begin());
+      inbound_buffer.pop_front();
       const auto input_size = size(input);
       inbound_buffer_size -= input_size;
       TENZIR_TRACE("{} {} uses {} elements", *self, op->name(), input_size);
@@ -862,7 +843,12 @@ struct exec_node_state {
   auto push(Input input) -> caf::result<void>
     requires(not std::is_same_v<Input, std::monostate>)
   {
+    if (metrics.time_to_first_input == duration::zero()) {
+      metrics.time_to_first_input
+        = std::chrono::steady_clock::now() - start_time;
+    }
     const auto input_size = size(input);
+    TENZIR_ASSERT(input_size > 0);
     TENZIR_TRACE("{} {} received {} elements from upstream", *self, op->name(),
                  input_size);
     metrics.inbound_measurement.num_elements += input_size;

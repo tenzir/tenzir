@@ -147,6 +147,9 @@ public:
   /// @returns The number of in-memory table slices.
   static size_t instances() noexcept;
 
+  /// Return an approximation of the memory covered by this slice.
+  auto approx_bytes() const -> uint64_t;
+
   // -- data access ------------------------------------------------------------
 
   /// Get all values in the slice, iterating row-wise.

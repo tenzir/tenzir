@@ -8,6 +8,7 @@
 
 #include "tenzir/arrow_table_slice.hpp"
 
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/config.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
@@ -152,9 +153,6 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
       state_.schema = type::from_arrow(*state_.record_batch->schema());
     }
     TENZIR_ASSERT(is<record_type>(state_.schema));
-    state_.flat_columns = index_column_arrays(state_.record_batch);
-    TENZIR_ASSERT_EXPENSIVE(state_.flat_columns.size()
-                            == as<record_type>(state_.schema).num_leaves());
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
@@ -190,7 +188,7 @@ template <class FlatBuffer>
 table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     if (auto&& batch = record_batch()) {
-      return state_.flat_columns.size();
+      return state_.get_flat_columns().size();
     }
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
@@ -216,7 +214,7 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
   id offset, table_slice::size_type column, value_index& index) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     if (auto&& batch = record_batch()) {
-      auto&& array = state_.flat_columns[column];
+      auto&& array = state_.get_flat_columns()[column];
       const auto& schema = as<record_type>(this->schema());
       auto type = schema.field(schema.resolve_flat_index(column)).type;
       for (size_t row = 0; auto&& value : values(type, *array)) {
@@ -237,7 +235,7 @@ data_view
 arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                   table_slice::size_type column) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
-    auto&& array = state_.flat_columns[column];
+    auto&& array = state_.get_flat_columns()[column];
     const auto& schema = as<record_type>(this->schema());
     auto offset = schema.resolve_flat_index(column);
     return value_at(schema.field(offset).type, *array, row);
@@ -257,7 +255,7 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
         .field(as<record_type>(this->schema()).resolve_flat_index(column))
         .type,
       t));
-    auto&& array = state_.flat_columns[column];
+    auto&& array = state_.get_flat_columns()[column];
     return value_at(t, *array, row);
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
@@ -470,6 +468,9 @@ transform_columns(type schema,
 table_slice
 transform_columns(const table_slice& slice,
                   const std::vector<indexed_transformation>& transformations) {
+  if (transformations.empty()) {
+    return slice;
+  }
   if (slice.rows() == 0) {
     return {};
   }
@@ -664,9 +665,275 @@ auto make_struct_array(
                            field_arrays);
 }
 
+namespace {
+
+namespace arrow_ext {
+
+using namespace arrow;
+
+// This is copied and adapted from Arrow.
+struct GetByteRangesArray {
+  GetByteRangesArray(const ArrayData& input, int64_t offset, int64_t length)
+    : input{input}, offset{offset}, length{length} {
+  }
+
+  const ArrayData& input;
+  int64_t offset;
+  int64_t length;
+
+  uint64_t total_length = 0;
+
+  Status VisitBitmap(const std::shared_ptr<Buffer>& buffer) {
+    if (buffer) {
+      total_length += bit_util::CoveringBytes(offset, length);
+    }
+    return Status::OK();
+  }
+
+  Status
+  VisitFixedWidthArray(const Buffer& buffer, const FixedWidthType& type) {
+    (void)buffer;
+    uint64_t offset_bits = offset * type.bit_width();
+    uint64_t offset_bytes
+      = bit_util::RoundDown(static_cast<int64_t>(offset_bits), 8) / 8;
+    uint64_t end_byte
+      = bit_util::RoundUp(
+          static_cast<int64_t>(offset_bits + (length * type.bit_width())), 8)
+        / 8;
+    uint64_t length_bytes = (end_byte - offset_bytes);
+    total_length += length_bytes;
+    return Status::OK();
+  }
+
+  Status Visit(const FixedWidthType& type) {
+    static_assert(sizeof(uint8_t*) <= sizeof(uint64_t),
+                  "Undefined behavior if pointer larger than uint64_t");
+    RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
+    RETURN_NOT_OK(VisitFixedWidthArray(*input.buffers[1], type));
+    if (input.dictionary) {
+      // This is slightly imprecise because we always assume the entire
+      // dictionary is referenced.  If this array has an offset it may only be
+      // referencing a portion of the dictionary
+      GetByteRangesArray dict_visitor{
+        *input.dictionary,
+        input.dictionary->offset,
+        input.dictionary->length,
+      };
+      RETURN_NOT_OK(VisitTypeInline(*input.dictionary->type, &dict_visitor));
+      total_length += dict_visitor.total_length;
+    }
+    return Status::OK();
+  }
+
+  Status Visit(const NullType& type) const {
+    (void)type;
+    return Status::OK();
+  }
+
+  template <typename BaseBinaryType>
+  Status VisitBaseBinary(const BaseBinaryType& type) {
+    (void)type;
+    using offset_type = typename BaseBinaryType::offset_type;
+    RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
+
+    total_length += sizeof(offset_type) * length;
+
+    const offset_type* offsets = input.GetValues<offset_type>(1, offset);
+    offset_type start = offsets[0];
+    offset_type end = offsets[length];
+    total_length += static_cast<uint64_t>(end - start);
+    return Status::OK();
+  }
+
+  Status Visit(const BinaryType& type) {
+    return VisitBaseBinary(type);
+  }
+
+  Status Visit(const LargeBinaryType& type) {
+    return VisitBaseBinary(type);
+  }
+
+  template <typename BaseListType>
+  Status VisitBaseList(const BaseListType& type) {
+    using offset_type = typename BaseListType::offset_type;
+    RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
+
+    total_length += sizeof(offset_type) * length;
+
+    const offset_type* offsets = input.GetValues<offset_type>(1, offset);
+    int64_t start = static_cast<int64_t>(offsets[0]);
+    int64_t end = static_cast<int64_t>(offsets[length]);
+    GetByteRangesArray child{
+      *input.child_data[0],
+      start,
+      end - start,
+    };
+    RETURN_NOT_OK(VisitTypeInline(*type.value_type(), &child));
+    total_length += child.total_length;
+    return Status::OK();
+  }
+
+  Status Visit(const ListType& type) {
+    return VisitBaseList(type);
+  }
+
+  Status Visit(const LargeListType& type) {
+    return VisitBaseList(type);
+  }
+
+  Status Visit(const FixedSizeListType& type) {
+    RETURN_NOT_OK(VisitBitmap(input.buffers[0]));
+    GetByteRangesArray child{
+      *input.child_data[0],
+      offset * type.list_size(),
+      length * type.list_size(),
+    };
+    RETURN_NOT_OK(VisitTypeInline(*type.value_type(), &child));
+    total_length += child.total_length;
+    return Status::OK();
+  }
+
+  Status Visit(const StructType& type) {
+    for (int i = 0; i < type.num_fields(); i++) {
+      GetByteRangesArray child{
+        *input.child_data[i],
+        offset + input.child_data[i]->offset,
+        length,
+      };
+      RETURN_NOT_OK(VisitTypeInline(*type.field(i)->type(), &child));
+      total_length += child.total_length;
+    }
+    return Status::OK();
+  }
+
+  Status Visit(const DenseUnionType& type) {
+    // Skip validity map for DenseUnionType
+    // Types buffer is always int8
+    RETURN_NOT_OK(VisitFixedWidthArray(
+      *input.buffers[1], *std::dynamic_pointer_cast<FixedWidthType>(int8())));
+    // Offsets buffer is always int32
+    RETURN_NOT_OK(VisitFixedWidthArray(
+      *input.buffers[2], *std::dynamic_pointer_cast<FixedWidthType>(int32())));
+
+    // We have to loop through the types buffer to figure out the correct
+    // offset / length being referenced in the child arrays
+    std::vector<int64_t> lengths_per_type(type.type_codes().size());
+    std::vector<int64_t> offsets_per_type(type.type_codes().size());
+    const int8_t* type_codes = input.GetValues<int8_t>(1, 0);
+    for (const int8_t* it = type_codes; it != type_codes + offset; it++) {
+      TENZIR_ASSERT(type.child_ids()[static_cast<std::size_t>(*it)]
+                    != UnionType::kInvalidChildId);
+      offsets_per_type[type.child_ids()[static_cast<std::size_t>(*it)]]++;
+    }
+    for (const int8_t* it = type_codes + offset;
+         it != type_codes + offset + length; it++) {
+      TENZIR_ASSERT(type.child_ids()[static_cast<std::size_t>(*it)]
+                    != UnionType::kInvalidChildId);
+      lengths_per_type[type.child_ids()[static_cast<std::size_t>(*it)]]++;
+    }
+
+    for (int i = 0; i < type.num_fields(); i++) {
+      GetByteRangesArray child{
+        *input.child_data[i], offsets_per_type[i] + input.child_data[i]->offset,
+        lengths_per_type[i]};
+      RETURN_NOT_OK(VisitTypeInline(*type.field(i)->type(), &child));
+      total_length += child.total_length;
+    }
+
+    return Status::OK();
+  }
+
+  Status Visit(const SparseUnionType& type) {
+    // Skip validity map for SparseUnionType
+    // Types buffer is always int8
+    RETURN_NOT_OK(VisitFixedWidthArray(
+      *input.buffers[1], *std::dynamic_pointer_cast<FixedWidthType>(int8())));
+
+    for (int i = 0; i < type.num_fields(); i++) {
+      GetByteRangesArray child{
+        *input.child_data[i],
+        offset + input.child_data[i]->offset,
+        length,
+      };
+      RETURN_NOT_OK(VisitTypeInline(*type.field(i)->type(), &child));
+      total_length += child.total_length;
+    }
+
+    return Status::OK();
+  }
+
+  Status Visit(const RunEndEncodedType& type) const {
+    (void)type;
+    TENZIR_UNREACHABLE();
+  }
+
+  Status Visit(const ExtensionType& extension_type) {
+    GetByteRangesArray storage{
+      input,
+      offset,
+      length,
+    };
+    RETURN_NOT_OK(VisitTypeInline(*extension_type.storage_type(), &storage));
+    total_length += storage.total_length;
+    return Status::OK();
+  }
+
+  Status Visit(const DataType& type) const {
+    return Status::TypeError("Extracting byte ranges not supported for type ",
+                             type.ToString());
+  }
+
+  static std::shared_ptr<DataType> RangesType() {
+    return struct_({field("start", uint64()), field("offset", uint64()),
+                    field("length", uint64())});
+  }
+
+  static Result<uint64_t> Exec(const ArrayData& input) {
+    GetByteRangesArray self{
+      input,
+      input.offset,
+      input.length,
+    };
+    RETURN_NOT_OK(VisitTypeInline(*input.type, &self));
+    return self.total_length;
+  }
+};
+
+} // namespace arrow_ext
+
+} // namespace
+
+template <class Flatbuffer>
+auto arrow_table_slice<Flatbuffer>::approx_bytes() const -> uint64_t {
+  if (state_.approx_bytes_ == std::numeric_limits<uint64_t>::max()) {
+    state_.approx_bytes_ = std::invoke([&]() -> uint64_t {
+      if (state_.record_batch->num_rows() == 0) {
+        return 0;
+      }
+      auto total_size = uint64_t{0};
+      for (auto& array : state_.record_batch->column_data()) {
+        total_size += check(arrow_ext::GetByteRangesArray::Exec(*array));
+      }
+      return total_size;
+    });
+  }
+  return state_.approx_bytes_;
+}
+
 // -- template machinery -------------------------------------------------------
 
 /// Explicit template instantiations for all Arrow encoding versions.
 template class arrow_table_slice<fbs::table_slice::arrow::v2>;
+
+auto arrow_table_slice_state<fbs::table_slice::arrow::v2>::get_flat_columns()
+  const -> const arrow::ArrayVector& {
+  auto guard = std::unique_lock{flat_columns_mutex};
+  if (not flat_columns) {
+    flat_columns = index_column_arrays(record_batch);
+    TENZIR_ASSERT_EXPENSIVE(flat_columns->size()
+                            == as<record_type>(schema).num_leaves());
+  }
+  return *flat_columns;
+}
 
 } // namespace tenzir
