@@ -32,7 +32,7 @@ from a string:
 
 :::tip Read the Guide
 To learn more about parsing nested data structures, check out our new [guide on
-parsing nested data](/next/usage/parsing-nested-data).
+parsing nested data](/next/usage/parse-nested-data).
 :::
 
 The new `parse_*` functions behave similar to the `read_*` operators, except
