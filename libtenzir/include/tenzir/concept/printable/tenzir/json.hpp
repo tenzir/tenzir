@@ -26,6 +26,34 @@
 
 namespace tenzir {
 
+struct json_string_fmt_wrapper {
+  std::string_view inner;
+};
+
+} // namespace tenzir
+
+template <>
+struct fmt::formatter<tenzir::json_string_fmt_wrapper> {
+  constexpr auto parse(fmt::format_parse_context& ctx)
+    -> fmt::format_parse_context::iterator {
+    return ctx.begin();
+  }
+
+  auto format(const tenzir::json_string_fmt_wrapper& x,
+              fmt::format_context& ctx) const -> fmt::format_context::iterator {
+    auto out = ctx.out();
+    *out++ = '"';
+    auto f = x.inner.begin();
+    auto l = x.inner.end();
+    while (f != l) {
+      tenzir::detail::json_escaper(f, out);
+    }
+    *out++ = '"';
+    return out;
+  }
+};
+
+namespace tenzir {
 struct json_printer : printer_base<json_printer> {
   explicit json_printer(json_printer_options options)
     : printer_base(), options_{options} {
@@ -104,26 +132,8 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view3<std::string> x) -> bool {
-      // TODO: Color is a terrible hack atm.
-      char buff[100]{};
-      const auto e = fmt::format_to(buff, options_.style.string, "A");
-      TENZIR_ASSERT(std::less<>{}(e, std::end(buff)));
-      auto pos = buff;
-      for (; *pos != 'A'; ++pos) {
-        *out_++ = *pos;
-      }
-      TENZIR_ASSERT(std::less<>{}(pos, std::end(buff)));
-      TENZIR_ASSERT(std::less<>{}(pos, e));
-      *out_++ = '"';
-      auto f = x.begin();
-      auto l = x.end();
-      while (f != l) {
-        detail::json_escaper(f, out_);
-      }
-      *out_++ = '"';
-      for (++pos; pos != e; ++pos) {
-        *out_++ = *pos;
-      }
+      out_ = fmt::format_to(out_, options_.style.string, "{}",
+                            json_string_fmt_wrapper{x});
       return true;
     }
 

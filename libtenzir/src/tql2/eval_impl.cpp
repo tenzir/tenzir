@@ -289,7 +289,6 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             if (field.type.kind().is_not<null_type>()
                 and field.type != last_type) {
               if (last_type.kind().is_not<null_type>()) {
-                // Sad case :(
                 result.push_back(b.finish_assert_one_array());
               }
               last_type = field.type;
