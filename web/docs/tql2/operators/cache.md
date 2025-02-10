@@ -25,9 +25,10 @@ Set the `tenzir.cache` configuration section controls how caches behave in
 Tenzir Nodes:
 - `tenzir.cache.lifetime` sets the default write timeout for newly created
   caches.
-- `tenzir.cache.capacity` sets an upper bound for the total memory usage in
-  bytes across all caches in a node. If the memory usage exceeds this limit, the
-  node will start evicting caches to make room for new data. The node requires a
+- `tenzir.cache.capacity` sets an upper bound for the estimated total memory
+  usage in bytes across all caches in a node. If the memory usage exceeds this
+  limit, the node will start evicting caches to make room for new data. This
+  eviction process happens at most once every 30 seconds. The node requires a
   minimum total cache capacity of 64MiB.
 
 ```yaml
