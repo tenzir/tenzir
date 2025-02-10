@@ -113,6 +113,7 @@ Function | Description | Example
 [`is_title`](functions/is_title.md) | Checks if a string follows title case | `"Hello World".is_title()`
 [`is_upper`](functions/is_upper.md) | Checks if a string is in uppercase | `"HELLO".is_upper()`
 [`match_regex`](functions/match_regex.md) | Checks if a string partially matches a regular expression | `"Hi".match_regex("[Hh]i")`
+[`slice`](functions/slice.md) | Slices a string with offsets and strides | `"Hi".slice(begin=2, stride=4)`
 
 ### Transformation
 
