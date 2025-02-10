@@ -750,16 +750,27 @@ auto split_for_parallelization(generator<chunk_ptr> input)
         if (byte == std::byte{'\n'}) {
           auto end = detail::narrow<size_t>(&byte - bytes.data());
           auto rest = std::vector<chunk_ptr>{};
-          if (end != bytes.size() - 1) {
+          // Move the remainder of the chunk where the newline is in.
+          if (end + 1 != bytes.size()) {
             rest.push_back(chunk->slice(end + 1, bytes.size()));
           }
+          if (end != 0) {
+            chunk = chunk->slice(0, end);
+          }
+          // Move the subsequent chunks.
           auto chunk_index = &chunk - current.data();
           rest.insert(rest.end(),
                       std::move_iterator{current.begin() + chunk_index + 1},
                       std::move_iterator{current.end()});
           current.erase(current.begin() + chunk_index + 1, current.end());
-          return std::move(current);
+          // Return everything up the newline and continue with the rest.
+          auto result = std::move(current);
           current = std::move(rest);
+          current_size = 0;
+          for (auto& chunk : current) {
+            current_size += chunk->size();
+          }
+          return result;
         }
       }
     }
@@ -770,8 +781,10 @@ auto split_for_parallelization(generator<chunk_ptr> input)
     if (now > next_timeout) {
       if (auto pop = pop_before_last_linebreak()) {
         co_yield std::move(*pop);
-        next_timeout = now + timeout;
       }
+      // Even if we couldn't pop anything, we still reset the timeout to prevent
+      // looping there over and over again.
+      next_timeout = now + timeout;
     }
     if (not chunk) {
       // This means that the operator has no more input. We propagate that
@@ -798,14 +811,16 @@ auto split_for_parallelization(generator<chunk_ptr> input)
       // of the chunk but is ignored later.
       if (byte == std::byte{'\n'}) {
         auto end = detail::narrow<size_t>(&byte - bytes.data());
-        current.push_back(chunk->slice(0, end));
-        current_size += current.back()->size();
+        if (end != 0) {
+          current.push_back(chunk->slice(0, end));
+          current_size += current.back()->size();
+        }
         co_yield std::move(current);
         yielded = true;
         current.clear();
         current_size = 0;
         // Remember the rest of the current chunk, if there is any.
-        if (end != bytes.size() - 1) {
+        if (end + 1 != bytes.size()) {
           current.push_back(chunk->slice(end + 1, bytes.size()));
           current_size += current.back()->size();
         }
