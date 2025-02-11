@@ -108,7 +108,7 @@ inline auto split_at_crlf(generator<chunk_ptr> input)
     co_yield simdjson::padded_string_view{buffer};
   }
 }
-inline auto split_at_null(generator<chunk_ptr> input, char split)
+inline auto split_at_null(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
   auto buffer = std::string{};
   for (auto&& chunk : input) {
@@ -119,7 +119,7 @@ inline auto split_at_null(generator<chunk_ptr> input, char split)
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
     const auto* const end = begin + chunk->size();
     for (const auto* current = begin; current != end; ++current) {
-      if (*current != split) {
+      if (*current != '\0') {
         continue;
       }
       const auto size = static_cast<size_t>(current - begin);
@@ -714,7 +714,7 @@ struct parser_args {
 ///
 /// Only yields an empty vector if the input yielded an empty chunk, which means
 /// that the operator's input buffer is exhausted.
-auto split_for_parallelization(generator<chunk_ptr> input)
+auto split_for_parallelization(generator<chunk_ptr> input, std::byte splitter)
   -> generator<std::vector<chunk_ptr>> {
   // Split at the next newline after the given number of bytes.
   constexpr auto split_after_size = size_t{1'000'000};
@@ -733,7 +733,7 @@ auto split_for_parallelization(generator<chunk_ptr> input)
     for (auto& chunk : std::views::reverse(current)) {
       auto bytes = as_bytes(chunk);
       for (const auto& byte : std::views::reverse(bytes)) {
-        if (byte == std::byte{'\n'}) {
+        if (byte == splitter) {
           auto end = detail::narrow<size_t>(&byte - bytes.data());
           auto rest = std::vector<chunk_ptr>{};
           // Move the remainder of the chunk where the newline is in.
@@ -795,7 +795,7 @@ auto split_for_parallelization(generator<chunk_ptr> input)
     for (const auto& byte : std::views::reverse(bytes)) {
       // This handles both LF and CRLF. In the latter case, the CR becomes part
       // of the chunk but is ignored later.
-      if (byte == std::byte{'\n'}) {
+      if (byte == splitter) {
         auto end = detail::narrow<size_t>(&byte - bytes.data());
         if (end != 0) {
           current.push_back(chunk->slice(0, end));
@@ -870,15 +870,25 @@ auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
       auto input = std::move(inputs.front());
       inputs.pop_front();
       inputs_lock.unlock();
-      auto parsed = parser_loop<ndjson_parser&>(
-        split_at_crlf(std::invoke(
-          [](std::vector<chunk_ptr> input) -> generator<chunk_ptr> {
-            for (auto& chunk : input) {
-              co_yield std::move(chunk);
-            }
-          },
-          std::move(input))),
-        parser);
+      auto input_gen = std::invoke(
+        [](std::vector<chunk_ptr> input) -> generator<chunk_ptr> {
+          for (auto& chunk : input) {
+            co_yield std::move(chunk);
+          }
+        },
+        std::move(input));
+      auto split_gen = std::invoke([&] {
+        switch (args.split_mode) {
+          case split_at::newline:
+            return split_at_crlf(std::move(input_gen));
+          case split_at::null:
+            return split_at_null(std::move(input_gen));
+          case split_at::none:
+            TENZIR_UNREACHABLE();
+        }
+        TENZIR_UNREACHABLE();
+      });
+      auto parsed = parser_loop<ndjson_parser&>(std::move(split_gen), parser);
       for (auto slice : parsed) {
         if (slice.rows() == 0) {
           // We don't care, because our input is already fully there.
@@ -917,7 +927,18 @@ auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
     outputs.pop_front();
     return output;
   };
-  for (auto split : split_for_parallelization(std::move(input))) {
+  auto splitter = std::invoke([&] {
+    switch (args.split_mode) {
+      case split_at::newline:
+        return std::byte{'\n'};
+      case split_at::null:
+        return std::byte{'\0'};
+      case split_at::none:
+        TENZIR_UNREACHABLE();
+    }
+    TENZIR_UNREACHABLE();
+  });
+  for (auto split : split_for_parallelization(std::move(input), splitter)) {
     auto yielded = false;
     if (split.empty()) {
       // We got a signal that there is no more input. Thus, we'd like to sleep.
@@ -997,11 +1018,11 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
+    if (args_.jobs > 0) {
+      return parse_parallelized(std::move(input), args_, ctrl);
+    }
     switch (args_.split_mode) {
       case split_at::newline: {
-        if (args_.jobs > 0) {
-          return parse_parallelized(std::move(input), args_, ctrl);
-        }
         return parser_loop(split_at_crlf(std::move(input)),
                            ndjson_parser{
                              args_.parser_name,
@@ -1010,7 +1031,7 @@ public:
                            });
       }
       case split_at::null: {
-        return parser_loop(split_at_null(std::move(input), '\0'),
+        return parser_loop(split_at_null(std::move(input)),
                            ndjson_parser{
                              args_.parser_name,
                              ctrl.diagnostics(),
@@ -1606,17 +1627,14 @@ public:
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = parser_args{"ndjson"};
+    args.split_mode = split_at::newline;
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
-    auto jobs = uint64_t{0};
-    parser.named_optional("_jobs", jobs);
-    auto result = parser.parse(inv, ctx);
-    TRY(result);
-    auto args = parser_args{"ndjson"};
+    parser.named_optional("_jobs", args.jobs);
+    TRY(parser.parse(inv, ctx));
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
-    args.split_mode = split_at::newline;
-    args.jobs = jobs;
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }
@@ -1635,13 +1653,13 @@ public:
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = parser_args{"gelf"};
+    args.split_mode = split_at::null;
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
-    auto result = parser.parse(inv, ctx);
-    TRY(result);
-    auto args = parser_args{"gelf"};
-    args.split_mode = split_at::null;
+    parser.named_optional("_jobs", args.jobs);
+    TRY(parser.parse(inv, ctx));
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
@@ -1659,6 +1677,8 @@ public:
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = parser_args{std::string{Name.str()}};
+    args.split_mode = split_at::newline;
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{
@@ -1672,10 +1692,8 @@ public:
       },
     };
     msb_parser.add_settings_to_parser(parser, false, false);
-    auto result = parser.parse(inv, ctx);
-    TRY(result);
-    auto args = parser_args{std::string{Name.str()}};
-    args.split_mode = split_at::newline;
+    parser.named_optional("_jobs", args.jobs);
+    TRY(parser.parse(inv, ctx));
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
