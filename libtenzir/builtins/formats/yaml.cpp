@@ -22,6 +22,7 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/view.hpp>
+#include <tenzir/view3.hpp>
 
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>
@@ -174,6 +175,10 @@ auto print_node(auto& out, const View& value) -> void {
     return match(value, [&](const auto& value) {
         return print_node(out, value);
       });
+  } else if constexpr (std::same_as<View, data_view3>) {
+    return match(value, [&](const auto& value) {
+      return print_node(out, value);
+    });
   } else if constexpr (std::is_same_v<View, caf::none_t>) {
     out << YAML::Null;
   } else if constexpr (std::is_same_v<View, view<bool>>) {
@@ -188,13 +193,15 @@ auto print_node(auto& out, const View& value) -> void {
                                         view<time>, view<pattern>, view<ip>,
                                         view<subnet>, view<enumeration>>) {
     out << fmt::to_string(data_view{value});
-  } else if constexpr (std::is_same_v<View, view<list>>) {
+  } else if constexpr (std::same_as<View, view<list>>
+                       or std::same_as<View, view3<list>>) {
     out << YAML::BeginSeq;
     for (const auto& element : value) {
       print_node(out, element);
     }
     out << YAML::EndSeq;
-  } else if constexpr (std::is_same_v<View, view<record>>) {
+  } else if constexpr (std::same_as<View, view<record>>
+                       or std::same_as<View, view3<record>>) {
     out << YAML::BeginMap;
     for (const auto& [key, element] : value) {
       out << YAML::Key;
@@ -210,7 +217,8 @@ auto print_node(auto& out, const View& value) -> void {
   }
 };
 
-auto print_document(YAML::Emitter& out, const view<record>& row) -> void {
+template <class View>
+auto print_document(YAML::Emitter& out, const View& row) -> void {
   out << YAML::BeginDoc;
   print_node(out, row);
   out << YAML::EndDoc;
@@ -425,6 +433,56 @@ class write_yaml final
   }
 };
 
+class print_yaml final : public virtual function_plugin {
+  auto name() const -> std::string override {
+    return "print_yaml";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto include_document_markers = std::optional<location>{};
+    auto parser = argument_parser2::function(name());
+
+    parser.positional("input", expr, "any");
+    parser.named("include_document_markers", include_document_markers);
+    TRY(parser.parse(inv, ctx));
+    return function_use::make(
+      [call = inv.call.get_location(), expr = std::move(expr),
+       include_document_markers
+       = include_document_markers](evaluator eval, session) {
+        return map_series(eval(expr), [&](series arg) -> multi_series {
+          const auto f = detail::overload{
+            [&](const arrow::NullArray&) -> multi_series {
+              return arg;
+            },
+            [&](const auto& arr) -> multi_series {
+              YAML::Emitter out;
+              auto builder = series_builder{type{string_type{}}};
+              for (int64_t i = 0; i < arr.length(); ++i) {
+                auto row = view_at(arr, i);
+                if (not row) {
+                  builder.null();
+                  continue;
+                }
+                if (include_document_markers) {
+                  print_document(out, *row);
+                } else {
+                  print_node(out, *row);
+                }
+                auto str = std::string_view{out.c_str(), out.size()};
+                builder.try_data(str);
+              }
+              return builder.finish_assert_one_array();
+            },
+          };
+
+          return match(*arg.array, f);
+        });
+      });
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::yaml
 
@@ -432,3 +490,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::yaml_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::read_yaml)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::parse_yaml)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::write_yaml)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::print_yaml)

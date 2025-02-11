@@ -175,8 +175,11 @@ auto view_at(const T& x, int64_t i)
     return record_view3::from_valid(x, i);
   } else if constexpr (std::same_as<T, arrow::ListArray>) {
     return list_view3::from_valid(x, i);
+  } else if constexpr (std::same_as<T, arrow::MapArray>) {
+    // TODO: Once we actually get rid of Maps...
+    TENZIR_UNREACHABLE();
+    return std::nullopt;
   } else {
-    static_assert(not std::same_as<T, arrow::MapArray>);
     return value_at(type_from_arrow_t<T>{}, x, i);
   }
 }

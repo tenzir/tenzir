@@ -155,6 +155,12 @@ Function | Description | Example
 [`parse_xsv`](functions/parse_xsv.mdx) | Parses a string as XSV | `string.parse_xsv(",", ";", "", header=["a","b"])`
 [`parse_yaml`](functions/parse_yaml.mdx) | Parses a string as YAML | `string.parse_yaml()`
 
+## Printing
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`print_yaml`](functions/print_yaml.md) | Prints a value as a YAML document | `record.print_yaml()`
+
 ## Time & Date
 
 Function | Description | Example

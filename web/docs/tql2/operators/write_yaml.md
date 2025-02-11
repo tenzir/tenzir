@@ -20,3 +20,7 @@ read_json
 write_yaml
 save_file "output.yaml"
 ```
+
+## See Also
+
+[`read_yaml`](read_yaml.mdx), [`print_yaml`](../functions/print_yaml.md)
