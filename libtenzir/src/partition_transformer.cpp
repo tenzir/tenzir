@@ -168,9 +168,9 @@ partition_transformer_state::create_or_get_partition(const table_slice& slice) {
 // Since we don't have to answer queries while this partition is being
 // constructed, we don't have to spawn separate indexer actors and
 // stream data but can just compute everything inline here.
-void partition_transformer_state::update_type_ids_and_indexers(
-  std::unordered_map<std::string, ids>& type_ids,
-  const tenzir::uuid& partition_id, const table_slice& slice) {
+void partition_transformer_state::update_type_ids(
+  std::unordered_map<std::string, ids>& type_ids, const tenzir::uuid&,
+  const table_slice& slice) {
   const auto& schema = slice.schema();
   // Update type ids
   auto it = type_ids.emplace(schema.name(), ids{}).first;
@@ -180,23 +180,6 @@ void partition_transformer_state::update_type_ids_and_indexers(
   TENZIR_ASSERT(first >= ids.size());
   ids.append_bits(false, first - ids.size());
   ids.append_bits(true, last - first);
-  // Push the event data to the indexers.
-  TENZIR_ASSERT_EXPENSIVE(slice.columns()
-                          == as<record_type>(schema).num_leaves());
-  for (size_t flat_index = 0;
-       const auto& [field, offset] : as<record_type>(schema).leaves()) {
-    const auto qf = qualified_record_field{schema, offset};
-    auto& typed_indexers = partition_buildup.at(partition_id).indexers;
-    auto it = typed_indexers.find(qf);
-    if (it == typed_indexers.end()) {
-      it = typed_indexers.emplace(qf, nullptr).first;
-    }
-    auto& idx = it->second;
-    if (idx != nullptr) {
-      slice.append_column_to_index(flat_index, *idx);
-    }
-    ++flat_index;
-  }
 }
 
 void partition_transformer_state::fulfill(
@@ -440,8 +423,7 @@ auto partition_transformer(
           slice.offset(offset);
           offset += slice.rows();
           self->mail(slice).send(data.builder);
-          self->state().update_type_ids_and_indexers(data.type_ids, data.id,
-                                                     slice);
+          self->state().update_type_ids(data.type_ids, data.id, slice);
           mutable_synopsis.add(slice, self->state().partition_capacity,
                                self->state().synopsis_opts);
         }
@@ -494,13 +476,7 @@ auto partition_transformer(
               = caf::make_error(ec::logic_error, "missing data for partition");
             return;
           }
-          auto& indexers = indexers_it->second.indexers;
-          auto fields = std::vector<struct record_type::field>{};
-          fields.reserve(indexers.size());
-          for (const auto& [qf, _] : indexers) {
-            fields.emplace_back(std::string{qf.name()}, qf.type());
-          }
-          auto partition = pack_full(partition_data, record_type{fields});
+          auto partition = pack_full(partition_data, record_type{});
           if (!partition) {
             stream_data.partition_chunks = partition.error();
             return;
