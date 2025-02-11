@@ -157,10 +157,7 @@ private:
       }
     }
     cache_size_ += events.rows();
-    // Calculate the byte size of any referenced Arrow buffers
-    // TODO: Use `table_slice::approx_bytes` instead.
-    byte_size_ += detail::narrow_cast<uint64_t>(
-      check(arrow::util::ReferencedBufferSize(*to_record_batch(events))));
+    byte_size_ += events.approx_bytes();
     // If a single cache exceeds the total capacity, we stop short of adding the
     // batch of events that'd make it go over the limit. This is better than
     // being evicted immediately.
