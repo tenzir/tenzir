@@ -17,7 +17,6 @@
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/ids.hpp"
-#include "tenzir/indexer.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/shutdown.hpp"

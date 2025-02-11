@@ -128,13 +128,6 @@ using partition_actor = typed_actor_fwd<
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// The INDEXER actor interface.
-using indexer_actor = typed_actor_fwd<
-  // Returns the ids for the given predicate.
-  auto(atom::evaluate, curried_predicate)->caf::result<ids>,
-  // Requests the INDEXER to shut down.
-  auto(atom::shutdown)->caf::result<void>>::unwrap;
-
 /// The PARTITION CREATION LISTENER actor interface.
 using partition_creation_listener_actor = typed_actor_fwd<
   auto(atom::update, partition_synopsis_pair)->caf::result<void>,
@@ -413,7 +406,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::flush_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::importer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::index_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::indexer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::metrics_receiver_actor))
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
