@@ -13,7 +13,6 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/partition_common.hpp"
 #include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/fbs/utils.hpp"
@@ -313,27 +312,8 @@ partition_actor::behavior_type passive_partition(
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
       TENZIR_ASSERT(self->state().deferred_evaluations.empty());
-      auto rp = self->make_response_promise<uint64_t>();
-      // Don't bother with the indexers etc. if we already know the ids
-      // we want to retrieve.
-      if (!query_context.ids.empty()) {
-        if (query_context.expr != tenzir::expression{}) {
-          return caf::make_error(ec::invalid_argument, "query may only contain "
-                                                       "either expression or "
-                                                       "ids");
-        }
-        rp.delegate(self->state().store, atom::query_v, query_context);
-        return rp;
-      }
-      auto triples = detail::evaluate(self->state(), query_context.expr);
-      if (triples.empty()) {
-        rp.deliver(uint64_t{0});
-        return rp;
-      }
-      query_context.ids
-        = detail::get_ids_for_evaluation(self->state().type_ids(), triples);
-      rp.delegate(self->state().store, atom::query_v, std::move(query_context));
-      return rp;
+      return self->mail(atom::query_v, std::move(query_context))
+        .delegate(self->state().store);
     },
     [self](atom::erase) -> caf::result<atom::done> {
       auto rp = self->make_response_promise<atom::done>();

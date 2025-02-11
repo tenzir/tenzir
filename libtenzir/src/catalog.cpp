@@ -549,10 +549,6 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
     [self](atom::candidates, const tenzir::query_context& query_context)
       -> caf::result<catalog_lookup_result> {
       TENZIR_TRACE("{} {}", *self, TENZIR_ARG(query_context));
-      if (not query_context.ids.empty()) {
-        return caf::make_error(ec::invalid_argument, "catalog expects queries "
-                                                     "not to have ids");
-      }
       return self->state().lookup(query_context.expr);
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
