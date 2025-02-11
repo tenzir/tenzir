@@ -967,10 +967,22 @@ class chart_plugin : public virtual operator_factory_plugin {
             .emit(ctx);
           return failure::promise();
         }
+        const auto yname = std::invoke([&]() -> std::string {
+          if (auto ss = ast::simple_selector::try_from(y)) {
+            return fmt::format(
+              "{}", fmt::join(std::views::transform(ss->path(),
+                                                    &ast::identifier::name),
+                              "."));
+          }
+          if (args.ty == chart_type::pie) {
+            return "value";
+          }
+          return "y";
+        });
         const auto loc = y.get_location();
         auto result = ast::function_call{entity, {std::move(y)}, loc, false};
         TENZIR_ASSERT(resolve_entities(result, ctx));
-        args.y[args.ty == chart_type::pie ? "value" : "y"] = std::move(result);
+        args.y[yname] = std::move(result);
         return {};
       });
   }
