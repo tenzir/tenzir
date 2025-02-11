@@ -140,15 +140,6 @@ using indexer_actor = typed_actor_fwd<
   // Requests the INDEXER to shut down.
   auto(atom::shutdown)->caf::result<void>>::unwrap;
 
-/// The ACTIVE INDEXER actor interface.
-using active_indexer_actor = typed_actor_fwd<
-  // Finalizes the ACTIVE INDEXER into a chunk, which containes an INDEXER.
-  auto(atom::snapshot)->caf::result<chunk_ptr>>
-  // Conform the the INDEXER ACTOR interface.
-  ::extend_with<indexer_actor>
-  // Conform to the procol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
 /// The PARTITION CREATION LISTENER actor interface.
 using partition_creation_listener_actor = typed_actor_fwd<
   auto(atom::update, partition_synopsis_pair)->caf::result<void>,
@@ -416,7 +407,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
     (std::vector<
       std::tuple<tenzir::exec_node_actor, tenzir::operator_type, std::string>>))
 
-  TENZIR_ADD_TYPE_ID((tenzir::active_indexer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::active_partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_active_store_actor))

@@ -34,15 +34,6 @@ struct indexer_state {
   size_t column;
 };
 
-/// Indexes a table slice column with a single value index.
-/// @param self A pointer to the spawned actor.
-/// @param column The flat index of the column in the slice schema.
-/// @param index The underlying value index.
-/// @pre index
-active_indexer_actor::behavior_type
-active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               size_t column, value_index_ptr index);
-
 /// An indexer that was recovered from on-disk state. It can only respond
 /// to queries, but not add eny more entries.
 /// @param self A pointer to the spawned actor.
