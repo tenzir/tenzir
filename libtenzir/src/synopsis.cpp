@@ -32,14 +32,6 @@ namespace {
 caf::expected<synopsis_ptr> unpack_opaque_synopsis(
   const tenzir::fbs::synopsis::LegacyOpaqueSynopsis& synopsis) {
   auto ret = synopsis_ptr{nullptr};
-  if (auto data = synopsis.caf_0_17_data()) {
-    tenzir::detail::legacy_deserializer sink(as_bytes(*data));
-    if (sink(ret)) {
-      return ret;
-    }
-    return caf::make_error(ec::parse_error, "opaque_synopsis not "
-                                            "deserializable");
-  }
   if (auto data = synopsis.caf_0_18_data()) {
     caf::binary_deserializer sink(data->data(), data->size());
     if (sink.apply(ret)) {

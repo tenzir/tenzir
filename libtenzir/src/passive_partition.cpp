@@ -64,13 +64,6 @@ void deliver_error_to_deferred_requests(passive_partition_state& state,
 
 caf::expected<tenzir::record_type>
 unpack_schema(const fbs::partition::LegacyPartition& partition) {
-  if (auto const* data = partition.combined_schema_caf_0_17()) {
-    auto lrt = legacy_record_type{};
-    if (auto error = fbs::deserialize_bytes(data, lrt)) {
-      return error;
-    }
-    return as<record_type>(type::from_legacy_type(lrt));
-  }
   if (auto const* data = partition.schema()) {
     auto chunk = chunk::copy(as_bytes(*data));
     auto t = type{std::move(chunk)};
@@ -107,24 +100,6 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     caf::binary_deserializer sink{bytes.data(), bytes.size()};
     value_index_ptr state_ptr;
     if (!sink.apply(state_ptr) || !state_ptr) {
-      return {};
-    }
-    return state_ptr;
-  }
-  if (const auto* data = index_fbs.caf_0_17_data()) {
-    auto uncompressed_data = uncompress(*data);
-    detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
-    value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr) {
-      return {};
-    }
-    return state_ptr;
-  }
-  if (auto ext_index = index_fbs.caf_0_17_external_container_idx()) {
-    auto uncompressed_data = uncompress(container.get_raw(ext_index));
-    detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
-    value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr) {
       return {};
     }
     return state_ptr;

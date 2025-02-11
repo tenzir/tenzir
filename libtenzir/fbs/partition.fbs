@@ -43,7 +43,7 @@ table LegacyPartition {
   /// embedded in the field names, pruned of attributes, and serialized using
   /// CAF 0.17's binary serializer.
   /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
-  combined_schema_caf_0_17: [ubyte];
+  combined_schema_caf_0_17: [ubyte] (deprecated);
 
   /// A map storing the mapping from type name -> ids
   /// Serialized using CAF's binary serializer.
