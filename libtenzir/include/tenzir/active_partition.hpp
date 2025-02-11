@@ -12,7 +12,6 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/aliases.hpp"
-#include "tenzir/evaluator.hpp"
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/index_config.hpp"

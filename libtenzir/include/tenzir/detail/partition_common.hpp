@@ -13,6 +13,7 @@
 
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
+#include "tenzir/evaluation_triple.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/passive_partition.hpp"
 #include "tenzir/time_synopsis.hpp"

@@ -128,11 +128,6 @@ using partition_actor = typed_actor_fwd<
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// The EVALUATOR actor interface.
-using evaluator_actor = typed_actor_fwd<
-  // Evaluates the expression and responds with matching ids.
-  auto(atom::run)->caf::result<ids>>::unwrap;
-
 /// The INDEXER actor interface.
 using indexer_actor = typed_actor_fwd<
   // Returns the ids for the given predicate.
@@ -412,7 +407,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::default_active_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_passive_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::disk_monitor_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::evaluator_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_sink_actor))
   TENZIR_ADD_TYPE_ID((tenzir::filesystem_actor))

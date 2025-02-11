@@ -330,37 +330,9 @@ partition_actor::behavior_type passive_partition(
         rp.deliver(uint64_t{0});
         return rp;
       }
-      auto ids_for_evaluation
+      query_context.ids
         = detail::get_ids_for_evaluation(self->state().type_ids(), triples);
-      auto eval = self->spawn(evaluator, query_context.expr, std::move(triples),
-                              std::move(ids_for_evaluation));
-      self->mail(atom::run_v)
-        .request(eval, caf::infinite)
-        .then(
-          [self, rp,
-           query_context = std::move(query_context)](const ids& hits) mutable {
-            if (!hits.empty() && hits.size() != self->state().events) {
-              // FIXME: We run into this for at least the IP index following the
-              // quickstart guide in the documentation, indicating that the IP
-              // index returns an undersized bitmap whose length does not match
-              // the number of events in this partition. This _can_ cause subtle
-              // issues downstream because you need to very carefully handle
-              // this scenario, which is easy to overlook as a developer. We
-              // should fix this issue.
-              TENZIR_TRACE("{} received evaluator results with wrong length: "
-                           "expected {}, got {}",
-                           *self, self->state().events, hits.size());
-            }
-            TENZIR_TRACE("{} received results from the evaluator", *self);
-            // TODO: Use the first path if the expression can be evaluated
-            // exactly.
-            query_context.ids = hits;
-            rp.delegate(self->state().store, atom::query_v,
-                        std::move(query_context));
-          },
-          [rp](caf::error& err) mutable {
-            rp.deliver(std::move(err));
-          });
+      rp.delegate(self->state().store, atom::query_v, std::move(query_context));
       return rp;
     },
     [self](atom::erase) -> caf::result<atom::done> {
