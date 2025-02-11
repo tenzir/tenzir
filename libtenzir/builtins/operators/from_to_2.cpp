@@ -365,11 +365,6 @@ auto create_pipeline_from_uri(std::string path,
   if (not has_pipeline_or_events) {
     auto file = get_file(*url);
     if (file.empty()) {
-      diagnostic::error("URL has no segments to deduce the format from")
-        .primary(inv.args.front().get_location())
-        .hint("you can pass a pipeline to handle compression and format")
-        .docs(docs)
-        .emit(ctx);
       goto post_deduction_reporting;
     }
     auto filename_loc = inv.args.front().get_location();
@@ -410,11 +405,18 @@ post_deduction_reporting:
   TENZIR_TRACE("{} operator: determined read       : {}", traits::operator_name,
                rw_plugin ? rw_plugin->name() : "none");
   /// TODO: Decide on whether/where we actually want this
-  if (not rw_plugin and not has_pipeline_or_events
-      and io_properties.default_format) {
-    rw_plugin = io_properties.default_format;
-    TENZIR_TRACE("{} operator: fallback read         : {}",
-                 traits::operator_name, rw_plugin->name());
+  if (not rw_plugin and not has_pipeline_or_events) {
+    if (io_properties.default_format) {
+      rw_plugin = io_properties.default_format;
+      TENZIR_TRACE("{} operator: fallback read         : {}",
+                   traits::operator_name, rw_plugin->name());
+    } else {
+      diagnostic::error("URL has no segments to deduce the format from")
+        .primary(inv.args.front().get_location())
+        .hint("you can pass a pipeline to handle compression and format")
+        .docs(docs)
+        .emit(ctx);
+    }
   }
   if (not io_plugin) {
     return failure::promise();
