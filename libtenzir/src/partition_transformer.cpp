@@ -14,7 +14,6 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/value_index_factory.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <flatbuffers/flatbuffers.h>

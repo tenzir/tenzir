@@ -179,7 +179,6 @@ class time_type;
 class type;
 class uint64_type;
 class uuid;
-class value_index;
 class wah_bitmap;
 
 struct active_partition_state;
@@ -300,7 +299,6 @@ using ids = bitmap; // temporary; until we have a real type for 'ids'
 using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
-using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.
 using duration = caf::timespan;
@@ -359,24 +357,6 @@ namespace table_slice::arrow {
 struct v2;
 
 } // namespace table_slice::arrow
-
-namespace value_index {
-
-struct ArithmeticIndex;
-struct EnumerationIndex;
-struct HashIndex;
-struct IPIndex;
-struct ListIndex;
-struct StringIndex;
-struct SubnetIndex;
-
-namespace detail {
-
-struct ValueIndexBase;
-
-} // namespace detail
-
-} // namespace value_index
 
 } // namespace fbs
 

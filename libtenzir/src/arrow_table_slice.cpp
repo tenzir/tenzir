@@ -18,7 +18,6 @@
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/table_slice_builder.hpp"
-#include "tenzir/value_index.hpp"
 
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
@@ -208,27 +207,6 @@ bool arrow_table_slice<FlatBuffer>::is_serialized() const noexcept {
 }
 
 // -- data access ------------------------------------------------------------
-
-template <class FlatBuffer>
-void arrow_table_slice<FlatBuffer>::append_column_to_index(
-  id offset, table_slice::size_type column, value_index& index) const {
-  if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
-    if (auto&& batch = record_batch()) {
-      auto&& array = state_.get_flat_columns()[column];
-      const auto& schema = as<record_type>(this->schema());
-      auto type = schema.field(schema.resolve_flat_index(column)).type;
-      for (size_t row = 0; auto&& value : values(type, *array)) {
-        if (!is<view<caf::none_t>>(value)) {
-          index.append(value, offset + row);
-        }
-        ++row;
-      }
-    }
-  } else {
-    static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
-                                                      "slice version");
-  }
-}
 
 template <class FlatBuffer>
 data_view

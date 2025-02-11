@@ -48,7 +48,6 @@
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/uuid.hpp"
-#include "tenzir/value_index.hpp"
 
 #include <caf/actor_registry.hpp>
 #include <caf/error.hpp>

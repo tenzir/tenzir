@@ -27,7 +27,6 @@
 #include "tenzir/factory.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/value_index_factory.hpp"
 
 #include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
@@ -364,7 +363,6 @@ configuration::configuration() {
   load<caf::net::middleman>();
   // Initialize factories.
   factory<synopsis>::initialize();
-  factory<value_index>::initialize();
   // Register Arrow extension types.
   auto register_extension_types
     = []<concrete_type... Ts>(detail::type_list<Ts...>) {

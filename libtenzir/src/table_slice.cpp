@@ -25,7 +25,6 @@
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/value_index.hpp"
 
 #include <arrow/record_batch.h>
 
@@ -342,21 +341,6 @@ auto table_slice::values(const struct offset& path) const
   return as_series.values();
 }
 
-void table_slice::append_column_to_index(table_slice::size_type column,
-                                         value_index& index) const {
-  TENZIR_ASSERT(offset() != invalid_id);
-  auto f = detail::overload{
-    []() noexcept {
-      die("cannot append column of invalid table slice to index");
-    },
-    [&](const auto& encoded) noexcept {
-      return state(encoded, state_)
-        ->append_column_to_index(offset(), column, index);
-    },
-  };
-  return visit(f, as_flatbuffer(chunk_));
-}
-
 data_view table_slice::at(table_slice::size_type row,
                           table_slice::size_type column) const {
   TENZIR_ASSERT(row < rows());
@@ -571,8 +555,8 @@ auto split(std::vector<table_slice> events, uint64_t partition_point)
   };
 }
 
-auto subslice(const table_slice& slice, size_t begin,
-              size_t end) -> table_slice {
+auto subslice(const table_slice& slice, size_t begin, size_t end)
+  -> table_slice {
   TENZIR_ASSERT(begin <= end);
   TENZIR_ASSERT(end <= slice.rows());
   if (begin == 0 && end == slice.rows()) {
@@ -662,9 +646,9 @@ table_slice resolve_enumerations(table_slice slice) {
     if (!is<enumeration_type>(field.type)) {
       continue;
     }
-    static auto transformation =
-      [](struct record_type::field field,
-         std::shared_ptr<arrow::Array> array) noexcept
+    static auto transformation
+      = [](struct record_type::field field,
+           std::shared_ptr<arrow::Array> array) noexcept
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
       const auto& et = as<enumeration_type>(field.type);
@@ -695,8 +679,8 @@ table_slice resolve_enumerations(table_slice slice) {
   return transform_columns(slice, transformations);
 }
 
-auto resolve_meta_extractor(const table_slice& slice,
-                            const meta_extractor& ex) -> data {
+auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
+  -> data {
   if (slice.rows() == 0) {
     return {};
   }
@@ -812,8 +796,9 @@ namespace {
 /// are replaced with the values of the next list offsets array, repeated until
 /// all list offsets arrays have been combined into one. This allows for
 /// flattening lists in Arrow's data model.
-auto combine_offsets(const std::vector<std::shared_ptr<arrow::Array>>&
-                       list_offsets) -> std::shared_ptr<arrow::Array> {
+auto combine_offsets(
+  const std::vector<std::shared_ptr<arrow::Array>>& list_offsets)
+  -> std::shared_ptr<arrow::Array> {
   TENZIR_ASSERT(not list_offsets.empty());
   auto it = list_offsets.begin();
   auto result = *it++;
@@ -971,20 +956,21 @@ auto make_flatten_transformation(
 
 auto make_rename_transformation(std::string new_name)
   -> indexed_transformation::function_type {
-  return [new_name = std::move(new_name)](struct record_type::field field,
-                                          std::shared_ptr<arrow::Array> array)
-           -> std::vector<std::pair<struct record_type::field,
-                                    std::shared_ptr<arrow::Array>>> {
-    return {
-      {
+  return
+    [new_name = std::move(new_name)](struct record_type::field field,
+                                     std::shared_ptr<arrow::Array> array)
+      -> std::vector<
+        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+      return {
         {
-          new_name,
-          field.type,
+          {
+            new_name,
+            field.type,
+          },
+          array,
         },
-        array,
-      },
+      };
     };
-  };
 }
 
 } // namespace
@@ -1197,8 +1183,8 @@ void unflatten_into(unflatten_entry& entry, std::shared_ptr<arrow::Array> array,
 
 } // namespace
 
-auto unflatten(const arrow::StructArray& array,
-               std::string_view sep) -> std::shared_ptr<arrow::StructArray> {
+auto unflatten(const arrow::StructArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::StructArray> {
   // We unflatten records by recursively building up an `unflatten_record`,
   // which is basically a mutable `arrow::StructArray`.
   auto root = unflatten_entry{unflatten_record{array.length(), nullptr}};
@@ -1208,8 +1194,8 @@ auto unflatten(const arrow::StructArray& array,
   return realize(std::move(*record));
 }
 
-auto unflatten(const arrow::ListArray& array,
-               std::string_view sep) -> std::shared_ptr<arrow::ListArray> {
+auto unflatten(const arrow::ListArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::ListArray> {
   // Unflattening a list simply means unflattening its values.
   auto values = unflatten(array.values(), sep);
   return check(arrow::ListArray::FromArrays(
@@ -1217,8 +1203,8 @@ auto unflatten(const arrow::ListArray& array,
     array.null_bitmap(), array.data()->null_count));
 }
 
-auto unflatten(std::shared_ptr<arrow::Array> array,
-               std::string_view sep) -> std::shared_ptr<arrow::Array> {
+auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
+  -> std::shared_ptr<arrow::Array> {
   // We only unflatten records, but records can be contained in lists.
   if (auto record = try_as<arrow::StructArray>(*array)) {
     return unflatten(*record, sep);
