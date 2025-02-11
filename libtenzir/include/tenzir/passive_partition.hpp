@@ -19,7 +19,6 @@
 #include "tenzir/query_context.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/uuid.hpp"
-#include "tenzir/value_index.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -39,10 +38,6 @@ struct passive_partition_state {
   passive_partition_state() = default;
 
   caf::error initialize_from_chunk(const tenzir::chunk_ptr&);
-
-  // -- utility functions ------------------------------------------------------
-
-  indexer_actor indexer_at(size_t position) const;
 
   const std::optional<tenzir::record_type>& combined_schema() const;
 
@@ -93,9 +88,6 @@ struct passive_partition_state {
   /// The store to retrieve the data from.
   store_actor store = {};
 
-  /// Whether this actor is currently shutting down.
-  bool is_shutting_down = false;
-
   /// Actor handle of the node.
   node_actor::pointer node = {};
 
@@ -104,10 +96,6 @@ struct passive_partition_state {
 
   /// The flatbuffer container holding the index data
   std::optional<fbs::flatbuffer_container> container = {};
-
-  /// Maps qualified fields to indexer actors. This is mutable since
-  /// indexers are spawned lazily on first access.
-  mutable std::vector<indexer_actor> indexers = {};
 };
 
 // -- flatbuffers --------------------------------------------------------------

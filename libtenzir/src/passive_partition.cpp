@@ -25,7 +25,6 @@
 #include "tenzir/status.hpp"
 #include "tenzir/terminate.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/value_index.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
@@ -80,12 +79,6 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
 
 } // namespace
 
-/// Gets the INDEXER at a certain position.
-indexer_actor passive_partition_state::indexer_at(size_t position) const {
-  TENZIR_ASSERT(position < indexers.size());
-  return indexers[position];
-}
-
 const std::optional<tenzir::record_type>&
 passive_partition_state::combined_schema() const {
   return combined_schema_;
@@ -128,10 +121,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   } else {
     return schema.error();
   }
-  // We only create dummy entries here, since the positions of the `indexers`
-  // vector must be the same as in `combined_schema`. The actual indexers are
-  // deserialized and spawned lazily on demand.
-  state.indexers.resize(state.combined_schema_->num_fields());
   auto const* type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
     auto const* type_ids_tuple = type_ids->Get(i);
@@ -298,9 +287,6 @@ partition_actor::behavior_type passive_partition(
         }
         self->state().store = *store;
         self->monitor(self->state().store, [=](caf::error err) {
-          if (self->state().is_shutting_down) {
-            return;
-          }
           TENZIR_ERROR("{} shuts down after DOWN from {} store: {}", *self,
                        self->state().store_id, err);
           self->quit(std::move(err));
@@ -327,13 +313,6 @@ partition_actor::behavior_type passive_partition(
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
       TENZIR_ASSERT(self->state().deferred_evaluations.empty());
-      // Don't handle queries after we already received an exit message, while
-      // the terminator is running. Since we require every partition to have at
-      // least one indexer, we can use this to check.
-      if (self->state().indexers.empty()) {
-        return caf::make_error(ec::system_error, "can not handle query because "
-                                                 "shutdown was requested");
-      }
       auto rp = self->make_response_promise<uint64_t>();
       // Don't bother with the indexers etc. if we already know the ids
       // we want to retrieve.
@@ -420,34 +399,7 @@ partition_actor::behavior_type passive_partition(
     [self](const caf::exit_msg& msg) {
       TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self,
                    msg.source, msg.reason);
-      self->state().is_shutting_down = true;
-      // Receiving an EXIT message does not need to coincide with the state
-      // being destructed, so we explicitly clear the vector to release the
-      // references.
-      // TODO: We must actor_cast to caf::actor here because 'terminate'
-      // operates on 'std::vector<caf::actor>' only. That should probably be
-      // generalized in the future.
-      auto indexers = std::vector<caf::actor>{};
-      indexers.reserve(self->state().indexers.size());
-      for (auto&& indexer : std::exchange(self->state().indexers, {})) {
-        indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
-      }
-      if (msg.reason != caf::exit_reason::user_shutdown) {
-        self->quit(msg.reason);
-        return;
-      }
-      // When the shutdown was requested by the user (as opposed to the partition
-      // just dropping out of the LRU cache), pro-actively remove the indexers.
-      terminate<policy::parallel>(self, std::move(indexers))
-        .then(
-          [=](atom::done) {
-            TENZIR_TRACE("{} shut down all indexers successfully", *self);
-            self->quit();
-          },
-          [=](const caf::error& err) {
-            TENZIR_ERROR("{} failed to shut down all indexers: {}", *self, err);
-            self->quit(err);
-          });
+      self->quit(std::move(msg.reason));
     },
   };
 }

@@ -24,11 +24,9 @@ namespace tenzir::detail {
 /// @relates active_partition_state
 /// @relates passive_partition_state
 template <typename PartitionState>
-indexer_actor
-fetch_indexer(const PartitionState& state, const data_extractor& dx,
-              relational_operator op, const data& x) {
-  TENZIR_TRACE("{} {} {}", TENZIR_ARG(dx), TENZIR_ARG(op), TENZIR_ARG(x));
-  return state.indexer_at(dx.column);
+indexer_actor fetch_indexer(const PartitionState&, const data_extractor&,
+                            relational_operator, const data&) {
+  return {};
 }
 
 /// Retrieves an INDEXER for a predicate with a data extractor.
@@ -48,8 +46,9 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.
     for (auto& [name, ids] : state.type_ids()) {
-      if (evaluate(name, op, x))
+      if (evaluate(name, op, x)) {
         row_ids |= ids;
+      }
     }
   } else if (ex.kind == meta_extractor::schema_id) {
     // TODO: Actually take the schema fingerprint into account. For now, we just
@@ -68,13 +67,16 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
           state.data.synopsis->max_import_time,
         };
         auto add = ts.lookup(op, *t);
-        if (!add || *add)
-          for (const auto& [_, ids] : state.type_ids())
+        if (!add || *add) {
+          for (const auto& [_, ids] : state.type_ids()) {
             row_ids |= ids;
+          }
+        }
       }
     } else {
-      for (const auto& [_, ids] : state.type_ids())
+      for (const auto& [_, ids] : state.type_ids()) {
         row_ids |= ids;
+      }
     }
   } else if (ex.kind == meta_extractor::internal) {
     // TODO: Actually take the internal flag into account. For now, we just
