@@ -45,7 +45,7 @@ table LegacyQualifiedValueIndex {
   field_name: string;
 
   /// The value index for the given field.
-  index: detail.LegacyValueIndex;
+  index: detail.LegacyValueIndex (deprecated);
 }
 
 table ArithmeticIndex {

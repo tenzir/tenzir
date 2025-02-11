@@ -40,10 +40,6 @@ struct passive_partition_state {
 
   caf::error initialize_from_chunk(const tenzir::chunk_ptr&);
 
-  // -- member types -----------------------------------------------------------
-
-  using recovered_indexer = std::pair<qualified_record_field, value_index_ptr>;
-
   // -- utility functions ------------------------------------------------------
 
   indexer_actor indexer_at(size_t position) const;
@@ -115,10 +111,6 @@ struct passive_partition_state {
 };
 
 // -- flatbuffers --------------------------------------------------------------
-
-[[nodiscard]] value_index_ptr
-unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
-                   const fbs::flatbuffer_container& container);
 
 [[nodiscard]] caf::error
 unpack(const fbs::partition::LegacyPartition&, passive_partition_state&);

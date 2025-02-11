@@ -16,7 +16,6 @@
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/index_config.hpp"
-#include "tenzir/indexer.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/plugin.hpp"
@@ -70,10 +69,6 @@ struct active_partition_state {
     /// sent back to the partition after persisting to minimize memory footprint
     /// of the catalog.
     partition_synopsis_ptr synopsis = {};
-
-    /// A mapping from qualified field name to serialized indexer state
-    /// for each indexer in the partition.
-    std::vector<std::pair<std::string, chunk_ptr>> indexer_chunks = {};
   };
 
   // -- inbound path -----------------------------------------------------------

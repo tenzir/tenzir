@@ -61,7 +61,7 @@ chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
   return fbs::release(synopsis_builder);
 }
 
-/// Delivers persistance promise and calculates indexer_chunks
+/// Delivers persistance promise
 void serialize(
   active_partition_actor::stateful_pointer<active_partition_state> self) {
   auto& mutable_synopsis = self->state().data.synopsis.unshared();
@@ -74,9 +74,6 @@ void serialize(
   auto fields = std::vector<struct record_type::field>{};
   for (const auto& [field, offset] : as<record_type>(schema).leaves()) {
     const auto qf = qualified_record_field{schema, offset};
-    // Backwards compat for to comply with the format that supports
-    // value indexes.
-    self->state().data.indexer_chunks.emplace_back(qf.name(), nullptr);
     fields.emplace_back(std::string{qf.name()}, qf.type());
   }
   TENZIR_ASSERT(!fields.empty());
@@ -185,52 +182,6 @@ pack_full(const active_partition_state::serialization_data& x,
   if (!uuid) {
     return uuid.error();
   }
-  std::vector<flatbuffers::Offset<fbs::value_index::LegacyQualifiedValueIndex>>
-    indices;
-  std::vector<tenzir::chunk_ptr> external_indices;
-  // Note that the deserialization code relies on the order of indexers within
-  // the flatbuffers being preserved.
-  for (const auto& [name, chunk] : x.indexer_chunks) {
-    auto fieldname = builder.CreateString(name);
-    auto data = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
-    auto size = size_t{0};
-    auto external_idx = size_t{0};
-    if (chunk) {
-      auto compressed_chunk = chunk::compress(as_bytes(chunk));
-      if (!compressed_chunk) {
-        return compressed_chunk.error();
-      }
-      size = (*compressed_chunk)->size();
-      // This threshold is an educated guess to keep tiny indices inline
-      // to reduce additional page loads and huge indices out of the way.
-      constexpr auto INDEXER_INLINE_THRESHOLD = 4096ull;
-      if (size < INDEXER_INLINE_THRESHOLD) {
-        data = builder.CreateVector(
-          reinterpret_cast<const uint8_t*>((*compressed_chunk)->data()), size);
-      } else {
-        external_indices.emplace_back(std::move(*compressed_chunk));
-        // The index into the flatbuffer_container is 1 + index into
-        // `external_indices`.
-        external_idx = external_indices.size();
-      }
-    }
-    fbs::value_index::detail::LegacyValueIndexBuilder vbuilder(builder);
-    if (chunk) {
-      vbuilder.add_decompressed_size(chunk->size());
-    }
-    if (external_idx > 0) {
-      vbuilder.add_caf_0_18_external_container_idx(external_idx);
-    } else {
-      vbuilder.add_caf_0_18_data(data);
-    }
-    auto vindex = vbuilder.Finish();
-    fbs::value_index::LegacyQualifiedValueIndexBuilder qbuilder(builder);
-    qbuilder.add_field_name(fieldname);
-    qbuilder.add_index(vindex);
-    auto qindex = qbuilder.Finish();
-    indices.push_back(qindex);
-  }
-  auto indexes = builder.CreateVector(indices);
   // Serialize schema.
   auto schema_bytes = as_bytes(combined_schema);
   auto schema_offset = builder.CreateVector(
@@ -265,7 +216,6 @@ pack_full(const active_partition_state::serialization_data& x,
   fbs::partition::LegacyPartitionBuilder legacy_builder(builder);
   legacy_builder.add_uuid(*uuid);
   legacy_builder.add_events(x.events);
-  legacy_builder.add_indexes(indexes);
   legacy_builder.add_partition_synopsis(*maybe_ps);
   legacy_builder.add_schema(schema_offset);
   legacy_builder.add_type_ids(type_ids);
@@ -281,9 +231,6 @@ pack_full(const active_partition_state::serialization_data& x,
   // even if all indices are inline.
   fbs::flatbuffer_container_builder cbuilder;
   cbuilder.add(as_bytes(chunk));
-  for (auto const& index : external_indices) {
-    cbuilder.add(as_bytes(index));
-  }
   auto container = std::move(cbuilder).finish(fbs::PartitionIdentifier());
   return std::move(container).dissolve();
 }

@@ -80,65 +80,10 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
 
 } // namespace
 
-value_index_ptr
-unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
-                   const fbs::flatbuffer_container& container) {
-  // If an external idx was specified, the data is not stored inline in
-  // the flatbuffer but in a separate segment of this file.
-  auto uncompress = [&index_fbs]<class T>(T&& index_data) {
-    auto data_view = as_bytes(std::forward<T>(index_data));
-    auto uncompressed_data
-      = index_fbs.decompressed_size() != 0
-          ? chunk::decompress(data_view, index_fbs.decompressed_size())
-          : chunk::make(data_view, []() noexcept {});
-    TENZIR_ASSERT(uncompressed_data);
-    return uncompressed_data;
-  };
-  if (const auto* data = index_fbs.caf_0_18_data()) {
-    auto uncompressed_data = uncompress(*data);
-    auto bytes = as_bytes(*uncompressed_data);
-    caf::binary_deserializer sink{bytes.data(), bytes.size()};
-    value_index_ptr state_ptr;
-    if (!sink.apply(state_ptr) || !state_ptr) {
-      return {};
-    }
-    return state_ptr;
-  }
-  if (auto ext_index = index_fbs.caf_0_18_external_container_idx()) {
-    auto uncompressed_data = uncompress(container.get_raw(ext_index));
-    auto bytes = as_bytes(*uncompressed_data);
-    caf::binary_deserializer sink{bytes.data(), bytes.size()};
-    value_index_ptr state_ptr;
-    if (!sink.apply(state_ptr) || !state_ptr) {
-      return {};
-    }
-    return state_ptr;
-  }
-  return {};
-}
-
 /// Gets the INDEXER at a certain position.
 indexer_actor passive_partition_state::indexer_at(size_t position) const {
   TENZIR_ASSERT(position < indexers.size());
-  auto& indexer = indexers[position];
-  if (indexer) {
-    return indexer;
-  }
-  // Deserialize the value index and spawn a passive_indexer lazily when it is
-  // requested for the first time.
-  const auto* qualified_index = flatbuffer->indexes()->Get(position);
-  if (!qualified_index || !qualified_index->index()) {
-    return {};
-  }
-  if (auto value_index
-      = unpack_value_index(*qualified_index->index(), *container)) {
-    indexer = self->spawn(passive_indexer, id, std::move(value_index));
-    return indexer;
-  }
-  TENZIR_TRACE("passive-partition {} has no index or failed to index for field "
-               "{}",
-               id, qualified_index->field_name()->string_view());
-  return {};
+  return indexers[position];
 }
 
 const std::optional<tenzir::record_type>&
@@ -174,22 +119,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
       reinterpret_cast<const std::byte*>(store_header->data()->data()),
       store_header->data()->size()};
   }
-  auto const* indexes = partition.indexes();
-  if (!indexes) {
-    return caf::make_error(ec::format_error, //
-                           "missing 'indexes' field in partition flatbuffer");
-  }
-  for (auto const* qualified_index : *indexes) {
-    if (!qualified_index->field_name()) {
-      return caf::make_error(ec::format_error, //
-                             "missing field name in qualified index");
-    }
-    auto const* index = qualified_index->index();
-    if (!index) {
-      return caf::make_error(ec::format_error, //
-                             "missing index field in qualified index");
-    }
-  }
   if (auto error = unpack(*partition.uuid(), state.id)) {
     return error;
   }
@@ -199,19 +128,10 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   } else {
     return schema.error();
   }
-  // This condition should be '!=', but then we cant deserialize in unit tests
-  // anymore without creating a bunch of index actors first. :/
-  if (state.combined_schema_->num_fields() < indexes->size()) {
-    TENZIR_ERROR(
-      "{} found incoherent number of indexers in deserialized state; "
-      "{} fields for {} indexes",
-      state.name, state.combined_schema_->num_fields(), indexes->size());
-    return caf::make_error(ec::format_error, "incoherent number of indexers");
-  }
   // We only create dummy entries here, since the positions of the `indexers`
   // vector must be the same as in `combined_schema`. The actual indexers are
   // deserialized and spawned lazily on demand.
-  state.indexers.resize(indexes->size());
+  state.indexers.resize(state.combined_schema_->num_fields());
   auto const* type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
     auto const* type_ids_tuple = type_ids->Get(i);
@@ -494,35 +414,8 @@ partition_actor::behavior_type passive_partition(
           });
       return rp;
     },
-    [self](atom::status, status_verbosity, duration) -> record {
-      record result;
-      if (!self->state().partition_chunk) {
-        result["state"] = "waiting for chunk";
-        return result;
-      }
-      result["size"] = self->state().partition_chunk->size();
-      size_t mem_indexers = 0;
-      for (size_t i = 0; i < self->state().indexers.size(); ++i) {
-        if (self->state().indexers[i]) {
-          mem_indexers += sizeof(indexer_state)
-                          + self->state()
-                              .flatbuffer->indexes()
-                              ->Get(i)
-                              ->index()
-                              ->decompressed_size();
-        }
-      }
-      result["memory-usage-indexers"] = mem_indexers;
-      auto x = self->state().partition_chunk->incore();
-      if (!x) {
-        result["memory-usage-incore"] = fmt::to_string(x.error());
-        result["memory-usage"] = self->state().partition_chunk->size()
-                                 + mem_indexers + sizeof(self->state());
-      } else {
-        result["memory-usage-incore"] = *x;
-        result["memory-usage"] = *x + mem_indexers + sizeof(self->state());
-      }
-      return result;
+    [](atom::status, status_verbosity, duration) -> record {
+      return {};
     },
     [self](const caf::exit_msg& msg) {
       TENZIR_TRACE("{} received EXIT from {} with reason: {}", *self,

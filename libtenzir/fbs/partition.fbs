@@ -54,7 +54,7 @@ table LegacyPartition {
   partition_synopsis: partition_synopsis.LegacyPartitionSynopsis;
 
   /// The contained value indexes.
-  indexes: [value_index.LegacyQualifiedValueIndex];
+  indexes: [value_index.LegacyQualifiedValueIndex] (deprecated);
 
   /// A store identifier and header information.
   store: detail.StoreHeader;

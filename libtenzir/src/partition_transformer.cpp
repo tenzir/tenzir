@@ -450,19 +450,6 @@ auto partition_transformer(
         // synopsis keeps track of offset/events internally.
         mutable_synopsis.shrink();
         mutable_synopsis.events = data.events;
-        for (auto& [qf, idx] :
-             self->state().partition_buildup.at(data.id).indexers) {
-          auto chunk = chunk_ptr{};
-          // Note that `chunkify(nullptr)` return a chunk of size > 0.
-          if (idx) {
-            chunk = chunkify(idx);
-          }
-          // We defensively treat every empty chunk as non-existing.
-          if (chunk && chunk->size() == 0) {
-            chunk = nullptr;
-          }
-          data.indexer_chunks.emplace_back(qf.name(), chunk);
-        }
       }
       for (auto& [_, partition_data] : self->state().data) {
         self->mail(atom::persist_v)
