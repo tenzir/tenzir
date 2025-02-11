@@ -37,16 +37,7 @@ public:
   auto operator()(generator<table_slice> input) const
     -> generator<table_slice> {
     auto last_finish = std::chrono::steady_clock::now();
-    static const auto schema = type{
-      "tenzir.measure.events",
-      record_type{
-        {"timestamp", time_type{}},
-        {"events", uint64_type{}},
-        {"schema_id", string_type{}},
-        {"schema", definition_ ? type{record_type{}} : type{string_type{}}},
-      },
-    };
-    auto builder = series_builder{schema};
+    auto builder = series_builder{};
     auto counters = std::unordered_map<type, uint64_t>{};
     for (auto&& slice : input) {
       const auto now = std::chrono::steady_clock::now();
@@ -54,7 +45,7 @@ public:
         if (builder.length() > 0
             and last_finish + defaults::import::batch_timeout < now) {
           last_finish = now;
-          co_yield builder.finish_assert_one_slice();
+          co_yield builder.finish_assert_one_slice("tenzir.measure.events");
           continue;
         }
         co_yield {};
@@ -76,13 +67,13 @@ public:
       if (real_time_ or builder.length() == batch_size_
           or last_finish + defaults::import::batch_timeout < now) {
         last_finish = now;
-        co_yield builder.finish_assert_one_slice();
+        co_yield builder.finish_assert_one_slice("tenzir.measure.events");
         continue;
       }
       co_yield {};
     }
     if (builder.length() > 0) {
-      co_yield builder.finish_assert_one_slice();
+      co_yield builder.finish_assert_one_slice("tenzir.measure.events");
     }
   }
 
