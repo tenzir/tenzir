@@ -3,7 +3,7 @@
 Transforms the input event stream to a TQL notation byte stream.
 
 ```tql
-write_tql [strip=bool, color=bool, compact=bool, arrays_of_objects=bool,
+write_tql [strip=bool, color=bool, compact=bool,
            strip_null_fields=bool, strip_nulls_in_lists=bool,
            strip_empty_records=bool, strip_empty_lists=bool]
 ```
@@ -25,19 +25,6 @@ Defaults to `false`.
 ### `compact = bool (optional)`
 
 Write one event per line, omitting linebreaks and indentation of records.
-
-Defaults to `false`.
-
-### `arrays_of_objects = bool (optional)`
-
-Prints one array of objects per batch of events arriving at the printer as
-opposed to printing one object per event.
-
-This is particularly useful when interfacing with REST APIs, which often require
-sets of events grouped into one JSON object.
-
-Use the [`batch`](batch.md) operator to explicitly control how many
-events get grouped together in the same array.
 
 Defaults to `false`.
 
