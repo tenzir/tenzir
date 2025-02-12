@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/similarity.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
@@ -161,6 +162,20 @@ auto argument_parser2::parse(const ast::entity& self,
         auto& name = sel->path()[0].name;
         auto it = std::ranges::find(named_, name, &named_t::name);
         if (it == named_.end()) {
+          auto filtered = std::views::filter(named_, [](auto&& x) {
+            return not x.name.starts_with("_");
+          });
+          if (not filtered.empty()) {
+            const auto best = std::ranges::max(filtered, {}, [&](auto&& x) {
+              return detail::calculate_similarity(name, x.name);
+            });
+            if (detail::calculate_similarity(name, best.name) > -10) {
+              emit(diagnostic::error("named argument `{}` does not exist", name)
+                     .primary(assignment.left)
+                     .hint("did you mean `{}`?", best.name));
+              return;
+            }
+          }
           emit(diagnostic::error("named argument `{}` does not exist", name)
                  .primary(assignment.left));
           return;
@@ -470,8 +485,8 @@ auto argument_parser2::named(std::string name, std::optional<T>& x,
 }
 
 template <argument_parser_type T>
-auto argument_parser2::named_optional(std::string name, T& x,
-                                      std::string type) -> argument_parser2& {
+auto argument_parser2::named_optional(std::string name, T& x, std::string type)
+  -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
