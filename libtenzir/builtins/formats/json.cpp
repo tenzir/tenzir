@@ -1812,6 +1812,7 @@ public:
     parser.named("strip_nulls_in_lists", args.omit_nulls_in_lists);
     parser.named("strip_empty_records", args.omit_empty_objects);
     parser.named("strip_empty_lists", args.omit_empty_lists);
+    parser.named("arrays_of_objects", args.arrays_of_objects);
     parser.named_optional("_jobs", n_jobs);
     if (tql_) {
       parser.named("compact", args.compact_output);
@@ -1848,6 +1849,7 @@ public:
           .named("strip_nulls_in_lists", args.omit_nulls_in_lists)
           .named("strip_empty_records", args.omit_empty_objects)
           .named("strip_empty_lists", args.omit_empty_lists)
+          .named("arrays_of_objects", args.arrays_of_objects)
           .named_optional("_jobs", n_jobs)
           .parse(inv, ctx));
     return std::make_unique<write_json>(args, n_jobs);
