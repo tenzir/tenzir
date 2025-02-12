@@ -467,8 +467,6 @@ if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs_relocatable.cpp.in"
     "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
-  file(READ "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" installdirs)
-  message(STATUS "installdirs:\n${installdirs}")
 else ()
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
                  "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)

@@ -11,9 +11,6 @@
 #include "tenzir/detail/process.hpp"
 #include "tenzir/detail/string.hpp"
 
-#include <fmt/format.h>
-#include <fmt/std.h>
-
 #include <string_view>
 
 namespace tenzir::detail {
