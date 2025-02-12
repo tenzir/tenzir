@@ -9,6 +9,8 @@
 stdenv.mkDerivation {
   inherit name src;
 
+  outputs = ["out" "dev"];
+
   nativeBuildInputs = [cmake];
   buildInputs = [tenzir];
 
