@@ -1107,9 +1107,84 @@ public:
     return "json";
   }
 
+  class instance : public printer_instance {
+  public:
+    instance(json_printer_options opts, bool arrays_of_objects)
+      : opts_{opts}, arrays_of_objects_{arrays_of_objects} {
+    }
+
+    auto make_meta() const {
+      return chunk_metadata{.content_type
+                            = opts_.oneline and not arrays_of_objects_
+                                ? "application/x-ndjson"
+                                : "application/json"};
+    }
+
+    auto process(table_slice slice) -> generator<chunk_ptr> override {
+      if (slice.rows() == 0) {
+        co_yield {};
+        co_return;
+      }
+      auto printer = tenzir::json_printer{opts_};
+      // TODO: Since this printer is per-schema we can write an optimized
+      // version of it that gets the schema ahead of time and only expects
+      // data corresponding to exactly that schema.
+      auto buffer = std::vector<char>{};
+      auto resolved_slice = resolve_enumerations(slice);
+      auto out_iter = std::back_inserter(buffer);
+      auto rows = values3(resolved_slice);
+      auto row = rows.begin();
+      if (arrays_of_objects_) {
+        if (array_open_written_) {
+          *out_iter++ = ',';
+          if (not opts_.oneline) {
+            *out_iter++ = '\n';
+          }
+        } else {
+          out_iter = fmt::format_to(out_iter, "[");
+          array_open_written_ = true;
+        }
+      }
+      if (row != rows.end()) {
+        const auto ok = printer.print(out_iter, *row);
+        TENZIR_ASSERT(ok);
+        ++row;
+      }
+      for (; row != rows.end(); ++row) {
+        if (arrays_of_objects_) {
+          *out_iter++ = ',';
+          if (not opts_.oneline) {
+            *out_iter++ = '\n';
+          }
+        } else {
+          out_iter = fmt::format_to(out_iter, "\n");
+        }
+        const auto ok = printer.print(out_iter, *row);
+        TENZIR_ASSERT(ok);
+      }
+      if (not arrays_of_objects_) {
+        *out_iter++ = '\n';
+      }
+      auto chunk = chunk::make(std::move(buffer), make_meta());
+      co_yield std::move(chunk);
+    }
+
+    virtual auto finish() -> generator<chunk_ptr> override {
+      if (not arrays_of_objects_) {
+        co_return;
+      }
+      TENZIR_ASSERT(array_open_written_);
+      co_yield chunk::make(std::vector<char>(1, ']'), make_meta());
+    }
+
+  private:
+    const json_printer_options opts_;
+    const bool arrays_of_objects_ = false;
+    bool array_open_written_ = false;
+  };
+
   auto
   instantiate_impl() const -> caf::expected<std::unique_ptr<printer_instance>> {
-    const auto compact = !!args_.compact_output;
     auto style = default_style();
     if (args_.monochrome_output) {
       style = no_style();
@@ -1118,67 +1193,17 @@ public:
     } else if (args_.color_output) {
       style = jq_style();
     }
-    const auto omit_null_fields
-      = args_.omit_null_fields.has_value() or args_.omit_all.has_value();
-    const auto omit_nulls_in_lists
-      = args_.omit_nulls_in_lists.has_value() or args_.omit_all.has_value();
-    const auto omit_empty_objects
-      = args_.omit_empty_objects.has_value() or args_.omit_all.has_value();
-    const auto omit_empty_lists
-      = args_.omit_empty_lists.has_value() or args_.omit_all.has_value();
-    const auto arrays_of_objects = args_.arrays_of_objects.has_value();
-    auto meta = chunk_metadata{.content_type = compact and not arrays_of_objects
-                                                 ? "application/x-ndjson"
-                                                 : "application/json"};
-    return printer_instance::make(
-      [compact, style, omit_null_fields, omit_nulls_in_lists,
-       omit_empty_objects, omit_empty_lists, arrays_of_objects, tql = args_.tql,
-       meta = std::move(meta)](table_slice slice) -> generator<chunk_ptr> {
-        if (slice.rows() == 0) {
-          co_yield {};
-          co_return;
-        }
-        auto printer = tenzir::json_printer{{
-          .tql = tql,
-          .style = style,
-          .oneline = compact,
-          .omit_null_fields = omit_null_fields,
-          .omit_nulls_in_lists = omit_nulls_in_lists,
-          .omit_empty_records = omit_empty_objects,
-          .omit_empty_lists = omit_empty_lists,
-        }};
-        // TODO: Since this printer is per-schema we can write an optimized
-        // version of it that gets the schema ahead of time and only expects
-        // data corresponding to exactly that schema.
-        auto buffer = std::vector<char>{};
-        auto resolved_slice = resolve_enumerations(slice);
-        auto out_iter = std::back_inserter(buffer);
-        auto rows = values3(resolved_slice);
-        auto row = rows.begin();
-        if (not arrays_of_objects) {
-          for (; row != rows.end(); ++row) {
-            const auto ok = printer.print(out_iter, *row);
-            TENZIR_ASSERT(ok);
-            out_iter = fmt::format_to(out_iter, "\n");
-          }
-        } else {
-          out_iter = fmt::format_to(out_iter, "[");
-          if (row != rows.end()) {
-            const auto ok = printer.print(out_iter, *row);
-            TENZIR_ASSERT(ok);
-            ++row;
-          }
-          for (; row != rows.end(); ++row) {
-            *out_iter++ = ',';
-            *out_iter++ = compact ? ' ' : '\n';
-            const auto ok = printer.print(out_iter, *row);
-            TENZIR_ASSERT(ok);
-          }
-          out_iter = fmt::format_to(out_iter, "]\n");
-        }
-        auto chunk = chunk::make(std::move(buffer), meta);
-        co_yield std::move(chunk);
-      });
+    return std::make_unique<instance>(
+      json_printer_options{
+        .tql = args_.tql,
+        .style = style,
+        .oneline = args_.compact_output.has_value(),
+        .omit_null_fields = args_.omit_null_fields or args_.omit_all,
+        .omit_nulls_in_lists = args_.omit_nulls_in_lists or args_.omit_all,
+        .omit_empty_records = args_.omit_empty_objects or args_.omit_all,
+        .omit_empty_lists = args_.omit_empty_lists or args_.omit_all,
+      },
+      args_.arrays_of_objects.has_value());
   }
 
   auto instantiate(type, operator_control_plane&) const
@@ -1803,7 +1828,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
-    auto n_jobs = uint64_t{};
+    auto n_jobs = std::optional<located<uint64_t>>{};
     args.tql = tql_;
     auto parser = argument_parser2::operator_("write_json");
     parser.named("color", args.color_output);
@@ -1812,14 +1837,27 @@ public:
     parser.named("strip_nulls_in_lists", args.omit_nulls_in_lists);
     parser.named("strip_empty_records", args.omit_empty_objects);
     parser.named("strip_empty_lists", args.omit_empty_lists);
-    parser.named_optional("_jobs", n_jobs);
+    parser.named("_jobs", n_jobs);
     if (tql_) {
       parser.named("compact", args.compact_output);
     } else {
       parser.named("arrays_of_objects", args.arrays_of_objects);
     }
     TRY(parser.parse(inv, ctx));
-    return std::make_unique<write_json>(args, n_jobs);
+    if (n_jobs and n_jobs->inner == 0) {
+      diagnostic::error("`_jobs` must be larger than 0")
+        .primary(*n_jobs)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (n_jobs and args.arrays_of_objects) {
+      diagnostic::error("`arrays_of_objects` is incompatible with `_jobs`")
+        .primary(*n_jobs)
+        .primary(*args.arrays_of_objects)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return std::make_unique<write_json>(args, n_jobs ? n_jobs->inner : 0);
   }
 
   auto write_properties() const -> write_properties_t override {
@@ -1842,7 +1880,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.compact_output = location::unknown;
-    auto n_jobs = uint64_t{};
+    auto n_jobs = std::optional<located<uint64_t>>{};
     TRY(argument_parser2::operator_(name())
           .named("color", args.color_output)
           .named("strip", args.omit_all)
@@ -1851,9 +1889,22 @@ public:
           .named("strip_empty_records", args.omit_empty_objects)
           .named("strip_empty_lists", args.omit_empty_lists)
           .named("arrays_of_objects", args.arrays_of_objects)
-          .named_optional("_jobs", n_jobs)
+          .named("_jobs", n_jobs)
           .parse(inv, ctx));
-    return std::make_unique<write_json>(args, n_jobs);
+    if (n_jobs and n_jobs->inner == 0) {
+      diagnostic::error("`_jobs` must be larger than 0")
+        .primary(*n_jobs)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (n_jobs and args.arrays_of_objects) {
+      diagnostic::error("`arrays_of_objects` is incompatible with `_jobs`")
+        .primary(*n_jobs)
+        .primary(*args.arrays_of_objects)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return std::make_unique<write_json>(args, n_jobs ? n_jobs->inner : 0);
   }
 
   auto write_properties() const -> write_properties_t override {
