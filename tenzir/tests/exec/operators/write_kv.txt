@@ -1,0 +1,8 @@
+
+x=
+x=0
+x=1 y=2
+x=string
+x="quoted=string"
+x.y="127.0.0.1"
+x=\\n\\r\n

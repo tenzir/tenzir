@@ -10,11 +10,13 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
+#include <tenzir/detail/assert.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/to_lines.hpp>
+#include <tenzir/view3.hpp>
 
 #include <arrow/api.h>
 #include <re2/re2.h>
@@ -250,6 +252,207 @@ auto parse_loop(generator<std::optional<std::string_view>> input,
   }
 }
 
+struct argument_info {
+  argument_info(std::string name, located<std::string> lstr)
+    : name{std::move(name)}, value{std::move(lstr.inner)}, loc{lstr.source} {
+  }
+  argument_info(std::string name, std::string value)
+    : name{std::move(name)}, value{std::move(value)} {
+  }
+  argument_info(std::string name,
+                const std::optional<located<std::string>>& value)
+    : name{std::move(name)},
+      value{value ? value->inner : std::string{}},
+      loc{value ? value->source : location::unknown} {
+  }
+  std::string name;
+  std::string value;
+  location loc = location::unknown;
+};
+auto has_overlap(diagnostic_handler& dh,
+                 std::vector<argument_info> values) -> bool {
+  for (size_t i = 0; i < values.size(); ++i) {
+    for (size_t j = i + 1; j < values.size(); ++j) {
+      const auto i_larger = values[i].value.size() > values[j].value.size();
+      const auto& longer = i_larger ? values[i] : values[j];
+      const auto& shorter = i_larger ? values[j] : values[i];
+      if (shorter.value.empty()) {
+        continue;
+      }
+      if (longer.value.find(shorter.value) != longer.value.npos) {
+        diagnostic::error("`{}` and `{}` conflict", shorter.name, longer.name)
+          .note("`{}` is a substring of `{}`", shorter.value, longer.value)
+          .primary(longer.loc)
+          .primary(shorter.loc)
+          .emit(dh);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+auto check_non_empty(std::string_view name, const located<std::string>& v,
+                     diagnostic_handler& dh) -> failure_or<void> {
+  if (v.inner.empty()) {
+    diagnostic::error("`{}` must not be empty", name).primary(v).emit(dh);
+    return failure::promise();
+  }
+
+  return {};
+}
+
+struct kv_writer {
+  location operator_location;
+  located<std::string> field_sep = {" ", operator_location};
+  located<std::string> value_sep = {"=", operator_location};
+  located<std::string> list_sep = {",", operator_location};
+  located<std::string> flatten = {".", operator_location};
+  located<std::string> null = {"", operator_location};
+
+  friend auto inspect(auto& f, kv_writer& x) -> bool {
+    return f.object(x)
+      .pretty_name("write_kv_args")
+      .fields(f.field("field_sep", x.field_sep),
+              f.field("value_sep", x.value_sep),
+              f.field("list_sep", x.list_sep), f.field("flatten", x.flatten),
+              f.field("null", x.null));
+  }
+
+  auto add(argument_parser2& parser) {
+    parser.named_optional("field_sep", field_sep);
+    parser.named_optional("value_sep", value_sep);
+    parser.named_optional("list_sep", list_sep);
+    parser.named_optional("flatten", flatten);
+    parser.named_optional("null", null);
+  };
+
+  auto validate(diagnostic_handler& dh) -> failure_or<void> {
+    if (has_overlap(dh, {{"flatten", flatten},
+                         {"field_sep", field_sep},
+                         {"value_sep", value_sep},
+                         {"list_sep", list_sep},
+                         {"null", null}})) {
+      return failure::promise();
+    }
+    TRY(check_non_empty("field_sep", field_sep, dh));
+    TRY(check_non_empty("value_sep", field_sep, dh));
+    TRY(check_non_empty("list_sep", field_sep, dh));
+    return {};
+  }
+
+  auto print(auto out, view3<record> r) const {
+    auto it = r.begin();
+    if (it == r.end()) {
+      return out;
+    }
+    {
+      const auto& [k, v] = *it;
+      out = fmt::format_to(out, "{}{}", k, value_sep.inner);
+      out = print(out, v);
+      ++it;
+    }
+    for (; it != r.end(); ++it) {
+      const auto& [k, v] = *it;
+      out = fmt::format_to(out, "{}{}{}", field_sep.inner, k, value_sep.inner);
+      out = print(out, v);
+    }
+    return out;
+  }
+
+  auto print(auto out, view3<list> l) const {
+    auto it = l.begin();
+    if (it == l.end()) {
+      return out;
+    }
+    out = print(out, *it);
+    for (; it != l.end(); ++it) {
+      out = fmt::format_to(out, "{}", list_sep.inner);
+      out = print(out, *it);
+    }
+    return out;
+  }
+
+  template <typename It>
+  auto print(It out, data_view3 v) const -> It {
+    return match(
+      v,
+      [&](const caf::none_t&) -> It {
+        return fmt::format_to(out, "{}", null.inner);
+      },
+      [&](const auto& scalar) -> It {
+        auto formatted = fmt::format("{}", scalar);
+        auto needs_quoting = formatted.find(flatten.inner) != formatted.npos;
+        needs_quoting |= formatted.find(field_sep.inner) != formatted.npos;
+        needs_quoting |= formatted.find(value_sep.inner) != formatted.npos;
+        needs_quoting |= formatted.find(list_sep.inner) != formatted.npos;
+        needs_quoting |= not null.inner.empty()
+                         and formatted.find(null.inner) != formatted.npos;
+        constexpr static auto p
+          = printers::escape(tenzir::detail::json_escaper);
+        if (needs_quoting) {
+          *out++ = '"';
+        }
+        p.print(out, formatted);
+        if (needs_quoting) {
+          *out++ = '"';
+        }
+        return out;
+      },
+      [&](const view3<list>& l) -> It {
+        return print(out, l);
+      },
+      [&](const view3<record>&) -> It {
+        // We assume that the record has been flattend. Hence we should never
+        // enter this recursion.
+        TENZIR_UNREACHABLE();
+        return out;
+      });
+  }
+};
+
+class write_kv_operator final : public crtp_operator<write_kv_operator> {
+public:
+  auto name() const -> std::string override {
+    return "write_kv";
+  }
+
+  write_kv_operator() = default;
+  write_kv_operator(kv_writer writer) : writer_{std::move(writer)} {
+  }
+
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane&) const -> generator<chunk_ptr> {
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto resolved_slice
+        = flatten(resolve_enumerations(slice), writer_.flatten.inner).slice;
+      auto out = std::vector<char>{};
+      auto out_iter = std::back_inserter(out);
+      for (auto&& row : values3(resolved_slice)) {
+        out_iter = writer_.print(out_iter, row);
+        *out_iter++ = '\n';
+      }
+      co_yield chunk::make(std::exchange(out, {}));
+    }
+  }
+
+  friend auto inspect(auto& f, write_kv_operator& x) -> bool {
+    return f.apply(x.writer_);
+  }
+
+private:
+  kv_writer writer_;
+};
+
 class kv_plugin final : public virtual parser_plugin<kv_parser> {
 public:
   auto parse_parser(parser_interface& p) const
@@ -324,6 +527,23 @@ public:
   }
 };
 
+class write_kv : public operator_plugin2<write_kv_operator> {
+public:
+  auto name() const -> std::string override {
+    return "write_kv";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto writer = kv_writer{inv.self.get_location()};
+    writer.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(writer.validate(ctx));
+    return std::make_unique<write_kv_operator>(std::move(writer));
+  }
+};
+
 class parse_kv : public function_plugin {
 public:
   auto name() const -> std::string override {
@@ -384,4 +604,5 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::kv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::read_kv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::write_kv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::parse_kv)

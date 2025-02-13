@@ -155,6 +155,7 @@ Operator | Description | Example
 [`write_csv`](./operators/write_csv.md) | Writes events as CSV | `write_csv`
 [`write_feather`](./operators/write_feather.md) | Writes events as Feather | `write_feather`
 [`write_json`](./operators/write_json.md) | Writes events as JSON | `write_json`
+[`write_kv`](./operators/write_kv.md) | Writes events as Key-Value pairs | `write_kv`
 [`write_ndjson`](./operators/write_ndjson.md) | Writes events as Newline-Delimited JSON | `write_ndjson`
 [`write_lines`](./operators/write_lines.md) | Writes events as lines | `write_lines`
 [`write_parquet`](./operators/write_parquet.md) | Writes events as Parquet | `write_parquet`
