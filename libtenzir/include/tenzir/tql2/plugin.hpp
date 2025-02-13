@@ -220,8 +220,11 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    co_yield {};
     auto gen = parser_.instantiate(std::move(input), ctrl);
     if (not gen) {
+      diagnostic::error("failed to instantiate `{}`", name())
+        .emit(ctrl.diagnostics());
       co_return;
     }
     for (auto&& slice : *gen) {
@@ -275,8 +278,11 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    co_yield {};
     auto gen = loader_.instantiate(ctrl);
     if (not gen) {
+      diagnostic::error("failed to instantiate `{}`", name())
+        .emit(ctrl.diagnostics());
       co_return;
     }
     for (auto&& chunk : *gen) {
@@ -327,15 +333,15 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    co_yield {};
     // TODO: Extend API to allow schema-less make_saver().
     auto new_saver = Saver{saver_}.instantiate(ctrl, std::nullopt);
     if (!new_saver) {
       diagnostic::error(new_saver.error())
-        .note("failed to instantiate saver")
+        .note("failed to instantiate `{}`", name())
         .emit(ctrl.diagnostics());
       co_return;
     }
-    co_yield {};
     for (auto&& x : input) {
       (*new_saver)(std::move(x));
       co_yield {};
@@ -384,11 +390,12 @@ public:
 
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    co_yield {};
     if (writer_.allows_joining()) {
       auto p = writer_.instantiate(type{}, ctrl);
       if (!p) {
         diagnostic::error(p.error())
-          .note("failed to instantiate writer")
+          .note("failed to instantiate `{}`", name())
           .emit(ctrl.diagnostics());
         co_return;
       }
@@ -415,7 +422,7 @@ public:
           auto p = writer_.instantiate(slice.schema(), ctrl);
           if (!p) {
             diagnostic::error(p.error())
-              .note("failed to initialize writer")
+              .note("failed to initialize `{}`", name())
               .emit(ctrl.diagnostics());
             co_return;
           }
