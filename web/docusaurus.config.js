@@ -147,10 +147,10 @@ async function createConfig() {
             remarkPlugins: [[require('@akopyl/docusaurus-toc-patcher'), {} ]]
           },
           blog: {
-            blogTitle: 'Blog',
+            blogTitle: 'Releases',
             blogDescription: 'News from the Tenzir community',
             blogSidebarCount: 20,
-            blogSidebarTitle: 'Blog Posts',
+            blogSidebarTitle: 'Release Announcements',
             postsPerPage: 20,
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
             rehypePlugins: [[rehypePrettyCode, rehypePrettyCodeOptions]],
@@ -212,8 +212,13 @@ async function createConfig() {
               label: 'Docs',
             },
             {
-              to: 'blog',
+              to: 'https://tenzir.com/blog',
               label: 'Blog',
+              position: 'left',
+            },
+            {
+              to: '/blog',
+              label: 'Releases',
               position: 'left',
             },
             {
