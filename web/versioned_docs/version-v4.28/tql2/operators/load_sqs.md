@@ -20,6 +20,11 @@ by reducing the number of empty responses when there are no messages available
 to return in reply to a message request. Use the `poll_time` option to adjust
 the timeout.
 
+The operator requires the following AWS permissions:
+- `sqs:GetQueueUrl`
+- `sqs:ReceiveMessage`
+- `sqs:DeleteMessage`
+
 ### `queue: str`
 
 The name of the queue to use.
@@ -37,13 +42,13 @@ Defaults to `3s`.
 Read JSON messages from the SQS queue `tenzir`:
 
 ```tql
-load_sqs "sqs://tenzir"
+load_sqs "tenzir"
 ```
 
 Read JSON messages with a 20-second long poll timeout:
 
 ```tql
-load_sqs "sqs://tenzir", poll_time=20s
+load_sqs "tenzir", poll_time=20s
 ```
 
 ## See Also
