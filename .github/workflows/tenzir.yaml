@@ -218,9 +218,9 @@ jobs:
           run_if_changed python "python/"
           run_if_changed docs "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
-          TENZIR_SOURCES=(cmake/ CMakeLists.txt libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json)
+          TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
           run_if_changed tenzir "${TENZIR_SOURCES[@]}"
-          run_docker_tenzir="$(any ${run_tenzir} ${run_tenzir_plugins} ${run_python})"
+          run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
           run_if_changed_default docker-tenzir $run_docker_tenzir \
             "Dockerfile" ".dockerignore" \
             ".github/workflows/docker.yaml" \
