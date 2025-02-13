@@ -15,11 +15,16 @@
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
-#include <librdkafka/rdkafkacpp.h>
 
 #include <memory>
 #include <string>
 #include <string_view>
+
+#if TENZIR_ENABLE_BUNDLED_LIBRDKAFKA
+#  include <rdkafkacpp.h>
+#else
+#  include <librdkafka/rdkafkacpp.h>
+#endif
 
 namespace tenzir::plugins::kafka {
 
