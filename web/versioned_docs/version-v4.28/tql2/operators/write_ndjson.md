@@ -3,8 +3,8 @@
 Transforms the input event stream to a Newline-Delimited JSON byte stream.
 
 ```tql
-write_ndjson [strip=bool, color=bool
-              strip_null_fields=bool, strip_nulls_in_lists=bool
+write_ndjson [strip=bool, color=bool, arrays_of_objects=bool,
+              strip_null_fields=bool, strip_nulls_in_lists=bool,
               strip_empty_records=bool, strip_empty_lists=bool]
 ```
 
@@ -21,6 +21,12 @@ Defaults to `false`.
 ### `color = bool (optional)`
 
 Colorize the output.
+
+Defaults to `false`.
+
+### `arrays_of_objects = bool (optional)`
+
+Prints the input as a single array of objects, instead of as separate objects.
 
 Defaults to `false`.
 
