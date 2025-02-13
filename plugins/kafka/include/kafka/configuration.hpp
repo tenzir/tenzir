@@ -34,6 +34,7 @@ public:
     std::optional<std::string> role;
     std::optional<std::string> session_name;
     std::optional<std::string> ext_id;
+    location loc;
 
     static auto from_record(located<record> config, diagnostic_handler& dh)
       -> failure_or<aws_iam_options>;
