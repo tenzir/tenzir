@@ -19,7 +19,6 @@
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_traits.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/data.hpp"
 #include "tenzir/logger.hpp"
@@ -131,8 +130,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
     [&](const list& values) -> flatbuffers::Offset<fbs::Data> {
       auto value_offsets = std::vector<flatbuffers::Offset<fbs::Data>>{};
       value_offsets.reserve(values.size());
-      for (const auto& value : values)
+      for (const auto& value : values) {
         value_offsets.emplace_back(pack(builder, value));
+      }
       const auto value_offset
         = fbs::data::CreateListDirect(builder, &value_offsets);
       return fbs::CreateData(builder, fbs::data::Data::list,
@@ -219,8 +219,9 @@ caf::error unpack(const fbs::Data& from, data& to) {
       }
       auto result = pattern::make(from.data_as_pattern()->value()->str(),
                                   std::move(options));
-      if (!result)
+      if (!result) {
         return std::move(result.error());
+      }
       to = std::move(*result);
       return caf::none;
     }
@@ -250,8 +251,9 @@ caf::error unpack(const fbs::Data& from, data& to) {
       for (const auto* value : *from.data_as_list()->values()) {
         TENZIR_ASSERT(value);
         auto element_buffer = data{};
-        if (auto err = unpack(*value, element_buffer))
+        if (auto err = unpack(*value, element_buffer)) {
           return err;
+        }
         list_buffer.emplace_back(std::move(element_buffer));
       }
       to = std::move(list_buffer);
@@ -263,11 +265,13 @@ caf::error unpack(const fbs::Data& from, data& to) {
       for (const auto* entry : *from.data_as_map()->entries()) {
         TENZIR_ASSERT(entry);
         auto key_buffer = data{};
-        if (auto err = unpack(*entry->key(), key_buffer))
+        if (auto err = unpack(*entry->key(), key_buffer)) {
           return err;
+        }
         auto value_buffer = data{};
-        if (auto err = unpack(*entry->value(), value_buffer))
+        if (auto err = unpack(*entry->value(), value_buffer)) {
           return err;
+        }
         map_buffer.emplace_back(std::move(key_buffer), std::move(value_buffer));
       }
       to = map{map::make_unsafe(std::move(map_buffer))};
@@ -279,8 +283,9 @@ caf::error unpack(const fbs::Data& from, data& to) {
       for (const auto* field : *from.data_as_record()->fields()) {
         TENZIR_ASSERT(field);
         auto data_buffer = data{};
-        if (auto err = unpack(*field->data(), data_buffer))
+        if (auto err = unpack(*field->data(), data_buffer)) {
           return err;
+        }
         record_buffer.emplace_back(field->name()->str(),
                                    std::move(data_buffer));
       }
@@ -293,7 +298,9 @@ caf::error unpack(const fbs::Data& from, data& to) {
 
 bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   auto eval_string_and_pattern = [](const auto& x, const auto& y) {
-    return match(std::tie(x, y), detail::overload{
+    return match(
+      std::tie(x, y),
+      detail::overload{
         [](const auto&, const auto&) -> std::optional<bool> {
           return {};
         },
@@ -306,27 +313,27 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
       });
   };
   auto eval_in = [](const auto& x, const auto& y) {
-    return match(std::tie(x, y), detail::overload{
-                        [](const auto&, const auto&) {
-                          return false;
-                        },
-                        [](const std::string& lhs, const std::string& rhs) {
-                          return rhs.find(lhs) != std::string::npos;
-                        },
-                        [](const std::string& lhs, const pattern& rhs) {
-                          return rhs.search(lhs);
-                        },
-                        [](const ip& lhs, const subnet& rhs) {
-                          return rhs.contains(lhs);
-                        },
-                        [](const subnet& lhs, const subnet& rhs) {
-                          return rhs.contains(lhs);
-                        },
-                        [](const auto& lhs, const list& rhs) {
-                          return std::find(rhs.begin(), rhs.end(), lhs)
-                                 != rhs.end();
-                        },
-                      });
+    return match(std::tie(x, y),
+                 detail::overload{
+                   [](const auto&, const auto&) {
+                     return false;
+                   },
+                   [](const std::string& lhs, const std::string& rhs) {
+                     return rhs.find(lhs) != std::string::npos;
+                   },
+                   [](const std::string& lhs, const pattern& rhs) {
+                     return rhs.search(lhs);
+                   },
+                   [](const ip& lhs, const subnet& rhs) {
+                     return rhs.contains(lhs);
+                   },
+                   [](const subnet& lhs, const subnet& rhs) {
+                     return rhs.contains(lhs);
+                   },
+                   [](const auto& lhs, const list& rhs) {
+                     return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
+                   },
+                 });
   };
   switch (op) {
     default:
@@ -341,12 +348,14 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
     case relational_operator::not_ni:
       return !eval_in(rhs, lhs);
     case relational_operator::equal:
-      if (auto x = eval_string_and_pattern(lhs, rhs))
+      if (auto x = eval_string_and_pattern(lhs, rhs)) {
         return *x;
+      }
       return lhs == rhs;
     case relational_operator::not_equal:
-      if (auto x = eval_string_and_pattern(lhs, rhs))
+      if (auto x = eval_string_and_pattern(lhs, rhs)) {
         return !*x;
+      }
       return lhs != rhs;
     case relational_operator::less:
       return lhs < rhs;
@@ -361,19 +370,19 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
 
 bool is_basic(const data& x) {
   return match(x, detail::overload{
-                      [](const auto&) {
-                        return true;
-                      },
-                      [](const list&) {
-                        return false;
-                      },
-                      [](const map&) {
-                        return false;
-                      },
-                      [](const record&) {
-                        return false;
-                      },
-                    });
+                    [](const auto&) {
+                      return true;
+                    },
+                    [](const list&) {
+                      return false;
+                    },
+                    [](const map&) {
+                      return false;
+                    },
+                    [](const record&) {
+                      return false;
+                    },
+                  });
 }
 
 bool is_complex(const data& x) {
@@ -382,19 +391,19 @@ bool is_complex(const data& x) {
 
 bool is_recursive(const data& x) {
   return match(x, detail::overload{
-                      [](const auto&) {
-                        return false;
-                      },
-                      [](const list&) {
-                        return true;
-                      },
-                      [](const map&) {
-                        return true;
-                      },
-                      [](const record&) {
-                        return true;
-                      },
-                    });
+                    [](const auto&) {
+                      return false;
+                    },
+                    [](const list&) {
+                      return true;
+                    },
+                    [](const map&) {
+                      return true;
+                    },
+                    [](const record&) {
+                      return true;
+                    },
+                  });
 }
 
 bool is_container(const data& x) {
@@ -404,8 +413,9 @@ bool is_container(const data& x) {
 
 size_t depth(const record& r) {
   size_t result = 0;
-  if (r.empty())
+  if (r.empty()) {
     return result;
+  }
   // Do a DFS, using (begin, end, depth) tuples for the state.
   std::vector<std::tuple<record::const_iterator, record::const_iterator, size_t>>
     stack;
@@ -435,10 +445,12 @@ record flatten(const record& r, size_t max_recursion) {
   }
   for (const auto& [k, v] : r) {
     if (const auto* nested = try_as<record>(&v)) {
-      for (auto& [nk, nv] : flatten(*nested, --max_recursion))
+      for (auto& [nk, nv] : flatten(*nested, --max_recursion)) {
         result.emplace(fmt::format("{}.{}", k, nk), std::move(nv));
-    } else
+      }
+    } else {
       result.emplace(k, v);
+    }
   }
   return result;
 }
@@ -455,19 +467,23 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
     if (const auto* ir = try_as<record>(&v)) {
       // Look for a matching field of type record.
       const auto offset = rt.resolve_key(k);
-      if (!offset.has_value())
+      if (!offset.has_value()) {
         return {};
+      }
       auto field = rt.field(*offset);
       const auto* irt = try_as<record_type>(&field.type);
-      if (!irt)
+      if (!irt) {
         return {};
+      }
       // Recurse.
       auto nested = flatten(*ir, *irt, --max_recursion);
-      if (!nested)
+      if (!nested) {
         return {};
+      }
       // Hoist nested record into parent scope by prefixing field names.
-      for (auto& [nk, nv] : *nested)
+      for (auto& [nk, nv] : *nested) {
         result.emplace(fmt::format("{}.{}", k, nk), std::move(nv));
+      }
     } else {
       result.emplace(k, v);
     }
@@ -484,8 +500,9 @@ flatten(const data& x, const type& t, size_t max_recursion) {
   }
   const auto* xs = try_as<record>(&x);
   const auto* rt = try_as<record_type>(&t);
-  if (xs && rt)
+  if (xs && rt) {
     return flatten(*xs, *rt, --max_recursion);
+  }
   return caf::none;
 }
 
@@ -554,8 +571,9 @@ void merge(const record& src, record& dst,
 caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {
   for (const auto& [k, v] : xs) {
     caf::config_value x;
-    if (auto err = convert(v, x))
+    if (auto err = convert(v, x)) {
       return err;
+    }
     ys[to_string(k)] = std::move(x);
   }
   return caf::none;
@@ -564,8 +582,9 @@ caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {
 caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys) {
   for (const auto& [k, v] : xs) {
     caf::config_value x;
-    if (auto err = convert(v, x))
+    if (auto err = convert(v, x)) {
       return err;
+    }
     ys[k] = std::move(x);
   }
   return caf::none;
@@ -573,8 +592,9 @@ caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys) {
 
 caf::error convert(const record& xs, caf::config_value& cv) {
   caf::config_value::dictionary result;
-  if (auto err = convert(xs, result))
+  if (auto err = convert(xs, result)) {
     return err;
+  }
   cv = std::move(result);
   return caf::none;
 }
@@ -584,10 +604,11 @@ caf::error convert(const data& d, caf::config_value& cv) {
     [&](const auto& x) -> caf::error {
       using value_type = std::decay_t<decltype(x)>;
       if constexpr (detail::is_any_v<value_type, bool, uint64_t, double,
-                                     duration, std::string, int64_t>)
+                                     duration, std::string, int64_t>) {
         cv = x;
-      else
+      } else {
         cv = to_string(x);
+      }
       return caf::none;
     },
     [&](caf::none_t) -> caf::error {
@@ -605,8 +626,9 @@ caf::error convert(const data& d, caf::config_value& cv) {
       result.reserve(xs.size());
       for (const auto& x : xs) {
         caf::config_value y;
-        if (auto err = convert(x, y))
+        if (auto err = convert(x, y)) {
           return err;
+        }
         result.push_back(std::move(y));
       }
       cv = std::move(result);
@@ -615,15 +637,17 @@ caf::error convert(const data& d, caf::config_value& cv) {
     [&](const map& xs) -> caf::error {
       // We treat maps like records.
       caf::dictionary<caf::config_value> result;
-      if (auto err = convert(xs, result))
+      if (auto err = convert(xs, result)) {
         return err;
+      }
       cv = std::move(result);
       return caf::none;
     },
     [&](const record& xs) -> caf::error {
       caf::dictionary<caf::config_value> result;
-      if (auto err = convert(xs, result))
+      if (auto err = convert(xs, result)) {
         return err;
+      }
       cv = std::move(result);
       return caf::none;
     },
@@ -634,8 +658,9 @@ caf::error convert(const data& d, caf::config_value& cv) {
 bool convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
   for (const auto& [k, v] : xs) {
     data y;
-    if (!convert(v, y))
+    if (!convert(v, y)) {
       return false;
+    }
     ys.emplace(k, std::move(y));
   }
   return true;
@@ -643,8 +668,9 @@ bool convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
 
 bool convert(const caf::dictionary<caf::config_value>& xs, data& y) {
   record result;
-  if (!convert(xs, result))
+  if (!convert(xs, result)) {
     return false;
+  }
   y = std::move(result);
   return true;
 }
@@ -678,8 +704,9 @@ bool convert(const caf::config_value& x, data& y) {
     },
     [&](const caf::config_value::dictionary& xs) -> bool {
       record result;
-      if (!convert(xs, result))
+      if (!convert(xs, result)) {
         return false;
+      }
       y = std::move(result);
       return true;
     },
@@ -695,8 +722,9 @@ record strip(const record& xs) {
     }
     if (const auto* vr = try_as<record>(&v)) {
       auto nested = strip(*vr);
-      if (!nested.empty())
+      if (!nested.empty()) {
         result.emplace(k, std::move(nested));
+      }
     } else {
       result.emplace(k, v);
     }
@@ -707,8 +735,9 @@ record strip(const record& xs) {
 namespace {
 
 data parse(const simdjson::dom::element& elem, size_t depth = 0) {
-  if (depth > defaults::max_recursion)
+  if (depth > defaults::max_recursion) {
     throw std::runtime_error("nesting too deep");
+  }
   switch (elem.type()) {
     case simdjson::dom::element_type::NULL_VALUE:
       return data{};
@@ -727,8 +756,9 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
       // when printed as JSON.
       const auto p
         = parsers::net | parsers::ip | parsers::time | parsers::duration;
-      if (p(str, result))
+      if (p(str, result)) {
         return result;
+      }
       // Take the input as-is if nothing worked.
       return std::string{str};
     }
@@ -736,20 +766,22 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
       list xs;
       auto lst = elem.get_array();
       xs.reserve(lst.size());
-      for (const auto& element : lst)
+      for (const auto& element : lst) {
         xs.push_back(parse(element, depth + 1));
+      }
       return xs;
     }
     case simdjson::dom::element_type::OBJECT: {
       record xs;
       auto obj = elem.get_object();
       xs.reserve(obj.size());
-      for (const auto& pair : obj)
+      for (const auto& pair : obj) {
         xs.emplace(pair.key, parse(pair.value, depth + 1));
+      }
       return xs;
     }
   }
-  die("unhandled json object type in switch statement");
+  TENZIR_UNREACHABLE();
 }
 
 } // end namespace
@@ -769,9 +801,10 @@ caf::expected<data> from_json(std::string_view x) {
   simdjson::dom::parser parser;
   simdjson::dom::element doc;
   auto error = parser.parse(padded_string).get(doc);
-  if (error)
+  if (error) {
     return caf::make_error(ec::parse_error,
                            fmt::format("{}", error_message(error)));
+  }
   try {
     return parse(doc);
   } catch (const simdjson::simdjson_error& e) {
@@ -792,30 +825,34 @@ data parse(const YAML::Node& node) {
       auto str = node.as<std::string>();
       data result;
       // Attempt some type inference.
-      if (parsers::boolean(str, result))
+      if (parsers::boolean(str, result)) {
         return result;
+      }
       // Attempt maximum type inference.
-      if (parsers::data(str, result))
+      if (parsers::data(str, result)) {
         return result;
+      }
       // Take the input as-is if nothing worked.
       return str;
     }
     case YAML::NodeType::Sequence: {
       list xs;
       xs.reserve(node.size());
-      for (const auto& element : node)
+      for (const auto& element : node) {
         xs.push_back(parse(element));
+      }
       return xs;
     }
     case YAML::NodeType::Map: {
       record xs;
       xs.reserve(node.size());
-      for (const auto& pair : node)
+      for (const auto& pair : node) {
         xs.emplace(pair.first.as<std::string>(), parse(pair.second));
+      }
       return xs;
     }
   }
-  die("unhandled YAML node type in switch statement");
+  TENZIR_UNREACHABLE();
 }
 
 } // namespace
@@ -837,34 +874,40 @@ caf::expected<data> from_yaml(std::string_view str) {
 
 caf::expected<data> load_yaml(const std::filesystem::path& file) {
   const auto contents = detail::load_contents(file);
-  if (!contents)
+  if (!contents) {
     return contents.error();
-  if (auto yaml = from_yaml(*contents))
+  }
+  if (auto yaml = from_yaml(*contents)) {
     return yaml;
-  else
+  } else {
     return caf::make_error(ec::parse_error, "failed to load YAML file",
                            file.string(), yaml.error().context());
+  }
 }
 
 caf::expected<std::vector<std::pair<std::filesystem::path, data>>>
 load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion) {
-  if (max_recursion == 0)
+  if (max_recursion == 0) {
     return ec::recursion_limit_reached;
+  }
   std::vector<std::pair<std::filesystem::path, data>> result;
   auto filter = [](const std::filesystem::path& f) {
     const auto& extension = f.extension();
     return extension == ".yaml" || extension == ".yml";
   };
   auto yaml_files = detail::filter_dir(dir, std::move(filter), max_recursion);
-  if (!yaml_files)
+  if (!yaml_files) {
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to filter YAML dir at {}: {}",
                                        dir, yaml_files.error()));
-  for (auto& file : *yaml_files)
-    if (auto yaml = load_yaml(file))
+  }
+  for (auto& file : *yaml_files) {
+    if (auto yaml = load_yaml(file)) {
       result.emplace_back(std::move(file), std::move(*yaml));
-    else
+    } else {
       return yaml.error();
+    }
+  }
   return result;
 }
 
@@ -913,8 +956,9 @@ void print(YAML::Emitter& out, const data& x) {
     },
     [&out](const list& xs) {
       out << YAML::BeginSeq;
-      for (const auto& x : xs)
+      for (const auto& x : xs) {
         print(out, x);
+      }
       out << YAML::EndSeq;
     },
     // We treat maps like records.
@@ -947,8 +991,9 @@ caf::expected<std::string> to_yaml(const data& x) {
   out.SetOutputCharset(YAML::EscapeNonAscii); // restrict to ASCII output
   out.SetIndent(2);
   print(out, x);
-  if (out.good())
+  if (out.good()) {
     return std::string{out.c_str(), out.size()};
+  }
   return caf::make_error(ec::parse_error, out.GetLastError());
 }
 

@@ -12,7 +12,6 @@
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/detail/byteswap.hpp"
 #include "tenzir/detail/narrow.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 
@@ -134,7 +133,7 @@ socket::~socket() {
 }
 
 socket::operator bool() const {
-  return fd and *fd >= 0;
+  return fd and * fd >= 0;
 }
 
 auto socket::connect(socket_endpoint peer) -> int {
@@ -189,7 +188,7 @@ auto resolve(std::string_view hostname) -> caf::expected<std::vector<ip>> {
       TENZIR_ASSERT(addr);
       result.push_back(*addr);
     } else {
-      die("unsupported IP address family");
+      TENZIR_ASSERT(false, "unsupported IP address family");
     }
   }
   freeaddrinfo(res);

@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/config.hpp"
-#include "tenzir/die.hpp"
+#include "tenzir/detail/assert.hpp"
 
 #include <array>
 
@@ -36,8 +36,8 @@ support_for_partition_version(uint64_t partition_version) noexcept {
       // Parquet.
       supported_versions{"VAST v2.4", std::nullopt},
     };
-  if (partition_version >= table.size())
-    die("unsupported partition version");
+  TENZIR_ASSERT(partition_version < table.size(),
+                "unsupported partition version");
   return table[partition_version];
 }
 

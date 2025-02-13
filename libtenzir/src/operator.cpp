@@ -10,7 +10,7 @@
 
 #include "tenzir/concept/printable/tenzir/operator.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
-#include "tenzir/die.hpp"
+#include "tenzir/detail/assert.hpp"
 
 namespace tenzir {
 
@@ -47,7 +47,7 @@ bool is_negated(relational_operator op) {
     case relational_operator::not_equal:
       return true;
   }
-  die("missing case for relational operator");
+  TENZIR_UNREACHABLE();
 }
 
 relational_operator negate(relational_operator op) {
@@ -73,7 +73,7 @@ relational_operator negate(relational_operator op) {
     case relational_operator::not_ni:
       return relational_operator::ni;
   }
-  die("missing case for relational operator");
+  TENZIR_UNREACHABLE();
 }
 
 relational_operator flip(relational_operator op) {
@@ -98,7 +98,7 @@ relational_operator flip(relational_operator op) {
     case relational_operator::not_ni:
       return relational_operator::not_in;
   }
-  die("missing case for relational operator");
+  TENZIR_UNREACHABLE();
 }
 
 } // namespace tenzir

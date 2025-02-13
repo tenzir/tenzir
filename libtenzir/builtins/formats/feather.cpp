@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/convertible/data.hpp>
@@ -62,9 +63,7 @@ unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb) {
 auto make_import_time_col(const time& import_time, int64_t rows) {
   auto v = import_time.time_since_epoch().count();
   auto builder = time_type::make_arrow_builder(arrow::default_memory_pool());
-  if (auto status = builder->Reserve(rows); !status.ok()) {
-    die(fmt::format("make time column failed: '{}'", status.ToString()));
-  }
+  check(builder->Reserve(rows));
   for (int i = 0; i < rows; ++i) {
     auto status = builder->Append(v);
     TENZIR_ASSERT(status.ok());
@@ -185,7 +184,7 @@ class passive_feather_store final : public passive_store {
     for (const auto& slice : slices()) {
       return slice.schema();
     }
-    die("store must not be empty");
+    TENZIR_ASSERT(false, "store must not be empty");
   }
 
 private:

@@ -47,10 +47,11 @@ struct cell_evaluator<relational_operator::equal> {
       { lhs == rhs } -> std::same_as<bool>;
     }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, Rhs>)
+    if constexpr (requires_stdcmp<LhsView, Rhs>) {
       return std::cmp_equal(lhs, rhs);
-    else
+    } else {
       return lhs == rhs;
+    }
   }
 
   static bool evaluate(std::string_view lhs, const pattern& rhs) noexcept {
@@ -88,10 +89,11 @@ struct cell_evaluator<relational_operator::less> {
       { lhs < rhs } -> std::same_as<bool>;
     }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, Rhs>)
+    if constexpr (requires_stdcmp<LhsView, Rhs>) {
       return std::cmp_less(lhs, rhs);
-    else
+    } else {
       return lhs < rhs;
+    }
   }
 };
 
@@ -106,10 +108,11 @@ struct cell_evaluator<relational_operator::less_equal> {
       { lhs <= rhs } -> std::same_as<bool>;
     }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, Rhs>)
+    if constexpr (requires_stdcmp<LhsView, Rhs>) {
       return std::cmp_less_equal(lhs, rhs);
-    else
+    } else {
       return lhs <= rhs;
+    }
   }
 };
 
@@ -124,10 +127,11 @@ struct cell_evaluator<relational_operator::greater> {
       { lhs > rhs } -> std::same_as<bool>;
     }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, Rhs>)
+    if constexpr (requires_stdcmp<LhsView, Rhs>) {
       return std::cmp_greater(lhs, rhs);
-    else
+    } else {
       return lhs > rhs;
+    }
   }
 };
 
@@ -142,10 +146,11 @@ struct cell_evaluator<relational_operator::greater_equal> {
       { lhs >= rhs } -> std::same_as<bool>;
     }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, Rhs>)
+    if constexpr (requires_stdcmp<LhsView, Rhs>) {
       return std::cmp_greater_equal(lhs, rhs);
-    else
+    } else {
       return lhs >= rhs;
+    }
   }
 };
 
@@ -235,8 +240,9 @@ struct column_evaluator {
       const auto row = detail::narrow_cast<int64_t>(id - offset);
       // TODO: Instead of this in the loop, do selection &= array.null_bitmap
       // outside of it.
-      if (array.IsNull(row))
+      if (array.IsNull(row)) {
         continue;
+      }
       result.append(false, id - result.size());
       result.append(
         cell_evaluator<Op>::evaluate(value_at(type, array, row), rhs), 1u);
@@ -259,8 +265,9 @@ struct column_evaluator<relational_operator::equal, LhsType, caf::none_t> {
     for (auto id : select(selection)) {
       TENZIR_ASSERT(id >= offset);
       const auto row = detail::narrow_cast<int64_t>(id - offset);
-      if (!array.IsNull(row))
+      if (!array.IsNull(row)) {
         continue;
+      }
       result.append(false, id - result.size());
       result.append(true, 1u);
     }
@@ -282,8 +289,9 @@ struct column_evaluator<relational_operator::not_equal, LhsType, caf::none_t> {
     for (auto id : select(selection)) {
       TENZIR_ASSERT(id >= offset);
       const auto row = detail::narrow_cast<int64_t>(id - offset);
-      if (array.IsNull(row))
+      if (array.IsNull(row)) {
         continue;
+      }
       result.append(false, id - result.size());
       result.append(true, 1u);
     }
@@ -453,22 +461,26 @@ ids evaluate(const expression& expr, const table_slice& slice,
   const auto num_rows = slice.rows();
   const auto evaluate_predicate = detail::overload{
     [](const auto&, relational_operator, const auto&, const ids&) -> ids {
-      die("predicates must be normalized and bound for evaluation");
+      TENZIR_ASSERT(false,
+                    "predicates must be normalized and bound for evaluation");
     },
     [&](const meta_extractor& lhs, relational_operator op, const data& rhs,
         ids selection) -> ids {
       // If no bit in the selection is set we have no results, but we can avoid
       // an allocation by simply returning the already empty selection.
-      if (!any(selection))
+      if (!any(selection)) {
         return selection;
-      if (evaluate_meta_extractor(slice, lhs, op, rhs))
+      }
+      if (evaluate_meta_extractor(slice, lhs, op, rhs)) {
         return selection;
+      }
       return ids{offset + num_rows, false};
     },
     [&](const data_extractor& lhs, relational_operator op, const data& rhs,
         const ids& selection) -> ids {
-      if (!any(selection))
+      if (!any(selection)) {
         return ids{offset + num_rows, false};
+      }
       const auto index
         = as<record_type>(slice.schema()).resolve_flat_index(lhs.column);
       const auto type_and_array = index.get(slice);
@@ -514,8 +526,9 @@ ids evaluate(const expression& expr, const table_slice& slice,
       },
       [&](const conjunction& conjunction, ids selection) {
         for (const auto& connective : conjunction) {
-          if (!any(selection))
+          if (!any(selection)) {
             return selection;
+          }
           selection = self(self, connective, std::move(selection));
         }
         return selection;
@@ -523,8 +536,9 @@ ids evaluate(const expression& expr, const table_slice& slice,
       [&](const disjunction& disjunction, const ids& selection) {
         auto mask = selection;
         for (const auto& connective : disjunction) {
-          if (!any(mask))
+          if (!any(mask)) {
             return selection;
+          }
           mask &= ~self(self, connective, mask);
         }
         return selection & ~mask;
@@ -545,10 +559,12 @@ ids evaluate(const expression& expr, const table_slice& slice,
     selection.append(true, num_rows);
   } else {
     for (auto hint : select(hints)) {
-      if (hint < offset)
+      if (hint < offset) {
         continue;
-      if (hint >= offset + num_rows)
+      }
+      if (hint >= offset + num_rows) {
         break;
+      }
       selection.append(false, hint - selection.size());
       selection.append<true>();
     }

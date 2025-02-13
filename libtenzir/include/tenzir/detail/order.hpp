@@ -9,7 +9,6 @@
 #pragma once
 
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/die.hpp"
 
 #include <bit>
 #include <cmath>
@@ -43,7 +42,7 @@ auto order(T x) {
     uint64_t result;
     switch (std::fpclassify(x)) {
       default:
-        die("missing std::fpclassify() case");
+        TENZIR_UNREACHABLE();
       case FP_ZERO:
         result = 0x7fffffffffffffff;
         break;
@@ -54,7 +53,7 @@ auto order(T x) {
         result = x < 0.0 ? 0x7ffffffffffffffe : 0x8000000000000000;
         break;
       case FP_NAN:
-        die("NaN cannot be ordered");
+        TENZIR_UNREACHABLE();
       case FP_NORMAL: {
         static constexpr auto exp_mask = (~0ull << 53) >> 1;
         static constexpr auto sig_mask = ~0ull >> 12;

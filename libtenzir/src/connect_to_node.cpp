@@ -14,6 +14,7 @@
 #include "tenzir/connect_request.hpp"
 #include "tenzir/connector.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/endpoint.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
@@ -31,18 +32,10 @@ namespace {
 
 void assert_data_completness(const record& remote_version,
                              const record& local_version) {
-  if (!local_version.contains("Tenzir")) {
-    die("no Tenzir key found in a local version");
-  }
-  if (!remote_version.contains("Tenzir")) {
-    die("no Tenzir key found in a remote version");
-  }
-  if (!local_version.contains("plugins")) {
-    die("no plugins key found in a local version");
-  }
-  if (!remote_version.contains("plugins")) {
-    die("no plugins key found in a remote version");
-  }
+  TENZIR_ASSERT(local_version.contains("Tenzir"));
+  TENZIR_ASSERT(remote_version.contains("Tenzir"));
+  TENZIR_ASSERT(local_version.contains("plugins"));
+  TENZIR_ASSERT(remote_version.contains("plugins"));
 }
 
 } // namespace

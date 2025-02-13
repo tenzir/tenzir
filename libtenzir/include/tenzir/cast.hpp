@@ -12,9 +12,9 @@
 
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/passthrough.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/type.hpp"
 
@@ -40,7 +40,7 @@ struct cast_helper {
   cast(const FromType&, const std::shared_ptr<type_to_arrow_array_t<FromType>>&,
        const ToType&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
-    die("not implemented");
+    TENZIR_UNIMPLEMENTED();
   }
 
   static auto cast_value(const FromType& from_type, auto&&,
@@ -321,7 +321,7 @@ struct cast_helper<map_type, map_type> {
   cast(const map_type&, std::shared_ptr<type_to_arrow_array_t<map_type>>,
        const map_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<map_type>> {
-    die("map_type array cast not implemented");
+    TENZIR_UNREACHABLE();
   }
 
   static auto cast_value(const map_type&, const map&, const map_type&) noexcept
@@ -524,7 +524,7 @@ struct cast_helper<int64_type, uint64_type> {
   cast(const int64_type&, std::shared_ptr<type_to_arrow_array_t<int64_type>>,
        const uint64_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<uint64_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -550,7 +550,7 @@ struct cast_helper<uint64_type, int64_type> {
   cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
        const int64_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<int64_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -577,7 +577,7 @@ struct cast_helper<int64_type, bool_type> {
   cast(const int64_type&, std::shared_ptr<type_to_arrow_array_t<int64_type>>,
        const bool_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<bool_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -597,7 +597,7 @@ struct cast_helper<bool_type, int64_type> {
   cast(const bool_type&, std::shared_ptr<type_to_arrow_array_t<bool_type>>,
        const int64_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<int64_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -618,7 +618,7 @@ struct cast_helper<bool_type, uint64_type> {
   cast(const bool_type&, std::shared_ptr<type_to_arrow_array_t<bool_type>>,
        const uint64_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<uint64_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -644,7 +644,7 @@ struct cast_helper<uint64_type, bool_type> {
   cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
        const bool_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<bool_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -664,7 +664,7 @@ struct cast_helper<bool_type, double_type> {
   cast(const bool_type&, std::shared_ptr<type_to_arrow_array_t<bool_type>>,
        const double_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<double_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -690,7 +690,7 @@ struct cast_helper<double_type, bool_type> {
   cast(const double_type&, std::shared_ptr<type_to_arrow_array_t<double_type>>,
        const bool_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<bool_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -710,7 +710,7 @@ struct cast_helper<int64_type, double_type> {
   cast(const int64_type&, std::shared_ptr<type_to_arrow_array_t<int64_type>>,
        const double_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<double_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -730,7 +730,7 @@ struct cast_helper<double_type, int64_type> {
   cast(const double_type&, std::shared_ptr<type_to_arrow_array_t<double_type>>,
        const int64_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<int64_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -750,7 +750,7 @@ struct cast_helper<uint64_type, double_type> {
   cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
        const double_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<double_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -771,7 +771,7 @@ struct cast_helper<double_type, uint64_type> {
   cast(const double_type&, std::shared_ptr<type_to_arrow_array_t<double_type>>,
        const uint64_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<uint64_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -806,7 +806,7 @@ struct cast_helper<uint64_type, enumeration_type> {
   cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
        const enumeration_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -842,7 +842,7 @@ struct cast_helper<int64_type, enumeration_type> {
   cast(const int64_type&, std::shared_ptr<type_to_arrow_array_t<int64_type>>,
        const enumeration_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -873,7 +873,7 @@ struct cast_helper<double_type, enumeration_type> {
   cast(const double_type&, std::shared_ptr<type_to_arrow_array_t<double_type>>,
        const enumeration_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -942,7 +942,7 @@ struct cast_helper<FromType, string_type> {
   cast(const FromType&, std::shared_ptr<type_to_arrow_array_t<FromType>>,
        const string_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<string_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -1092,7 +1092,7 @@ struct cast_helper<string_type, ToType> {
   cast(const string_type&, std::shared_ptr<type_to_arrow_array_t<string_type>>,
        const ToType&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -1133,7 +1133,7 @@ struct cast_helper<FromType, duration_type> {
   cast(const FromType&, std::shared_ptr<type_to_arrow_array_t<FromType>>,
        const duration_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<duration_type>> {
-    die("unimplemented");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 

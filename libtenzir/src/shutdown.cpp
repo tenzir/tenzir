@@ -13,7 +13,6 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/type_traits.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/terminate.hpp"
 
@@ -32,7 +31,8 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
         self->quit(std::move(reason));
       },
       [=](const caf::error& err) {
-        die(
+        TENZIR_ASSERT(
+          false,
           fmt::format("failed to cleanly terminate dependent actors: {}", err));
       });
 }
@@ -55,7 +55,8 @@ void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
         self->send_exit(self, std::move(reason));
       },
       [&](const caf::error& err) {
-        die(
+        TENZIR_ASSERT(
+          false,
           fmt::format("failed to cleanly terminate dependent actors: {}", err));
       });
 }

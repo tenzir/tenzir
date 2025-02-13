@@ -10,7 +10,6 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/detail/byteswap.hpp>
-#include <tenzir/die.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/make_byte_reader.hpp>
@@ -245,7 +244,8 @@ public:
           timestamp
             += std::chrono::nanoseconds(packet.header.timestamp_fraction);
         } else {
-          die("invalid magic number"); // validated earlier
+          // we validated the magic number earlier
+          TENZIR_UNREACHABLE();
         }
         auto data = view<blob>{packet.data.data(), packet.data.size()};
         if (!(builder.add(input_file_header.linktype & 0x0000FFFF)
@@ -545,8 +545,8 @@ private:
 class plugin final : public virtual parser_plugin<pcap_parser>,
                      public virtual printer_plugin<pcap_printer> {
 public:
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
+  auto initialize(const record& config, const record& /* global_config */)
+    -> caf::error override {
     config_ = config;
     return caf::none;
   }
@@ -580,8 +580,8 @@ private:
 
 class read_plugin final
   : public virtual operator_plugin2<parser_adapter<pcap_parser>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = parser_args{};
     TRY(argument_parser2::operator_(name())
           .named("emit_file_headers", args.emit_file_headers)
@@ -598,8 +598,8 @@ class read_plugin final
 class write_plugin final
   : public virtual operator_plugin2<writer_adapter<pcap_printer>> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<pcap_printer>>(pcap_printer{});
   }

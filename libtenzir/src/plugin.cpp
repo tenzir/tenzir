@@ -19,7 +19,6 @@
 #include "tenzir/detail/installdirs.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/stable_set.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/operator_control_plane.hpp"
@@ -169,7 +168,8 @@ unload_disabled_static_plugins(std::vector<std::string> paths_or_names) {
   auto check_and_remove_disabled_static_plugin = [&](auto& plugin) -> bool {
     switch (plugin.type()) {
       case plugin_ptr::type::dynamic:
-        die("dynamic plugins must not be loaded at this point");
+        TENZIR_ASSERT(false,
+                      "dynamic plugins must not be loaded at this point");
       case plugin_ptr::type::static_: {
         auto has_same_name = [&](const auto& name) {
           return plugin->name() == name;

@@ -12,7 +12,6 @@
 #include "tenzir/bits.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/range.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/word.hpp"
 
 #include <cstdint>
@@ -73,8 +72,9 @@ public:
   template <class Bitmap>
   void append(const Bitmap& other) {
     TENZIR_ASSERT(derived().size() + other.size() <= max_size);
-    for (auto bits : bit_range(other))
+    for (auto bits : bit_range(other)) {
       append(bits);
+    }
   }
 
   /// Appends a single bit.
@@ -102,10 +102,11 @@ public:
   /// Appends a certain number of bits from a given block.
   /// @param xs The bits to append.
   void append(bits_type xs) {
-    if (xs.is_run())
+    if (xs.is_run()) {
       derived().append_bits(xs.data(), xs.size());
-    else if (!xs.empty())
+    } else if (!xs.empty()) {
       derived().append_block(xs.data(), xs.size());
+    }
   }
 
   // -- element access --------------------------------------------------------
@@ -118,11 +119,12 @@ public:
     TENZIR_ASSERT(i < derived().size());
     auto n = size_type{0};
     for (auto bits : bit_range(derived())) {
-      if (i >= n && i < n + bits.size())
+      if (i >= n && i < n + bits.size()) {
         return bits[i - n];
+      }
       n += bits.size();
     }
-    die("bitmap_base<Derived>::operator[]");
+    TENZIR_UNREACHABLE();
   }
 
   // -- bitwise operations ----------------------------------------------------

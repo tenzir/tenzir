@@ -15,6 +15,7 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
@@ -50,7 +51,7 @@ template <concrete_type Type>
 struct zeek_parser {
   auto operator()(const Type&, char, const std::string&) const
     -> rule<std::string_view::const_iterator, type_to_data_t<Type>> {
-    die("unexpected type");
+    TENZIR_UNIMPLEMENTED();
   }
 };
 
@@ -828,7 +829,7 @@ public:
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto first = true;
-      auto is_first_schema = not *last_schema;
+      auto is_first_schema = not * last_schema;
       auto did_schema_change = *last_schema != input_schema;
       *last_schema = input_schema;
       for (const auto& row : values(input_type, *array)) {

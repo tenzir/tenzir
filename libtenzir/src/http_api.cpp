@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/assert.hpp"
+
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
@@ -65,9 +67,11 @@ auto http_method_from_string(const std::string& str)
     }
   }(http_method::get);
   static_assert(method_map.size() == num_methods);
-  for (auto const& [method, method_string] : method_map)
-    if (str == method_string)
+  for (auto const& [method, method_string] : method_map) {
+    if (str == method_string) {
       return method;
+    }
+  }
   return caf::make_error(ec::invalid_argument, "unknown method");
 }
 
@@ -78,8 +82,9 @@ auto rest_endpoint::canonical_path() const -> std::string {
 
 auto parse_skeleton(simdjson::ondemand::value value, size_t depth = 0)
   -> tenzir::data {
-  if (depth > tenzir::defaults::max_recursion)
+  if (depth > tenzir::defaults::max_recursion) {
     return tenzir::data{"nesting too deep"};
+  }
   switch (value.type()) {
     case simdjson::ondemand::json_type::null:
       return tenzir::data{};
@@ -91,28 +96,31 @@ auto parse_skeleton(simdjson::ondemand::value value, size_t depth = 0)
     case simdjson::ondemand::json_type::array: {
       auto lst = value.get_array();
       list xs;
-      for (auto x : lst)
+      for (auto x : lst) {
         xs.push_back(parse_skeleton(x.value(), depth + 1));
+      }
       return xs;
     }
     case simdjson::ondemand::json_type::object: {
       record xs;
       auto obj = value.get_object();
-      for (auto pair : obj)
+      for (auto pair : obj) {
         xs.emplace(std::string{pair.unescaped_key().value()},
                    parse_skeleton(pair.value().value(), depth + 1));
+      }
       return xs;
     }
   }
-  die("missing return in switch statement");
+  TENZIR_UNREACHABLE();
 }
 
 auto http_parameter_map::from_json(std::string_view json)
   -> caf::expected<http_parameter_map> {
   try {
     http_parameter_map result;
-    if (json.empty())
+    if (json.empty()) {
       return result;
+    }
     auto padded_string = simdjson::padded_string{json};
     auto parser = simdjson::ondemand::parser{};
     auto doc = parser.iterate(padded_string);
@@ -155,20 +163,25 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                                const http_parameter_map& parameter_map)
   -> caf::expected<tenzir::record> {
   tenzir::record result;
-  if (!endpoint.params)
+  if (!endpoint.params) {
     return result;
+  }
   auto const& params = parameter_map.params();
   for (auto const& field : endpoint.params->fields()) {
     auto const& name = field.name;
     auto maybe_param = params.find(name);
-    if (maybe_param == params.end())
+    if (maybe_param == params.end()) {
       continue;
+    }
     auto const& param_data = maybe_param->second;
     auto is_string = is<std::string>(param_data);
-    auto typed_value = match(field.type, detail::overload{
+    auto typed_value = match(
+      field.type,
+      detail::overload{
         [&](const string_type&) -> caf::expected<data> {
-          if (!is_string)
+          if (!is_string) {
             return caf::make_error(ec::invalid_argument, "expected string");
+          }
           return param_data;
         },
         [&](const blob_type&) -> caf::expected<data> {
@@ -176,18 +189,21 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                                  "blob parameters are not supported");
         },
         [&](const bool_type&) -> caf::expected<data> {
-          if (!is_string)
+          if (!is_string) {
             return caf::make_error(ec::invalid_argument, "expected bool");
+          }
           bool result = false;
           auto const& string_value = as<std::string>(param_data);
-          if (!parsers::boolean(string_value, result))
+          if (!parsers::boolean(string_value, result)) {
             return caf::make_error(ec::invalid_argument, "not a boolean value");
+          }
           return data{result};
         },
         [&](const list_type& lt) -> caf::expected<data> {
           auto const* list = try_as<tenzir::list>(&param_data);
-          if (!list)
+          if (!list) {
             return caf::make_error(ec::invalid_argument, "expected a list");
+          }
           auto result = tenzir::list{};
           for (auto const& x : *list) {
             if (!is<std::string>(x) and !is<tenzir::record>(x)) {
@@ -216,10 +232,11 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                   // TODO: This currently works with records containing only
                   // strings, but is untested with other value types.
                   const auto* result = try_as<record>(&x);
-                  if (!result)
+                  if (!result) {
                     return caf::make_error(ec::invalid_argument,
                                            fmt::format("invalid record "
                                                        "syntax"));
+                  }
                   return *result;
                 },
                 [](const auto&) -> caf::expected<data> {
@@ -228,16 +245,18 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                                          "supported");
                 },
               });
-            if (!parsed)
+            if (!parsed) {
               return parsed.error();
+            }
             result.emplace_back(*parsed);
           }
           return result;
         },
         [&](const record_type&) -> caf::expected<data> {
           const auto* parsed = try_as<record>(&param_data);
-          if (!parsed)
+          if (!parsed) {
             return caf::make_error(ec::invalid_argument, "expected a record");
+          }
           auto result = record{};
           for (const auto& x : *parsed) {
             auto parse_result = false;
@@ -260,12 +279,14 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
         },
         [&]<basic_type Type>(const Type&) -> caf::expected<data> {
           using data_t = type_to_data_t<Type>;
-          if (!is_string)
+          if (!is_string) {
             return caf::make_error(ec::invalid_argument, "expected basic type");
+          }
           auto const& string_value = as<std::string>(param_data);
           auto result = to<data_t>(string_value);
-          if (!result)
+          if (!result) {
             return std::move(result.error());
+          }
           return std::move(*result);
         },
         []<complex_type Type>(const Type&) -> caf::expected<data> {
@@ -274,12 +295,13 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                                  "parameters");
         },
       });
-    if (!typed_value)
+    if (!typed_value) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("failed to parse parameter "
                                          "'{}' with value '{}': {}\n",
                                          name, param_data,
                                          typed_value.error()));
+    }
     result[name] = std::move(*typed_value);
   }
   return result;

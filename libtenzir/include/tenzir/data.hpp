@@ -18,7 +18,6 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/merge_lists.hpp"
 #include "tenzir/pattern.hpp"

@@ -61,14 +61,14 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     case fbs::table_slice::TableSlice::msgpack_v1:
     case fbs::table_slice::TableSlice::arrow_v0:
     case fbs::table_slice::TableSlice::arrow_v1:
-      die("outdated table slice encoding");
+      TENZIR_UNREACHABLE();
     case fbs::table_slice::TableSlice::arrow_v2:
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_arrow_v2());
   }
   // GCC-8 fails to recognize that this can never be reached, so we just call a
   // [[noreturn]] function.
-  die("unhandled table slice encoding");
+  TENZIR_UNREACHABLE();
 }
 
 /// Get a pointer to the `tenzir.fbs.TableSlice` inside the chunk.
@@ -123,7 +123,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
     ++num_instances_;
     auto f = detail::overload{
       []() noexcept {
-        die("invalid table slice encoding");
+        TENZIR_UNREACHABLE();
       },
       [&](const auto& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
@@ -293,7 +293,7 @@ void table_slice::modify_state(F&& f) {
   }
   auto g = detail::overload{
     []() noexcept {
-      die("cannot assign import time to invalid table slice");
+      TENZIR_UNREACHABLE();
     },
     [&](const auto& encoded) noexcept {
       auto& mutable_state
@@ -347,7 +347,7 @@ data_view table_slice::at(table_slice::size_type row,
   TENZIR_ASSERT(column < columns());
   auto f = detail::overload{
     [&]() noexcept -> data_view {
-      die("cannot access data of invalid table slice");
+      TENZIR_ASSERT(false, "cannot access data of invalid table slice");
     },
     [&](const auto& encoded) noexcept {
       return state(encoded, state_)->at(row, column);
@@ -362,7 +362,7 @@ data_view table_slice::at(table_slice::size_type row,
   TENZIR_ASSERT(column < columns());
   auto f = detail::overload{
     [&]() noexcept -> data_view {
-      die("cannot access data of invalid table slice");
+      TENZIR_ASSERT(false, "cannot access data of invalid table slice");
     },
     [&](const auto& encoded) noexcept {
       return state(encoded, state_)->at(row, column, t);
@@ -374,7 +374,7 @@ data_view table_slice::at(table_slice::size_type row,
 std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
   auto f = detail::overload{
     []() noexcept -> std::shared_ptr<arrow::RecordBatch> {
-      die("cannot access record batch of invalid table slice");
+      TENZIR_ASSERT(false, "cannot access data of invalid table slice");
     },
     [&](const auto& encoded) noexcept -> std::shared_ptr<arrow::RecordBatch> {
       // The following does not work on all compilers, hence the ugly
@@ -704,7 +704,7 @@ auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
       return slice.schema().attribute("internal").has_value();
     }
   }
-  die("unhandled meta extractor kind");
+  TENZIR_UNREACHABLE();
 }
 
 auto resolve_operand(const table_slice& slice, const operand& op)
