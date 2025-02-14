@@ -91,6 +91,16 @@ include(TenzirProvideFindModule)
 include(TenzirRegisterPlugin)
 include(TenzirUtilities)
 
+# -- extra installation dirs ---------------------------------------------------
+
+set(TENZIR_INSTALL_ARCHIVEDIR
+    "${CMAKE_INSTALL_LIBDIR}"
+    CACHE PATH "The Installation path of static archives")
+
+set(TENZIR_INSTALL_CMAKEDIR
+    "${CMAKE_INSTALL_LIBDIR}/cmake"
+    CACHE PATH "The Installation path of the cmake files")
+
 # -- project configuration -----------------------------------------------------
 
 # Determine whether we're building Tenzir a subproject. This is used to determine
@@ -962,7 +972,7 @@ export(
 
 install(
   EXPORT TenzirTargets
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/tenzir"
+  DESTINATION "${TENZIR_INSTALL_CMAKEDIR}/tenzir"
   NAMESPACE tenzir::
   COMPONENT Development)
 
@@ -974,7 +984,7 @@ write_basic_package_version_file(
 configure_package_config_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirConfig.cmake.in"
   "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfig.cmake"
-  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/tenzir")
+  INSTALL_DESTINATION "${TENZIR_INSTALL_CMAKEDIR}/tenzir")
 
 configure_file("${PROJECT_SOURCE_DIR}/cmake/TenzirMacDependencyPaths.cmake"
                ${CMAKE_BINARY_DIR} COPYONLY)
@@ -986,7 +996,7 @@ install(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirMacDependencyPaths.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfig.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfigVersion.cmake"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/tenzir"
+  DESTINATION "${TENZIR_INSTALL_CMAKEDIR}/tenzir"
   COMPONENT Development)
 
 # -- scripts -------------------------------------------------------------------

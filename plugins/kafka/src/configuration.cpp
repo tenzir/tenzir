@@ -71,6 +71,7 @@ auto configuration::aws_iam_options::from_record(located<record> config,
     return {};
   };
   auto opts = aws_iam_options{};
+  opts.loc = config.source;
   TRY(assign_non_empty_string("region", opts.region));
   TRY(assign_non_empty_string("assume_role", opts.role));
   TRY(assign_non_empty_string("session_name", opts.session_name));
@@ -91,13 +92,25 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   auto provider = std::invoke(
     [&]() -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
       if (options_.role) {
+        TENZIR_VERBOSE("Refreshing IAM Credentials for {}, {}, {}",
+                       options_.region, options_.role.value(), valid_for);
         return std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
           options_.role.value(),
           options_.session_name.value_or("tenzir-session"),
           options_.ext_id.value_or(""));
       }
+      TENZIR_VERBOSE("Using the default credential chain");
       return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
     });
+  if (auto creds = provider->GetAWSCredentials(); creds.IsEmpty()) {
+    diagnostic::warning("got empty AWS credentials")
+      .primary(options_.loc)
+      .emit(dh_);
+  } else if (creds.IsExpired()) {
+    diagnostic::warning("got expired AWS credentials")
+      .primary(options_.loc)
+      .emit(dh_);
+  }
   request.AddQueryStringParameter("Action", "kafka-cluster:Connect");
   const auto signer = Aws::Client::AWSAuthV4Signer{
     provider,
@@ -136,6 +149,7 @@ auto configuration::make(const record& options,
     return err;
   }
   if (aws) {
+    TENZIR_VERBOSE("setting aws iam callback");
     result.aws_
       = std::make_shared<aws_iam_callback>(std::move(aws).value(), dh);
     std::string errstr;

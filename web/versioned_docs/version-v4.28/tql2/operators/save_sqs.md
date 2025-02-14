@@ -19,6 +19,10 @@ by reducing the number of empty responses when there are no messages available
 to return in reply to a message request. Use the `poll_time` option to adjust
 the timeout.
 
+The operator requires the following AWS permissions:
+- `sqs:GetQueueUrl`
+- `sqs:SendMessage`
+
 ### `queue: str`
 
 The name of the queue to use.
@@ -38,7 +42,7 @@ Write JSON messages from a source feed to the SQS queue `tenzir`:
 ```tql
 subscribe "to-sqs"
 write_json
-save_sqs "sqs://tenzir"
+save_sqs "tenzir"
 ```
 
 ## See Also

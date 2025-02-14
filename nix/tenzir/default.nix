@@ -107,7 +107,7 @@
           chmod -R u+w source/extra-plugins
         '';
 
-        outputs = ["out"] ++ lib.optionals isStatic ["package"];
+        outputs = ["out"] ++ (if isStatic then ["package"] else ["dev"]);
 
         nativeBuildInputs = [
           cmake
@@ -186,6 +186,9 @@
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
             "-DTENZIR_ENABLE_BATS_TENZIR_INSTALLATION=OFF"
             "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
+          ] ++ lib.optionals (builtins.any (x: x == "dev") finalAttrs.outputs) [
+            "-DTENZIR_INSTALL_ARCHIVEDIR=${placeholder "dev"}/lib"
+            "-DTENZIR_INSTALL_CMAKEDIR=${placeholder "dev"}/lib/cmake"
           ] ++ lib.optionals isStatic [
             "-UCMAKE_INSTALL_BINDIR"
             "-UCMAKE_INSTALL_SBINDIR"

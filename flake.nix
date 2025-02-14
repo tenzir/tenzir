@@ -45,10 +45,13 @@
           type = "app";
           program = "${pkgs.dockerTools.streamLayeredImage {
             inherit name tag;
+            contents = [
+              pkg pkgs.bash pkgs.python3
+            ];
             config = let
               tenzir-dir = "/var/lib/tenzir";
             in {
-              Entrypoint = ["${pkgs.lib.getBin pkg}/bin/${entrypoint}"];
+              Entrypoint = ["/bin/${entrypoint}"];
               CMD = ["--help"];
               Env = [
                 # When changing these, make sure to also update the

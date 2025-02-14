@@ -3,8 +3,8 @@
 Transforms the input event stream to a TQL notation byte stream.
 
 ```tql
-write_tql [strip=bool, color=bool, oneline=bool,
-           strip_null_fields=bool, strip_nulls_in_lists=bool
+write_tql [strip=bool, color=bool, compact=bool,
+           strip_null_fields=bool, strip_nulls_in_lists=bool,
            strip_empty_records=bool, strip_empty_lists=bool]
 ```
 
