@@ -598,6 +598,53 @@ public:
     });
   }
 };
+
+class print_kv : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "print_kv";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+
+    auto parser = argument_parser2::function(name());
+    auto writer = kv_writer{};
+    parser.positional("input", input, "record");
+    writer.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(writer.validate(ctx));
+    return function_use::make([input = std::move(input),
+                               writer = std::move(writer)](evaluator eval,
+                                                           session ctx) {
+      return map_series(eval(input), [&](series values) -> multi_series {
+        if (values.type.kind().is<null_type>()) {
+          return values;
+        }
+        const auto records = try_as<arrow::StructArray>(&*values.array);
+        if (not records) {
+          diagnostic::warning("expected `record`, got `{}`", values.type.kind())
+            .primary(input)
+            .emit(ctx);
+          return series::null(null_type{}, values.length());
+        }
+        auto builder = series_builder{type{string_type{}}};
+        auto buffer = std::string{};
+        for (auto row : values3(*records)) {
+          buffer.clear();
+          if (not row) {
+            builder.null();
+            continue;
+          }
+          writer.print(std::back_inserter(buffer), *row);
+          builder.data(buffer);
+        }
+        return builder.finish_assert_one_array();
+      });
+    });
+  }
+};
 } // namespace
 
 } // namespace tenzir::plugins::kv
@@ -606,3 +653,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::kv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::read_kv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::write_kv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::parse_kv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::print_kv)

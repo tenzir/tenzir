@@ -159,6 +159,7 @@ Function | Description | Example
 
 Function | Description | Example
 :--------|:-------------|:-------
+[`print_kv`](functions/print_kv.md) | Prints a record as Key-Value pairs | `record.print_kv()`
 [`print_yaml`](functions/print_yaml.md) | Prints a value as a YAML document | `record.print_yaml()`
 
 ## Time & Date
