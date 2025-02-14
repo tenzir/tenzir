@@ -60,7 +60,7 @@ There are other ways to execute YARA rules, e.g.,
 [osquery](https://osquery.readthedocs.io/en/stable/deployment/yara/), or
 [Velociraptor](https://docs.velociraptor.app/vql_reference/plugin/yara/)—which
 we also [integrated as pipeline
-operator](/blog/integrating-velociraptor-into-tenzir-pipelines).
+operator](/archive/integrating-velociraptor-into-tenzir-pipelines).
 
 And now there's also Tenzir, with a [`yara`][yara-operator] operator that
 accepts bytes as input and produces events as output. Let's take the simple case
@@ -182,7 +182,7 @@ This is where the [separation between structured and unstructured
 data][separation-of-concerns] in pipelines pays off. You plug in any loader
 while leaving the remainder of `yara` pipeline in place.
 
-[separation-of-concerns]: /blog/five-design-principles-for-building-a-data-pipeline-engine#p1-separation-of-concerns
+[separation-of-concerns]: /archive/five-design-principles-for-building-a-data-pipeline-engine#p1-separation-of-concerns
 
 ## Post-process matches
 

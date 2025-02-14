@@ -27,7 +27,7 @@ We plan to make pipelines easier to introspect and to manage. Do you have ideas,
 or want to take a sneak peek at what's coming up?
 
 Every Tuesday at at 8 AM EST / 11 AM EST / 5 PM CET / 9.30 PM IST, we're hosting
-[Office Hours](/blog/introducing-office-hours) in our [Discord](/discord). Come
+[Office Hours](/archive/introducing-office-hours) in our [Discord](/discord). Come
 join the discussion.
 :::
 

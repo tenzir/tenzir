@@ -19,7 +19,7 @@ describes how you can build your own context plugin.
 
 This is the second post of the our contextualization series. If you haven't read
 the first post, go check it out and learn [how Splunk, Elastic, and Sentinel
-support contextualization](/blog/enrichment-complexity-in-the-wild).
+support contextualization](/archive/enrichment-complexity-in-the-wild).
 
 ## Requirements
 
@@ -336,7 +336,7 @@ We can visualize this pipeline as follows:
 
 How is this different to others, e.g., Splunk, Elastic, and Sentinel? If you
 don't recall how these three work, go back to our [previous blog
-post](/blog/enrichment-complexity-in-the-wild).
+post](/archive/enrichment-complexity-in-the-wild).
 
 1. **Simplicity**. The core abstraction is incredibly simple—an opaque context
    that can be used from two sides. You can simultaneously feed the context with

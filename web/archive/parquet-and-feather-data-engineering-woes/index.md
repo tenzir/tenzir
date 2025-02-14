@@ -25,8 +25,8 @@ This blog post is the last part of a 3-piece series on Parquet and Feather.
 2. [Writing Security Telemetry][parquet-and-feather-2]
 3. This blog post
 
-[parquet-and-feather-1]: /blog/parquet-and-feather-enabling-open-investigations/
-[parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
+[parquet-and-feather-1]: /archive/parquet-and-feather-enabling-open-investigations/
+[parquet-and-feather-2]: /archive/parquet-and-feather-writing-security-telemetry/
 :::
 
 While our Feather implementation proved to be straight-forward, the Parquet

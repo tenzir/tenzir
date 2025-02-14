@@ -7,8 +7,8 @@ tags: [release, summarize, pipelines]
 ---
 
 We released [VAST v2.2][github-vast-release] 🙌! Transforms now have a new name:
-[pipelines](/blog/vast-v2.2#transforms-are-now-pipelines). The [summarize
-operator](/blog/vast-v2.2#summarization-improvements) also underwent a facelift,
+[pipelines](/releases/vast-v2.2#transforms-are-now-pipelines). The [summarize
+operator](/releases/vast-v2.2#summarization-improvements) also underwent a facelift,
 making aggregation functions pluggable and allowing for assigning names to
 output fields.
 
@@ -38,7 +38,7 @@ or data at rest.
 
 From a user perspective, the configuration keys associated with transforms have
 changed. Here's the updated example from our previous [VAST v1.0 release
-blog](/blog/vast-v1.0).
+blog](/releases/vast-v1.0).
 
 ```yaml
 vast:

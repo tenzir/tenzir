@@ -8,8 +8,8 @@ comments: true
 
 We've just released [Tenzir
 v4.13](https://github.com/tenzir/tenzir/releases/tag/v4.13.0), a release
-focusing on stability and incremental improvements over the [feature-packed past
-releases](/blog/tags/release).
+focusing on stability and incremental improvements over the feature-packed past
+releases.
 
 ![Tenzir v4.13](tenzir-v4.13.excalidraw.svg)
 

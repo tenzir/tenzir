@@ -69,8 +69,8 @@ real-time.
 
 :::info Follow our Blog Post Series
 Read more about contexts in our blog post series:
-1. [Enrichment Complexity in the Wild](/blog/enrichment-complexity-in-the-wild)
-2. [Contextualization Made Simple](/blog/contextualization-made-simple)
+1. [Enrichment Complexity in the Wild](/archive/enrichment-complexity-in-the-wild)
+2. [Contextualization Made Simple](/archive/contextualization-made-simple)
 :::
 
 ## Grok and KV Parsers

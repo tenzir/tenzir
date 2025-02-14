@@ -6,7 +6,7 @@ tags: [tenzir, vast, community, project]
 ---
 
 VAST is now Tenzir. This blog post describes what changed when [we renamed the
-project](/blog/vast-to-tenzir).
+project](/archive/vast-to-tenzir).
 
 ![VAST to Tenzir](vast-to-tenzir.excalidraw.svg)
 

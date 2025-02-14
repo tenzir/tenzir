@@ -7,7 +7,7 @@ image: /img/blog/rest-api-deployment-single.excalidraw.svg
 tags: [frontend, rest, api, architecture]
 ---
 
-As of [v2.4](/blog/vast-v2.4) VAST ships with a new `web` plugin that
+As of [v2.4](/releases/vast-v2.4) VAST ships with a new `web` plugin that
 provides a REST API. The [API documentation](/api) describes the
 available endpoints also provides an
 [OpenAPI](https://spec.openapis.org/oas/latest.html) spec for download. This

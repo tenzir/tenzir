@@ -86,7 +86,7 @@ below).
 ### Aggregate Step
 
 :::info Transforms → Pipelines
-In [VAST v2.2](/blog/vast-v2.2), we renamed *transforms* to *pipelines*, and
+In [VAST v2.2](/releases/vast-v2.2), we renamed *transforms* to *pipelines*, and
 *transform steps* to *pipeline operators*. This caused several configuration key
 changes. Additionally, we renamed the `aggregate` operator to
 `summarize`. Please keep this in mind when reading the example

@@ -83,7 +83,7 @@ byproduct of changing the Fluent Bit data exchange format from JSON to MsgPack:
 ![Fluent Bit Performance](fluent-bit-speedup.svg)
 
 Read the [dedicated blog post on this
-issue](/blog/switching-fluentbit-from-json-to-msgpack).
+issue](/archive/switching-fluentbit-from-json-to-msgpack).
 
 Thanks to Christoph Lobmeyer and Yannik Meinhardt for reporting this issue! 🙏
 

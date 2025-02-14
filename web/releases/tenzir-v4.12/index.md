@@ -76,7 +76,7 @@ example, if the same connection tuple doesn't come up within a 24h interval, the
 corresponding entry is removed from the operator's internal state.
 
 We delved deeper into the power of the `deduplicate` operator in a [previous
-blog post](reduce-cost-and-noise-with-deduplication).
+blog post](/archive/reduce-cost-and-noise-with-deduplication).
 
 Building on this, the `every` operator (prominently featured in the [previous
 release](tenzir-v4.11#execute-sources-on-a-schedule)) can now also accompany

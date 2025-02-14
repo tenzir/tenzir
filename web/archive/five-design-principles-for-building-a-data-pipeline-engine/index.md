@@ -124,7 +124,7 @@ finally writes it as a Parquet file into an S3 bucket.
 New pipeline languages are mushrooming all over the place. Splunk started with
 its own Search Processing Language (SPL) and now released SPL2 to make it
 more pipeline-ish. And Elastic also doubled down as well with [their new
-ES|QL](/blog/a-first-look-at-esql). When we designed the Tenzir Query Language
+ES|QL](/archive/a-first-look-at-esql). When we designed the Tenzir Query Language
 (TQL), we drew a lot of inspiration from
 [PRQL](https://prql-lang.org/), [Nu](https://www.nushell.sh/), and
 [Zed](https://zed.brimdata.io/). These may sound esoteric to some, but they are
@@ -193,7 +193,7 @@ Zeek[^1] on the filtered trace, and then writes the log as Parquet file to disk.
 [^1]: The `zeek` operator is user-defined operator for `shell "zeek -r - …" |
     read zeek-tsv`. We wrote a [blog post on how you can use `shell` as escape
     hatch to integrate arbitrary
-    tools](/blog/shell-yeah-supercharging-zeek-and-suricata-with-tenzir) in a
+    tools](/archive/shell-yeah-supercharging-zeek-and-suricata-with-tenzir) in a
     pipeline.
 
 Visually, this pipeline has the following operator typing:

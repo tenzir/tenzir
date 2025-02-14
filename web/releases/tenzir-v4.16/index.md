@@ -17,9 +17,8 @@ v4.16](https://github.com/tenzir/tenzir/releases/tag/v4.16.0) and its upgraded
 
 ## Multi-Producer Multi-Consumer
 
-The introduction of the `publish` operator with [Tenzir
-v4.12](/blog/tenzir-v4.12) enabled split-routing of events. We frequently saw
-users write pipelines like this:
+The introduction of the `publish` operator with Tenzir v4.12 enabled
+split-routing of events. We frequently saw users write pipelines like this:
 
 ```text {0} title="Pipeline 1: Publish alerts"
 …

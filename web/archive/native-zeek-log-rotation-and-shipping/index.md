@@ -173,7 +173,7 @@ scenarios, we recommend to use the post-processing script as a notifier, e.g.,
 to signal another tool that it can now process a file.
 
 For ultimate control over logging, you can always develop your own [writer
-plugin](/blog/mobilizing-zeek-logs#writer-plugin) that immediately ship logs
+plugin](/archive/mobilizing-zeek-logs#writer-plugin) that immediately ship logs
 instead of going through the file system.
 
 ## Conclusion
@@ -193,4 +193,4 @@ If you are looking for an efficient way to get your Zeek logs flowing, [give
 Tenzir a try](/overview). [Our Zeek
 package](https://github.com/tenzir/zeek-tenzir) makes it easy to launch
 post-processing pipelines natively from Zeek. And don't forget to check out our
-[other Zeek blogs](/blog/tags/zeek).
+[other Zeek blogs](/archive/tags/zeek).

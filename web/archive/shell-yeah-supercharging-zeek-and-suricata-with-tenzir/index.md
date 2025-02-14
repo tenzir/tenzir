@@ -22,7 +22,7 @@ Suricata logs?**
 
 ## Purring like a Suricat
 
-In our [previous blog post](/blog/zeek-and-ye-shall-pipe/) we adapted Zeek to
+In our [previous blog post](/archive/zeek-and-ye-shall-pipe/) we adapted Zeek to
 behave like a good ol' Unix tool, taking input via stdin and producing output
 via stdout. Turns out you can do the same fudgery with Suricata:[^1]
 
@@ -169,5 +169,5 @@ integrate third-party tooling into a Tenzir pipeline when coupled with
 user-defined operators.
 
 Using Zeek or Suricata? Tenzir makes 'em fun to work with. Check out our other
-blogs tagged with [`#zeek`](/blog/tags/zeek) and
-[`#suricata`](/blog/tags/suricata), and [give it a shot](/overview) yourself.
+blogs tagged with [`#zeek`](/archive/tags/zeek) and
+[`#suricata`](/archive/tags/suricata), and [give it a shot](/overview) yourself.

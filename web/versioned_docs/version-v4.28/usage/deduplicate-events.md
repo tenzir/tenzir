@@ -5,7 +5,7 @@ mechanism to remove duplicate events in a pipeline.
 
 There are numerous use cases for deduplication, such as reducing noise,
 optimizing costs and make threat detection and response more efficent. Read our
-[blog post](/blog/reduce-cost-and-noise-with-deduplication) for high-level
+[blog post](/archive/reduce-cost-and-noise-with-deduplication) for high-level
 discussion.
 
 ## Analyze unique host pairs

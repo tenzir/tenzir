@@ -31,8 +31,8 @@ This is blog post is part of a 3-piece series on Parquet and Feather.
 2. [Writing Security Telemetry][parquet-and-feather-2]
 3. [Data Engineering Woes][parquet-and-feather-3]
 
-[parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
-[parquet-and-feather-3]: /blog/parquet-and-feather-data-engineering-woes/
+[parquet-and-feather-2]: /archive/parquet-and-feather-writing-security-telemetry/
+[parquet-and-feather-3]: /archive/parquet-and-feather-data-engineering-woes/
 :::
 
 ## Why Parquet and Feather?
@@ -126,7 +126,7 @@ avoids friction in the data exchange process. Nobody wants to spend time
 converting bytes or strings into the semantic objects that are ultimately need
 for the analysis.
 
-[blog-arrow]: /blog/apache-arrow-as-platform-for-security-data-engineering
+[blog-arrow]: /archive/apache-arrow-as-platform-for-security-data-engineering
 [ipaddress]: https://docs.python.org/3/library/ipaddress.html
 
 Here's how VAST's type system looks like:

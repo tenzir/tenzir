@@ -9,14 +9,14 @@ ingestion, ad-hoc log file processing, and even generating Zeek logs.
 :::info Zeek Blog Post Series
 We wrote several Zeek blog posts in the past that cover various aspects of the
 Zeek integration in much more detail.
-- [Mobilizing Zeek Logs](/blog/mobilizing-zeek-logs)
-- [Zeek and Ye Shall Pipe](/blog/zeek-and-ye-shall-pipe)
-- [Shell Yeah! Supercharging Zeek and Suricata with Tenzir](/blog/shell-yeah-supercharging-zeek-and-suricata-with-tenzir)
-- [Native Zeek Log Rotation & Shipping](/blog/native-zeek-log-rotation-and-shipping)
-- [Tenzir for Splunk Users](/blog/tenzir-for-splunk-users)
+- [Mobilizing Zeek Logs](/archive/mobilizing-zeek-logs)
+- [Zeek and Ye Shall Pipe](/archive/zeek-and-ye-shall-pipe)
+- [Shell Yeah! Supercharging Zeek and Suricata with Tenzir](/archive/shell-yeah-supercharging-zeek-and-suricata-with-tenzir)
+- [Native Zeek Log Rotation & Shipping](/archive/native-zeek-log-rotation-and-shipping)
+- [Tenzir for Splunk Users](/archive/tenzir-for-splunk-users)
 :::
 
-Zeek logs come in [three forms](/blog/mobilizing-zeek-logs) in practice, all of
+Zeek logs come in [three forms](/archive/mobilizing-zeek-logs) in practice, all of
 which Tenzir can parse natively:
 
 1. Tab-Separated Values (TSV) with a custom header.
@@ -60,7 +60,7 @@ zeek -r trace.pcap tenzir/import Tenzir::delete_after_postprocesing=F
 ```
 
 For further details on how to use our Zeek package read our blog post [Native
-Zeek Log Rotation & Shipping](/blog/native-zeek-log-rotation-and-shipping).
+Zeek Log Rotation & Shipping](/archive/native-zeek-log-rotation-and-shipping).
 
 #### Run an import pipeline when rotating logs
 
@@ -113,7 +113,7 @@ tenzir "$pipeline"
 ```
 
 Our blog post [Native Zeek Log Rotation &
-Shipping](/blog/native-zeek-log-rotation-and-shipping) provides further details
+Shipping](/archive/native-zeek-log-rotation-and-shipping) provides further details
 on this method.
 
 ### Run Zeek on a packet pipeline
@@ -153,7 +153,7 @@ tenzir 'load_file "/path/to/trace.pcap"
 ```
 
 Read the [in-depth blog
-post](/blog/shell-yeah-supercharging-zeek-and-suricata-with-tenzir) for more
+post](/archive/shell-yeah-supercharging-zeek-and-suricata-with-tenzir) for more
 details about the inner workings of the [`shell`](../../tql2/operators/shell.md)
 operator.
 

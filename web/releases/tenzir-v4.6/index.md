@@ -67,7 +67,7 @@ future. Stay tuned!
 
 :::info Follow our Blog Post Series
 We're so excited about enrichments that we wrote an entire blog post series on
-it. The [first post](/blog/enrichment-complexity-in-the-wild) is already live,
+it. The [first post](/archive/enrichment-complexity-in-the-wild) is already live,
 and sets the scene. The second post will soon follow to explain in-depth just
 how Tenzir makes enrichments easy. Stay tuned!
 :::

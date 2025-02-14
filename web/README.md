@@ -9,7 +9,7 @@ Markdown](https://docusaurus.io/docs/markdown-features) for primary content.
 
 Key files and directories of the `/web` directory include:
 
-- [blog](/blog): articles and accompanying files.
+- [blog](/archive): articles and accompanying files.
 - [docs](/docs): documentation content
 - [presets](/presets): partial MDX components for inclusion elsewhere
 - [src](/src): React components in Typescript, CSS, and pages

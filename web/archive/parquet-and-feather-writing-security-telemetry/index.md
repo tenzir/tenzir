@@ -16,13 +16,13 @@ structured security data? In this blog post, we answer this question.
 :::info Parquet & Feather: 2/3
 This is blog post is part of a 3-piece series on Parquet and Feather.
 
-1. [Enabling Open Investigations](/blog/parquet-and-feather-enabling-open-investigations/)
+1. [Enabling Open Investigations](/archive/parquet-and-feather-enabling-open-investigations/)
 2. This blog post
-3. [Data Engineering Woes](/blog/parquet-and-feather-data-engineering-woes/)
+3. [Data Engineering Woes](/archive/parquet-and-feather-data-engineering-woes/)
 
 :::
 
-In the [previous blog](/blog/parquet-and-feather-enabling-open-investigations/), we explained why Parquet and
+In the [previous blog](/archive/parquet-and-feather-enabling-open-investigations/), we explained why Parquet and
 Feather are great building blocks for modern investigations. In this blog, we take
 a look at how they actually perform on the write path in two dimensions:
 
@@ -393,7 +393,7 @@ linear function of the number of stores. (We are aware of this concern and are
 exploring improvements, but this topic is out of scope for this post.) The issue
 here is catalog fragmentation.
 
-As of [v2.3](/blog/vast-v2.3), VAST has automatic rebuilding in place, which
+As of [v2.3](/releases/vast-v2.3), VAST has automatic rebuilding in place, which
 merges underfull partitions to reduce pressure on the catalog. This doesn’t fix
 the problem of linear state, but gives us much sufficient reach for real-world
 deployments.

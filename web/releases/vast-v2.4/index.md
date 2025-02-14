@@ -47,9 +47,9 @@ post series on them:
 2. [Writing Security Telemetry][parquet-and-feather-2]
 3. [Data Engineering Woes][parquet-and-feather-3]
 
-[parquet-and-feather-1]: /blog/parquet-and-feather-enabling-open-investigations/
-[parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
-[parquet-and-feather-3]: /blog/parquet-and-feather-data-engineering-woes/
+[parquet-and-feather-1]: /archive/parquet-and-feather-enabling-open-investigations/
+[parquet-and-feather-2]: /archive/parquet-and-feather-writing-security-telemetry/
+[parquet-and-feather-3]: /archive/parquet-and-feather-data-engineering-woes/
 
 ## What's Next?
 

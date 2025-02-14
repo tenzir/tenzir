@@ -36,7 +36,7 @@ load s3 bucket/file.exe
 :::info
 We've written a blog post on the YARA operator that shows just how it works and
 explains in-depth how you can use it: [Matching YARA Rules in Byte
-Pipelines](/blog/matching-yara-rules-in-byte-pipelines)
+Pipelines](/archive/matching-yara-rules-in-byte-pipelines)
 :::
 
 ## Velociraptor Operator
@@ -52,7 +52,7 @@ breeze.
 :::info
 Read our blog post on how we built this integration and how you can utilize it:
 [Integrating Velociraptor into Tenzir
-Pipelines](/blog/integrating-velociraptor-into-tenzir-pipelines)
+Pipelines](/archive/integrating-velociraptor-into-tenzir-pipelines)
 :::
 
 ## AMQP Connector

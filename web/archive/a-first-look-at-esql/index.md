@@ -29,10 +29,10 @@ the lines to understand what this new pipeline language has to offer.
 
 The reason why we are excited about this announcement is because we have *also*
 designed and implemented a pipeline language over the past 8 months that we just
-[launched at BlackHat](/blog/introducing-tenzir-security-data-pipelines). First,
+[launched at BlackHat](/archive/introducing-tenzir-security-data-pipelines). First,
 we see the release of ES|QL as a confirmation for pipeline model. In our [blog
 post about Splunk's Search Processing Language
-(SPL)](/blog/tenzir-for-splunk-users), we briefly mentioned why SQL might not be
+(SPL)](/archive/tenzir-for-splunk-users), we briefly mentioned why SQL might not be
 the best choice for analysts, and why thinking about one operator at a time
 provides an easier user experience. Second, we'd like to look under the hood of
 ES|QL to compare and reflect on our own Tenzir Query Language (TQL).

@@ -19,7 +19,7 @@ Sovereign Edition users.
 
 ## Charting
 
-[Tenzir Node v4.27.0](/blog/tenzir-node-v4.27) introduced four new charting
+[Tenzir Node v4.27.0](/releases/tenzir-node-v4.27) introduced four new charting
 operators for TQL2 -- `chart_line`, `chart_area`, `chart_bar` and `chart_pie`.
 
 These new operators offer easy ways to aggregate, pivot, bucket and visualize

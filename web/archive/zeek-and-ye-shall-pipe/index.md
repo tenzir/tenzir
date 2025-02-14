@@ -27,7 +27,7 @@ In this example, `<upstream>` produces packets in PCAP format and `<downstream>`
 processes the Zeek logs. Let's work towards this.
 
 Solving the upstream part is easy: just use `zeek -r -` to read from stdin. So
-let's focus on the logs downstream. [Our last blog](/blog/mobilizing-zeek-logs)
+let's focus on the logs downstream. [Our last blog](/archive/mobilizing-zeek-logs)
 introduced the various logging formats, such as tab-separated values (TSV),
 JSON, and Streaming JSON with an extra `_path` discriminator field. The only
 format conducive to multiplexing different log types is Streaming JSON.

@@ -103,7 +103,7 @@ event's nature and severity.
 
 ### Elastic
 
-Elastic's [new ES|QL language](/blog/a-first-look-at-esql) also
+Elastic's [new ES|QL language](/archive/a-first-look-at-esql) also
 [supports
 enrichment](https://www.elastic.co/guide/en/elasticsearch/reference/master/esql-enrich-data.html)
 using the [`ENRICH`

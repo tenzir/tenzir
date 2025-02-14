@@ -70,10 +70,9 @@ available metrics and their values.
 
 We've made significant strides in enhancing TQL2 over the past month. New
 features include string classification and transformation
-(`<string>.to_upper()`, `<string>.is_lower()`), computing [CommunityID flow
-hashes](/blog/unifying-network-and-endpoint-data-with-community-ids), indexing
-into lists, and accessing secrets and environment variables (`secret(<string>)`,
-`env(<string>)`), among others.
+(`<string>.to_upper()`, `<string>.is_lower()`), computing CommunityID flow
+hashes, indexing into lists, and accessing secrets and environment variables
+(`secret(<string>)`, `env(<string>)`), among others.
 
 ## Other Changes
 
