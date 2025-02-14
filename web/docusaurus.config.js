@@ -128,9 +128,15 @@ async function createConfig() {
       [
         '@docusaurus/plugin-content-blog',
         {
-          id: 'archive',
-          routeBasePath: 'archive',
+          id: 'blog-archive',
+          routeBasePath: '/archive',
           path: './archive',
+          blogTitle: 'Blog Archive',
+          blogSidebarCount: 100,
+          blogSidebarTitle: 'Blog Archive',
+          postsPerPage: 100,
+          beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
+          rehypePlugins: [[rehypePrettyCode, rehypePrettyCodeOptions]],
         },
       ]
     ],
@@ -156,13 +162,14 @@ async function createConfig() {
           },
           blog: {
             blogTitle: 'Releases',
-            blogSidebarCount: 20,
             blogDescription: 'Release Notes',
+            blogSidebarCount: 100,
             blogSidebarTitle: 'Release Notes',
-            postsPerPage: 20,
+            postsPerPage: 100,
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
             rehypePlugins: [[rehypePrettyCode, rehypePrettyCodeOptions]],
             routeBasePath: '/releases',
+            path: './releases',
           },
           pages: {
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
@@ -313,6 +320,10 @@ async function createConfig() {
                 {
                   label: 'Blog',
                   href: 'https://tenzir.com/blog',
+                },
+                {
+                  label: 'Blog Archive',
+                  href: '/archive',
                 },
                 {
                   label: 'Newsletter',

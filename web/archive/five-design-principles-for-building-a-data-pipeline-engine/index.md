@@ -214,8 +214,7 @@ one-record-at-a-time processing comes at the cost of performance. In the
 spectrum of performance and ease of use, Tenzir therefore fills a
 gap:
 
-![Structured vs.
-Document-Oriented](structured-vs-document-oriented.excalidraw.svg)
+![Structured vs. Document-Oriented](structured-vs-document-oriented.excalidraw.svg)
 
 :::info Eclectic & Super-structured Data
 [Zed](https://amyousterhout.com/papers/zed_cidr23.pdf) has a type system similar
