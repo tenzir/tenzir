@@ -125,6 +125,14 @@ async function createConfig() {
           ],
         },
       ],
+      [
+        '@docusaurus/plugin-content-blog',
+        {
+          id: 'archive',
+          routeBasePath: 'archive',
+          path: './archive',
+        },
+      ]
     ],
 
     presets: [
@@ -148,8 +156,8 @@ async function createConfig() {
           },
           blog: {
             blogTitle: 'Releases',
-            blogDescription: 'Tenzir Release Notes',
             blogSidebarCount: 20,
+            blogDescription: 'Release Notes',
             blogSidebarTitle: 'Release Notes',
             postsPerPage: 20,
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
