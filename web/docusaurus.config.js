@@ -119,8 +119,8 @@ async function createConfig() {
         {
           redirects: [
             {
-              to: '/',
-              from: '/docs',
+              from: '/blog',
+              to: '/releases',
             },
           ],
         },
@@ -148,12 +148,13 @@ async function createConfig() {
           },
           blog: {
             blogTitle: 'Releases',
-            blogDescription: 'News from the Tenzir community',
+            blogDescription: 'Tenzir Release Notes',
             blogSidebarCount: 20,
-            blogSidebarTitle: 'Release Announcements',
+            blogSidebarTitle: 'Release Notes',
             postsPerPage: 20,
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
             rehypePlugins: [[rehypePrettyCode, rehypePrettyCodeOptions]],
+            routeBasePath: '/releases',
           },
           pages: {
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
@@ -212,12 +213,7 @@ async function createConfig() {
               label: 'Docs',
             },
             {
-              to: 'https://tenzir.com/blog',
-              label: 'Blog',
-              position: 'left',
-            },
-            {
-              to: '/blog',
+              to: '/releases',
               label: 'Releases',
               position: 'left',
             },
@@ -261,24 +257,20 @@ async function createConfig() {
               title: 'Resources',
               items: [
                 {
-                  label: 'Docs',
-                  to: '/',
-                },
-                {
                   label: 'API',
                   to: '/api',
-                },
-                {
-                  label: 'Blog',
-                  to: '/blog',
                 },
                 {
                   label: 'Changelog',
                   to: '/changelog',
                 },
                 {
-                  label: 'Release Notes',
+                  label: 'Release Slides',
                   href: 'https://docs.google.com/presentation/d/1R59T2nuGJg43g6PVKogZbb6DjcJXRYBx3Bih8W-A-oM/present',
+                },
+                {
+                  label: 'Tenzir vs. Cribl',
+                  href: '/tenzir-vs-cribl',
                 },
               ],
             },
@@ -291,7 +283,7 @@ async function createConfig() {
                 },
                 {
                   label: 'GitHub',
-                  href: 'https://github.com/tenzir/tenzir',
+                  href: 'https://github.com/tenzir',
                 },
                 {
                   label: 'Twitter',
@@ -311,17 +303,16 @@ async function createConfig() {
                   href: 'https://tenzir.com',
                 },
                 {
+                  label: 'Blog',
+                  href: 'https://tenzir.com/blog',
+                },
+                {
                   label: 'Newsletter',
                   to: '/newsletter',
                 },
                 {
                   label: 'Privacy Statement',
                   to: '/privacy-statement',
-                },
-                {
-                  label: 'Tenzir vs. Cribl',
-                  // TODO: remove /next/ after the page is part of a release.
-                  href: '/next/tenzir-vs-cribl',
                 },
               ],
             },
