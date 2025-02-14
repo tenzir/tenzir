@@ -160,6 +160,8 @@ Function | Description | Example
 Function | Description | Example
 :--------|:-------------|:-------
 [`print_kv`](functions/print_kv.md) | Prints a record as Key-Value pairs | `record.print_kv()`
+[`print_json`](functions/print_json.mdx) | Prints a record as a JSON string | `record.print_json()`
+[`print_ndjson`](functions/print_ndjson.mdx) | Prints a record as NDJSON string | `record.print_ndjson()`
 [`print_yaml`](functions/print_yaml.md) | Prints a value as a YAML document | `record.print_yaml()`
 
 ## Time & Date
