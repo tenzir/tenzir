@@ -144,9 +144,6 @@ public:
   /// @returns Whether the slice is already serialized.
   [[nodiscard]] bool is_serialized() const noexcept;
 
-  /// @returns The number of in-memory table slices.
-  static size_t instances() noexcept;
-
   /// Return an approximation of the memory covered by this slice.
   auto approx_bytes() const -> uint64_t;
 
@@ -255,10 +252,6 @@ private:
 
   /// A pointer to the underlying chunk, which contains a
   /// `tenzir.fbs.TableSlice` FlatBuffers table.
-  /// @note On construction and destruction, the ref-count of `chunk_` is used
-  /// to determine whether the `num_instances_` counter should be increased or
-  /// decreased. This implies that the chunk must *never* be exposed outside of
-  /// `table_slice`.
   chunk_ptr chunk_ = {};
 
   /// The offset of the table slice within its ID space.
@@ -274,9 +267,6 @@ private:
     const void* none = {};
     const arrow_table_slice<fbs::table_slice::arrow::v2>* arrow_v2;
   } state_;
-
-  /// The number of in-memory table slices.
-  inline static std::atomic<size_t> num_instances_ = {};
 };
 
 // -- operations ---------------------------------------------------------------

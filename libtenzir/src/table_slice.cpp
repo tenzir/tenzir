@@ -120,7 +120,6 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   TENZIR_ASSERT(!chunk_ || chunk_->unique());
   if (chunk_) {
-    ++num_instances_;
     auto f = detail::overload{
       []() noexcept {
         TENZIR_UNREACHABLE();
@@ -138,7 +137,6 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
         chunk_
           = chunk::make(bytes, [state = std::move(state),
                                 chunk = std::move(chunk_)]() mutable noexcept {
-              --num_instances_;
               // We manually call the destructors in proper order here, as the
               // state (and thus the contained chunk that actually owns the
               // memory we decoupled) must be destroyed last and the destruction
@@ -316,10 +314,6 @@ bool table_slice::is_serialized() const noexcept {
     },
   };
   return visit(f, as_flatbuffer(chunk_));
-}
-
-size_t table_slice::instances() noexcept {
-  return num_instances_;
 }
 
 // -- data access --------------------------------------------------------------
