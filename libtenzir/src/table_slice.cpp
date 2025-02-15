@@ -22,10 +22,11 @@
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/series.hpp"
-#include "tenzir/table_slice_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
+#include <arrow/io/api.h>
+#include <arrow/ipc/writer.h>
 #include <arrow/record_batch.h>
 
 #include <cstddef>
@@ -38,6 +39,85 @@ namespace tenzir {
 // -- utility functions --------------------------------------------------------
 
 namespace {
+
+/// Create a table slice from a record batch.
+/// @param record_batch The record batch to encode.
+/// @param builder The flatbuffers builder to use.
+/// @param serialize Embed the IPC format in the FlatBuffers table.
+table_slice
+create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
+                   flatbuffers::FlatBufferBuilder& builder, type schema,
+                   table_slice::serialize serialize) {
+  TENZIR_ASSERT(record_batch);
+#if TENZIR_ENABLE_ASSERTIONS
+  // NOTE: There's also a ValidateFull function, but that always errors when
+  // using nested struct arrays. Last tested with Arrow 7.0.0. -- DL.
+  auto validate_status = record_batch->Validate();
+  TENZIR_ASSERT_EXPENSIVE(validate_status.ok(),
+                          validate_status.ToString().c_str());
+#endif // TENZIR_ENABLE_ASSERTIONS
+  auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
+  if (serialize == table_slice::serialize::yes) {
+    auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
+    auto stream_writer
+      = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema())
+          .ValueOrDie();
+    auto status = stream_writer->WriteRecordBatch(*record_batch);
+    if (!status.ok()) {
+      TENZIR_ERROR("failed to write record batch: {}", status.ToString());
+    }
+    auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
+    fbs_ipc_buffer = builder.CreateVector(arrow_ipc_buffer->data(),
+                                          arrow_ipc_buffer->size());
+  }
+  // Create Arrow-encoded table slices. We need to set the import time to
+  // something other than 0, as it cannot be modified otherwise. We then later
+  // reset it to the clock's epoch.
+  constexpr int64_t stub_ns_since_epoch = 1337;
+  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv2(
+    builder, fbs_ipc_buffer, stub_ns_since_epoch);
+  // Create and finish table slice.
+  auto table_slice_buffer
+    = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::arrow_v2,
+                            arrow_table_slice_buffer.Union());
+  fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
+  // Create the table slice from the chunk.
+  auto chunk = chunk::make(builder.Release());
+  auto result = table_slice{std::move(chunk), table_slice::verify::no,
+                            serialize == table_slice::serialize::yes
+                              ? std::shared_ptr<arrow::RecordBatch>{}
+                              : record_batch,
+                            std::move(schema)};
+  result.import_time(time{});
+  return result;
+}
+
+[[maybe_unused]] bool
+verify_record_batch(const arrow::RecordBatch& record_batch) {
+  auto check_col
+    = [](auto&& check_col, const arrow::Array& column) noexcept -> void {
+    auto f = detail::overload{
+      [&](const arrow::StructArray& sa) noexcept {
+        for (const auto& column : sa.fields()) {
+          check_col(check_col, *column);
+        }
+      },
+      [&](const arrow::ListArray& la) noexcept {
+        check_col(check_col, *la.values());
+      },
+      [&](const arrow::MapArray& ma) noexcept {
+        check_col(check_col, *ma.keys());
+        check_col(check_col, *ma.items());
+      },
+      [](const arrow::Array&) noexcept {},
+    };
+    match(column, f);
+  };
+  for (const auto& column : record_batch.columns()) {
+    check_col(check_col, *column);
+  }
+  return true;
+}
 
 /// Visits a FlatBuffers table slice to dispatch to its specific encoding.
 /// @param visitor A callable object to dispatch to.
@@ -159,8 +239,10 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
                          type schema, enum serialize serialize) {
+  TENZIR_ASSERT_EXPENSIVE(verify_record_batch(*record_batch));
+  auto builder = flatbuffers::FlatBufferBuilder{};
   *this
-    = table_slice_builder::create(record_batch, std::move(schema), serialize);
+    = create_table_slice(record_batch, builder, std::move(schema), serialize);
 }
 
 table_slice::table_slice(const table_slice& other) noexcept = default;

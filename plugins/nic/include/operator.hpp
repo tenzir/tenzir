@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/variant_traits.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/tenzir/ip.hpp>
@@ -19,7 +21,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pcap.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <pcap/pcap.h>
@@ -203,35 +205,12 @@ private:
   record config_;
 };
 
-/// A type that represents an description of a NIC.
-auto nic_type() -> type {
-  return type{
-    "tenzir.nic",
-    record_type{
-      {"name", string_type{}},
-      {"description", string_type{}},
-      {"addresses", list_type{ip_type{}}},
-      {"loopback", bool_type{}},
-      {"up", bool_type{}},
-      {"running", bool_type{}},
-      {"wireless", bool_type{}},
-      {"status",
-       record_type{
-         {"unknown", bool_type{}},
-         {"connected", bool_type{}},
-         {"disconnected", bool_type{}},
-         {"not_applicable", bool_type{}},
-       }},
-    },
-  };
-}
-
 class nics_operator final : public crtp_operator<nics_operator> {
 public:
   nics_operator() = default;
 
-  auto
-  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto err = std::array<char, PCAP_ERRBUF_SIZE>{};
     pcap_if_t* devices = nullptr;
     auto result = pcap_findalldevs(&devices, err.data());
@@ -247,14 +226,30 @@ public:
       co_return;
     }
     TENZIR_ASSERT(result == 0);
-    auto builder = table_slice_builder{nic_type()};
+    auto builder = series_builder{type{
+      "tenzir.nic",
+      record_type{
+        {"name", string_type{}},
+        {"description", string_type{}},
+        {"addresses", list_type{ip_type{}}},
+        {"loopback", bool_type{}},
+        {"up", bool_type{}},
+        {"running", bool_type{}},
+        {"wireless", bool_type{}},
+        {"status",
+         record_type{
+           {"unknown", bool_type{}},
+           {"connected", bool_type{}},
+           {"disconnected", bool_type{}},
+           {"not_applicable", bool_type{}},
+         }},
+      },
+    }};
     for (const auto* ptr = iface.get(); ptr != nullptr; ptr = ptr->next) {
-      auto okay = builder.add(std::string_view{ptr->name});
-      TENZIR_ASSERT(okay);
+      auto event = builder.record();
+      event.field("name", std::string_view{ptr->name});
       if (ptr->description) {
-        okay = builder.add(std::string_view{ptr->description});
-      } else {
-        okay = builder.add(caf::none);
+        event.field("description", std::string_view{ptr->description});
       }
       auto addrs = list{};
       for (auto* addr = ptr->addresses; addr != nullptr; addr = addr->next) {
@@ -262,32 +257,26 @@ public:
           addrs.emplace_back(*x);
         }
       }
-      okay = builder.add(addrs);
-      TENZIR_ASSERT(okay);
+      event.field("addresses", addrs);
       auto is_set = [ptr](uint32_t x) {
         return (ptr->flags & x) == x;
       };
       auto is_status = [ptr](uint32_t x) {
         return (ptr->flags & PCAP_IF_CONNECTION_STATUS) == x;
       };
-      okay = builder.add(is_set(PCAP_IF_LOOPBACK));
-      TENZIR_ASSERT(okay);
-      okay = builder.add(is_set(PCAP_IF_UP));
-      TENZIR_ASSERT(okay);
-      okay = builder.add(is_set(PCAP_IF_RUNNING));
-      TENZIR_ASSERT(okay);
-      okay = builder.add(is_set(PCAP_IF_WIRELESS));
-      TENZIR_ASSERT(okay);
-      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_UNKNOWN));
-      TENZIR_ASSERT(okay);
-      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_CONNECTED));
-      TENZIR_ASSERT(okay);
-      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_DISCONNECTED));
-      TENZIR_ASSERT(okay);
-      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_NOT_APPLICABLE));
-      TENZIR_ASSERT(okay);
+      event.field("loopback", is_set(PCAP_IF_LOOPBACK));
+      event.field("up", is_set(PCAP_IF_UP));
+      event.field("running", is_set(PCAP_IF_RUNNING));
+      event.field("wireless", is_set(PCAP_IF_WIRELESS));
+      auto status = event.field("status").record();
+      status.field("unknown", is_status(PCAP_IF_CONNECTION_STATUS_UNKNOWN));
+      status.field("connected", is_status(PCAP_IF_CONNECTION_STATUS_CONNECTED));
+      status.field("disconnected",
+                   is_status(PCAP_IF_CONNECTION_STATUS_DISCONNECTED));
+      status.field("not_applicable",
+                   is_status(PCAP_IF_CONNECTION_STATUS_NOT_APPLICABLE));
     }
-    co_yield builder.finish();
+    co_yield builder.finish_assert_one_slice();
   }
 
   auto name() const -> std::string override {
@@ -298,8 +287,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)order;
     (void)filter;
     return do_not_optimize(*this);

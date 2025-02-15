@@ -173,7 +173,6 @@ class string_type;
 class subnet_type;
 class subnet;
 class synopsis;
-class table_slice_builder;
 class table_slice;
 class time_type;
 class type;

@@ -11,11 +11,11 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/passthrough.hpp"
-#include "tenzir/table_slice_builder.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/expected.hpp>

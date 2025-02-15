@@ -31,7 +31,6 @@
 #include <tenzir/read_query.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <arrow/table.h>

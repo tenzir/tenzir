@@ -9,25 +9,11 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
-
-#include <algorithm>
+#include <tenzir/series_builder.hpp>
 
 namespace tenzir::plugins::formats {
 
 namespace {
-
-/// A type that represents a format.
-auto format_type() -> type {
-  return type{
-    "tenzir.format",
-    record_type{
-      {"name", string_type{}},
-      {"printer", bool_type{}},
-      {"parser", bool_type{}},
-    },
-  };
-}
 
 class plugin final : public virtual aspect_plugin {
 public:
@@ -37,25 +23,33 @@ public:
 
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
+    TENZIR_UNUSED(ctrl);
     auto parsers = collect(plugins::get<parser_parser_plugin>());
     auto printers = collect(plugins::get<printer_parser_plugin>());
     auto formats = std::set<std::string>{};
-    for (const auto* plugin : parsers)
+    for (const auto* plugin : parsers) {
       formats.insert(plugin->name());
-    for (const auto* plugin : printers)
-      formats.insert(plugin->name());
-    auto builder = table_slice_builder{format_type()};
-    for (const auto& format : formats) {
-      if (not(builder.add(format)
-              && builder.add(plugins::find<parser_parser_plugin>(format)
-                             != nullptr)
-              && builder.add(plugins::find<printer_parser_plugin>(format)
-                             != nullptr))) {
-        diagnostic::error("failed to add format").emit(ctrl.diagnostics());
-        co_return;
-      }
     }
-    co_yield builder.finish();
+    for (const auto* plugin : printers) {
+      formats.insert(plugin->name());
+    }
+    auto builder = series_builder{type{
+      "tenzir.format",
+      record_type{
+        {"name", string_type{}},
+        {"printer", bool_type{}},
+        {"parser", bool_type{}},
+      },
+    }};
+    for (const auto& format : formats) {
+      auto event = builder.record();
+      event.field("name", format);
+      event.field("printer",
+                  plugins::find<printer_parser_plugin>(format) != nullptr);
+      event.field("parser",
+                  plugins::find<parser_parser_plugin>(format) != nullptr);
+    }
+    co_yield builder.finish_assert_one_slice();
   }
 };
 

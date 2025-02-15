@@ -13,7 +13,6 @@
 #include <tenzir/detail/url.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 
 #include <arrow/util/compression.h>
@@ -163,11 +162,11 @@ public:
     event_too_large,
   };
 
-  auto
-  create_metadata(std::string_view action,
-                  std::optional<std::optional<std::string_view>> idx,
-                  std::optional<std::optional<std::string_view>> id,
-                  const opensearch_args& args) -> std::optional<diagnostic> {
+  auto create_metadata(std::string_view action,
+                       std::optional<std::optional<std::string_view>> idx,
+                       std::optional<std::optional<std::string_view>> id,
+                       const opensearch_args& args)
+    -> std::optional<diagnostic> {
     constexpr auto supported_actions
       = std::array{"create", "delete", "index", "update", "upsert"};
     const auto valid_action
@@ -290,8 +289,8 @@ private:
 
 auto resolve_str(std::string_view option_name,
                  const std::optional<ast::expression>& expr,
-                 const table_slice& slice,
-                 diagnostic_handler& dh) -> std::optional<series> {
+                 const table_slice& slice, diagnostic_handler& dh)
+  -> std::optional<series> {
   if (not expr) {
     return std::nullopt;
   }
@@ -421,8 +420,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<std::monostate> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
     auto wrapped_req = new_req(dh);
     if (not wrapped_req) {
@@ -511,8 +510,8 @@ public:
     }
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -541,8 +540,8 @@ struct plugin : public virtual operator_plugin2<opensearch_operator> {
     return "to_opensearch";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = opensearch_args{};
     auto p = argument_parser2::operator_(name());
     args.add_to(p);

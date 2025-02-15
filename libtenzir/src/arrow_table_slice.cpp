@@ -17,7 +17,6 @@
 #include "tenzir/fbs/table_slice.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/table_slice_builder.hpp"
 
 #include <arrow/api.h>
 #include <arrow/compute/api.h>

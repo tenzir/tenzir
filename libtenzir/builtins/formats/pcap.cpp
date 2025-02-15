@@ -16,7 +16,7 @@
 #include <tenzir/pcap.hpp>
 #include <tenzir/pcapng.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/view.hpp>
@@ -30,14 +30,27 @@ namespace {
 using namespace tenzir::pcap;
 
 auto make_file_header_table_slice(const file_header& header) -> table_slice {
-  auto builder = table_slice_builder{file_header_type()};
-  auto okay = builder.add(header.magic_number)
-              && builder.add(header.major_version)
-              && builder.add(header.minor_version)
-              && builder.add(header.reserved1) && builder.add(header.reserved2)
-              && builder.add(header.snaplen) && builder.add(header.linktype);
-  TENZIR_ASSERT(okay);
-  return builder.finish();
+  auto builder = series_builder{type{
+    "pcap.file_header",
+    record_type{
+      {"magic_number", uint64_type{}},  // uint32
+      {"major_version", uint64_type{}}, // uint32
+      {"minor_version", uint64_type{}}, // uint32
+      {"reserved1", uint64_type{}},     // uint32
+      {"reserved2", uint64_type{}},     // uint32
+      {"snaplen", uint64_type{}},       // uint32
+      {"linktype", uint64_type{}},      // uint16
+    },
+  }};
+  auto event = builder.record();
+  event.field("magic_number", uint64_t{header.magic_number});
+  event.field("major_version", uint64_t{header.major_version});
+  event.field("minor_version", uint64_t{header.minor_version});
+  event.field("reserved1", uint64_t{header.reserved1});
+  event.field("reserved2", uint64_t{header.reserved2});
+  event.field("snaplen", uint64_t{header.snaplen});
+  event.field("linktype", uint64_t{header.linktype});
+  return builder.finish_assert_one_slice();
 }
 
 struct parser_args {
@@ -116,15 +129,25 @@ public:
       // Records, consisting of a 16-byte header and variable-length payload.
       // However, our parser is a bit smarter and also supports concatenated
       // PCAP traces.
-      auto builder = table_slice_builder{packet_record_type()};
+      auto builder = series_builder{type{
+        "pcap.packet",
+        record_type{
+          {"linktype", uint64_type{}}, // uint16 would suffice
+          {"timestamp", time_type{}},
+          {"captured_packet_length", uint64_type{}},
+          {"original_packet_length", uint64_type{}},
+          {"data", type{blob_type{}, {{"skip"}}}},
+        },
+      }};
       auto num_packets = size_t{0};
       auto last_finish = std::chrono::steady_clock::now();
       while (true) {
         const auto now = std::chrono::steady_clock::now();
-        if (builder.rows() >= defaults::import::table_slice_size
+        if (builder.length() >= detail::narrow_cast<int64_t>(
+              defaults::import::table_slice_size)
             or last_finish + defaults::import::batch_timeout < now) {
           last_finish = now;
-          co_yield builder.finish();
+          co_yield builder.finish_assert_one_slice();
         }
         packet_record packet;
         // We first try to parse a packet header first.
@@ -140,8 +163,8 @@ public:
           }
           if (bytes->empty()) {
             TENZIR_DEBUG("completed trace of {} packets", num_packets);
-            if (builder.rows() > 0) {
-              co_yield builder.finish();
+            if (builder.length() > 0) {
+              co_yield builder.finish_assert_one_slice();
             }
             co_return;
           }
@@ -191,9 +214,9 @@ public:
             }
             // Before emitting the new file header, flush all buffered packets
             // from the previous trace.
-            if (builder.rows() > 0) {
+            if (builder.length() > 0) {
               last_finish = now;
-              co_yield builder.finish();
+              co_yield builder.finish_assert_one_slice();
             }
             if (emit_file_headers) {
               co_yield make_file_header_table_slice(input_file_header);
@@ -221,7 +244,7 @@ public:
             continue;
           }
           if (bytes->size() != length) {
-            co_yield builder.finish();
+            co_yield builder.finish_assert_one_slice();
             diagnostic::error("truncated last packet; expected {} but got {}",
                               length, bytes->size())
               .note("from `pcap`")
@@ -248,19 +271,18 @@ public:
           TENZIR_UNREACHABLE();
         }
         auto data = view<blob>{packet.data.data(), packet.data.size()};
-        if (!(builder.add(input_file_header.linktype & 0x0000FFFF)
-              && builder.add(timestamp)
-              && builder.add(packet.header.captured_packet_length)
-              && builder.add(packet.header.original_packet_length)
-              && builder.add(data))) {
-          diagnostic::error("failed to add packet #{}", num_packets)
-            .note("from `pcap`")
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
+        auto event = builder.record();
+        event.field("timestamp", timestamp);
+        event.field("linktype",
+                    uint64_t{input_file_header.linktype & 0x0000FFFF});
+        event.field("captured_packet_length",
+                    uint64_t{packet.header.captured_packet_length});
+        event.field("original_packet_length",
+                    uint64_t{packet.header.original_packet_length});
+        event.field("data", data);
       }
-      if (builder.rows() > 0) {
-        co_yield builder.finish();
+      if (builder.length() > 0) {
+        co_yield builder.finish_assert_one_slice();
       }
     };
     return make(ctrl, std::move(input), !!args_.emit_file_headers);

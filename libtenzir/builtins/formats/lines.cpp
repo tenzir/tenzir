@@ -6,11 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/defaults.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/split_nulls.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -33,15 +35,6 @@ struct parser_args {
   }
 };
 
-auto line_type() -> type {
-  return type{
-    "tenzir.line",
-    record_type{
-      {"line", string_type{}},
-    },
-  };
-}
-
 class lines_parser final : public plugin_parser {
 public:
   lines_parser() = default;
@@ -58,9 +51,13 @@ public:
     -> std::optional<generator<table_slice>> override {
     auto make = [](auto& ctrl, generator<chunk_ptr> input, bool skip_empty,
                    bool nulls) -> generator<table_slice> {
-      auto num_non_empty_lines = size_t{0};
-      auto num_empty_lines = size_t{0};
-      auto builder = table_slice_builder{line_type()};
+      TENZIR_UNUSED(ctrl);
+      auto builder = series_builder{type{
+        "tenzir.line",
+        record_type{
+          {"line", string_type{}},
+        },
+      }};
       auto last_finish = std::chrono::steady_clock::now();
       auto cutter = nulls ? split_nulls : to_lines;
       for (auto line : cutter(std::move(input))) {
@@ -68,33 +65,21 @@ public:
           co_yield {};
           continue;
         }
-        if (line->empty()) {
-          ++num_empty_lines;
-          if (skip_empty) {
-            co_yield {};
-            continue;
-          }
-        } else {
-          ++num_non_empty_lines;
+        if (line->empty() and skip_empty) {
+          continue;
         }
-        auto num_lines = skip_empty ? num_non_empty_lines
-                                    : num_non_empty_lines + num_empty_lines;
-        if (not builder.add(*line)) {
-          diagnostic::error("failed to add line")
-            .hint("line number: ", num_lines + 1)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
+        auto event = builder.record();
+        event.field("line", *line);
         const auto now = std::chrono::steady_clock::now();
-        if (builder.rows() >= defaults::import::table_slice_size
+        if (builder.length() >= detail::narrow_cast<int64_t>(
+              defaults::import::table_slice_size)
             or last_finish + defaults::import::batch_timeout < now) {
           last_finish = now;
-          co_yield builder.finish();
-          builder = table_slice_builder{line_type()};
+          co_yield builder.finish_assert_one_slice();
         }
       }
-      if (builder.rows() > 0) {
-        co_yield builder.finish();
+      if (builder.length() > 0) {
+        co_yield builder.finish_assert_one_slice();
       }
     };
     return make(ctrl, std::move(input), !!args_.skip_empty, !!args_.null);

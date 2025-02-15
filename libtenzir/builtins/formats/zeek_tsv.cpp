@@ -24,7 +24,7 @@
 #include "tenzir/generator.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/table_slice_builder.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/type.hpp"
@@ -452,21 +452,9 @@ struct zeek_printer {
       return true;
     }
 
-    auto operator()(const view<record>& x) noexcept -> bool {
-      // TODO: This won't be needed when flatten() for table_slices is in the
-      // codebase.
-      TENZIR_WARN("printing records as zeek-tsv data is currently a work in "
-                  "progress; printing null instead");
-      auto first = true;
-      for (const auto& v : x) {
-        if (not first) {
-          ++out = printer.sep;
-        } else {
-          first = false;
-        }
-        (*this)(caf::none);
-      }
-      return true;
+    auto operator()(const view<record>&) noexcept -> bool {
+      // We flattened before, so this cannot be reached.
+      TENZIR_UNREACHABLE();
     }
 
     Iterator& out;
@@ -494,7 +482,8 @@ struct zeek_document {
   std::vector<std::string> types = {};
 
   /// A builder generated from the above metadata.
-  std::optional<table_slice_builder> builder = {};
+  std::optional<series_builder> builder = {};
+  std::optional<record_ref> event = {};
   std::vector<rule<std::string_view::const_iterator, bool>> parsers = {};
   type target_schema = {};
 };
@@ -506,7 +495,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
   auto line_nr = size_t{0};
   // Helper for finishing and casting.
   auto finish = [&] {
-    auto slice = unflatten(document.builder->finish(), ".");
+    auto slice = unflatten(document.builder->finish_assert_one_slice(), ".");
     if (document.target_schema
         and can_cast(slice.schema(), document.target_schema)) {
       return cast(std::move(slice), document.target_schema);
@@ -518,7 +507,8 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     const auto now = std::chrono::steady_clock::now();
     // Yield at chunk boundaries.
     if (document.builder
-        and (document.builder->rows() >= defaults::import::table_slice_size
+        and (document.builder->length() >= detail::narrow_cast<int64_t>(
+               defaults::import::table_slice_size)
              or last_finish + defaults::import::batch_timeout < now)) {
       last_finish = now;
       co_yield finish();
@@ -669,19 +659,25 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
             .emit(ctrl.diagnostics());
           parsed_type = type{string_type{}};
         }
-        const auto make_unset_parser = [&]() {
+        const auto make_unset_parser = [&, field]() {
           return ignore(parsers::str{document.unset_field}
                         >> &(parsers::chr{document.separator} | parsers::eoi))
             .then([&]() {
-              return document.builder->add(caf::none);
+              document.event->field(field).null();
+              return true;
             });
         };
         const auto make_empty_parser
           = [&]<concrete_type Type>(const Type& type) {
               return ignore(parsers::str{document.empty_field} >> &(
                               parsers::chr{document.separator} | parsers::eoi))
-                .then([&]() {
-                  return document.builder->add(type.construct());
+                .then([&, field]() {
+                  if constexpr (std::is_same_v<Type, map_type>) {
+                    TENZIR_UNREACHABLE();
+                  } else {
+                    document.event->field(field, std::move(type.construct()));
+                  }
+                  return true;
                 });
             };
         auto make_field_parser =
@@ -692,12 +688,19 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                                        std::is_same_v<Type, list_type>
                                          ? document.set_separator
                                          : std::string{})
-                     .then([&](type_to_data_t<Type> value) {
+                     .then([&, field](type_to_data_t<Type> value) {
                        // TODO: A zeek `string` is not necessarily valid UTF-8,
                        // but our `string_type` requires it. We must use `blob`
                        // here instead of the string turns out to contain
                        // invalid UTF-8.
-                       return document.builder->add(value);
+                       if constexpr (std::is_same_v<Type, map_type>) {
+                         TENZIR_UNREACHABLE();
+                       } else {
+                         TENZIR_WARN("adding field {} with value {}", field,
+                                     data{value});
+                         document.event->field(field, std::move(value));
+                       }
+                       return true;
                      });
         };
         document.parsers.push_back(match(*parsed_type, make_field_parser));
@@ -705,7 +708,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       }
       const auto schema_name = fmt::format("zeek.{}", document.path);
       auto schema = type{schema_name, record_type{record_fields}};
-      document.builder = table_slice_builder{std::move(schema)};
+      document.builder = series_builder{std::move(schema)};
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
       auto target_schema
@@ -729,6 +732,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     const auto l = line->end();
     auto add_ok = false;
     const auto separator = ignore(parsers::chr{document.separator});
+    document.event = document.builder->record();
     for (size_t i = 0; i < document.parsers.size() - 1; ++i) {
       const auto parse_ok = document.parsers[i](f, l, add_ok);
       if (not parse_ok) [[unlikely]] {
@@ -763,8 +767,9 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         .note("line {}", line_nr)
         .emit(ctrl.diagnostics());
     }
+    document.event = {};
   }
-  if (document.builder and document.builder->rows() > 0) {
+  if (document.builder and document.builder->length() > 0) {
     co_yield finish();
   }
 }
