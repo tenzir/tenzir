@@ -14,13 +14,16 @@
 #include "tenzir/connect_request.hpp"
 #include "tenzir/connector.hpp"
 #include "tenzir/endpoint.hpp"
-#include "tenzir/node_control.hpp"
 
 #include <caf/event_based_actor.hpp>
 
 namespace tenzir {
 
-namespace details {
+namespace detail {
+
+/// Retrieves the node connection timeout as specified under the option
+/// `tenzir.connection-timeout` from the given settings.
+auto node_connection_timeout(const caf::settings& options) -> caf::timespan;
 
 auto get_node_endpoint(const caf::settings& opts) -> caf::expected<endpoint>;
 
@@ -33,7 +36,7 @@ auto get_deadline(caf::timespan timeout)
 [[nodiscard]] auto
 check_version(const record& remote_version, const record& cfg) -> bool;
 
-} // namespace details
+} // namespace detail
 
 /// Connects to a remote Tenzir server.
 auto connect_to_node(caf::scoped_actor& self) -> caf::expected<node_actor>;
@@ -43,14 +46,13 @@ void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
                      std::function<void(caf::expected<node_actor>)> callback) {
   // Fetch values from config.
   const auto& opts = content(self->system().config());
-  auto node_endpoint = details::get_node_endpoint(opts);
+  auto node_endpoint = detail::get_node_endpoint(opts);
   if (!node_endpoint) {
     return callback(std::move(node_endpoint.error()));
   }
-  auto timeout = node_connection_timeout(opts);
-  auto connector
-    = self->spawn(tenzir::connector, details::get_retry_delay(opts),
-                  details::get_deadline(timeout));
+  auto timeout = detail::node_connection_timeout(opts);
+  auto connector = self->spawn(tenzir::connector, detail::get_retry_delay(opts),
+                               detail::get_deadline(timeout));
   self
     ->mail(atom::connect_v,
            connect_request{node_endpoint->port->number(), node_endpoint->host})
@@ -65,7 +67,7 @@ void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
             [self, callback,
              node = std::move(node)](record& remote_version) mutable {
               // TODO: Refactor this (also in .cpp).
-              (void)details::check_version(
+              (void)detail::check_version(
                 remote_version,
                 check(to<record>(content(self->system().config()))));
               callback(std::move(node));

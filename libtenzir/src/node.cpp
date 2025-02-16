@@ -30,7 +30,6 @@
 #include "tenzir/index_config.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/node.hpp"
-#include "tenzir/node_control.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/shutdown.hpp"
@@ -97,14 +96,7 @@ auto register_component(node_actor::stateful_pointer<node_state> self,
     }
     return fmt::format("{}/{}", type, label);
   }();
-  if (tag != "filesystem") {
-    // TODO: This is a terrible hack, but for historical reasons the filesystem
-    // actor is kept alive through a very manual process, and putting it into
-    // the registry makes that situation even worse for some reason. There's a
-    // related comment in the core shutdown sequence in the node actor's exit
-    // handler; we should really aim to fix this sometime in the future.
-    self->system().registry().put(fmt::format("tenzir.{}", tag), component);
-  }
+  self->system().registry().put(fmt::format("tenzir.{}", tag), component);
   self->state().component_names.emplace(component->address(), tag);
   const auto [it, inserted] = self->state().alive_components.insert(
     std::pair{component->address(), std::move(tag)});
@@ -171,8 +163,8 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
 
 auto spawn_filesystem(node_actor::stateful_pointer<node_state> self)
   -> filesystem_actor {
-  auto filesystem
-    = self->spawn<caf::detached>(posix_filesystem, self->state().dir);
+  auto filesystem = self->spawn<caf::detached + caf::hidden>(posix_filesystem,
+                                                             self->state().dir);
   TENZIR_ASSERT(filesystem);
   if (auto err = register_component(
         self, caf::actor_cast<caf::actor>(filesystem), "filesystem")) {
@@ -597,14 +589,9 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           core_shutdown_handles.push_back(comp->actor);
         }
       }
-      caf::actor filesystem_handle;
       for (const char* name : ordered_core_components) {
         if (auto comp = registry.remove(name)) {
-          if (comp->type == "filesystem") {
-            filesystem_handle = comp->actor;
-          } else {
-            core_shutdown_handles.push_back(comp->actor);
-          }
+          core_shutdown_handles.push_back(comp->actor);
         }
       }
       std::vector<caf::actor> aux_components;
@@ -618,14 +605,10 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       // Drop everything.
       registry.clear();
       auto core_shutdown_sequence
-        = [=, core_shutdown_handles = std::move(core_shutdown_handles),
-           filesystem_handle = std::move(filesystem_handle)]() mutable {
+        = [=, core_shutdown_handles
+              = std::move(core_shutdown_handles)]() mutable {
             shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
                                          node_shutdown_reason);
-            // We deliberately do not send an exit message to the filesystem
-            // actor, as that would mean that actors not tracked by the
-            // component registry which hold a strong handle to the filesystem
-            // actor cannot use it for persistence on shutdown.
           };
       terminate<policy::parallel>(self, std::move(aux_components))
         .then(

@@ -22,7 +22,6 @@
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/node.hpp>
-#include <tenzir/node_control.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/query_cursor.hpp>

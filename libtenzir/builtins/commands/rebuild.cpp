@@ -22,7 +22,6 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/index.hpp>
 #include <tenzir/node.hpp>
-#include <tenzir/node_control.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -38,6 +37,7 @@
 #include <caf/expected.hpp>
 #include <caf/policy/select_all.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
 #include <caf/type_id.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
@@ -516,16 +516,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   self->state().catalog = std::move(catalog);
   self->state().index = std::move(index);
   self->state().max_partition_size
-    = caf::get_or(self->system().config(), "tenzir.max-partition-size",
+    = caf::get_or(content(self->system().config()), "tenzir.max-partition-size",
                   defaults::max_partition_size);
   self->state().desired_batch_size
-    = caf::get_or(self->system().config(), "tenzir.import.batch-size",
+    = caf::get_or(content(self->system().config()), "tenzir.import.batch-size",
                   defaults::import::table_slice_size);
   self->state().automatic_rebuild = caf::get_or(
-    self->system().config(), "tenzir.automatic-rebuild", size_t{1});
+    content(self->system().config()), "tenzir.automatic-rebuild", size_t{1});
   if (self->state().automatic_rebuild > 0) {
     self->state().rebuild_interval
-      = caf::get_or(self->system().config(), "tenzir.rebuild-interval",
+      = caf::get_or(content(self->system().config()), "tenzir.rebuild-interval",
                     defaults::rebuild_interval);
     self->state().schedule();
   }
