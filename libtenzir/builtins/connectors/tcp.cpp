@@ -537,7 +537,9 @@ public:
                 // nop
               },
               [&](const caf::error& err) {
-                diagnostic::error("failed to connect: {}", err)
+                diagnostic::error("tcp loader failed to connect")
+                  .note("with error: {}", err)
+                  .note("while connecting to {}:{}", args.hostname, args.port)
                   .emit(ctrl.diagnostics());
               });
         } else {
@@ -655,7 +657,9 @@ public:
             // nop
           },
           [&](const caf::error& err) {
-            diagnostic::error("failed to connect: {}", err)
+            diagnostic::error("tcp saver failed to connect")
+              .note("with error: {}", err)
+              .note("while connecting to {}:{}", args_.hostname, args_.port)
               .emit(ctrl.diagnostics());
           });
     } else {
