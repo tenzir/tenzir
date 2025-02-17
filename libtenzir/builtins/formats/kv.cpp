@@ -252,56 +252,6 @@ auto parse_loop(generator<std::optional<std::string_view>> input,
   }
 }
 
-struct argument_info {
-  argument_info(std::string name, located<std::string> lstr)
-    : name{std::move(name)}, value{std::move(lstr.inner)}, loc{lstr.source} {
-  }
-  argument_info(std::string name, std::string value)
-    : name{std::move(name)}, value{std::move(value)} {
-  }
-  argument_info(std::string name,
-                const std::optional<located<std::string>>& value)
-    : name{std::move(name)},
-      value{value ? value->inner : std::string{}},
-      loc{value ? value->source : location::unknown} {
-  }
-  std::string name;
-  std::string value;
-  location loc = location::unknown;
-};
-auto has_overlap(diagnostic_handler& dh,
-                 std::vector<argument_info> values) -> bool {
-  for (size_t i = 0; i < values.size(); ++i) {
-    for (size_t j = i + 1; j < values.size(); ++j) {
-      const auto i_larger = values[i].value.size() > values[j].value.size();
-      const auto& longer = i_larger ? values[i] : values[j];
-      const auto& shorter = i_larger ? values[j] : values[i];
-      if (shorter.value.empty()) {
-        continue;
-      }
-      if (longer.value.find(shorter.value) != longer.value.npos) {
-        diagnostic::error("`{}` and `{}` conflict", shorter.name, longer.name)
-          .note("`{}` is a substring of `{}`", shorter.value, longer.value)
-          .primary(longer.loc)
-          .primary(shorter.loc)
-          .emit(dh);
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-auto check_non_empty(std::string_view name, const located<std::string>& v,
-                     diagnostic_handler& dh) -> failure_or<void> {
-  if (v.inner.empty()) {
-    diagnostic::error("`{}` must not be empty", name).primary(v).emit(dh);
-    return failure::promise();
-  }
-
-  return {};
-}
-
 struct kv_writer {
   location operator_location;
   located<std::string> field_sep = {" ", operator_location};
@@ -328,13 +278,11 @@ struct kv_writer {
   };
 
   auto validate(diagnostic_handler& dh) -> failure_or<void> {
-    if (has_overlap(dh, {{"flatten", flatten},
-                         {"field_sep", field_sep},
-                         {"value_sep", value_sep},
-                         {"list_sep", list_sep},
-                         {"null", null}})) {
-      return failure::promise();
-    }
+    TRY(check_no_substrings(dh, {{"flatten", flatten},
+                                 {"field_sep", field_sep},
+                                 {"value_sep", value_sep},
+                                 {"list_sep", list_sep},
+                                 {"null", null}}));
     TRY(check_non_empty("field_sep", field_sep, dh));
     TRY(check_non_empty("value_sep", field_sep, dh));
     TRY(check_non_empty("list_sep", field_sep, dh));
@@ -393,7 +341,7 @@ struct kv_writer {
         if (needs_quoting) {
           *out++ = '"';
         }
-        p.print(out, formatted);
+        TENZIR_ASSERT(p.print(out, formatted));
         if (needs_quoting) {
           *out++ = '"';
         }
@@ -608,7 +556,6 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto input = ast::expression{};
-
     auto parser = argument_parser2::function(name());
     auto writer = kv_writer{};
     parser.positional("input", input, "record");
@@ -622,21 +569,24 @@ public:
         if (values.type.kind().is<null_type>()) {
           return values;
         }
-        const auto records = try_as<arrow::StructArray>(&*values.array);
-        if (not records) {
+        if (values.type.kind() != type{record_type{}}.kind()) {
           diagnostic::warning("expected `record`, got `{}`", values.type.kind())
             .primary(input)
             .emit(ctx);
           return series::null(null_type{}, values.length());
         }
+        const auto struct_array
+          = std::dynamic_pointer_cast<arrow::StructArray>(values.array);
+        TENZIR_ASSERT(struct_array);
+        auto records = flatten(values.type, struct_array, ".").array;
         auto builder = series_builder{type{string_type{}}};
         auto buffer = std::string{};
         for (auto row : values3(*records)) {
-          buffer.clear();
           if (not row) {
             builder.null();
             continue;
           }
+          buffer.clear();
           writer.print(std::back_inserter(buffer), *row);
           builder.data(buffer);
         }

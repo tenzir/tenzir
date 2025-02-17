@@ -3,13 +3,25 @@
 Transforms event stream to TSV (Tab-Separated Values) byte stream.
 
 ```tql
-write_tsv [no_header=bool]
+write_tsv [list_sep=str, null_value=str, no_header=bool]
 ```
 
 ## Description
 
 The `write_tsv` operator transforms an event stream into a byte stream by writing
 the events as TSV.
+
+### `list_sep: str`
+
+The string separating different elements in a list within a single field.
+
+Defaults to `","`.
+
+### `null_value: str`
+
+The string denoting an absent value.
+
+Defaults to `"-"`.
 
 ### `no_header=bool (optional)`
 

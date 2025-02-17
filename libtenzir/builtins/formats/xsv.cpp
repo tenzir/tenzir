@@ -23,6 +23,7 @@
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>
@@ -37,10 +38,36 @@ namespace tenzir::plugins::xsv {
 namespace {
 
 struct xsv_printer_options {
-  char field_sep = {};
-  char list_sep = {};
-  std::string null_value = {};
+  located<std::string> field_sep = {};
+  located<std::string> list_sep = {};
+  located<std::string> null_value = {};
   bool no_header = {};
+
+  auto add(argument_parser2& parser) -> void {
+    if (field_sep.inner.empty()) {
+      /// XSV case, nothing is set
+      parser.positional("field_sep", field_sep);
+      parser.positional("list_sep", list_sep);
+      parser.positional("null_value", null_value);
+    } else {
+      /// Configured case
+      TENZIR_ASSERT(not list_sep.inner.empty());
+      parser.named_optional("list_sep", list_sep);
+      parser.named_optional("null_value", null_value);
+    }
+    if (not no_header) {
+      parser.named("no_header", no_header);
+    }
+  }
+
+  auto validate(diagnostic_handler& dh) -> failure_or<void> {
+    TRY(check_no_substrings(dh, {{"field_sep", field_sep},
+                                 {"list_sep", list_sep},
+                                 {"null_value", null_value}}));
+    TRY(check_non_empty("field_sep", field_sep, dh));
+    TRY(check_non_empty("list_sep", list_sep, dh));
+    return {};
+  }
 
   static auto
   try_parse_printer_options(parser_interface& p) -> xsv_printer_options {
@@ -86,9 +113,9 @@ struct xsv_printer_options {
       }
     }
     return xsv_printer_options{
-      .field_sep = *field_sep,
-      .list_sep = *list_sep,
-      .null_value = std::move(null_value.inner),
+      .field_sep = located{std::string{1, *field_sep}, field_sep_str.source},
+      .list_sep = located{std::string{1, *list_sep}, list_sep_str.source},
+      .null_value = std::move(null_value),
       .no_header = no_header,
     };
   }
@@ -370,16 +397,17 @@ protected:
 };
 
 struct xsv_printer_impl {
-  xsv_printer_impl(char sep, char list_sep, std::string null)
-    : sep{sep}, list_sep{list_sep}, null{std::move(null)} {
+  xsv_printer_impl(std::string_view sep, std::string_view list_sep,
+                   std::string_view null)
+    : sep{sep}, list_sep{list_sep}, null{null} {
   }
 
   template <typename It>
-  auto print_header(It& out, const view<record>& x) const noexcept -> bool {
+  auto print_header(It& out, const view3<record>& x) const noexcept -> bool {
     auto first = true;
     for (const auto& [k, _] : x) {
       if (!first) {
-        ++out = sep;
+        out = fmt::format_to(out, "{}", sep);
       } else {
         first = false;
       }
@@ -389,11 +417,11 @@ struct xsv_printer_impl {
   }
 
   template <typename It>
-  auto print_values(It& out, const view<record>& x) const noexcept -> bool {
+  auto print_values(It& out, const view3<record>& x) const noexcept -> bool {
     auto first = true;
     for (const auto& [_, v] : x) {
       if (!first) {
-        ++out = sep;
+        out = fmt::format_to(out, "{}", sep);
       } else {
         first = false;
       }
@@ -416,64 +444,68 @@ struct xsv_printer_impl {
       return true;
     }
 
-    auto operator()(auto x) noexcept -> bool {
+    auto operator()(view3<pattern>) noexcept -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
+    auto operator()(view3<map>) noexcept -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
+    auto operator()(view3<record>) noexcept -> bool {
+      TENZIR_UNREACHABLE();
+    }
+    template <typename T>
+    auto operator()(const T& scalar) noexcept -> bool {
       sequence_empty = false;
-      make_printer<decltype(x)> p;
-      return p.print(out, x);
-    }
-
-    auto operator()(view<pattern>) noexcept -> bool {
-      TENZIR_UNREACHABLE();
-    }
-
-    auto operator()(view<map>) noexcept -> bool {
-      TENZIR_UNREACHABLE();
-    }
-
-    auto operator()(view<record>) noexcept -> bool {
-      TENZIR_UNREACHABLE();
-    }
-
-    auto operator()(view<std::string> x) noexcept -> bool {
-      sequence_empty = false;
-      auto needs_escaping = std::any_of(x.begin(), x.end(), [this](auto c) {
-        return c == printer.sep || c == '"' || c == '\n' || c == '\r'
-               || c == '\v' || c == '\f';
-      });
-      if (needs_escaping) {
-        static auto escaper = [](auto& f, auto out) {
-          switch (*f) {
-            default:
-              *out++ = *f++;
-              return;
-            case '\\':
-              *out++ = '\\';
-              *out++ = '\\';
-              break;
-            case '"':
-              *out++ = '\\';
-              *out++ = '"';
-              break;
-          }
-          ++f;
-          return;
-        };
-        static auto p = '"' << printers::escape(escaper) << '"';
-        return p.print(out, x);
+      auto formatted = std::string{};
+      if constexpr (std::same_as<T, int64_t>) {
+        formatted = std::to_string(scalar);
+      } else if constexpr (std::same_as<T, view3<std::string>>) {
+        formatted = scalar;
+      } else {
+        formatted = fmt::format("{}", data_view{scalar});
       }
-      out = std::copy(x.begin(), x.end(), out);
+      auto needs_quoting = formatted.find(printer.sep) != formatted.npos;
+      needs_quoting |= formatted.find(printer.list_sep) != formatted.npos;
+      needs_quoting |= formatted == printer.null;
+      constexpr static auto escaper = [](auto& f, auto out) {
+        switch (*f) {
+          default:
+            *out++ = *f++;
+            return;
+          case '\\':
+            *out++ = '\\';
+            *out++ = '\\';
+            break;
+          case '"':
+            *out++ = '\\';
+            *out++ = '"';
+            break;
+        }
+        ++f;
+        return;
+      };
+      constexpr static auto p = printers::escape(escaper);
+      if (needs_quoting) {
+        *out++ = '"';
+      }
+      TENZIR_ASSERT(p.print(out, formatted));
+      if (needs_quoting) {
+        *out++ = '"';
+      }
       return true;
     }
 
-    auto operator()(view<blob> x) noexcept -> bool {
+    auto operator()(view3<blob> x) noexcept -> bool {
       return (*this)(detail::base64::encode(x));
     }
 
-    auto operator()(const view<list>& x) noexcept -> bool {
+    auto operator()(const view3<list>& x) noexcept -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
         if (!sequence_empty) {
-          ++out = printer.list_sep;
+          out = fmt::format_to(out, "{}", printer.list_sep);
         }
         if (!match(v, *this)) {
           return false;
@@ -487,9 +519,9 @@ struct xsv_printer_impl {
     bool sequence_empty{true};
   };
 
-  char sep{','};
-  char list_sep{';'};
-  std::string null{};
+  std::string_view sep;
+  std::string_view list_sep;
+  std::string_view null;
 };
 
 auto parse_line(std::string_view line, std::vector<std::string>& fields,
@@ -710,21 +742,31 @@ public:
     auto metadata = chunk_metadata{.content_type = content_type()};
     return printer_instance::make(
       [meta = std::move(metadata), args = args_,
+       first_type = std::optional<record_type>{},
        first = true](table_slice slice) mutable -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
         }
-        auto printer
-          = xsv_printer_impl{args.field_sep, args.list_sep, args.null_value};
+        auto printer = xsv_printer_impl{
+          args.field_sep.inner,
+          args.list_sep.inner,
+          args.null_value.inner,
+        };
         auto buffer = std::vector<char>{};
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        const auto& input_type = as<record_type>(input_schema);
+        auto slice_type = as<record_type>(input_schema);
+        if (not first_type) {
+          first_type = std::move(slice_type);
+        } else if (slice_type != *first_type) {
+          // TODO: Can we capture ctrl.diagnostics ?
+          // diagnostic::warning("type change in XSV writer").emit(dh);
+        }
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-        for (const auto& row : values(input_type, *array)) {
+        for (const auto& row : values3(*array)) {
           TENZIR_ASSERT(row);
           if (first && not args.no_header) {
             printer.print_header(out_iter, *row);
@@ -735,7 +777,7 @@ public:
           TENZIR_ASSERT(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        auto chunk = chunk::make(std::move(buffer), meta);
+        auto chunk = chunk::make(std::exchange(buffer, {}), meta);
         co_yield std::move(chunk);
       });
   }
@@ -754,14 +796,12 @@ public:
 
 private:
   auto content_type() const -> std::string {
-    switch (args_.field_sep) {
-      default:
-        return "text/plain";
-      case ',':
-        return "text/csv";
-      case '\t':
-        return "text/tab-separated-values";
+    if (args_.field_sep.inner == ",") {
+      return "text/csv";
+    } else if (args_.field_sep.inner == "\t") {
+      return "text/tab-separated-values";
     }
+    return "text/plain";
   }
 
   xsv_printer_options args_;
@@ -780,7 +820,6 @@ public:
     // auto options = xsv_options::try_parse(p, "xsv", is_parser);
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
-
     auto opt_parser = xsv_common_parser_options_parser{name()};
     opt_parser.add_to_parser(parser);
     parser.parse(p);
@@ -803,8 +842,8 @@ public:
   }
 };
 
-template <detail::string_literal Name, char Sep, char ListSep,
-          detail::string_literal Null>
+template <detail::string_literal Name, detail::string_literal Sep,
+          detail::string_literal ListSep, detail::string_literal Null>
 class configured_xsv_plugin final : public virtual parser_parser_plugin,
                                     public virtual printer_parser_plugin {
 public:
@@ -840,9 +879,9 @@ public:
     parser.add("--no-header", no_header);
     parser.parse(p);
     return std::make_unique<xsv_printer>(xsv_printer_options{
-      .field_sep = Sep,
-      .list_sep = ListSep,
-      .null_value = std::string{Null.str()},
+      .field_sep = located{std::string{Sep}, location::unknown},
+      .list_sep = located{std::string{ListSep}, location::unknown},
+      .null_value = located{std::string{Null}, location::unknown},
       .no_header = no_header,
     });
   }
@@ -852,9 +891,9 @@ public:
   }
 };
 
-using csv_plugin = configured_xsv_plugin<"csv", ',', ';', "">;
-using tsv_plugin = configured_xsv_plugin<"tsv", '\t', ',', "-">;
-using ssv_plugin = configured_xsv_plugin<"ssv", ' ', ',', "-">;
+using csv_plugin = configured_xsv_plugin<"csv", ",", ";", "">;
+using tsv_plugin = configured_xsv_plugin<"tsv", "\t", ",", "-">;
+using ssv_plugin = configured_xsv_plugin<"ssv", " ", ",", "-">;
 
 class read_xsv : public operator_plugin2<parser_adapter<xsv_parser>> {
 public:
@@ -871,66 +910,6 @@ public:
     TRY(auto opts, opt_parser.get_options(ctx));
     return std::make_unique<parser_adapter<xsv_parser>>(
       xsv_parser{std::move(opts)});
-  }
-};
-
-class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>> {
-public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = xsv_printer_options{};
-    auto field_sep_str = located<std::string>{};
-    auto list_sep_str = located<std::string>{};
-    auto null_value = located<std::string>{};
-    auto no_header = bool{};
-    TRY(argument_parser2::operator_(name())
-          .positional("field_sep", field_sep_str)
-          .positional("list_sep", list_sep_str)
-          .positional("null_value", null_value)
-          .named("no_header", args.no_header)
-          .parse(inv, ctx));
-    auto field_sep = to_xsv_sep(field_sep_str.inner);
-    if (!field_sep) {
-      diagnostic::error(field_sep.error())
-        .primary(field_sep_str.source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    auto list_sep = to_xsv_sep(list_sep_str.inner);
-    if (!list_sep) {
-      diagnostic::error(list_sep.error()).primary(list_sep_str.source).emit(ctx);
-      return failure::promise();
-    }
-    if (*field_sep == *list_sep) {
-      diagnostic::error("field separator and list separator must be "
-                        "different")
-        .primary(field_sep_str.source)
-        .primary(list_sep_str.source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    for (auto ch : null_value.inner) {
-      if (ch == *field_sep) {
-        diagnostic::error("null value conflicts with field separator")
-          .primary(field_sep_str.source)
-          .primary(null_value.source)
-          .emit(ctx);
-        return failure::promise();
-      }
-      if (ch == *list_sep) {
-        diagnostic::error("null value conflicts with list separator")
-          .primary(list_sep_str.source)
-          .primary(null_value.source)
-          .emit(ctx);
-        return failure::promise();
-      }
-    }
-    return std::make_unique<writer_adapter<xsv_printer>>(xsv_printer{{
-      .field_sep = *field_sep,
-      .list_sep = *list_sep,
-      .null_value = std::move(null_value.inner),
-      .no_header = no_header,
-    }});
   }
 };
 
@@ -966,8 +945,22 @@ public:
   }
 };
 
-template <detail::string_literal Name, char Sep, char ListSep,
-          detail::string_literal Null>
+class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>> {
+public:
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = xsv_printer_options{};
+    auto parser = argument_parser2::operator_(name());
+    args.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(args.validate(ctx));
+    return std::make_unique<writer_adapter<xsv_printer>>(
+      xsv_printer{std::move(args)});
+  }
+};
+
+template <detail::string_literal Name, detail::string_literal Sep,
+          detail::string_literal ListSep, detail::string_literal Null>
 class configured_write_xsv_plugin final
   : public operator_plugin2<writer_adapter<xsv_printer>> {
 public:
@@ -977,17 +970,17 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto no_header = bool{};
-    TRY(argument_parser2::operator_(name())
-          .named("no_header", no_header)
-          .parse(inv, ctx));
+    auto opts = xsv_printer_options{
+      .field_sep = located{std::string{Sep}, inv.self.get_location()},
+      .list_sep = located{std::string{ListSep}, inv.self.get_location()},
+      .null_value = located{std::string{Null}, inv.self.get_location()},
+    };
+    auto parser = argument_parser2::operator_(name());
+    opts.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(opts.validate(ctx));
     return std::make_unique<writer_adapter<xsv_printer>>(
-      xsv_printer{xsv_printer_options{
-        .field_sep = Sep,
-        .list_sep = ListSep,
-        .null_value = std::string{Null.str()},
-        .no_header = no_header,
-      }});
+      xsv_printer{std::move(opts)});
   }
 
   auto write_properties() const -> write_properties_t override {
@@ -1083,15 +1076,104 @@ public:
   }
 };
 
+auto make_xsv_printing_function(ast::expression input,
+                                xsv_printer_options opts) -> function_ptr {
+  return function_use::make(
+    [input = std::move(input), opts = std::move(opts)](
+      function_plugin::evaluator eval, session ctx) mutable {
+      return map_series(eval(input), [&](series data) -> multi_series {
+        if (data.type.kind().is<null_type>()) {
+          return data;
+        }
+        if (data.type.kind() != type{record_type{}}.kind()) {
+          diagnostic::warning("expected `record`, got `{}`", data.type.kind())
+            .primary(input)
+            .emit(ctx);
+          return series::null(null_type{}, data.length());
+        }
+        const auto struct_array
+          = std::dynamic_pointer_cast<arrow::StructArray>(data.array);
+        TENZIR_ASSERT(struct_array);
+        auto records = flatten(data.type, struct_array, ".").array;
+        auto builder = series_builder{type{string_type{}}};
+        auto printer = xsv_printer_impl{
+          opts.field_sep.inner,
+          opts.list_sep.inner,
+          opts.null_value.inner,
+        };
+        auto buffer = std::string{};
+        for (auto row : values3(*records)) {
+          if (not row) {
+            builder.null();
+            continue;
+          }
+          buffer.clear();
+          auto out = std::back_inserter(buffer);
+          printer.print_values(out, *row);
+          builder.data(buffer);
+        }
+        return builder.finish_assert_one_array();
+      });
+    });
+}
+
+class print_xsv : public function_plugin {
+  auto name() const -> std::string override {
+    return "print_xsv";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+    auto opts = xsv_printer_options{
+      .no_header = true,
+    };
+    auto parser = argument_parser2::function(name());
+    parser.positional("input", input, "record");
+    opts.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(opts.validate(ctx));
+    return make_xsv_printing_function(std::move(input), std::move(opts));
+  }
+};
+
+template <detail::string_literal Name, detail::string_literal Sep,
+          detail::string_literal ListSep, detail::string_literal Null>
+class configured_print_xsv_plugin final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return fmt::format("print_{}", Name);
+  }
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+    auto opts = xsv_printer_options{
+      .field_sep = located{std::string{Sep}, inv.call.get_location()},
+      .list_sep = located{std::string{ListSep}, inv.call.get_location()},
+      .null_value = located{std::string{Null}, inv.call.get_location()},
+      .no_header = true,
+    };
+    auto parser = argument_parser2::function(name());
+    parser.positional("input", input, "record");
+    opts.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(opts.validate(ctx));
+    return make_xsv_printing_function(std::move(input), std::move(opts));
+  }
+};
+
 using read_csv = configured_read_xsv_plugin<"csv", ",", ";", "">;
 using read_tsv = configured_read_xsv_plugin<"tsv", "\t", ",", "-">;
 using read_ssv = configured_read_xsv_plugin<"ssv", " ", ",", "-">;
-using write_csv = configured_write_xsv_plugin<"csv", ',', ';', "">;
-using write_tsv = configured_write_xsv_plugin<"tsv", '\t', ',', "-">;
-using write_ssv = configured_write_xsv_plugin<"ssv", ' ', ',', "-">;
+using write_csv = configured_write_xsv_plugin<"csv", ",", ";", "">;
+using write_tsv = configured_write_xsv_plugin<"tsv", "\t", ",", "-">;
+using write_ssv = configured_write_xsv_plugin<"ssv", " ", ",", "-">;
 using parse_csv = configured_parse_xsv_plugin<"csv", ",", ";", "">;
 using parse_tsv = configured_parse_xsv_plugin<"tsv", "\t", ",", "-">;
 using parse_ssv = configured_parse_xsv_plugin<"ssv", " ", ",", "-">;
+using print_csv = configured_print_xsv_plugin<"csv", ",", ";", "">;
+using print_tsv = configured_print_xsv_plugin<"tsv", "\t", ",", "-">;
+using print_ssv = configured_print_xsv_plugin<"ssv", " ", ",", "-">;
 
 } // namespace tenzir::plugins::xsv
 
@@ -1111,3 +1193,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_xsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_csv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_tsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_ssv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::print_xsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::print_csv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::print_tsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::print_ssv)
