@@ -696,8 +696,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                        if constexpr (std::is_same_v<Type, map_type>) {
                          TENZIR_UNREACHABLE();
                        } else {
-                         TENZIR_WARN("adding field {} with value {}", field,
-                                     data{value});
                          document.event->field(field, std::move(value));
                        }
                        return true;
