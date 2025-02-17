@@ -12,11 +12,9 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/aliases.hpp"
-#include "tenzir/evaluator.hpp"
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/index_config.hpp"
-#include "tenzir/indexer.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/plugin.hpp"
@@ -24,7 +22,6 @@
 #include "tenzir/query_context.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/uuid.hpp"
-#include "tenzir/value_index.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -70,10 +67,6 @@ struct active_partition_state {
     /// sent back to the partition after persisting to minimize memory footprint
     /// of the catalog.
     partition_synopsis_ptr synopsis = {};
-
-    /// A mapping from qualified field name to serialized indexer state
-    /// for each indexer in the partition.
-    std::vector<std::pair<std::string, chunk_ptr>> indexer_chunks = {};
   };
 
   // -- inbound path -----------------------------------------------------------
@@ -116,10 +109,6 @@ struct active_partition_state {
 
   /// Access info for the finished store.
   std::optional<resource> store_file = {};
-
-  /// Temporary storage for the serialized indexers of this partition, before
-  /// they get written into the flatbuffer.
-  std::map<caf::actor_id, tenzir::chunk_ptr> chunks = {};
 
   /// A once_flag for things that need to be done only once at shutdown.
   std::once_flag shutdown_once = {};

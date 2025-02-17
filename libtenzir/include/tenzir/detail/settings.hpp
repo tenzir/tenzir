@@ -10,7 +10,7 @@
 
 #include "caf/detail/pretty_type_name.hpp"
 #include "tenzir/error.hpp"
-#include "tenzir/policy/merge_lists.hpp"
+#include "tenzir/merge_lists.hpp"
 #include "tenzir/variant_traits.hpp"
 
 #include <caf/actor_system_config.hpp>

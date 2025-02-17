@@ -11,13 +11,14 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/concept/parseable/tenzir/endpoint.hpp"
+#include "tenzir/configuration.hpp"
 #include "tenzir/connect_request.hpp"
 #include "tenzir/connector.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/endpoint.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/node_control.hpp"
 #include "tenzir/version.hpp"
 
 #include <caf/actor_registry.hpp>
@@ -31,23 +32,30 @@ namespace {
 
 void assert_data_completness(const record& remote_version,
                              const record& local_version) {
-  if (!local_version.contains("Tenzir")) {
-    die("no Tenzir key found in a local version");
-  }
-  if (!remote_version.contains("Tenzir")) {
-    die("no Tenzir key found in a remote version");
-  }
-  if (!local_version.contains("plugins")) {
-    die("no plugins key found in a local version");
-  }
-  if (!remote_version.contains("plugins")) {
-    die("no plugins key found in a remote version");
-  }
+  TENZIR_ASSERT(local_version.contains("Tenzir"));
+  TENZIR_ASSERT(remote_version.contains("Tenzir"));
+  TENZIR_ASSERT(local_version.contains("plugins"));
+  TENZIR_ASSERT(remote_version.contains("plugins"));
 }
 
 } // namespace
 
-namespace details {
+namespace detail {
+
+auto node_connection_timeout(const caf::settings& options) -> caf::timespan {
+  auto timeout_value = get_or_duration(options, "tenzir.connection-timeout",
+                                       defaults::node_connection_timeout);
+  if (!timeout_value) {
+    TENZIR_ERROR("client failed to read connection-timeout: {}",
+                 timeout_value.error());
+    return caf::timespan{defaults::node_connection_timeout};
+  }
+  auto timeout = caf::timespan{*timeout_value};
+  if (timeout == timeout.zero()) {
+    return caf::infinite;
+  }
+  return timeout;
+}
 
 auto get_node_endpoint(const caf::settings& opts) -> caf::expected<endpoint> {
   endpoint node_endpoint;
@@ -119,7 +127,7 @@ check_version(const record& remote_version, const record& cfg) -> bool {
   return true;
 }
 
-} // namespace details
+} // namespace detail
 
 std::optional<std::chrono::steady_clock::time_point>
 get_deadline(caf::timespan timeout) {
@@ -171,13 +179,13 @@ caf::expected<node_actor> connect_to_node(caf::scoped_actor& self) {
   }
   // Fetch values from config.
   const auto& opts = content(self->system().config());
-  auto node_endpoint = details::get_node_endpoint(opts);
+  auto node_endpoint = detail::get_node_endpoint(opts);
   if (!node_endpoint) {
     return std::move(node_endpoint.error());
   }
-  auto timeout = node_connection_timeout(opts);
-  auto connector_actor = self->spawn(connector, details::get_retry_delay(opts),
-                                     details::get_deadline(timeout));
+  auto timeout = detail::node_connection_timeout(opts);
+  auto connector_actor = self->spawn(connector, detail::get_retry_delay(opts),
+                                     detail::get_deadline(timeout));
   auto result = caf::expected<node_actor>{caf::error{}};
   // `get_node_endpoint()` will add a default value.
   TENZIR_ASSERT(node_endpoint->port.has_value());
@@ -201,7 +209,7 @@ caf::expected<node_actor> connect_to_node(caf::scoped_actor& self) {
     .receive(
       [&](record& remote_version) {
         // TODO
-        (void)details::check_version(
+        (void)detail::check_version(
           remote_version, check(to<record>(content(self->system().config()))));
       },
       [&](caf::error& error) {

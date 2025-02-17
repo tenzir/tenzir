@@ -7,7 +7,7 @@ namespace tenzir.fbs.value_index.detail;
 table LegacyValueIndex {
   /// A value index serialized using CAF 0.17's binary serializer.
   /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
-  caf_0_17_data: [ubyte];
+  caf_0_17_data: [ubyte] (deprecated);
 
   /// The size of the value index before compression. A value of zero indicates
   /// that no compression was used.
@@ -19,7 +19,7 @@ table LegacyValueIndex {
   /// here because the partition itself will always occupy index 0 of the external
   /// container.
   /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
-  caf_0_17_external_container_idx: ulong;
+  caf_0_17_external_container_idx: ulong (deprecated);
 
   caf_0_18_data: [ubyte];
 
@@ -45,7 +45,7 @@ table LegacyQualifiedValueIndex {
   field_name: string;
 
   /// The value index for the given field.
-  index: detail.LegacyValueIndex;
+  index: detail.LegacyValueIndex (deprecated);
 }
 
 table ArithmeticIndex {

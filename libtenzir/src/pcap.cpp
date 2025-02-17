@@ -60,14 +60,16 @@ auto is_file_header(const packet_header& header) -> bool {
   //
   auto is_reserved
     = header.captured_packet_length == 0 && header.original_packet_length == 0;
-  if (not is_reserved)
+  if (not is_reserved) {
     return false;
+  }
   // In theory, checking for zeroed out reserved fields should be sufficient.
   // But we don't all PCAP generating tools, so do a few extra checks.
   auto is_magic = header.timestamp == pcap::magic_number_1
                   || header.timestamp == pcap::magic_number_2;
-  if (not is_magic)
+  if (not is_magic) {
     return false;
+  }
   // We're actually stopping here for now, even though we could go deeper. The
   // base rate is too low for this.
   return true;
@@ -108,39 +110,13 @@ auto byteswap(packet_header hdr) -> packet_header {
 
 auto need_byte_swap(uint32_t magic) -> std::optional<bool> {
   auto swapped = detail::byteswap(magic);
-  if (magic == magic_number_1 || magic == magic_number_2)
+  if (magic == magic_number_1 || magic == magic_number_2) {
     return false;
-  if (swapped == magic_number_1 || swapped == magic_number_2)
+  }
+  if (swapped == magic_number_1 || swapped == magic_number_2) {
     return true;
+  }
   return std::nullopt;
-}
-
-auto file_header_type() -> type {
-  return type{
-    "pcap.file_header",
-    record_type{
-      {"magic_number", uint64_type{}},  // uint32
-      {"major_version", uint64_type{}}, // uint32
-      {"minor_version", uint64_type{}}, // uint32
-      {"reserved1", uint64_type{}},     // uint32
-      {"reserved2", uint64_type{}},     // uint32
-      {"snaplen", uint64_type{}},       // uint32
-      {"linktype", uint64_type{}},      // uint16
-    },
-  };
-}
-
-auto packet_record_type() -> type {
-  return type{
-    "pcap.packet",
-    record_type{
-      {"linktype", uint64_type{}}, // uint16 would suffice
-      {"timestamp", time_type{}},
-      {"captured_packet_length", uint64_type{}},
-      {"original_packet_length", uint64_type{}},
-      {"data", type{blob_type{}, {{"skip"}}}},
-    },
-  };
 }
 
 } // namespace tenzir::pcap

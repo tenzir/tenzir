@@ -17,7 +17,6 @@
 #include <tenzir/connect_to_node.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/node.hpp>
-#include <tenzir/node_control.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/type.hpp>
 

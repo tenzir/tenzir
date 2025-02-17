@@ -16,7 +16,6 @@
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/array.h>
@@ -64,8 +63,8 @@ auto make_drop() {
     [](struct record_type::field, std::shared_ptr<arrow::Array>)
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-    return {};
-  };
+      return {};
+    };
 }
 
 template <mode Mode>
@@ -118,22 +117,22 @@ auto make_extend(const table_slice& slice, const configuration& config,
 
 auto make_replace(const table_slice& slice, const operand& op,
                   operator_control_plane& ctrl) {
-  return [&](struct record_type::field input_field,
-             std::shared_ptr<arrow::Array>)
-           -> std::vector<std::pair<struct record_type::field,
-                                    std::shared_ptr<arrow::Array>>> {
-    auto [type, array] = resolve_operand(slice, op);
-    if (not type && not array) {
-      diagnostic::error("lists must have a homogeneous element type")
-        .note("from `{}`", operator_name(mode::replace))
-        .emit(ctrl.diagnostics());
-      return {};
-    }
-    return {{
-      {input_field.name, type},
-      array,
-    }};
-  };
+  return
+    [&](struct record_type::field input_field, std::shared_ptr<arrow::Array>)
+      -> std::vector<
+        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+      auto [type, array] = resolve_operand(slice, op);
+      if (not type && not array) {
+        diagnostic::error("lists must have a homogeneous element type")
+          .note("from `{}`", operator_name(mode::replace))
+          .emit(ctrl.diagnostics());
+        return {};
+      }
+      return {{
+        {input_field.name, type},
+        array,
+      }};
+    };
 }
 
 template <mode Mode>
@@ -153,8 +152,9 @@ public:
 
   auto operator()(const table_slice& slice, operator_control_plane& ctrl) const
     -> table_slice {
-    if (slice.rows() == 0)
+    if (slice.rows() == 0) {
       return {};
+    }
     const auto& layout = as<record_type>(slice.schema());
     auto transformations1 = std::vector<indexed_transformation>{};
     auto transformations2 = std::vector<indexed_transformation>{};

@@ -17,7 +17,6 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
-#include <tenzir/die.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
@@ -31,8 +30,8 @@ namespace {
 class plugin final : public virtual loader_plugin<kafka_loader>,
                      public virtual saver_plugin<kafka_saver> {
 public:
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
+  auto initialize(const record& config, const record& /* global_config */)
+    -> caf::error override {
     config_ = flatten(config);
     if (!config_.contains("bootstrap.servers")) {
       config_["bootstrap.servers"] = "localhost";

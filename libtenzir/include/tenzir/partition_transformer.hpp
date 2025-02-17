@@ -45,9 +45,8 @@ struct partition_transformer_state {
 
   // Update the `type_ids` map with the information of the given slice.
   void
-  update_type_ids_and_indexers(std::unordered_map<std::string, ids>& type_ids,
-                               const tenzir::uuid& partition_id,
-                               const table_slice& slice);
+  update_type_ids(std::unordered_map<std::string, ids>& type_ids,
+                  const tenzir::uuid& partition_id, const table_slice& slice);
 
   // Returns the partition in which to insert this slice, maybe creating a new
   // partition.
@@ -100,12 +99,6 @@ struct partition_transformer_state {
 
     /// Cached table slices in this partition.
     std::vector<table_slice> slices = {};
-
-    /// Stores the value index for each field.
-    // Fields with a `#skip` attribute are stored as `nullptr`.
-    using value_index_map
-      = detail::stable_map<qualified_record_field, value_index_ptr>;
-    value_index_map indexers = {};
   };
 
   std::unordered_map<uuid, buildup> partition_buildup;

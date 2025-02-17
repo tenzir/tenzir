@@ -128,27 +128,6 @@ using partition_actor = typed_actor_fwd<
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// The EVALUATOR actor interface.
-using evaluator_actor = typed_actor_fwd<
-  // Evaluates the expression and responds with matching ids.
-  auto(atom::run)->caf::result<ids>>::unwrap;
-
-/// The INDEXER actor interface.
-using indexer_actor = typed_actor_fwd<
-  // Returns the ids for the given predicate.
-  auto(atom::evaluate, curried_predicate)->caf::result<ids>,
-  // Requests the INDEXER to shut down.
-  auto(atom::shutdown)->caf::result<void>>::unwrap;
-
-/// The ACTIVE INDEXER actor interface.
-using active_indexer_actor = typed_actor_fwd<
-  // Finalizes the ACTIVE INDEXER into a chunk, which containes an INDEXER.
-  auto(atom::snapshot)->caf::result<chunk_ptr>>
-  // Conform the the INDEXER ACTOR interface.
-  ::extend_with<indexer_actor>
-  // Conform to the procol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
 /// The PARTITION CREATION LISTENER actor interface.
 using partition_creation_listener_actor = typed_actor_fwd<
   auto(atom::update, partition_synopsis_pair)->caf::result<void>,
@@ -416,20 +395,17 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
     (std::vector<
       std::tuple<tenzir::exec_node_actor, tenzir::operator_type, std::string>>))
 
-  TENZIR_ADD_TYPE_ID((tenzir::active_indexer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::active_partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_active_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_passive_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::disk_monitor_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::evaluator_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_sink_actor))
   TENZIR_ADD_TYPE_ID((tenzir::filesystem_actor))
   TENZIR_ADD_TYPE_ID((tenzir::flush_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::importer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::index_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::indexer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::metrics_receiver_actor))
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))

@@ -24,7 +24,6 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
-#include <tenzir/table_slice_builder.hpp>
 
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>

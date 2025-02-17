@@ -11,7 +11,7 @@
 #include "tenzir/concept/printable/core/printer.hpp"
 #include "tenzir/concept/printable/string/any.hpp"
 #include "tenzir/concept/printable/string/string.hpp"
-#include "tenzir/die.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/operator.hpp"
 
@@ -24,7 +24,7 @@ struct arithmetic_operator_printer : printer_base<arithmetic_operator_printer> {
   bool print(Iterator& out, const arithmetic_operator& op) const {
     switch (op) {
       default:
-        die("missing case for arithmetic operator");
+        TENZIR_UNIMPLEMENTED();
       case arithmetic_operator::positive:
       case arithmetic_operator::plus:
         return printers::any.print(out, '+');
@@ -56,7 +56,7 @@ struct relational_operator_printer : printer_base<relational_operator_printer> {
   bool print(Iterator& out, const relational_operator& op) const {
     switch (op) {
       default:
-        die("missing case for relational operator");
+        TENZIR_UNIMPLEMENTED();
       case relational_operator::in:
         return printers::str.print(out, "in");
       case relational_operator::not_in:
@@ -88,7 +88,7 @@ struct bool_operator_printer : printer_base<bool_operator_printer> {
   bool print(Iterator& out, const bool_operator& op) const {
     switch (op) {
       default:
-        die("missing case for boolean operator");
+        TENZIR_UNIMPLEMENTED();
       case bool_operator::logical_not:
         return printers::str.print(out, "!");
       case bool_operator::logical_and:

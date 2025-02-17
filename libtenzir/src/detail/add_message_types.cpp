@@ -19,7 +19,6 @@
 #include "tenzir/connect_request.hpp"
 #include "tenzir/context.hpp"
 #include "tenzir/detail/stable_map.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/http_api.hpp"
 #include "tenzir/index.hpp"
@@ -70,9 +69,9 @@ void add_message_types() {
   for (const auto& [new_block, assigner] :
        plugins::get_static_type_id_blocks()) {
     for (const auto& old_block : old_blocks) {
-      if (new_block.begin < old_block.end && old_block.begin < new_block.end) {
-        die("cannot assign overlapping plugin type ID blocks");
-      }
+      TENZIR_ASSERT(new_block.begin >= old_block.end
+                      || old_block.begin >= new_block.end,
+                    "cannot assign overlapping plugin type ID blocks");
     }
     old_blocks.push_back(new_block);
     assigner();

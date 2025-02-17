@@ -24,7 +24,6 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql/basic.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -216,7 +215,7 @@ public:
     auto remainder_op = is_true_literal(remainder)
                           ? nullptr
                           : std::make_unique<where_assert_operator>(
-                            std::move(remainder), warn_);
+                              std::move(remainder), warn_);
     if (filter == trivially_true_expression()) {
       return optimize_result{std::move(legacy), order, std::move(remainder_op)};
     }
@@ -243,8 +242,8 @@ struct arguments {
   ast::expression expr;
 };
 
-auto make_where_function(function_plugin::invocation inv,
-                         session ctx) -> failure_or<function_ptr> {
+auto make_where_function(function_plugin::invocation inv, session ctx)
+  -> failure_or<function_ptr> {
   auto args = arguments{};
   TRY(argument_parser2::function("where")
         .positional("list", args.field, "list")
@@ -402,8 +401,8 @@ struct where_result_part {
   }
 };
 
-auto make_map_function(function_plugin::invocation inv,
-                       session ctx) -> failure_or<function_ptr> {
+auto make_map_function(function_plugin::invocation inv, session ctx)
+  -> failure_or<function_ptr> {
   auto args = arguments{};
   TRY(argument_parser2::function("map")
         .positional("list", args.field, "list")

@@ -17,7 +17,7 @@
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/stable_map.hpp" // IWYU pragma: keep
 #include "tenzir/logger.hpp"
-#include "tenzir/table_slice_builder.hpp"
+#include "tenzir/table_slice.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 

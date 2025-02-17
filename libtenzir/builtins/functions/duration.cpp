@@ -9,7 +9,6 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/series_builder.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/api.h>
@@ -24,8 +23,8 @@ public:
     return "duration";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "string")

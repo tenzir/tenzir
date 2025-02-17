@@ -11,7 +11,6 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/expression.hpp"
-#include "tenzir/ids.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_actor_view.hpp>
@@ -79,12 +78,12 @@ struct query_context {
     return f.object(q)
       .pretty_name("tenzir.query")
       .fields(f.field("id", q.id), f.field("cmd", q.cmd),
-              f.field("expr", q.expr), f.field("ids", q.ids),
-              f.field("priority", q.priority), f.field("issuer", q.issuer));
+              f.field("expr", q.expr), f.field("priority", q.priority),
+              f.field("issuer", q.issuer));
   }
 
   std::size_t memusage() const {
-    return sizeof(*this) + ids.memusage();
+    return sizeof(*this);
   }
 
   // -- data members -----------------------------------------------------------
@@ -100,9 +99,6 @@ struct query_context {
 
   /// The initial taste size.
   std::optional<uint32_t> taste = std::nullopt;
-
-  /// The event ids to restrict the query evaluation to, if set.
-  tenzir::ids ids = {};
 
   struct priority {
     constexpr static uint64_t normal = 1'000;
@@ -137,8 +133,8 @@ struct formatter<tenzir::query_context> {
       },
     };
     match(value.cmd, f);
-    return fmt::format_to(out, "{} (priority={}), ids={}, issuer={})",
-                          value.expr, value.priority, value.ids, value.issuer);
+    return fmt::format_to(out, "{} (priority={}), issuer={})", value.expr,
+                          value.priority, value.issuer);
   }
 };
 

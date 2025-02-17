@@ -56,7 +56,6 @@
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/node.hpp>
-#include <tenzir/node_control.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
@@ -69,6 +68,7 @@
 #include <arrow/record_batch.h>
 #include <caf/actor_addr.hpp>
 #include <caf/actor_registry.hpp>
+#include <caf/scoped_actor.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -810,24 +810,13 @@ struct serve_handler_state {
 };
 
 auto serve_handler(
-  serve_handler_actor::stateful_pointer<serve_handler_state> self,
-  const node_actor& node) -> serve_handler_actor::behavior_type {
+  serve_handler_actor::stateful_pointer<serve_handler_state> self)
+  -> serve_handler_actor::behavior_type {
   self->state().self = self;
-  self
-    ->mail(atom::get_v, atom::label_v,
-           std::vector<std::string>{"serve-manager"})
-    .request(node, caf::infinite)
-    .await(
-      [self](std::vector<caf::actor>& actors) {
-        TENZIR_ASSERT(actors.size() == 1);
-        self->state().serve_manager
-          = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
-      },
-      [self](const caf::error& err) { //
-        self->quit(caf::make_error(
-          ec::logic_error,
-          fmt::format("failed to find serve-manager: {}", err)));
-      });
+  self->state().serve_manager
+    = self->system().registry().get<serve_manager_actor>(
+      "tenzir.serve-manager");
+  TENZIR_ASSERT(self->state().serve_manager);
   return {
     [self](atom::http_request, uint64_t endpoint_id,
            tenzir::record& params) -> caf::result<rest_response> {
@@ -1034,7 +1023,8 @@ public:
 
   auto handler(caf::actor_system& system, node_actor node) const
     -> rest_handler_actor override {
-    return system.spawn(serve_handler, node);
+    TENZIR_UNUSED(node);
+    return system.spawn(serve_handler);
   }
 
   auto signature() const -> operator_signature override {

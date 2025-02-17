@@ -19,7 +19,6 @@
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/to_lines.hpp>
 
 #include <ranges>
@@ -468,8 +467,8 @@ public:
     ++latest.line_count;
   }
 
-  static auto
-  finish_single(message_type& msg, multi_series_builder& builder) -> bool {
+  static auto finish_single(message_type& msg, multi_series_builder& builder)
+    -> bool {
     auto r = builder.record();
     r.exact_field("facility").data(msg.hdr.facility);
     r.exact_field("severity").data(msg.hdr.severity);
@@ -484,8 +483,8 @@ public:
     return true;
   }
 
-  static auto
-  finish_single(row_type& row, multi_series_builder& builder) -> bool {
+  static auto finish_single(row_type& row, multi_series_builder& builder)
+    -> bool {
     return finish_single(row.parsed, builder);
   }
   std::vector<row_type> rows_{};
@@ -510,8 +509,8 @@ public:
     ++latest.line_count;
   }
 
-  static auto
-  finish_single(message_type& msg, multi_series_builder& builder) -> bool {
+  static auto finish_single(message_type& msg, multi_series_builder& builder)
+    -> bool {
     auto r = builder.record();
     r.exact_field("facility").data(msg.facility);
     r.exact_field("severity").data(msg.severity);
@@ -528,8 +527,8 @@ public:
     return true;
   }
 
-  static auto
-  finish_single(row_type& row, multi_series_builder& builder) -> bool {
+  static auto finish_single(row_type& row, multi_series_builder& builder)
+    -> bool {
     return finish_single(row.parsed, builder);
   }
 
@@ -755,8 +754,8 @@ public:
 
 class read_syslog final
   : public virtual operator_plugin2<parser_adapter<syslog_parser>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_syslog");
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
@@ -773,8 +772,8 @@ public:
     return "tql2.parse_syslog";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     auto parser = argument_parser2::function(name());

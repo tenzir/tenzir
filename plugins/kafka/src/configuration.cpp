@@ -15,7 +15,6 @@
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/overload.hpp>
-#include <tenzir/die.hpp>
 #include <tenzir/error.hpp>
 
 #include <aws/core/auth/AWSCredentialsProvider.h>
@@ -273,9 +272,7 @@ auto configuration::rebalancer::rebalance_cb(
 
 configuration::configuration() {
   conf_.reset(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-  if (!conf_) {
-    die("RdKafka::Conf::create");
-  }
+  TENZIR_ASSERT(conf_, "RdKafka::Conf::create");
 }
 
 } // namespace tenzir::plugins::kafka

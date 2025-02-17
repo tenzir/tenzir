@@ -18,10 +18,9 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/ip.hpp"
+#include "tenzir/merge_lists.hpp"
 #include "tenzir/pattern.hpp"
-#include "tenzir/policy/merge_lists.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/time.hpp"
 #include "tenzir/variant.hpp"
@@ -49,25 +48,27 @@ struct invalid_data_type {};
 
 template <class T>
 constexpr auto to_data_type() {
-  if constexpr (std::is_floating_point_v<T>)
+  if constexpr (std::is_floating_point_v<T>) {
     return double{};
-  else if constexpr (std::is_same_v<T, bool>)
+  } else if constexpr (std::is_same_v<T, bool>) {
     return bool{};
-  else if constexpr (std::is_unsigned_v<T>) {
+  } else if constexpr (std::is_unsigned_v<T>) {
     // TODO (ch7585): Define enumeration and count as strong typedefs to
     //                avoid error-prone heuristics like this one.
-    if constexpr (sizeof(T) == 1)
+    if constexpr (sizeof(T) == 1) {
       return enumeration{};
-    else
+    } else {
       return uint64_t{};
-  } else if constexpr (std::is_convertible_v<T, std::string>)
+    }
+  } else if constexpr (std::is_convertible_v<T, std::string>) {
     return std::string{};
-  else if constexpr (detail::is_any_v<T, caf::none_t, int64_t, duration, time,
-                                      pattern, ip, subnet, list, map, record,
-                                      blob>)
+  } else if constexpr (detail::is_any_v<T, caf::none_t, int64_t, duration, time,
+                                        pattern, ip, subnet, list, map, record,
+                                        blob>) {
     return T{};
-  else
+  } else {
     return invalid_data_type{};
+  }
 }
 
 } // namespace detail
@@ -374,7 +375,7 @@ template <typename T>
   requires detail::tl_contains<data::types, T>::value
 auto get_if(const record* r, std::string_view path) -> const T* {
   auto result = descend(r, path);
-  if (not result || not *result) {
+  if (not result || not*result) {
     return nullptr;
   }
   if (auto ptr = try_as<T>(*result)) {
@@ -398,8 +399,9 @@ auto get_or(const record& r, std::string_view path, T const& fallback)
   -> T const& {
   TENZIR_ASSERT(!path.empty());
   auto result = get_if<T>(&r, path);
-  if (result)
+  if (result) {
     return *result;
+  }
   return fallback;
 }
 
@@ -411,8 +413,9 @@ auto get_or(const record& r, std::string_view path, T&& fallback)
 inline auto get_or(const record& r, std::string_view path,
                    std::string_view fallback) -> std::string_view {
   auto result = get_if<std::string>(&r, path);
-  if (result)
+  if (result) {
     return *result;
+  }
   return fallback;
 }
 
@@ -437,8 +440,9 @@ T& get(record& r, std::string_view path) {
 template <class T, class... Opts>
 data to_data(const T& x, Opts&&... opts) {
   data d;
-  if (convert(x, d, std::forward<Opts>(opts)...))
+  if (convert(x, d, std::forward<Opts>(opts)...)) {
     return d;
+  }
   return {};
 }
 
