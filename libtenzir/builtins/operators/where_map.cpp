@@ -779,9 +779,9 @@ public:
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<ir::operator_ptr> override {
-    // TODO: This should use the argument parser IR wrapper.
     auto expr = ast::expression{};
-    // TODO: Yeah. No.
+    // TODO: We don't want to create a session here. This is just a test to see
+    // how far we could go with the existing argument parser.
     auto provider = session_provider::make(ctx);
     auto loc = inv.op.get_location();
     TRY(argument_parser2::operator_("where")

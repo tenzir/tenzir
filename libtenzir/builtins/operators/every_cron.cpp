@@ -404,7 +404,15 @@ public:
           TRY(auto value, const_eval(expr, ctx));
           auto cast = try_as<duration>(value);
           if (not cast) {
-            diagnostic::error("expected `duration`, got `TODO`")
+            auto got = match(
+              value,
+              []<class T>(const T&) -> type_kind {
+                return tag_v<data_to_type_t<T>>;
+              },
+              [](const pattern&) -> type_kind {
+                TENZIR_UNREACHABLE();
+              });
+            diagnostic::error("expected `duration`, got `{}`", got)
               .primary(expr)
               .emit(ctx);
             return failure::promise();
