@@ -28,14 +28,20 @@ public:
     return Signed ? "int" : "uint";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
+    auto base = located<uint64_t>{10, location::unknown};
     TRY(argument_parser2::function(name())
-          .positional("x", expr, "string|number")
+          .positional("x", expr, "number|string")
+          .named_optional("base", base)
           .parse(inv, ctx));
-    return function_use::make([expr = std::move(expr), this](auto eval,
-                                                             session ctx) {
+    if (base.inner != 10 and base.inner != 16) {
+      diagnostic::error("`base` must be 10 or 16").primary(base).emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make([this, expr = std::move(expr),
+                               base = base.inner](auto eval, session ctx) {
       return map_series(eval(expr), [&](series value) {
         auto f = detail::overload{
           [](const arrow::NullArray& arg) {
@@ -106,27 +112,48 @@ public:
             auto report = false;
             auto b = Builder{};
             check(b.Reserve(value.length()));
+            constexpr auto p = std::invoke([] {
+              if constexpr (Signed) {
+                return parsers::i64;
+              } else {
+                return parsers::u64;
+              }
+            });
+            constexpr auto q
+              = ignore(*parsers::space) >> p >> ignore(*parsers::space);
+            constexpr auto px = std::invoke([] {
+              if constexpr (Signed) {
+                return parsers::ix64;
+              } else {
+                return parsers::ux64;
+              }
+            });
+            constexpr auto qx
+              = ignore(*parsers::space) >> px >> ignore(*parsers::space);
             for (auto row = int64_t{0}; row < value.length(); ++row) {
               if (arg.IsNull(row)) {
                 // TODO: Do we want to report this? Probably not.
                 check(b.AppendNull());
               } else {
-                auto p = std::invoke([] {
-                  if constexpr (Signed) {
-                    return parsers::i64;
-                  } else {
-                    return parsers::u64;
-                  }
-                });
-                auto q
-                  = ignore(*parsers::space) >> p >> ignore(*parsers::space);
                 auto result = Data{};
-                if (q(arg.GetView(row), result)) {
-                  check(b.Append(result));
-                } else {
-                  check(b.AppendNull());
-                  report = true;
+                switch (base) {
+                  case 10:
+                    if (q(arg.GetView(row), result)) {
+                      check(b.Append(result));
+                      continue;
+                    }
+                    break;
+                  case 16:
+                    if (qx(arg.GetView(row), result)) {
+                      check(b.Append(result));
+                      continue;
+                    }
+                    break;
+                  default:
+                    TENZIR_UNREACHABLE();
                 }
+                check(b.AppendNull());
+                report = true;
               }
             }
             if (report) {
