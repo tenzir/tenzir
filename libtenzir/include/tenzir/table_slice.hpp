@@ -144,9 +144,6 @@ public:
   /// @returns Whether the slice is already serialized.
   [[nodiscard]] bool is_serialized() const noexcept;
 
-  /// @returns The number of in-memory table slices.
-  static size_t instances() noexcept;
-
   /// Return an approximation of the memory covered by this slice.
   auto approx_bytes() const -> uint64_t;
 
@@ -157,12 +154,6 @@ public:
 
   /// Get all values for the given path.
   auto values(const struct offset& path) const -> generator<view<data>>;
-
-  /// Appends all values in column `column` to `index`.
-  /// @param `column` The index of the column to append.
-  /// @param `index` the value index to append to.
-  /// @pre `offset() != invalid_id`
-  void append_column_to_index(size_type column, value_index& index) const;
 
   /// Retrieves data by specifying 2D-coordinates via row and column.
   /// @param row The row offset.
@@ -261,10 +252,6 @@ private:
 
   /// A pointer to the underlying chunk, which contains a
   /// `tenzir.fbs.TableSlice` FlatBuffers table.
-  /// @note On construction and destruction, the ref-count of `chunk_` is used
-  /// to determine whether the `num_instances_` counter should be increased or
-  /// decreased. This implies that the chunk must *never* be exposed outside of
-  /// `table_slice`.
   chunk_ptr chunk_ = {};
 
   /// The offset of the table slice within its ID space.
@@ -280,9 +267,6 @@ private:
     const void* none = {};
     const arrow_table_slice<fbs::table_slice::arrow::v2>* arrow_v2;
   } state_;
-
-  /// The number of in-memory table slices.
-  inline static std::atomic<size_t> num_instances_ = {};
 };
 
 // -- operations ---------------------------------------------------------------
@@ -345,8 +329,8 @@ auto split(std::vector<table_slice> events, uint64_t partition_point)
 
 /// Selects the rows with indices `[begin, end)`.
 /// @pre `begin <= end && end <= slice.rows()`
-auto subslice(const table_slice& slice, size_t begin,
-              size_t end) -> table_slice;
+auto subslice(const table_slice& slice, size_t begin, size_t end)
+  -> table_slice;
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
@@ -386,8 +370,8 @@ filter(const table_slice& slice, const ids& hints);
 [[nodiscard]] table_slice resolve_enumerations(table_slice slice);
 
 /// Resolve a meta extractor for a given table slice.
-auto resolve_meta_extractor(const table_slice& slice,
-                            const meta_extractor& ex) -> data;
+auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
+  -> data;
 
 /// Resolve an operand into an Array for a given table slice. Note that this
 /// already uses prefix matching instead of suffix matching.
@@ -399,14 +383,14 @@ auto resolve_operand(const table_slice& slice, const operand& op)
 /// Example: Splitting `{a.b: 42}` with `.` yields `{a: {b: 42}}`.
 auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice;
 
-auto unflatten(const arrow::ListArray& array,
-               std::string_view sep) -> std::shared_ptr<arrow::ListArray>;
+auto unflatten(const arrow::ListArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::ListArray>;
 
-auto unflatten(std::shared_ptr<arrow::Array> array,
-               std::string_view sep) -> std::shared_ptr<arrow::Array>;
+auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
+  -> std::shared_ptr<arrow::Array>;
 
-auto unflatten(const arrow::StructArray& array,
-               std::string_view sep) -> std::shared_ptr<arrow::StructArray>;
+auto unflatten(const arrow::StructArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::StructArray>;
 
 /// @related flatten
 struct flatten_result {
@@ -430,8 +414,8 @@ struct flatten_array_result {
 ///
 /// @param slice The unflattened table slice.
 /// @param separator The separator to join record field names with.
-auto flatten(table_slice slice, std::string_view separator
-                                = ".") -> flatten_result;
+auto flatten(table_slice slice, std::string_view separator = ".")
+  -> flatten_result;
 
 /// Flattens an array recursively such that it no longer contains nested data
 /// structures by joining nested records over the provided separator and merging

@@ -89,13 +89,6 @@ public:
 
   // -- data access ------------------------------------------------------------
 
-  /// Appends all values in column `column` to `index`.
-  /// @param `offset` The offset of the table slice in its ID space.
-  /// @param `column` The index of the column to append.
-  /// @param `index` the value index to append to.
-  void append_column_to_index(id offset, table_slice::size_type column,
-                              value_index& index) const;
-
   /// Retrieves data by specifying 2D-coordinates via row and column.
   /// @param row The row offset.
   /// @param column The column offset.
@@ -201,8 +194,9 @@ auto value_at([[maybe_unused]] const Type& type,
         }
         value_type at(size_type i) const override {
           const auto row = detail::narrow_cast<int64_t>(i);
-          if (value_slice->IsNull(row))
+          if (value_slice->IsNull(row)) {
             return caf::none;
+          }
           return value_at(value_type, *value_slice, row);
         };
         size_type size() const noexcept override {
@@ -234,8 +228,9 @@ auto value_at([[maybe_unused]] const Type& type,
         }
         value_type at(size_type i) const override {
           TENZIR_ASSERT_EXPENSIVE(!key_array->IsNull(value_offset + i));
-          if (item_array->IsNull(value_offset + i))
+          if (item_array->IsNull(value_offset + i)) {
             return {value_at(key_type, *key_array, value_offset + i), {}};
+          }
           return {
             value_at(key_type, *key_array, value_offset + i),
             value_at(item_type, *item_array, value_offset + i),
@@ -297,17 +292,19 @@ auto value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
               int64_t row) -> view<type_to_data_t<Type>> {
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
   TENZIR_ASSERT_EXPENSIVE(!arr.IsNull(row));
-  if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value)
+  if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value) {
     return value_at(type, *as<type_to_arrow_array_t<Type>>(arr).storage(), row);
-  else
+  } else {
     return value_at(type, as<type_to_arrow_array_t<Type>>(arr), row);
+  }
 }
 
 auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
               int64_t row) -> data_view {
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
-  if (arr.IsNull(row))
+  if (arr.IsNull(row)) {
     return caf::none;
+  }
   auto f = [&]<concrete_type Type>(const Type& type) noexcept -> data_view {
     return value_at(type, arr, row);
   };
@@ -326,10 +323,11 @@ auto values(const Type& type, const type_to_arrow_array_t<Type>& arr) noexcept
                  const type_to_arrow_array_storage_t<Type>& arr) noexcept
     -> generator<std::optional<view<type_to_data_t<Type>>>> {
     for (int i = 0; i < arr.length(); ++i) {
-      if (arr.IsNull(i))
+      if (arr.IsNull(i)) {
         co_yield {};
-      else
+      } else {
         co_yield value_at(type, arr, i);
+      }
     }
   };
   if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value) {
@@ -346,10 +344,11 @@ auto values(const type& type,
     = []<concrete_type Type>(
         const Type& type, const arrow::Array& array) -> generator<data_view> {
     for (auto&& result : values(type, as<type_to_arrow_array_t<Type>>(array))) {
-      if (!result)
+      if (!result) {
         co_yield {};
-      else
+      } else {
         co_yield std::move(*result);
+      }
     }
   };
   return match(std::tuple(std::ref(type), detail::passthrough(array)), f);

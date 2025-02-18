@@ -11,11 +11,11 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
-#include <tenzir/node_control.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
+#include <caf/actor_registry.hpp>
 
 namespace tenzir::plugins::import {
 
@@ -27,17 +27,8 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     const auto start_time = std::chrono::steady_clock::now();
-    // TODO: Some of the the requests this operator makes are blocking, so we
-    // have to create a scoped actor here; once the operator API uses async we
-    // can offer a better mechanism here.
-    auto self = caf::scoped_actor{ctrl.self().system()};
-    auto components = get_node_components<importer_actor>(self, ctrl.node());
-    if (!components) {
-      diagnostic::error(components.error())
-        .note("failed get a handle to the importer actor")
-        .throw_();
-    }
-    auto [importer] = std::move(*components);
+    const auto importer
+      = ctrl.self().system().registry().get<importer_actor>("tenzir.importer");
     auto metric_handler = ctrl.metrics({
       "tenzir.metrics.import",
       record_type{

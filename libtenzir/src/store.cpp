@@ -91,7 +91,7 @@ handle_query(const auto& self, const query_context& query_context) {
         return;
       }
       state->second.result_generator
-        = self->state().store->extract(*tailored_expr, query_context.ids);
+        = self->state().store->extract(*tailored_expr);
       state->second.result_iterator = state->second.result_generator.begin();
       state->second.sink = extract.sink;
       state->second.start = start;
@@ -141,10 +141,9 @@ generator<uint64_t> base_store::count(expression expr, ids selection) const {
   }
 }
 
-generator<table_slice>
-base_store::extract(expression expr, ids selection) const {
+generator<table_slice> base_store::extract(expression expr) const {
   for (const auto& slice : slices()) {
-    if (auto filtered_slice = filter(slice, expr, selection)) {
+    if (auto filtered_slice = filter(slice, expr)) {
       co_yield std::move(*filtered_slice);
     }
   }

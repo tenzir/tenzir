@@ -1,0 +1,39 @@
+[
+  legacy_exec export {
+    expression: {
+      node: conjunction {
+        conjunction: [
+          {
+            node: predicate {
+              lhs: meta_extractor {
+                kind: 3
+              },
+              op: 4,
+              rhs: data bool false
+            }
+          },
+          {
+            node: predicate {
+              lhs: field_extractor {
+                field: "foo"
+              },
+              op: 4,
+              rhs: data int64 1
+            }
+          }
+        ]
+      }
+    },
+    mode: {
+      retro: true,
+      live: false,
+      internal: false,
+      parallel: 3
+    }
+  },
+  where_exec binary_expr {
+    left: root_field `bar` @ 26..29,
+    op: "eq" @ 30..32,
+    right: root_field `baz` @ 33..36
+  }
+]

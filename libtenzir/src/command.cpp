@@ -12,7 +12,6 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/string.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 
@@ -43,16 +42,18 @@ auto field_size(const command::children_list& xs) {
 
 // Returns the field size for printing all names in `xs`.
 auto field_size(const config_options& xs) {
-  return std::accumulate(xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
-    // We print parameters in the form "[-h | -? | --help=] <type>" (but we omit
-    // the type for boolean). So, "[=]" adds 3 characters, each short name adds
-    // 5 characters with "-X | ", the long name gets the 2 character prefix
-    // "--", and finally we add an extra space plus the type name.
-    auto tname = y.type_name();
-    auto tname_size = tname == "bool" ? 0u : tname.size() + 4;
-    return std::max(x, 4 + (y.short_names().size() * 5) + y.long_name().size()
-                         + tname_size);
-  });
+  return std::accumulate(
+    xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
+      // We print parameters in the form "[-h | -? | --help=] <type>" (but we
+      // omit the type for boolean). So, "[=]" adds 3 characters, each short
+      // name adds 5 characters with "-X | ", the long name gets the 2 character
+      // prefix
+      // "--", and finally we add an extra space plus the type name.
+      auto tname = y.type_name();
+      auto tname_size = tname == "bool" ? 0u : tname.size() + 4;
+      return std::max(x, 4 + (y.short_names().size() * 5) + y.long_name().size()
+                           + tname_size);
+    });
 }
 
 void parameters_helptext(const command& cmd, std::ostream& out) {
@@ -84,8 +85,9 @@ void parameters_helptext(const command& cmd, std::ostream& out) {
 
 // Prints the description for a command if there is any
 void description(const command& cmd, std::ostream& out) {
-  if (!cmd.description.empty())
+  if (!cmd.description.empty()) {
     out << cmd.description << "\n\n";
+  }
 }
 
 // Prints the helptext for a command without children.
@@ -152,8 +154,9 @@ void append_highlighted(line_pair& dst, std::string_view x) {
 
 template <class ForwardIterator>
 void append_plain(line_pair& dst, ForwardIterator first, ForwardIterator last) {
-  for (; first != last; ++first)
+  for (; first != last; ++first) {
     append_plain(dst, *first);
+  }
 }
 
 std::ostream& operator<<(std::ostream& os, const line_pair& x) {
@@ -181,10 +184,12 @@ void render_parse_error(const command& cmd, const invocation& inv,
   if (err == ec::unrecognized_option) {
     os << "error: invalid option parameter";
     auto& context = err.context();
-    if (context.match_elements<std::string, std::string, std::string>())
+    if (context.match_elements<std::string, std::string, std::string>()) {
       os << " (" << context.get_as<std::string>(2) << ")";
-    if (position != last)
+    }
+    if (position != last) {
       os << '\n' << make_line_pair() << '\n';
+    }
     helptext(cmd, os);
   } else if (err == ec::missing_subcommand) {
     os << "error: missing subcommand after " << inv.full_name << '\n';
@@ -210,8 +215,7 @@ auto generate_default_value_for_argument_type(std::string_view type_name)
   } else if (type_name.starts_with("dictionary")) {
     return "{}";
   }
-  die(fmt::format("option has type '{}' with no default value support",
-                  type_name));
+  TENZIR_UNIMPLEMENTED();
 }
 
 void sanitize_long_form_argument(std::string& argument,
@@ -291,16 +295,18 @@ caf::error parse_impl(invocation& result, const command& cmd,
   *target = &cmd;
   auto [state, position] = cmd.options.parse(result.options, first, last);
   result.assign(&cmd, position, last);
-  if (get_or(result.options, "help", false))
+  if (get_or(result.options, "help", false)) {
     return caf::none;
+  }
   bool has_subcommand;
   switch (state) {
     default: {
       std::string printable_position = "(unknown)";
-      if (position != last)
+      if (position != last) {
         printable_position = *position;
-      else if (first != last)
+      } else if (first != last) {
         printable_position = *first;
+      }
       return caf::make_error(ec::invalid_argument, cmd.full_name(),
                              printable_position, state);
     }
@@ -311,18 +317,21 @@ caf::error parse_impl(invocation& result, const command& cmd,
       has_subcommand = position != last;
       break;
   }
-  if (position != last && position->starts_with('-'))
+  if (position != last && position->starts_with('-')) {
     return caf::make_error(ec::unrecognized_option, cmd.full_name(), *position);
+  }
   // Check for help option.
   if (has_subcommand && *position == "help") {
     put(result.options, "help", true);
     return caf::none;
   }
-  if (!has_subcommand)
+  if (!has_subcommand) {
     return caf::none;
+  }
   // Consume CLI arguments if we have arguments but don't have subcommands.
-  if (cmd.children.empty())
+  if (cmd.children.empty()) {
     return caf::none;
+  }
   // Dispatch to subcommand.
   // TODO: We need to copy the iterator here, because structured binding cannot
   //       be captured. Clang reports the error "reference to local binding
@@ -332,9 +341,12 @@ caf::error parse_impl(invocation& result, const command& cmd,
   //       workaround when all supported compilers accept accessing structured
   //       bindings from lambdas.
   auto i = std::find_if(cmd.children.begin(), cmd.children.end(),
-                        [p = position](auto& x) { return x->name == *p; });
-  if (i == cmd.children.end())
+                        [p = position](auto& x) {
+                          return x->name == *p;
+                        });
+  if (i == cmd.children.end()) {
     return caf::make_error(ec::invalid_subcommand, cmd.full_name(), *position);
+  }
   return parse_impl(result, **i, position + 1, last, target);
 }
 
@@ -382,12 +394,15 @@ const command& root(const command& cmd) {
 const command*
 resolve(const command& cmd, std::vector<std::string_view>::iterator position,
         std::vector<std::string_view>::iterator end) {
-  if (position == end)
+  if (position == end) {
     return &cmd;
-  auto i = std::find_if(cmd.children.begin(), cmd.children.end(),
-                        [&](auto& x) { return x->name == *position; });
-  if (i == cmd.children.end())
+  }
+  auto i = std::find_if(cmd.children.begin(), cmd.children.end(), [&](auto& x) {
+    return x->name == *position;
+  });
+  if (i == cmd.children.end()) {
     return nullptr;
+  }
   return resolve(**i, position + 1, end);
 }
 
@@ -400,11 +415,14 @@ void helptext(const command& cmd, std::ostream& out) {
   // Make sure fields are filled left-to-right.
   out << std::left;
   // Dispatch based on whether or not cmd has visible children.
-  auto visible = [](const auto& cmd) { return cmd->visible; };
-  if (std::any_of(cmd.children.begin(), cmd.children.end(), visible))
+  auto visible = [](const auto& cmd) {
+    return cmd->visible;
+  };
+  if (std::any_of(cmd.children.begin(), cmd.children.end(), visible)) {
     nested_helptext(cmd, out);
-  else
+  } else {
     flat_helptext(cmd, out);
+  }
 }
 
 std::string helptext(const command& cmd) {

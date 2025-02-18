@@ -23,7 +23,6 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/session.hpp>
 #include <tenzir/table_slice.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/type.hpp>
 

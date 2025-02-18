@@ -11,7 +11,6 @@
 #include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/ip.hpp>
 #include <tenzir/series_builder.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 

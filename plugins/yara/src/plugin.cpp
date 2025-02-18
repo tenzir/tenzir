@@ -6,13 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/assert.hpp"
+
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/die.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/view.hpp>
+
+#include <yara/libyara.h>
+#include <yara/types.h>
 
 #include <deque>
 #include <string_view>
@@ -48,7 +52,7 @@ struct scan_options {
 auto to_error(int status) -> caf::error {
   switch (status) {
     default:
-      die(fmt::format("unhandled status value: {}", status));
+      TENZIR_UNREACHABLE();
     case ERROR_SUCCESS:
       break;
     case ERROR_INSUFFICIENT_MEMORY:
@@ -225,8 +229,8 @@ private:
 /// A YARA rule scanner.
 class scanner {
 public:
-  static auto
-  make(const rules& rules, scan_options opts = {}) -> std::optional<scanner> {
+  static auto make(const rules& rules, scan_options opts = {})
+    -> std::optional<scanner> {
     // Create scanner from rules.
     auto result = scanner{std::move(opts)};
     auto status = yr_scanner_create(rules.rules_, &result.scanner_);
@@ -279,8 +283,8 @@ public:
   }
 
   /// Checks a sequence of memory blocks for rule matches.
-  auto
-  scan(memory_block_vector& blocks) -> caf::expected<std::vector<table_slice>> {
+  auto scan(memory_block_vector& blocks)
+    -> caf::expected<std::vector<table_slice>> {
     auto builder = series_builder{};
     yr_scanner_set_callback(scanner_, callback, &builder);
     auto status = yr_scanner_scan_mem_blocks(scanner_, blocks.iterator());
@@ -375,7 +379,7 @@ private:
     } else if (message == CALLBACK_MSG_SCAN_FINISHED) {
       TENZIR_DEBUG("completed scan");
     } else {
-      die("unhandled message type in YARA callback");
+      TENZIR_UNREACHABLE();
     }
     return CALLBACK_CONTINUE;
   }
@@ -498,8 +502,8 @@ public:
   }
 
   auto
-  operator()(generator<chunk_ptr> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto rules = caf::expected<class rules>{caf::error{}};
     auto compiler = compiler::make();
     if (not compiler) {
@@ -592,8 +596,8 @@ public:
     return "yara";
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)filter;
     (void)order;
     return do_not_optimize(*this);
@@ -614,9 +618,8 @@ class plugin final : public virtual operator_plugin<yara_operator>,
                      public virtual operator_factory_plugin {
 public:
   plugin() {
-    if (yr_initialize() != ERROR_SUCCESS) {
-      die("failed to initialize yara");
-    }
+    const auto ok = yr_initialize();
+    TENZIR_ASSERT(ok == ERROR_SUCCESS, "failed to initialize yara");
   }
 
   ~plugin() final {
@@ -627,8 +630,8 @@ public:
     return {.transformation = true};
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = operator_args{};
     auto rules = located<list>{};
     argument_parser2::operator_("yara")

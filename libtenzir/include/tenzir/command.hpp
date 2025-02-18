@@ -234,12 +234,4 @@ void helptext(const command& cmd, std::ostream& out);
 /// Returns the helptext for `cmd`.
 std::string helptext(const command& cmd);
 
-/// Applies `fun` to `cmd` and each of its children, recursively.
-template <class F>
-void for_each(const command& cmd, F fun) {
-  fun(cmd);
-  for (auto& ptr : cmd.children)
-    for_each(*ptr, fun);
-}
-
 } // namespace tenzir

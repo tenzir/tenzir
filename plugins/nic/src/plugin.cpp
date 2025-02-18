@@ -17,7 +17,6 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pcap.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <pcap/pcap.h>
@@ -33,8 +32,8 @@ namespace {
 class plugin final : public virtual loader_plugin<nic_loader>,
                      public virtual operator_plugin<nics_operator> {
 public:
-  auto initialize(const record& config,
-                  const record& /* global_config */) -> caf::error override {
+  auto initialize(const record& config, const record& /* global_config */)
+    -> caf::error override {
     config_ = config;
     return caf::none;
   }

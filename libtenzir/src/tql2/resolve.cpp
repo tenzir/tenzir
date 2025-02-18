@@ -8,10 +8,10 @@
 
 #include "tenzir/tql2/resolve.hpp"
 
+#include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/registry.hpp"
 
 #include <tsl/robin_map.h>
@@ -22,7 +22,8 @@ namespace {
 
 class entity_resolver : public ast::visitor<entity_resolver> {
 public:
-  explicit entity_resolver(session ctx) : reg_{ctx.reg()}, diag_{ctx.dh()} {
+  explicit entity_resolver(const registry& reg, diagnostic_handler& diag)
+    : reg_{reg}, diag_{diag} {
   }
 
   void visit(ast::entity& x) {
@@ -145,19 +146,25 @@ private:
 } // namespace
 
 auto resolve_entities(ast::pipeline& pipe, session ctx) -> failure_or<void> {
-  auto resolver = entity_resolver{ctx};
+  auto resolver = entity_resolver{ctx.reg(), ctx.dh()};
+  resolver.visit(pipe);
+  return resolver.get_failure();
+}
+
+auto resolve_entities(ast::pipeline& pipe, base_ctx ctx) -> failure_or<void> {
+  auto resolver = entity_resolver{ctx, ctx};
   resolver.visit(pipe);
   return resolver.get_failure();
 }
 
 auto resolve_entities(ast::expression& expr, session ctx) -> failure_or<void> {
-  auto resolver = entity_resolver{ctx};
+  auto resolver = entity_resolver{ctx.reg(), ctx.dh()};
   resolver.visit(expr);
   return resolver.get_failure();
 }
 
 auto resolve_entities(ast::function_call& fc, session ctx) -> failure_or<void> {
-  auto resolver = entity_resolver{ctx};
+  auto resolver = entity_resolver{ctx.reg(), ctx.dh()};
   resolver.visit(fc);
   return resolver.get_failure();
 }

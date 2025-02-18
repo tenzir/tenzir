@@ -66,20 +66,11 @@
     },
     args: [
       binary_expr {
-        left: constant {
-          value: int64 1,
-          source: 55..56
-        },
+        left: constant int64 1 @ 55..56,
         op: "or_" @ 57..59,
-        right: constant {
-          value: int64 2,
-          source: 60..61
-        }
+        right: constant int64 2 @ 60..61
       },
-      constant {
-        value: int64 3,
-        source: 63..64
-      }
+      constant int64 3 @ 63..64
     ]
   }
 ]

@@ -8,10 +8,7 @@
       ]
     },
     equals: 14..15,
-    right: constant {
-      value: string "Launch",
-      source: 16..24
-    }
+    right: constant string "Launch" @ 16..24
   },
   assignment {
     left: simple_selector {
@@ -22,10 +19,7 @@
       ]
     },
     equals: 37..38,
-    right: constant {
-      value: int64 1,
-      source: 39..40
-    }
+    right: constant int64 1 @ 39..40
   },
   assignment {
     left: simple_selector {
@@ -107,17 +101,11 @@
               },
               field {
                 name: `type` @ 215..221,
-                expr: constant {
-                  value: string "Unknown",
-                  source: 223..232
-                }
+                expr: constant string "Unknown" @ 223..232
               },
               field {
                 name: `type_id` @ 238..245,
-                expr: constant {
-                  value: int64 0,
-                  source: 247..248
-                }
+                expr: constant int64 0 @ 247..248
               }
             ],
             end: 252..253
@@ -198,17 +186,11 @@
       items: [
         field {
           name: `account_type` @ 382..394,
-          expr: constant {
-            value: string "Windows Account",
-            source: 396..413
-          }
+          expr: constant string "Windows Account" @ 396..413
         },
         field {
           name: `account_type_id` @ 417..432,
-          expr: constant {
-            value: int64 2,
-            source: 434..435
-          }
+          expr: constant int64 2 @ 434..435
         },
         field {
           name: `domain` @ 439..445,
@@ -296,10 +278,7 @@
       ]
     },
     equals: 588..589,
-    right: constant {
-      value: string "System Activity",
-      source: 590..607
-    }
+    right: constant string "System Activity" @ 590..607
   },
   assignment {
     left: simple_selector {
@@ -334,10 +313,7 @@
       ]
     },
     equals: 668..669,
-    right: constant {
-      value: string "Process Activity",
-      source: 670..688
-    }
+    right: constant string "Process Activity" @ 670..688
   },
   assignment {
     left: simple_selector {
@@ -390,24 +366,15 @@
             items: [
               field {
                 name: `name` @ 783..787,
-                expr: constant {
-                  value: string "Windows",
-                  source: 789..798
-                }
+                expr: constant string "Windows" @ 789..798
               },
               field {
                 name: `type` @ 804..810,
-                expr: constant {
-                  value: string "Windows",
-                  source: 812..821
-                }
+                expr: constant string "Windows" @ 812..821
               },
               field {
                 name: `type_id` @ 827..834,
-                expr: constant {
-                  value: int64 100,
-                  source: 836..839
-                }
+                expr: constant int64 100 @ 836..839
               }
             ],
             end: 843..844
@@ -415,17 +382,11 @@
         },
         field {
           name: `type` @ 848..854,
-          expr: constant {
-            value: string "Unknown",
-            source: 856..865
-          }
+          expr: constant string "Unknown" @ 856..865
         },
         field {
           name: `type_id` @ 869..876,
-          expr: constant {
-            value: int64 0,
-            source: 878..879
-          }
+          expr: constant int64 0 @ 878..879
         }
       ],
       end: 881..882
@@ -455,10 +416,7 @@
       ]
     },
     equals: 914..915,
-    right: constant {
-      value: string "A new process has been created.",
-      source: 916..949
-    }
+    right: constant string "A new process has been created." @ 916..949
   },
   assignment {
     left: simple_selector {
@@ -496,10 +454,7 @@
                   items: [
                     field {
                       name: `name` @ 1038..1042,
-                      expr: constant {
-                        value: string "Security",
-                        source: 1044..1054
-                      }
+                      expr: constant string "Security" @ 1044..1054
                     }
                   ],
                   end: 1060..1061
@@ -507,17 +462,11 @@
               },
               field {
                 name: `name` @ 1067..1071,
-                expr: constant {
-                  value: string "Microsoft Windows",
-                  source: 1073..1092
-                }
+                expr: constant string "Microsoft Windows" @ 1073..1092
               },
               field {
                 name: `vendor_name` @ 1098..1109,
-                expr: constant {
-                  value: string "Microsoft",
-                  source: 1111..1122
-                }
+                expr: constant string "Microsoft" @ 1111..1122
               }
             ],
             end: 1126..1127
@@ -528,10 +477,7 @@
           expr: list {
             begin: 1141..1142,
             items: [
-              expression constant {
-                value: string "host",
-                source: 1142..1148
-              }
+              expression constant string "host" @ 1142..1148
             ],
             end: 1148..1149
           }
@@ -546,10 +492,7 @@
         },
         field {
           name: `version` @ 1175..1182,
-          expr: constant {
-            value: string "1.1.0",
-            source: 1184..1191
-          }
+          expr: constant string "1.1.0" @ 1184..1191
         }
       ],
       end: 1193..1194
@@ -674,17 +617,11 @@
               },
               field {
                 name: `type` @ 1450..1456,
-                expr: constant {
-                  value: string "Unknown",
-                  source: 1458..1467
-                }
+                expr: constant string "Unknown" @ 1458..1467
               },
               field {
                 name: `type_id` @ 1473..1480,
-                expr: constant {
-                  value: int64 0,
-                  source: 1482..1483
-                }
+                expr: constant int64 0 @ 1482..1483
               }
             ],
             end: 1487..1488
@@ -764,10 +701,7 @@
       ]
     },
     equals: 1619..1620,
-    right: constant {
-      value: string "Informational",
-      source: 1621..1636
-    }
+    right: constant string "Informational" @ 1621..1636
   },
   assignment {
     left: simple_selector {
@@ -778,10 +712,7 @@
       ]
     },
     equals: 1649..1650,
-    right: constant {
-      value: int64 1,
-      source: 1651..1652
-    }
+    right: constant int64 1 @ 1651..1652
   },
   assignment {
     left: simple_selector {
@@ -792,10 +723,7 @@
       ]
     },
     equals: 1660..1661,
-    right: constant {
-      value: string "Success",
-      source: 1662..1671
-    }
+    right: constant string "Success" @ 1662..1671
   },
   assignment {
     left: simple_selector {
@@ -806,10 +734,7 @@
       ]
     },
     equals: 1682..1683,
-    right: constant {
-      value: int64 1,
-      source: 1684..1685
-    }
+    right: constant int64 1 @ 1684..1685
   },
   assignment {
     left: simple_selector {
@@ -859,10 +784,7 @@
             method: true
           },
           op: "mul" @ 1740..1741,
-          right: constant {
-            value: int64 1000,
-            source: 1742..1746
-          }
+          right: constant int64 1000 @ 1742..1746
         }
       ],
       rpar: 1746..1747,
@@ -878,10 +800,7 @@
       ]
     },
     equals: 1758..1759,
-    right: constant {
-      value: string "Process Activity: Launch",
-      source: 1760..1786
-    }
+    right: constant string "Process Activity: Launch" @ 1760..1786
   },
   assignment {
     left: simple_selector {
@@ -892,10 +811,7 @@
       ]
     },
     equals: 1796..1797,
-    right: constant {
-      value: int64 100701,
-      source: 1798..1804
-    }
+    right: constant int64 100701 @ 1798..1804
   },
   assignment {
     left: simple_selector {

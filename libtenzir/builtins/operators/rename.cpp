@@ -15,7 +15,6 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/table.h>

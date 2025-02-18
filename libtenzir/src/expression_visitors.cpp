@@ -17,7 +17,6 @@
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/die.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/table_slice.hpp"
@@ -37,13 +36,16 @@ expression meta_pruner::operator()(const conjunction& c) const {
   conjunction pruned;
   for (const auto& op : c) {
     auto x = match(op, *this);
-    if (x != expression{})
+    if (x != expression{}) {
       pruned.push_back(std::move(x));
+    }
   }
-  if (pruned.empty())
+  if (pruned.empty()) {
     return expression{};
-  if (pruned.size() == 1)
+  }
+  if (pruned.size() == 1) {
     return pruned.front();
+  }
   return pruned;
 }
 
@@ -51,20 +53,24 @@ expression meta_pruner::operator()(const disjunction& d) const {
   disjunction pruned;
   for (const auto& op : d) {
     auto x = match(op, *this);
-    if (x != expression{})
+    if (x != expression{}) {
       pruned.push_back(std::move(x));
+    }
   }
-  if (pruned.empty())
+  if (pruned.empty()) {
     return expression{};
-  if (pruned.size() == 1)
+  }
+  if (pruned.size() == 1) {
     return pruned.front();
+  }
   return pruned;
 }
 
 expression meta_pruner::operator()(const negation& n) const {
   auto x = match(n.expr(), *this);
-  if (x == expression{})
+  if (x == expression{}) {
     return x;
+  }
   return negation{x};
 }
 
@@ -81,23 +87,29 @@ expression hoister::operator()(caf::none_t) const {
 
 expression hoister::operator()(const conjunction& c) const {
   conjunction hoisted;
-  for (auto& op : c)
+  for (auto& op : c) {
     if (auto inner = try_as<conjunction>(&op)) {
-      for (auto& inner_op : *inner)
+      for (auto& inner_op : *inner) {
         hoisted.push_back(match(inner_op, *this));
-    } else
+      }
+    } else {
       hoisted.push_back(match(op, *this));
+    }
+  }
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
 
 expression hoister::operator()(const disjunction& d) const {
   disjunction hoisted;
-  for (auto& op : d)
+  for (auto& op : d) {
     if (auto inner = try_as<disjunction>(&op)) {
-      for (auto& inner_op : *inner)
+      for (auto& inner_op : *inner) {
         hoisted.push_back(match(inner_op, *this));
-    } else
+      }
+    } else {
       hoisted.push_back(match(op, *this));
+    }
+  }
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
 
@@ -115,15 +127,17 @@ expression aligner::operator()(caf::none_t) const {
 
 expression aligner::operator()(const conjunction& c) const {
   conjunction result;
-  for (auto& op : c)
+  for (auto& op : c) {
     result.push_back(match(op, *this));
+  }
   return result;
 }
 
 expression aligner::operator()(const disjunction& d) const {
   disjunction result;
-  for (auto& op : d)
+  for (auto& op : d) {
     result.push_back(match(op, *this));
+  }
   return result;
 }
 
@@ -136,8 +150,9 @@ expression aligner::operator()(const predicate& p) const {
     return !is<data>(operand);
   };
   // Already aligned if LHS is an extractor or no extractor present.
-  if (is_extractor(p.lhs) || !is_extractor(p.rhs))
+  if (is_extractor(p.lhs) || !is_extractor(p.rhs)) {
     return p;
+  }
   return predicate{p.rhs, flip(p.op), p.lhs};
 }
 
@@ -150,8 +165,9 @@ expression denegator::operator()(caf::none_t) const {
 
 expression denegator::operator()(const conjunction& c) const {
   auto add = [&](auto x) -> expression {
-    for (auto& op : c)
+    for (auto& op : c) {
       x.push_back(match(op, *this));
+    }
     return x;
   };
   return negate_ ? add(disjunction{}) : add(conjunction{});
@@ -159,8 +175,9 @@ expression denegator::operator()(const conjunction& c) const {
 
 expression denegator::operator()(const disjunction& d) const {
   auto add = [&](auto x) -> expression {
-    for (auto& op : d)
+    for (auto& op : d) {
       x.push_back(match(op, *this));
+    }
     return x;
   };
   return negate_ ? add(conjunction{}) : add(disjunction{});
@@ -187,8 +204,9 @@ expression deduplicator::operator()(const conjunction& c) const {
   conjunction result;
   for (auto& op : c) {
     auto p = match(op, *this);
-    if (std::count(result.begin(), result.end(), p) == 0)
+    if (std::count(result.begin(), result.end(), p) == 0) {
       result.push_back(p);
+    }
   }
   return result;
 }
@@ -197,8 +215,9 @@ expression deduplicator::operator()(const disjunction& d) const {
   disjunction result;
   for (auto& op : d) {
     auto p = match(op, *this);
-    if (std::count(result.begin(), result.end(), p) == 0)
+    if (std::count(result.begin(), result.end(), p) == 0) {
       result.push_back(p);
+    }
   }
   return result;
 }
@@ -260,8 +279,9 @@ caf::expected<void> validator::operator()(caf::none_t) {
 caf::expected<void> validator::operator()(const conjunction& c) {
   for (auto& op : c) {
     auto m = match(op, *this);
-    if (!m)
+    if (!m) {
       return m;
+    }
   }
   return {};
 }
@@ -269,8 +289,9 @@ caf::expected<void> validator::operator()(const conjunction& c) {
 caf::expected<void> validator::operator()(const disjunction& d) {
   for (auto& op : d) {
     auto m = match(op, *this);
-    if (!m)
+    if (!m) {
       return m;
+    }
   }
   return {};
 }
@@ -320,11 +341,13 @@ caf::expected<void>
 validator::operator()(const type_extractor& ex, const data& d) {
   // References to aliases can't be checked here because the expression parser
   // can't possible know about them. We defer the check to the type resolver.
-  if (!ex.type)
+  if (!ex.type) {
     return {};
-  if (!compatible(ex.type, op_, d))
+  }
+  if (!compatible(ex.type, op_, d)) {
     return caf::make_error(
       ec::syntax_error, "type extractor type check failure", ex.type, op_, d);
+  }
   return {};
 }
 
@@ -347,47 +370,53 @@ caf::expected<expression> type_resolver::operator()(const conjunction& c) {
   conjunction result;
   for (auto& op : c) {
     auto r = match(op, *this);
-    if (!r)
+    if (!r) {
       return r;
-    else if (is<caf::none_t>(*r)) {
+    } else if (is<caf::none_t>(*r)) {
       return expression{};
-    } else
+    } else {
       result.push_back(std::move(*r));
+    }
   }
-  if (result.empty())
+  if (result.empty()) {
     return expression{};
-  if (result.size() == 1)
+  }
+  if (result.size() == 1) {
     return {std::move(result[0])};
-  else
+  } else {
     return {std::move(result)};
+  }
 }
 
 caf::expected<expression> type_resolver::operator()(const disjunction& d) {
   disjunction result;
   for (auto& op : d) {
     auto r = match(op, *this);
-    if (!r)
+    if (!r) {
       return r;
-    else if (!is<caf::none_t>(*r)) {
+    } else if (!is<caf::none_t>(*r)) {
       result.push_back(std::move(*r));
     }
   }
-  if (result.empty())
+  if (result.empty()) {
     return expression{};
-  if (result.size() == 1)
+  }
+  if (result.size() == 1) {
     return {std::move(result[0])};
-  else
+  } else {
     return {std::move(result)};
+  }
 }
 
 caf::expected<expression> type_resolver::operator()(const negation& n) {
   auto r = match(n.expr(), *this);
-  if (!r)
+  if (!r) {
     return r;
-  else if (!is<caf::none_t>(*r)) {
+  } else if (!is<caf::none_t>(*r)) {
     return {negation{std::move(*r)}};
-  } else
+  } else {
     return expression{};
+  }
 }
 
 caf::expected<expression> type_resolver::operator()(const predicate& p) {
@@ -439,12 +468,15 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
     auto x = data_extractor{schema_, offset};
     connective.emplace_back(predicate{std::move(x), op_, d});
   }
-  if (connective.empty())
+  if (connective.empty()) {
     return expression{}; // did not resolve
-  if (connective.size() == 1)
+  }
+  if (connective.size() == 1) {
     return {std::move(connective[0])};
-  if (is_negated(op_))
+  }
+  if (is_negated(op_)) {
     return {conjunction{std::move(connective)}};
+  }
   return {disjunction{std::move(connective)}};
 }
 
@@ -462,16 +494,20 @@ bool matcher::operator()(caf::none_t) {
 }
 
 bool matcher::operator()(const conjunction& c) {
-  for (auto& op : c)
-    if (!match(op, *this))
+  for (auto& op : c) {
+    if (!match(op, *this)) {
       return false;
+    }
+  }
   return true;
 }
 
 bool matcher::operator()(const disjunction& d) {
-  for (auto& op : d)
-    if (match(op, *this))
+  for (auto& op : d) {
+    if (match(op, *this)) {
       return true;
+    }
+  }
   return false;
 }
 

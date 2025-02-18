@@ -41,13 +41,6 @@ struct catalog_lookup_result {
     }
   };
 
-  enum kind {
-    exact,
-    probabilistic,
-  };
-
-  enum kind kind { kind::exact };
-
   std::unordered_map<type, candidate_info> candidate_infos;
 
   auto empty() const noexcept -> bool;
@@ -55,16 +48,10 @@ struct catalog_lookup_result {
   auto size() const noexcept -> size_t;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, enum kind& x) -> bool {
-    return detail::inspect_enum(f, x);
-  }
-
-  template <class Inspector>
   friend auto inspect(Inspector& f, catalog_lookup_result& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.catalog_lookup_result")
-      .fields(f.field("kind", x.kind),
-              f.field("candidate-infos", x.candidate_infos));
+      .fields(f.field("candidate-infos", x.candidate_infos));
   }
 };
 

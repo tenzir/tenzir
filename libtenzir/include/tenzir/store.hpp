@@ -51,8 +51,7 @@ public:
   /// @param expr The expression to filter events.
   /// @param selection Pre-filtered ids to consider.
   /// @return The results of applying the extract query to each table slice.
-  [[nodiscard]] virtual generator<table_slice>
-  extract(expression expr, ids selection) const;
+  [[nodiscard]] virtual generator<table_slice> extract(expression expr) const;
 };
 
 /// A base class for passive stores used by the store plugin.

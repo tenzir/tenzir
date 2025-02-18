@@ -12,7 +12,6 @@
 #include <tenzir/double_synopsis.hpp>
 #include <tenzir/duration_synopsis.hpp>
 #include <tenzir/int64_synopsis.hpp>
-#include <tenzir/node_control.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -21,6 +20,7 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uint64_synopsis.hpp>
 
+#include <caf/actor_registry.hpp>
 #include <caf/scoped_actor.hpp>
 
 #include <string_view>
@@ -40,26 +40,14 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    // TODO: Some of the the requests this operator makes are blocking, so
-    // we have to create a scoped actor here; once the operator API uses
-    // async we can offer a better mechanism here.
-    auto blocking_self = caf::scoped_actor(ctrl.self().system());
-    auto components
-      = get_node_components<catalog_actor>(blocking_self, ctrl.node());
-    if (!components) {
-      diagnostic::error(components.error())
-        .note("failed to get catalog")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    co_yield {};
-    auto [catalog] = std::move(*components);
+    const auto catalog
+      = ctrl.self().system().registry().get<catalog_actor>("tenzir.catalog");
     auto synopses = std::vector<partition_synopsis_pair>{};
     ctrl.set_waiting(true);
     ctrl.self()
       .mail(atom::get_v, filter_)
       .request(catalog, caf::infinite)
-      .await(
+      .then(
         [&](std::vector<partition_synopsis_pair>& result) {
           ctrl.set_waiting(false);
           synopses = std::move(result);

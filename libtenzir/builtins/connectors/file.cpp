@@ -13,7 +13,6 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/fdinbuf.hpp>
-#include <tenzir/detail/fdoutbuf.hpp>
 #include <tenzir/detail/file_path_to_plugin_name.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/detail/scope_guard.hpp>
@@ -343,8 +342,9 @@ public:
   auto default_parser() const -> std::string override {
     auto name
       = detail::file_path_to_plugin_name(args_.path.inner).value_or("json");
-    if (!plugins::find<parser_parser_plugin>(name))
+    if (!plugins::find<parser_parser_plugin>(name)) {
       return "json";
+    }
     return name;
   }
 
@@ -619,8 +619,8 @@ public:
   auto name() const -> std::string override {
     return "load_stdin";
   }
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto timeout = std::optional<located<duration>>{};
     TRY(argument_parser2::operator_(name())
           .named("timeout", timeout)
@@ -681,8 +681,8 @@ private:
 
 class save_file_plugin final : public operator_plugin2<save_file_operator> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     TRY(argument_parser2::operator_("save_file")
           .positional("path", args.path)
@@ -715,8 +715,8 @@ public:
     return "save_stdout";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     auto args = saver_args{};
     args.path = located{"-", inv.self.get_location()};

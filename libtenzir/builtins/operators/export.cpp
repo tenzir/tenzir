@@ -18,7 +18,6 @@
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/metric_handler.hpp>
-#include <tenzir/node_control.hpp>
 #include <tenzir/passive_partition.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -385,23 +384,11 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto filesystem = filesystem_actor{};
-    ctrl.set_waiting(true);
-    ctrl.self()
-      .mail(atom::get_v, atom::label_v, std::vector<std::string>{"filesystem"})
-      .request(ctrl.node(), caf::infinite)
-      .then(
-        [&](std::vector<caf::actor>& actors) {
-          TENZIR_ASSERT(actors.size() == 1);
-          filesystem = caf::actor_cast<filesystem_actor>(std::move(actors[0]));
-          ctrl.set_waiting(false);
-        },
-        [&](const caf::error& err) {
-          diagnostic::error(err)
-            .note("failed to retrieve filesystem component")
-            .emit(ctrl.diagnostics());
-        });
     co_yield {};
+    const auto filesystem
+      = ctrl.self().system().registry().get<filesystem_actor>(
+        "tenzir.filesystem");
+    TENZIR_ASSERT(filesystem);
     auto metrics_handler = ctrl.metrics({
       "tenzir.metrics.export",
       record_type{
@@ -466,8 +453,10 @@ public:
     if (filter != caf::none and filter != trivially_true_expression()) {
       clauses.push_back(filter);
     }
-    auto expr = clauses.empty() ? trivially_true_expression()
-                                : expression{conjunction{std::move(clauses)}};
+    auto expr = clauses.empty()
+                  ? trivially_true_expression()
+                  : (clauses.size() == 1 ? std::move(clauses[0])
+                                         : conjunction{std::move(clauses)});
     return optimize_result{trivially_true_expression(), event_order::ordered,
                            std::make_unique<export_operator>(std::move(expr),
                                                              mode_)};

@@ -17,7 +17,6 @@
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/ip.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
@@ -100,8 +99,8 @@ public:
     return transformations;
   }
 
-  auto
-  process(table_slice slice, state_type& state) const -> output_type override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     return transform_columns(slice, state);
   }
 
@@ -109,8 +108,8 @@ public:
     return "pseudonymize";
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }
@@ -210,8 +209,8 @@ class plugin2 : public virtual function_plugin {
     return "encrypt_cryptopan";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto seed = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
