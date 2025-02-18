@@ -333,10 +333,27 @@ auto dump_tokens(std::span<token const> tokens, std::string_view source)
 
 namespace {
 
+auto run_pipeline(exec::pipeline_actor pipe, base_ctx ctx) -> failure_or<void> {
+  auto self = caf::scoped_actor{ctx};
+  self->monitor(pipe);
+  auto started
+    = self->mail(atom::start_v).request(pipe, caf::infinite).receive();
+  if (not started) {
+    TENZIR_TODO();
+  }
+  auto running = true;
+  self->receive_while(running)([&running](caf::down_msg) {
+    running = false;
+  });
+  return {};
+}
+
+// TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                   caf::actor_system& sys) -> failure_or<bool> {
   // Transform the AST into IR.
-  auto c_ctx = compile_ctx::make_root(base_ctx{ctx.dh(), ctx.reg()});
+  auto b_ctx = base_ctx{ctx.dh(), ctx.reg(), &sys};
+  auto c_ctx = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(c_ctx));
   if (cfg.dump_ir) {
     fmt::print("{:#?}\n", ir);
@@ -379,22 +396,23 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return false;
   }
   // Start the actual execution.
-  auto self = caf::scoped_actor{sys};
-  auto exec
-    = self->spawn(caf::actor_from_state<exec::pipeline>, std::move(finalized),
-                  // TODO
-                  base_ctx{ctx.dh(), ctx.reg()});
-  self->monitor(exec);
-  auto started
-    = self->mail(atom::start_v).request(exec, caf::infinite).receive();
-  if (not started) {
-    TENZIR_TODO();
-  }
-  auto running = true;
-  self->receive_while(running)([&running](caf::down_msg) {
-    running = false;
-  });
-  return false;
+  auto exec = b_ctx.system().spawn(caf::actor_from_state<exec::pipeline>,
+                                   std::move(finalized), exec::restore::no,
+                                   // TODO
+                                   b_ctx);
+  return run_pipeline(std::move(exec), b_ctx).is_success();
+}
+
+// TODO: Source for diagnostic handler?
+auto exec_restore(std::span<const std::byte> bp_chunk, base_ctx ctx)
+  -> failure_or<void> {
+  auto f = caf::binary_deserializer{bp_chunk};
+  auto pipe_bp = bp::pipeline{};
+  auto ok = f.apply(pipe_bp);
+  TENZIR_ASSERT(ok);
+  auto pipe = ctx.system().spawn(caf::actor_from_state<exec::pipeline>,
+                                 std::move(pipe_bp), exec::restore::yes, ctx);
+  return run_pipeline(std::move(pipe), ctx);
 }
 
 } // namespace

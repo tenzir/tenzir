@@ -11,6 +11,7 @@
 #include "tenzir/base_ctx.hpp"
 #include "tenzir/operator_actor.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/uuid.hpp"
 
 namespace tenzir::bp {
 
@@ -20,8 +21,15 @@ namespace tenzir::bp {
 class operator_base {
 public:
   struct spawn_args {
+    spawn_args(caf::actor_system& sys, base_ctx ctx,
+               std::optional<chunk_ptr> chunk)
+      : sys{sys}, ctx{ctx}, chunk{std::move(chunk)} {
+    }
+
     caf::actor_system& sys;
     base_ctx ctx;
+    // TODO: Empty state?
+    std::optional<chunk_ptr> chunk;
   };
 
   virtual ~operator_base() = default;
@@ -68,11 +76,18 @@ public:
     return std::move(operators_);
   }
 
+  auto id() const -> uuid {
+    return id_;
+  }
+
   friend auto inspect(auto& f, pipeline& x) -> bool {
-    return f.apply(x.operators_);
+    // TODO: Tests?
+    return f.object(x).fields(f.field("id", x.id_),
+                              f.field("operators", x.operators_));
   }
 
 private:
+  uuid id_ = uuid::random();
   std::vector<operator_ptr> operators_;
 };
 

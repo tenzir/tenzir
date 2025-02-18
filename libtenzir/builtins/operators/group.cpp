@@ -12,9 +12,55 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/substitute_ctx.hpp>
 
+#include <caf/actor_from_state.hpp>
+
 namespace tenzir::plugins::group {
 
 namespace {
+
+class group {
+public:
+  group(exec::operator_actor::pointer self, ast::expression over,
+        ir::pipeline pipe, let_id id)
+    : self_{self}, over_{std::move(over)}, pipe_{std::move(pipe)}, id_{id} {
+  }
+
+  auto make_behavior() -> exec::operator_actor::behavior_type {
+    return {
+      [](exec::handshake hs) -> caf::result<exec::handshake_response> {
+
+      },
+    };
+  }
+
+  friend auto inspect(auto& f, group& x) -> bool {
+    return f.object(x).fields();
+  }
+
+private:
+  struct group_t {
+    bp::pipeline pipe;
+
+    friend auto inspect(auto& f, group_t& x) -> bool {
+    }
+  };
+
+  auto make_group(ast::constant::kind group, base_ctx ctx) const
+    -> failure_or<bp::pipeline> {
+    auto env = std::unordered_map<let_id, ast::constant::kind>{};
+    env[id_] = std::move(group);
+    auto copy = pipe_;
+    TRY(copy.substitute(substitute_ctx{ctx, &env}, true));
+    // TODO: Optimize it before finalize?
+    return std::move(copy).finalize(finalize_ctx{ctx});
+  }
+
+  exec::operator_actor::pointer self_;
+  ast::expression over_;
+  ir::pipeline pipe_;
+  let_id id_;
+  std::unordered_map<ast::constant::kind, group_t> groups_;
+};
 
 class group_exec final : public bp::operator_base {
 public:
@@ -28,22 +74,16 @@ public:
     return "group_exec";
   }
 
+  auto spawn(spawn_args args) const -> exec::operator_actor override {
+    return args.sys.spawn(caf::actor_from_state<group>, over_, pipe_, id_);
+  }
+
   friend auto inspect(auto& f, group_exec& x) -> bool {
     return f.object(x).fields(f.field("over", x.over_),
                               f.field("pipe", x.pipe_), f.field("id", x.id_));
   }
 
 private:
-  auto make_group(ast::constant::kind group, base_ctx ctx) const
-    -> failure_or<bp::pipeline> {
-    auto env = std::unordered_map<let_id, ast::constant::kind>{};
-    env[id_] = std::move(group);
-    auto copy = pipe_;
-    TRY(copy.substitute(substitute_ctx{ctx, &env}, true));
-    // TODO: Optimize it before finalize?
-    return std::move(copy).finalize(finalize_ctx{ctx});
-  }
-
   ast::expression over_;
   ir::pipeline pipe_;
   let_id id_;

@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/bp.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/operator_actor.hpp"
 
 #include <caf/scheduled_actor/flow.hpp>
@@ -29,10 +30,13 @@ struct pipeline_actor_traits {
 
 using pipeline_actor = caf::typed_actor<pipeline_actor_traits>;
 
+enum class restore { yes, no };
+
 class pipeline {
 public:
-  pipeline(pipeline_actor::pointer self, bp::pipeline pipe, base_ctx ctx)
-    : self_{self}, pipe_{std::move(pipe)}, ctx_{ctx} {
+  pipeline(pipeline_actor::pointer self, bp::pipeline pipe,
+           enum restore restore, base_ctx ctx)
+    : self_{self}, pipe_{std::move(pipe)}, restore_{restore}, ctx_{ctx} {
   }
 
   auto make_behavior() -> pipeline_actor::behavior_type {
@@ -74,10 +78,21 @@ private:
   }
 
   void spawn(std::function<void(std::vector<operator_actor>)> callback) {
+    auto get_chunk = [](uuid id, size_t index) -> chunk_ptr {
+      TENZIR_TODO();
+    };
+
     auto ops = std::vector<operator_actor>{};
-    for (auto& op : pipe_) {
-      ops.push_back(
-        op->spawn(bp::operator_base::spawn_args{self_->system(), ctx_}));
+    for (auto [index, op] : detail::enumerate(pipe_)) {
+      auto chunk = std::optional<chunk_ptr>{};
+      if (restore_ == restore::yes) {
+        chunk = get_chunk(pipe_.id(), index);
+      }
+      ops.push_back(op->spawn(bp::operator_base::spawn_args{
+        self_->system(),
+        ctx_,
+        std::move(chunk),
+      }));
     }
     callback(std::move(ops));
   }
@@ -132,6 +147,7 @@ private:
 
   pipeline_actor::pointer self_;
   bp::pipeline pipe_;
+  restore restore_;
   base_ctx ctx_;
 };
 
