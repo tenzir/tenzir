@@ -8,10 +8,11 @@
 
 #include "tenzir/tql2/exec.hpp"
 
+#include "tenzir/bp.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/exec.hpp"
+#include "tenzir/exec/pipeline.hpp"
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/ir.hpp"
@@ -28,6 +29,10 @@
 #include "tenzir/try.hpp"
 
 #include <arrow/util/utf8.h>
+#include <caf/actor_from_state.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/scheduler.hpp>
+#include <caf/scoped_actor.hpp>
 #include <tsl/robin_set.h>
 
 #include <string_view>
@@ -328,8 +333,8 @@ auto dump_tokens(std::span<token const> tokens, std::string_view source)
 
 namespace {
 
-auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx)
-  -> failure_or<bool> {
+auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
+                  caf::actor_system& sys) -> failure_or<bool> {
   // Transform the AST into IR.
   auto c_ctx = compile_ctx::make_root(base_ctx{ctx.dh(), ctx.reg()});
   TRY(auto ir, std::move(ast).compile(c_ctx));
@@ -374,7 +379,21 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx)
     return false;
   }
   // Start the actual execution.
-  diagnostic::error("execution not implemented yet").emit(ctx);
+  auto self = caf::scoped_actor{sys};
+  auto exec
+    = self->spawn(caf::actor_from_state<exec::pipeline>, std::move(finalized),
+                  // TODO
+                  base_ctx{ctx.dh(), ctx.reg()});
+  self->monitor(exec);
+  auto started
+    = self->mail(atom::start_v).request(exec, caf::infinite).receive();
+  if (not started) {
+    TENZIR_TODO();
+  }
+  auto running = true;
+  self->receive_while(running)([&running](caf::down_msg) {
+    running = false;
+  });
   return false;
 }
 
@@ -397,10 +416,10 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    if (cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir
-        or cfg.dump_finalized) {
+    if (cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir or cfg.dump_finalized
+        or true) {
       // This new code path will eventually supersede the current one.
-      return exec_with_ir(std::move(parsed), cfg, ctx);
+      return exec_with_ir(std::move(parsed), cfg, ctx, sys);
     }
     TRY(auto pipe, compile(std::move(parsed), ctx));
     if (cfg.dump_pipeline) {

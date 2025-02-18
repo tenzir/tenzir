@@ -6,7 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/compile_ctx.hpp"
+#include "tenzir/finalize_ctx.hpp"
+#include "tenzir/operator_actor.hpp"
+#include "tenzir/substitute_ctx.hpp"
+
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/exec/pipeline.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -14,6 +21,8 @@
 
 #include <arrow/util/config.h>
 #include <boost/version.hpp>
+#include <caf/actor_from_state.hpp>
+#include <caf/scheduled_actor/flow.hpp>
 #include <flatbuffers/base.h>
 #include <openssl/configuration.h>
 
@@ -157,8 +166,84 @@ public:
   }
 };
 
+class version_exec {
+public:
+  explicit version_exec(exec::operator_actor::pointer self) : self_{self} {
+  }
+
+  auto make_behavior() -> exec::operator_actor::behavior_type {
+    return {
+      [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
+        auto out
+          = self_
+              ->observe(as<caf::typed_stream<exec::message<void>>>(hs.input),
+                        30, 10)
+              .map([](exec::message<void> msg) -> exec::message<table_slice> {
+                // FIXME
+                return static_cast<exec::checkpoint>(msg);
+              })
+              .merge(self_->make_observable().just(
+                exec::message<table_slice>{table_slice{}}))
+              .to_typed_stream("version-exec", duration::zero(), 1);
+        return {std::move(out)};
+      },
+    };
+  }
+
+private:
+  exec::operator_actor::pointer self_;
+};
+
+class version_bp final : public bp::operator_base {
+public:
+  version_bp() = default;
+
+  auto name() const -> std::string override {
+    return "version_bp";
+  }
+
+  auto spawn(spawn_args args) const -> exec::operator_actor override {
+    return args.sys.spawn(caf::actor_from_state<version_exec>);
+  }
+
+  friend auto inspect(auto& f, version_bp& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class version_ir final : public ir::operator_base {
+public:
+  version_ir() = default;
+
+  auto name() const -> std::string override {
+    return "version_ir";
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    TENZIR_UNUSED(ctx, instantiate);
+    return {};
+  }
+
+  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
+    TENZIR_UNUSED(ctx);
+    return std::make_unique<version_bp>();
+  }
+
+  auto infer_type(operator_type2 input, diagnostic_handler&) const
+    -> failure_or<std::optional<operator_type2>> override {
+    TENZIR_ASSERT(input == tag_v<void>);
+    return tag_v<table_slice>;
+  }
+
+  friend auto inspect(auto& f, version_ir& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
 class plugin final : public virtual operator_plugin<version_operator>,
-                     operator_factory_plugin {
+                     public virtual operator_factory_plugin,
+                     public virtual operator_compiler_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
@@ -176,6 +261,13 @@ public:
     argument_parser2::operator_("version").parse(inv, ctx).ignore();
     return std::make_unique<version_operator>();
   }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::operator_ptr> override {
+    // TODO
+    TENZIR_ASSERT(inv.args.empty());
+    return std::make_unique<version_ir>();
+  }
 };
 
 } // namespace
@@ -183,3 +275,9 @@ public:
 } // namespace tenzir::plugins::version
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::version::plugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::ir::operator_base,
+                            tenzir::plugins::version::version_ir>);
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::bp::operator_base,
+                            tenzir::plugins::version::version_bp>);
