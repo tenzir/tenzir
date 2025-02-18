@@ -453,8 +453,10 @@ public:
     if (filter != caf::none and filter != trivially_true_expression()) {
       clauses.push_back(filter);
     }
-    auto expr = clauses.empty() ? trivially_true_expression()
-                                : expression{conjunction{std::move(clauses)}};
+    auto expr = clauses.empty()
+                  ? trivially_true_expression()
+                  : (clauses.size() == 1 ? std::move(clauses[0])
+                                         : conjunction{std::move(clauses)});
     return optimize_result{trivially_true_expression(), event_order::ordered,
                            std::make_unique<export_operator>(std::move(expr),
                                                              mode_)};

@@ -9,6 +9,7 @@
 #include "tenzir/tql2/ast.hpp"
 
 #include "caf/binary_deserializer.hpp"
+#include "tenzir/compile_ctx.hpp"
 #include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
@@ -18,6 +19,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql/basic.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -324,6 +326,14 @@ auto split_legacy_expression(const ast::expression& x)
       if (y.op.inner == ast::binary_op::and_) {
         auto [lo, ln] = split_legacy_expression(y.left);
         auto [ro, rn] = split_legacy_expression(y.right);
+        auto o = expression{};
+        if (lo == trivially_true_expression()) {
+          o = std::move(ro);
+        } else if (ro == trivially_true_expression()) {
+          o = std::move(lo);
+        } else {
+          o = conjunction{std::move(lo), std::move(ro)};
+        }
         auto n = ast::expression{};
         if (is_true_literal(ln)) {
           n = std::move(rn);
@@ -333,7 +343,7 @@ auto split_legacy_expression(const ast::expression& x)
           n = ast::expression{
             ast::binary_expr{std::move(ln), y.op, std::move(rn)}};
         }
-        return std::pair{expression{conjunction{lo, ro}}, std::move(n)};
+        return std::pair{std::move(o), std::move(n)};
       }
       if (y.op.inner == ast::binary_op::or_) {
         auto [lo, ln] = split_legacy_expression(y.left);
@@ -365,6 +375,139 @@ auto split_legacy_expression(const ast::expression& x)
         };
       }
       return std::pair{trivially_true_expression(), x};
+    });
+}
+
+namespace {
+
+class binder : public ast::visitor<binder> {
+public:
+  explicit binder(compile_ctx ctx) : ctx_{ctx} {
+  }
+
+  void visit(ast::dollar_var& x) {
+    if (x.let) {
+      return;
+    }
+    auto name = x.name_without_dollar();
+    if (auto let = ctx_.get(name)) {
+      x.let = *let;
+    } else {
+      auto available = std::vector<std::string>{};
+      for (auto& [name, _] : ctx_.env()) {
+        available.push_back("`$" + name + "`");
+      }
+      auto d = diagnostic::error("unknown variable").primary(x);
+      if (available.empty()) {
+        d = std::move(d).hint("no variables are available here");
+      } else {
+        d = std::move(d).hint("available are {}", fmt::join(available, ", "));
+      }
+      std::move(d).emit(ctx_);
+      result_ = failure::promise();
+    }
+  }
+
+  void visit(ast::pipeline_expr& x) {
+    // TODO: What should happen? If `ast::constant` would allow `ir::pipeline`,
+    // then we could compile it here. However, what environment do we take?
+    diagnostic::error("cannot have pipeline here").primary(x.begin).emit(ctx_);
+    result_ = failure::promise();
+    // enter(x);
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+  auto result() -> failure_or<void> {
+    return result_;
+  }
+
+private:
+  failure_or<void> result_;
+  compile_ctx ctx_;
+};
+
+} // namespace
+
+auto ast::expression::bind(compile_ctx ctx) & -> failure_or<void> {
+  auto b = binder{ctx};
+  b.visit(*this);
+  return b.result();
+}
+
+namespace {
+
+class substitutor : public ast::visitor<substitutor> {
+public:
+  explicit substitutor(substitute_ctx ctx) : ctx_{ctx} {
+  }
+
+  void visit(ast::expression& x) {
+    if (auto var = try_as<ast::dollar_var>(x)) {
+      if (auto value = ctx_.get(var->let)) {
+        x = ast::constant{std::move(*value), var->get_location()};
+      } else {
+        result_ = ast::substitute_result::some_remaining;
+      }
+    } else {
+      enter(x);
+    }
+  }
+
+  void visit(ast::dollar_var&) {
+    // This is handled by the `ast::expression` case above.
+    TENZIR_UNREACHABLE();
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+  auto result() const -> ast::substitute_result {
+    return result_;
+  }
+
+private:
+  ast::substitute_result result_ = ast::substitute_result::no_remaining;
+  substitute_ctx ctx_;
+};
+
+} // namespace
+
+// TODO: Where to put this?
+auto ast::expression::substitute(
+  substitute_ctx ctx) & -> failure_or<substitute_result> {
+  auto visitor = substitutor{ctx};
+  visitor.visit(*this);
+  return visitor.result();
+}
+
+auto ast::expression::is_deterministic(const registry& reg) const -> bool {
+  // TODO: Handle other cases.
+  return match(
+    [](const ast::constant&) {
+      return true;
+    },
+    [&](const ast::unary_expr& x) {
+      return x.expr.is_deterministic(reg);
+    },
+    [&](const ast::binary_expr& x) {
+      return x.left.is_deterministic(reg) and x.right.is_deterministic(reg);
+    },
+    [&](const ast::function_call& x) {
+      if (not reg.get(x).is_deterministic()) {
+        return false;
+      }
+      return std::ranges::all_of(x.args, [&](auto& arg) {
+        return arg.is_deterministic(reg);
+      });
+    },
+    [](const auto&) {
+      return false;
     });
 }
 

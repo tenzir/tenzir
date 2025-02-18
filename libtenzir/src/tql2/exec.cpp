@@ -8,11 +8,16 @@
 
 #include "tenzir/tql2/exec.hpp"
 
+#include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/exec.hpp"
 #include "tenzir/exec_pipeline.hpp"
+#include "tenzir/finalize_ctx.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -47,8 +52,9 @@ public:
       }
       visit(let->expr);
       auto value = const_eval(let->expr, ctx_);
+      auto name = std::string{let->name_without_dollar()};
       if (value) {
-        map_[let->name.name] = tenzir::match(
+        map_[std::move(name)] = tenzir::match(
           std::move(*value),
           [](auto x) -> ast::constant::kind {
             return x;
@@ -59,14 +65,14 @@ public:
           });
       } else {
         failure_ = value.error();
-        map_[let->name.name] = std::nullopt;
+        map_[std::move(name)] = std::nullopt;
       }
       it = x.body.erase(it);
     }
   }
 
   void emit_not_found(const ast::dollar_var& var) {
-    diagnostic::error("variable `{}` was not declared", var.name)
+    diagnostic::error("variable `{}` was not declared", var.ident.name)
       .primary(var)
       .emit(ctx_);
     failure_ = failure::promise();
@@ -78,7 +84,7 @@ public:
       enter(x);
       return;
     }
-    auto it = map_.find(dollar_var->name);
+    auto it = map_.find(std::string{dollar_var->name_without_dollar()});
     if (it == map_.end()) {
       emit_not_found(*dollar_var);
       return;
@@ -122,7 +128,7 @@ public:
       emit(diagnostic::error("expected a pipeline afterwards").primary(*var));
       return;
     }
-    auto it = map_.find(var->name);
+    auto it = map_.find(std::string{var->name_without_dollar()});
     if (it == map_.end()) {
       emit_not_found(*var);
       return;
@@ -164,7 +170,7 @@ public:
         },
       };
       auto constant = tenzir::match(entry, f);
-      map_.insert_or_assign(var->name, constant);
+      map_.insert_or_assign(std::string{var->name_without_dollar()}, constant);
       auto pipe_copy = *pipe;
       visit(pipe_copy);
       x.args.emplace_back(std::move(pipe_copy));
@@ -175,7 +181,8 @@ public:
           .primary(args[2]));
     }
     // Restore the original value in case it's used elsewhere.
-    map_.insert_or_assign(var->name, std::move(original));
+    map_.insert_or_assign(std::string{var->name_without_dollar()},
+                          std::move(original));
   }
 
   void visit(ast::invocation& x) {
@@ -262,7 +269,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
           location::unknown, std::move(x.then), location::unknown});
         if (x.else_) {
           args.emplace_back(ast::pipeline_expr{
-            location::unknown, std::move(*x.else_), location::unknown});
+            location::unknown, std::move(x.else_->pipe), location::unknown});
         }
         auto plugin = plugins::find<operator_factory_plugin>("tql2.if");
         TENZIR_ASSERT(plugin);
@@ -318,6 +325,60 @@ auto dump_tokens(std::span<token const> tokens, std::string_view source)
   return not has_error;
 }
 
+namespace {
+
+auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx)
+  -> failure_or<bool> {
+  // Transform the AST into IR.
+  auto c_ctx = compile_ctx::make_root(base_ctx{ctx.dh(), ctx.reg()});
+  TRY(auto ir, std::move(ast).compile(c_ctx));
+  if (cfg.dump_ir) {
+    fmt::print("{:#?}\n", ir);
+    return not ctx.has_failure();
+  }
+  // Instantiate the IR.
+  auto sub_ctx = substitute_ctx{c_ctx, nullptr};
+  TRY(ir.substitute(sub_ctx, true));
+  if (cfg.dump_inst_ir) {
+    fmt::print("{:#?}\n", ir);
+    return not ctx.has_failure();
+  }
+  // TODO: What about the case where we have an empty pipeline?
+  // Type check the instantiated IR.
+  TRY(auto output, ir.infer_type(tag_v<void>, ctx));
+  // TODO: Can we assume that we get a result type here?
+  TENZIR_ASSERT(output);
+  if (output->is_not<void>()) {
+    // TODO: Add the implicit sink here, before optimization.
+  }
+  // Optimize the IR.
+  auto opt
+    = std::move(ir).optimize(ir::optimize_filter{}, event_order::ordered);
+  // TODO: Can this happen?
+  TENZIR_ASSERT(opt.filter.empty());
+  ir = std::move(opt.replacement);
+  if (cfg.dump_opt_ir) {
+    fmt::print("{:#?}\n", ir);
+    return not ctx.has_failure();
+  }
+  // Finalize the IR into something that we can execute.
+  auto i_ctx = finalize_ctx{c_ctx};
+  TRY(auto finalized, std::move(ir).finalize(i_ctx));
+  if (cfg.dump_finalized) {
+    fmt::print("{:#?}\n", use_default_formatter(finalized));
+    return not ctx.has_failure();
+  }
+  // Do not proceed to execution if there has been an error.
+  if (ctx.has_failure()) {
+    return false;
+  }
+  // Start the actual execution.
+  diagnostic::error("execution not implemented yet").emit(ctx);
+  return false;
+}
+
+} // namespace
+
 auto exec2(std::string_view source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
   TENZIR_UNUSED(sys);
@@ -334,6 +395,11 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
     if (cfg.dump_ast) {
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
+    }
+    if (cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir
+        or cfg.dump_finalized) {
+      // This new code path will eventually supersede the current one.
+      return exec_with_ir(std::move(parsed), cfg, ctx);
     }
     TRY(auto pipe, compile(std::move(parsed), ctx));
     if (cfg.dump_pipeline) {

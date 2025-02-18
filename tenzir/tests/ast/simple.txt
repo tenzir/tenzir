@@ -19,10 +19,7 @@
       ]
     },
     equals: 11..12,
-    right: constant {
-      value: int64 42,
-      source: 13..15
-    }
+    right: constant int64 42 @ 13..15
   },
   invocation {
     op: {
@@ -41,10 +38,7 @@
           ]
         },
         equals: 24..25,
-        right: constant {
-          value: int64 43,
-          source: 26..28
-        }
+        right: constant int64 43 @ 26..28
       }
     ]
   },

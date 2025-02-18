@@ -16,30 +16,54 @@ namespace tenzir {
 
 struct module_def;
 
+/// Operators defined in the user's config.
 struct user_defined_operator {
   /// Definition with resolved entities, but without resolved `let`s.
   ast::pipeline definition;
 };
 
-/// Operators are either operator plugins or user-defined operators.
+class operator_compiler_plugin;
+
+/// Operators defined natively with C++.
+struct native_operator {
+  native_operator(const operator_compiler_plugin* ir_plugin,
+                  const operator_factory_plugin* factory_plugin)
+    : ir_plugin{ir_plugin}, factory_plugin{factory_plugin} {
+  }
+
+  // We have at least one of these set, maybe both.
+  const operator_compiler_plugin* ir_plugin;
+  const operator_factory_plugin* factory_plugin;
+};
+
+/// Operators are either native or user-defined.
 struct operator_def {
 public:
   explicit(false) operator_def(user_defined_operator udo)
     : kind_{std::move(udo)} {
   }
 
+  explicit(false) operator_def(native_operator builtin) : kind_{builtin} {
+  }
+
   explicit(false) operator_def(const operator_factory_plugin& plugin)
-    : kind_{plugin} {
+    : kind_{native_operator{nullptr, &plugin}} {
   }
 
   /// Instantiate the operator with the given arguments.
   auto make(operator_factory_plugin::invocation inv, session ctx) const
     -> failure_or<operator_ptr>;
 
+  // TODO: Remove this?
+  auto inner() const -> const variant<native_operator, user_defined_operator>& {
+    return kind_;
+  }
+  auto inner() -> variant<native_operator, user_defined_operator>& {
+    return kind_;
+  }
+
 private:
-  std::variant<std::reference_wrapper<const operator_factory_plugin>,
-               user_defined_operator>
-    kind_;
+  variant<native_operator, user_defined_operator> kind_;
 };
 
 /// A set of entities, with a most one entity per entity namespace.

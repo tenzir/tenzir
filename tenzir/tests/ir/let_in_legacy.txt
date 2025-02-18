@@ -1,0 +1,25 @@
+{
+  lets: [
+    {
+      ident: `$foo` @ 4..8,
+      expr: constant int64 42 @ 11..13,
+      id: 1
+    }
+  ],
+  operators: [
+    legacy_ir partial {
+      plugin: "version",
+      inv: {
+        op: {
+          path: [
+            `version` @ 162..169
+          ],
+          ref: std::version/op
+        },
+        args: [
+          dollar_var `$foo` -> 1 @ 170..174
+        ]
+      }
+    }
+  ]
+}

@@ -8,6 +8,7 @@
 
 #include "tenzir/tql2/registry.hpp"
 
+#include "tenzir/ir.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/exec.hpp"
 
@@ -57,8 +58,14 @@ auto operator_def::make(operator_factory_plugin::invocation inv,
       TRY(auto compiled, compile(ast::pipeline{udo.definition}, ctx));
       return std::make_unique<pipeline>(std::move(compiled));
     },
-    [&](const operator_factory_plugin& plugin) -> failure_or<operator_ptr> {
-      return plugin.make(inv, ctx);
+    [&](const native_operator& op) -> failure_or<operator_ptr> {
+      if (not op.factory_plugin) {
+        diagnostic::error("this operator can only be used with the new IR")
+          .primary(inv.self)
+          .emit(ctx);
+        return failure::promise();
+      }
+      return op.factory_plugin->make(inv, ctx);
     });
 }
 
@@ -82,7 +89,14 @@ auto global_registry_mut() -> registry& {
       if (name.starts_with("tql2.")) {
         name.erase(0, 5);
       }
-      reg.add(entity_pkg::std, name, *op);
+      reg.add(entity_pkg::std, name, native_operator{nullptr, op});
+    }
+    for (auto op : plugins::get<operator_compiler_plugin>()) {
+      auto name = op->operator_name();
+      if (name.starts_with("tql2.")) {
+        name.erase(0, 5);
+      }
+      reg.add(entity_pkg::std, name, native_operator{op, nullptr});
     }
     for (auto fn : plugins::get<function_plugin>()) {
       auto name = fn->function_name();
@@ -211,8 +225,25 @@ void registry::add(entity_pkg package, std::string_view name, entity_def def) {
       set.fn = &plugin.get();
     },
     [&](operator_def def) {
-      TENZIR_ASSERT(not set.op);
-      set.op = std::move(def);
+      // For compatibility reasons, we handle the case where it was already
+      // registered but only with the legacy plugin type.
+      // TENZIR_ASSERT(not set.op);
+      if (not set.op) {
+        set.op = std::move(def);
+        return;
+      }
+      auto existing = try_as<native_operator>(set.op->inner());
+      TENZIR_ASSERT(existing);
+      auto incoming = try_as<native_operator>(def.inner());
+      TENZIR_ASSERT(incoming);
+      if (incoming->factory_plugin) {
+        TENZIR_ASSERT(not existing->factory_plugin);
+        existing->factory_plugin = incoming->factory_plugin;
+      }
+      if (incoming->ir_plugin) {
+        TENZIR_ASSERT(not existing->ir_plugin);
+        existing->ir_plugin = incoming->ir_plugin;
+      }
     });
 }
 
