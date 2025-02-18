@@ -27,7 +27,6 @@ struct checkpoint {
 template <class T>
 struct message : variant<checkpoint, T> {
   using super = variant<checkpoint, T>;
-
   using super::super;
 
   friend auto inspect(auto& f, message<T>& x) -> bool {
@@ -36,9 +35,18 @@ struct message : variant<checkpoint, T> {
 };
 
 template <>
-struct message<void> : checkpoint {
+struct message<void> : variant<checkpoint> {
+  using super = variant<checkpoint>;
+  using super::super;
+
+  template <class U>
+    requires(not std::is_void_v<U>)
+  explicit(false) operator message<U>() && {
+    return as<checkpoint>(std::move(*this));
+  }
+
   friend auto inspect(auto& f, message<void>& x) -> bool {
-    return f.apply(static_cast<checkpoint&>(x));
+    return f.apply(static_cast<super&>(x));
   }
 };
 
@@ -59,12 +67,24 @@ struct handshake {
     : input{std::move(input)} {
   }
 
+  // TODO: is this the rollback manager?
+  using checkpoint_receiver_actor
+    = caf::typed_actor<auto(checkpoint, chunk_ptr)->caf::result<void>>;
+
   variant<caf::typed_stream<message<void>>,
           caf::typed_stream<message<table_slice>>>
     input;
 
+  // FIXME: can this be nullptr? when do we actually load this state?
+  chunk_ptr state;
+
+  // FIXME: actually set this:
+  checkpoint_receiver_actor checkpoint_receiver;
+
   friend auto inspect(auto& f, handshake& x) -> bool {
-    return f.apply(x.input);
+    return f.object(x).fields(
+      f.field("input", x.input), f.field("state", x.state),
+      f.field("checkpoint_receiver", x.checkpoint_receiver));
   }
 };
 
@@ -72,7 +92,6 @@ struct handshake_response {
   variant<caf::typed_stream<message<void>>,
           caf::typed_stream<message<table_slice>>>
     output;
-
   friend auto inspect(auto& f, handshake_response& x) -> bool {
     return f.apply(x.output);
   }

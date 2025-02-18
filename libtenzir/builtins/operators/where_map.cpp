@@ -225,7 +225,7 @@ public:
     auto remainder_op = is_true_literal(remainder)
                           ? nullptr
                           : std::make_unique<where_assert_operator>(
-                            std::move(remainder), warn_);
+                              std::move(remainder), warn_);
     if (filter == trivially_true_expression()) {
       return optimize_result{std::move(legacy), order, std::move(remainder_op)};
     }
@@ -714,28 +714,30 @@ private:
         auto response = exec::handshake_response{};
         response.output
           = self_->observe(std::move(input), 30, 10)
-              .flat_map([this](exec::message<table_slice> msg)
-                          -> caf::flow::observable<exec::message<table_slice>> {
-                return match(
-                  std::move(msg),
-                  [this](exec::checkpoint check)
-                    -> caf::flow::observable<exec::message<table_slice>> {
-                    // TODO: Save state.
-                    return self_->make_observable()
-                      .just(exec::message<table_slice>{check})
-                      .as_observable();
-                  },
-                  [this](const table_slice& slice)
-                    -> caf::flow::observable<exec::message<table_slice>> {
-                    auto filtered = filter2(slice, expr_, ctx_, false);
-                    return self_->make_observable()
-                      .from_container(std::move(filtered))
-                      .map([](table_slice slice) -> exec::message<table_slice> {
-                        return slice;
-                      })
-                      .as_observable();
-                  });
-              })
+              .concat_map(
+                [this](exec::message<table_slice> msg)
+                  -> caf::flow::observable<exec::message<table_slice>> {
+                  return match(
+                    std::move(msg),
+                    [this](exec::checkpoint check)
+                      -> caf::flow::observable<exec::message<table_slice>> {
+                      // TODO: Save state.
+                      return self_->make_observable()
+                        .just(exec::message<table_slice>{check})
+                        .as_observable();
+                    },
+                    [this](const table_slice& slice)
+                      -> caf::flow::observable<exec::message<table_slice>> {
+                      auto filtered = filter2(slice, expr_, ctx_, false);
+                      return self_->make_observable()
+                        .from_container(std::move(filtered))
+                        .map(
+                          [](table_slice slice) -> exec::message<table_slice> {
+                            return slice;
+                          })
+                        .as_observable();
+                    });
+                })
               .to_typed_stream("where-stream", duration::zero(), 1);
         return response;
       });
