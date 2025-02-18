@@ -220,6 +220,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   }
   pipe = std::move(*implicit_pipe);
   pipe = pipe.optimize_if_closed();
+  TENZIR_WARN("opt = {:#?}", pipe);
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
   auto metrics = std::vector<operator_metric>{};

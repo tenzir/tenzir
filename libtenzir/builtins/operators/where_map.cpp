@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/bp.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -18,7 +19,6 @@
 #include <tenzir/detail/debug_writer.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/exec.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
@@ -40,6 +40,7 @@
 #include <arrow/compute/api.h>
 #include <arrow/type.h>
 #include <arrow/util/bitmap_writer.h>
+#include <caf/actor_from_state.hpp>
 #include <caf/expected.hpp>
 
 namespace tenzir::plugins::where {
@@ -145,6 +146,47 @@ public:
   }
 };
 
+auto filter2(const table_slice& slice, const ast::expression& expr,
+             diagnostic_handler& dh, bool warn) -> std::vector<table_slice> {
+  auto results = std::vector<table_slice>{};
+  auto offset = int64_t{0};
+  for (auto& filter : eval(expr, slice, dh)) {
+    auto array = try_as<arrow::BooleanArray>(&*filter.array);
+    if (not array) {
+      diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
+        .primary(expr)
+        .emit(dh);
+      offset += filter.array->length();
+      continue;
+    }
+    if (array->true_count() == array->length()) {
+      results.push_back(subslice(slice, offset, offset + array->length()));
+      offset += array->length();
+      continue;
+    }
+    if (warn) {
+      diagnostic::warning("assertion failure").primary(expr).emit(dh);
+    }
+    auto length = array->length();
+    auto current_value = array->Value(0);
+    auto current_begin = int64_t{0};
+    // We add an artificial `false` at index `length` to flush.
+    for (auto i = int64_t{1}; i < length + 1; ++i) {
+      const auto next = i != length && array->IsValid(i) && array->Value(i);
+      if (current_value == next) {
+        continue;
+      }
+      if (current_value) {
+        results.push_back(subslice(slice, offset + current_begin, offset + i));
+      }
+      current_value = next;
+      current_begin = i;
+    }
+    offset += length;
+  }
+  return results;
+}
+
 class where_assert_operator final
   : public crtp_operator<where_assert_operator> {
 public:
@@ -167,46 +209,9 @@ public:
         co_yield {};
         continue;
       }
-      auto offset = int64_t{0};
-      for (auto& filter : eval(expr_, slice, ctrl.diagnostics())) {
-        auto array = try_as<arrow::BooleanArray>(&*filter.array);
-        if (not array) {
-          diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
-            .primary(expr_)
-            .emit(ctrl.diagnostics());
-          offset += filter.array->length();
-          co_yield {};
-          continue;
-        }
-        if (array->true_count() == array->length()) {
-          co_yield subslice(slice, offset, offset + array->length());
-          offset += array->length();
-          continue;
-        }
-        if (warn_) {
-          diagnostic::warning("assertion failure")
-            .primary(expr_)
-            .emit(ctrl.diagnostics());
-        }
-        auto length = array->length();
-        auto current_value = array->Value(0);
-        auto current_begin = int64_t{0};
-        // We add an artificial `false` at index `length` to flush.
-        auto results = std::vector<table_slice>{};
-        for (auto i = int64_t{1}; i < length + 1; ++i) {
-          const auto next = i != length && array->IsValid(i) && array->Value(i);
-          if (current_value == next) {
-            continue;
-          }
-          if (current_value) {
-            results.push_back(
-              subslice(slice, offset + current_begin, offset + i));
-          }
-          current_value = next;
-          current_begin = i;
-        }
+      auto results = filter2(slice, expr_, ctrl.diagnostics(), warn_);
+      if (not results.empty()) {
         co_yield concatenate(std::move(results));
-        offset += length;
       }
     }
   }
@@ -682,8 +687,94 @@ public:
   }
 };
 
+class where_impl {
+public:
+  // For fresh start.
+  where_impl(exec::operator_actor::pointer self,
+             exec::checkpoint_receiver_actor checkpoint_receiver,
+             ast::expression expr, base_ctx ctx)
+    : self_{self},
+      checkpoint_receiver_{std::move(checkpoint_receiver)},
+      expr_{std::move(expr)},
+      ctx_{ctx} {
+  }
+
+  // For restoring.
+  where_impl(exec::operator_actor::pointer self, base_ctx ctx)
+    : self_{self}, ctx_{ctx} {
+  }
+
+  auto make_behavior() -> exec::operator_actor::behavior_type {
+    return {
+      [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
+        return handshake(std::move(hs));
+      },
+      [](exec::checkpoint) -> caf::result<void> {
+        TENZIR_TODO();
+      },
+      [](atom::stop) -> caf::result<void> {
+        TENZIR_TODO();
+      },
+    };
+  }
+
+private:
+  auto handshake(exec::handshake hs) -> caf::result<exec::handshake_response> {
+    return match(
+      std::move(hs.input),
+      [](exec::stream<void>) -> exec::handshake_response {
+        TENZIR_TODO();
+      },
+      [&](exec::stream<table_slice> input) -> exec::handshake_response {
+        auto response = exec::handshake_response{};
+        response.output
+          = impl(self_->observe(std::move(input), 30, 10))
+              .to_typed_stream("where-stream", std::chrono::milliseconds{1}, 1);
+        return response;
+      });
+  }
+
+  auto impl(exec::observable<table_slice> input)
+    -> exec::observable<table_slice> {
+    return input.concat_map(
+      [this](exec::message<table_slice> msg) -> exec::observable<table_slice> {
+        return match(
+          std::move(msg),
+          [&](exec::checkpoint check) -> exec::observable<table_slice> {
+            // TODO: Save state.
+            return self_->mail(check, chunk_ptr{})
+              .request(checkpoint_receiver_, caf::infinite)
+              .as_observable()
+              .map([check](caf::unit_t) -> exec::message<table_slice> {
+                return exec::message<table_slice>{check};
+              })
+              .as_observable();
+          },
+          [&](exec::exhausted e) -> exec::observable<table_slice> {
+            return self_->make_observable()
+              .just(exec::message<table_slice>{e})
+              .as_observable();
+          },
+          [&](const table_slice& slice) -> exec::observable<table_slice> {
+            auto filtered = filter2(slice, expr_, ctx_, false);
+            return self_->make_observable()
+              .from_container(std::move(filtered))
+              .map([](table_slice slice) -> exec::message<table_slice> {
+                return slice;
+              })
+              .as_observable();
+          });
+      });
+  }
+
+  exec::operator_actor::pointer self_;
+  exec::checkpoint_receiver_actor checkpoint_receiver_;
+  ast::expression expr_;
+  base_ctx ctx_;
+};
+
 // TODO: Don't want to write this fully ourselves.
-class where_exec final : public exec::operator_base {
+class where_exec final : public bp::operator_base {
 public:
   where_exec() = default;
 
@@ -693,6 +784,13 @@ public:
 
   explicit where_exec(ast::expression predicate)
     : predicate_{std::move(predicate)} {
+  }
+
+  auto spawn(spawn_args args) const -> exec::operator_actor override {
+    TENZIR_ASSERT(not args.restore or *args.restore == nullptr);
+    return args.sys.spawn(caf::actor_from_state<where_impl>,
+                          std::move(args.checkpoint_receiver), predicate_,
+                          args.ctx);
   }
 
   friend auto inspect(auto& f, where_exec& x) -> bool {
@@ -725,7 +823,7 @@ public:
 
   // TODO: Should this get the type of the input?
   // Or do we get it earlier? Or later?
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
     (void)ctx;
     return std::make_unique<where_exec>(std::move(predicate_));
   }
@@ -758,7 +856,7 @@ private:
 };
 
 TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::operator_base, where_ir>)
-TENZIR_REGISTER_PLUGIN(inspection_plugin<exec::operator_base, where_exec>)
+TENZIR_REGISTER_PLUGIN(inspection_plugin<bp::operator_base, where_exec>)
 
 class where_plugin final : public virtual operator_factory_plugin,
                            public virtual function_plugin,

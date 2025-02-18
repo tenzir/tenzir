@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/bp.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -73,7 +74,7 @@ public:
   /// The implementation may assume that the operator was previously
   /// instantiated, i.e., `substitute` was called with `instantiate == true`.
   /// However, other methods such as `optimize` may be called in between.
-  virtual auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> = 0;
+  virtual auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> = 0;
 
   /// Return the "main location" of the operator.
   ///
@@ -173,7 +174,7 @@ struct pipeline {
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 
   /// @see operator_base
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline>;
+  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline>;
 
   /// @see operator_base
   auto infer_type(operator_type2 input, diagnostic_handler& dh) const

@@ -10,6 +10,7 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/exec/operator_impl.hpp>
 #include <tenzir/null_bitmap.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
@@ -645,6 +646,115 @@ struct state2 {
            or (cfg.read_timeout_ and now > read_at + cfg.read_timeout_->inner)
            or (cfg.distance_ and current_row > last_row + cfg.distance_->inner);
   }
+
+  friend auto inspect(auto& f, state2& x) -> bool {
+    // FIXME: Inspect time points.
+    return f.object(x).fields(f.field("count", x.count),
+                              f.field("last_row", x.last_row)
+                              // ,f.field("created_at", x.created_at),
+                              // f.field("written_at", x.written_at),
+                              // f.field("read_at", x.read_at)
+    );
+  }
+};
+
+struct deduplicate_state {
+  tsl::robin_map<data, state2> state = {};
+  int64_t row = 0;
+  std::chrono::steady_clock::time_point last_cleanup_time
+    = std::chrono::steady_clock::now();
+
+  friend auto inspect(auto& f, deduplicate_state& x) -> bool {
+    // FIXME: Make `last_cleanup_time` inspectable.
+    return f.object(x).fields(f.field("state", x.state), f.field("row", x.row));
+  }
+};
+
+class deduplicate3 : public exec::operator_base<deduplicate_state> {
+public:
+  explicit deduplicate3(initializer init, configuration2 cfg)
+    : operator_base{std::move(init)}, cfg_{std::move(cfg)} {
+  }
+
+  void next(const table_slice& events) override {
+    const auto now = std::chrono::steady_clock::now();
+    auto& state = this->state();
+    if (events.rows() == 0) {
+      // We clean up every 15 minutes. This is a bit arbitrary, but there's no
+      // good mechanism for detecting whether an operator is idle from within
+      // the operator right now.
+      if (now > state.last_cleanup_time + std::chrono::minutes{15}) {
+        state.last_cleanup_time = now;
+        auto expired_keys = std::vector<data>{};
+        for (const auto& [key, value] : state.state) {
+          if (value.is_expired(cfg_, state.row, now)) {
+            expired_keys.push_back(key);
+          }
+        }
+        for (const auto& key : expired_keys) {
+          state.state.erase(key);
+        }
+      }
+      return;
+    }
+    auto keys = eval(cfg_.key_, events, ctx());
+    auto offset = int64_t{};
+    auto ids = null_bitmap{};
+    for (auto&& key : keys.values()) {
+      const auto current_row = state.row + offset++;
+      auto it = state.state.find(key);
+      if (it == state.state.end()) {
+        state.state.emplace_hint(it, materialize(key), state2{})
+          .value()
+          .reset(current_row, now);
+        ids.append_bit(true);
+        continue;
+      }
+      if (it->second.is_expired(cfg_, current_row, now)) {
+        it.value().reset(current_row, now);
+        ids.append_bit(true);
+        continue;
+      }
+      it.value().read_at = now;
+      it.value().last_row = current_row;
+      if (it->second.count >= cfg_.limit_.inner) {
+        ids.append_bit(false);
+        continue;
+      }
+      it.value().count += 1;
+      it.value().written_at = now;
+      ids.append_bit(true);
+    }
+    state.row += keys.length();
+    for (auto [begin, end] : select_runs(ids)) {
+      push(subslice(events, begin, end));
+    }
+  }
+
+private:
+  configuration2 cfg_;
+};
+
+class deduplicate_bp final : public bp::operator_base {
+public:
+  explicit deduplicate_bp(configuration2 cfg) : cfg_{std::move(cfg)} {
+  }
+
+  auto name() const -> std::string override {
+    return "head_bp";
+  }
+
+  auto spawn(spawn_args args) const -> exec::operator_actor override {
+    // TODO: Initial state.
+    return exec::spawn_operator<deduplicate3>(std::move(args), {}, cfg_);
+  }
+
+  friend auto inspect(auto& f, deduplicate_bp& x) -> bool {
+    return f.apply(x.cfg_);
+  }
+
+private:
+  configuration2 cfg_;
 };
 
 class deduplicate_operator2 final

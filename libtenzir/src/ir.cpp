@@ -8,8 +8,8 @@
 
 #include "tenzir/ir.hpp"
 
+#include "tenzir/bp.hpp"
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/exec.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -39,11 +39,11 @@ auto make_where_ir(ast::expression filter) -> ir::operator_ptr {
 
 } // namespace
 
-class if_exec final : public exec::operator_base {
+class if_exec final : public bp::operator_base {
 public:
   if_exec() = default;
 
-  if_exec(ast::expression condition, exec::pipeline then_, exec::pipeline else_)
+  if_exec(ast::expression condition, bp::pipeline then_, bp::pipeline else_)
     : condition_{std::move(condition)},
       then_{std::move(then_)},
       else_{std::move(else_)} {
@@ -51,10 +51,6 @@ public:
 
   auto name() const -> std::string override {
     return "if_exec";
-  }
-
-  auto spawn() const -> operator_actor override {
-    TENZIR_TODO();
   }
 
   friend auto inspect(auto& f, if_exec& x) -> bool {
@@ -65,8 +61,8 @@ public:
 
 private:
   ast::expression condition_;
-  exec::pipeline then_;
-  exec::pipeline else_;
+  bp::pipeline then_;
+  bp::pipeline else_;
 };
 
 class if_ir final : public ir::operator_base {
@@ -105,9 +101,9 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
     TRY(auto then_instance, std::move(then_).finalize(ctx));
-    auto else_instance = exec::pipeline{};
+    auto else_instance = bp::pipeline{};
     if (else_) {
       TRY(else_instance, std::move(else_->pipe).finalize(ctx));
     }
@@ -156,22 +152,18 @@ private:
   std::optional<else_t> else_;
 };
 
-class legacy_exec final : public exec::operator_base {
+class legacy_bp final : public bp::operator_base {
 public:
-  legacy_exec() = default;
+  legacy_bp() = default;
 
-  explicit legacy_exec(operator_ptr op) : op_{std::move(op)} {
+  explicit legacy_bp(operator_ptr op) : op_{std::move(op)} {
   }
 
   auto name() const -> std::string override {
     return "legacy_exec";
   }
 
-  auto spawn(/*args*/) const -> operator_actor override {
-    TENZIR_TODO();
-  }
-
-  friend auto inspect(auto& f, legacy_exec& x) -> bool {
+  friend auto inspect(auto& f, legacy_bp& x) -> bool {
     return plugin_inspect(f, x.op_);
   }
 
@@ -220,17 +212,17 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
     (void)ctx;
     auto op = as<operator_ptr>(std::move(state_));
     if (auto pipe = dynamic_cast<pipeline*>(op.get())) {
-      auto result = std::vector<exec::operator_ptr>{};
+      auto result = std::vector<bp::operator_ptr>{};
       for (auto& op : std::move(*pipe).unwrap()) {
-        result.push_back(std::make_unique<legacy_exec>(std::move(op)));
+        result.push_back(std::make_unique<legacy_bp>(std::move(op)));
       }
       return result;
     }
-    return std::make_unique<legacy_exec>(std::move(op));
+    return std::make_unique<legacy_bp>(std::move(op));
   }
 
   auto infer_type(operator_type2 input, diagnostic_handler& dh) const
@@ -335,9 +327,9 @@ namespace {
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::operator_base, legacy_ir>{},
-    new inspection_plugin<exec::operator_base, legacy_exec>{},
+    new inspection_plugin<bp::operator_base, legacy_bp>{},
     new inspection_plugin<ir::operator_base, if_ir>{},
-    new inspection_plugin<exec::operator_base, if_exec>{},
+    new inspection_plugin<bp::operator_base, if_exec>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
@@ -490,7 +482,7 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> {
+auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> {
   // TODO: Assert that we were instantiated, or instantiate ourselves?
   TENZIR_ASSERT(lets.empty());
   auto opt = std::move(*this).optimize(optimize_filter{}, event_order::ordered);
@@ -502,7 +494,7 @@ auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> {
                                      make_where_ir(expr));
   }
   *this = std::move(opt.replacement);
-  auto result = std::vector<exec::operator_ptr>{};
+  auto result = std::vector<bp::operator_ptr>{};
   for (auto& op : operators) {
     TRY(auto ops, std::move(*op).finalize(ctx));
     result.insert(result.end(), std::move_iterator{ops.begin()},
@@ -592,6 +584,14 @@ auto operator_compiler_plugin::operator_name() const -> std::string {
     result = result.substr(5);
   }
   return result;
+}
+
+ir::operator_ptr::operator_ptr(const operator_ptr&) {
+  TENZIR_TODO();
+}
+
+auto ir::operator_ptr::operator=(const operator_ptr&) -> operator_ptr& {
+  TENZIR_TODO();
 }
 
 } // namespace tenzir

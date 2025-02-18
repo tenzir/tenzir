@@ -8,10 +8,11 @@
 
 #include "tenzir/tql2/exec.hpp"
 
+#include "tenzir/bp.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/exec.hpp"
+#include "tenzir/exec/pipeline.hpp"
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/ir.hpp"
@@ -28,6 +29,10 @@
 #include "tenzir/try.hpp"
 
 #include <arrow/util/utf8.h>
+#include <caf/actor_from_state.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/scheduler.hpp>
+#include <caf/scoped_actor.hpp>
 #include <tsl/robin_set.h>
 
 #include <string_view>
@@ -328,10 +333,31 @@ auto dump_tokens(std::span<token const> tokens, std::string_view source)
 
 namespace {
 
-auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx)
-  -> failure_or<bool> {
+auto run_pipeline(exec::pipeline_actor pipe, base_ctx ctx) -> failure_or<void> {
+  auto self = caf::scoped_actor{ctx};
+  self->monitor(pipe);
+  auto started
+    = self->mail(atom::start_v).request(pipe, caf::infinite).receive();
+  if (not started) {
+    if (started.error() != ec::silent) {
+      TENZIR_TODO();
+    }
+    return failure::promise();
+  }
+  auto running = true;
+  self->receive_while(running)([&running](caf::down_msg) {
+    running = false;
+  });
+  return {};
+}
+
+// TODO: failure_or<bool> is bad
+auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
+                  caf::actor_system& sys) -> failure_or<bool> {
   // Transform the AST into IR.
-  auto c_ctx = compile_ctx::make_root(base_ctx{ctx.dh(), ctx.reg()});
+  auto b_ctx = base_ctx{ctx.dh(), ctx.reg(), sys};
+  (void)b_ctx.system();
+  auto c_ctx = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(c_ctx));
   if (cfg.dump_ir) {
     fmt::print("{:#?}\n", ir);
@@ -374,8 +400,22 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx)
     return false;
   }
   // Start the actual execution.
-  diagnostic::error("execution not implemented yet").emit(ctx);
-  return false;
+  auto exec = exec::make_pipeline(
+    std::move(finalized), exec::pipeline_settings{}, std::nullopt, b_ctx);
+  return run_pipeline(std::move(exec), b_ctx).is_success();
+}
+
+// TODO: Source for diagnostic handler?
+auto exec_restore(std::span<const std::byte> bp_chunk,
+                  exec::checkpoint_reader_actor checkpoint_reader, base_ctx ctx)
+  -> failure_or<void> {
+  auto f = caf::binary_deserializer{bp_chunk};
+  auto pipe_bp = bp::pipeline{};
+  auto ok = f.apply(pipe_bp);
+  TENZIR_ASSERT(ok);
+  auto exec = exec::make_pipeline(std::move(pipe_bp), exec::pipeline_settings{},
+                                  std::move(checkpoint_reader), ctx);
+  return run_pipeline(std::move(exec), ctx);
 }
 
 } // namespace
@@ -397,10 +437,10 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    if (cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir
-        or cfg.dump_finalized) {
+    if (cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir or cfg.dump_finalized
+        or true) {
       // This new code path will eventually supersede the current one.
-      return exec_with_ir(std::move(parsed), cfg, ctx);
+      return exec_with_ir(std::move(parsed), cfg, ctx, sys);
     }
     TRY(auto pipe, compile(std::move(parsed), ctx));
     if (cfg.dump_pipeline) {
