@@ -40,10 +40,10 @@
 
 #include <filesystem>
 
-namespace bp = boost::process;
-
 namespace tenzir::plugins::python {
 namespace {
+
+namespace bp = boost::process;
 
 /// Arrow InputStream API implementation over a file descriptor.
 class arrow_fd_wrapper : public ::arrow::io::InputStream {

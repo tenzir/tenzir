@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/bp.hpp>
 #include <tenzir/compile_ctx.hpp>
-#include <tenzir/exec.hpp>
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -16,7 +16,7 @@ namespace tenzir::plugins::group {
 
 namespace {
 
-class group_exec final : public exec::operator_base {
+class group_exec final : public bp::operator_base {
 public:
   group_exec() = default;
 
@@ -35,7 +35,7 @@ public:
 
 private:
   auto make_group(ast::constant::kind group, base_ctx ctx) const
-    -> failure_or<exec::pipeline> {
+    -> failure_or<bp::pipeline> {
     auto env = std::unordered_map<let_id, ast::constant::kind>{};
     env[id_] = std::move(group);
     auto copy = pipe_;
@@ -70,7 +70,7 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
     (void)ctx;
     return std::make_unique<group_exec>(std::move(over_), std::move(pipe_),
                                         id_);
@@ -107,7 +107,7 @@ public:
 };
 
 using group_ir_plugin = inspection_plugin<ir::operator_base, group_ir>;
-using group_exec_plugin = inspection_plugin<exec::operator_base, group_exec>;
+using group_exec_plugin = inspection_plugin<bp::operator_base, group_exec>;
 
 } // namespace
 

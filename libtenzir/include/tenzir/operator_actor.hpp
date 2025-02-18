@@ -16,7 +16,7 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_stream.hpp>
 
-namespace tenzir {
+namespace tenzir::exec {
 
 struct checkpoint {
   friend auto inspect(auto& f, checkpoint& x) -> bool {
@@ -51,6 +51,8 @@ struct operator_actor_traits {
 using operator_actor = caf::typed_actor<operator_actor_traits>;
 
 struct handshake {
+  handshake() = default;
+
   explicit(false) handshake(variant<caf::typed_stream<message<void>>,
                                     caf::typed_stream<message<table_slice>>>
                               input)
@@ -76,4 +78,4 @@ struct handshake_response {
   }
 };
 
-} // namespace tenzir
+} // namespace tenzir::exec

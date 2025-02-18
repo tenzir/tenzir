@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/bp.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -18,7 +19,6 @@
 #include <tenzir/detail/debug_writer.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/exec.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
@@ -689,47 +689,48 @@ public:
 
 class where_impl {
 public:
-  where_impl(operator_actor::pointer self, ast::expression expr, base_ctx ctx)
+  where_impl(exec::operator_actor::pointer self, ast::expression expr,
+             base_ctx ctx)
     : self_{self}, expr_{std::move(expr)}, ctx_{ctx} {
   }
 
-  auto make_behavior() -> operator_actor::behavior_type {
+  auto make_behavior() -> exec::operator_actor::behavior_type {
     return {
-      [this](struct handshake hs) -> caf::result<handshake_response> {
+      [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
         return handshake(std::move(hs));
       },
     };
   }
 
 private:
-  auto handshake(handshake hs) -> caf::result<handshake_response> {
+  auto handshake(exec::handshake hs) -> caf::result<exec::handshake_response> {
     return match(
       std::move(hs.input),
-      [](caf::typed_stream<message<void>>) -> handshake_response {
+      [](caf::typed_stream<exec::message<void>>) -> exec::handshake_response {
         TENZIR_TODO();
       },
-      [this](
-        caf::typed_stream<message<table_slice>> input) -> handshake_response {
-        auto response = handshake_response{};
+      [this](caf::typed_stream<exec::message<table_slice>> input)
+        -> exec::handshake_response {
+        auto response = exec::handshake_response{};
         response.output
           = self_->observe(std::move(input), 30, 10)
-              .flat_map([this](message<table_slice> msg)
-                          -> caf::flow::observable<message<table_slice>> {
+              .flat_map([this](exec::message<table_slice> msg)
+                          -> caf::flow::observable<exec::message<table_slice>> {
                 return match(
                   std::move(msg),
-                  [this](checkpoint check)
-                    -> caf::flow::observable<message<table_slice>> {
+                  [this](exec::checkpoint check)
+                    -> caf::flow::observable<exec::message<table_slice>> {
                     // TODO: Save state.
                     return self_->make_observable()
-                      .just(message<table_slice>{check})
+                      .just(exec::message<table_slice>{check})
                       .as_observable();
                   },
                   [this](const table_slice& slice)
-                    -> caf::flow::observable<message<table_slice>> {
+                    -> caf::flow::observable<exec::message<table_slice>> {
                     auto filtered = filter2(slice, expr_, ctx_, false);
                     return self_->make_observable()
                       .from_container(std::move(filtered))
-                      .map([](table_slice slice) -> message<table_slice> {
+                      .map([](table_slice slice) -> exec::message<table_slice> {
                         return slice;
                       })
                       .as_observable();
@@ -740,13 +741,13 @@ private:
       });
   }
 
-  operator_actor::pointer self_;
+  exec::operator_actor::pointer self_;
   ast::expression expr_;
   base_ctx ctx_;
 };
 
 // TODO: Don't want to write this fully ourselves.
-class where_exec final : public exec::operator_base {
+class where_exec final : public bp::operator_base {
 public:
   where_exec() = default;
 
@@ -758,7 +759,7 @@ public:
     : predicate_{std::move(predicate)} {
   }
 
-  auto spawn(exec::spawn_args args) const -> operator_actor override {
+  auto spawn(spawn_args args) const -> exec::operator_actor override {
     return args.sys.spawn(caf::actor_from_state<where_impl>, predicate_,
                           args.ctx);
   }
@@ -793,7 +794,7 @@ public:
 
   // TODO: Should this get the type of the input?
   // Or do we get it earlier? Or later?
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
     (void)ctx;
     return std::make_unique<where_exec>(std::move(predicate_));
   }
@@ -826,7 +827,7 @@ private:
 };
 
 TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::operator_base, where_ir>)
-TENZIR_REGISTER_PLUGIN(inspection_plugin<exec::operator_base, where_exec>)
+TENZIR_REGISTER_PLUGIN(inspection_plugin<bp::operator_base, where_exec>)
 
 class where_plugin final : public virtual operator_factory_plugin,
                            public virtual function_plugin,

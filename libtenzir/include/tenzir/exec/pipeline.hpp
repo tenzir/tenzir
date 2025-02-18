@@ -10,30 +10,33 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/exec.hpp"
+#include "tenzir/bp.hpp"
 #include "tenzir/operator_actor.hpp"
 
 #include <caf/scheduled_actor/flow.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_stream.hpp>
 
-namespace tenzir {
+namespace tenzir::exec {
 
 struct pipeline_actor_traits {
   using signatures = caf::type_list<
     //
-    auto(atom::start)->caf::result<void>>;
+    auto(atom::start)->caf::result<void>,
+    //
+    auto(atom::start, handshake hs)->caf::result<handshake_response>
+    >;
 };
 
 using pipeline_actor = caf::typed_actor<pipeline_actor_traits>;
 
-class pipeline_impl {
+class pipeline {
 public:
-  pipeline_impl(pipeline_actor::pointer self, exec::pipeline pipe, base_ctx ctx)
+  pipeline(pipeline_actor::pointer self, bp::pipeline pipe, base_ctx ctx)
     : self_{self}, pipe_{std::move(pipe)}, ctx_{ctx} {
   }
 
-  auto make_behavior() -> operator_actor::behavior_type {
+  auto make_behavior() -> pipeline_actor::behavior_type {
     return {
       [this](atom::start) -> caf::result<void> {
         return start();
@@ -74,7 +77,7 @@ private:
   void spawn(std::function<void(std::vector<operator_actor>)> callback) {
     auto ops = std::vector<operator_actor>{};
     for (auto& op : pipe_) {
-      ops.push_back(op->spawn(exec::spawn_args{self_->system(), ctx_}));
+      ops.push_back(op->spawn(bp::operator_base::spawn_args{self_->system(), ctx_}));
     }
     callback(std::move(ops));
   }
@@ -119,8 +122,8 @@ private:
   }
 
   pipeline_actor::pointer self_;
-  exec::pipeline pipe_;
+  bp::pipeline pipe_;
   base_ctx ctx_;
 };
 
-} // namespace tenzir
+} // namespace tenzir::exec

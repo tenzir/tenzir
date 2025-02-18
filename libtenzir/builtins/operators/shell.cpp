@@ -28,10 +28,10 @@
 #include <queue>
 #include <thread>
 
-namespace bp = boost::process;
-
 namespace tenzir::plugins::shell {
 namespace {
+
+namespace bp = boost::process;
 
 using namespace tenzir::binary_byte_literals;
 

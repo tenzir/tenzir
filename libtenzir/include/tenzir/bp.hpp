@@ -12,23 +12,24 @@
 #include "tenzir/operator_actor.hpp"
 #include "tenzir/plugin.hpp"
 
-namespace tenzir::exec {
-
-struct spawn_args {
-  caf::actor_system& sys;
-  base_ctx ctx;
-};
+namespace tenzir::bp {
 
 /// Configured instance of an operator that is ready for execution.
 ///
 /// Subclasses must register a serialization plugin with the same name.
 class operator_base {
 public:
+  struct spawn_args {
+    caf::actor_system& sys;
+    base_ctx ctx;
+  };
+
   virtual ~operator_base() = default;
 
   virtual auto name() const -> std::string = 0;
 
-  virtual auto spawn(spawn_args args) const -> operator_actor {
+  virtual auto spawn(spawn_args args) const -> exec::operator_actor {
+    (void)args;
     TENZIR_TODO();
   }
 };
@@ -75,4 +76,4 @@ private:
   std::vector<operator_ptr> operators_;
 };
 
-}; // namespace tenzir::exec
+}; // namespace tenzir::bp
