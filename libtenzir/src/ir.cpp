@@ -53,10 +53,6 @@ public:
     return "if_exec";
   }
 
-  auto spawn() const -> operator_actor override {
-    TENZIR_TODO();
-  }
-
   friend auto inspect(auto& f, if_exec& x) -> bool {
     return f.object(x).fields(f.field("condition", x.condition_),
                               f.field("then", x.then_),
@@ -165,10 +161,6 @@ public:
 
   auto name() const -> std::string override {
     return "legacy_exec";
-  }
-
-  auto spawn(/*args*/) const -> operator_actor override {
-    TENZIR_TODO();
   }
 
   friend auto inspect(auto& f, legacy_exec& x) -> bool {

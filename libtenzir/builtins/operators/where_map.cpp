@@ -40,6 +40,7 @@
 #include <arrow/compute/api.h>
 #include <arrow/type.h>
 #include <arrow/util/bitmap_writer.h>
+#include <caf/actor_from_state.hpp>
 #include <caf/expected.hpp>
 
 namespace tenzir::plugins::where {
@@ -145,6 +146,47 @@ public:
   }
 };
 
+auto filter2(const table_slice& slice, const ast::expression& expr,
+             diagnostic_handler& dh, bool warn) -> std::vector<table_slice> {
+  auto results = std::vector<table_slice>{};
+  auto offset = int64_t{0};
+  for (auto& filter : eval(expr, slice, dh)) {
+    auto array = try_as<arrow::BooleanArray>(&*filter.array);
+    if (not array) {
+      diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
+        .primary(expr)
+        .emit(dh);
+      offset += filter.array->length();
+      continue;
+    }
+    if (array->true_count() == array->length()) {
+      results.push_back(subslice(slice, offset, offset + array->length()));
+      offset += array->length();
+      continue;
+    }
+    if (warn) {
+      diagnostic::warning("assertion failure").primary(expr).emit(dh);
+    }
+    auto length = array->length();
+    auto current_value = array->Value(0);
+    auto current_begin = int64_t{0};
+    // We add an artificial `false` at index `length` to flush.
+    for (auto i = int64_t{1}; i < length + 1; ++i) {
+      const auto next = i != length && array->IsValid(i) && array->Value(i);
+      if (current_value == next) {
+        continue;
+      }
+      if (current_value) {
+        results.push_back(subslice(slice, offset + current_begin, offset + i));
+      }
+      current_value = next;
+      current_begin = i;
+    }
+    offset += length;
+  }
+  return results;
+}
+
 class where_assert_operator final
   : public crtp_operator<where_assert_operator> {
 public:
@@ -167,46 +209,9 @@ public:
         co_yield {};
         continue;
       }
-      auto offset = int64_t{0};
-      for (auto& filter : eval(expr_, slice, ctrl.diagnostics())) {
-        auto array = try_as<arrow::BooleanArray>(&*filter.array);
-        if (not array) {
-          diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
-            .primary(expr_)
-            .emit(ctrl.diagnostics());
-          offset += filter.array->length();
-          co_yield {};
-          continue;
-        }
-        if (array->true_count() == array->length()) {
-          co_yield subslice(slice, offset, offset + array->length());
-          offset += array->length();
-          continue;
-        }
-        if (warn_) {
-          diagnostic::warning("assertion failure")
-            .primary(expr_)
-            .emit(ctrl.diagnostics());
-        }
-        auto length = array->length();
-        auto current_value = array->Value(0);
-        auto current_begin = int64_t{0};
-        // We add an artificial `false` at index `length` to flush.
-        auto results = std::vector<table_slice>{};
-        for (auto i = int64_t{1}; i < length + 1; ++i) {
-          const auto next = i != length && array->IsValid(i) && array->Value(i);
-          if (current_value == next) {
-            continue;
-          }
-          if (current_value) {
-            results.push_back(
-              subslice(slice, offset + current_begin, offset + i));
-          }
-          current_value = next;
-          current_begin = i;
-        }
+      auto results = filter2(slice, expr_, ctrl.diagnostics(), warn_);
+      if (not results.empty()) {
         co_yield concatenate(std::move(results));
-        offset += length;
       }
     }
   }
@@ -220,7 +225,7 @@ public:
     auto remainder_op = is_true_literal(remainder)
                           ? nullptr
                           : std::make_unique<where_assert_operator>(
-                              std::move(remainder), warn_);
+                            std::move(remainder), warn_);
     if (filter == trivially_true_expression()) {
       return optimize_result{std::move(legacy), order, std::move(remainder_op)};
     }
@@ -682,6 +687,64 @@ public:
   }
 };
 
+class where_impl {
+public:
+  where_impl(operator_actor::pointer self, ast::expression expr, base_ctx ctx)
+    : self_{self}, expr_{std::move(expr)}, ctx_{ctx} {
+  }
+
+  auto make_behavior() -> operator_actor::behavior_type {
+    return {
+      [this](struct handshake hs) -> caf::result<handshake_response> {
+        return handshake(std::move(hs));
+      },
+    };
+  }
+
+private:
+  auto handshake(handshake hs) -> caf::result<handshake_response> {
+    return match(
+      std::move(hs.input),
+      [](caf::typed_stream<message<void>>) -> handshake_response {
+        TENZIR_TODO();
+      },
+      [this](
+        caf::typed_stream<message<table_slice>> input) -> handshake_response {
+        auto response = handshake_response{};
+        response.output
+          = self_->observe(std::move(input), 30, 10)
+              .flat_map([this](message<table_slice> msg)
+                          -> caf::flow::observable<message<table_slice>> {
+                return match(
+                  std::move(msg),
+                  [this](checkpoint check)
+                    -> caf::flow::observable<message<table_slice>> {
+                    // TODO: Save state.
+                    return self_->make_observable()
+                      .just(message<table_slice>{check})
+                      .as_observable();
+                  },
+                  [this](const table_slice& slice)
+                    -> caf::flow::observable<message<table_slice>> {
+                    auto filtered = filter2(slice, expr_, ctx_, false);
+                    return self_->make_observable()
+                      .from_container(std::move(filtered))
+                      .map([](table_slice slice) -> message<table_slice> {
+                        return slice;
+                      })
+                      .as_observable();
+                  });
+              })
+              .to_typed_stream("where-stream", duration::zero(), 1);
+        return response;
+      });
+  }
+
+  operator_actor::pointer self_;
+  ast::expression expr_;
+  base_ctx ctx_;
+};
+
 // TODO: Don't want to write this fully ourselves.
 class where_exec final : public exec::operator_base {
 public:
@@ -693,6 +756,11 @@ public:
 
   explicit where_exec(ast::expression predicate)
     : predicate_{std::move(predicate)} {
+  }
+
+  auto spawn(exec::spawn_args args) const -> operator_actor override {
+    return args.sys.spawn(caf::actor_from_state<where_impl>, predicate_,
+                          args.ctx);
   }
 
   friend auto inspect(auto& f, where_exec& x) -> bool {
