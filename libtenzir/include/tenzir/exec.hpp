@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include <tenzir/plugin.hpp>
-
-namespace tenzir {
-
-// TODO: Figure out how this actually looks like.
-using operator_actor = int;
-
-} // namespace tenzir
+#include "tenzir/base_ctx.hpp"
+#include "tenzir/operator_actor.hpp"
+#include "tenzir/plugin.hpp"
 
 namespace tenzir::exec {
+
+struct spawn_args {
+  caf::actor_system& sys;
+  base_ctx ctx;
+};
 
 /// Configured instance of an operator that is ready for execution.
 ///
@@ -28,7 +28,7 @@ public:
 
   virtual auto name() const -> std::string = 0;
 
-  virtual auto spawn(/*args*/) const -> operator_actor {
+  virtual auto spawn(spawn_args args) const -> operator_actor {
     TENZIR_TODO();
   }
 };
