@@ -24,8 +24,7 @@ struct pipeline_actor_traits {
     //
     auto(atom::start)->caf::result<void>,
     //
-    auto(atom::start, handshake hs)->caf::result<handshake_response>
-    >;
+    auto(atom::start, handshake hs)->caf::result<handshake_response>>;
 };
 
 using pipeline_actor = caf::typed_actor<pipeline_actor_traits>;
@@ -77,7 +76,8 @@ private:
   void spawn(std::function<void(std::vector<operator_actor>)> callback) {
     auto ops = std::vector<operator_actor>{};
     for (auto& op : pipe_) {
-      ops.push_back(op->spawn(bp::operator_base::spawn_args{self_->system(), ctx_}));
+      ops.push_back(
+        op->spawn(bp::operator_base::spawn_args{self_->system(), ctx_}));
     }
     callback(std::move(ops));
   }
@@ -85,9 +85,9 @@ private:
   auto start() -> caf::result<void> {
     auto rp = self_->make_response_promise<void>();
     spawn([this, rp](std::vector<operator_actor> ops) mutable {
-      auto initial
-        = self_->make_observable().never<message<void>>().to_typed_stream(
-          "initial", duration::zero(), 1);
+      auto initial = self_->make_observable()
+                       .just(message<void>{})
+                       .to_typed_stream("initial", duration::zero(), 1);
       recurse(handshake{std::move(initial)}, std::move(ops),
               [this, rp](caf::expected<handshake_response> hr) mutable {
                 if (not hr) {
@@ -100,9 +100,18 @@ private:
                   // TODO: ERROR?
                   TENZIR_TODO();
                 }
-                self_->observe(*output, 30, 10).for_each([](message<void>) {
-                  // TODO: Checkpoints??
-                });
+                self_->observe(*output, 30, 10)
+                  .do_on_error([this](caf::error err) {
+                    TENZIR_WARN("error");
+                    self_->quit(std::move(err));
+                  })
+                  .do_on_complete([this] {
+                    TENZIR_WARN("complete");
+                    self_->quit();
+                  })
+                  .for_each([](message<void>) {
+                    TENZIR_WARN("checkpoint arrived at exec");
+                  });
                 rp.deliver();
               });
     });

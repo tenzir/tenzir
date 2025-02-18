@@ -179,11 +179,13 @@ public:
               ->observe(as<caf::typed_stream<exec::message<void>>>(hs.input),
                         30, 10)
               .map([](exec::message<void> msg) -> exec::message<table_slice> {
-                // FIXME
-                return static_cast<exec::checkpoint>(msg);
+                return msg;
               })
-              .merge(self_->make_observable().just(
+              .concat(self_->make_observable().just(
                 exec::message<table_slice>{table_slice{}}))
+              .do_on_complete([] {
+                TENZIR_WARN("version completed");
+              })
               .to_typed_stream("version-exec", duration::zero(), 1);
         return {std::move(out)};
       },
@@ -265,6 +267,7 @@ public:
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<ir::operator_ptr> override {
     // TODO
+    TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(inv.args.empty());
     return std::make_unique<version_ir>();
   }
