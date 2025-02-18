@@ -263,7 +263,8 @@ struct kv_writer {
   friend auto inspect(auto& f, kv_writer& x) -> bool {
     return f.object(x)
       .pretty_name("write_kv_args")
-      .fields(f.field("field_sep", x.field_sep),
+      .fields(f.field("operator_location", x.operator_location),
+              f.field("field_sep", x.field_sep),
               f.field("value_sep", x.value_sep),
               f.field("list_sep", x.list_sep), f.field("flatten", x.flatten),
               f.field("null", x.null));
@@ -296,13 +297,17 @@ struct kv_writer {
     }
     {
       const auto& [k, v] = *it;
-      out = fmt::format_to(out, "{}{}", k, value_sep.inner);
+      // We dispatch the key through `print`, in order to deal with separators.
+      out = print(out, k);
+      out = fmt::format_to(out, "{}", value_sep.inner);
       out = print(out, v);
       ++it;
     }
     for (; it != r.end(); ++it) {
       const auto& [k, v] = *it;
-      out = fmt::format_to(out, "{}{}{}", field_sep.inner, k, value_sep.inner);
+      out = fmt::format_to(out, "{}", field_sep.inner);
+      out = print(out, k);
+      out = fmt::format_to(out, "{}", value_sep.inner);
       out = print(out, v);
     }
     return out;
@@ -314,6 +319,7 @@ struct kv_writer {
       return out;
     }
     out = print(out, *it);
+    ++it;
     for (; it != l.end(); ++it) {
       out = fmt::format_to(out, "{}", list_sep.inner);
       out = print(out, *it);
@@ -330,14 +336,38 @@ struct kv_writer {
       },
       [&](const auto& scalar) -> It {
         auto formatted = fmt::format("{}", scalar);
-        auto needs_quoting = formatted.find(flatten.inner) != formatted.npos;
-        needs_quoting |= formatted.find(field_sep.inner) != formatted.npos;
-        needs_quoting |= formatted.find(value_sep.inner) != formatted.npos;
-        needs_quoting |= formatted.find(list_sep.inner) != formatted.npos;
-        needs_quoting |= not null.inner.empty()
-                         and formatted.find(null.inner) != formatted.npos;
-        constexpr static auto p
-          = printers::escape(tenzir::detail::json_escaper);
+        auto needs_quoting
+          = formatted.find(field_sep.inner) != formatted.npos
+            or formatted.find(value_sep.inner) != formatted.npos
+            or formatted.find(list_sep.inner) != formatted.npos
+            or (not null.inner.empty()
+                and formatted.find(null.inner) != formatted.npos);
+        constexpr static auto escaper = [](auto& f, auto out) {
+          switch (*f) {
+            default:
+              *out++ = *f++;
+              return;
+            case '\\':
+              *out++ = '\\';
+              *out++ = '\\';
+              break;
+            case '"':
+              *out++ = '\\';
+              *out++ = '"';
+              break;
+            case '\n':
+              *out++ = '\\';
+              *out++ = 'n';
+              break;
+            case '\r':
+              *out++ = '\\';
+              *out++ = 'r';
+              break;
+          }
+          ++f;
+          return;
+        };
+        constexpr static auto p = printers::escape(escaper);
         if (needs_quoting) {
           *out++ = '"';
         }
@@ -573,15 +603,18 @@ public:
           diagnostic::warning("expected `record`, got `{}`", values.type.kind())
             .primary(input)
             .emit(ctx);
-          return series::null(null_type{}, values.length());
+          return series::null(string_type{}, values.length());
         }
         const auto struct_array
           = std::dynamic_pointer_cast<arrow::StructArray>(values.array);
         TENZIR_ASSERT(struct_array);
-        auto records = flatten(values.type, struct_array, ".").array;
+        auto [flattend_type, flattend_array, _]
+          = flatten(values.type, struct_array, writer.flatten.inner);
+        auto [resolved_type, resolved_array] = resolve_enumerations(
+          as<record_type>(flattend_type), flattend_array);
         auto builder = series_builder{type{string_type{}}};
         auto buffer = std::string{};
-        for (auto row : values3(*records)) {
+        for (auto row : values3(*resolved_array)) {
           if (not row) {
             builder.null();
             continue;

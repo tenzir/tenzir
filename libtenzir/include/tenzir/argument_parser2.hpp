@@ -185,24 +185,24 @@ private:
 };
 
 struct argument_info {
-  argument_info(std::string name, located<std::string> lstr)
-    : name{std::move(name)}, value{std::move(lstr.inner)}, loc{lstr.source} {
+  argument_info(std::string_view name, const located<std::string>& value)
+    : name{name}, value{value.inner}, loc{value.source} {
   }
-  argument_info(std::string name, std::string value)
-    : name{std::move(name)}, value{std::move(value)} {
+  argument_info(std::string_view name, std::string_view value)
+    : name{name}, value{value} {
   }
-  argument_info(std::string name,
+  argument_info(std::string_view name,
                 const std::optional<located<std::string>>& value)
-    : name{std::move(name)},
+    : name{name},
       value{value ? value->inner : std::string{}},
       loc{value ? value->source : location::unknown} {
   }
-  std::string name;
-  std::string value;
+  std::string_view name;
+  std::string_view value;
   location loc = location::unknown;
 };
 
-/// Ensures that none of the given string values is a full substring of another,
+/// Ensures that none of the given string values is a substring of another,
 /// ignoring empty strings.
 auto check_no_substrings(diagnostic_handler& dh,
                          std::vector<argument_info> values) -> failure_or<void>;

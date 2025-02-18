@@ -9,4 +9,4 @@ value as a JSON or YAML string.
 
 We added the functions `record.print_kv()`, `record.print_csv()`,
 `record.print_ssv()`, `record.print_tsv()` and `record.print_xsv()` to print
-records as formatted strings.
+records as the respective format.

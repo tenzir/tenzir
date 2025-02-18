@@ -8,6 +8,7 @@
 
 #include "tenzir/argument_parser.hpp"
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/concept/parseable/string/quoted_string.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
@@ -455,6 +456,7 @@ struct xsv_printer_impl {
     auto operator()(view3<record>) noexcept -> bool {
       TENZIR_UNREACHABLE();
     }
+
     template <typename T>
     auto operator()(const T& scalar) noexcept -> bool {
       sequence_empty = false;
@@ -481,6 +483,14 @@ struct xsv_printer_impl {
           case '"':
             *out++ = '\\';
             *out++ = '"';
+            break;
+          case '\n':
+            *out++ = '\\';
+            *out++ = 'n';
+            break;
+          case '\r':
+            *out++ = '\\';
+            *out++ = 'r';
             break;
         }
         ++f;
@@ -742,7 +752,6 @@ public:
     auto metadata = chunk_metadata{.content_type = content_type()};
     return printer_instance::make(
       [meta = std::move(metadata), args = args_,
-       first_type = std::optional<record_type>{},
        first = true](table_slice slice) mutable -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
@@ -758,12 +767,6 @@ public:
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
         auto slice_type = as<record_type>(input_schema);
-        if (not first_type) {
-          first_type = std::move(slice_type);
-        } else if (slice_type != *first_type) {
-          // TODO: Can we capture ctrl.diagnostics ?
-          // diagnostic::warning("type change in XSV writer").emit(dh);
-        }
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values3(*array)) {
@@ -777,8 +780,7 @@ public:
           TENZIR_ASSERT(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        auto chunk = chunk::make(std::exchange(buffer, {}), meta);
-        co_yield std::move(chunk);
+        co_yield chunk::make(std::move(buffer), meta);
       });
   }
 
@@ -798,7 +800,8 @@ private:
   auto content_type() const -> std::string {
     if (args_.field_sep.inner == ",") {
       return "text/csv";
-    } else if (args_.field_sep.inner == "\t") {
+    }
+    if (args_.field_sep.inner == "\t") {
       return "text/tab-separated-values";
     }
     return "text/plain";
@@ -1079,8 +1082,8 @@ public:
 auto make_xsv_printing_function(ast::expression input,
                                 xsv_printer_options opts) -> function_ptr {
   return function_use::make(
-    [input = std::move(input), opts = std::move(opts)](
-      function_plugin::evaluator eval, session ctx) mutable {
+    [input = std::move(input),
+     opts = std::move(opts)](function_plugin::evaluator eval, session ctx) {
       return map_series(eval(input), [&](series data) -> multi_series {
         if (data.type.kind().is<null_type>()) {
           return data;
@@ -1089,12 +1092,15 @@ auto make_xsv_printing_function(ast::expression input,
           diagnostic::warning("expected `record`, got `{}`", data.type.kind())
             .primary(input)
             .emit(ctx);
-          return series::null(null_type{}, data.length());
+          return series::null(string_type{}, data.length());
         }
         const auto struct_array
           = std::dynamic_pointer_cast<arrow::StructArray>(data.array);
         TENZIR_ASSERT(struct_array);
-        auto records = flatten(data.type, struct_array, ".").array;
+        auto [flattend_type, flattend_array, _]
+          = flatten(data.type, struct_array, ".");
+        auto [resolved_type, resolved_array] = resolve_enumerations(
+          as<record_type>(flattend_type), flattend_array);
         auto builder = series_builder{type{string_type{}}};
         auto printer = xsv_printer_impl{
           opts.field_sep.inner,
@@ -1102,7 +1108,7 @@ auto make_xsv_printing_function(ast::expression input,
           opts.null_value.inner,
         };
         auto buffer = std::string{};
-        for (auto row : values3(*records)) {
+        for (auto row : values3(*resolved_array)) {
           if (not row) {
             builder.null();
             continue;

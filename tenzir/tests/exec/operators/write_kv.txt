@@ -4,5 +4,6 @@ x=0
 x=1 y=2
 x=string
 x="quoted=string"
-x.y="127.0.0.1"
-x=\\n\\r\n
+x.y=127.0.0.1
+x=\\n\\r\n y=0
+l=0,1 l2=hello\n l3=

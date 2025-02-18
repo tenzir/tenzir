@@ -10,6 +10,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
@@ -443,41 +444,36 @@ class print_yaml final : public virtual function_plugin {
     auto expr = ast::expression{};
     auto include_document_markers = std::optional<location>{};
     auto parser = argument_parser2::function(name());
-
     parser.positional("input", expr, "any");
     parser.named("include_document_markers", include_document_markers);
     TRY(parser.parse(inv, ctx));
     return function_use::make(
       [call = inv.call.get_location(), expr = std::move(expr),
-       include_document_markers
-       = include_document_markers](evaluator eval, session) {
-        return map_series(eval(expr), [&](series arg) -> multi_series {
-          const auto f = detail::overload{
-            [&](const arrow::NullArray&) -> multi_series {
-              return arg;
-            },
-            [&](const auto& arr) -> multi_series {
-              YAML::Emitter out;
-              auto builder = series_builder{type{string_type{}}};
-              for (int64_t i = 0; i < arr.length(); ++i) {
-                auto row = view_at(arr, i);
-                if (not row) {
-                  builder.null();
-                  continue;
-                }
-                if (include_document_markers) {
-                  print_document(out, *row);
-                } else {
-                  print_node(out, *row);
-                }
-                auto str = std::string_view{out.c_str(), out.size()};
-                builder.try_data(str);
+       include_document_markers](evaluator eval, session) -> multi_series {
+        return map_series(eval(expr), [&](series values) -> multi_series {
+          if (values.type.kind().is<null_type>()) {
+            return values;
+          }
+          const auto work = [&](const auto& arr) -> multi_series {
+            YAML::Emitter out;
+            auto builder = series_builder{tenzir::type{string_type{}}};
+            for (auto row : values3(arr)) {
+              if (not row) {
+                builder.null();
+                continue;
               }
-              return builder.finish_assert_one_array();
-            },
+              if (include_document_markers) {
+                print_document(out, *row);
+              } else {
+                print_node(out, *row);
+              }
+              auto str = std::string_view{out.c_str(), out.size()};
+              builder.try_data(str);
+            }
+            return builder.finish_assert_one_array();
           };
-
-          return match(*arg.array, f);
+          const auto resolved = resolve_enumerations(std::move(values));
+          return match(*resolved.array, work);
         });
       });
   }

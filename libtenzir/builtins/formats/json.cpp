@@ -1079,18 +1079,21 @@ struct printer_args {
   std::optional<location> arrays_of_objects;
   bool tql = false;
 
-  auto add(argument_parser2& parser, bool compact, bool arrays) -> void {
-    parser.named("color", color_output);
+  auto add(argument_parser2& parser, bool add_compact, bool add_arrays,
+           bool add_color) -> void {
     parser.named("strip", omit_all);
     parser.named("strip_null_fields", omit_null_fields);
     parser.named("strip_nulls_in_lists", omit_nulls_in_lists);
     parser.named("strip_empty_records", omit_empty_objects);
     parser.named("strip_empty_lists", omit_empty_lists);
-    if (compact) {
+    if (add_compact) {
       parser.named("compact", compact_output);
     }
-    if (arrays) {
+    if (add_arrays) {
       parser.named("arrays_of_objects", arrays_of_objects);
+    }
+    if (add_color) {
+      parser.named("color", color_output);
     }
   }
 
@@ -1846,7 +1849,7 @@ public:
     auto n_jobs = std::optional<located<uint64_t>>{};
     args.tql = tql_;
     auto parser = argument_parser2::operator_("write_json");
-    args.add(parser, tql_, not tql_);
+    args.add(parser, tql_, not tql_, true);
     parser.named("_jobs", n_jobs);
     TRY(parser.parse(inv, ctx));
     if (n_jobs and n_jobs->inner == 0) {
@@ -1887,7 +1890,7 @@ public:
     args.compact_output = location::unknown;
     auto n_jobs = std::optional<located<uint64_t>>{};
     auto parser = argument_parser2::operator_(name());
-    args.add(parser, false, true);
+    args.add(parser, false, true, true);
     parser.named("_jobs", n_jobs);
     TRY(parser.parse(inv, ctx));
     if (n_jobs and n_jobs->inner == 0) {
@@ -1926,17 +1929,11 @@ public:
     auto args = printer_args{};
     auto parser = argument_parser2::function(name());
     parser.positional("x", expr, "any");
-    args.add(parser, false, false);
+    args.add(parser, false, false, false);
     TRY(parser.parse(inv, ctx));
-    auto style = default_style();
-    if (args.monochrome_output) {
-      style = no_style();
-    } else if (args.color_output) {
-      style = jq_style();
-    }
     auto opts = json_printer_options{
       .tql = false,
-      .style = style,
+      .style = no_style(),
       .oneline = compact_,
       .omit_null_fields = args.omit_null_fields or args.omit_all,
       .omit_nulls_in_lists = args.omit_nulls_in_lists or args.omit_all,
@@ -1946,28 +1943,27 @@ public:
     return function_use::make(
       [call = inv.call.get_location(), printer = tenzir::json_printer{opts},
        expr = std::move(expr)](evaluator eval, session) {
-        return map_series(eval(expr), [&](series arg) {
-          auto f = detail::overload{
-            [&](const arrow::NullArray&) -> multi_series {
-              return arg;
-            },
-            [&](const auto& arg) -> multi_series {
-              auto buffer = std::string{};
-              auto builder = series_builder{type{string_type{}}};
-              for (auto row : values3(arg)) {
-                buffer.clear();
-                if (not row) {
-                  builder.null();
-                  continue;
-                }
-                auto it = std::back_inserter(buffer);
-                printer.print(it, *row);
-                builder.data(buffer);
+        return map_series(eval(expr), [&](series values) -> multi_series {
+          if (values.type.kind().is<null_type>()) {
+            return values;
+          }
+          const auto work = [&](const auto& arg) -> multi_series {
+            auto buffer = std::string{};
+            auto builder = series_builder{tenzir::type{string_type{}}};
+            for (auto row : values3(arg)) {
+              buffer.clear();
+              if (not row) {
+                builder.null();
+                continue;
               }
-              return builder.finish_assert_one_array();
-            },
+              auto it = std::back_inserter(buffer);
+              printer.print(it, *row);
+              builder.data(buffer);
+            }
+            return builder.finish_assert_one_array();
           };
-          return match(*arg.array, f);
+          const auto resolved = resolve_enumerations(std::move(values));
+          return match(*resolved.array, work);
         });
       });
   }

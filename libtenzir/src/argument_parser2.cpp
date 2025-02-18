@@ -524,8 +524,8 @@ auto check_no_substrings(diagnostic_handler& dh,
       if (longer.value.find(shorter.value) != longer.value.npos) {
         diagnostic::error("`{}` and `{}` conflict", shorter.name, longer.name)
           .note("`{}` is a substring of `{}`", shorter.value, longer.value)
-          .primary(longer.loc)
           .primary(shorter.loc)
+          .primary(longer.loc)
           .emit(dh);
         return failure::promise();
       }
