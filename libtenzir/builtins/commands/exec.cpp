@@ -13,6 +13,7 @@
 #include <tenzir/plugin.hpp>
 
 #include <iostream>
+#include <unistd.h>
 
 namespace tenzir::plugins::exec {
 
@@ -45,13 +46,13 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto cfg = exec_config{};
   auto color_mode = caf::get_or(inv.options, "tenzir.exec.color", "auto");
   auto color = color_diagnostics{};
+  const auto no_color_env = not detail::getenv("NO_COLOR").value_or("").empty();
   if (color_mode == "always") {
     color = color_diagnostics::yes;
   } else if (color_mode == "never") {
     color = color_diagnostics::no;
   } else {
-    if (not isatty(STDERR_FILENO)
-        || not detail::getenv("NO_COLOR").value_or("").empty()) {
+    if (not isatty(STDERR_FILENO) or no_color_env) {
       color = color_diagnostics::no;
     } else {
       color = color_diagnostics::yes;
@@ -80,7 +81,10 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.implicit_bytes_sink = caf::get_or(
     inv.options, "tenzir.exec.implicit-bytes-sink", cfg.implicit_bytes_sink);
   cfg.implicit_events_sink = caf::get_or(
-    inv.options, "tenzir.exec.implicit-events-sink", cfg.implicit_events_sink);
+    inv.options, "tenzir.exec.implicit-events-sink",
+    make_default_implicit_events_sink(
+      (color_mode == "auto" and not no_color_env and isatty(STDOUT_FILENO))
+      or color_mode == "always"));
   cfg.implicit_bytes_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-source",
                   cfg.implicit_bytes_source);
