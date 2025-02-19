@@ -26,17 +26,19 @@ bool is_target_applicable(const qualified_record_field& index_qf,
   // This is unnecessarily complicated for now, but we don't currently have a
   // better API for it.
   const auto is_type_extractor = extractor.starts_with(':');
-  if (!is_type_extractor)
+  if (!is_type_extractor) {
     return index_qf.name() == extractor;
+  }
   const auto type_name = extractor.substr(1);
-  if (type_name.empty())
+  if (type_name.empty()) {
     return false;
+  }
   // First check whether the type name of any of the type names it aliases match
   // the type extractor.
   const auto type = index_qf.type();
-  for (const auto& name : type.names())
-    if (type_name == name)
-      return true;
+  if (type_name == type.name()) {
+    return true;
+  }
   // If that's not the case, check whether the type name is the name of any of
   // the underlying basic type.
   const auto basic_type_name = [](const concrete_type auto& x) noexcept {
@@ -59,8 +61,9 @@ bool should_create_partition_index(
   const qualified_record_field& index_qf,
   const std::vector<index_config::rule>& rules) {
   for (const auto& rule : rules) {
-    if (should_use_rule(rule.targets, index_qf))
+    if (should_use_rule(rule.targets, index_qf)) {
       return rule.create_partition_index;
+    }
   }
   return true;
 }

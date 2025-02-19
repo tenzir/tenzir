@@ -346,8 +346,9 @@ TEST(record_type name resolving) {
   CHECK_EQUAL(rt.resolve_key("r.not"), std::nullopt);
   auto to_vector = [](auto&& rng) {
     std::vector<offset> result{};
-    for (auto&& elem : std::forward<decltype(rng)>(rng))
+    for (auto&& elem : std::forward<decltype(rng)>(rng)) {
       result.push_back(std::forward<decltype(elem)>(elem));
+    }
     return result;
   };
   CHECK_EQUAL(to_vector(rt.resolve_key_suffix("a")),
@@ -731,10 +732,6 @@ TEST(named types) {
   CHECK(is<bool_type>(aat));
   CHECK_EQUAL(aat.name(), "l2");
   CHECK_EQUAL(fmt::format("{}", aat), "l2");
-  auto aat_names = std::string{};
-  for (auto&& name : aat.names())
-    fmt::format_to(std::back_inserter(aat_names), "{}", name);
-  CHECK_EQUAL(aat_names, "l2l1");
   const auto lat = type::from_legacy_type(legacy_bool_type{}.name("l3"));
   CHECK(is<bool_type>(lat));
   CHECK_EQUAL(lat.name(), "l3");
@@ -757,29 +754,11 @@ TEST(enriched types) {
   CHECK_EQUAL(aat.attribute("second"), "");
   CHECK_EQUAL(aat.attribute("third"), "nestingworks");
   CHECK_EQUAL(aat.attribute("fourth"), std::nullopt);
-  CHECK_EQUAL(fmt::format("{}", aat), "l2 #third=nestingworks");
+  CHECK_EQUAL(fmt::format("{}", aat),
+              "l2 #first=value #second #third=nestingworks");
   const auto lat = type::from_legacy_type(
     legacy_bool_type{}.attributes({{"first", "value"}, {"second"}}).name("l1"));
   CHECK_EQUAL(lat, at);
-}
-
-TEST(aliases) {
-  const auto t1 = bool_type{};
-  const auto t2 = type{"quux", t1};
-  const auto t3 = type{"qux", t2, {{"first"}}};
-  const auto t4 = type{"baz", t3};
-  const auto t5 = type{t4, {{"second"}}};
-  const auto t6 = type{"bar", t5, {{"third"}}};
-  const auto t7 = type{"foo", t6, {{"fourth"}}};
-  auto aliases = std::vector<type>{};
-  for (auto&& alias : t7.aliases())
-    aliases.push_back(std::move(alias));
-  REQUIRE_EQUAL(aliases.size(), 5u);
-  CHECK_EQUAL(aliases[0], t6);
-  CHECK_EQUAL(aliases[1], t4);
-  CHECK_EQUAL(aliases[2], t3);
-  CHECK_EQUAL(aliases[3], t2);
-  CHECK_EQUAL(aliases[4], t1);
 }
 
 TEST(metadata layer merging) {
@@ -798,8 +777,7 @@ TEST(metadata layer merging) {
     {{"one", "eins"}},
   };
   CHECK_EQUAL(t1, t2);
-
-  MESSAGE("attributes do not get merged in named metadata layers");
+  MESSAGE("attributes do get merged in named metadata layers");
   const auto t3 = type{
     type{
       "foo",
@@ -808,7 +786,7 @@ TEST(metadata layer merging) {
     },
     {{"one", "eins"}},
   };
-  CHECK_NOT_EQUAL(t1, t3);
+  CHECK_EQUAL(t1, t3);
   MESSAGE("attribute merging prefers new attributes");
   const auto t4 = type{
     "foo",
@@ -883,7 +861,8 @@ TEST(sum type) {
   };
   CHECK(match(type{ip_type{}}, is_type(ip_type{})));
   CHECK(match(type{bool_type{}}, is_type(bool_type{})));
-  CHECK(match(std::tuple{type{bool_type{}}, type{int64_type{}}}, is_type(bool_type{}, int64_type{})));
+  CHECK(match(std::tuple{type{bool_type{}}, type{int64_type{}}},
+              is_type(bool_type{}, int64_type{})));
 }
 
 TEST(hashes) {
