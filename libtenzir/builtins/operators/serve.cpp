@@ -810,13 +810,18 @@ struct serve_handler_state {
 };
 
 auto serve_handler(
-  serve_handler_actor::stateful_pointer<serve_handler_state> self)
-  -> serve_handler_actor::behavior_type {
+  serve_handler_actor::stateful_pointer<serve_handler_state> self,
+  const node_actor& node) -> serve_handler_actor::behavior_type {
   self->state().self = self;
-  self->state().serve_manager
-    = self->system().registry().get<serve_manager_actor>(
-      "tenzir.serve-manager");
-  TENZIR_ASSERT(self->state().serve_manager);
+  self
+    ->mail(atom::get_v, atom::label_v,
+           std::vector<std::string>{"serve-manager"})
+    .request(node, caf::infinite)
+    .await([self](std::vector<caf::actor>& actors) {
+      TENZIR_ASSERT(actors.size() == 1);
+      self->state().serve_manager
+        = caf::actor_cast<serve_manager_actor>(actors.front());
+    });
   return {
     [self](atom::http_request, uint64_t endpoint_id,
            tenzir::record& params) -> caf::result<rest_response> {
@@ -1023,8 +1028,7 @@ public:
 
   auto handler(caf::actor_system& system, node_actor node) const
     -> rest_handler_actor override {
-    TENZIR_UNUSED(node);
-    return system.spawn(serve_handler);
+    return system.spawn(serve_handler, node);
   }
 
   auto signature() const -> operator_signature override {
