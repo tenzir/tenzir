@@ -710,15 +710,9 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
       auto target_schema
-        = std::find_if(modules::schemas().begin(), modules::schemas().end(),
-                       [&](const auto& schema) {
-                         for (const auto& name : schema.names()) {
-                           if (name == schema_name) {
-                             return true;
-                           }
-                         }
-                         return false;
-                       });
+        = std::ranges::find_if(modules::schemas(), [&](const auto& schema) {
+            return schema.name() == schema_name;
+          });
       document.target_schema
         = target_schema == modules::schemas().end() ? type{} : *target_schema;
       // We intentionally fall through here; we create the builder lazily

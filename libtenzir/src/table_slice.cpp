@@ -838,16 +838,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     },
     [&](const type_extractor& ex) {
       for (const auto& [field, index] : layout.leaves()) {
-        bool match = field.type == ex.type;
-        if (not match) {
-          for (auto name : field.type.names()) {
-            if (name == ex.type.name()) {
-              match = true;
-              break;
-            }
-          }
-        }
-        if (match) {
+        if (field.type == ex.type or field.type.name() == ex.type.name()) {
           bind_array(index);
           return;
         }
