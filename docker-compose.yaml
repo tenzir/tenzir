@@ -10,8 +10,6 @@ services:
       - TENZIR_TOKEN=${TENZIR_TOKEN:-}
       - TENZIR_ENDPOINT=tenzir-node:5158
       - TENZIR_TQL2=true
-    ports:
-      - 5158:5158
     entrypoint:
       - tenzir-node
     volumes:
@@ -26,6 +24,8 @@ services:
     image: ${TENZIR_IMAGE:-ghcr.io/tenzir/tenzir:${TENZIR_VERSION:-main}}
     build:
       target: tenzir
+    profiles:
+      - donotstart
     depends_on:
       - tenzir-node
     environment:
