@@ -448,8 +448,7 @@ public:
         }
       }
     };
-    if (args_.x_min and args_.res
-        and (args_.ty == chart_type::line or args_.fill)) {
+    if (args_.x_min and args_.res) {
       TENZIR_ASSERT(not groups.empty());
       auto min = std::optional{args_.x_min->rounded};
       const auto& first = groups.begin()->first;
@@ -463,7 +462,7 @@ public:
     }
     for (auto prev = std::optional<data>{};
          const auto& [x, gb] : groups | std::views::take(args_.limit.inner)) {
-      if (args_.res and (args_.ty == chart_type::line or args_.fill)) {
+      if (args_.res) {
         while (auto gap = find_gap(prev, x)) {
           prev = gap.value();
           fill_at(std::move(gap).value());
@@ -472,8 +471,7 @@ public:
       insert(x, gb);
       prev = x;
     }
-    if (args_.x_max and args_.res
-        and (args_.ty == chart_type::line or args_.fill)) {
+    if (args_.x_max and args_.res) {
       TENZIR_ASSERT(not groups.empty());
       auto last = std::optional{groups.rbegin()->first};
       const auto& max = args_.x_max->rounded;
@@ -513,7 +511,7 @@ public:
 
   static auto jsonify_limit(const data& d) -> std::string {
     auto result = std::string{};
-    auto printer = json_printer{json_printer_options{
+    const auto printer = json_printer{json_printer_options{
       .tql = true,
       .numeric_durations = true,
     }};
@@ -752,18 +750,6 @@ public:
 
   auto validate_y(const data& d, std::string_view yname, tenzir::location loc,
                   diagnostic_handler& dh) const -> bool {
-    if (is<caf::none_t>(d)) {
-      if (args_.ty == chart_type::line) {
-        return true;
-      }
-      TENZIR_ASSERT(not args_.fill);
-      diagnostic::warning("y-axis cannot have type `null`")
-        .primary(std::move(loc))
-        .note(fmt::format("skipping {}", yname))
-        .hint("consider specifying `fill`")
-        .emit(dh);
-      return false;
-    }
     const auto ty = type::infer(d);
     if (not ty) {
       diagnostic::warning("failed to infer type of `y`")
@@ -773,7 +759,8 @@ public:
       return false;
     }
     if (not ty->kind()
-              .is_any<int64_type, uint64_type, double_type, duration_type>()) {
+              .is_any<null_type, int64_type, uint64_type, double_type,
+                      duration_type>()) {
       diagnostic::warning("y-axis cannot have type `{}`", ty->kind())
         .primary(std::move(loc))
         .note(fmt::format("skipping {}", yname))
