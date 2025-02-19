@@ -60,7 +60,7 @@ struct serializable_actor {
     if (not chunk) {
       return;
     }
-    auto deserializer = caf::binary_deserializer{*chunk};
+    auto deserializer = caf::binary_deserializer{as_bytes(chunk)};
     const auto ok = deserializer.apply(static_cast<Derived&>(*this));
     TENZIR_ASSERT(ok);
   }
@@ -116,10 +116,11 @@ public:
         return {std::move(out)};
       },
       // post-commit
-      [this](exec::checkpoint checkpoint) -> caf::result<void> {
-        TENZIR_UNUSED(checkpoint);
-        TENZIR_WARN("discard post-commit");
-      }};
+      // [this](exec::checkpoint checkpoint) -> caf::result<void> {
+      //   TENZIR_UNUSED(checkpoint);
+      //   TENZIR_WARN("discard post-commit");
+      // }
+    };
   }
 
   friend auto inspect(auto& f, discard_exec& x) -> bool {

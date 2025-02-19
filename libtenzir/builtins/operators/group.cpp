@@ -59,7 +59,7 @@ private:
   ast::expression over_;
   ir::pipeline pipe_;
   let_id id_;
-  std::unordered_map<ast::constant::kind, group_t> groups_;
+  // std::unordered_map<ast::constant::kind, group_t> groups_;
 };
 
 class group_exec final : public bp::operator_base {

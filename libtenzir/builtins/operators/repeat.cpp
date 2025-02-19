@@ -136,6 +136,7 @@ struct repeat_state {
   }
 };
 
+#if 0
 class plugin2 /*: transformation_operator<repeat_args, repeat_state> */ {
   auto name() -> std::string {
     return "repeat";
@@ -160,6 +161,7 @@ class plugin2 /*: transformation_operator<repeat_args, repeat_state> */ {
     return self->make_observable().repeat(std::move(input)).as_observable();
   }
 };
+#endif
 
 } // namespace
 
