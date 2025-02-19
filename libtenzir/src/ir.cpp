@@ -586,4 +586,12 @@ auto operator_compiler_plugin::operator_name() const -> std::string {
   return result;
 }
 
+ir::operator_ptr::operator_ptr(const operator_ptr&) {
+  TENZIR_TODO();
+}
+
+auto ir::operator_ptr::operator=(const operator_ptr&) -> operator_ptr& {
+  TENZIR_TODO();
+}
+
 } // namespace tenzir
