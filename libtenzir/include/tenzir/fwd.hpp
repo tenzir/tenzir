@@ -204,7 +204,7 @@ namespace exec {
 
 struct checkpoint;
 template <class T>
-struct message;
+struct msg;
 struct handshake;
 struct handshake_response;
 
@@ -522,8 +522,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::exec::handshake))
   TENZIR_ADD_TYPE_ID((tenzir::exec::handshake_response))
   TENZIR_ADD_TYPE_ID((tenzir::exec::checkpoint))
-  TENZIR_ADD_TYPE_ID((tenzir::exec::message<void>))
-  TENZIR_ADD_TYPE_ID((tenzir::exec::message<tenzir::table_slice>))
+  TENZIR_ADD_TYPE_ID((tenzir::exec::msg<void>))
+  TENZIR_ADD_TYPE_ID((tenzir::exec::msg<tenzir::table_slice>))
 
   // TODO: Make list, record, and map concrete typs to we don't need to do
   // these kinda things. See tenzir/aliases.hpp for their definitions.
