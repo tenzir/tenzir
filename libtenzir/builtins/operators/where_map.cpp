@@ -709,32 +709,31 @@ private:
       [](caf::typed_stream<exec::message<void>>) -> exec::handshake_response {
         TENZIR_TODO();
       },
-      [this](caf::typed_stream<exec::message<table_slice>> input)
+      [this](caf::typed_stream<exec::msg<table_slice>> input)
         -> exec::handshake_response {
         auto response = exec::handshake_response{};
         response.output
           = self_->observe(std::move(input), 30, 10)
               .concat_map(
-                [this](exec::message<table_slice> msg)
-                  -> caf::flow::observable<exec::message<table_slice>> {
+                [this](exec::msg<table_slice> msg)
+                  -> caf::flow::observable<exec::msg<table_slice>> {
                   return match(
                     std::move(msg),
                     [this](exec::checkpoint check)
-                      -> caf::flow::observable<exec::message<table_slice>> {
+                      -> caf::flow::observable<exec::msg<table_slice>> {
                       // TODO: Save state.
                       return self_->make_observable()
-                        .just(exec::message<table_slice>{check})
+                        .just(exec::msg<table_slice>{check})
                         .as_observable();
                     },
                     [this](const table_slice& slice)
-                      -> caf::flow::observable<exec::message<table_slice>> {
+                      -> caf::flow::observable<exec::msg<table_slice>> {
                       auto filtered = filter2(slice, expr_, ctx_, false);
                       return self_->make_observable()
                         .from_container(std::move(filtered))
-                        .map(
-                          [](table_slice slice) -> exec::message<table_slice> {
-                            return slice;
-                          })
+                        .map([](table_slice slice) -> exec::msg<table_slice> {
+                          return slice;
+                        })
                         .as_observable();
                     });
                 })

@@ -81,7 +81,6 @@ private:
     auto get_chunk = [](uuid id, size_t index) -> chunk_ptr {
       TENZIR_TODO();
     };
-
     auto ops = std::vector<operator_actor>{};
     for (auto [index, op] : detail::enumerate(pipe_)) {
       auto chunk = std::optional<chunk_ptr>{};

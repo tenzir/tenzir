@@ -178,11 +178,11 @@ public:
           = self_
               ->observe(as<caf::typed_stream<exec::message<void>>>(hs.input),
                         30, 10)
-              .map([](exec::message<void> msg) -> exec::message<table_slice> {
+              .map([](exec::message<void> msg) -> exec::msg<table_slice> {
                 return msg;
               })
               .concat(self_->make_observable().just(
-                exec::message<table_slice>{table_slice{}}))
+                exec::msg<table_slice>{table_slice{}}))
               .do_on_complete([] {
                 TENZIR_WARN("version completed");
               })
