@@ -1141,7 +1141,7 @@ public:
             *out_iter++ = '\n';
           }
         } else {
-          out_iter = fmt::format_to(out_iter, "[");
+          *out_iter++ = '[';
           array_open_written_ = true;
         }
       }
@@ -1149,6 +1149,10 @@ public:
         const auto ok = printer.print(out_iter, *row);
         TENZIR_ASSERT(ok);
         ++row;
+        if (not arrays_of_objects_) {
+          *out_iter++ = '\n';
+          co_yield chunk::make(std::exchange(buffer, {}), make_meta());
+        }
       }
       for (; row != rows.end(); ++row) {
         if (arrays_of_objects_) {
@@ -1156,17 +1160,15 @@ public:
           if (not opts_.oneline) {
             *out_iter++ = '\n';
           }
-        } else {
-          out_iter = fmt::format_to(out_iter, "\n");
         }
         const auto ok = printer.print(out_iter, *row);
         TENZIR_ASSERT(ok);
+        if (not arrays_of_objects_) {
+          *out_iter++ = '\n';
+          co_yield chunk::make(std::exchange(buffer, {}), make_meta());
+        }
       }
-      if (not arrays_of_objects_) {
-        *out_iter++ = '\n';
-      }
-      auto chunk = chunk::make(std::move(buffer), make_meta());
-      co_yield std::move(chunk);
+      co_yield chunk::make(std::move(buffer), make_meta());
     }
 
     virtual auto finish() -> generator<chunk_ptr> override {
