@@ -24,12 +24,15 @@ struct checkpoint {
   }
 };
 
+struct exhausted {};
+
 // WITHOUT END
 // observable<variant<checkpoint, T>>
 
 // WITH END
 // observable<variant<checkpoint, end, T>>
 // observable<variant<end, pair<checkpoint, observable<T>>>
+// observable<variant<end, checkpoint, observable<T>>
 
 // HOW TO SIGNAL PREVIOUS
 // -> observable<variant<checkpoint, end, T>>
@@ -42,42 +45,45 @@ struct checkpoint {
 // DB transform operator
 
 template <class T>
-struct msg : variant<checkpoint, T> {
-  using super = variant<checkpoint, T>;
+struct message : variant<checkpoint, exhausted, T> {
+  using super = variant<checkpoint, exhausted, T>;
   using super::super;
 
-  friend auto inspect(auto& f, msg<T>& x) -> bool {
+  friend auto inspect(auto& f, message<T>& x) -> bool {
     return f.apply(static_cast<super&>(x));
   }
 };
 
 template <>
-struct msg<void> : variant<checkpoint> {
-  using super = variant<checkpoint>;
+struct message<void> : variant<checkpoint, exhausted> {
+  using super = variant<checkpoint, exhausted>;
   using super::super;
 
   template <class U>
     requires(not std::is_void_v<U>)
-  explicit(false) operator msg<U>() && {
+  explicit(false) operator message<U>() && {
     return as<checkpoint>(std::move(*this));
   }
 
-  friend auto inspect(auto& f, msg<void>& x) -> bool {
+  friend auto inspect(auto& f, message<void>& x) -> bool {
     return f.apply(static_cast<super&>(x));
   }
 };
 
 template <class T>
-using msg_stream = caf::typed_stream<msg<T>>;
+using stream = caf::typed_stream<message<T>>;
 
 template <class T>
-struct as_msg_stream {
-  using type = msg_stream<T>;
+using observable = caf::flow::observable<message<T>>;
+
+template <class T>
+struct as_stream {
+  using type = stream<T>;
 };
 
-using msg_types = caf::type_list<void, table_slice>;
-using msg_stream_types = caf::detail::tl_map_t<msg_types, as_msg_stream>;
-using any_msg_stream = detail::tl_apply_t<msg_stream_types, variant>;
+using message_types = caf::type_list<void, table_slice>;
+using stream_types = caf::detail::tl_map_t<message_types, as_stream>;
+using any_stream = detail::tl_apply_t<stream_types, variant>;
 
 struct operator_actor_traits {
   using signatures = caf::type_list<
@@ -87,35 +93,31 @@ struct operator_actor_traits {
 
 using operator_actor = caf::typed_actor<operator_actor_traits>;
 
+// TODO: is this the rollback manager?
+using checkpoint_receiver_actor
+  = caf::typed_actor<auto(checkpoint, chunk_ptr)->caf::result<void>>;
+
 struct handshake {
   handshake() = default;
 
-  explicit(false) handshake(any_msg_stream input) : input{std::move(input)} {
+  explicit(false) handshake(any_stream input) : input{std::move(input)} {
   }
 
-  // TODO: is this the rollback manager?
-  using checkpoint_receiver_actor
-    = caf::typed_actor<auto(checkpoint, chunk_ptr)->caf::result<void>>;
-
-  variant<caf::typed_stream<msg<void>>, caf::typed_stream<msg<table_slice>>>
-    input;
-
-  // FIXME: can this be nullptr? when do we actually load this state?
-  chunk_ptr state;
+  any_stream input;
 
   // FIXME: actually set this:
   checkpoint_receiver_actor checkpoint_receiver;
 
   friend auto inspect(auto& f, handshake& x) -> bool {
-    return f.object(x).fields(
-      f.field("input", x.input), f.field("state", x.state),
-      f.field("checkpoint_receiver", x.checkpoint_receiver));
+    return f.object(x).fields(f.field("input", x.input),
+                              f.field("checkpoint_receiver",
+                                      x.checkpoint_receiver));
   }
 };
 
 struct handshake_response {
-  variant<caf::typed_stream<msg<void>>, caf::typed_stream<msg<table_slice>>>
-    output;
+  any_stream output;
+
   friend auto inspect(auto& f, handshake_response& x) -> bool {
     return f.apply(x.output);
   }

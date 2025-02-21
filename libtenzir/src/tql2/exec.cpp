@@ -352,7 +352,8 @@ auto run_pipeline(exec::pipeline_actor pipe, base_ctx ctx) -> failure_or<void> {
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                   caf::actor_system& sys) -> failure_or<bool> {
   // Transform the AST into IR.
-  auto b_ctx = base_ctx{ctx.dh(), ctx.reg(), &sys};
+  auto b_ctx = base_ctx{ctx.dh(), ctx.reg(), sys};
+  (void)b_ctx.system();
   auto c_ctx = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(c_ctx));
   if (cfg.dump_ir) {

@@ -689,9 +689,15 @@ public:
 
 class where_impl {
 public:
+  // For fresh start.
   where_impl(exec::operator_actor::pointer self, ast::expression expr,
              base_ctx ctx)
     : self_{self}, expr_{std::move(expr)}, ctx_{ctx} {
+  }
+
+  // For restoring.
+  where_impl(exec::operator_actor::pointer self, base_ctx ctx)
+    : self_{self}, ctx_{ctx} {
   }
 
   auto make_behavior() -> exec::operator_actor::behavior_type {
@@ -706,39 +712,51 @@ private:
   auto handshake(exec::handshake hs) -> caf::result<exec::handshake_response> {
     return match(
       std::move(hs.input),
-      [](caf::typed_stream<exec::message<void>>) -> exec::handshake_response {
+      [](exec::stream<void>) -> exec::handshake_response {
         TENZIR_TODO();
       },
-      [this](caf::typed_stream<exec::msg<table_slice>> input)
-        -> exec::handshake_response {
+      [&](exec::stream<table_slice> input) -> exec::handshake_response {
         auto response = exec::handshake_response{};
         response.output
-          = self_->observe(std::move(input), 30, 10)
-              .concat_map(
-                [this](exec::msg<table_slice> msg)
-                  -> caf::flow::observable<exec::msg<table_slice>> {
-                  return match(
-                    std::move(msg),
-                    [this](exec::checkpoint check)
-                      -> caf::flow::observable<exec::msg<table_slice>> {
-                      // TODO: Save state.
-                      return self_->make_observable()
-                        .just(exec::msg<table_slice>{check})
-                        .as_observable();
-                    },
-                    [this](const table_slice& slice)
-                      -> caf::flow::observable<exec::msg<table_slice>> {
-                      auto filtered = filter2(slice, expr_, ctx_, false);
-                      return self_->make_observable()
-                        .from_container(std::move(filtered))
-                        .map([](table_slice slice) -> exec::msg<table_slice> {
-                          return slice;
-                        })
-                        .as_observable();
-                    });
-                })
+          = impl(self_->observe(std::move(input), 30, 10),
+                 hs.checkpoint_receiver)
               .to_typed_stream("where-stream", duration::zero(), 1);
         return response;
+      });
+  }
+
+  auto
+  impl(exec::observable<table_slice> input, exec::checkpoint_receiver_actor cra)
+    -> exec::observable<table_slice> {
+    return input.concat_map(
+      [this, cra = std::move(cra)](
+        exec::message<table_slice> msg) -> exec::observable<table_slice> {
+        return match(
+          std::move(msg),
+          [&](exec::checkpoint check) -> exec::observable<table_slice> {
+            // TODO: Save state.
+            return self_->mail(check, chunk_ptr{})
+              .request(cra, caf::infinite)
+              .as_observable()
+              .map([check](caf::unit_t) -> exec::message<table_slice> {
+                return exec::message<table_slice>{check};
+              })
+              .as_observable();
+          },
+          [&](exec::exhausted e) -> exec::observable<table_slice> {
+            return self_->make_observable()
+              .just(exec::message<table_slice>{e})
+              .as_observable();
+          },
+          [&](const table_slice& slice) -> exec::observable<table_slice> {
+            auto filtered = filter2(slice, expr_, ctx_, false);
+            return self_->make_observable()
+              .from_container(std::move(filtered))
+              .map([](table_slice slice) -> exec::message<table_slice> {
+                return slice;
+              })
+              .as_observable();
+          });
       });
   }
 
@@ -761,6 +779,7 @@ public:
   }
 
   auto spawn(spawn_args args) const -> exec::operator_actor override {
+    TENZIR_ASSERT(not args.chunk or *args.chunk == nullptr);
     return args.sys.spawn(caf::actor_from_state<where_impl>, predicate_,
                           args.ctx);
   }

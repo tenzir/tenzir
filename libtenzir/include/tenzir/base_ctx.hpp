@@ -20,16 +20,19 @@ namespace tenzir {
 /// type interning, etc.
 class base_ctx {
 public:
-  base_ctx(diagnostic_handler& dh, const registry& reg,
-           caf::actor_system* sys = nullptr)
-    : dh_{dh}, reg_{reg}, sys_{sys} {
+  base_ctx(diagnostic_handler& dh, const registry& reg) : dh_{dh}, reg_{reg} {
+  }
+
+  base_ctx(diagnostic_handler& dh, const registry& reg, caf::actor_system& sys)
+    : dh_{dh}, reg_{reg}, sys_{&sys} {
   }
 
   // TODO: Consider using inheritance instead.
   template <class T>
     requires std::convertible_to<T, diagnostic_handler&>
              and std::convertible_to<T, const registry&>
-  explicit(false) base_ctx(T&& x) : base_ctx{x, x} {
+             and std::convertible_to<T, caf::actor_system&>
+  explicit(false) base_ctx(T&& x) : base_ctx{x, x, x} {
   }
 
   explicit(false) operator diagnostic_handler&() {
