@@ -95,6 +95,7 @@ RUN cmake -B build -G Ninja \
       -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
       -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
+      -D TENZIR_ENABLE_BUNDLED_LIBRDKAFKA:BOOL="ON" \
       -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
@@ -315,22 +316,26 @@ RUN apt-get update && \
       libboost-url1.81 \
       libc++1 \
       libc++abi1 \
+      libcurl4 \
       libflatbuffers2 \
       libfmt9 \
       libgrpc++1.51 \
       libhttp-parser2.9 \
+      liblz4-1 \
       libmaxminddb0 \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \
-      librdkafka++1 \
       libre2-9 \
+      libsasl2-2 \
       libspdlog1.10 \
       libunwind8 \
+      libxml2 \
       libxxhash-dev \
       libyaml-cpp0.7 \
       libyara9 \
       libzmq5 \
+      libzstd1 \
       lsb-release \
       openssl \
       python3 \
