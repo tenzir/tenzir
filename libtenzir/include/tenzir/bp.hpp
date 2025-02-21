@@ -28,7 +28,10 @@ public:
 
     caf::actor_system& sys;
     base_ctx ctx;
-    // TODO: Empty state?
+
+    // nullopt => fresh start
+    // nullptr => no chunk sent for restore point
+    // otherwise => chunk contents sent for restore point
     std::optional<chunk_ptr> chunk;
   };
 

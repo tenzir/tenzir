@@ -175,14 +175,12 @@ public:
     return {
       [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
         auto out
-          = self_
-              ->observe(as<caf::typed_stream<exec::message<void>>>(hs.input),
-                        30, 10)
-              .map([](exec::message<void> msg) -> exec::msg<table_slice> {
+          = self_->observe(as<exec::stream<void>>(hs.input), 30, 10)
+              .map([](exec::message<void> msg) -> exec::message<table_slice> {
                 return msg;
               })
               .concat(self_->make_observable().just(
-                exec::msg<table_slice>{table_slice{}}))
+                exec::message<table_slice>{table_slice{}}))
               .do_on_complete([] {
                 TENZIR_WARN("version completed");
               })

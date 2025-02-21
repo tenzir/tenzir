@@ -85,11 +85,9 @@ public:
     return {
       [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
         auto out
-          = self_
-              ->observe(as<caf::typed_stream<exec::msg<table_slice>>>(hs.input),
-                        30, 10)
+          = self_->observe(as<exec::stream<table_slice>>(hs.input), 30, 10)
               .concat_map([this, checkpoint_receiver = hs.checkpoint_receiver](
-                            exec::msg<table_slice> msg)
+                            exec::message<table_slice> msg)
                             -> caf::flow::observable<exec::message<void>> {
                 if (auto checkpoint = try_as<exec::checkpoint>(msg)) {
                   TENZIR_WARN("got checkpoint");
