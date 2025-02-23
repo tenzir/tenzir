@@ -509,6 +509,9 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::chunk_ptr>))
 
+  TENZIR_ADD_TYPE_ID((caf::typed_stream<tenzir::table_slice>))
+  TENZIR_ADD_TYPE_ID((caf::typed_stream<tenzir::chunk_ptr>))
+
   // TODO: Make list, record, and map concrete typs to we don't need to do
   // these kinda things. See tenzir/aliases.hpp for their definitions.
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::data>))
@@ -553,6 +556,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_synopsis_pair>))
   TENZIR_ADD_TYPE_ID((std::vector<std::filesystem::path>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::expression>))
+  TENZIR_ADD_TYPE_ID((std::optional<uint64_t>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_types)
 
