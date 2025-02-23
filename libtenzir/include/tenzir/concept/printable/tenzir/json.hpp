@@ -316,6 +316,11 @@ struct json_printer : printer_base<json_printer> {
   }
 
   template <class Iterator, class T>
+  auto print(Iterator& out, view3<T> v) const -> bool {
+    return print_visitor{out, options_}(v);
+  }
+
+  template <class Iterator, class T>
     requires(std::constructible_from<data_view2, T>
              and not std::constructible_from<view3<data>, T>)
   auto print(Iterator& out, T&& x) const -> bool {

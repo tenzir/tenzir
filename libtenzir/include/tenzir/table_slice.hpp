@@ -369,9 +369,49 @@ filter(const table_slice& slice, const ids& hints);
 /// that this does not go into records inside lists or maps.
 [[nodiscard]] table_slice resolve_enumerations(table_slice slice);
 
+/// Resolves all enumeration columns in a table slice to string columns. Note
+/// that this does not go into records inside lists or maps.
+[[nodiscard]] auto resolve_enumerations(series s) -> series;
+
+/// Resolves all enumeration columns in a struct Array to string columns. Note
+/// that this does not go into records inside lists or maps.
+[[nodiscard]] auto resolve_enumerations(
+  tenzir::type type,
+  const std::shared_ptr<type_to_arrow_array_t<tenzir::type>>& array)
+  -> std::pair<tenzir::type, std::shared_ptr<arrow::Array>>;
+
+/// This exists to prevent accidental usage of a mixed interface. Only the fully
+/// erased or the fully typed API should be used.
+template <std::derived_from<arrow::Array> ArrayT>
+auto resolve_enumerations(tenzir::type type,
+                          const std::shared_ptr<ArrayT>& array) -> void
+                                                                   = delete;
+
+/// Resolves all enumeration columns in a struct Array to string columns. Note
+/// that this does not go into records inside lists or maps.
+[[nodiscard]] auto
+resolve_enumerations(record_type schema,
+                     const std::shared_ptr<arrow::StructArray>& struct_array)
+  -> std::pair<record_type, std::shared_ptr<arrow::StructArray>>;
+
+/// Resolves all enumeration columns in a struct Array to string columns. Note
+/// that this does not go into records inside lists or maps.
+[[nodiscard]] auto
+resolve_enumerations(enumeration_type type,
+                     const std::shared_ptr<enumeration_type::array_type>& array)
+  -> std::pair<string_type, std::shared_ptr<arrow::StringArray>>;
+
+/// Resolves all enumeration columns in a struct Array to string columns. Note
+/// that this does not go into records inside lists or maps.
+[[nodiscard]] auto resolve_enumerations(
+  list_type type,
+  const std::shared_ptr<type_to_arrow_array_t<list_type>>& array)
+  -> std::pair<tenzir::list_type,
+               std::shared_ptr<type_to_arrow_array_t<list_type>>>;
+
 /// Resolve a meta extractor for a given table slice.
-auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
-  -> data;
+auto resolve_meta_extractor(const table_slice& slice,
+                            const meta_extractor& ex) -> data;
 
 /// Resolve an operand into an Array for a given table slice. Note that this
 /// already uses prefix matching instead of suffix matching.
@@ -383,14 +423,14 @@ auto resolve_operand(const table_slice& slice, const operand& op)
 /// Example: Splitting `{a.b: 42}` with `.` yields `{a: {b: 42}}`.
 auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice;
 
-auto unflatten(const arrow::ListArray& array, std::string_view sep)
-  -> std::shared_ptr<arrow::ListArray>;
+auto unflatten(const arrow::ListArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::ListArray>;
 
-auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
-  -> std::shared_ptr<arrow::Array>;
+auto unflatten(std::shared_ptr<arrow::Array> array,
+               std::string_view sep) -> std::shared_ptr<arrow::Array>;
 
-auto unflatten(const arrow::StructArray& array, std::string_view sep)
-  -> std::shared_ptr<arrow::StructArray>;
+auto unflatten(const arrow::StructArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::StructArray>;
 
 /// @related flatten
 struct flatten_result {

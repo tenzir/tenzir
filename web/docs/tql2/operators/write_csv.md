@@ -3,13 +3,25 @@
 Transforms event stream to CSV (Comma-Separated Values) byte stream.
 
 ```tql
-write_csv [no_header=bool]
+write_csv [list_sep=str, null_value=str, no_header=bool]
 ```
 
 ## Description
 
 The `write_csv` operator transforms an event stream into a byte stream by writing
 the events as CSV.
+
+### `list_sep: str`
+
+The string separating different elements in a list within a single field.
+
+Defaults to `";"`.
+
+### `null_value: str`
+
+The string denoting an absent value.
+
+Defaults to `" "`.
 
 ### `no_header=bool (optional)`
 

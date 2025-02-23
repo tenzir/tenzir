@@ -526,4 +526,36 @@ struct instantiate_argument_parser_methods {
 
 template struct instantiate_argument_parser_methods<std::monostate{}>;
 
+auto check_no_substrings(diagnostic_handler& dh,
+                         std::vector<argument_info> values) -> failure_or<void> {
+  for (size_t i = 0; i < values.size(); ++i) {
+    for (size_t j = i + 1; j < values.size(); ++j) {
+      const auto i_larger = values[i].value.size() > values[j].value.size();
+      const auto& longer = i_larger ? values[i] : values[j];
+      const auto& shorter = i_larger ? values[j] : values[i];
+      if (shorter.value.empty()) {
+        continue;
+      }
+      if (longer.value.find(shorter.value) != longer.value.npos) {
+        diagnostic::error("`{}` and `{}` conflict", shorter.name, longer.name)
+          .note("`{}` is a substring of `{}`", shorter.value, longer.value)
+          .primary(shorter.loc)
+          .primary(longer.loc)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+  }
+  return {};
+}
+
+auto check_non_empty(std::string_view name, const located<std::string>& v,
+                     diagnostic_handler& dh) -> failure_or<void> {
+  if (v.inner.empty()) {
+    diagnostic::error("`{}` must not be empty", name).primary(v).emit(dh);
+    return failure::promise();
+  }
+  return {};
+}
+
 } // namespace tenzir

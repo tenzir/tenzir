@@ -1,0 +1,2 @@
+str,int,duration,time,nested.x
+hello world,42,10s,2025-02-17T00:00:00Z,0

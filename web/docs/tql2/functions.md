@@ -4,10 +4,6 @@
 
 TODO: the following functions still need to be documented:
 
-- `format`
-- `parse_*`
-- `print_*`
-
 ## OCSF
 
 - `ocsf::category_name`
@@ -155,6 +151,19 @@ Function | Description | Example
 [`parse_tsv`](functions/parse_tsv.mdx) | Parses a string as TSV  | `string.parse_tsv(header=["a","b"])`
 [`parse_xsv`](functions/parse_xsv.mdx) | Parses a string as XSV | `string.parse_xsv(",", ";", "", header=["a","b"])`
 [`parse_yaml`](functions/parse_yaml.mdx) | Parses a string as YAML | `string.parse_yaml()`
+
+## Printing
+
+Function | Description | Example
+:--------|:-------------|:-------
+[`print_csv`](functions/print_csv.mdx) | Prints a record as comma separated values | `record.print_csv()`
+[`print_kv`](functions/print_kv.md) | Prints a record as Key-Value pairs | `record.print_kv()`
+[`print_json`](functions/print_json.mdx) | Prints a record as a JSON string | `record.print_json()`
+[`print_ndjson`](functions/print_ndjson.mdx) | Prints a record as NDJSON string | `record.print_ndjson()`
+[`print_ssv`](functions/print_ssv.mdx) | Prints a record as space separated values | `record.print_ssv()`
+[`print_tsv`](functions/print_tsv.mdx) | Prints a record as tab separated values | `record.print_tsv()`
+[`print_yaml`](functions/print_yaml.md) | Prints a value as a YAML document | `record.print_yaml()`
+[`print_xsv`](functions/print_xsv.md) | Prints a record as delimited separated values | `record.print_tsv()`
 
 ## Time & Date
 

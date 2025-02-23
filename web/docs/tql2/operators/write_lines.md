@@ -1,6 +1,11 @@
 # write_lines
 
-# TODO
+Writes the *values* of an event.
+
+:::tip
+The [`write_kv`](write_kv.md) operator also writes the *key*s in addition
+to the values.
+:::
 
 ```tql
 write_lines
@@ -25,3 +30,6 @@ version
 select version
 write_lines
 ```
+
+## See Also
+[`read_lines`](read_lines.md), [`write_kv`](write_kv.md)

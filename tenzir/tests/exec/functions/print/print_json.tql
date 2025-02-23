@@ -1,0 +1,2 @@
+from {x: 0}, {x:null}, {x: { x: 0, y: 1 } }, { x: [0,1,2,] }
+x = x.print_json()
