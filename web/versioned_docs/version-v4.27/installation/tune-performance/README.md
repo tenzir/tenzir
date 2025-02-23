@@ -180,7 +180,7 @@ We have a [blog post][parquet-and-feather-2] that does an in-depth
 comparison of various compression levels and storage formats.
 :::
 
-[parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
+[parquet-and-feather-2]: /archive/parquet-and-feather-writing-security-telemetry/
 
 ### Rebuild partitions
 

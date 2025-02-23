@@ -305,7 +305,7 @@ encounter.
 ### Deduplication
 
 Deduplication means removing duplicate events from a stream. Check out our [blog
-post on deduplication](/blog/reduce-cost-and-noise-with-deduplication) that
+post on deduplication](/archive/reduce-cost-and-noise-with-deduplication) that
 discusses this topic in more depth.
 
 #### Cribl

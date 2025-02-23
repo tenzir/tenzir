@@ -96,7 +96,7 @@ async function createConfig() {
   /// END CUSTOM CODE ///
   return {
     title: 'Tenzir',
-    tagline: 'Easy data pipelines for security teams.',
+    tagline: 'The data pipeline engine for security teams.',
     url: 'https://docs.tenzir.com',
     baseUrl: '/',
     onBrokenLinks: 'throw',
@@ -119,12 +119,26 @@ async function createConfig() {
         {
           redirects: [
             {
-              to: '/',
-              from: '/docs',
+              from: '/blog',
+              to: '/releases',
             },
           ],
         },
       ],
+      [
+        '@docusaurus/plugin-content-blog',
+        {
+          id: 'blog-archive',
+          routeBasePath: '/archive',
+          path: './archive',
+          blogTitle: 'Blog Archive',
+          blogSidebarCount: 100,
+          blogSidebarTitle: 'Blog Archive',
+          postsPerPage: 100,
+          beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
+          rehypePlugins: [[rehypePrettyCode, rehypePrettyCodeOptions]],
+        },
+      ]
     ],
 
     presets: [
@@ -147,13 +161,15 @@ async function createConfig() {
             remarkPlugins: [[require('@akopyl/docusaurus-toc-patcher'), {} ]]
           },
           blog: {
-            blogTitle: 'Blog',
-            blogDescription: 'News from the Tenzir community',
-            blogSidebarCount: 20,
-            blogSidebarTitle: 'Blog Posts',
-            postsPerPage: 20,
+            blogTitle: 'Releases',
+            blogDescription: 'Release Notes',
+            blogSidebarCount: 100,
+            blogSidebarTitle: 'Release Notes',
+            postsPerPage: 100,
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
             rehypePlugins: [[rehypePrettyCode, rehypePrettyCodeOptions]],
+            routeBasePath: '/releases',
+            path: './releases',
           },
           pages: {
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
@@ -212,8 +228,8 @@ async function createConfig() {
               label: 'Docs',
             },
             {
-              to: 'blog',
-              label: 'Blog',
+              to: '/releases',
+              label: 'Releases',
               position: 'left',
             },
             {
@@ -256,24 +272,20 @@ async function createConfig() {
               title: 'Resources',
               items: [
                 {
-                  label: 'Docs',
-                  to: '/',
-                },
-                {
                   label: 'API',
                   to: '/api',
-                },
-                {
-                  label: 'Blog',
-                  to: '/blog',
                 },
                 {
                   label: 'Changelog',
                   to: '/changelog',
                 },
                 {
-                  label: 'Release Notes',
+                  label: 'Release Slides',
                   href: 'https://docs.google.com/presentation/d/1R59T2nuGJg43g6PVKogZbb6DjcJXRYBx3Bih8W-A-oM/present',
+                },
+                {
+                  label: 'Tenzir vs. Cribl',
+                  href: '/tenzir-vs-cribl',
                 },
               ],
             },
@@ -286,7 +298,7 @@ async function createConfig() {
                 },
                 {
                   label: 'GitHub',
-                  href: 'https://github.com/tenzir/tenzir',
+                  href: 'https://github.com/tenzir',
                 },
                 {
                   label: 'Twitter',
@@ -306,17 +318,20 @@ async function createConfig() {
                   href: 'https://tenzir.com',
                 },
                 {
+                  label: 'Blog',
+                  href: 'https://tenzir.com/blog',
+                },
+                {
+                  label: 'Blog Archive',
+                  href: '/archive',
+                },
+                {
                   label: 'Newsletter',
                   to: '/newsletter',
                 },
                 {
                   label: 'Privacy Statement',
                   to: '/privacy-statement',
-                },
-                {
-                  label: 'Tenzir vs. Cribl',
-                  // TODO: remove /next/ after the page is part of a release.
-                  href: '/next/tenzir-vs-cribl',
                 },
               ],
             },

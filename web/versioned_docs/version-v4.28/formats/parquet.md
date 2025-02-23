@@ -68,7 +68,7 @@ option is ignored if no compression type is specified.
 
 Defaults to the compression type's default compression level.
 
-[parquet-and-feather-blog]: ../../../../blog/parquet-and-feather-writing-security-telemetry/
+[parquet-and-feather-blog]: ../../../../archive/parquet-and-feather-writing-security-telemetry/
 
 ## Examples
 

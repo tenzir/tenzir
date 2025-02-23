@@ -150,7 +150,7 @@ non-engineer user base. This inspired us to create a language with:
 - The *composability* of [Nu](https://www.nushell.sh/)
 
 Even Elastic recognized the need for more intuitive languages by introducing
-[ES|QL](/blog/a-first-look-at-esql), which leans into a pipeline style. Nearly
+[ES|QL](/archive/a-first-look-at-esql), which leans into a pipeline style. Nearly
 every major SIEM and observability tool has adopted some version of a pipeline
 language, underscoring the trend toward simplified, step-by-step data
 handling.
