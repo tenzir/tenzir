@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[28006],{57263:e=>{e.exports=JSON.parse('{"label":"query-frontend","permalink":"/archive/tags/query-frontend","allTagsPath":"/archive/tags","count":1}')}}]);

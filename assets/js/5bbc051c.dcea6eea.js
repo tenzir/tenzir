@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[51142],{72072:e=>{e.exports=JSON.parse('{"permalink":"/releases/tags/enrich","page":1,"postsPerPage":100,"totalPages":1,"totalCount":1,"blogDescription":"Release Notes","blogTitle":"Releases"}')}}]);

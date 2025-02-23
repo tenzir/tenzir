@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[84598],{34455:e=>{e.exports=JSON.parse('{"permalink":"/releases/tags/python","page":1,"postsPerPage":100,"totalPages":1,"totalCount":3,"blogDescription":"Release Notes","blogTitle":"Releases"}')}}]);

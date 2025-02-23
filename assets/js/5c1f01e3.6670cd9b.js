@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[60723],{79042:e=>{e.exports=JSON.parse('{"permalink":"/archive/tags/open-source","page":1,"postsPerPage":100,"totalPages":1,"totalCount":1,"blogDescription":"Blog","blogTitle":"Blog Archive"}')}}]);

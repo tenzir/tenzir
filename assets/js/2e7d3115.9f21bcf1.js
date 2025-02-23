@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[49259],{67501:e=>{e.exports=JSON.parse('{"permalink":"/archive/tags/benchmark","page":1,"postsPerPage":100,"totalPages":1,"totalCount":1,"blogDescription":"Blog","blogTitle":"Blog Archive"}')}}]);

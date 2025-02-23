@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[33515],{95078:e=>{e.exports=JSON.parse('{"permalink":"/releases/tags/pipelines-as-code","page":1,"postsPerPage":100,"totalPages":1,"totalCount":1,"blogDescription":"Release Notes","blogTitle":"Releases"}')}}]);

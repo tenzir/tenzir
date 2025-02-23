@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[34955],{33563:a=>{a.exports=JSON.parse('{"label":"dataops","permalink":"/archive/tags/dataops","allTagsPath":"/archive/tags","count":1}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[53551],{74612:e=>{e.exports=JSON.parse('{"permalink":"/archive/tags/discord","page":1,"postsPerPage":100,"totalPages":1,"totalCount":2,"blogDescription":"Blog","blogTitle":"Blog Archive"}')}}]);

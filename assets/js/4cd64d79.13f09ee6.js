@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[91986],{80318:e=>{e.exports=JSON.parse('{"label":"fluent-bit","permalink":"/archive/tags/fluent-bit","allTagsPath":"/archive/tags","count":1}')}}]);

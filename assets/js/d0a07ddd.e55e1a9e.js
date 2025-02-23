@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[27697],{73758:e=>{e.exports=JSON.parse('{"permalink":"/releases/tags/syslog","page":1,"postsPerPage":100,"totalPages":1,"totalCount":3,"blogDescription":"Release Notes","blogTitle":"Releases"}')}}]);

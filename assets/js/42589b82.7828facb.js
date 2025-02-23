@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[52605],{61225:e=>{e.exports=JSON.parse('{"permalink":"/archive/tags/vast","page":1,"postsPerPage":100,"totalPages":1,"totalCount":2,"blogDescription":"Blog","blogTitle":"Blog Archive"}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[33372],{8841:e=>{e.exports=JSON.parse('{"label":"threat-intel","permalink":"/archive/tags/threat-intel","allTagsPath":"/archive/tags","count":1}')}}]);

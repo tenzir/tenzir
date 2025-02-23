@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[73110],{73263:e=>{e.exports=JSON.parse('{"permalink":"/archive/tags/spl","page":1,"postsPerPage":100,"totalPages":1,"totalCount":2,"blogDescription":"Blog","blogTitle":"Blog Archive"}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[33215],{17274:a=>{a.exports=JSON.parse('{"label":"secdataops","permalink":"/archive/tags/secdataops","allTagsPath":"/archive/tags","count":1}')}}]);

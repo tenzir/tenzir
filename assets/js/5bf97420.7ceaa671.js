@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[55238],{24357:e=>{e.exports=JSON.parse('{"permalink":"/releases/tags/operators","page":1,"postsPerPage":100,"totalPages":1,"totalCount":5,"blogDescription":"Release Notes","blogTitle":"Releases"}')}}]);
