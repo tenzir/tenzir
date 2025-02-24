@@ -326,6 +326,7 @@ in {
         ps.pipeline-manager
         ps.platform
         ps.to_asl
+        ps.to_splunk
         ps.vast
       ] ++ lib.optionals (!isStatic) [
         ps.snowflake
