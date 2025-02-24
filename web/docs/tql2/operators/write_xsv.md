@@ -3,7 +3,7 @@
 Transforms event stream to XSV byte stream.
 
 ```tql
-write_xsv field_sep:str, list_sep:str, null_value:str, [no_header=bool]
+write_xsv field_separator=str, list_separator=str, null_value=str, [no_header=bool]
 ```
 
 ## Description
@@ -27,15 +27,15 @@ The following table lists existing XSV configurations:
 
 Note that nested records have dot-separated field names.
 
-### `field_sep: str`
+### `field_separator = str`
 
 The string separating different fields.
 
-### `list_sep: str`
+### `list_separator = str`
 
 The string separating different elements in a list within a single field.
 
-### `null_value: str`
+### `null_value = str`
 
 The string denoting an absent value.
 

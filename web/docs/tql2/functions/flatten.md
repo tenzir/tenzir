@@ -3,7 +3,7 @@
 Flattens nested data.
 
 ```tql
-flatten(x:record) -> record
+flatten(x:record, separtor=string) -> record
 ```
 
 ## Description
@@ -89,7 +89,11 @@ becomes
 
 As you can see from the above examples, flattening also removes `null` values.
 
-### `sep = string (optional)`
+### `x: record`
+
+The record you want to flatten.
+
+### `separator: string (optional)`
 
 The separator to use for joining field names.
 

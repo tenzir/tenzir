@@ -3,7 +3,7 @@
 Unflattens nested data.
 
 ```tql
-unflatten(x:record, [sep=string]) -> record
+unflatten(x:record, [separator=string]) -> record
 ```
 
 ## Description
@@ -18,7 +18,11 @@ unflattened afterwards may not be identical to the schema of the unmodified
 record.
 :::
 
-### `sep = string (optional)`
+### `x: record`
+
+The record you want to unflatten.
+
+### `separator: string (optional)`
 
 The separator to use for splitting field names.
 

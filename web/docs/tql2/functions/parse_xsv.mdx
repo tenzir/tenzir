@@ -8,7 +8,8 @@ Parses a string as delimiter separated values.
 parse_xsv(input:string, field_sep:string, list_sep:string, null_value:string,
           header=list<string>|string,
          [auto_expand=bool, quotes=string, schema=string,
-          selector=string, schema_only=bool, raw=bool, unflatten=string]) -> record
+          selector=string, schema_only=bool, raw=bool,
+          unflatten_separator=string]) -> record
 ```
 
 ## Description
@@ -62,7 +63,9 @@ Defaults to the characters `"'`.
 ```tql
 from { input: "1,2,3" }
 output = input.parse_xsv(
-  ",", ";", "",
+  field_separtor=",",
+  list_separator= ";",
+  null_value="",
   header=["a","b","c"],
 )
 ```

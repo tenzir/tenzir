@@ -3,7 +3,7 @@
 Prints a record as a delimited sequence of values.
 
 ```tql
-print_xsv(input:record, field_sep:str, list_sep:str, null_value:str, [no_header=bool]) -> string
+print_xsv(input:record, field_separator=str, list_separator=str, null_value=str) -> string
 ```
 
 ## Description
@@ -18,15 +18,15 @@ The following table lists existing XSV configurations:
 |[`ssv`](print_ssv.mdx)|`<space>`      |`,`           |`-`       |
 |[`tsv`](print_tsv.mdx)|`\t`           |`,`           |`-`       |
 
-### `field_sep: str`
+### `field_separator = str`
 
 The string separating different fields.
 
-### `list_sep: str`
+### `list_separator = str`
 
 The string separating different elements in a list within a single field.
 
-### `null_value: str`
+### `null_value = str`
 
 The string denoting an absent value.
 
@@ -34,7 +34,10 @@ The string denoting an absent value.
 
 ```tql
 from {x:1, y:true, z: "String"}
-output = this.print_xsv(",",";", "null")
+output = this.print_xsv(
+  field_separator=",",
+  list_selarator=";",
+  null_value="null")
 ```
 ```tql
 {

@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/detail/assert.hpp>
@@ -271,22 +272,22 @@ struct kv_writer {
   }
 
   auto add(argument_parser2& parser) {
-    parser.named_optional("field_sep", field_sep);
-    parser.named_optional("value_sep", value_sep);
-    parser.named_optional("list_sep", list_sep);
-    parser.named_optional("flatten", flatten);
-    parser.named_optional("null", null);
+    parser.named_optional("field_separator", field_sep);
+    parser.named_optional("value_separator", value_sep);
+    parser.named_optional("list_separator", list_sep);
+    parser.named_optional("flatten_separator", flatten);
+    parser.named_optional("null_value", null);
   };
 
   auto validate(diagnostic_handler& dh) -> failure_or<void> {
-    TRY(check_no_substrings(dh, {{"flatten", flatten},
-                                 {"field_sep", field_sep},
-                                 {"value_sep", value_sep},
-                                 {"list_sep", list_sep},
-                                 {"null", null}}));
-    TRY(check_non_empty("field_sep", field_sep, dh));
-    TRY(check_non_empty("value_sep", field_sep, dh));
-    TRY(check_non_empty("list_sep", field_sep, dh));
+    TRY(check_no_substrings(dh, {{"flatten_separator", flatten},
+                                 {"field_separator", field_sep},
+                                 {"value_separator", value_sep},
+                                 {"list_separator", list_sep},
+                                 {"null_value", null}}));
+    TRY(check_non_empty("field_separator", field_sep, dh));
+    TRY(check_non_empty("value_separator", field_sep, dh));
+    TRY(check_non_empty("list_separator", field_sep, dh));
     return {};
   }
 
@@ -597,7 +598,7 @@ public:
                                                            session ctx) {
       return map_series(eval(input), [&](series values) -> multi_series {
         if (values.type.kind().is<null_type>()) {
-          return values;
+          return series::null(string_type{}, values.length());
         }
         if (values.type.kind() != type{record_type{}}.kind()) {
           diagnostic::warning("expected `record`, got `{}`", values.type.kind())
@@ -612,18 +613,18 @@ public:
           = flatten(values.type, struct_array, writer.flatten.inner);
         auto [resolved_type, resolved_array] = resolve_enumerations(
           as<record_type>(flattend_type), flattend_array);
-        auto builder = series_builder{type{string_type{}}};
+        auto builder = type_to_arrow_builder_t<string_type>{};
         auto buffer = std::string{};
         for (auto row : values3(*resolved_array)) {
           if (not row) {
-            builder.null();
+            check(builder.AppendNull());
             continue;
           }
           buffer.clear();
           writer.print(std::back_inserter(buffer), *row);
-          builder.data(buffer);
+          check(builder.Append(buffer));
         }
-        return builder.finish_assert_one_array();
+        return series{string_type{}, check(builder.Finish())};
       });
     });
   }

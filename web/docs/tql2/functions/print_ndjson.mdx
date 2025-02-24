@@ -5,9 +5,9 @@ import Docs from './_print_json_common.mdx'
 Transforms a value into a single-line JSON string.
 
 ```tql
-print_ndjson input:any [strip=bool, color=bool, arrays_of_objects=bool,
-                        strip_null_fields=bool, strip_nulls_in_lists=bool,
-                        strip_empty_records=bool, strip_empty_lists=bool]
+print_ndjson(input:any, [strip=bool, color=bool, arrays_of_objects=bool,
+                         strip_null_fields=bool, strip_nulls_in_lists=bool,
+                         strip_empty_records=bool, strip_empty_lists=bool]) -> string
 ```
 
 ## Description

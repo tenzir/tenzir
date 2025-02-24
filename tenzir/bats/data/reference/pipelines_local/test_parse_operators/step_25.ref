@@ -28,8 +28,8 @@ where (xyz == 123 @ 24..35) @ 18..35
 pipeline [
   write xsv {
     args: {
-      field_sep: "," @ 0..0,
-      list_sep: ";" @ 0..0,
+      field_separator: "," @ 0..0,
+      field_separator: ";" @ 0..0,
       null_value: "" @ 0..0,
       no_header: false
     }

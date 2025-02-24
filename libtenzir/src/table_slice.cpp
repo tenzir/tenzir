@@ -724,19 +724,14 @@ constexpr static auto resolve_enumerations_transformation = [](
   for (const auto& value :
        values(et, as<type_to_arrow_array_t<enumeration_type>>(*array))) {
     if (!value) {
-      const auto append_result = builder->AppendNull();
-      TENZIR_ASSERT_EXPENSIVE(append_result.ok(),
-                              append_result.ToString().c_str());
+      check(builder->AppendNull());
       continue;
     }
-    const auto append_result
-      = append_builder(string_type{}, *builder, et.field(*value));
-    TENZIR_ASSERT_EXPENSIVE(append_result.ok(),
-                            append_result.ToString().c_str());
+    check(append_builder(string_type{}, *builder, et.field(*value)));
   }
   return {{
-    {field.name, new_type},
-    builder->Finish().ValueOrDie(),
+    {field.name, std::move(new_type)},
+    check(builder->Finish()),
   }};
 };
 
@@ -773,19 +768,19 @@ auto resolve_enumerations(
   const std::shared_ptr<type_to_arrow_array_t<tenzir::type>>& array)
   -> std::pair<tenzir::type, std::shared_ptr<arrow::Array>> {
   if (auto* t = try_as<enumeration_type>(type)) {
-    auto arr = std::dynamic_pointer_cast<enumeration_type::array_type>(array);
+    auto arr = std::static_pointer_cast<enumeration_type::array_type>(array);
     TENZIR_ASSERT(arr);
     return erase(resolve_enumerations(std::move(*t), arr));
   }
   if (auto* t = try_as<record_type>(type)) {
     auto arr
-      = std::dynamic_pointer_cast<type_to_arrow_array_t<record_type>>(array);
+      = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
     TENZIR_ASSERT(arr);
     return erase(resolve_enumerations(std::move(*t), arr));
   }
   if (auto* t = try_as<list_type>(type)) {
     auto arr
-      = std::dynamic_pointer_cast<type_to_arrow_array_t<list_type>>(array);
+      = std::static_pointer_cast<type_to_arrow_array_t<list_type>>(array);
     TENZIR_ASSERT(arr);
     return erase(resolve_enumerations(std::move(*t), arr));
   }
@@ -809,7 +804,7 @@ auto resolve_enumerations(
   }
   auto transform_result = transform_columns(tenzir::type{std::move(schema)},
                                             struct_array, transformations);
-  auto result_array = std::dynamic_pointer_cast<arrow::StructArray>(
+  auto result_array = std::static_pointer_cast<arrow::StructArray>(
     std::move(transform_result.second));
   TENZIR_ASSERT(result_array);
   return {as<record_type>(transform_result.first), std::move(result_array)};

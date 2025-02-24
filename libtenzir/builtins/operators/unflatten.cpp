@@ -79,7 +79,7 @@ public:
     auto sep = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "any")
-          .named("sep", sep)
+          .positional("separator", sep)
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), sep = std::move(sep)](evaluator eval, session) {

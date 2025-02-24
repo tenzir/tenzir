@@ -1945,22 +1945,26 @@ public:
        expr = std::move(expr)](evaluator eval, session) {
         return map_series(eval(expr), [&](series values) -> multi_series {
           if (values.type.kind().is<null_type>()) {
-            return values;
+            auto builder = type_to_arrow_builder_t<string_type>{};
+            for (int64_t i = 0; i < values.length(); ++i) {
+              check(builder.Append("null"));
+            }
+            return series{string_type{}, check(builder.Finish())};
           }
           const auto work = [&](const auto& arg) -> multi_series {
             auto buffer = std::string{};
-            auto builder = series_builder{tenzir::type{string_type{}}};
+            auto builder = type_to_arrow_builder_t<string_type>{};
             for (auto row : values3(arg)) {
-              buffer.clear();
               if (not row) {
-                builder.null();
+                check(builder.Append("null"));
                 continue;
               }
+              buffer.clear();
               auto it = std::back_inserter(buffer);
               printer.print(it, *row);
-              builder.data(buffer);
+              check(builder.Append(buffer));
             }
-            return builder.finish_assert_one_array();
+            return series{string_type{}, check(builder.Finish())};
           };
           const auto resolved = resolve_enumerations(std::move(values));
           return match(*resolved.array, work);

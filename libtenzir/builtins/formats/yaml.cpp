@@ -452,14 +452,19 @@ class print_yaml final : public virtual function_plugin {
        include_document_markers](evaluator eval, session) -> multi_series {
         return map_series(eval(expr), [&](series values) -> multi_series {
           if (values.type.kind().is<null_type>()) {
-            return values;
+            auto builder = type_to_arrow_builder_t<string_type>{};
+            for (int64_t i = 0; i < values.length(); ++i) {
+              check(builder.Append("null"));
+            }
+            return series{string_type{}, check(builder.Finish())};
           }
           const auto work = [&](const auto& arr) -> multi_series {
             YAML::Emitter out;
-            auto builder = series_builder{tenzir::type{string_type{}}};
+            out.SetNullFormat(YAML::LowerNull);
+            auto builder = type_to_arrow_builder_t<string_type>{};
             for (auto row : values3(arr)) {
               if (not row) {
-                builder.null();
+                check(builder.Append("null"));
                 continue;
               }
               if (include_document_markers) {
@@ -468,9 +473,9 @@ class print_yaml final : public virtual function_plugin {
                 print_node(out, *row);
               }
               auto str = std::string_view{out.c_str(), out.size()};
-              builder.try_data(str);
+              check(builder.Append(str));
             }
-            return builder.finish_assert_one_array();
+            return series{string_type{}, check(builder.Finish())};
           };
           const auto resolved = resolve_enumerations(std::move(values));
           return match(*resolved.array, work);

@@ -3,7 +3,8 @@
 Writes events in a Key-Value format.
 
 ```tql
-write_kv [field_sep=str, value_sep=str, list_sep=str, flatten=str, null=str]
+write_kv [field_separator=str, value_separator=str, list_separator=str,
+          flatten_separator=str, null_value=str]
 ```
 
 ## Description

@@ -5,9 +5,9 @@ import CommonOptions from '../_common_parsing_options_base.mdx';
 Read SSV (Space-Separated Values) from a byte stream.
 
 ```tql
-read_ssv [list_sep=string, null_value=string, comments=bool, header=string,
+read_ssv [list_separator=string, null_value=string, comments=bool, header=string,
           quotes=string, auto_expand=bool,
-          schema=string, selector=string, schema_only=bool, raw=bool, unflatten=string]
+          schema=string, selector=string, schema_only=bool, raw=bool, unflatten_separator=string]
 ```
 
 ## Description
@@ -30,7 +30,7 @@ A list of strings to be used as the column names, or a `string` to be parsed
 as the `header` for the parsed values.
 If unspecified, the first line of the input is used as the header.
 
-### `list_sep = string (optional)`
+### `list_separator = string (optional)`
 
 The `string` separating the elements _inside_ a list.
 

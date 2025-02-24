@@ -8,8 +8,8 @@
   },
   read_xsv {
     name: "csv",
-    field_sep: ",",
-    list_sep: ";",
+    field_separator: ",",
+    list_separator: ";",
     null_value: "",
     quotes: "\"'",
     auto_expand: false,
