@@ -35,3 +35,7 @@ Write an event as TSV.
 from {x:1, y:true, z: "String"}
 write_tsv
 ```
+```
+x	y	z
+1	true	String
+```

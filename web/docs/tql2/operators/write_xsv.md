@@ -44,3 +44,12 @@ The string denoting an absent value.
 Whether to not print a header line containing the field names.
 
 ## Examples
+
+```tql
+from {x:1, y:true, z: "String"}
+write_xsv field_separator="/", list_separator=";", null_value=""
+```
+```
+x/y/z
+1/true/String
+```

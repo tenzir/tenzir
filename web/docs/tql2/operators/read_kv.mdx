@@ -5,7 +5,7 @@ import CommonOptions from './_common_parsing_options.mdx';
 Read Key-Value pairs from a byte stream.
 
 ```tql
-read_kv [field_split:string, value_split:string, merge=bool, raw=bool, quotes=string,
+read_kv [field_split=string, value_split=string, merge=bool, raw=bool, quotes=string,
          schema=string, selector=string, schema_only=bool, unflatten_separator=string]
 ```
 
@@ -55,13 +55,13 @@ will parse as
 }
 ```
 
-### `field_split: string (optional)`
+### `field_split = string (optional)`
 
 The regular expression used to separate individual fields.
 
 Defaults to `r"\s"`.
 
-### `value_split: string (optional)`
+### `value_split = string (optional)`
 
 The regular expression used to separate a key from its value.
 
@@ -84,7 +84,8 @@ surname:"John Norman", family_name:Smith, date_of_birth: 1995-05-26
 ```
 
 ```tql title=" "
-read_kv r"\s*,\s*", r"\s*:\s*"
+read_kv field_split=r"\s*,\s*",
+  value_split=r"\s*:\s*"
 ```
 ```tql
 {
@@ -102,7 +103,8 @@ PATH: D:\bar VALUE: 42 INFO: Great
 ```
 
 ```tql title=" "
-read_kv r"(\s+)[A-Z][A-Z_]+:", r":\s*"
+read_kv field_split=r"(\s+)[A-Z][A-Z_]+:",
+  value_split=r":\s*"
 ```
 ```tql
 {

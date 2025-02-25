@@ -488,8 +488,8 @@ public:
       "=",
       location::unknown,
     };
-    parser.positional("field_split", field_split);
-    parser.positional("value_split", value_split);
+    parser.named("field_split", field_split);
+    parser.named("value_split", value_split);
     auto msb_parser = multi_series_builder_argument_parser{};
     auto quoting = detail::quoting_escaping_policy{};
     msb_parser.add_all_to_parser(parser);
@@ -545,8 +545,8 @@ public:
     };
     auto quoting = detail::quoting_escaping_policy{};
     parser.positional("input", input, "string");
-    parser.positional("field_split", field_split);
-    parser.positional("value_split", value_split);
+    parser.named("field_split", field_split);
+    parser.named("value_split", value_split);
     parser.named_optional("quotes", quoting.quotes);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
