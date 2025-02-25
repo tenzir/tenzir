@@ -1,3 +1,3 @@
-{"proto": "udp", "count": 5306}
-{"proto": "tcp", "count": 3135}
-{"proto": "icmp", "count": 21}
+{"proto":"udp","count":5306}
+{"proto":"tcp","count":3135}
+{"proto":"icmp","count":21}

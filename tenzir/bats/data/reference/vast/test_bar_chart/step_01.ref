@@ -1,1 +1,1 @@
-{"chart": "bar", "limit": "10000", "position": "grouped", "x": "id.orig_h", "x_axis_type": "linear", "y": "count", "y_axis_type": "linear"}
+{"chart":"bar","limit":"10000","position":"grouped","x":"id.orig_h","x_axis_type":"linear","y":"count","y_axis_type":"linear"}

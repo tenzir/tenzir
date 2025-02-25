@@ -1,4 +1,4 @@
-{"x": null}
+{"x":null}
 warning: zeek-json parser: event did not contain selector field
  = note: selector field `_path` was not found
 
