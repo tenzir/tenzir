@@ -440,8 +440,8 @@ auto& get_builtin_pattern_store(diagnostic_handler& dh) {
 
 class grok_parser final : public plugin_parser {
   friend auto parse_loop(generator<std::optional<std::string_view>> input,
-                         diagnostic_handler& dh,
-                         grok_parser parser) -> generator<table_slice>;
+                         diagnostic_handler& dh, grok_parser parser)
+    -> generator<table_slice>;
 
 public:
   grok_parser() = default;
@@ -639,8 +639,8 @@ private:
 };
 
 auto parse_loop(generator<std::optional<std::string_view>> input,
-                diagnostic_handler& dh,
-                grok_parser parser) -> generator<table_slice> {
+                diagnostic_handler& dh, grok_parser parser)
+  -> generator<table_slice> {
   auto tdh = transforming_diagnostic_handler{
     dh,
     [](auto diag) {
@@ -730,8 +730,8 @@ public:
     return "tql2.read_grok";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto pattern_definitions_expression = std::optional<ast::expression>{};
     auto raw_pattern = located<std::string>{};
@@ -750,9 +750,16 @@ public:
     TRY(auto pattern_definitions,
         extract_pattern_definitions(std::move(pattern_definitions_expression),
                                     ctx));
-    return std::make_unique<parser_adapter<grok_parser>>(grok_parser{
-      std::move(pattern_definitions), std::move(raw_pattern), indexed_captures,
-      include_unnamed, std::move(opts), ctx.dh()});
+    try {
+      return std::make_unique<parser_adapter<grok_parser>>(grok_parser{
+        std::move(pattern_definitions), std::move(raw_pattern),
+        indexed_captures, include_unnamed, std::move(opts), ctx.dh()});
+    } catch (diagnostic diag) {
+      std::move(diag).modify().emit(ctx);
+      return failure::promise();
+    } catch (...) {
+      throw;
+    }
   }
 };
 
@@ -762,8 +769,8 @@ public:
     return "tql2.parse_grok";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto pattern = located<std::string>{};
     auto indexed_captures = false;
@@ -785,17 +792,18 @@ public:
         extract_pattern_definitions(std::move(pattern_definitions_expression),
                                     ctx));
     TRY(auto msb_opts, msb_parser.get_options(ctx));
-    auto p = grok_parser{
-      std::move(pattern_definitions),
-      std::move(pattern),
-      indexed_captures,
-      include_unnamed,
-      std::move(msb_opts),
-      ctx.dh(),
-    };
-    return function_use::make(
-      [input = std::move(input),
-       parser = std::move(p)](evaluator eval, session ctx) -> multi_series {
+    try {
+      auto p = grok_parser{
+        std::move(pattern_definitions),
+        std::move(pattern),
+        indexed_captures,
+        include_unnamed,
+        std::move(msb_opts),
+        ctx.dh(),
+      };
+      return function_use::make([input = std::move(input), parser
+                                                           = std::move(p)](
+                                  evaluator eval, session ctx) -> multi_series {
         return map_series(eval(input), [&](series values) -> multi_series {
           if (values.type.kind().is<null_type>()) {
             return values;
@@ -811,6 +819,12 @@ public:
           return multi_series{std::move(output)};
         });
       });
+    } catch (diagnostic diag) {
+      std::move(diag).modify().emit(ctx);
+      return failure::promise();
+    } catch (...) {
+      throw;
+    }
   }
 };
 
