@@ -395,18 +395,18 @@ TEST(JSON - omit nulls) {
   }};
   check_to_json(p,
                 tenzir::record{{"a", 42u}, {"b", caf::none}, {"c", caf::none}},
-                R"__({"a": 42})__");
+                R"__({"a":42})__");
   check_to_json(p,
                 tenzir::record{{"a", tenzir::record{{"b", caf::none}}},
                                {"c", caf::none}},
-                R"__({"a": {}})__");
+                R"__({"a":{}})__");
   check_to_json(p,
                 tenzir::record{
                   {"a", 42u},
                   {"b", record{{"c", caf::none}, {"d", caf::none}}},
                   {"e", record{{"f", record{{"g", caf::none}}}}},
                 },
-                R"__({"a": 42, "b": {}, "e": {"f": {}}})__");
+                R"__({"a":42,"b":{},"e":{"f":{}}})__");
 }
 
 TEST(JSON - omit empty records) {
@@ -417,7 +417,7 @@ TEST(JSON - omit empty records) {
   }};
   check_to_json(p,
                 tenzir::record{{"a", 42u}, {"b", caf::none}, {"c", caf::none}},
-                R"__({"a": 42})__");
+                R"__({"a":42})__");
   check_to_json(p,
                 tenzir::record{{"a", tenzir::record{{"b", caf::none}}},
                                {"c", caf::none}},
@@ -428,7 +428,7 @@ TEST(JSON - omit empty records) {
                   {"b", record{{"c", caf::none}, {"d", caf::none}}},
                   {"e", record{{"f", record{{"g", caf::none}}}}},
                 },
-                R"__({"a": 42})__");
+                R"__({"a":42})__");
 }
 
 TEST(JSON - omit empty lists) {
@@ -442,13 +442,13 @@ TEST(JSON - omit empty lists) {
     check_to_json(
       p,
       tenzir::record{{"a", tenzir::list{}}, {"b", tenzir::list{}}, {"c", true}},
-      R"__({"c": true})__");
+      R"__({"c":true})__");
     check_to_json(
       p,
       tenzir::list{tenzir::record{{"a", tenzir::record{{"b", true}}},
                                   {"c", true}},
                    tenzir::record{}},
-      R"__([{"a": {"b": true}, "c": true}])__");
+      R"__([{"a":{"b":true},"c":true}])__");
     check_to_json(
       p,
       tenzir::record{
@@ -456,7 +456,7 @@ TEST(JSON - omit empty lists) {
         {"b", record{{"c", true}, {"d", true}}},
         {"e", record{{"f", tenzir::list{record{{"g", true}}}}}},
       },
-      R"__({"a": 42, "b": {"c": true, "d": true}, "e": {"f": [{"g": true}]}})__");
+      R"__({"a":42,"b":{"c":true,"d":true},"e":{"f":[{"g":true}]}})__");
   }
   {
     auto p = json_printer{json_printer_options{
@@ -483,7 +483,7 @@ TEST(JSON - omit empty lists) {
         {"b", record{{"c", caf::none}, {"d", caf::none}}},
         {"e", record{{"f", tenzir::list{record{{"g", caf::none}}}}}},
       },
-      R"__({"a": 42})__");
+      R"__({"a":42})__");
   }
 }
 

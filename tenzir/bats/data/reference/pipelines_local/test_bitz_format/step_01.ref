@@ -1,4 +1,4 @@
-{"b": true, "e": "A", "schema": "foo"}
-{"b": false, "e": "B", "schema": "foo"}
-{"b": false, "e": "C", "schema": "foo"}
-{"b": false, "e": "D", "schema": "foo"}
+{"b":true,"e":"A","schema":"foo"}
+{"b":false,"e":"B","schema":"foo"}
+{"b":false,"e":"C","schema":"foo"}
+{"b":false,"e":"D","schema":"foo"}

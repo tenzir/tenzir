@@ -1,5 +1,5 @@
-{"a": [1, 2, 3], "b": 1, "c": 3, "d": 3, "e": 1}
-{"a": [4, 5], "b": 4, "c": null, "d": 5, "e": null}
+{"a":[1,2,3],"b":1,"c":3,"d":3,"e":1}
+{"a":[4,5],"b":4,"c":null,"d":5,"e":null}
 warning: list index out of bounds
  --> /dev/stdin:4:7
   |

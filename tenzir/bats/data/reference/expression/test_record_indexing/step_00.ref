@@ -1,9 +1,9 @@
-{"x": {"x": 1}, "y": "x", "z": 1}
-{"x": {"x": "1"}, "y": "x", "z": "1"}
-{"x": {"x": 1}, "z": null}
-{"x": {}, "y": "x", "z": null}
-{"y": "x", "z": null}
-{"z": null}
+{"x":{"x":1},"y":"x","z":1}
+{"x":{"x":"1"},"y":"x","z":"1"}
+{"x":{"x":1},"z":null}
+{"x":{},"y":"x","z":null}
+{"y":"x","z":null}
+{"z":null}
 warning: field `y` not found
  --> <input>:1:19
   |

@@ -1,6 +1,6 @@
-{"x": "9.38d"}
-{"x": null}
-{"x": null}
+{"x":"9.38d"}
+{"x":null}
+{"x":null}
 warning: `duration` expected `string`, but got `int64`
  --> <input>:1:42
   |

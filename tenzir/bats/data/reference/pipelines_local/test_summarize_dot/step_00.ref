@@ -1,4 +1,4 @@
-{"x": 36}
+{"x":36}
 warning: zeek-json parser: event did not contain selector field
  = note: selector field `_path` was not found
 
