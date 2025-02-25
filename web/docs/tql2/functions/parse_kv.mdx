@@ -5,9 +5,9 @@ import CommonOptions from './_common_parsing_options.mdx';
 Parses a string as Key-Value pairs.
 
 ```tql
-parse_kv(input:string, [field_split:string, value_split: string, quotes=string,
+parse_kv(input:string, [field_split=string, value_split=string, quotes=string,
          schema=string, selector=string, schema_only=bool,
-         raw=bool, unflatten=string]) -> record
+         raw=bool, unflatten_separator=string]) -> record
 ```
 
 ## Description
@@ -59,13 +59,13 @@ will parse as
 
 The string to parse.
 
-### `field_split: string (optional)`
+### `field_split = string (optional)`
 
 The regular expression used to separate individual fields.
 
 Defaults to `r"\s"`.
 
-### `value_split: string (optional)`
+### `value_split = string (optional)`
 
 The regular expression used to separate a key from its value.
 
@@ -85,7 +85,7 @@ Defaults to the characters `"'`.
 
 ```tql
 from { input: "surname: John, family_name: Smith, date_of_birth: 1995-05-26"}
-output = input.parse_kv(r"\s*,\s*", r"\s*:\s*")
+output = input.parse_kv(field_split=r"\s*,\s*", value_split=r"\s*:\s*")
 ```
 ```tql
 {

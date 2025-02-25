@@ -1,9 +1,9 @@
 [
   write_xsv {
     args: {
-      field_sep: 44,
-      list_sep: 59,
-      null_value: "",
+      field_separator: "," @ 0..0,
+      field_separator: ";" @ 0..0,
+      null_value: "" @ 0..0,
       no_header: false
     }
   },

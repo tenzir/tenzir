@@ -5,10 +5,11 @@ import CommonOptions from './_common_parsing_options.mdx';
 Parses a string as delimiter separated values.
 
 ```tql
-parse_xsv(input:string, field_sep:string, list_sep:string, null_value:string,
+parse_xsv(input:string, field_separator=string, list_separator=string, null_value=string,
           header=list<string>|string,
          [auto_expand=bool, quotes=string, schema=string,
-          selector=string, schema_only=bool, raw=bool, unflatten=string]) -> record
+          selector=string, schema_only=bool, raw=bool,
+          unflatten_separator=string]) -> record
 ```
 
 ## Description
@@ -32,15 +33,15 @@ The following table lists existing XSV configurations:
 A list of strings to be used as the column names, or a `string` to be parsed
 as the `header` for the parsed values.
 
-### `field_sep: string`
+### `field_separator = string`
 
 The string separating different fields.
 
-### `list_sep: string`
+### `list_separator = string`
 
 The string separating different elements in a list within a single field.
 
-### `null_value: string`
+### `null_value = string`
 
 The string denoting an absent value.
 
@@ -62,7 +63,9 @@ Defaults to the characters `"'`.
 ```tql
 from { input: "1,2,3" }
 output = input.parse_xsv(
-  ",", ";", "",
+  field_separtor=",",
+  list_separator= ";",
+  null_value="",
   header=["a","b","c"],
 )
 ```

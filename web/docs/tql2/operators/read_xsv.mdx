@@ -5,9 +5,9 @@ import CommonOptions from '../_common_parsing_options_base.mdx';
 Read XSV from a byte stream.
 
 ```tql
-read_xsv field_sep:string, list_sep:string, null_value:string,
+read_xsv field_separator=string, list_separator=string, null_value=string,
         [comments=bool, header=string, auto_expand=bool, quotes=string,
-         selector=string, schema_only=bool, raw=bool, unflatten=string]
+         selector=string, schema_only=bool, raw=bool, unflatten_separator=string]
 ```
 
 ## Description
@@ -27,15 +27,15 @@ The following table lists existing XSV configurations:
 [csv]: https://en.wikipedia.org/wiki/Comma-separated_values
 [xsv]: https://en.wikipedia.org/wiki/Delimiter-separated_values
 
-### `field_sep: string`
+### `field_separator = string`
 
 The string separating different fields.
 
-### `list_sep: string`
+### `list_separator = string`
 
 The string separating different elements in a list within a single field.
 
-### `null_value: string`
+### `null_value = string`
 
 The string denoting an absent value.
 

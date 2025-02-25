@@ -184,4 +184,31 @@ private:
   std::string name_;
 };
 
+struct argument_info {
+  argument_info(std::string_view name, const located<std::string>& value)
+    : name{name}, value{value.inner}, loc{value.source} {
+  }
+  argument_info(std::string_view name, std::string_view value)
+    : name{name}, value{value} {
+  }
+  argument_info(std::string_view name,
+                const std::optional<located<std::string>>& value)
+    : name{name},
+      value{value ? value->inner : std::string{}},
+      loc{value ? value->source : location::unknown} {
+  }
+  std::string_view name;
+  std::string_view value;
+  location loc = location::unknown;
+};
+
+/// Ensures that none of the given string values is a substring of another,
+/// ignoring empty strings.
+auto check_no_substrings(diagnostic_handler& dh,
+                         std::vector<argument_info> values) -> failure_or<void>;
+
+/// Ensures that the argument is not empty.
+auto check_non_empty(std::string_view name, const located<std::string>& v,
+                     diagnostic_handler& dh) -> failure_or<void>;
+
 } // namespace tenzir

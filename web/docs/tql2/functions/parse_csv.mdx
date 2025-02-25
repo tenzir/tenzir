@@ -6,9 +6,10 @@ Parses a string as CSV (Comma-Separated Values).
 
 ```tql
 parse_csv(input:string, header=list<string>|string,
-         [list_sep=string, null_value=string,
+         [list_separator=string, null_value=string,
           auto_expand=bool, quotes=string, schema=string,
-          selector=string, schema_only=bool, raw=bool, unflatten=string]) -> record
+          selector=string, schema_only=bool, raw=bool,
+          unflatten_separator=string]) -> record
 ```
 
 ## Description
@@ -24,7 +25,7 @@ The string to parse.
 A list of strings to be used as the column names, or a `string` to be parsed
 as the `header` for the parsed values.
 
-### `list_sep = string (optional)`
+### `list_separator = string (optional)`
 
 The string separating different elements in a list within a single field.
 

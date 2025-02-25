@@ -8,6 +8,7 @@
 
 #include "tenzir/argument_parser.hpp"
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/concept/parseable/string/quoted_string.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
@@ -23,6 +24,7 @@
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>
@@ -37,10 +39,36 @@ namespace tenzir::plugins::xsv {
 namespace {
 
 struct xsv_printer_options {
-  char field_sep = {};
-  char list_sep = {};
-  std::string null_value = {};
+  located<std::string> field_separator = {};
+  located<std::string> list_separator = {};
+  located<std::string> null_value = {};
   bool no_header = {};
+
+  auto add(argument_parser2& parser) -> void {
+    if (field_separator.inner.empty()) {
+      /// XSV case, nothing is set
+      parser.named("field_separator", field_separator);
+      parser.named("list_separator", list_separator);
+      parser.named("null_value", null_value);
+    } else {
+      /// Configured case
+      TENZIR_ASSERT(not list_separator.inner.empty());
+      parser.named_optional("field_separator", list_separator);
+      parser.named_optional("null_value", null_value);
+    }
+    if (not no_header) {
+      parser.named("no_header", no_header);
+    }
+  }
+
+  auto validate(diagnostic_handler& dh) -> failure_or<void> {
+    TRY(check_no_substrings(dh, {{"field_separator", field_separator},
+                                 {"list_separator", list_separator},
+                                 {"null_value", null_value}}));
+    TRY(check_non_empty("field_separator", field_separator, dh));
+    TRY(check_non_empty("list_separator", list_separator, dh));
+    return {};
+  }
 
   static auto
   try_parse_printer_options(parser_interface& p) -> xsv_printer_options {
@@ -86,16 +114,17 @@ struct xsv_printer_options {
       }
     }
     return xsv_printer_options{
-      .field_sep = *field_sep,
-      .list_sep = *list_sep,
-      .null_value = std::move(null_value.inner),
+      .field_separator
+      = located{std::string{1, *field_sep}, field_sep_str.source},
+      .list_separator = located{std::string{1, *list_sep}, list_sep_str.source},
+      .null_value = std::move(null_value),
       .no_header = no_header,
     };
   }
 
   friend auto inspect(auto& f, xsv_printer_options& x) -> bool {
-    return f.object(x).fields(f.field("field_sep", x.field_sep),
-                              f.field("list_sep", x.list_sep),
+    return f.object(x).fields(f.field("field_separator", x.field_separator),
+                              f.field("field_separator", x.list_separator),
                               f.field("null_value", x.null_value),
                               f.field("no_header", x.no_header));
   }
@@ -103,8 +132,8 @@ struct xsv_printer_options {
 
 struct xsv_parser_options {
   std::string name = {};
-  std::string field_sep = {};
-  std::string list_sep = {};
+  std::string field_separator = {};
+  std::string list_separator = {};
   std::string null_value = {};
   std::string quotes = "\"\'";
   bool auto_expand = {};
@@ -114,9 +143,10 @@ struct xsv_parser_options {
 
   friend auto inspect(auto& f, xsv_parser_options& x) -> bool {
     return f.object(x).fields(
-      f.field("name", x.name), f.field("field_sep", x.field_sep),
-      f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
-      f.field("quotes", x.quotes), f.field("auto_expand", x.auto_expand),
+      f.field("name", x.name), f.field("field_separator", x.field_separator),
+      f.field("list_separator", x.list_separator),
+      f.field("null_value", x.null_value), f.field("quotes", x.quotes),
+      f.field("auto_expand", x.auto_expand),
       f.field("allow_comments", x.allow_comments), f.field("header", x.header),
       f.field("builder_options", x.builder_options));
   }
@@ -128,7 +158,7 @@ auto parse_header(
   diagnostic_handler& dh) -> failure_or<std::vector<std::string>> {
   auto fields = std::vector<std::string>{};
   auto field_text = std::string_view{};
-  while (auto split = quoting.split_at_unquoted(line, args.field_sep)) {
+  while (auto split = quoting.split_at_unquoted(line, args.field_separator)) {
     std::tie(field_text, line) = *split;
     fields.emplace_back(quoting.unquote_unescape(field_text));
   }
@@ -197,8 +227,10 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
                                    std::string list_sep_default,
                                    std::string null_value_default)
     : name_{std::move(name)},
-      field_sep_{located{std::string{field_sep_default}, location::unknown}},
-      list_sep_{located{std::string{list_sep_default}, location::unknown}},
+      field_separator_{
+        located{std::string{field_sep_default}, location::unknown}},
+      list_separator_{
+        located{std::string{list_sep_default}, location::unknown}},
       null_value_{located{std::move(null_value_default), location::unknown}},
       mode_{mode::special_optional} {
     settings_.merge = true;
@@ -210,14 +242,14 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
 
   auto add_to_parser(argument_parser& parser) -> void {
     if (mode_ == mode::special_optional) {
-      parser.add("--list-sep", list_sep_, "<list-sep>");
+      parser.add("--list-sep", list_separator_, "<list-sep>");
       parser.add("--null-value", null_value_, "<null-value>");
     } else {
-      field_sep_ = located{"REQUIRED", location::unknown};
-      list_sep_ = located{"REQUIRED", location::unknown};
+      field_separator_ = located{"REQUIRED", location::unknown};
+      list_separator_ = located{"REQUIRED", location::unknown};
       null_value_ = located{"REQUIRED", location::unknown};
-      parser.add(*field_sep_, "<field-sep>");
-      parser.add(*list_sep_, "<list-sep>");
+      parser.add(*field_separator_, "<field-sep>");
+      parser.add(*list_separator_, "<list-sep>");
       parser.add(*null_value_, "<null-value>");
     }
     parser.add("--allow-comments", allow_comments_);
@@ -231,17 +263,17 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
   auto add_to_parser(argument_parser2& parser, bool add_merge_option,
                      bool header_required) -> void {
     if (mode_ == mode::special_optional) {
-      TENZIR_ASSERT(list_sep_);
+      TENZIR_ASSERT(list_separator_);
       TENZIR_ASSERT(null_value_);
-      parser.named_optional("list_sep", *list_sep_);
+      parser.named_optional("list_separator", *list_separator_);
       parser.named_optional("null_value", *null_value_);
     } else {
-      field_sep_ = located{"REQUIRED", location::unknown};
-      list_sep_ = located{"REQUIRED", location::unknown};
+      field_separator_ = located{"REQUIRED", location::unknown};
+      list_separator_ = located{"REQUIRED", location::unknown};
       null_value_ = located{"REQUIRED", location::unknown};
-      parser.positional("field_sep", *field_sep_);
-      parser.positional("list_sep", *list_sep_);
-      parser.positional("null_value", *null_value_);
+      parser.named("field_separator", *field_separator_);
+      parser.named("list_separator", *list_separator_);
+      parser.named("null_value", *null_value_);
     }
     if (header_required) {
       parser.named("header", header_expression_.emplace(),
@@ -266,49 +298,49 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
                  and (lhs->inner.find(rhs->inner) != npos
                       or rhs->inner.find(lhs->inner) != npos);
         };
-    if (list_sep_ and overlap(field_sep_, list_sep_)) {
+    if (list_separator_ and overlap(field_separator_, list_separator_)) {
       diagnostic::error("`field_sep` and `list_sep` must not overlap")
-        .note("field_sep=`{}`, list_sep=`{}`", field_sep_->inner,
-              list_sep_->inner)
-        .primary(field_sep_->source)
-        .primary(list_sep_->source)
+        .note("field_sep=`{}`, list_sep=`{}`", field_separator_->inner,
+              list_separator_->inner)
+        .primary(field_separator_->source)
+        .primary(list_separator_->source)
         .emit(ctx);
       return failure::promise();
     }
-    if (overlap(field_sep_, null_value_)) {
+    if (overlap(field_separator_, null_value_)) {
       diagnostic::error("`field_sep` and `null_value` must not overlap")
-        .note("field_sep=`{}`, null_value=`{}`", field_sep_->inner,
+        .note("field_sep=`{}`, null_value=`{}`", field_separator_->inner,
               null_value_->inner)
-        .primary(field_sep_->source)
+        .primary(field_separator_->source)
         .primary(null_value_->source)
         .emit(ctx);
       return failure::promise();
     }
-    if (list_sep_ and overlap(list_sep_, null_value_)) {
+    if (list_separator_ and overlap(list_separator_, null_value_)) {
       diagnostic::error("`list_sep` and `null_value` must not overlap")
-        .note("list_sep=`{}`, null_value=`{}`", list_sep_->inner,
+        .note("list_sep=`{}`, null_value=`{}`", list_separator_->inner,
               null_value_->inner)
         .primary(null_value_->source)
-        .primary(list_sep_->source)
+        .primary(list_separator_->source)
         .emit(ctx);
       return failure::promise();
     }
     for (const auto q : quotes_->inner) {
-      if (field_sep_->inner.find(q) != npos) {
+      if (field_separator_->inner.find(q) != npos) {
         diagnostic::error("quote character `{}`conflicts with "
                           "`field_sep=\"{}\"`",
-                          q, field_sep_->inner)
+                          q, field_separator_->inner)
           .primary(quotes_->source)
           .primary(null_value_->source)
           .emit(ctx);
         return failure::promise();
       }
-      if (list_sep_ and list_sep_->inner.find(q) != npos) {
+      if (list_separator_ and list_separator_->inner.find(q) != npos) {
         diagnostic::error("quote character `{}` conflicts with "
                           "`list_sep=\"{}\"`",
-                          q, list_sep_->inner)
+                          q, list_separator_->inner)
           .primary(quotes_->source)
-          .primary(list_sep_->source)
+          .primary(list_separator_->source)
           .emit(ctx);
         return failure::promise();
       }
@@ -326,8 +358,8 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     auto header = std::optional<std::vector<std::string>>{};
     auto ret = xsv_parser_options{
       .name = "xsv",
-      .field_sep = field_sep_->inner,
-      .list_sep = list_sep_->inner,
+      .field_separator = field_separator_->inner,
+      .list_separator = list_separator_->inner,
       .null_value = null_value_->inner,
       .quotes = quotes_->inner,
       .auto_expand = auto_expand_,
@@ -360,8 +392,8 @@ protected:
   bool allow_comments_{};
   std::optional<located<std::string>> header_string_{};
   std::optional<ast::expression> header_expression_{};
-  std::optional<located<std::string>> field_sep_{};
-  std::optional<located<std::string>> list_sep_{};
+  std::optional<located<std::string>> field_separator_{};
+  std::optional<located<std::string>> list_separator_{};
   std::optional<located<std::string>> null_value_{};
   std::optional<located<std::string>> quotes_
     = located{xsv_parser_options{}.quotes, location::unknown};
@@ -370,16 +402,17 @@ protected:
 };
 
 struct xsv_printer_impl {
-  xsv_printer_impl(char sep, char list_sep, std::string null)
-    : sep{sep}, list_sep{list_sep}, null{std::move(null)} {
+  xsv_printer_impl(std::string_view sep, std::string_view list_sep,
+                   std::string_view null)
+    : sep{sep}, list_sep{list_sep}, null{null} {
   }
 
   template <typename It>
-  auto print_header(It& out, const view<record>& x) const noexcept -> bool {
+  auto print_header(It& out, const view3<record>& x) const noexcept -> bool {
     auto first = true;
     for (const auto& [k, _] : x) {
       if (!first) {
-        ++out = sep;
+        out = fmt::format_to(out, "{}", sep);
       } else {
         first = false;
       }
@@ -389,11 +422,11 @@ struct xsv_printer_impl {
   }
 
   template <typename It>
-  auto print_values(It& out, const view<record>& x) const noexcept -> bool {
+  auto print_values(It& out, const view3<record>& x) const noexcept -> bool {
     auto first = true;
     for (const auto& [_, v] : x) {
       if (!first) {
-        ++out = sep;
+        out = fmt::format_to(out, "{}", sep);
       } else {
         first = false;
       }
@@ -416,64 +449,77 @@ struct xsv_printer_impl {
       return true;
     }
 
-    auto operator()(auto x) noexcept -> bool {
+    auto operator()(view3<pattern>) noexcept -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
+    auto operator()(view3<map>) noexcept -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
+    auto operator()(view3<record>) noexcept -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
+    template <typename T>
+    auto operator()(const T& scalar) noexcept -> bool {
       sequence_empty = false;
-      make_printer<decltype(x)> p;
-      return p.print(out, x);
-    }
-
-    auto operator()(view<pattern>) noexcept -> bool {
-      TENZIR_UNREACHABLE();
-    }
-
-    auto operator()(view<map>) noexcept -> bool {
-      TENZIR_UNREACHABLE();
-    }
-
-    auto operator()(view<record>) noexcept -> bool {
-      TENZIR_UNREACHABLE();
-    }
-
-    auto operator()(view<std::string> x) noexcept -> bool {
-      sequence_empty = false;
-      auto needs_escaping = std::any_of(x.begin(), x.end(), [this](auto c) {
-        return c == printer.sep || c == '"' || c == '\n' || c == '\r'
-               || c == '\v' || c == '\f';
-      });
-      if (needs_escaping) {
-        static auto escaper = [](auto& f, auto out) {
-          switch (*f) {
-            default:
-              *out++ = *f++;
-              return;
-            case '\\':
-              *out++ = '\\';
-              *out++ = '\\';
-              break;
-            case '"':
-              *out++ = '\\';
-              *out++ = '"';
-              break;
-          }
-          ++f;
-          return;
-        };
-        static auto p = '"' << printers::escape(escaper) << '"';
-        return p.print(out, x);
+      auto formatted = std::string{};
+      if constexpr (std::same_as<T, int64_t>) {
+        formatted = std::to_string(scalar);
+      } else if constexpr (std::same_as<T, view3<std::string>>) {
+        formatted = scalar;
+      } else {
+        formatted = fmt::format("{}", data_view{scalar});
       }
-      out = std::copy(x.begin(), x.end(), out);
+      auto needs_quoting = formatted.find(printer.sep) != formatted.npos;
+      needs_quoting |= formatted.find(printer.list_sep) != formatted.npos;
+      needs_quoting |= formatted == printer.null;
+      constexpr static auto escaper = [](auto& f, auto out) {
+        switch (*f) {
+          default:
+            *out++ = *f++;
+            return;
+          case '\\':
+            *out++ = '\\';
+            *out++ = '\\';
+            break;
+          case '"':
+            *out++ = '\\';
+            *out++ = '"';
+            break;
+          case '\n':
+            *out++ = '\\';
+            *out++ = 'n';
+            break;
+          case '\r':
+            *out++ = '\\';
+            *out++ = 'r';
+            break;
+        }
+        ++f;
+        return;
+      };
+      constexpr static auto p = printers::escape(escaper);
+      if (needs_quoting) {
+        *out++ = '"';
+      }
+      TENZIR_ASSERT(p.print(out, formatted));
+      if (needs_quoting) {
+        *out++ = '"';
+      }
       return true;
     }
 
-    auto operator()(view<blob> x) noexcept -> bool {
+    auto operator()(view3<blob> x) noexcept -> bool {
       return (*this)(detail::base64::encode(x));
     }
 
-    auto operator()(const view<list>& x) noexcept -> bool {
+    auto operator()(const view3<list>& x) noexcept -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
         if (!sequence_empty) {
-          ++out = printer.list_sep;
+          out = fmt::format_to(out, "{}", printer.list_sep);
         }
         if (!match(v, *this)) {
           return false;
@@ -487,9 +533,9 @@ struct xsv_printer_impl {
     bool sequence_empty{true};
   };
 
-  char sep{','};
-  char list_sep{';'};
-  std::string null{};
+  std::string_view sep;
+  std::string_view list_sep;
+  std::string_view null;
 };
 
 auto parse_line(std::string_view line, std::vector<std::string>& fields,
@@ -527,8 +573,8 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
       } else {
         auto excess_values = 1;
         auto it = size_t{0};
-        while ((it = quoting.find_not_in_quotes(line, args.field_sep,
-                                                it + args.field_sep.size()))
+        while ((it = quoting.find_not_in_quotes(
+                  line, args.field_separator, it + args.field_separator.size()))
                != line.npos) {
           ++excess_values;
         }
@@ -542,7 +588,7 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
       }
     }
     auto field = builder.unflattened_field(fields[field_idx]);
-    if (auto split = quoting.split_at_unquoted(line, args.field_sep)) {
+    if (auto split = quoting.split_at_unquoted(line, args.field_separator)) {
       std::tie(field_text, line) = *split;
     } else {
       field_text = line;
@@ -557,10 +603,11 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
             builder.data_unparsed(quoting.unquote_unescape(text));
           }
         };
-    if (args.list_sep.empty()) {
+    if (args.list_separator.empty()) {
       add_value(field_text, args.null_value, field);
     } else {
-      if (auto split = quoting.split_at_unquoted(field_text, args.list_sep)) {
+      if (auto split
+          = quoting.split_at_unquoted(field_text, args.list_separator)) {
         auto list = field.list();
         // Iterate the list
         do {
@@ -568,7 +615,7 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
           std::tie(list_element_text, field_text) = *split;
           add_value(list_element_text, args.null_value, list);
         } while (
-          (split = quoting.split_at_unquoted(field_text, args.list_sep)));
+          (split = quoting.split_at_unquoted(field_text, args.list_separator)));
         // Add the final element (for which the split would have failed)
         add_value(field_text, args.null_value, list);
       } else {
@@ -715,16 +762,19 @@ public:
           co_yield {};
           co_return;
         }
-        auto printer
-          = xsv_printer_impl{args.field_sep, args.list_sep, args.null_value};
+        auto printer = xsv_printer_impl{
+          args.field_separator.inner,
+          args.list_separator.inner,
+          args.null_value.inner,
+        };
         auto buffer = std::vector<char>{};
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        const auto& input_type = as<record_type>(input_schema);
+        auto slice_type = as<record_type>(input_schema);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-        for (const auto& row : values(input_type, *array)) {
+        for (const auto& row : values3(*array)) {
           TENZIR_ASSERT(row);
           if (first && not args.no_header) {
             printer.print_header(out_iter, *row);
@@ -735,8 +785,7 @@ public:
           TENZIR_ASSERT(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        auto chunk = chunk::make(std::move(buffer), meta);
-        co_yield std::move(chunk);
+        co_yield chunk::make(std::move(buffer), meta);
       });
   }
 
@@ -754,14 +803,13 @@ public:
 
 private:
   auto content_type() const -> std::string {
-    switch (args_.field_sep) {
-      default:
-        return "text/plain";
-      case ',':
-        return "text/csv";
-      case '\t':
-        return "text/tab-separated-values";
+    if (args_.field_separator.inner == ",") {
+      return "text/csv";
     }
+    if (args_.field_separator.inner == "\t") {
+      return "text/tab-separated-values";
+    }
+    return "text/plain";
   }
 
   xsv_printer_options args_;
@@ -780,7 +828,6 @@ public:
     // auto options = xsv_options::try_parse(p, "xsv", is_parser);
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
-
     auto opt_parser = xsv_common_parser_options_parser{name()};
     opt_parser.add_to_parser(parser);
     parser.parse(p);
@@ -803,8 +850,8 @@ public:
   }
 };
 
-template <detail::string_literal Name, char Sep, char ListSep,
-          detail::string_literal Null>
+template <detail::string_literal Name, detail::string_literal Sep,
+          detail::string_literal ListSep, detail::string_literal Null>
 class configured_xsv_plugin final : public virtual parser_parser_plugin,
                                     public virtual printer_parser_plugin {
 public:
@@ -840,9 +887,9 @@ public:
     parser.add("--no-header", no_header);
     parser.parse(p);
     return std::make_unique<xsv_printer>(xsv_printer_options{
-      .field_sep = Sep,
-      .list_sep = ListSep,
-      .null_value = std::string{Null.str()},
+      .field_separator = located{std::string{Sep}, location::unknown},
+      .list_separator = located{std::string{ListSep}, location::unknown},
+      .null_value = located{std::string{Null}, location::unknown},
       .no_header = no_header,
     });
   }
@@ -852,9 +899,9 @@ public:
   }
 };
 
-using csv_plugin = configured_xsv_plugin<"csv", ',', ';', "">;
-using tsv_plugin = configured_xsv_plugin<"tsv", '\t', ',', "-">;
-using ssv_plugin = configured_xsv_plugin<"ssv", ' ', ',', "-">;
+using csv_plugin = configured_xsv_plugin<"csv", ",", ";", "">;
+using tsv_plugin = configured_xsv_plugin<"tsv", "\t", ",", "-">;
+using ssv_plugin = configured_xsv_plugin<"ssv", " ", ",", "-">;
 
 class read_xsv : public operator_plugin2<parser_adapter<xsv_parser>> {
 public:
@@ -871,66 +918,6 @@ public:
     TRY(auto opts, opt_parser.get_options(ctx));
     return std::make_unique<parser_adapter<xsv_parser>>(
       xsv_parser{std::move(opts)});
-  }
-};
-
-class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>> {
-public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = xsv_printer_options{};
-    auto field_sep_str = located<std::string>{};
-    auto list_sep_str = located<std::string>{};
-    auto null_value = located<std::string>{};
-    auto no_header = bool{};
-    TRY(argument_parser2::operator_(name())
-          .positional("field_sep", field_sep_str)
-          .positional("list_sep", list_sep_str)
-          .positional("null_value", null_value)
-          .named("no_header", args.no_header)
-          .parse(inv, ctx));
-    auto field_sep = to_xsv_sep(field_sep_str.inner);
-    if (!field_sep) {
-      diagnostic::error(field_sep.error())
-        .primary(field_sep_str.source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    auto list_sep = to_xsv_sep(list_sep_str.inner);
-    if (!list_sep) {
-      diagnostic::error(list_sep.error()).primary(list_sep_str.source).emit(ctx);
-      return failure::promise();
-    }
-    if (*field_sep == *list_sep) {
-      diagnostic::error("field separator and list separator must be "
-                        "different")
-        .primary(field_sep_str.source)
-        .primary(list_sep_str.source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    for (auto ch : null_value.inner) {
-      if (ch == *field_sep) {
-        diagnostic::error("null value conflicts with field separator")
-          .primary(field_sep_str.source)
-          .primary(null_value.source)
-          .emit(ctx);
-        return failure::promise();
-      }
-      if (ch == *list_sep) {
-        diagnostic::error("null value conflicts with list separator")
-          .primary(list_sep_str.source)
-          .primary(null_value.source)
-          .emit(ctx);
-        return failure::promise();
-      }
-    }
-    return std::make_unique<writer_adapter<xsv_printer>>(xsv_printer{{
-      .field_sep = *field_sep,
-      .list_sep = *list_sep,
-      .null_value = std::move(null_value.inner),
-      .no_header = no_header,
-    }});
   }
 };
 
@@ -966,8 +953,22 @@ public:
   }
 };
 
-template <detail::string_literal Name, char Sep, char ListSep,
-          detail::string_literal Null>
+class write_xsv : public operator_plugin2<writer_adapter<xsv_printer>> {
+public:
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = xsv_printer_options{};
+    auto parser = argument_parser2::operator_(name());
+    args.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(args.validate(ctx));
+    return std::make_unique<writer_adapter<xsv_printer>>(
+      xsv_printer{std::move(args)});
+  }
+};
+
+template <detail::string_literal Name, detail::string_literal Sep,
+          detail::string_literal ListSep, detail::string_literal Null>
 class configured_write_xsv_plugin final
   : public operator_plugin2<writer_adapter<xsv_printer>> {
 public:
@@ -977,17 +978,17 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto no_header = bool{};
-    TRY(argument_parser2::operator_(name())
-          .named("no_header", no_header)
-          .parse(inv, ctx));
+    auto opts = xsv_printer_options{
+      .field_separator = located{std::string{Sep}, inv.self.get_location()},
+      .list_separator = located{std::string{ListSep}, inv.self.get_location()},
+      .null_value = located{std::string{Null}, inv.self.get_location()},
+    };
+    auto parser = argument_parser2::operator_(name());
+    opts.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(opts.validate(ctx));
     return std::make_unique<writer_adapter<xsv_printer>>(
-      xsv_printer{xsv_printer_options{
-        .field_sep = Sep,
-        .list_sep = ListSep,
-        .null_value = std::string{Null.str()},
-        .no_header = no_header,
-      }});
+      xsv_printer{std::move(opts)});
   }
 
   auto write_properties() const -> write_properties_t override {
@@ -1083,15 +1084,107 @@ public:
   }
 };
 
+auto make_xsv_printing_function(ast::expression input,
+                                xsv_printer_options opts) -> function_ptr {
+  return function_use::make(
+    [input = std::move(input),
+     opts = std::move(opts)](function_plugin::evaluator eval, session ctx) {
+      return map_series(eval(input), [&](series data) -> multi_series {
+        if (data.type.kind().is<null_type>()) {
+          return series::null(string_type{}, data.length());
+        }
+        if (data.type.kind() != type{record_type{}}.kind()) {
+          diagnostic::warning("expected `record`, got `{}`", data.type.kind())
+            .primary(input)
+            .emit(ctx);
+          return series::null(string_type{}, data.length());
+        }
+        const auto struct_array
+          = std::dynamic_pointer_cast<arrow::StructArray>(data.array);
+        TENZIR_ASSERT(struct_array);
+        auto [flattend_type, flattend_array, _]
+          = flatten(data.type, struct_array, ".");
+        auto [resolved_type, resolved_array] = resolve_enumerations(
+          as<record_type>(flattend_type), flattend_array);
+        auto builder = type_to_arrow_builder_t<string_type>{};
+        auto printer = xsv_printer_impl{
+          opts.field_separator.inner,
+          opts.list_separator.inner,
+          opts.null_value.inner,
+        };
+        auto buffer = std::string{};
+        for (auto row : values3(*resolved_array)) {
+          if (not row) {
+            check(builder.AppendNull());
+            continue;
+          }
+          buffer.clear();
+          auto out = std::back_inserter(buffer);
+          printer.print_values(out, *row);
+          check(builder.Append(buffer));
+        }
+        return series{string_type{}, check(builder.Finish())};
+      });
+    });
+}
+
+class print_xsv : public function_plugin {
+  auto name() const -> std::string override {
+    return "print_xsv";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+    auto opts = xsv_printer_options{
+      .no_header = true,
+    };
+    auto parser = argument_parser2::function(name());
+    parser.positional("input", input, "record");
+    opts.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(opts.validate(ctx));
+    return make_xsv_printing_function(std::move(input), std::move(opts));
+  }
+};
+
+template <detail::string_literal Name, detail::string_literal Sep,
+          detail::string_literal ListSep, detail::string_literal Null>
+class configured_print_xsv_plugin final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return fmt::format("print_{}", Name);
+  }
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+    auto opts = xsv_printer_options{
+      .field_separator = located{std::string{Sep}, inv.call.get_location()},
+      .list_separator = located{std::string{ListSep}, inv.call.get_location()},
+      .null_value = located{std::string{Null}, inv.call.get_location()},
+      .no_header = true,
+    };
+    auto parser = argument_parser2::function(name());
+    parser.positional("input", input, "record");
+    opts.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(opts.validate(ctx));
+    return make_xsv_printing_function(std::move(input), std::move(opts));
+  }
+};
+
 using read_csv = configured_read_xsv_plugin<"csv", ",", ";", "">;
 using read_tsv = configured_read_xsv_plugin<"tsv", "\t", ",", "-">;
 using read_ssv = configured_read_xsv_plugin<"ssv", " ", ",", "-">;
-using write_csv = configured_write_xsv_plugin<"csv", ',', ';', "">;
-using write_tsv = configured_write_xsv_plugin<"tsv", '\t', ',', "-">;
-using write_ssv = configured_write_xsv_plugin<"ssv", ' ', ',', "-">;
+using write_csv = configured_write_xsv_plugin<"csv", ",", ";", "">;
+using write_tsv = configured_write_xsv_plugin<"tsv", "\t", ",", "-">;
+using write_ssv = configured_write_xsv_plugin<"ssv", " ", ",", "-">;
 using parse_csv = configured_parse_xsv_plugin<"csv", ",", ";", "">;
 using parse_tsv = configured_parse_xsv_plugin<"tsv", "\t", ",", "-">;
 using parse_ssv = configured_parse_xsv_plugin<"ssv", " ", ",", "-">;
+using print_csv = configured_print_xsv_plugin<"csv", ",", ";", "">;
+using print_tsv = configured_print_xsv_plugin<"tsv", "\t", ",", "-">;
+using print_ssv = configured_print_xsv_plugin<"ssv", " ", ",", "-">;
 
 } // namespace tenzir::plugins::xsv
 
@@ -1111,3 +1204,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_xsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_csv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_tsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::parse_ssv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::print_xsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::print_csv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::print_tsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::print_ssv)

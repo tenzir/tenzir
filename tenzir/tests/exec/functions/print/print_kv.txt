@@ -1,0 +1,6 @@
+{
+  input: {
+    key: "value",
+  },
+  output: "key=value",
+}

@@ -80,7 +80,7 @@ public:
     auto sep = std::optional<std::string>{default_flatten_separator};
     TRY(argument_parser2::function("flatten")
           .positional("x", expr, "record")
-          .named("sep", sep)
+          .positional("separator", sep)
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), sep = std::move(sep.value())](
