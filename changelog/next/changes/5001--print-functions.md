@@ -8,3 +8,6 @@ The `field_sep`, `list_sep` and `null_value` options on the XSV operators and
 functions (such as `read_xsv`, `write_csv` or `parse_tsv`) are now named
 arguments on all of them and are called `field_separator`, `list_separator`
 and `null_value`.
+
+The `field_split` and `list_split` arguments for the `read_kv` operator and
+`parse_kv` function are now named arguments.
