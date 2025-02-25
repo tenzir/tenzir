@@ -9,7 +9,7 @@ comments: true
 
 # Tenzir Node v4.25: Sinks Galore!
 
-Tenzir Node v4.25 adds new sinks for Snowflake, OpenSearch, and Elasticsearch,
+[Tenzir Node v4.25][github-release] adds new sinks for Snowflake, OpenSearch, and Elasticsearch,
 allowing seamless data integration and output. It also introduces major
 enhancements to TQL2, including new language features and operator
 improvements.
@@ -194,5 +194,5 @@ Join us every second Tuesday at 5 PM CET for office hours on [Discord][discord].
 Share your ideas, preview upcoming features, or chat with fellow Tenzir users
 and our team. Bring your questions, use cases, or just stop by to say hello!
 
-[discord]: /discord  
-[changelog]: /changelog#v4250  
+[discord]: /discord
+[changelog]: /changelog#v4250

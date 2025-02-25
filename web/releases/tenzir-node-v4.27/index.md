@@ -7,7 +7,7 @@ tags: [release, node]
 comments: true
 ---
 
-Tenzir Node v4.27 enhances the charting capabilities and integrates with IAM for
+[Tenzir Node v4.27][github-release] enhances the charting capabilities and integrates with IAM for
 authenticating to Amazon MSK.
 
 ![Tenzir Node v4.27](tenzir-node-v4.27.excalidraw.svg)

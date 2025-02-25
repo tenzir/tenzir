@@ -7,7 +7,7 @@ tags: [release, node]
 comments: true
 ---
 
-Tenzir Node v4.26 enhances our native Parquet and OCSF capabilities with a new
+[Tenzir Node v4.26][github-release] enhances our native Parquet and OCSF capabilities with a new
 operator for writing data directly to Amazon Security Lake (ASL).
 
 ![Tenzir Node v4.26](tenzir-node-v4.26.excalidraw.svg)
@@ -23,7 +23,7 @@ Amazon Security Lake:
 
 ```tql
 let $s3_uri = "s3://aws-security-data-lake-eu-west-2-lake-abcdefghijklmnopqrstuvwxyz1234/ext/tenzir_network_activity/"
- 
+
 load_kafka "ocsf_events"
 read_ndjson
 where @name == "ocsf.network_activity"
@@ -134,5 +134,5 @@ Join us every second Tuesday at 5 PM CET for office hours on [Discord][discord].
 Share your ideas, preview upcoming features, or chat with fellow Tenzir users
 and our team. Bring your questions, use cases, or just stop by to say hello!
 
-[discord]: /discord  
+[discord]: /discord
 [changelog]: /changelog#v4260
