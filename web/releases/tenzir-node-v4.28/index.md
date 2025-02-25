@@ -7,7 +7,7 @@ tags: [release, node]
 comments: true
 ---
 
-Tenzir Node v4.28 makes it easier than before to parse deeply nested data
+[Tenzir Node v4.28][github-release] makes it easier than before to parse deeply nested data
 structures.
 
 ![Tenzir Node v4.28](tenzir-node-v4.28.svg)
