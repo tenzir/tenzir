@@ -63,7 +63,7 @@ struct integral_parser
       return false;
     }
     constexpr static bool is_signed = std::is_signed_v<attribute>;
-    const auto first_is_sign = *f == '-' or *f == '+';
+    const auto first_is_sign = *f == '-' or * f == '+';
     if (first_is_sign and not is_signed) {
       return false;
     }
@@ -74,6 +74,36 @@ struct integral_parser
     auto end = std::begin(data);
     int take_chars = 0;
     auto save = f;
+    if constexpr (Radix == 16) {
+      static_assert(std::is_integral_v<T>);
+      f = std::invoke([&] {
+        if (first_is_sign) {
+          ++f;
+        }
+        if (f == l or *f != '0') {
+          // nothing or non-zero, cannot be 0x, fallback
+          return save;
+        }
+        ++f;
+        if (f == l or (*f != 'x' and *f != 'X')) {
+          // 0 or 0 without x|X, fallback
+          return save;
+        }
+        ++f;
+        if (f == l) {
+          // only 0x, not a complete number, fallback
+          return save;
+        }
+        if (first_is_sign) {
+          // first was sign, move it to buffer
+          *end = *save;
+          ++take_chars;
+          ++end;
+        }
+        // skip 0x
+        return f;
+      });
+    }
     while (true) {
       auto c = *f;
       // Take only digits
@@ -133,20 +163,24 @@ template <class T, int MaxDigits = std::numeric_limits<T>::digits10 + 1,
           int MinDigits = 1, int Radix = 10>
 auto const integral = integral_parser<T, MaxDigits, MinDigits, Radix>{};
 
-auto const i8 = integral_parser<int8_t>{};
-auto const i16 = integral_parser<int16_t>{};
-auto const i32 = integral_parser<int32_t>{};
-auto const i64 = integral_parser<int64_t>{};
-auto const u8 = integral_parser<uint8_t>{};
-auto const u16 = integral_parser<uint16_t>{};
-auto const u32 = integral_parser<uint32_t>{};
-auto const u64 = integral_parser<uint64_t>{};
+constexpr auto i8 = integral_parser<int8_t>{};
+constexpr auto i16 = integral_parser<int16_t>{};
+constexpr auto i32 = integral_parser<int32_t>{};
+constexpr auto i64 = integral_parser<int64_t>{};
+constexpr auto u8 = integral_parser<uint8_t>{};
+constexpr auto u16 = integral_parser<uint16_t>{};
+constexpr auto u32 = integral_parser<uint32_t>{};
+constexpr auto u64 = integral_parser<uint64_t>{};
 
-auto const hex_prefix = ignore(lit{"0x"} | lit{"0X"});
-auto const hex8 = integral_parser<uint8_t, 2, 1, 16>{};
-auto const hex16 = integral_parser<uint16_t, 4, 1, 16>{};
-auto const hex32 = integral_parser<uint32_t, 8, 1, 16>{};
-auto const hex64 = integral_parser<uint64_t, 16, 1, 16>{};
+constexpr auto hex_prefix = ignore(lit{"0x"} | lit{"0X"});
+constexpr auto ix8 = integral_parser<int8_t, 2, 1, 16>{};
+constexpr auto ix16 = integral_parser<int16_t, 4, 1, 16>{};
+constexpr auto ix32 = integral_parser<int32_t, 8, 1, 16>{};
+constexpr auto ix64 = integral_parser<int64_t, 16, 1, 16>{};
+constexpr auto ux8 = integral_parser<uint8_t, 2, 1, 16>{};
+constexpr auto ux16 = integral_parser<uint16_t, 4, 1, 16>{};
+constexpr auto ux32 = integral_parser<uint32_t, 8, 1, 16>{};
+constexpr auto ux64 = integral_parser<uint64_t, 16, 1, 16>{};
 
 } // namespace parsers
 } // namespace tenzir

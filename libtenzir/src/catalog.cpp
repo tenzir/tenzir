@@ -418,13 +418,9 @@ auto catalog_state::lookup_impl(const expression& expr,
           auto result = [&] {
             if (!lhs.type) {
               auto pred = [&](auto& field) {
-                const auto type = field.type();
-                for (const auto& name : type.names()) {
-                  if (name == lhs.type.name()) {
-                    return compatible(type, x.op, d);
-                  }
-                }
-                return false;
+                const auto& type = field.type();
+                return type.name() == lhs.type.name()
+                       and compatible(type, x.op, d);
               };
               return search(pred);
             }

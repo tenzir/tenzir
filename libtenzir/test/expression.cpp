@@ -225,14 +225,15 @@ TEST(extractors) {
                            data{80u}};
     auto pred3 = predicate{data_extractor{subport, 9},
                            relational_operator::equal, data{80u}};
-    auto normalized = disjunction{pred0, pred1, pred2, pred3};
+    auto all_ports = disjunction{pred0, pred2};
+    auto all_uints = disjunction{pred0, pred1, pred2, pred3};
     MESSAGE("type extractor - used defined types");
     auto expr = unbox(to<expression>(":port == 80"));
     auto resolved = tenzir::match(expr, type_resolver(r));
-    CHECK_EQUAL(resolved, normalized);
+    CHECK_EQUAL(resolved, all_ports);
     expr = unbox(to<expression>(":uint64 == 80"));
     resolved = tenzir::match(expr, type_resolver(r));
-    CHECK_EQUAL(resolved, normalized);
+    CHECK_EQUAL(resolved, all_uints);
   }
 }
 

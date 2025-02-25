@@ -435,12 +435,7 @@ caf::expected<expression>
 type_resolver::operator()(const type_extractor& ex, const data& d) {
   if (!ex.type) {
     auto matches = [&](const type& t) {
-      for (const auto& name : t.names()) {
-        if (name == ex.type.name()) {
-          return compatible(t, op_, d);
-        }
-      }
-      return false;
+      return t.name() == ex.type.name() and compatible(t, op_, d);
     };
     return resolve_extractor(matches, d);
   }

@@ -24,6 +24,7 @@
 #include "tenzir/series.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
+#include "tenzir/view3.hpp"
 
 #include <arrow/io/api.h>
 #include <arrow/ipc/writer.h>
@@ -711,6 +712,36 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   return rank(evaluate(expr, slice, hints));
 }
 
+namespace {
+constexpr static auto resolve_enumerations_transformation = [](
+  struct record_type::field field, std::shared_ptr<arrow::Array> array) noexcept
+  -> std::vector<
+    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+  const auto& et = as<enumeration_type>(field.type);
+  auto new_type = tenzir::type{string_type{}};
+  new_type.assign_metadata(field.type);
+  auto builder = string_type::make_arrow_builder(arrow::default_memory_pool());
+  for (const auto& value :
+       values(et, as<type_to_arrow_array_t<enumeration_type>>(*array))) {
+    if (!value) {
+      check(builder->AppendNull());
+      continue;
+    }
+    check(append_builder(string_type{}, *builder, et.field(*value)));
+  }
+  return {{
+    {field.name, std::move(new_type)},
+    check(builder->Finish()),
+  }};
+};
+
+template <typename T>
+auto erase(std::pair<T, std::shared_ptr<type_to_arrow_array_t<T>>> v)
+  -> std::pair<tenzir::type, std::shared_ptr<arrow::Array>> {
+  return {tenzir::type{std::move(v.first)}, std::move(v.second)};
+}
+} // namespace
+
 table_slice resolve_enumerations(table_slice slice) {
   if (slice.rows() == 0) {
     return slice;
@@ -722,37 +753,95 @@ table_slice resolve_enumerations(table_slice slice) {
     if (!is<enumeration_type>(field.type)) {
       continue;
     }
-    static auto transformation
-      = [](struct record_type::field field,
-           std::shared_ptr<arrow::Array> array) noexcept
-      -> std::vector<
-        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-      const auto& et = as<enumeration_type>(field.type);
-      auto new_type = tenzir::type{string_type{}};
-      new_type.assign_metadata(field.type);
-      auto builder
-        = string_type::make_arrow_builder(arrow::default_memory_pool());
-      for (const auto& value :
-           values(et, as<type_to_arrow_array_t<enumeration_type>>(*array))) {
-        if (!value) {
-          const auto append_result = builder->AppendNull();
-          TENZIR_ASSERT_EXPENSIVE(append_result.ok(),
-                                  append_result.ToString().c_str());
-          continue;
-        }
-        const auto append_result
-          = append_builder(string_type{}, *builder, et.field(*value));
-        TENZIR_ASSERT_EXPENSIVE(append_result.ok(),
-                                append_result.ToString().c_str());
-      }
-      return {{
-        {field.name, new_type},
-        builder->Finish().ValueOrDie(),
-      }};
-    };
-    transformations.push_back({index, transformation});
+    transformations.emplace_back(index, resolve_enumerations_transformation);
   }
   return transform_columns(slice, transformations);
+}
+
+auto resolve_enumerations(series s) -> series {
+  auto [new_type, new_array] = resolve_enumerations(s.type, s.array);
+  return series{std::move(new_type), std::move(new_array)};
+}
+
+auto resolve_enumerations(
+  tenzir::type type,
+  const std::shared_ptr<type_to_arrow_array_t<tenzir::type>>& array)
+  -> std::pair<tenzir::type, std::shared_ptr<arrow::Array>> {
+  if (auto* t = try_as<enumeration_type>(type)) {
+    auto arr = std::static_pointer_cast<enumeration_type::array_type>(array);
+    TENZIR_ASSERT(arr);
+    return erase(resolve_enumerations(std::move(*t), arr));
+  }
+  if (auto* t = try_as<record_type>(type)) {
+    auto arr
+      = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
+    TENZIR_ASSERT(arr);
+    return erase(resolve_enumerations(std::move(*t), arr));
+  }
+  if (auto* t = try_as<list_type>(type)) {
+    auto arr
+      = std::static_pointer_cast<type_to_arrow_array_t<list_type>>(array);
+    TENZIR_ASSERT(arr);
+    return erase(resolve_enumerations(std::move(*t), arr));
+  }
+  return {std::move(type), array};
+}
+
+auto resolve_enumerations(
+  record_type schema, const std::shared_ptr<arrow::StructArray>& struct_array)
+  -> std::pair<record_type, std::shared_ptr<arrow::StructArray>> {
+  TENZIR_ASSERT(struct_array);
+  if (struct_array->length() == 0) {
+    return {std::move(schema), struct_array};
+  }
+  // Resolve enumeration types, if there are any.
+  auto transformations = std::vector<indexed_transformation>{};
+  for (const auto& [field, index] : schema.leaves()) {
+    if (!is<enumeration_type>(field.type)) {
+      continue;
+    }
+    transformations.emplace_back(index, resolve_enumerations_transformation);
+  }
+  auto transform_result = transform_columns(tenzir::type{std::move(schema)},
+                                            struct_array, transformations);
+  auto result_array = std::static_pointer_cast<arrow::StructArray>(
+    std::move(transform_result.second));
+  TENZIR_ASSERT(result_array);
+  return {as<record_type>(transform_result.first), std::move(result_array)};
+}
+
+auto resolve_enumerations(
+  tenzir::list_type type,
+  const std::shared_ptr<type_to_arrow_array_t<list_type>>& array)
+  -> std::pair<tenzir::list_type,
+               std::shared_ptr<type_to_arrow_array_t<list_type>>> {
+  auto value_type = type.value_type();
+  auto [resolved_type, resolved_array]
+    = resolve_enumerations(value_type, array->values());
+  auto new_list = check(arrow::ListArray::FromArrays(
+    *array->offsets(), *resolved_array, arrow::default_memory_pool(),
+    array->null_bitmap(), array->null_count()));
+  return {std::move(type), std::move(new_list)};
+}
+
+auto resolve_enumerations(
+  tenzir::enumeration_type type,
+  const std::shared_ptr<enumeration_type::array_type>& array)
+  -> std::pair<string_type, std::shared_ptr<arrow::StringArray>> {
+  auto builder = arrow::StringBuilder(arrow::default_memory_pool());
+  for (const auto& v : values3(*array)) {
+    if (not v) {
+      check(builder.AppendNull());
+      continue;
+    }
+    check(builder.Append(type.field(*v)));
+  }
+  auto res = std::shared_ptr<arrow::StringArray>{};
+  check(builder.Finish(&res));
+  return {
+    string_type{},
+    std::move(res),
+  };
 }
 
 auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
@@ -838,16 +927,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     },
     [&](const type_extractor& ex) {
       for (const auto& [field, index] : layout.leaves()) {
-        bool match = field.type == ex.type;
-        if (not match) {
-          for (auto name : field.type.names()) {
-            if (name == ex.type.name()) {
-              match = true;
-              break;
-            }
-          }
-        }
-        if (match) {
+        if (field.type == ex.type or field.type.name() == ex.type.name()) {
           bind_array(index);
           return;
         }

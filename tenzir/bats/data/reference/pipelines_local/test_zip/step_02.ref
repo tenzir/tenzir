@@ -1,4 +1,4 @@
-{"foo": [], "bar": [4, 5], "baz": [{"left": null, "right": 4}, {"left": null, "right": 5}]}
+{"foo":[],"bar":[4,5],"baz":[{"left":null,"right":4},{"left":null,"right":5}]}
 warning: lists have different lengths
  --> <input>:1:41
   |

@@ -83,7 +83,7 @@ to a type instance, whereas Arrow attaches metadata to a schema or record field.
 
 :::tip More on Arrow & Tenzir
 If you want to learn more about why Tenzir uses Apache Arrow, read our
-[two](/blog/apache-arrow-as-platform-for-security-data-engineering) [blog
-posts](/blog/parquet-and-feather-enabling-open-investigations) that explain why
+[two](/archive/apache-arrow-as-platform-for-security-data-engineering) [blog
+posts](/archive/parquet-and-feather-enabling-open-investigations) that explain why
 we build on top of Arrow.
 :::

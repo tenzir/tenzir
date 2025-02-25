@@ -10,11 +10,14 @@
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/similarity.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/registry.hpp"
 
 #include <tsl/robin_map.h>
+
+#include <ranges>
 
 namespace tenzir {
 
@@ -37,21 +40,13 @@ public:
     // - Use its name + namespace (mod/fn/op) for lookup as user-defined.
     // - If something is found: Use rest of the segments. If not found: Error.
     // - If nothing is found: Repeat with lookup for built-in entities.
-    auto report_not_found = [&](const ast::identifier& ident, entity_ns ns) {
-      auto type = std::invoke([&] {
-        switch (ns) {
-          case entity_ns::op:
-            return "operator";
-          case entity_ns::fn:
-            return "function";
-          case entity_ns::mod:
-            return "module";
-        }
-        TENZIR_UNREACHABLE();
-      });
-      // TODO: This list is too long. Suggest only close matches instead. Also,
-      // we should maybe only suggest things in the same module.
-      auto available = std::invoke([&] {
+    const auto target_ns
+      = context_ == context_t::op_name ? entity_ns::op : entity_ns::fn;
+    const auto first_ns = x.path.size() == 1 ? target_ns : entity_ns::mod;
+    const auto report_not_found = [&](const std::vector<ast::identifier>& path,
+                                      size_t idx, entity_ns ns) {
+      result_ = failure::promise();
+      const auto available = std::invoke([&] {
         switch (ns) {
           case entity_ns::op:
             return reg_.operator_names();
@@ -62,18 +57,60 @@ public:
         }
         TENZIR_UNREACHABLE();
       });
-      auto diag = diagnostic::error("{} `{}` not found", type, ident.name)
-                    .primary(ident);
-      if (not available.empty()) {
-        diag = std::move(diag).hint("must be one of: {}",
-                                    fmt::join(available, ", "));
+      const auto type = std::invoke([&] {
+        switch (ns) {
+          case entity_ns::op:
+            return "operator";
+          case entity_ns::fn:
+            return "function";
+          case entity_ns::mod:
+            return "module";
+        }
+        TENZIR_UNREACHABLE();
+      });
+      const auto prefix = fmt::format(
+        "{}", fmt::join(std::views::transform(path, &ast::identifier::name)
+                          | std::views::take(idx),
+                        "::"));
+      const auto full = fmt::format(
+        "{}", fmt::join(std::views::transform(path, &ast::identifier::name)
+                          | std::views::take(idx + 1),
+                        "::"));
+      const auto& ident = path.at(idx);
+      if (available.empty()) {
+        diagnostic::error("{} `{}` not found", type, ident.name)
+          .primary(ident)
+          .note("no {}s found", type)
+          .emit(diag_);
+        return;
       }
-      std::move(diag).emit(diag_);
-      result_ = failure::promise();
+      auto filtered = std::views::filter(available, [&](auto&& x) {
+        return x.starts_with(prefix);
+      });
+      if (not filtered.empty()) {
+        auto best = std::ranges::max(filtered, {}, [&](auto&& x) {
+          return detail::calculate_similarity(full, x);
+        });
+        if (const auto pos = best.find(prefix);
+            not prefix.empty() and pos == 0) {
+          best.erase(0, prefix.size() + 2);
+        }
+        if (detail::calculate_similarity(full, best) > -5) {
+          diagnostic::error("{} `{}` not found", type, ident.name)
+            .primary(ident)
+            .hint("did you mean `{}`?", best)
+            .docs("https://docs.tenzir.com/tql2/{}",
+                  target_ns == entity_ns::op ? "operators" : "functions")
+            .emit(diag_);
+          return;
+        }
+      }
+      diagnostic::error("{} `{}` not found", type, ident.name)
+        .primary(ident)
+        .docs("https://docs.tenzir.com/tql2/{}",
+              target_ns == entity_ns::op ? "operators" : "functions")
+        .emit(diag_);
     };
-    auto target_ns
-      = context_ == context_t::op_name ? entity_ns::op : entity_ns::fn;
-    auto first_ns = x.path.size() == 1 ? target_ns : entity_ns::mod;
     // Because there currently is no way to bring additional entities into the
     // scope, we can directly dispatch to the registry.
     auto pkg = std::invoke([&]() -> std::optional<entity_pkg> {
@@ -86,7 +123,7 @@ public:
       return std::nullopt;
     });
     if (not pkg) {
-      report_not_found(x.path[0], first_ns);
+      report_not_found(x.path, 0, first_ns);
       return;
     }
     // After figuring out which package it belongs to, we try the full path.
@@ -102,7 +139,7 @@ public:
       TENZIR_ASSERT(err->segment < x.path.size());
       auto is_last = err->segment == path.segments().size() - 1;
       auto error_ns = is_last ? target_ns : entity_ns::mod;
-      report_not_found(x.path[err->segment], error_ns);
+      report_not_found(x.path, err->segment, error_ns);
       return;
     }
     x.ref = std::move(path);

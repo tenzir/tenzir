@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/similarity.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
@@ -161,6 +162,20 @@ auto argument_parser2::parse(const ast::entity& self,
         auto& name = sel->path()[0].name;
         auto it = std::ranges::find(named_, name, &named_t::name);
         if (it == named_.end()) {
+          auto filtered = std::views::filter(named_, [](auto&& x) {
+            return not x.name.starts_with("_");
+          });
+          if (not filtered.empty()) {
+            const auto best = std::ranges::max(filtered, {}, [&](auto&& x) {
+              return detail::calculate_similarity(name, x.name);
+            });
+            if (detail::calculate_similarity(name, best.name) > -10) {
+              emit(diagnostic::error("named argument `{}` does not exist", name)
+                     .primary(assignment.left)
+                     .hint("did you mean `{}`?", best.name));
+              return;
+            }
+          }
           emit(diagnostic::error("named argument `{}` does not exist", name)
                  .primary(assignment.left));
           return;
@@ -470,8 +485,8 @@ auto argument_parser2::named(std::string name, std::optional<T>& x,
 }
 
 template <argument_parser_type T>
-auto argument_parser2::named_optional(std::string name, T& x,
-                                      std::string type) -> argument_parser2& {
+auto argument_parser2::named_optional(std::string name, T& x, std::string type)
+  -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
@@ -510,5 +525,37 @@ struct instantiate_argument_parser_methods {
 };
 
 template struct instantiate_argument_parser_methods<std::monostate{}>;
+
+auto check_no_substrings(diagnostic_handler& dh,
+                         std::vector<argument_info> values) -> failure_or<void> {
+  for (size_t i = 0; i < values.size(); ++i) {
+    for (size_t j = i + 1; j < values.size(); ++j) {
+      const auto i_larger = values[i].value.size() > values[j].value.size();
+      const auto& longer = i_larger ? values[i] : values[j];
+      const auto& shorter = i_larger ? values[j] : values[i];
+      if (shorter.value.empty()) {
+        continue;
+      }
+      if (longer.value.find(shorter.value) != longer.value.npos) {
+        diagnostic::error("`{}` and `{}` conflict", shorter.name, longer.name)
+          .note("`{}` is a substring of `{}`", shorter.value, longer.value)
+          .primary(shorter.loc)
+          .primary(longer.loc)
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+  }
+  return {};
+}
+
+auto check_non_empty(std::string_view name, const located<std::string>& v,
+                     diagnostic_handler& dh) -> failure_or<void> {
+  if (v.inner.empty()) {
+    diagnostic::error("`{}` must not be empty", name).primary(v).emit(dh);
+    return failure::promise();
+  }
+  return {};
+}
 
 } // namespace tenzir

@@ -376,10 +376,6 @@ public:
   [[nodiscard]] std::string_view name() const& noexcept;
   [[nodiscard]] std::string_view name() && = delete;
 
-  /// Returns a view of all names of this type.
-  [[nodiscard]] generator<std::string_view> names() const& noexcept;
-  [[nodiscard]] generator<std::string_view> names() && = delete;
-
   /// Returns the value of an attribute by name, if it exists.
   /// @param key The key of the attribute.
   /// @note If an attribute exists and its value is empty, the result contains
@@ -400,9 +396,6 @@ public:
   attributes(type::recurse recurse = type::recurse::yes) const& noexcept;
   [[nodiscard]] generator<attribute_view>
   attributes(type::recurse recurse = type::recurse::yes) && = delete;
-
-  /// Returns all aliases of this type, excluding this type itself.
-  [[nodiscard]] generator<type> aliases() const noexcept;
 
   /// Returns a string generated from hashing the contents of a type.
   std::string make_fingerprint() const;
@@ -1735,11 +1728,13 @@ struct formatter<tenzir::type> {
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
     auto it = ctx.begin();
     auto end = ctx.end();
-    if (it != end && (*it++ == '-') && it != end && (*it++ == 'a'))
+    if (it != end && (*it++ == '-') && it != end && (*it++ == 'a')) {
       print_attributes = false;
+    }
     // continue until end of range
-    while (it != end && *it != '}')
+    while (it != end && *it != '}') {
       ++it;
+    }
     return it;
   }
 
@@ -1747,12 +1742,13 @@ struct formatter<tenzir::type> {
   auto format(const tenzir::type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     auto out = ctx.out();
-    if (const auto& name = value.name(); !name.empty())
+    if (const auto& name = value.name(); !name.empty()) {
       out = fmt::format_to(out, "{}", name);
-    else
+    } else {
       match(value, [&](const auto& x) {
         out = fmt::format_to(out, "{}", x);
       });
+    }
     if (print_attributes) {
       for (bool first = false; const auto& attribute :
                                value.attributes(tenzir::type::recurse::no)) {
@@ -1778,8 +1774,9 @@ struct formatter<tenzir::type::attribute_view> {
   auto
   format(const tenzir::type::attribute_view& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    if (value.value.empty())
+    if (value.value.empty()) {
       return fmt::format_to(ctx.out(), "#{}", value.key);
+    }
     return fmt::format_to(ctx.out(), "#{}={}", value.key, value.value);
   }
 };

@@ -511,7 +511,7 @@ TEST(unsigned int16) {
 
 TEST(unsigned hexadecimal integral) {
   using namespace parsers;
-  auto p = ignore(-hex_prefix) >> hex64;
+  auto p = ignore(-hex_prefix) >> ux64;
   unsigned x = 0u;
   CHECK(p("1234", x));
   CHECK_EQUAL(x, 0x1234u);
@@ -853,14 +853,16 @@ namespace {
 template <class T>
 T to_si(std::string_view str) {
   auto parse_si = [&](auto input, auto& x) {
-    if constexpr (std::is_same_v<T, uint64_t>)
+    if constexpr (std::is_same_v<T, uint64_t>) {
       return parsers::count(input, x);
-    else if constexpr (std::is_same_v<T, int64_t>)
+    } else if constexpr (std::is_same_v<T, int64_t>) {
       return parsers::integer(input, x);
+    }
   };
   T x;
-  if (!parse_si(str, x))
+  if (!parse_si(str, x)) {
     FAIL("could not parse " << str << " as SI literal");
+  }
   return x;
 }
 
@@ -906,8 +908,9 @@ TEST(si int) {
 
 TEST(bytesize) {
   const auto parse = [](std::string_view str) {
-    if (auto result = uint64_t{}; parsers::bytesize(str, result))
+    if (auto result = uint64_t{}; parsers::bytesize(str, result)) {
       return result;
+    }
     FAIL("failed to parse bytesize: " << str);
   };
   using namespace si_literals;

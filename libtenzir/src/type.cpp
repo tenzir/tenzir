@@ -398,124 +398,73 @@ type::type(std::string_view name, const type& nested,
     // This special case fbs::type::Type::exists for easier conversion of legacy
     // types, which did not require an legacy alias type wrapping to have a name.
     *this = nested;
-  } else {
-    auto nested_bytes = as_bytes(nested);
-    // Identify the first named metadata-layer, and store all attributes we
-    // encounter until then. We merge the attributes into the attributes
-    // provided to this constructor, priorising the new attributes, with the
-    // nested byte range being adjusted to the first named metadata-layer (or
-    // the underlying concrete type).
-    for (const auto* root = fbs::GetType(nested_bytes.data());
-         root != nullptr;) {
-      switch (root->type_type()) {
-        case fbs::type::Type::pattern_type:
-          __builtin_unreachable();
-        case fbs::type::Type::NONE:
-        case fbs::type::Type::bool_type:
-        case fbs::type::Type::int64_type:
-        case fbs::type::Type::uint64_type:
-        case fbs::type::Type::double_type:
-        case fbs::type::Type::duration_type:
-        case fbs::type::Type::time_type:
-        case fbs::type::Type::string_type:
-        case fbs::type::Type::blob_type:
-        case fbs::type::Type::ip_type:
-        case fbs::type::Type::subnet_type:
-        case fbs::type::Type::enumeration_type:
-        case fbs::type::Type::list_type:
-        case fbs::type::Type::map_type:
-        case fbs::type::Type::record_type:
-          root = nullptr;
-          break;
-        case fbs::type::Type::enriched_type: {
-          const auto* enriched_type = root->type_as_enriched_type();
-          if (enriched_type->name()) {
-            root = nullptr;
-            break;
-          }
-          if (const auto* stripped_attributes = enriched_type->attributes()) {
-            for (const auto* stripped_attribute : *stripped_attributes) {
-              TENZIR_ASSERT(stripped_attribute->key());
-              // Skip over any attributes that were already in the new list of
-              // attributes.
-              if (std::any_of(
-                    attributes.begin(), attributes.end(),
-                    [&](const auto& attribute) noexcept {
-                      return attribute.key
-                             == stripped_attribute->key()->string_view();
-                    })) {
-                continue;
-              }
-              if (stripped_attribute->value()) {
-                attributes.push_back(
-                  {stripped_attribute->key()->string_view(),
-                   stripped_attribute->value()->string_view()});
-              } else {
-                attributes.push_back(
-                  {stripped_attribute->key()->string_view()});
-              }
-            }
-          }
-          nested_bytes = as_bytes(*enriched_type->type());
-          root = enriched_type->type_nested_root();
-          TENZIR_ASSERT(root);
-          break;
-        }
-      }
-    }
-    const auto reserved_size = [&]() noexcept {
-      // The total length is made up from the following terms:
-      // - 52 bytes FlatBuffers table framing
-      // - Nested type FlatBuffers table size
-      // - All contained string lengths, rounded up to four each
-      // Note that this cannot account for attributes, since they are stored in
-      // hash map which makes calculating the space requirements non-trivial.
-      size_t size = 52;
-      size += nested_bytes.size();
-      size += reserved_string_size(name);
-      return size;
-    };
-    auto builder = attributes.empty()
-                     ? flatbuffers::FlatBufferBuilder{reserved_size()}
-                     : flatbuffers::FlatBufferBuilder{};
-    const auto nested_type_offset = builder.CreateVector(
-      reinterpret_cast<const uint8_t*>(nested_bytes.data()),
-      nested_bytes.size());
-    const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
-    const auto attributes_offset = [&]() noexcept
-      -> flatbuffers::Offset<
-        flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
-      if (attributes.empty()) {
-        return 0;
-      }
-      auto attributes_offsets
-        = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
-      attributes_offsets.reserve(attributes.size());
-      auto add_attribute = [&](const auto& attribute) noexcept {
-        const auto key_offset = builder.CreateString(attribute.key);
-        const auto value_offset
-          = attribute.value.empty() ? 0 : builder.CreateString(attribute.value);
-        attributes_offsets.emplace_back(fbs::type::detail::CreateAttribute(
-          builder, key_offset, value_offset));
-      };
-      std::sort(attributes.begin(), attributes.end(),
-                [](const attribute_view& lhs,
-                   const attribute_view& rhs) noexcept {
-                  return lhs.key < rhs.key;
-                });
-      for (const auto& attribute : attributes) {
-        add_attribute(attribute);
-      }
-      return builder.CreateVectorOfSortedTables(&attributes_offsets);
-    }();
-    const auto enriched_type_offset = fbs::type::detail::CreateEnrichedType(
-      builder, nested_type_offset, name_offset, attributes_offset);
-    const auto type_offset = fbs::CreateType(
-      builder, fbs::type::Type::enriched_type, enriched_type_offset.Union());
-    builder.Finish(type_offset);
-    auto result = builder.Release();
-    table_ = chunk::make(std::move(result));
+    return;
   }
+  if (name.empty()) {
+    name = nested.name();
+  }
+  for (const auto& [key, value] : nested.attributes()) {
+    const auto duplicate
+      = std::ranges::find(attributes, key, &attribute_view::key);
+    if (duplicate != attributes.end()) {
+      continue;
+    }
+    attributes.push_back({key, value});
+  }
+  const auto nested_bytes = match(nested, [](const auto& nested) {
+    return as_bytes(nested);
+  });
+  const auto reserved_size = [&]() noexcept {
+    // The total length is made up from the following terms:
+    // - 52 bytes FlatBuffers table framing
+    // - Nested type FlatBuffers table size
+    // - All contained string lengths, rounded up to four each
+    // Note that this cannot account for attributes, since they are stored in
+    // hash map which makes calculating the space requirements non-trivial.
+    size_t size = 52;
+    size += nested_bytes.size();
+    size += reserved_string_size(name);
+    return size;
+  };
+  auto builder = attributes.empty()
+                   ? flatbuffers::FlatBufferBuilder{reserved_size()}
+                   : flatbuffers::FlatBufferBuilder{};
+  const auto nested_type_offset = builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(nested_bytes.data()), nested_bytes.size());
+  const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
+  const auto attributes_offset = [&]() noexcept
+    -> flatbuffers::Offset<
+      flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
+    if (attributes.empty()) {
+      return 0;
+    }
+    auto attributes_offsets
+      = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
+    attributes_offsets.reserve(attributes.size());
+    auto add_attribute = [&](const auto& attribute) noexcept {
+      const auto key_offset = builder.CreateString(attribute.key);
+      const auto value_offset
+        = attribute.value.empty() ? 0 : builder.CreateString(attribute.value);
+      attributes_offsets.emplace_back(
+        fbs::type::detail::CreateAttribute(builder, key_offset, value_offset));
+    };
+    std::sort(attributes.begin(), attributes.end(),
+              [](const attribute_view& lhs,
+                 const attribute_view& rhs) noexcept {
+                return lhs.key < rhs.key;
+              });
+    for (const auto& attribute : attributes) {
+      add_attribute(attribute);
+    }
+    return builder.CreateVectorOfSortedTables(&attributes_offsets);
+  }();
+  const auto enriched_type_offset = fbs::type::detail::CreateEnrichedType(
+    builder, nested_type_offset, name_offset, attributes_offset);
+  const auto type_offset = fbs::CreateType(
+    builder, fbs::type::Type::enriched_type, enriched_type_offset.Union());
+  builder.Finish(type_offset);
+  auto result = builder.Release();
+  table_ = chunk::make(std::move(result));
 }
 
 type::type(std::string_view name, const type& nested) noexcept
@@ -1052,54 +1001,9 @@ auto inspect(caf::detail::stringification_inspector& f, type& x) {
 }
 
 void type::assign_metadata(const type& other) noexcept {
-  const auto name = other.name();
-  if (name.empty() && !other.has_attributes()) {
-    return;
-  }
-  const auto pruned = prune();
-  const auto nested_bytes = as_bytes(pruned);
-  const auto reserved_size = [&]() noexcept {
-    // The total length is made up from the following terms:
-    // - 52 bytes FlatBuffers table framing
-    // - Nested type FlatBuffers table size
-    // - All contained string lengths, rounded up to four each
-    // Note that this cannot account for attributes, since they are stored in
-    // hash map which makes calculating the space requirements non-trivial.
-    size_t size = 52;
-    size += nested_bytes.size();
-    size += reserved_string_size(name);
-    return size;
-  };
-  auto builder = other.has_attributes()
-                   ? flatbuffers::FlatBufferBuilder{reserved_size()}
-                   : flatbuffers::FlatBufferBuilder{};
-  const auto nested_type_offset = builder.CreateVector(
-    reinterpret_cast<const uint8_t*>(nested_bytes.data()), nested_bytes.size());
-  const auto name_offset = name.empty() ? 0 : builder.CreateString(name);
-  const auto attributes_offset = [&]() noexcept
-    -> flatbuffers::Offset<
-      flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
-    if (!other.has_attributes()) {
-      return 0;
-    }
-    auto attributes_offsets
-      = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
-    for (const auto& attribute : other.attributes()) {
-      const auto key_offset = builder.CreateString(attribute.key);
-      const auto value_offset
-        = attribute.value.empty() ? 0 : builder.CreateString(attribute.value);
-      attributes_offsets.emplace_back(
-        fbs::type::detail::CreateAttribute(builder, key_offset, value_offset));
-    }
-    return builder.CreateVectorOfSortedTables(&attributes_offsets);
-  }();
-  const auto enriched_type_offset = fbs::type::detail::CreateEnrichedType(
-    builder, nested_type_offset, name_offset, attributes_offset);
-  const auto type_offset = fbs::CreateType(
-    builder, fbs::type::Type::enriched_type, enriched_type_offset.Union());
-  builder.Finish(type_offset);
-  auto result = builder.Release();
-  table_ = chunk::make(std::move(result));
+  *this = match(*this, [&](const auto& self) {
+    return type{other.name(), self, collect(other.attributes())};
+  });
 }
 
 auto type::prune() const noexcept -> type {
@@ -1153,42 +1057,6 @@ std::string_view type::name() const& noexcept {
         const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* name = enriched_type->name()) {
           return name->string_view();
-        }
-        root = enriched_type->type_nested_root();
-        TENZIR_ASSERT(root);
-        break;
-      }
-    }
-  }
-  __builtin_unreachable();
-}
-
-generator<std::string_view> type::names() const& noexcept {
-  const auto* root = &table(transparent::no);
-  while (true) {
-    switch (root->type_type()) {
-      case fbs::type::Type::pattern_type:
-        __builtin_unreachable();
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type:
-      case fbs::type::Type::int64_type:
-      case fbs::type::Type::uint64_type:
-      case fbs::type::Type::double_type:
-      case fbs::type::Type::duration_type:
-      case fbs::type::Type::time_type:
-      case fbs::type::Type::string_type:
-      case fbs::type::Type::blob_type:
-      case fbs::type::Type::ip_type:
-      case fbs::type::Type::subnet_type:
-      case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
-      case fbs::type::Type::record_type:
-        co_return;
-      case fbs::type::Type::enriched_type: {
-        const auto* enriched_type = root->type_as_enriched_type();
-        if (const auto* name = enriched_type->name()) {
-          co_yield name->string_view();
         }
         root = enriched_type->type_nested_root();
         TENZIR_ASSERT(root);
@@ -1317,42 +1185,6 @@ type::attributes(type::recurse recurse) const& noexcept {
         }
         if (recurse == type::recurse::no) {
           co_return;
-        }
-        root = enriched_type->type_nested_root();
-        TENZIR_ASSERT(root);
-        break;
-      }
-    }
-  }
-  __builtin_unreachable();
-}
-
-generator<type> type::aliases() const noexcept {
-  const auto* root = &table(transparent::no);
-  while (true) {
-    switch (root->type_type()) {
-      case fbs::type::Type::pattern_type:
-        __builtin_unreachable();
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type:
-      case fbs::type::Type::int64_type:
-      case fbs::type::Type::uint64_type:
-      case fbs::type::Type::double_type:
-      case fbs::type::Type::duration_type:
-      case fbs::type::Type::time_type:
-      case fbs::type::Type::string_type:
-      case fbs::type::Type::blob_type:
-      case fbs::type::Type::ip_type:
-      case fbs::type::Type::subnet_type:
-      case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
-      case fbs::type::Type::record_type:
-        co_return;
-      case fbs::type::Type::enriched_type: {
-        const auto* enriched_type = root->type_as_enriched_type();
-        if (enriched_type->name()) {
-          co_yield type{table_->slice(as_bytes(*enriched_type->type()))};
         }
         root = enriched_type->type_nested_root();
         TENZIR_ASSERT(root);

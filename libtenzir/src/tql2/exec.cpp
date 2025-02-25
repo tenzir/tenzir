@@ -222,23 +222,20 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
   auto fail = std::optional<failure>{};
   auto ops = std::vector<operator_ptr>{};
   for (auto& stmt : pipe.body) {
-    stmt.match(
-      [&](ast::invocation& x) {
+    auto result = stmt.match(
+      [&](ast::invocation& x) -> failure_or<void> {
         // TODO: Where do we check that this succeeds?
-        auto op = ctx.reg().get(x).make(
-          operator_factory_plugin::invocation{
-            std::move(x.op),
-            std::move(x.args),
-          },
-          ctx);
-        if (op) {
-          TENZIR_ASSERT(*op);
-          ops.push_back(std::move(*op));
-        } else {
-          fail = op.error();
-        }
+        TRY(auto op, ctx.reg().get(x).make(
+                       operator_factory_plugin::invocation{
+                         std::move(x.op),
+                         std::move(x.args),
+                       },
+                       ctx));
+        TENZIR_ASSERT(op);
+        ops.push_back(std::move(op));
+        return {};
       },
-      [&](ast::assignment& x) {
+      [&](ast::assignment& x) -> failure_or<void> {
 #if 0
         // TODO: Cannot do this right now (release typeid problem).
         auto assignments = std::vector<assignment>();
@@ -249,18 +246,18 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
         TENZIR_ASSERT(plugin);
         auto args = std::vector<ast::expression>{};
         args.emplace_back(std::move(x));
-        auto op = plugin->make(
-          operator_factory_plugin::invocation{
-            ast::entity{
-              {ast::identifier{std::string{"set"}, location::unknown}}},
-            std::move(args),
-          },
-          ctx);
-        TENZIR_ASSERT(op);
-        ops.push_back(std::move(*op));
+        TRY(auto op, plugin->make(
+                       operator_factory_plugin::invocation{
+                         ast::entity{{ast::identifier{std::string{"set"},
+                                                      location::unknown}}},
+                         std::move(args),
+                       },
+                       ctx));
+        ops.push_back(std::move(op));
 #endif
+        return {};
       },
-      [&](ast::if_stmt& x) {
+      [&](ast::if_stmt& x) -> failure_or<void> {
         // TODO: Same problem regarding instantiation outside of plugin.
         auto args = std::vector<ast::expression>{};
         args.reserve(3);
@@ -273,24 +270,28 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
         }
         auto plugin = plugins::find<operator_factory_plugin>("tql2.if");
         TENZIR_ASSERT(plugin);
-        auto op = plugin->make(
-          operator_factory_plugin::invocation{
-            ast::entity{{ast::identifier{std::string{"if"}, location::unknown}}},
-            std::move(args),
-          },
-          ctx);
-        TENZIR_ASSERT(op);
-        ops.push_back(std::move(*op));
+        TRY(auto op,
+            plugin->make(
+              operator_factory_plugin::invocation{
+                ast::entity{{ast::identifier{std::string{"if"}, x.if_kw}}},
+                std::move(args),
+              },
+              ctx));
+        ops.push_back(std::move(op));
+        return {};
       },
-      [&](ast::match_stmt& x) {
+      [&](ast::match_stmt& x) -> failure_or<void> {
         diagnostic::error("`match` not yet implemented, try using `if` instead")
           .primary(x)
           .emit(ctx.dh());
-        fail = failure::promise();
+        return failure::promise();
       },
-      [&](ast::let_stmt&) {
+      [&](ast::let_stmt&) -> failure_or<void> {
         TENZIR_UNREACHABLE();
       });
+    if (result.is_error()) {
+      fail = result.error();
+    }
   }
   if (fail) {
     return *fail;
