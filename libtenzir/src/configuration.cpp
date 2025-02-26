@@ -33,6 +33,8 @@
 #include <caf/net/middleman.hpp>
 #include <caf/openssl/manager.hpp>
 
+#include <openssl/x509.h>
+
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -533,6 +535,20 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
       value = path.string();
     }
   }
+  if (!config->contains("tenzir.ca-certificates")) {
+    auto& value = (*config)["tenzir.ca-certificates"];
+    const auto* file = getenv(X509_get_default_cert_file_env());
+    if (!file) {
+      file = X509_get_default_cert_file();
+    }
+    for (auto& f : {file, "/etc/ssl/certs/ca-certificates.crt", "/etc/ssl/certs/ca-bundle.crt"}) {
+      std::error_code ec;
+      if (std::filesystem::exists(f, ec)) {
+        value = f;
+        break;
+      }
+    }
+  }
   // From here on, we go into CAF land with the goal to put the configuration
   // into the members of this actor_system_config instance.
   auto settings = to_settings(std::move(*config));
@@ -542,14 +558,6 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   if (auto err = embed_config(*settings)) {
     return err;
   }
-  // Work around CAF quirk where options in the `openssl` group have no effect
-  // if they are not seen by the native option or config file parsers.
-  // FIXME: Are these handled automatically now?
-  // openssl_certificate = caf::get_or(content, "caf.openssl.certificate", "");
-  // openssl_key = caf::get_or(content, "caf.openssl.key", "");
-  // openssl_passphrase = caf::get_or(content, "caf.openssl.passphrase", "");
-  // openssl_capath = caf::get_or(content, "caf.openssl.capath", "");
-  // openssl_cafile = caf::get_or(content, "caf.openssl.cafile", "");
   // Detect when plugins, plugin-dirs, or schema-dirs are specified on the
   // command line. This needs to happen before the regular parsing of the
   // command line since plugins may add additional commands and schemas.
