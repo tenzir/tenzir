@@ -33,6 +33,8 @@
 #include <caf/net/middleman.hpp>
 #include <caf/openssl/manager.hpp>
 
+#include <openssl/x509.h>
+
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -533,6 +535,38 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
       value = path.string();
     }
   }
+  auto cacert_path_env_name = X509_get_default_cert_file_env();
+  auto cacert_path_env = detail::getenv(cacert_path_env_name);
+  if (!config->contains("tenzir.cacert")) {
+    if (cacert_path_env) {
+      // Always respect the environment variable, don't bother checking if the
+      // file exists.
+      (*config)["tenzir.cacert"] = cacert_path_env;
+    } else {
+      for (const auto& f : {
+             X509_get_default_cert_file(),
+             "/etc/ssl/certs/ca-certificates.crt",
+             "/etc/ssl/certs/ca-bundle.crt",
+           }) {
+        std::error_code ec;
+        if (std::filesystem::exists(f, ec)) {
+          (*config)["tenzir.cacert"] = f;
+          break;
+        }
+      }
+    }
+  }
+  auto foo = config;
+  // Set the OPENSSL environment variable for the cert file path if it is not
+  // set and not the default value.
+  if (auto cacert_path = get_if<std::string>(&*config, "tenzir.cacert")) {
+    if (not cacert_path_env) {
+      if (auto err = detail::setenv(cacert_path_env_name, *cacert_path)) {
+        // TODO: Consider just ignoring instead?
+        fmt::println(stderr, "failed to set {}: {}", cacert_path_env_name, err);
+      }
+    }
+  }
   // From here on, we go into CAF land with the goal to put the configuration
   // into the members of this actor_system_config instance.
   auto settings = to_settings(std::move(*config));
@@ -542,14 +576,6 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   if (auto err = embed_config(*settings)) {
     return err;
   }
-  // Work around CAF quirk where options in the `openssl` group have no effect
-  // if they are not seen by the native option or config file parsers.
-  // FIXME: Are these handled automatically now?
-  // openssl_certificate = caf::get_or(content, "caf.openssl.certificate", "");
-  // openssl_key = caf::get_or(content, "caf.openssl.key", "");
-  // openssl_passphrase = caf::get_or(content, "caf.openssl.passphrase", "");
-  // openssl_capath = caf::get_or(content, "caf.openssl.capath", "");
-  // openssl_cafile = caf::get_or(content, "caf.openssl.cafile", "");
   // Detect when plugins, plugin-dirs, or schema-dirs are specified on the
   // command line. This needs to happen before the regular parsing of the
   // command line since plugins may add additional commands and schemas.
