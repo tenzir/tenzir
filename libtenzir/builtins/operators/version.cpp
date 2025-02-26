@@ -187,6 +187,12 @@ public:
               .to_typed_stream("version-exec", duration::zero(), 1);
         return {std::move(out)};
       },
+      [](exec::checkpoint) -> caf::result<void> {
+        TENZIR_TODO();
+      },
+      [](atom::stop) -> caf::result<void> {
+        TENZIR_TODO();
+      },
     };
   }
 

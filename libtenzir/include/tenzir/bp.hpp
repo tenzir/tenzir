@@ -22,17 +22,22 @@ class operator_base {
 public:
   struct spawn_args {
     spawn_args(caf::actor_system& sys, base_ctx ctx,
-               std::optional<chunk_ptr> chunk)
-      : sys{sys}, ctx{ctx}, chunk{std::move(chunk)} {
+               exec::checkpoint_receiver_actor checkpoint_receiver,
+               std::optional<chunk_ptr> restore)
+      : sys{sys},
+        ctx{ctx},
+        checkpoint_receiver{std::move(checkpoint_receiver)},
+        restore{std::move(restore)} {
     }
 
     caf::actor_system& sys;
     base_ctx ctx;
+    exec::checkpoint_receiver_actor checkpoint_receiver;
 
     // nullopt => fresh start
     // nullptr => no chunk sent for restore point
     // otherwise => chunk contents sent for restore point
-    std::optional<chunk_ptr> chunk;
+    std::optional<chunk_ptr> restore;
   };
 
   virtual ~operator_base() = default;
@@ -79,8 +84,16 @@ public:
     return std::move(operators_);
   }
 
+  auto operator[](size_t index) -> operator_ptr& {
+    return operators_[index];
+  }
+
   auto id() const -> uuid {
     return id_;
+  }
+
+  auto size() const -> size_t {
+    return operators_.size();
   }
 
   friend auto inspect(auto& f, pipeline& x) -> bool {

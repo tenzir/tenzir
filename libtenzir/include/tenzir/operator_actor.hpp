@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/atoms.hpp"
 #include "tenzir/variant.hpp"
 
 #include <caf/scheduled_actor/flow.hpp>
@@ -87,8 +88,12 @@ using any_stream = detail::tl_apply_t<stream_types, variant>;
 
 struct operator_actor_traits {
   using signatures = caf::type_list<
-    //
-    auto(handshake hs)->caf::result<handshake_response>>;
+    // Initial setup.
+    auto(handshake hs)->caf::result<handshake_response>,
+    // Post-commit.
+    auto(checkpoint cp)->caf::result<void>,
+    // Signal that the actual output is no longer relevant, only checkpoints.
+    auto(atom::stop)->caf::result<void>>;
 };
 
 using operator_actor = caf::typed_actor<operator_actor_traits>;
@@ -105,13 +110,8 @@ struct handshake {
 
   any_stream input;
 
-  // FIXME: actually set this:
-  checkpoint_receiver_actor checkpoint_receiver;
-
   friend auto inspect(auto& f, handshake& x) -> bool {
-    return f.object(x).fields(f.field("input", x.input),
-                              f.field("checkpoint_receiver",
-                                      x.checkpoint_receiver));
+    return f.apply(x.input);
   }
 };
 

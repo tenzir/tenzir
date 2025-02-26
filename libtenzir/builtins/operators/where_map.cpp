@@ -690,9 +690,13 @@ public:
 class where_impl {
 public:
   // For fresh start.
-  where_impl(exec::operator_actor::pointer self, ast::expression expr,
-             base_ctx ctx)
-    : self_{self}, expr_{std::move(expr)}, ctx_{ctx} {
+  where_impl(exec::operator_actor::pointer self,
+             exec::checkpoint_receiver_actor checkpoint_receiver,
+             ast::expression expr, base_ctx ctx)
+    : self_{self},
+      checkpoint_receiver_{std::move(checkpoint_receiver)},
+      expr_{std::move(expr)},
+      ctx_{ctx} {
   }
 
   // For restoring.
@@ -704,6 +708,12 @@ public:
     return {
       [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
         return handshake(std::move(hs));
+      },
+      [](exec::checkpoint) -> caf::result<void> {
+        TENZIR_TODO();
+      },
+      [](atom::stop) -> caf::result<void> {
+        TENZIR_TODO();
       },
     };
   }
@@ -718,25 +728,22 @@ private:
       [&](exec::stream<table_slice> input) -> exec::handshake_response {
         auto response = exec::handshake_response{};
         response.output
-          = impl(self_->observe(std::move(input), 30, 10),
-                 hs.checkpoint_receiver)
+          = impl(self_->observe(std::move(input), 30, 10))
               .to_typed_stream("where-stream", duration::zero(), 1);
         return response;
       });
   }
 
-  auto
-  impl(exec::observable<table_slice> input, exec::checkpoint_receiver_actor cra)
+  auto impl(exec::observable<table_slice> input)
     -> exec::observable<table_slice> {
     return input.concat_map(
-      [this, cra = std::move(cra)](
-        exec::message<table_slice> msg) -> exec::observable<table_slice> {
+      [this](exec::message<table_slice> msg) -> exec::observable<table_slice> {
         return match(
           std::move(msg),
           [&](exec::checkpoint check) -> exec::observable<table_slice> {
             // TODO: Save state.
             return self_->mail(check, chunk_ptr{})
-              .request(cra, caf::infinite)
+              .request(checkpoint_receiver_, caf::infinite)
               .as_observable()
               .map([check](caf::unit_t) -> exec::message<table_slice> {
                 return exec::message<table_slice>{check};
@@ -761,6 +768,7 @@ private:
   }
 
   exec::operator_actor::pointer self_;
+  exec::checkpoint_receiver_actor checkpoint_receiver_;
   ast::expression expr_;
   base_ctx ctx_;
 };
@@ -779,8 +787,9 @@ public:
   }
 
   auto spawn(spawn_args args) const -> exec::operator_actor override {
-    TENZIR_ASSERT(not args.chunk or *args.chunk == nullptr);
-    return args.sys.spawn(caf::actor_from_state<where_impl>, predicate_,
+    TENZIR_ASSERT(not args.restore or *args.restore == nullptr);
+    return args.sys.spawn(caf::actor_from_state<where_impl>,
+                          std::move(args.checkpoint_receiver), predicate_,
                           args.ctx);
   }
 
