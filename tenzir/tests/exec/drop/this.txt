@@ -1,0 +1,13 @@
+{
+  a: {
+    b: 1,
+    c: 2,
+  },
+  d: 3,
+}
+warning: cannot drop `this`
+ --> exec/drop/this.tql:8:6
+  |
+8 | drop this
+  |      ~~~~ 
+  |
