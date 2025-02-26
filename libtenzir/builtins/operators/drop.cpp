@@ -72,8 +72,9 @@ public:
                     [&](const auto& dropped_schema) {
                       return dropped_schema == schema.name();
                     });
-    if (drop_schema)
+    if (drop_schema) {
       return std::nullopt;
+    }
 
     // Apply the transformation.
     auto transform_fn
@@ -91,8 +92,9 @@ public:
     // transform_columns requires the transformations to be sorted, and that may
     // not necessarily be true if we have multiple fields configured, so we sort
     // again in that case.
-    if (config_.fields.size() > 1)
+    if (config_.fields.size() > 1) {
       std::sort(transformations.begin(), transformations.end());
+    }
     transformations.erase(std::unique(transformations.begin(),
                                       transformations.end()),
                           transformations.end());
@@ -182,6 +184,7 @@ public:
         auto resolved = resolve(sel, slice.schema());
         std::move(resolved).match(
           [&](offset off) {
+            TENZIR_ASSERT(not off.empty());
             transformations.emplace_back(
               std::move(off),
               [](struct record_type::field, std::shared_ptr<arrow::Array>) {
@@ -231,6 +234,10 @@ public:
     for (auto& arg : inv.args) {
       auto selector = ast::simple_selector::try_from(arg);
       if (selector) {
+        if (selector->path().empty()) {
+          diagnostic::error("cannot drop `this`").primary(*selector).emit(ctx);
+          return failure::promise();
+        }
         selectors.push_back(std::move(*selector));
       } else {
         // TODO: Improve error message.
@@ -241,6 +248,38 @@ public:
           .emit(ctx.dh());
       }
     }
+    std::ranges::sort(selectors);
+    auto dropped_children = std::vector<ast::simple_selector>{};
+    for (auto it = selectors.begin(); it != selectors.end(); ++it) {
+      const auto parent
+        = std::ranges::find_if(selectors.begin(), it, [&](const auto& x) {
+            const auto [mismatch, _]
+              = std::ranges::mismatch(x.path(), it->path());
+            return mismatch == x.path().end();
+          });
+      if (parent != it) {
+        if (*parent == *it) {
+          diagnostic::warning("ignoring duplicate field")
+            .primary(*it)
+            .primary(*parent)
+            .emit(ctx.dh());
+        } else {
+          diagnostic::warning("ignoring field within dropped record")
+            .primary(*it, "ignoring this field")
+            .secondary(*parent, "because it is already dropped here")
+            .emit(ctx.dh());
+          dropped_children.push_back(*it);
+        }
+      }
+    }
+    // Remove all the duplicates found.
+    selectors.erase(std::unique(selectors.begin(), selectors.end()),
+                    selectors.end());
+    // Then remove all the children of dropped fields.
+    std::erase_if(selectors, [&](const auto& selector) {
+      return std::ranges::find(dropped_children, selector)
+             != dropped_children.end();
+    });
     return std::make_unique<drop_operator2>(std::move(selectors));
   }
 };

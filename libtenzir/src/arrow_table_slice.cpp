@@ -364,21 +364,19 @@ transform_columns(type schema,
         nested_index.push_back(0);
         nested_layer = impl(impl, std::move(nested_layer),
                             std::move(nested_index), current, sentinel);
-        if (!nested_layer.fields.empty()) {
-          auto nested_schema = type{record_type{nested_layer.fields}};
-          nested_schema.assign_metadata(layer.fields[index.back()].type);
-          result.fields.emplace_back(layer.fields[index.back()].name,
-                                     nested_schema);
-          auto nested_arrow_fields = arrow::FieldVector{};
-          nested_arrow_fields.reserve(nested_layer.fields.size());
-          for (const auto& nested_field : nested_layer.fields) {
-            nested_arrow_fields.push_back(
-              nested_field.type.to_arrow_field(nested_field.name));
-          }
-          result.arrays.push_back(
-            make_struct_array(nested_array.length(), nested_array.null_bitmap(),
-                              nested_arrow_fields, nested_layer.arrays));
+        auto nested_schema = type{record_type{nested_layer.fields}};
+        nested_schema.assign_metadata(layer.fields[index.back()].type);
+        result.fields.emplace_back(layer.fields[index.back()].name,
+                                   nested_schema);
+        auto nested_arrow_fields = arrow::FieldVector{};
+        nested_arrow_fields.reserve(nested_layer.fields.size());
+        for (const auto& nested_field : nested_layer.fields) {
+          nested_arrow_fields.push_back(
+            nested_field.type.to_arrow_field(nested_field.name));
         }
+        result.arrays.push_back(
+          make_struct_array(nested_array.length(), nested_array.null_bitmap(),
+                            nested_arrow_fields, nested_layer.arrays));
       } else {
         result.fields.push_back(std::move(layer.fields[index.back()]));
         result.arrays.push_back(std::move(layer.arrays[index.back()]));
