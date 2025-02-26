@@ -35,6 +35,12 @@ public:
       [](exec::handshake hs) -> caf::result<exec::handshake_response> {
 
       },
+      [](exec::checkpoint) -> caf::result<void> {
+        TENZIR_TODO();
+      },
+      [](atom::stop) -> caf::result<void> {
+        TENZIR_TODO();
+      },
     };
   }
 
@@ -46,9 +52,10 @@ public:
       if (it == groups_.end()) {
         // TODO: What if fail?
         auto group_bp = make_group(value).unwrap();
+        // TODO
         auto new_group = group_t{
           ctx_.system().spawn(caf::actor_from_state<exec::pipeline>,
-                              std::move(group_bp), exec::restore::no, ctx_),
+                              std::move(group_bp), std::nullopt, ctx_),
         };
         auto [new_it, inserted]
           = groups_.try_emplace(std::move(value), std::move(new_group));

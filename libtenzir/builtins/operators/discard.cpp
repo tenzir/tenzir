@@ -77,7 +77,10 @@ struct serializable_actor {
 
 class discard_exec : public serializable_actor<discard_exec> {
 public:
-  explicit discard_exec(exec::operator_actor::pointer self) : self_{self} {
+  explicit discard_exec(exec::operator_actor::pointer self,
+                        exec::checkpoint_receiver_actor checkpoint_receiver)
+    : self_{self}, checkpoint_receiver_{std::move(checkpoint_receiver)} {
+    // TODO: Does this make sense?
     deserialize(chunk_ptr{});
   }
 
@@ -86,13 +89,12 @@ public:
       [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
         auto out
           = self_->observe(as<exec::stream<table_slice>>(hs.input), 30, 10)
-              .concat_map([this, checkpoint_receiver = hs.checkpoint_receiver](
-                            exec::message<table_slice> msg)
+              .concat_map([this](exec::message<table_slice> msg)
                             -> caf::flow::observable<exec::message<void>> {
                 if (auto checkpoint = try_as<exec::checkpoint>(msg)) {
                   TENZIR_WARN("got checkpoint");
                   return self_->mail(*checkpoint, serialize())
-                    .request(checkpoint_receiver, caf::infinite)
+                    .request(checkpoint_receiver_, caf::infinite)
                     .as_observable()
                     .map([checkpoint = *checkpoint](caf::unit_t) {
                       // precommit
@@ -101,6 +103,7 @@ public:
                     })
                     .as_observable();
                 }
+
                 TENZIR_WARN("discard got table slice");
                 return self_->make_observable()
                   .empty<exec::message<void>>()
@@ -113,10 +116,14 @@ public:
         return {std::move(out)};
       },
       // post-commit
-      // [this](exec::checkpoint checkpoint) -> caf::result<void> {
-      //   TENZIR_UNUSED(checkpoint);
-      //   TENZIR_WARN("discard post-commit");
-      // }
+      [](exec::checkpoint checkpoint) -> caf::result<void> {
+        TENZIR_UNUSED(checkpoint);
+        TENZIR_WARN("discard post-commit");
+        return {};
+      },
+      [](atom::stop) -> caf::result<void> {
+        TENZIR_TODO();
+      },
     };
   }
 
@@ -127,6 +134,7 @@ public:
 
 private:
   exec::operator_actor::pointer self_;
+  exec::checkpoint_receiver_actor checkpoint_receiver_;
 };
 
 class discard_bp final : public bp::operator_base {
@@ -138,7 +146,8 @@ public:
   }
 
   auto spawn(spawn_args args) const -> exec::operator_actor override {
-    return args.sys.spawn(caf::actor_from_state<discard_exec>);
+    return args.sys.spawn(caf::actor_from_state<discard_exec>,
+                          std::move(args.checkpoint_receiver));
   }
 
   friend auto inspect(auto& f, discard_bp& x) -> bool {

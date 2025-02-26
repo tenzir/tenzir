@@ -398,21 +398,23 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   }
   // Start the actual execution.
   auto exec = b_ctx.system().spawn(caf::actor_from_state<exec::pipeline>,
-                                   std::move(finalized), exec::restore::no,
+                                   std::move(finalized), std::nullopt,
                                    // TODO
                                    b_ctx);
   return run_pipeline(std::move(exec), b_ctx).is_success();
 }
 
 // TODO: Source for diagnostic handler?
-auto exec_restore(std::span<const std::byte> bp_chunk, base_ctx ctx)
+auto exec_restore(std::span<const std::byte> bp_chunk,
+                  exec::checkpoint_reader_actor checkpoint_reader, base_ctx ctx)
   -> failure_or<void> {
   auto f = caf::binary_deserializer{bp_chunk};
   auto pipe_bp = bp::pipeline{};
   auto ok = f.apply(pipe_bp);
   TENZIR_ASSERT(ok);
-  auto pipe = ctx.system().spawn(caf::actor_from_state<exec::pipeline>,
-                                 std::move(pipe_bp), exec::restore::yes, ctx);
+  auto pipe
+    = ctx.system().spawn(caf::actor_from_state<exec::pipeline>,
+                         std::move(pipe_bp), std::move(checkpoint_reader), ctx);
   return run_pipeline(std::move(pipe), ctx);
 }
 
