@@ -428,3 +428,25 @@ caf:
 
       # List of excluded actors from run-time metrics.
       excludes: []
+
+  # Configure using OpenSSL for node-to-node connections.
+  # NOTE: Use the tenzir.endpoint variable to configure the endpoint.
+  openssl:
+
+    # Path to the PEM-formatted certificate file.
+    certificate:
+
+    # Path to the private key file for this node.
+    key:
+
+    # Passphrase to decrypt the private key.
+    passphrase:
+
+    # Path to an OpenSSL-style directory of trusted certificates.
+    capath:
+
+    # Path to a file of concatenated PEM-formatted certificates.
+    cafile:
+
+    # Colon-separated list of OpenSSL cipher strings to use.
+    cipher-list:
