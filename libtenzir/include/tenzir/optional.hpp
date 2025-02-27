@@ -29,7 +29,7 @@ template <class T>
 check(std::optional<T> result, std::source_location location
                                = std::source_location::current()) -> T {
   if (not result) [[unlikely]] {
-    detail::panic_impl("invalid optional access", location);
+    panic_at(location, "invalid optional access");
   }
   return std::move(result.value());
 }

@@ -259,6 +259,29 @@ struct exec_node_state {
             std::rethrow_exception(exception);
           } catch (diagnostic& diag) {
             return std::move(diag).to_error();
+          } catch (panic_exception& panic) {
+            auto stacktrace = std::string{};
+            for (auto& frame : panic.stacktrace) {
+              if (not stacktrace.empty()) {
+                stacktrace += '\n';
+              }
+              fmt::format_to(std::back_inserter(stacktrace), "{} @ {}:{} [{}]",
+                             frame.name(), frame.source_file(),
+                             frame.source_line(), frame.address());
+            }
+            return diagnostic::error("unexpected internal error: {}",
+                                     panic.message)
+              .note("this is a bug, we would appreciate a report - thank you!")
+              .note("https://github.com/orgs/tenzir/discussions/"
+                    "new?category=bug-reports")
+              .note("source: {}:{}", panic.location.file_name(),
+                    panic.location.line())
+              .note("version: v{}", tenzir::version::version)
+              .note(std::move(stacktrace))
+              .note("this is a bug, we would appreciate a report - thank you!")
+              .note("https://github.com/orgs/tenzir/discussions/"
+                    "new?category=bug-reports")
+              .to_error();
           } catch (const std::exception& err) {
             return diagnostic::error("{}", err.what())
               .note("unhandled exception in {} {}", *self, op->name())

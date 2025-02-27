@@ -528,19 +528,19 @@ public:
   auto infer_location() const -> std::optional<operator_location>;
 
   auto location() const -> operator_location override {
-    detail::panic("pipeline::location() must not be called");
+    panic("pipeline::location() must not be called");
   }
 
   auto detached() const -> bool override {
-    detail::panic("pipeline::detached() must not be called");
+    panic("pipeline::detached() must not be called");
   }
 
   auto internal() const -> bool override {
-    detail::panic("pipeline::internal() must not be called");
+    panic("pipeline::internal() must not be called");
   }
 
   auto idle_after() const -> duration override {
-    detail::panic("pipeline::idle_after() must not be called");
+    panic("pipeline::idle_after() must not be called");
   }
 
   auto instantiate(operator_input input, operator_control_plane& control) const
