@@ -96,6 +96,7 @@ Operator | Description | Example
 [`to`](./operators/to.md) | Writes events to an URI | `to "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
 [`to_asl`](./operators/to_asl.md) | Sends OCSF events to an Amazon Security Lake | `to_asl "s3://…"`
 [`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
+[`to_clickhouse`](./operators/to_clickhouse.md) | Sends events to a ClickHouse Table | `to_clickhouse table="my_table"`
 [`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent Bit| `to_fluent_bit "elasticsearch" …`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
 [`to_opensearch`](./operators/to_opensearch.md) | Sends incoming events to the OpenSearch Bulk API | `to_opensearch 'localhost:9200", …`

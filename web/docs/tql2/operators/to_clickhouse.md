@@ -1,0 +1,76 @@
+# to_clickhouse
+
+Sends events to a ClickHouse table.
+
+```tql
+to_clickhouse table=string, [url=string, user=string, password=string,
+                             mode=string, primary=field]
+```
+
+## Description
+
+### `table = string`
+
+The name of the table you want to write to. When giving a plain table name, it
+will use the `default` database, otherwise `database.table` can be specified.
+
+### `url = string (optional)`
+
+The location of the ClickHouse Server.
+
+Defaults to `"localhost:9000"`.
+
+### `user = string ( optional)`
+
+The user to use for authentication.
+
+Defaults to `"default"`.
+
+### `password = string (optional)`
+
+The password for the given user.
+
+Defaults to `""`.
+
+### `mode = string (optional)`
+
+* `"create"` if you want to create a table and fail if it already exists
+* `"append"` to append to an existing table
+* `"create_append"` to create a table if it does not exist and append to it
+  otherwise.
+
+Defaults to `"create_append"`.
+
+### `primary = field (optionally required)`
+
+The primary key to use when creating a table. Required for `mode = "create"` as
+well as for `mode = "create_append"` if the table does not yet exist.
+
+## Types
+
+Tenzir uses ClickHouse's [clickhouse-cpp](https://github.com/ClickHouse/clickhouse-cpp)
+client library to communicate with ClickHouse. The below table explains the
+translation from Tenzir's types to ClickHouse:
+
+| Tenzir | ClickHouse | Comment |
+|:--- | :--- | :--- |
+| `int64` | `Int64` | |
+| `unt64` | `Unt64` | |
+| `double` | `Float64` | |
+| `ip` | `IPv6` | |
+| `subnet` | FIXME | |
+| `time` | `DateTime64(8)` | |
+| `duration` | `Int64` | Converted as `nanoseconds(duration)` |
+| `record` | `Tuple(...)` | |
+| `list<T>` | `Array(T)` | |
+
+## Table Creation
+
+## Examples
+
+### Send CSV file to ClickHouse
+
+```tql
+from "my_file.csv"
+to_clickhouse table="my_table"
+```
