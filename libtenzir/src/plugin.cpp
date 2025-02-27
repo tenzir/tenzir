@@ -15,6 +15,7 @@
 #include "tenzir/config.hpp"
 #include "tenzir/configuration.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/backtrace.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/installdirs.hpp"
 #include "tenzir/detail/settings.hpp"
@@ -339,6 +340,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
     ++it;
     auto name_b = (*it)->name();
     if (name_a == name_b) {
+      detail::backtrace();
       TENZIR_ASSERT(false,
                     fmt::format("found multiple plugins named `{}`", name_a));
     } else {

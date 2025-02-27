@@ -524,6 +524,8 @@ private:
   tsl::robin_set<seen_t, hasher> seen_;
 };
 
+auto to_diagnostic(panic_exception&& e) -> diagnostic;
+
 } // namespace tenzir
 
 template <>

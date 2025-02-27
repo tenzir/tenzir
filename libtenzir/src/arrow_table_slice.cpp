@@ -433,8 +433,7 @@ transform_columns(type schema,
   }
 #if TENZIR_ENABLE_ASSERTIONS
   auto validate_status = new_struct_array->Validate();
-  TENZIR_ASSERT_EXPENSIVE(validate_status.ok(),
-                          validate_status.ToString().c_str());
+  TENZIR_ASSERT_EXPENSIVE(validate_status.ok(), validate_status.ToString());
 #endif // TENZIR_ENABLE_ASSERTIONS
   return {
     std::move(new_schema),

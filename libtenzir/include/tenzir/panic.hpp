@@ -40,7 +40,7 @@ struct panic_exception final : std::exception {
 template <class... Ts>
 struct located_format_string {
   template <class String>
-  explicit(false) constexpr located_format_string(
+  explicit(false) consteval located_format_string(
     String string, std::source_location location
                    = std::source_location::current())
     : string{std::move(string)}, location{location} {

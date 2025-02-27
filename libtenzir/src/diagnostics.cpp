@@ -265,4 +265,27 @@ auto diagnostic_deduplicator::hasher::operator()(const seen_t& x) const
   }
   return result;
 }
+
+auto to_diagnostic(panic_exception&& e) -> diagnostic {
+  auto stacktrace = std::string{};
+  for (auto& frame : e.stacktrace) {
+    if (not stacktrace.empty()) {
+      stacktrace += '\n';
+    }
+    fmt::format_to(std::back_inserter(stacktrace), "{} @ {}:{} [{}]",
+                   frame.name(), frame.source_file(), frame.source_line(),
+                   frame.address());
+  }
+  return diagnostic::error("unexpected internal error: {}", e.message)
+    .note("this is a bug, we would appreciate a report - thank you!")
+    .note("https://github.com/orgs/tenzir/discussions/"
+          "new?category=bug-reports")
+    .note("source: {}:{}", e.location.file_name(), e.location.line())
+    .note("version: v{}", tenzir::version::version)
+    .note(std::move(stacktrace))
+    .note("this is a bug, we would appreciate a report - thank you!")
+    .note("https://github.com/orgs/tenzir/discussions/"
+          "new?category=bug-reports")
+    .done();
+}
 } // namespace tenzir

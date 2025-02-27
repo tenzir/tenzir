@@ -38,7 +38,7 @@
 #include <thread>
 #include <unordered_map>
 
-auto main(int argc, char** argv) -> int {
+auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
   // Set a signal handler for fatal conditions. Prints a backtrace if support
   // for that is enabled.
@@ -123,7 +123,7 @@ auto main(int argc, char** argv) -> int {
     }
   }
 #if TENZIR_POSIX
-  struct rlimit rlimit{};
+  struct rlimit rlimit {};
   if (::getrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
     TENZIR_ERROR("failed to get RLIMIT_NOFILE: {}", detail::describe_errno());
     return -errno;
@@ -307,4 +307,9 @@ auto main(int argc, char** argv) -> int {
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
+} catch (tenzir::panic_exception& e) {
+  auto dh = make_diagnostic_printer(std::nullopt,
+                                    tenzir::color_diagnostics::yes, std::cerr);
+  dh->emit(to_diagnostic(std::move(e)));
+  return EXIT_FAILURE;
 }
