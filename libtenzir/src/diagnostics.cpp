@@ -27,7 +27,7 @@ namespace {
 void trim_and_truncate(std::string& str) {
   using namespace std::string_view_literals;
   boost::trim(str);
-  if (str.size() > 2000) {
+  if (str.size() > 100000) {
     auto prefix = std::string_view{str.begin(), str.begin() + 75};
     str = fmt::format("{} ... (truncated {} bytes)", prefix,
                       str.length() - prefix.length());
@@ -125,8 +125,16 @@ public:
       }
     }
     for (auto& note : diag.notes) {
-      fmt::print(stream_, "{} {}{}={} {}:{} {}\n", indent, bold, blue, uncolor,
-                 note.kind, reset, note.message);
+      auto lines = detail::split(note.message, "\n");
+      for (auto& line : lines) {
+        if (&line == &lines.front()) {
+          fmt::print(stream_, "{} {}{}={} {}:{} {}\n", indent, bold, blue,
+                     uncolor, note.kind, reset, line);
+        } else {
+          auto kind_spaces = std::string(fmt::to_string(note.kind).size(), ' ');
+          fmt::print(stream_, "{}   {}  {}\n", indent, kind_spaces, line);
+        }
+      }
     }
     if (diag.severity == severity::error) {
       error_ = true;
@@ -266,26 +274,64 @@ auto diagnostic_deduplicator::hasher::operator()(const seen_t& x) const
   return result;
 }
 
-auto to_diagnostic(panic_exception&& e) -> diagnostic {
-  auto stacktrace = std::string{};
-  for (auto& frame : e.stacktrace) {
-    if (not stacktrace.empty()) {
-      stacktrace += '\n';
+namespace {
+
+auto simplify_name(std::string name) -> std::string {
+  // TODO: Make this heuristic beter.
+  auto actor_prefix
+    = std::string_view{"caf::detail::default_behavior_impl<std::__1::tuple<"};
+  if (name.starts_with(actor_prefix)) {
+    auto actor_start = actor_prefix.size();
+    auto actor_end = name.find("::make_behavior()::'lambda'", actor_start);
+    if (actor_end != std::string::npos) {
+      name = name.substr(actor_start, actor_end - actor_start);
+      name += "::make_behavior";
     }
-    fmt::format_to(std::back_inserter(stacktrace), "{} @ {}:{} [{}]",
-                   frame.name(), frame.source_file(), frame.source_line(),
+  }
+  name = detail::replace_all(name, "std::__1::", "std::");
+  name = detail::replace_all(name, "(anonymous namespace)", "(anon)");
+  for (auto it = name.begin(); it != name.end(); ++it) {
+    if (*it != '<') {
+      continue;
+    }
+    auto start = it;
+    while (true) {
+      ++it;
+      if (it == name.end()) {
+        return name;
+      }
+      if (*it != '>') {
+        continue;
+      }
+      auto end = it;
+      auto start_pos = start - name.begin();
+      name = name.replace(start, end, "<...");
+      it = name.begin() + start_pos + 1;
+      break;
+    }
+  }
+  return name;
+}
+
+} // namespace
+
+auto to_diagnostic(panic_exception&& e) -> diagnostic {
+  auto note = std::string{
+    "this is a bug, we would appreciate a report - thank you!\n"
+    "=> "
+    "https://github.com/orgs/tenzir/discussions/new?category=bug-reports\n\n",
+  };
+  fmt::format_to(std::back_inserter(note), "version: v{}\n",
+                 tenzir::version::version);
+  fmt::format_to(std::back_inserter(note), "source: {}:{}\n\n",
+                 e.location.file_name(), e.location.line());
+  for (auto& frame : e.stacktrace) {
+    auto name = simplify_name(frame.name());
+    fmt::format_to(std::back_inserter(note), "{} - {}\n", name,
                    frame.address());
   }
   return diagnostic::error("unexpected internal error: {}", e.message)
-    .note("this is a bug, we would appreciate a report - thank you!")
-    .note("https://github.com/orgs/tenzir/discussions/"
-          "new?category=bug-reports")
-    .note("source: {}:{}", e.location.file_name(), e.location.line())
-    .note("version: v{}", tenzir::version::version)
-    .note(std::move(stacktrace))
-    .note("this is a bug, we would appreciate a report - thank you!")
-    .note("https://github.com/orgs/tenzir/discussions/"
-          "new?category=bug-reports")
+    .note(std::move(note))
     .done();
 }
 } // namespace tenzir

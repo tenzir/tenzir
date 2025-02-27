@@ -571,7 +571,7 @@ struct exec_node_state {
     return {};
   }
 
-  auto advance_generator() -> void {
+  TENZIR_NO_INLINE auto advance_generator() -> void {
     auto time_processing_guard = make_timer_guard(metrics.time_processing);
     if constexpr (std::is_same_v<Output, std::monostate>) {
       // We never issue demand to the sink, so we cannot be at the end of the
@@ -728,7 +728,7 @@ struct exec_node_state {
     }
   }
 
-  auto internal_run() -> caf::result<void> {
+  TENZIR_NO_INLINE auto internal_run() -> caf::result<void> {
     run_scheduled = false;
     run();
     return {};

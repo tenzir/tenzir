@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/backtrace.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -131,6 +133,7 @@ public:
     for (auto&& slice : builder.finish_as_table_slice("tenzir.version")) {
       co_yield std::move(slice);
     }
+    TENZIR_ASSERT(false);
   }
 
   auto name() const -> std::string override {
