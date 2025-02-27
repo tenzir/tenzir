@@ -12,6 +12,7 @@
 
 #include "tenzir/bp.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/operator_actor.hpp"
 
 #include <caf/actor_from_state.hpp>
@@ -26,7 +27,9 @@ struct pipeline_actor_traits {
     //
     auto(atom::start)->caf::result<void>,
     //
-    auto(atom::start, handshake hs)->caf::result<handshake_response>>;
+    auto(atom::start, handshake hs)->caf::result<handshake_response>,
+    // Sent by an operator to let the executor know it's done.
+    auto(atom::done)->caf::result<void>>;
 };
 
 using pipeline_actor = caf::typed_actor<pipeline_actor_traits>;
@@ -81,6 +84,17 @@ public:
       [this](atom::start, handshake hs) -> caf::result<handshake_response> {
         return start(std::move(hs));
       },
+      [this](atom::done) -> caf::result<void> {
+        // TODO: Could this come before we are fully spawned?
+        TENZIR_ASSERT(done_ < operators_.size());
+        done_ += 1;
+        TENZIR_WARN("got ready to shutdown from {} operators", done_);
+        if (done_ == operators_.size()) {
+          // Commence shutdown.
+          TENZIR_WARN("BEGINNING SHUTDOWN");
+        }
+        return {};
+      },
     };
   }
 
@@ -112,6 +126,7 @@ private:
                                  detail::unique_function<void()> callback) {
     auto index = operators_.size();
     TENZIR_ASSERT(index < pipe_.size());
+    // TODO: Maybe not one actor per operator. Can inspect sender instead.
     auto checkpointer = self_->spawn(caf::actor_from_state<checkpoint_receiver>,
                                      pipe_.id(), index);
     // TODO: Remote spawn.
@@ -120,6 +135,7 @@ private:
       self_->system(),
       ctx_,
       std::move(checkpointer),
+      self_,
       std::move(chunk),
     }));
     continue_spawn(std::move(callback));
@@ -156,9 +172,20 @@ private:
   auto start() -> caf::result<void> {
     auto rp = self_->make_response_promise<void>();
     spawn([this, rp]() mutable {
-      auto initial = self_->make_observable()
-                       .just(message<void>{})
-                       .to_typed_stream("initial", duration::zero(), 1);
+      // auto initial = self_->make_observable()
+      //                  .interval(std::chrono::seconds{1})
+      //                  .map([](int64_t) {
+      //                    return message<void>{checkpoint{}};
+      //                  })
+      //                  .to_typed_stream("initial", duration::zero(), 1);
+      auto [c, p] = caf::async::make_spsc_buffer_resource<message<void>>();
+      auto p2 = p.try_open();
+      TENZIR_ASSERT(p2);
+      detail::weak_run_delayed_loop(self_, std::chrono::seconds{5}, [p2] {
+        p2->push(checkpoint{});
+      });
+      auto initial
+        = c.observe_on(self_).to_typed_stream("initial", duration::zero(), 1);
       continue_start(handshake{std::move(initial)}, 0,
                      [this, rp](caf::expected<handshake_response> hr) mutable {
                        if (not hr) {
@@ -177,12 +204,99 @@ private:
                            self_->quit(std::move(err));
                          })
                          .do_on_complete([this] {
+                           // TODO: Facing an infinite checkpoint stream, how do
+                           // we know when we are actually done?
+                           //
+                           // ? src | head | dst
+                           // > src could be potentially infinite. It should
+                           //   shut down after head is done.
+                           //
+                           // ? src | fork { … } | head | dst
+                           // > dst could already done, but what about the fork?
+                           //   we probably want to end when the fork is done as
+                           //   well… how do we do that? we already get an
+                           //   exhausted message before. so we can't rely on
+                           //   that. fork will also get a stop message from
+                           //   head. but we can't stop the fork, unless that is
+                           //   also done.
+                           //
+                           // ? src | if … | head | dst
+                           // > it could be that one branch of the if has its
+                           //   own sink. in that case, we probably want to keep
+                           //   running. however, if both branches are
+                           //   transformations, then we'd like to stop the
+                           //   pipeline here.
+                           // > the STOP would be forwarded to both pipelines,
+                           //   which might then eventually signal ready to
+                           //   shutdown. we could actually shut the inner
+                           //   pipelines down in that case.
+                           //
+                           // ? src | group { … } | head | dst
+                           // > if we don't know beforehand that the inner
+                           //   pipeline doesn't contain any sinks, then we
+                           //   cannot finish it.
+                           // > let's say we spawn a new group. the group would
+                           //   immediately get a STOP, right? maybe it's not
+                           //   the sink that's relevant here, but what we need
+                           //   is a property that says … what?
+                           // > anyway, probably fine to not terminate here for
+                           //   now... right?
+                           //
+                           // ? src | group { … | head | dst }
+                           // > there are times when there are no active groups,
+                           //   but still want to keep the pipeline running.
+                           //
+                           // ? src | group { … }
+                           // > …
+                           //
+                           // We also need a mechanism to know when subpipelines
+                           // are completed, right?
+                           //
+                           // Maybe: Every operator sends something to the
+                           // pipeline executor when it's ready for shutdown
+                           // (what does that mean?). This probably coincides
+                           // with a stop message to the previous operator and
+                           // an exhausted message to the next operator.
+                           //
+                           // When all operators are ready for shutdown, we
+                           // commence shutdown by letting the incoming stream
+                           // end. This will propagate through the whole chain.
+                           // We know that we don't need checkpoints at this
+                           // point anymore because all operators have declared
+                           // that they are done.
+                           //
+                           // What degree of synchronization do we need for
+                           // this?
+                           // - We could do full synchronization by only using
+                           //   the streams in the forward direction: We would
+                           //   need to transport this message through all
+                           //   operators and would have multiple of those. We
+                           //   would know we are done when we have received 1
+                           //   for every operator.
+                           // - Alternatively, we could directly send the "ready
+                           //   for shutdown" messages to the outer executor.
+                           //   This would only be send after sending STOP and
+                           //   EXHAUSTED to its neighbors.
+                           //
+                           // src | where | head | where | dst
+                           //          <-STOP-+-DONE->
+                           //                 |
+                           //              EXECUTOR
+                           //
+                           //    <-STOP+             +DONE->
                            TENZIR_WARN("complete");
                            self_->quit();
                          })
-                         .for_each([](message<void>) {
-                           TENZIR_WARN("checkpoint arrived at exec");
-                           // TODO: Do we trigger post-commit here?
+                         .for_each([](message<void> msg) {
+                           match(
+                             msg,
+                             [](checkpoint) {
+                               TENZIR_WARN("checkpoint arrived at end");
+                               // TODO: Do we trigger post-commit here?
+                             },
+                             [](exhausted) {
+                               TENZIR_WARN("exhausted arrived at end");
+                             });
                          });
                        rp.deliver();
                      });
@@ -206,6 +320,7 @@ private:
   std::optional<checkpoint_reader_actor> checkpoint_reader_;
   base_ctx ctx_;
   std::vector<operator_actor> operators_;
+  size_t done_ = 0;
 };
 
 } // namespace tenzir::exec

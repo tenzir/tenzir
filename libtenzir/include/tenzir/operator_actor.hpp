@@ -102,6 +102,9 @@ using operator_actor = caf::typed_actor<operator_actor_traits>;
 using checkpoint_receiver_actor
   = caf::typed_actor<auto(checkpoint, chunk_ptr)->caf::result<void>>;
 
+using operator_shutdown_actor
+  = caf::typed_actor<auto(atom::done)->caf::result<void>>;
+
 struct handshake {
   handshake() = default;
 

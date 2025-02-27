@@ -168,7 +168,9 @@ public:
 
 class version_exec {
 public:
-  explicit version_exec(exec::operator_actor::pointer self) : self_{self} {
+  explicit version_exec(exec::operator_actor::pointer self,
+                        exec::operator_shutdown_actor operator_shutdown)
+    : self_{self}, operator_shutdown_{std::move(operator_shutdown)} {
   }
 
   auto make_behavior() -> exec::operator_actor::behavior_type {
@@ -179,10 +181,28 @@ public:
               .map([](exec::message<void> msg) -> exec::message<table_slice> {
                 return msg;
               })
-              .concat(self_->make_observable().just(
+              // TODO: Concat keeps order. We just want to inject, so merge?
+              .merge(self_->make_observable().just(
                 exec::message<table_slice>{table_slice{}}))
+              .map([this](exec::message<table_slice> message)
+                     -> exec::message<table_slice> {
+                // TODO: This should be sent after we send the table slice...
+                if (is<table_slice>(message)) {
+                  TENZIR_WARN("version completed, notifying executor");
+                  self_->mail(atom::done_v)
+                    .request(operator_shutdown_, caf::infinite)
+                    .then(
+                      []() {
+
+                      },
+                      [](caf::error err) {
+                        TENZIR_WARN("ERROR: {}", err);
+                      });
+                }
+                return message;
+              })
               .do_on_complete([] {
-                TENZIR_WARN("version completed");
+                TENZIR_WARN("version stream terminated");
               })
               .to_typed_stream("version-exec", duration::zero(), 1);
         return {std::move(out)};
@@ -198,6 +218,7 @@ public:
 
 private:
   exec::operator_actor::pointer self_;
+  exec::operator_shutdown_actor operator_shutdown_;
 };
 
 class version_bp final : public bp::operator_base {
@@ -209,7 +230,8 @@ public:
   }
 
   auto spawn(spawn_args args) const -> exec::operator_actor override {
-    return args.sys.spawn(caf::actor_from_state<version_exec>);
+    return args.sys.spawn(caf::actor_from_state<version_exec>,
+                          args.operator_shutdown);
   }
 
   friend auto inspect(auto& f, version_bp& x) -> bool {

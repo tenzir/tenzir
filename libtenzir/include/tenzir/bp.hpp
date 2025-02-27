@@ -23,16 +23,19 @@ public:
   struct spawn_args {
     spawn_args(caf::actor_system& sys, base_ctx ctx,
                exec::checkpoint_receiver_actor checkpoint_receiver,
+               exec::operator_shutdown_actor operator_shutdown,
                std::optional<chunk_ptr> restore)
       : sys{sys},
         ctx{ctx},
         checkpoint_receiver{std::move(checkpoint_receiver)},
+        operator_shutdown{std::move(operator_shutdown)},
         restore{std::move(restore)} {
     }
 
     caf::actor_system& sys;
     base_ctx ctx;
     exec::checkpoint_receiver_actor checkpoint_receiver;
+    exec::operator_shutdown_actor operator_shutdown;
 
     // nullopt => fresh start
     // nullptr => no chunk sent for restore point
