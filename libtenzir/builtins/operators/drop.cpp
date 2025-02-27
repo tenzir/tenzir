@@ -75,7 +75,6 @@ public:
     if (drop_schema) {
       return std::nullopt;
     }
-
     // Apply the transformation.
     auto transform_fn
       = [&](struct record_type::field, std::shared_ptr<arrow::Array>) noexcept
@@ -206,8 +205,7 @@ public:
               });
           });
       }
-      std::ranges::sort(transformations);
-      co_yield transform_columns(slice, transformations);
+      co_yield transform_columns(slice, std::move(transformations));
     }
   }
 

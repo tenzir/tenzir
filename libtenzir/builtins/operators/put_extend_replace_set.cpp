@@ -267,8 +267,9 @@ public:
       }
     }
     // Lastly, apply our transformations.
-    auto result = transform_columns(transform_columns(slice, transformations1),
-                                    transformations2);
+    auto result
+      = transform_columns(transform_columns(slice, std::move(transformations1)),
+                          std::move(transformations2));
     if (replace_schema_name) {
       result = cast(result, type{*replace_schema_name, result.schema()});
     } else if (Mode == mode::put) {

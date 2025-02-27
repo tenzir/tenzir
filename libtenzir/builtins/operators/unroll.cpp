@@ -139,7 +139,8 @@ auto unroll(const table_slice& slice, const offset& offset, bool unordered)
         }};
       auto transformations = std::vector<indexed_transformation>{};
       transformations.emplace_back(offset, std::move(transformation));
-      transformed_slices.push_back(transform_columns(slice, transformations));
+      transformed_slices.push_back(
+        transform_columns(slice, std::move(transformations)));
     }
     if (unordered) {
       for (const auto& transformed_slice : transformed_slices) {

@@ -16,28 +16,37 @@
 
 namespace tenzir {
 
-std::strong_ordering
-operator<=>(const offset& lhs, const offset& rhs) noexcept {
-  if (&lhs == &rhs)
+auto operator<=>(const offset& lhs, const offset& rhs) noexcept
+  -> std::strong_ordering {
+  if (&lhs == &rhs) {
     return std::strong_ordering::equal;
+  }
   const auto [lhs_mismatch, rhs_mismatch]
     = std::mismatch(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
   const auto lhs_exhausted = lhs_mismatch == lhs.end();
   const auto rhs_exhausted = rhs_mismatch == rhs.end();
-  if (lhs_exhausted && rhs_exhausted)
+  if (lhs_exhausted && rhs_exhausted) {
     return std::strong_ordering::equivalent;
-  if (lhs_exhausted)
+  }
+  if (lhs_exhausted) {
     return std::strong_ordering::less;
-  if (rhs_exhausted)
+  }
+  if (rhs_exhausted) {
     return std::strong_ordering::greater;
+  }
   return *lhs_mismatch < *rhs_mismatch ? std::strong_ordering::less
                                        : std::strong_ordering::greater;
 }
 
+bool operator==(const offset& lhs, const offset& rhs) noexcept {
+  return std::ranges::equal(lhs, rhs);
+}
+
 auto offset::get(const table_slice& slice) const noexcept
   -> std::pair<type, std::shared_ptr<arrow::Array>> {
-  if (slice.rows() == 0)
+  if (slice.rows() == 0) {
     return {};
+  }
   if (empty()) {
     return {
       slice.schema(),
@@ -68,8 +77,9 @@ auto offset::get(const arrow::StructArray& struct_array) const noexcept
       = array.GetFlattenedField(detail::narrow_cast<int>(index.front()))
           .ValueOrDie();
     index = index.subspan(1);
-    if (index.empty())
+    if (index.empty()) {
       return field;
+    }
     return impl(impl, index, as<arrow::StructArray>(*field));
   };
   return impl(impl, *this, struct_array);

@@ -169,7 +169,7 @@ public:
       auto transformations = std::vector<indexed_transformation>{
         {*target_index, transform},
       };
-      co_yield transform_columns(slice, transformations);
+      co_yield transform_columns(slice, std::move(transformations));
     }
   }
 

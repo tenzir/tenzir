@@ -36,8 +36,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
     auto start = start_;
     auto first_time = std::optional<time>{};
@@ -104,12 +104,12 @@ public:
       auto transformations = std::vector<indexed_transformation>{
         {*resolved_field->second, transform_fn},
       };
-      co_yield transform_columns(slice, transformations);
+      co_yield transform_columns(slice, std::move(transformations));
     }
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     if (speed_ == 1.0 and not start_) {
       // If this operator is a no-op we can just remove it during optimization.
       return optimize_result{filter, order, nullptr};
@@ -144,8 +144,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto first_time = std::optional<time>{};
     auto start = start_;
     for (auto&& slice : input) {
@@ -188,8 +188,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     if (speed_ == 1.0 and not start_) {
       // If this operator is a no-op we can just remove it during optimization.
       return optimize_result{filter, order, nullptr};
@@ -237,8 +237,8 @@ public:
 };
 
 struct plugin2 : operator_plugin2<timeshift_operator2> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto speed = std::optional<located<double>>{};
     auto start = std::optional<time>{};
     auto selector = ast::simple_selector{};
