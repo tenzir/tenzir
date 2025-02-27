@@ -315,7 +315,7 @@ auto simplify_name(std::string name) -> std::string {
 
 } // namespace
 
-auto to_diagnostic(panic_exception&& e) -> diagnostic {
+auto to_diagnostic(const panic_exception& e) -> diagnostic {
   auto note = std::string{
     "this is a bug, we would appreciate a report - thank you!\n"
     "=> "

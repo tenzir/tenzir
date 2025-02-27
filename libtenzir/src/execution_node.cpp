@@ -25,6 +25,7 @@
 #include <arrow/util/byte_size.h>
 #include <caf/actor_addr.hpp>
 #include <caf/actor_from_state.hpp>
+#include <caf/actor_registry.hpp>
 #include <caf/anon_mail.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -260,7 +261,22 @@ struct exec_node_state {
           } catch (diagnostic& diag) {
             return std::move(diag).to_error();
           } catch (panic_exception& panic) {
-            return to_diagnostic(std::move(panic)).to_error();
+            auto has_node
+              = self->system().registry().get("tenzir.node") != nullptr;
+            auto diagnostic = to_diagnostic(panic);
+            if (has_node) {
+              auto buffer = std::stringstream{};
+              buffer << "panic in execution node\n";
+              auto printer = make_diagnostic_printer(
+                std::nullopt, color_diagnostics::no, buffer);
+              printer->emit(diagnostic);
+              auto string = std::move(buffer).str();
+              if (not string.empty() and string.back() == '\n') {
+                string.pop_back();
+              }
+              TENZIR_ERROR(string);
+            }
+            return std::move(diagnostic).to_error();
           } catch (const std::exception& err) {
             return diagnostic::error("{}", err.what())
               .note("unhandled exception in {} {}", *self, op->name())
@@ -728,7 +744,7 @@ struct exec_node_state {
     }
   }
 
-  TENZIR_NO_INLINE auto internal_run() -> caf::result<void> {
+  auto internal_run() -> caf::result<void> {
     run_scheduled = false;
     run();
     return {};
