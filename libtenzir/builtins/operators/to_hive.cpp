@@ -183,12 +183,11 @@ auto remove_columns(const table_slice& slice,
       },
       [&](const resolve_error&) {});
   }
-  std::ranges::sort(transformations);
-  return transform_columns(slice, transformations);
+  return transform_columns(slice, std::move(transformations));
 }
 
-auto extend_url_path(boost::urls::url url_view,
-                     std::string_view path) -> std::string {
+auto extend_url_path(boost::urls::url url_view, std::string_view path)
+  -> std::string {
   auto extended_path
     = std::filesystem::path{url_view.path()}.concat(path).lexically_normal();
   auto url = boost::urls::url{url_view};
@@ -246,8 +245,8 @@ public:
                 return fmt::to_string(data);
               },
             };
-            relative_path += fmt::format("/{}={}", selector_to_name(sel),
-                                         match(data, f));
+            relative_path
+              += fmt::format("/{}={}", selector_to_name(sel), match(data, f));
           }
           relative_path += fmt::format("/{}.{}", next_id, args_.extension);
           next_id += 1;

@@ -19,6 +19,7 @@
 
 #include <caf/detail/is_one_of.hpp>
 
+#include <compare>
 #include <type_traits>
 
 namespace tenzir::detail {
@@ -46,6 +47,15 @@ struct identifier {
 
   auto get_location() const -> location {
     return location;
+  }
+
+  friend auto operator<=>(const identifier& lhs, const identifier& rhs)
+    -> std::strong_ordering {
+    return lhs.name <=> rhs.name;
+  }
+
+  friend auto operator==(const identifier& lhs, const identifier& rhs) -> bool {
+    return lhs.name == rhs.name;
   }
 
   friend auto inspect(auto& f, identifier& x) -> bool {
@@ -272,6 +282,16 @@ public:
 
   auto unwrap() && -> ast::expression {
     return std::move(expr_);
+  }
+
+  friend auto operator<=>(const simple_selector& lhs,
+                          const simple_selector& rhs) -> std::weak_ordering {
+    return lhs.path_ <=> rhs.path_;
+  }
+
+  friend auto operator==(const simple_selector& lhs, const simple_selector& rhs)
+    -> bool {
+    return lhs.path_ == rhs.path_;
   }
 
 private:
