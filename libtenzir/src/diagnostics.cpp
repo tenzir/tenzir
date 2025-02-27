@@ -326,9 +326,15 @@ auto to_diagnostic(const panic_exception& e) -> diagnostic {
   fmt::format_to(std::back_inserter(note), "source: {}:{}\n\n",
                  e.location.file_name(), e.location.line());
   for (auto& frame : e.stacktrace) {
-    auto name = simplify_name(frame.name());
-    fmt::format_to(std::back_inserter(note), "{} - {}\n", name,
-                   frame.address());
+    auto function_name = simplify_name(frame.name());
+    auto file_name = frame.source_file();
+    if (file_name.empty()) {
+      fmt::format_to(std::back_inserter(note), "{} @ {}\n", function_name,
+                     frame.address());
+    } else {
+      fmt::format_to(std::back_inserter(note), "{}:{} @ {}\n", file_name,
+                     frame.source_line(), frame.address());
+    }
   }
   return diagnostic::error("unexpected internal error: {}", e.message)
     .note(std::move(note))

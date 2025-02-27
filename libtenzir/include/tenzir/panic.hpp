@@ -10,12 +10,10 @@
 
 #include "tenzir/config.hpp"
 
-#include <dlfcn.h>
-
-#define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
 #include <boost/stacktrace/stacktrace.hpp>
 #include <fmt/format.h>
 
+#include <dlfcn.h>
 #include <source_location>
 
 namespace tenzir {

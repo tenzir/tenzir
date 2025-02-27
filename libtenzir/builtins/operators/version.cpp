@@ -133,7 +133,6 @@ public:
     for (auto&& slice : builder.finish_as_table_slice("tenzir.version")) {
       co_yield std::move(slice);
     }
-    TENZIR_ASSERT(false);
   }
 
   auto name() const -> std::string override {
