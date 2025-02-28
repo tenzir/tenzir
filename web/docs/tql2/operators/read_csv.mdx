@@ -32,7 +32,9 @@ If unspecified, the first line of the input is used as the header.
 
 ### `list_separator = string (optional)`
 
-The `string` separating the elements _inside_ a list.
+The `string` separating the elements _inside_ a list. If this string is found
+outside of quotes in a field, that field will become a list. If this string is
+empty, list parsing is disabled.
 
 Defaults to `;`.
 
