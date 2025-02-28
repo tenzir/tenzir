@@ -27,6 +27,10 @@ components:
       required:
         - definition
       properties:
+        id:
+          type: string
+          example: 08446737-da9b-4787-8599-97d85c48c3bb
+          description: The id of the pipeline to be updated. If not provided, a random id will be generated.
         definition:
           type: string
           example: export | where foo | publish /bar
