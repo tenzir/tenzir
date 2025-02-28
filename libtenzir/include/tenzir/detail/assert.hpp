@@ -55,8 +55,8 @@ assertion_failure(const char* cond, std::source_location location) {
 #  define TENZIR_ASSERT(...) TENZIR_UNUSED(__VA_ARGS__)
 #endif
 
-/// Unlike `__builtin_unreachable()`, reaching this macro is not UB, and unlike
-/// `die("unreachable")`, it prints a backtrace.
+/// Unlike `__builtin_unreachable()`, reaching this macro is not UB, it simply
+/// throws a panic.
 #define TENZIR_UNREACHABLE() ::tenzir::panic("unreachable")
 
 /// Used to mark code as unfinished. Reaching it throws a panic.
