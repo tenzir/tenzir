@@ -70,7 +70,7 @@ TEST(HTTP request items - JSON) {
   CHECK_EQUAL(header->value, "application/json, */*");
   // Adding an item with (JSON) data makes the method POST.
   CHECK_EQUAL(request.method, "POST");
-  CHECK_EQUAL(request.body, "{\"foo\": 42}");
+  CHECK_EQUAL(request.body, "{\"foo\":42}");
 }
 
 TEST(HTTP request items - JSON without content type) {
@@ -88,7 +88,7 @@ TEST(HTTP request items - JSON without content type) {
   REQUIRE(header);
   CHECK_EQUAL(header->value, "application/json");
   CHECK_EQUAL(request.method, "POST");
-  CHECK_EQUAL(request.body, "{\"foo\": 42}");
+  CHECK_EQUAL(request.body, "{\"foo\":42}");
 }
 
 TEST(HTTP request items - urlencoded) {

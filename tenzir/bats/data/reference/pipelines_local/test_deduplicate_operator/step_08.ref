@@ -1,5 +1,5 @@
-{"value": 123, "tag": 1}
-{"value": null, "tag": 2}
+{"value":123,"tag":1}
+{"value":null,"tag":2}
 warning: field `value` not found
  --> <input>:1:13
   |

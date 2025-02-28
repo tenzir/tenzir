@@ -328,7 +328,7 @@ TEST(conflict with list from current event) {
     [
       "1",
       "2",
-      "{"bar": 3}"
+      "{"bar":3}"
     ]
   ])"}});
 }
@@ -347,7 +347,7 @@ TEST(conflict with list from current event then no conflict) {
     [
       "1",
       "2",
-      "{"bar": 3}"
+      "{"bar":3}"
     ]
   ])"},
             {2, "struct<foo: list<item: struct<bar: int64>>>",
@@ -394,8 +394,8 @@ TEST(conflict with list from current event within another conflict) {
   check(b, {{1, "list<item: string>", R"([
   [
     "1",
-    "{"foo": "2"}",
-    "{"foo": "{\"bar\": 3}"}"
+    "{"foo":"2"}",
+    "{"foo":"{\"bar\":3}"}"
   ]
 ])"}});
 }

@@ -8,13 +8,16 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
+#include <tenzir/detail/assert.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/to_lines.hpp>
+#include <tenzir/view3.hpp>
 
 #include <arrow/api.h>
 #include <re2/re2.h>
@@ -250,6 +253,185 @@ auto parse_loop(generator<std::optional<std::string_view>> input,
   }
 }
 
+struct kv_writer {
+  location operator_location;
+  located<std::string> field_sep = {" ", operator_location};
+  located<std::string> value_sep = {"=", operator_location};
+  located<std::string> list_sep = {",", operator_location};
+  located<std::string> flatten = {".", operator_location};
+  located<std::string> null = {"", operator_location};
+
+  friend auto inspect(auto& f, kv_writer& x) -> bool {
+    return f.object(x)
+      .pretty_name("write_kv_args")
+      .fields(f.field("operator_location", x.operator_location),
+              f.field("field_sep", x.field_sep),
+              f.field("value_sep", x.value_sep),
+              f.field("list_sep", x.list_sep), f.field("flatten", x.flatten),
+              f.field("null", x.null));
+  }
+
+  auto add(argument_parser2& parser) {
+    parser.named_optional("field_separator", field_sep);
+    parser.named_optional("value_separator", value_sep);
+    parser.named_optional("list_separator", list_sep);
+    parser.named_optional("flatten_separator", flatten);
+    parser.named_optional("null_value", null);
+  };
+
+  auto validate(diagnostic_handler& dh) -> failure_or<void> {
+    TRY(check_no_substrings(dh, {{"flatten_separator", flatten},
+                                 {"field_separator", field_sep},
+                                 {"value_separator", value_sep},
+                                 {"list_separator", list_sep},
+                                 {"null_value", null}}));
+    TRY(check_non_empty("field_separator", field_sep, dh));
+    TRY(check_non_empty("value_separator", field_sep, dh));
+    TRY(check_non_empty("list_separator", field_sep, dh));
+    return {};
+  }
+
+  auto print(auto out, view3<record> r) const {
+    auto it = r.begin();
+    if (it == r.end()) {
+      return out;
+    }
+    {
+      const auto& [k, v] = *it;
+      // We dispatch the key through `print`, in order to deal with separators.
+      out = print(out, k);
+      out = fmt::format_to(out, "{}", value_sep.inner);
+      out = print(out, v);
+      ++it;
+    }
+    for (; it != r.end(); ++it) {
+      const auto& [k, v] = *it;
+      out = fmt::format_to(out, "{}", field_sep.inner);
+      out = print(out, k);
+      out = fmt::format_to(out, "{}", value_sep.inner);
+      out = print(out, v);
+    }
+    return out;
+  }
+
+  auto print(auto out, view3<list> l) const {
+    auto it = l.begin();
+    if (it == l.end()) {
+      return out;
+    }
+    out = print(out, *it);
+    ++it;
+    for (; it != l.end(); ++it) {
+      out = fmt::format_to(out, "{}", list_sep.inner);
+      out = print(out, *it);
+    }
+    return out;
+  }
+
+  template <typename It>
+  auto print(It out, data_view3 v) const -> It {
+    return match(
+      v,
+      [&](const caf::none_t&) -> It {
+        return fmt::format_to(out, "{}", null.inner);
+      },
+      [&](const auto& scalar) -> It {
+        auto formatted = fmt::format("{}", scalar);
+        auto needs_quoting
+          = formatted.find(field_sep.inner) != formatted.npos
+            or formatted.find(value_sep.inner) != formatted.npos
+            or formatted.find(list_sep.inner) != formatted.npos
+            or (not null.inner.empty()
+                and formatted.find(null.inner) != formatted.npos);
+        constexpr static auto escaper = [](auto& f, auto out) {
+          switch (*f) {
+            default:
+              *out++ = *f++;
+              return;
+            case '\\':
+              *out++ = '\\';
+              *out++ = '\\';
+              break;
+            case '"':
+              *out++ = '\\';
+              *out++ = '"';
+              break;
+            case '\n':
+              *out++ = '\\';
+              *out++ = 'n';
+              break;
+            case '\r':
+              *out++ = '\\';
+              *out++ = 'r';
+              break;
+          }
+          ++f;
+          return;
+        };
+        constexpr static auto p = printers::escape(escaper);
+        if (needs_quoting) {
+          *out++ = '"';
+        }
+        TENZIR_ASSERT(p.print(out, formatted));
+        if (needs_quoting) {
+          *out++ = '"';
+        }
+        return out;
+      },
+      [&](const view3<list>& l) -> It {
+        return print(out, l);
+      },
+      [&](const view3<record>&) -> It {
+        // We assume that the record has been flattend. Hence we should never
+        // enter this recursion.
+        TENZIR_UNREACHABLE();
+        return out;
+      });
+  }
+};
+
+class write_kv_operator final : public crtp_operator<write_kv_operator> {
+public:
+  auto name() const -> std::string override {
+    return "write_kv";
+  }
+
+  write_kv_operator() = default;
+  write_kv_operator(kv_writer writer) : writer_{std::move(writer)} {
+  }
+
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane&) const -> generator<chunk_ptr> {
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto resolved_slice
+        = flatten(resolve_enumerations(slice), writer_.flatten.inner).slice;
+      auto out = std::vector<char>{};
+      auto out_iter = std::back_inserter(out);
+      for (auto&& row : values3(resolved_slice)) {
+        out_iter = writer_.print(out_iter, row);
+        *out_iter++ = '\n';
+      }
+      co_yield chunk::make(std::exchange(out, {}));
+    }
+  }
+
+  friend auto inspect(auto& f, write_kv_operator& x) -> bool {
+    return f.apply(x.writer_);
+  }
+
+private:
+  kv_writer writer_;
+};
+
 class kv_plugin final : public virtual parser_plugin<kv_parser> {
 public:
   auto parse_parser(parser_interface& p) const
@@ -306,8 +488,8 @@ public:
       "=",
       location::unknown,
     };
-    parser.positional("field_split", field_split);
-    parser.positional("value_split", value_split);
+    parser.named("field_split", field_split);
+    parser.named("value_split", value_split);
     auto msb_parser = multi_series_builder_argument_parser{};
     auto quoting = detail::quoting_escaping_policy{};
     msb_parser.add_all_to_parser(parser);
@@ -321,6 +503,23 @@ public:
       splitter{std::move(*field_split)},
       splitter{std::move(*value_split)},
     }});
+  }
+};
+
+class write_kv : public operator_plugin2<write_kv_operator> {
+public:
+  auto name() const -> std::string override {
+    return "write_kv";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto writer = kv_writer{inv.self.get_location()};
+    writer.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(writer.validate(ctx));
+    return std::make_unique<write_kv_operator>(std::move(writer));
   }
 };
 
@@ -346,8 +545,8 @@ public:
     };
     auto quoting = detail::quoting_escaping_policy{};
     parser.positional("input", input, "string");
-    parser.positional("field_split", field_split);
-    parser.positional("value_split", value_split);
+    parser.named("field_split", field_split);
+    parser.named("value_split", value_split);
     parser.named_optional("quotes", quoting.quotes);
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_policy_to_parser(parser);
@@ -378,10 +577,64 @@ public:
     });
   }
 };
+
+class print_kv : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "print_kv";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+    auto parser = argument_parser2::function(name());
+    auto writer = kv_writer{};
+    parser.positional("input", input, "record");
+    writer.add(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(writer.validate(ctx));
+    return function_use::make([input = std::move(input),
+                               writer = std::move(writer)](evaluator eval,
+                                                           session ctx) {
+      return map_series(eval(input), [&](series values) -> multi_series {
+        if (values.type.kind().is<null_type>()) {
+          return series::null(string_type{}, values.length());
+        }
+        if (values.type.kind() != type{record_type{}}.kind()) {
+          diagnostic::warning("expected `record`, got `{}`", values.type.kind())
+            .primary(input)
+            .emit(ctx);
+          return series::null(string_type{}, values.length());
+        }
+        const auto struct_array
+          = std::dynamic_pointer_cast<arrow::StructArray>(values.array);
+        TENZIR_ASSERT(struct_array);
+        auto [flattend_type, flattend_array, _]
+          = flatten(values.type, struct_array, writer.flatten.inner);
+        auto [resolved_type, resolved_array] = resolve_enumerations(
+          as<record_type>(flattend_type), flattend_array);
+        auto builder = type_to_arrow_builder_t<string_type>{};
+        auto buffer = std::string{};
+        for (auto row : values3(*resolved_array)) {
+          if (not row) {
+            check(builder.AppendNull());
+            continue;
+          }
+          buffer.clear();
+          writer.print(std::back_inserter(buffer), *row);
+          check(builder.Append(buffer));
+        }
+        return series{string_type{}, check(builder.Finish())};
+      });
+    });
+  }
+};
 } // namespace
 
 } // namespace tenzir::plugins::kv
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::kv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::read_kv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::write_kv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::parse_kv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::kv::print_kv)

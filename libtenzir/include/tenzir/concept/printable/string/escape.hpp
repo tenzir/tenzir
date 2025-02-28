@@ -19,7 +19,7 @@ template <class Escaper>
 struct escape_printer : printer_base<escape_printer<Escaper>> {
   using attribute = std::string_view;
 
-  explicit escape_printer(Escaper f) : escaper{f} {
+  constexpr explicit escape_printer(Escaper f) : escaper{f} {
     // nop
   }
 
@@ -38,7 +38,7 @@ struct escape_printer : printer_base<escape_printer<Escaper>> {
 namespace printers {
 
 template <class Escaper>
-auto escape(Escaper escaper) {
+constexpr auto escape(Escaper escaper) {
   return escape_printer<Escaper>{escaper};
 }
 

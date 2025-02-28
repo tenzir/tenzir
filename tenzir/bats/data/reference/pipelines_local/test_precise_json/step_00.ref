@@ -1,2 +1,2 @@
-{"foo": "42ms"}
-{"foo": "43ms", "bar": null}
+{"foo":"42ms"}
+{"foo":"43ms","bar":null}

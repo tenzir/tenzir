@@ -189,7 +189,7 @@ struct json_printer : printer_base<json_printer> {
           newline();
           printed_once = true;
         } else {
-          separator();
+          list_separator();
           newline();
         }
         if (!match(element, *this)) {
@@ -217,7 +217,7 @@ struct json_printer : printer_base<json_printer> {
           newline();
           printed_once = true;
         } else {
-          separator();
+          list_separator();
           newline();
         }
         if (options_.tql) {
@@ -232,7 +232,11 @@ struct json_printer : printer_base<json_printer> {
           out_ = fmt::format_to(out_, options_.style.field, "{}",
                                 detail::json_escape(key));
         }
-        out_ = fmt::format_to(out_, options_.style.colon, ": ");
+        if (options_.oneline) {
+          out_ = fmt::format_to(out_, options_.style.colon, ":");
+        } else {
+          out_ = fmt::format_to(out_, options_.style.colon, ": ");
+        }
         if (!match(value, *this)) {
           return false;
         }
@@ -287,16 +291,12 @@ struct json_printer : printer_base<json_printer> {
         print = options_.tql and not options_.oneline;
       }
       if (print) {
-        out_ = fmt::format_to(out_, options_.style.comma, ",");
+        list_separator();
       }
     }
 
-    void separator() {
-      if (options_.oneline) {
-        out_ = fmt::format_to(out_, options_.style.comma, ", ");
-      } else {
-        out_ = fmt::format_to(out_, options_.style.comma, ",");
-      }
+    void list_separator() {
+      out_ = fmt::format_to(out_, options_.style.comma, ",");
     }
 
     void newline() {
@@ -313,6 +313,11 @@ struct json_printer : printer_base<json_printer> {
   template <class Iterator>
   auto print(Iterator& out, view3<data> d) const -> bool {
     return match(d, print_visitor{out, options_});
+  }
+
+  template <class Iterator, class T>
+  auto print(Iterator& out, view3<T> v) const -> bool {
+    return print_visitor{out, options_}(v);
   }
 
   template <class Iterator, class T>

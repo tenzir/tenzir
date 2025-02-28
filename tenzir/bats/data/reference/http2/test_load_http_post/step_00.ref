@@ -5,6 +5,6 @@ Accept-Encoding: *
 User-Agent: Tenzir/*.*.*
 Content-Type: application/json
 Accept: application/json, */*
-Content-Length: 48
+Content-Length: 42
 
-{"foo": "42", "bar": {"baz": 1, "baz2": "baz2"}}
+{"foo":"42","bar":{"baz":1,"baz2":"baz2"}}

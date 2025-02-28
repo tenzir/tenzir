@@ -80,7 +80,7 @@ auto multi_series_builder_argument_parser::add_settings_to_parser(
   }
   parser.named("raw", raw_);
   if (add_unflatten_option) {
-    parser.named("unflatten", unnest_);
+    parser.named("unflatten_separator", unnest_);
   }
   parser.named("_batch_timeout", timeout_);
   parser.named("_batch_size", batch_size_);

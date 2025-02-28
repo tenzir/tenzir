@@ -45,7 +45,7 @@
 namespace tenzir::plugins::json {
 
 // this is up here to avoid a warning for an undefined static function if it
-// where in the anon namespace
+// were in the anon namespace
 TENZIR_ENUM(split_at, none, newline, null);
 
 namespace {
@@ -1079,6 +1079,24 @@ struct printer_args {
   std::optional<location> arrays_of_objects;
   bool tql = false;
 
+  auto add(argument_parser2& parser, bool add_compact, bool add_arrays,
+           bool add_color) -> void {
+    parser.named("strip", omit_all);
+    parser.named("strip_null_fields", omit_null_fields);
+    parser.named("strip_nulls_in_lists", omit_nulls_in_lists);
+    parser.named("strip_empty_records", omit_empty_objects);
+    parser.named("strip_empty_lists", omit_empty_lists);
+    if (add_compact) {
+      parser.named("compact", compact_output);
+    }
+    if (add_arrays) {
+      parser.named("arrays_of_objects", arrays_of_objects);
+    }
+    if (add_color) {
+      parser.named("color", color_output);
+    }
+  }
+
   template <class Inspector>
   friend auto inspect(Inspector& f, printer_args& x) -> bool {
     return f.object(x)
@@ -1831,18 +1849,8 @@ public:
     auto n_jobs = std::optional<located<uint64_t>>{};
     args.tql = tql_;
     auto parser = argument_parser2::operator_("write_json");
-    parser.named("color", args.color_output);
-    parser.named("strip", args.omit_all);
-    parser.named("strip_null_fields", args.omit_null_fields);
-    parser.named("strip_nulls_in_lists", args.omit_nulls_in_lists);
-    parser.named("strip_empty_records", args.omit_empty_objects);
-    parser.named("strip_empty_lists", args.omit_empty_lists);
+    args.add(parser, tql_, not tql_, true);
     parser.named("_jobs", n_jobs);
-    if (tql_) {
-      parser.named("compact", args.compact_output);
-    } else {
-      parser.named("arrays_of_objects", args.arrays_of_objects);
-    }
     TRY(parser.parse(inv, ctx));
     if (n_jobs and n_jobs->inner == 0) {
       diagnostic::error("`_jobs` must be larger than 0")
@@ -1881,16 +1889,10 @@ public:
     auto args = printer_args{};
     args.compact_output = location::unknown;
     auto n_jobs = std::optional<located<uint64_t>>{};
-    TRY(argument_parser2::operator_(name())
-          .named("color", args.color_output)
-          .named("strip", args.omit_all)
-          .named("strip_null_fields", args.omit_null_fields)
-          .named("strip_nulls_in_lists", args.omit_nulls_in_lists)
-          .named("strip_empty_records", args.omit_empty_objects)
-          .named("strip_empty_lists", args.omit_empty_lists)
-          .named("arrays_of_objects", args.arrays_of_objects)
-          .named("_jobs", n_jobs)
-          .parse(inv, ctx));
+    auto parser = argument_parser2::operator_(name());
+    args.add(parser, false, true, true);
+    parser.named("_jobs", n_jobs);
+    TRY(parser.parse(inv, ctx));
     if (n_jobs and n_jobs->inner == 0) {
       diagnostic::error("`_jobs` must be larger than 0")
         .primary(*n_jobs)
@@ -1912,6 +1914,68 @@ public:
   }
 };
 
+class print_json_plugin : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return compact_ ? "print_ndjson" : "print_json";
+  }
+
+  print_json_plugin(bool compact) : compact_{compact} {
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto args = printer_args{};
+    auto parser = argument_parser2::function(name());
+    parser.positional("x", expr, "any");
+    args.add(parser, false, false, false);
+    TRY(parser.parse(inv, ctx));
+    auto opts = json_printer_options{
+      .tql = false,
+      .style = no_style(),
+      .oneline = compact_,
+      .omit_null_fields = args.omit_null_fields or args.omit_all,
+      .omit_nulls_in_lists = args.omit_nulls_in_lists or args.omit_all,
+      .omit_empty_records = args.omit_empty_objects or args.omit_all,
+      .omit_empty_lists = args.omit_empty_lists or args.omit_all,
+    };
+    return function_use::make(
+      [call = inv.call.get_location(), printer = tenzir::json_printer{opts},
+       expr = std::move(expr)](evaluator eval, session) {
+        return map_series(eval(expr), [&](series values) -> multi_series {
+          if (values.type.kind().is<null_type>()) {
+            auto builder = type_to_arrow_builder_t<string_type>{};
+            for (int64_t i = 0; i < values.length(); ++i) {
+              check(builder.Append("null"));
+            }
+            return series{string_type{}, check(builder.Finish())};
+          }
+          const auto work = [&](const auto& arg) -> multi_series {
+            auto buffer = std::string{};
+            auto builder = type_to_arrow_builder_t<string_type>{};
+            for (auto row : values3(arg)) {
+              if (not row) {
+                check(builder.Append("null"));
+                continue;
+              }
+              buffer.clear();
+              auto it = std::back_inserter(buffer);
+              printer.print(it, *row);
+              check(builder.Append(buffer));
+            }
+            return series{string_type{}, check(builder.Finish())};
+          };
+          const auto resolved = resolve_enumerations(std::move(values));
+          return match(*resolved.array, work);
+        });
+      });
+  }
+
+private:
+  bool compact_;
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::json
@@ -1929,3 +1993,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{false})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_ndjson_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::print_json_plugin{false})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::print_json_plugin{true})

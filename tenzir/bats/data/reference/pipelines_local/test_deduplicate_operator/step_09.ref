@@ -1,5 +1,5 @@
-{"foo": {"bar": 123}, "tag": 1}
-{"foo": {"bar": null}, "tag": 2}
+{"foo":{"bar":123},"tag":1}
+{"foo":{"bar":null},"tag":2}
 warning: cannot access field of non-record type
  --> <input>:1:17
   |

@@ -1,3 +1,7 @@
 from { input: "1,2,3" },
   { input: "failure" }
-output = input.parse_xsv( ",", "", "", header=["a","b","c"] )
+output = input.parse_xsv(
+  field_separator=",",
+  list_separator="",
+  null_value="",
+  header=["a","b","c"] )
