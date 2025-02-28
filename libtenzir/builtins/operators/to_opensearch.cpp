@@ -337,36 +337,34 @@ public:
     if (args_.cacert) {
       if (const auto ec = req.set(CURLOPT_CAINFO, args_.cacert->inner.data());
           ec != curl::easy::code::ok) {
-        diagnostic::error("Failed to set `cacert`: {}", to_string(ec)).emit(dh);
+        diagnostic::error("failed to set `cacert`: {}", to_string(ec)).emit(dh);
         return failure::promise();
       }
     }
     if (args_.certfile) {
-      if (auto ec = req.set(CURLOPT_SSLCERT, args_.certfile->inner.data());
+      if (auto ec = req.set(CURLOPT_SSLCERT, args_.certfile->inner);
           ec != curl::easy::code::ok) {
-        diagnostic::error("Failed to set `certfile`: {}", to_string(ec))
+        diagnostic::error("failed to set `certfile`: {}", to_string(ec))
           .emit(dh);
         return failure::promise();
       }
     }
     if (args_.keyfile) {
-      if (const auto ec = req.set(CURLOPT_SSLKEY, args_.keyfile->inner.data());
+      if (const auto ec = req.set(CURLOPT_SSLKEY, args_.keyfile->inner);
           ec != curl::easy::code::ok) {
-        diagnostic::error("Failed to set `keyfile`: {}", to_string(ec)).emit(dh);
+        diagnostic::error("failed to set `keyfile`: {}", to_string(ec)).emit(dh);
         return failure::promise();
       }
     }
-    const auto set_assert = [&](auto&& opt, auto&& value) {
-      TENZIR_ASSERT(req.set(opt, value) == curl::easy::code::ok);
-    };
-    set_assert(CURLOPT_POST, 1);
-    set_assert(CURLOPT_URL, args_.url.inner);
+    check(req.set(CURLOPT_POST, 1));
+    check(req.set(CURLOPT_URL, args_.url.inner));
     if (args_.tls) {
-      set_assert(CURLOPT_USE_SSL,
-                 args_.tls->inner ? CURLUSESSL_ALL : CURLUSESSL_NONE);
+      check(req.set(CURLOPT_USE_SSL,
+                    args_.tls->inner ? CURLUSESSL_ALL : CURLUSESSL_NONE));
     }
-    set_assert(CURLOPT_SSL_VERIFYPEER, args_.skip_peer_verification ? 0 : 1);
-    set_assert(CURLOPT_VERBOSE, args_._debug_curl);
+    check(
+      req.set(CURLOPT_SSL_VERIFYPEER, args_.skip_peer_verification ? 0 : 1));
+    check(req.set(CURLOPT_VERBOSE, args_._debug_curl ? 1 : 0));
     return req;
   }
 
@@ -377,10 +375,9 @@ public:
       response.append(reinterpret_cast<const char*>(data.data()),
                       reinterpret_cast<const char*>(data.data() + data.size()));
     };
-    TENZIR_ASSERT(req.set(write_callback) == curl::easy::code::ok);
-    TENZIR_ASSERT(req.set(CURLOPT_POSTFIELDS, body) == curl::easy::code::ok);
-    TENZIR_ASSERT(req.set(CURLOPT_POSTFIELDSIZE, body.size())
-                  == curl::easy::code::ok);
+    check(req.set(write_callback));
+    check(req.set(CURLOPT_POSTFIELDS, body));
+    check(req.set(CURLOPT_POSTFIELDSIZE, detail::narrow<long>(body.size())));
     req.set_http_header("Content-Length", fmt::to_string(body.size()));
     if (const auto ec = req.perform(); ec != curl::easy::code::ok) {
       diagnostic::error("{}", to_string(ec))
@@ -389,7 +386,7 @@ public:
       return;
     }
     const auto [ec, http_code] = req.get<curl::easy::info::response_code>();
-    TENZIR_ASSERT(ec == curl::easy::code::ok);
+    check(ec);
     if (http_code < 200 or http_code > 299) {
       diagnostic::warning("issue sending data. HTTP response code `{}`",
                           http_code)
