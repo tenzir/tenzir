@@ -183,8 +183,26 @@ public:
     : result_{severity, std::move(message), {}, {}} {
   }
 
-  auto compose(auto fn) && {
-    return std::move(fn)(std::move(*this));
+  /// Calls a function on the diagnostic builder. This is useful for
+  /// conditionally adding notes and annotations:
+  ///
+  ///   diagnostic::error(…)
+  ///     .compose([&](auto x) { return foo ? x.note("foo") : x; })
+  ///     .emit(ctx)
+  ///
+  /// Without this, the condition would need to be outside of the diagnostic
+  /// builder:
+  ///
+  ///   if (foo) {
+  ///     diagnostic::error(…)
+  ///       .note("foo")
+  ///       .emit(ctx);
+  ///   } else {
+  ///     diagnostic::error(…)
+  ///       .emit(ctx);
+  ///   }
+  auto compose(auto&& fn) && {
+    return std::forward<decltype(fn)>(fn)(std::move(*this));
   }
 
   // -- annotations -----------------------------------------------------------
