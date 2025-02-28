@@ -12,7 +12,7 @@
 
 namespace tenzir::detail {
 template <typename... Ts>
-  requires(sizeof...(Ts) > 1)
+  requires(sizeof...(Ts) > 0)
 [[noreturn]] TENZIR_NO_INLINE void
 assertion_failure(const char* cond, std::source_location location,
                   fmt::format_string<Ts...> string, Ts&&... args) {

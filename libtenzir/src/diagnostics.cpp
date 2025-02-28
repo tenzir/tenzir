@@ -277,11 +277,10 @@ auto diagnostic_deduplicator::hasher::operator()(const seen_t& x) const
 namespace {
 
 auto simplify_name(std::string name) -> std::string {
-  // TODO: Make this heuristic beter.
-  auto actor_prefix
+  constexpr static auto actor_prefix
     = std::string_view{"caf::detail::default_behavior_impl<std::__1::tuple<"};
-  if (name.starts_with(actor_prefix)) {
-    auto actor_start = actor_prefix.size();
+  if (auto actor_start = name.find(actor_prefix); actor_start != name.npos) {
+    actor_start += actor_prefix.size();
     auto actor_end = name.find("::make_behavior()::'lambda'", actor_start);
     if (actor_end != std::string::npos) {
       name = name.substr(actor_start, actor_end - actor_start);

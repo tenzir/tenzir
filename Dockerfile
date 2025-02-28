@@ -313,6 +313,7 @@ RUN apt-get update && \
       libasan6 \
       libboost-filesystem++1.81 \
       libboost-url1.81 \
+      libboost-stacktrace1.81 \
       libc++1 \
       libc++abi1 \
       libflatbuffers2 \
