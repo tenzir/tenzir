@@ -191,6 +191,12 @@ auto object_generator::record() -> record_generator {
       if (not writable()) {
         return record_generator{};
       }
+      // If the builder was created with a schema that specifies this field as
+      // anything but a `record`, we cannot continue here. Instead we omit
+      // writing data, causing an implicit null in the series builder.
+      if (b.kind() != type_kind::of<record_type>) {
+        return record_generator{};
+      }
       return record_generator{msb_, b.record()};
     },
     [&](raw_pointer raw) {
@@ -207,6 +213,12 @@ auto object_generator::list() -> list_generator {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       if (not writable()) {
+        return list_generator{};
+      }
+      // If the builder was created with a schema that specifies this field as
+      // anything but a `list`, we cannot continue here. Instead we omit writing
+      // data, causing an implicit null in the series builder.
+      if (b.kind() != type_kind::of<list_type>) {
         return list_generator{};
       }
       return list_generator{msb_, b.list()};

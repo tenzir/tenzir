@@ -1,0 +1,4 @@
+We fixed a crash that could happen when reading in data with a known schema,
+enabling merging mode and then getting unexpected structural data for a field.
+In particular this could happen when reading in XSV with known schema, where the
+data contained unexpected list separators.
