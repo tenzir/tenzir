@@ -8,6 +8,7 @@
 
 #include "tenzir/diagnostics.hpp"
 
+#include "tenzir/detail/backtrace.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
@@ -274,46 +275,6 @@ auto diagnostic_deduplicator::hasher::operator()(const seen_t& x) const
   return result;
 }
 
-namespace {
-
-auto simplify_name(std::string name) -> std::string {
-  constexpr static auto actor_prefix
-    = std::string_view{"caf::detail::default_behavior_impl<std::__1::tuple<"};
-  if (auto actor_start = name.find(actor_prefix); actor_start != name.npos) {
-    actor_start += actor_prefix.size();
-    auto actor_end = name.find("::make_behavior()::'lambda'", actor_start);
-    if (actor_end != std::string::npos) {
-      name = name.substr(actor_start, actor_end - actor_start);
-      name += "::make_behavior";
-    }
-  }
-  name = detail::replace_all(name, "std::__1::", "std::");
-  name = detail::replace_all(name, "(anonymous namespace)", "(anon)");
-  for (auto it = name.begin(); it != name.end(); ++it) {
-    if (*it != '<') {
-      continue;
-    }
-    auto start = it;
-    while (true) {
-      ++it;
-      if (it == name.end()) {
-        return name;
-      }
-      if (*it != '>') {
-        continue;
-      }
-      auto end = it;
-      auto start_pos = start - name.begin();
-      name = name.replace(start, end, "<...");
-      it = name.begin() + start_pos + 1;
-      break;
-    }
-  }
-  return name;
-}
-
-} // namespace
-
 auto to_diagnostic(const panic_exception& e) -> diagnostic {
   auto note = std::string{
     "this is a bug, we would appreciate a report - thank you!\n"
@@ -325,15 +286,7 @@ auto to_diagnostic(const panic_exception& e) -> diagnostic {
   fmt::format_to(std::back_inserter(note), "source: {}:{}\n\n",
                  e.location.file_name(), e.location.line());
   for (auto& frame : e.stacktrace) {
-    auto function_name = simplify_name(frame.name());
-    auto file_name = frame.source_file();
-    if (file_name.empty()) {
-      fmt::format_to(std::back_inserter(note), "{} @ {}\n", function_name,
-                     frame.address());
-    } else {
-      fmt::format_to(std::back_inserter(note), "{}:{} @ {}\n", file_name,
-                     frame.source_line(), frame.address());
-    }
+    note += detail::format_frame(frame) + "\n";
   }
   return diagnostic::error("unexpected internal error: {}", e.message)
     .note(std::move(note))

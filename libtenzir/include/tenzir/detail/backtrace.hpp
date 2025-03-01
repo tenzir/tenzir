@@ -8,11 +8,10 @@
 
 #pragma once
 
+#include <boost/stacktrace.hpp>
+
 namespace tenzir::detail {
 
-/// Prints a stack backtrace on stderr.
-/// @note Tries to use the following mechanisms in order: libunwind,
-/// libbacktrace, execinfo.h.
-void backtrace();
+auto format_frame(const boost::stacktrace::frame&) -> std::string;
 
 } // namespace tenzir::detail

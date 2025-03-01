@@ -428,12 +428,7 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   target_link_libraries(libtenzir PRIVATE pfs)
 endif ()
 
-# Link against a backtrace library.
-option(TENZIR_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
-add_feature_info("TENZIR_ENABLE_BACKTRACE" TENZIR_ENABLE_BACKTRACE
-                 "print a backtrace on unexpected termination.")
-unset(TENZIR_ENABLE_LIBUNWIND)
-unset(TENZIR_ENABLE_LIBBACKTRACE)
+# Link against a boost backtrace
 find_package(Boost REQUIRED COMPONENTS stacktrace_basic)
 dependency_summary("Boost" Boost::stacktrace_basic "Dependencies")
 find_package(Boost COMPONENTS stacktrace_backtrace)
@@ -441,37 +436,10 @@ if (${Boost_STACKTRACE_BACKTRACE_FOUND})
   dependency_summary("Boost" Boost::stacktrace_backtrace "Dependencies")
   target_link_libraries(libtenzir PRIVATE ${Boost_STACKTRACE_BACKTRACE_LIBRARY} backtrace dl )
   target_compile_definitions( libtenzir PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
-  else ()
+else ()
   target_link_libraries(libtenzir PRIVATE ${Boost_STACKTRACE_BASIC_LIBRARY} dl )
-  endif ()
-target_compile_definitions(libtenzir PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
-if (TENZIR_ENABLE_BACKTRACE)
-  find_package(libunwind)
-  if (libunwind_FOUND)
-    target_link_libraries(libtenzir PRIVATE unwind::unwind)
-    dependency_summary("libunwind" unwind::unwind "Dependencies")
-    set(TENZIR_ENABLE_LIBUNWIND ON)
-  else ()
-    find_package(Backtrace)
-    if (Backtrace_FOUND)
-      target_include_directories(libtenzir
-                                 PRIVATE ${Backtrace_INCLUDE_DIRECTORIES})
-      target_link_libraries(libtenzir PRIVATE ${Backtrace_LIBRARIES})
-      if ("${Backtrace_HEADER}" STREQUAL "backtrace.h")
-        dependency_summary("libbacktrace" "${Backtrace_INCLUDE_DIR}"
-                           "Dependencies")
-        set(TENZIR_ENABLE_LIBBACKTRACE ON)
-      elseif ("${Backtrace_HEADER}" STREQUAL "execinfo.h")
-        dependency_summary("libexecinfo" "${Backtrace_INCLUDE_DIR}"
-                           "Dependencies")
-        set(TENZIR_ENABLE_LIBEXECINFO ON)
-      else ()
-        message(
-          FATAL_ERROR "Found unexpected backtrace header ${Backtrace_HEADER}")
-      endif ()
-    endif ()
-  endif ()
 endif ()
+target_compile_definitions(libtenzir PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
 
 # Configure options-dependent code files.
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
