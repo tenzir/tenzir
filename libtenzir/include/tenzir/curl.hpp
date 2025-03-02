@@ -440,6 +440,10 @@ auto easy::get() -> std::pair<code, info_type_t<what>> {
 /// @relates easy
 auto to_string(easy::code code) -> std::string_view;
 
+inline void check(curl::easy::code ec) {
+  TENZIR_ASSERT(ec == curl::easy::code::ok, to_string(ec));
+}
+
 /// @relates easy
 auto to_error(easy::code code) -> caf::error;
 
