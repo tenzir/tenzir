@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/backtrace.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>

@@ -266,7 +266,7 @@ struct exec_node_state {
             auto diagnostic = to_diagnostic(panic);
             if (has_node) {
               auto buffer = std::stringstream{};
-              buffer << "panic in execution node\n";
+              buffer << "internal error in operator\n";
               auto printer = make_diagnostic_printer(
                 std::nullopt, color_diagnostics::no, buffer);
               printer->emit(diagnostic);
@@ -587,7 +587,7 @@ struct exec_node_state {
     return {};
   }
 
-  TENZIR_NO_INLINE auto advance_generator() -> void {
+  auto advance_generator() -> void {
     auto time_processing_guard = make_timer_guard(metrics.time_processing);
     if constexpr (std::is_same_v<Output, std::monostate>) {
       // We never issue demand to the sink, so we cannot be at the end of the
