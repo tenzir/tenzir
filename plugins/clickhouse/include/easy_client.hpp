@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 #include "clickhouse/client.h"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
+#include "tenzir/detail/stable_map.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/type.hpp"
 
@@ -23,14 +24,27 @@ struct transformer {
   /// The name of the resulting type in ClickHouse
   std::string clickhouse_typename;
   /// Whether the "column" in clickhouse would be nullable.
-  /// Note that while `Tuple(Ts..)` and `Array(T)` themselfs are not nullable,
-  /// their respective transformers may be, iff all value types in there are
-  /// nullable.
+  /// Note that while `Tuple(Ts..)` and `Array(T)` themselves are not nullable,
+  /// in ClickHouse, the nested types may be.
+  /// Iff all nested columns are nullable, we consider the Tuple/Array nullable
+  /// as well.
   bool clickhouse_nullable;
 
   transformer(std::string clickhouse_typename, bool clickhouse_nullable)
     : clickhouse_typename{std::move(clickhouse_typename)},
       clickhouse_nullable{clickhouse_nullable} {
+  }
+
+  enum class drop { none, some, all };
+
+  friend auto operator|(drop lhs, drop rhs) -> drop {
+    if (lhs == rhs) {
+      return lhs;
+    }
+    if (lhs == drop::all or rhs == drop::all) {
+      return drop::all;
+    }
+    return drop::some;
   }
 
   /// This function updates a `dropmask`. Events where the dropmask is true
@@ -40,22 +54,27 @@ struct transformer {
   /// created in `update_dropmask` and used in `create_columns`.
   [[nodiscard]] virtual auto
   update_dropmask(const tenzir::type& type, const arrow::Array& array,
-                  dropmask_ref dropmask, tenzir::diagnostic_handler& dh) -> bool
+                  dropmask_ref dropmask, tenzir::diagnostic_handler& dh) -> drop
                                                                             = 0;
+
+  /// Creates a column of nulls. This is used if an output column is nullable,
+  /// but not present in the input.
+  [[nodiscard]] virtual auto
+  create_null_column(size_t n) const -> ::clickhouse::ColumnRef = 0;
 
   /// Transforms an Arrow Array to a ClickHouse's Column API type, so that they
   /// can be used with the `::clickhouse::Client::Insert` function.
-  [[nodiscard]] virtual auto create_columns(
-    const tenzir::type& type, const arrow::Array& array, dropmask_cref dropmask,
-    tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef = 0;
+  [[nodiscard]] virtual auto
+  create_column(const tenzir::type& type, const arrow::Array& array,
+                dropmask_cref dropmask,
+                tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef
+                                                         = 0;
 
   virtual ~transformer() = default;
 };
 
 using schema_transformations
-  = std::unordered_map<std::string, std::unique_ptr<transformer>,
-                       detail::heterogeneous_string_hash,
-                       detail::heterogeneous_string_equal>;
+  = detail::stable_map<std::string, std::unique_ptr<transformer>>;
 
 struct Easy_Client {
   ::clickhouse::Client client;
@@ -72,7 +91,7 @@ struct Easy_Client {
   auto get_schema_transformations(std::string_view table)
     -> std::optional<schema_transformations>;
 
-  auto create_table(std::string_view table, std::string_view primary,
+  auto create_table(std::string_view table, const located<std::string>& primary,
                     const tenzir::record_type& schema)
     -> std::optional<schema_transformations>;
 };

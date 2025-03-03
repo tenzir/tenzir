@@ -18,20 +18,39 @@
 using namespace clickhouse;
 using namespace std::string_view_literals;
 
+/// The implementation works via multiple customization points:
+/// * Implementing the entire transformer by hand. This is done for Tuple and
+///   Array
+/// * A common implementation for non-structural types that works via
+///   * A trait to handle names and allocations.
+///     * This trait is auto-implemented for most types via a X-macro.
+///     * It is specialized for some types with special requirements
+///   * A `value_transform` function that translates between a tenzir::data
+///     value and the expected clickhouse API value.
+
 namespace tenzir::plugins::clickhouse {
 
 namespace {
 
-std::string remove_excessive_spaces(std::string_view str) {
+std::string remove_non_significant_whitespace(std::string_view str) {
   std::string ret;
   ret.reserve(str.size());
-  for (size_t i = 0; i < str.size() - 1; ++i) {
-    if (std::isspace(str[i]) and std::isspace(str[i + 1])) {
+  auto can_skip = false;
+  constexpr static auto syntax_characters = "(),"sv;
+  for (size_t i = 0; i < str.size(); ++i) {
+    const auto is_space = std::isspace(str[i]);
+    if (can_skip and std::isspace(str[i])) {
       continue;
     }
     ret += str[i];
+    const auto is_syntax
+      = syntax_characters.find(str[i]) != std::string_view::npos;
+    can_skip = is_space or is_syntax;
+    // Remove space *before* the current syntax token. Handles e.g. `text )`
+    if (is_syntax and i > 0 and std::isspace(str[i - 1])) {
+      ret.pop_back();
+    }
   }
-  ret += str.back();
   return ret;
 }
 
@@ -56,6 +75,13 @@ auto value_transform(tenzir::ip v) -> in6_addr {
   return res;
 }
 
+auto value_transform(tenzir::subnet v) -> std::tuple<in6_addr, uint8_t> {
+  auto res = std::tuple<in6_addr, uint8_t>{};
+  std::memcpy(&std::get<0>(res), &v.network(), sizeof(v));
+  std::get<1>(res) = v.length();
+  return res;
+}
+
 template <typename>
 struct tenzir_to_clickhouse_trait;
 
@@ -64,6 +90,8 @@ struct tenzir_to_clickhouse_trait;
   struct tenzir_to_clickhouse_trait<TENZIR_TYPENAME> {                         \
     constexpr static std::string_view name = CLICKHOUSE_NAME;                  \
     using column_type = CLICKHOUSE_COLUMN;                                     \
+                                                                               \
+    constexpr static auto null_value = std::nullopt;                           \
                                                                                \
     static auto clickhouse_typename(bool nullable) -> std::string {            \
       if (nullable) {                                                          \
@@ -84,7 +112,7 @@ struct tenzir_to_clickhouse_trait;
   }
 
 X(int64_type, ColumnInt64, "Int64");
-X(uint64_type, ColumnUInt64, "Uint64");
+X(uint64_type, ColumnUInt64, "UInt64");
 X(double_type, ColumnFloat64, "Float64");
 X(string_type, ColumnString, "String");
 X(duration_type, ColumnInt64, "Int64");
@@ -95,6 +123,8 @@ template <>
 struct tenzir_to_clickhouse_trait<time_type> {
   constexpr static std::string_view name = "DateTime64(8)";
   using column_type = ColumnDateTime64;
+
+  constexpr static auto null_value = std::nullopt;
 
   static auto clickhouse_typename(bool nullable) -> std::string {
     if (nullable) {
@@ -113,8 +143,38 @@ struct tenzir_to_clickhouse_trait<time_type> {
   }
 };
 
-/// TODO
-// Array
+template <>
+struct tenzir_to_clickhouse_trait<subnet_type> {
+  static auto clickhouse_typename(bool nullable) -> std::string {
+    if (nullable) {
+      return "Tuple(ip Nullable(IPv6),length Nullable(UInt8))";
+    }
+    return "Tuple(ip IPv6,length UInt8)";
+  }
+
+  constexpr static auto null_value = std::tuple{std::nullopt, std::nullopt};
+
+  template <bool nullable>
+  static auto allocate(size_t n) {
+    using ip_t
+      = std::conditional_t<nullable, ColumnNullableT<ColumnIPv6>, ColumnIPv6>;
+    using length_t
+      = std::conditional_t<nullable, ColumnNullableT<ColumnUInt8>, ColumnUInt8>;
+    using Column_Type = ColumnTupleT<ip_t, length_t>;
+    auto ip_c = std::make_shared<ip_t>();
+    ip_c->Reserve(n);
+    auto length_c = std::make_shared<length_t>();
+    length_c->Reserve(n);
+    auto res = std::make_shared<Column_Type>(
+      std::tuple{std::move(ip_c), std::move(length_c)});
+    return res;
+  }
+};
+
+template <typename Expected, typename Actual>
+concept convertible_hack = std::same_as<Expected, Actual>
+                           or (std::same_as<Expected, int64_type>
+                               and std::same_as<Actual, duration_type>);
 
 template <typename T, bool Nullable>
   requires requires { tenzir_to_clickhouse_trait<T>{}; }
@@ -127,46 +187,63 @@ struct transformer_from_trait : transformer {
 
   virtual auto update_dropmask(const tenzir::type&, const arrow::Array& array,
                                dropmask_ref dropmask,
-                               tenzir::diagnostic_handler&) -> bool override {
+                               tenzir::diagnostic_handler&) -> drop override {
     if constexpr (Nullable) {
-      return false;
+      return drop::none;
     }
     if (not array.null_bitmap()) {
-      return false;
+      return drop::none;
     }
     if (array.null_count() == 0) {
-      return false;
+      return drop::none;
     }
+    // TODO we can potentially discover a "drop::all" here
     for (int64_t i = 0; i < array.length(); ++i) {
       if (array.IsNull(i)) {
         dropmask[i] = true;
       }
     }
-    return true;
+    return drop::some;
   }
 
-  virtual auto create_columns(
+  virtual auto
+  create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    if constexpr (Nullable) {
+      auto columns = traits::template allocate<Nullable>(n);
+      for (size_t i = 0; i < n; ++n) {
+        columns->Append(traits::null_value);
+      }
+    }
+    return nullptr;
+  }
+
+  virtual auto create_column(
     const tenzir::type& type, const arrow::Array& array, dropmask_cref dropmask,
     tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef override {
     const auto f = detail::overload{
-      [&](const caf::none_t&) -> std::shared_ptr<Column> {
+      [&](const null_type&) -> std::shared_ptr<Column> {
         if constexpr (Nullable) {
           auto column = traits::template allocate<Nullable>(array.length());
           for (int64_t i = 0; i < array.length(); ++i) {
-            column->Append(std::nullopt);
+            column->Append(traits::null_value);
           }
           return column;
         }
         return nullptr;
       },
-      [&](const auto&) -> std::shared_ptr<Column> {
-        // error case. Potentially do conversions?
-        diagnostic::warning("incompatible data").emit(dh);
+      [&]<typename U>(const U&) -> std::shared_ptr<Column> {
+        // error case. Potentially do more conversions?
+        diagnostic::warning("incompatible data")
+          .note("expected `{}`, got `{}`\n", tenzir::type_kind{tag_v<T>},
+                tenzir::type_kind{tag_v<U>})
+          .emit(dh);
         return nullptr;
       },
-      [&](const T&) -> std::shared_ptr<Column> {
+      [&]<typename U>(const U&) -> std::shared_ptr<Column>
+        requires convertible_hack<T, U>
+      {
         auto column = traits::template allocate<Nullable>(array.length());
-        auto cast_array = dynamic_cast<const type_to_arrow_array_t<T>*>(&array);
+        auto cast_array = dynamic_cast<const type_to_arrow_array_t<U>*>(&array);
         TENZIR_ASSERT(cast_array);
         for (int64_t i = 0; i < cast_array->length(); ++i) {
           if (dropmask[i]) {
@@ -175,20 +252,22 @@ struct transformer_from_trait : transformer {
           auto v = view_at(*cast_array, i);
           if constexpr (Nullable) {
             if (not v) {
-              column->Append(std::nullopt);
+              column->Append(traits::null_value);
               continue;
             }
           }
           column->Append(value_transform(*v));
         }
         return column;
-      }};
+      },
+      };
     return match(type, f);
   }
 };
 
 struct transformer_record : transformer {
   schema_transformations transformations;
+  std::vector<char> found_column;
 
   transformer_record(std::string clickhouse_typename,
                      schema_transformations transformations)
@@ -200,54 +279,90 @@ struct transformer_record : transformer {
         break;
       }
     }
+    found_column.resize(transformations.size());
   }
 
   virtual auto
   update_dropmask(const tenzir::type& type, const arrow::Array& array,
                   dropmask_ref dropmask,
-                  tenzir::diagnostic_handler& dh) -> bool override {
+                  tenzir::diagnostic_handler& dh) -> drop override {
     if (clickhouse_nullable) {
-      return false;
+      return drop::none;
     }
     if (not array.null_bitmap()) {
-      return false;
+      return drop::none;
     }
     if (array.null_count() == 0) {
-      return false;
+      return drop::none;
     }
+    /// Update the dropmask based of the record itself. If we are here, we know
+    /// that we cannot null every subcolumn, so a "top level" null requires us
+    /// to drop the event.
     for (int64_t i = 0; i < array.length(); ++i) {
-      // FIXME: nullability checks for subcolumns.
-      // If all subcolumns were nullable, we can null those instead of dropping
-      // the entire event.
       if (array.IsNull(i)) {
         dropmask[i] = true;
       }
     }
     const auto& rt = as<record_type>(type);
     const auto& struct_array = as<arrow::StructArray>(array);
-    auto updated = false;
+    auto updated = drop::none;
+    /// Update the dropmasks from all nested columns
     for (auto [i, kt] : detail::enumerate(rt.fields())) {
       const auto& [k, t] = kt;
       const auto it = transformations.find(k);
       if (it == transformations.end()) {
         diagnostic::warning(
           "nested column `{}` does not exist in ClickHouse table ", k)
+          .note("column will be dropped")
           .emit(dh);
         continue;
       }
+      const auto out_idx = std::distance(transformations.begin(), it);
+      found_column[out_idx] = true;
       auto offset = tenzir::offset{};
       offset.push_back(i);
       auto arr = offset.get(struct_array);
       auto& trafo = it->second;
-      updated = trafo->update_dropmask(t, *arr, dropmask, dh);
+      // TODO we can potentially discover a "drop::all" here
+      updated = updated | trafo->update_dropmask(t, *arr, dropmask, dh);
+    }
+    /// Detect missing columns
+    for (const auto& [i, kvp] : detail::enumerate(transformations)) {
+      if (found_column[i]) {
+        continue;
+      }
+      if (kvp.second->clickhouse_nullable) {
+        continue;
+      }
+      diagnostic::warning(
+        "required column missing in input, event will be dropped")
+        .emit(dh);
+      std::ranges::fill(dropmask, true);
+      updated = drop::all;
     }
     return updated;
   }
 
-  virtual auto create_columns(
+  virtual auto
+  create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    if (not clickhouse_nullable) {
+      return nullptr;
+    }
+    auto columns = std::vector<ColumnRef>(transformations.size());
+    for (const auto& [_, t] : transformations) {
+      auto c = t->create_null_column(n);
+      if (not c) {
+        return nullptr;
+      }
+      columns.push_back(std::move(c));
+    }
+    return std::make_shared<ColumnTuple>(std::move(columns));
+  }
+
+  virtual auto create_column(
     const tenzir::type& type, const arrow::Array& array, dropmask_cref dropmask,
     tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef override {
-    auto columns = std::vector<ColumnRef>{};
+    auto columns = std::vector<ColumnRef>(transformations.size());
     const auto& rt = as<record_type>(type);
     const auto& struct_array = as<arrow::StructArray>(array);
     for (auto [i, kt] : detail::enumerate(rt.fields())) {
@@ -256,14 +371,15 @@ struct transformer_record : transformer {
       if (it == transformations.end()) {
         continue;
       }
+      const auto out_idx = std::distance(transformations.begin(), it);
       auto offset = tenzir::offset{};
       offset.push_back(i);
       auto arr = offset.get(struct_array);
       auto& trafo = it->second;
-      auto this_column = trafo->create_columns(t, *arr, dropmask, dh);
+      auto this_column = trafo->create_column(t, *arr, dropmask, dh);
       // TODO: re-evaluate this
       TENZIR_ASSERT(this_column);
-      columns.push_back(this_column);
+      columns[out_idx] = std::move(this_column);
     }
     return std::make_shared<ColumnTuple>(std::move(columns));
   }
@@ -284,7 +400,7 @@ struct transformer_array : transformer {
   virtual auto
   update_dropmask(const tenzir::type& type, const arrow::Array& array,
                   dropmask_ref dropmask,
-                  tenzir::diagnostic_handler& dh) -> bool override {
+                  tenzir::diagnostic_handler& dh) -> drop override {
     const auto value_type = as<list_type>(type).value_type();
     const auto& list_array = as<arrow::ListArray>(array);
     const auto& value_array = *list_array.values();
@@ -295,23 +411,24 @@ struct transformer_array : transformer {
     my_value_array = &value_array;
     // These "early returns MUST happen after we updated `my_mask`"
     if (clickhouse_nullable) {
-      return false;
+      return drop::none;
     }
     if (not array.null_bitmap()) {
-      return false;
+      return drop::none;
     }
     if (array.null_count() == 0) {
-      return false;
+      return drop::none;
     }
     auto updated
       = data_transform->update_dropmask(value_type, value_array, my_mask, dh);
-    if (not updated) {
-      return false;
+    if (updated == drop::none) {
+      return drop::none;
     }
+    /// TODO: we may be able to discover a `drop::all` here
     for (int64_t i = 0; i < array.length(); ++i) {
       if (array.IsNull(i)) {
         dropmask[i] = true;
-        updated = true;
+        updated = drop::some;
         continue;
       }
       const auto start = offsets.Value(i);
@@ -321,7 +438,9 @@ struct transformer_array : transformer {
         event_has_null |= my_mask[j];
       }
       dropmask[i] |= event_has_null;
-      updated |= event_has_null;
+      if (event_has_null) {
+        updated = drop::some;
+      }
     }
     return updated;
   }
@@ -343,7 +462,26 @@ struct transformer_array : transformer {
     return res;
   }
 
-  virtual auto create_columns(
+  virtual auto
+  create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    if (not clickhouse_nullable) {
+      return nullptr;
+    }
+    auto column = data_transform->create_null_column(n);
+    if (not column) {
+      return nullptr;
+    }
+    auto column_offsets = std::make_shared<ColumnUInt64>();
+    auto& output = column_offsets->GetWritableData();
+    output.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+      output[i] = i;
+    }
+    return std::make_shared<ColumnArray>(std::move(column),
+                                         std::move(column_offsets));
+  }
+
+  virtual auto create_column(
     const tenzir::type& type, const arrow::Array& array, dropmask_cref dropmask,
     tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef override {
     TENZIR_UNUSED(dropmask);
@@ -357,7 +495,7 @@ struct transformer_array : transformer {
                   fmt::format("{} == {}", my_mask.size(),
                               value_array.length()));
     auto clickhouse_columns
-      = data_transform->create_columns(value_type, value_array, my_mask, dh);
+      = data_transform->create_column(value_type, value_array, my_mask, dh);
     auto clickhouse_offsets = make_offsets(offsets);
     return std::make_shared<ColumnArray>(std::move(clickhouse_columns),
                                          std::move(clickhouse_offsets));
@@ -384,16 +522,15 @@ auto make_functions_from_clickhouse(const std::string_view clickhouse_typename)
   // Array(T)
   const bool is_nullable = clickhouse_typename.starts_with("Nullable(");
   TENZIR_ASSERT(not is_nullable or clickhouse_typename.ends_with(')'));
-  auto stripped_clickhouse_name = clickhouse_typename;
-  if (is_nullable) {
-    stripped_clickhouse_name.remove_prefix("Nullable("sv.size());
-    stripped_clickhouse_name.remove_suffix(1);
-  }
 #define X(TENZIR_TYPE)                                                         \
-  if (stripped_clickhouse_name                                                 \
+  if (clickhouse_typename                                                      \
       == tenzir_to_clickhouse_trait<TENZIR_TYPE>::clickhouse_typename(         \
         false)) {                                                              \
-    return make_transformer_impl<TENZIR_TYPE>(is_nullable);                    \
+    return make_transformer_impl<TENZIR_TYPE>(false);                          \
+  }                                                                            \
+  if (clickhouse_typename                                                      \
+      == tenzir_to_clickhouse_trait<TENZIR_TYPE>::clickhouse_typename(true)) { \
+    return make_transformer_impl<TENZIR_TYPE>(true);                           \
   }
   X(int64_type);
   X(uint64_type);
@@ -402,12 +539,13 @@ auto make_functions_from_clickhouse(const std::string_view clickhouse_typename)
   X(time_type);
   X(duration_type);
   X(ip_type);
+  X(subnet_type);
 #undef X
-  if (stripped_clickhouse_name.starts_with("Tuple(")) {
-    return make_record_functions_from_clickhouse(stripped_clickhouse_name);
+  if (clickhouse_typename.starts_with("Tuple(")) {
+    return make_record_functions_from_clickhouse(clickhouse_typename);
   }
-  if (stripped_clickhouse_name.starts_with("Array(")) {
-    return make_array_functions_from_clickhouse(stripped_clickhouse_name);
+  if (clickhouse_typename.starts_with("Array(")) {
+    return make_array_functions_from_clickhouse(clickhouse_typename);
   }
   return nullptr;
 }
@@ -526,7 +664,7 @@ auto type_to_clickhouse_typename(tenzir::type t, bool nullable) -> std::string {
 } // namespace
 
 auto Easy_Client::table_exists(std::string_view table) -> bool {
-  // // This does not work for some reason
+  // // This does not work for some reason. It returns a table with 0 rows.
   // auto query = Query{fmt::format("EXISTS TABLE {}", table)};
   // auto exists = false;
   // auto cb = [&](const Block& block) {
@@ -564,8 +702,8 @@ auto Easy_Client::get_schema_transformations(std::string_view table)
   auto cb = [&](const Block& block) {
     for (size_t i = 0; i < block.GetRowCount(); ++i) {
       auto name = block[0]->As<ColumnString>()->At(i);
-      auto type_str
-        = remove_excessive_spaces(block[1]->As<ColumnString>()->At(i));
+      auto type_str = remove_non_significant_whitespace(
+        block[1]->As<ColumnString>()->At(i));
       auto functions = make_functions_from_clickhouse(type_str);
       if (not functions) {
         error = true;
@@ -599,15 +737,14 @@ auto Easy_Client::get_schema_transformations(std::string_view table)
   return result;
 }
 
-auto Easy_Client::create_table(std::string_view table_name,
-                               std::string_view primary,
-                               const tenzir::record_type& schema)
-
-  -> std::optional<schema_transformations> {
+auto Easy_Client::create_table(
+  std::string_view table_name, const located<std::string>& primary,
+  const tenzir::record_type& schema) -> std::optional<schema_transformations> {
   auto result = schema_transformations{};
   auto columns = std::string{};
+  auto primary_found = false;
   for (auto [k, t] : schema.fields()) {
-    auto clickhouse_type = type_to_clickhouse_typename(t, k != primary);
+    auto clickhouse_type = type_to_clickhouse_typename(t, k != primary.inner);
     auto functions = make_functions_from_clickhouse(clickhouse_type);
     if (not functions) {
       diagnostic::error("cannot create table: unsupported column type in input")
@@ -616,16 +753,25 @@ auto Easy_Client::create_table(std::string_view table_name,
         .emit(dh);
       return std::nullopt;
     }
+    primary_found |= k == primary.inner;
     result.try_emplace(std::string{k}, std::move(functions));
   }
-  const std::string_view engine = "MergeTree";
+  if (not primary_found) {
+    diagnostic::error(
+      "cannot create table: primary key does not exist in input")
+      .primary(primary, "column `{}` does not exist", primary.inner)
+      .emit(dh);
+    return std::nullopt;
+  }
+  constexpr static std::string_view engine = "MergeTree";
   auto query_text
     = fmt::format("CREATE TABLE {}"
                   " {}"
                   " ENGINE = {}"
                   " ORDER BY {}",
-                  table_name, plain_clickhouse_tuple_elements(schema, primary),
-                  engine, primary);
+                  table_name,
+                  plain_clickhouse_tuple_elements(schema, primary.inner),
+                  engine, primary.inner);
   auto query = Query{query_text};
   client.Execute(query);
   return result;

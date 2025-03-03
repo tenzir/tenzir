@@ -55,20 +55,27 @@ translation from Tenzir's types to ClickHouse:
 | Tenzir | ClickHouse | Comment |
 |:--- | :--- | :--- |
 | `int64` | `Int64` | |
-| `unt64` | `Unt64` | |
+| `uint64` | `Unt64` | |
 | `double` | `Float64` | |
 | `ip` | `IPv6` | |
-| `subnet` | FIXME | |
+| `subnet` | `Tuple(ip IPv6, length UInt8)` | |
 | `time` | `DateTime64(8)` | |
 | `duration` | `Int64` | Converted as `nanoseconds(duration)` |
-| `record` | `Tuple(...)` | |
+| `record` | `Tuple(...)` | Fields in the tuple will be named with the field name |
 | `list<T>` | `Array(T)` | |
 
-## Table Creation
+Tenzir also supports `Nullable` versions of the above types (or their nested types).
+
+### Table Creation
+
+When a ClickHouse table is created from Tenzir, all columns except the `primary`
+will be created as `Nullable`.
+
+The table will be created from the first event the operator receives.
 
 ## Examples
 
-### Send CSV file to ClickHouse
+### Send CSV file to a local ClickHouse instance
 
 ```tql
 from "my_file.csv"

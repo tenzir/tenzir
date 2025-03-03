@@ -182,9 +182,14 @@ public:
       transformations = client.get_schema_transformations(args_.table.inner);
       TENZIR_TRACE("got table schema: {}", transformations.has_value());
     }
+    /// TODO. somehow merge this with the nested record implementation
     auto dropmask = dropmask_type{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      if (slice.columns() == 0) {
         co_yield {};
         continue;
       }
@@ -192,8 +197,8 @@ public:
       const auto& schema = as<record_type>(slice.schema());
       if (not transformations) {
         TENZIR_ASSERT(not table_existed);
-        transformations = client.create_table(args_.table.inner,
-                                              args_.primary->inner, schema);
+        transformations
+          = client.create_table(args_.table.inner, *args_.primary, schema);
         if (not transformations) {
           diagnostic::error("failed to create table")
             .primary(args_.operator_location)
@@ -220,13 +225,19 @@ public:
         offset.push_back(i);
         auto [t2, arr] = offset.get(slice);
         auto& trafo = it->second;
-        if (trafo->update_dropmask(t2, *arr, dropmask, ctrl.diagnostics())) {
-          diagnostic::warning("field `{}` is null, but the ClickHouse table "
-                              "does not support null values",
+        const auto updated
+          = trafo->update_dropmask(t2, *arr, dropmask, ctrl.diagnostics());
+        if (updated == transformer::drop::some) {
+          diagnostic::warning("field `{}` contains null, but the ClickHouse "
+                              "table does not support null values",
                               k)
             .primary(args_.operator_location)
             .note("event will be dropped")
             .emit(ctrl.diagnostics());
+        }
+        /// A diagnostic for this was already emitted
+        if (updated == transformer::drop::all) {
+          continue;
         }
       }
 
@@ -243,7 +254,7 @@ public:
         auto [t2, arr] = offset.get(slice);
         auto& trafo = it->second;
         auto column
-          = trafo->create_columns(t2, *arr, dropmask, ctrl.diagnostics());
+          = trafo->create_column(t2, *arr, dropmask, ctrl.diagnostics());
         block.AppendColumn(std::string{k}, std::move(column));
       }
       if (block.GetColumnCount() > 0) {
@@ -252,9 +263,9 @@ public:
       co_yield {};
     }
   } catch (std::exception& e) {
-    // TODO `TENZIR_ASSERT` currently thros a runtime error, which is caught
-    // here. We should update that to throw a custom type instead, so that we
-    // can differentiate those failures.
+    // TODO `TENZIR_ASSERT` currently throws a runtime error, which is caught
+    // here. Once the custom exception type for this is merged, we can
+    // catch&rethrow that instead of reporting it ourselves.
     diagnostic::error("unexpected error: {}", e.what())
       .primary(args_.operator_location)
       .emit(ctrl.diagnostics());
