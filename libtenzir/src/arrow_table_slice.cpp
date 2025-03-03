@@ -274,26 +274,22 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 std::pair<type, std::shared_ptr<arrow::StructArray>>
 transform_columns(type schema,
                   const std::shared_ptr<arrow::StructArray>& struct_array,
-                  const std::vector<indexed_transformation>& transformations) {
+                  std::vector<indexed_transformation> transformations) {
   if (struct_array->num_fields() == 0 or transformations.empty()) {
     return {schema, struct_array};
   }
-  TENZIR_ASSERT_EXPENSIVE(std::is_sorted(transformations.begin(),
-                                         transformations.end()),
-                          "transformations must be sorted by index");
-  TENZIR_ASSERT_EXPENSIVE(
-    transformations.end()
-      == std::adjacent_find(transformations.begin(), transformations.end(),
-                            [](const auto& lhs, const auto& rhs) {
-                              const auto [lhs_mismatch, rhs_mismatch]
-                                = std::mismatch(lhs.index.begin(),
-                                                lhs.index.end(),
-                                                rhs.index.begin(),
-                                                rhs.index.end());
-                              return lhs_mismatch == lhs.index.end();
-                            }),
-    "transformation indices must not be a subset of the following "
-    "transformation's index");
+  std::ranges::sort(transformations);
+  TENZIR_ASSERT(transformations.end()
+                  == std::ranges::adjacent_find(
+                    transformations,
+                    [](const auto& lhs, const auto& rhs) {
+                      const auto [lhs_mismatch, rhs_mismatch]
+                        = std::mismatch(lhs.index.begin(), lhs.index.end(),
+                                        rhs.index.begin(), rhs.index.end());
+                      return lhs_mismatch == lhs.index.end();
+                    }),
+                "transformation indices must not be a subset of the following "
+                "transformation's index");
   if (transformations.front().index.empty()) {
     TENZIR_ASSERT(transformations.size() == 1);
     auto result = transformations.front().fun({{}, schema}, struct_array);
@@ -364,21 +360,19 @@ transform_columns(type schema,
         nested_index.push_back(0);
         nested_layer = impl(impl, std::move(nested_layer),
                             std::move(nested_index), current, sentinel);
-        if (!nested_layer.fields.empty()) {
-          auto nested_schema = type{record_type{nested_layer.fields}};
-          nested_schema.assign_metadata(layer.fields[index.back()].type);
-          result.fields.emplace_back(layer.fields[index.back()].name,
-                                     nested_schema);
-          auto nested_arrow_fields = arrow::FieldVector{};
-          nested_arrow_fields.reserve(nested_layer.fields.size());
-          for (const auto& nested_field : nested_layer.fields) {
-            nested_arrow_fields.push_back(
-              nested_field.type.to_arrow_field(nested_field.name));
-          }
-          result.arrays.push_back(
-            make_struct_array(nested_array.length(), nested_array.null_bitmap(),
-                              nested_arrow_fields, nested_layer.arrays));
+        auto nested_schema = type{record_type{nested_layer.fields}};
+        nested_schema.assign_metadata(layer.fields[index.back()].type);
+        result.fields.emplace_back(layer.fields[index.back()].name,
+                                   nested_schema);
+        auto nested_arrow_fields = arrow::FieldVector{};
+        nested_arrow_fields.reserve(nested_layer.fields.size());
+        for (const auto& nested_field : nested_layer.fields) {
+          nested_arrow_fields.push_back(
+            nested_field.type.to_arrow_field(nested_field.name));
         }
+        result.arrays.push_back(
+          make_struct_array(nested_array.length(), nested_array.null_bitmap(),
+                            nested_arrow_fields, nested_layer.arrays));
       } else {
         result.fields.push_back(std::move(layer.fields[index.back()]));
         result.arrays.push_back(std::move(layer.arrays[index.back()]));
@@ -444,7 +438,7 @@ transform_columns(type schema,
 
 table_slice
 transform_columns(const table_slice& slice,
-                  const std::vector<indexed_transformation>& transformations) {
+                  std::vector<indexed_transformation> transformations) {
   if (transformations.empty()) {
     return slice;
   }
@@ -456,8 +450,8 @@ transform_columns(const table_slice& slice,
   }
   auto input_batch = to_record_batch(slice);
   auto input_struct_array = input_batch->ToStructArray().ValueOrDie();
-  auto [output_schema, output_struct_array]
-    = transform_columns(slice.schema(), input_struct_array, transformations);
+  auto [output_schema, output_struct_array] = transform_columns(
+    slice.schema(), input_struct_array, std::move(transformations));
   if (!output_schema) {
     return {};
   }
@@ -472,21 +466,19 @@ transform_columns(const table_slice& slice,
 
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
 select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
-               const std::vector<offset>& indices) {
+               std::vector<offset> indices) {
   TENZIR_ASSERT_EXPENSIVE(batch->schema()->Equals(schema.to_arrow_schema()),
                           "Tenzir schema and Arrow schema must match");
-  TENZIR_ASSERT_EXPENSIVE(std::is_sorted(indices.begin(), indices.end()),
-                          "indices must be "
-                          "sorted");
-  TENZIR_ASSERT_EXPENSIVE(
+  std::ranges::sort(indices);
+  TENZIR_ASSERT(
     indices.end()
-      == std::adjacent_find(indices.begin(), indices.end(),
-                            [](const auto& lhs, const auto& rhs) {
-                              const auto [lhs_mismatch, rhs_mismatch]
-                                = std::mismatch(lhs.begin(), lhs.end(),
-                                                rhs.begin(), rhs.end());
-                              return lhs_mismatch == lhs.end();
-                            }),
+      == std::ranges::adjacent_find(indices,
+                                    [](const auto& lhs, const auto& rhs) {
+                                      const auto [lhs_mismatch, rhs_mismatch]
+                                        = std::mismatch(lhs.begin(), lhs.end(),
+                                                        rhs.begin(), rhs.end());
+                                      return lhs_mismatch == lhs.end();
+                                    }),
     "indices must not be a subset of the following index");
   // The current unpacked layer of the transformation, i.e., the pieces required
   // to re-assemble the current layer of both the record type and the record
@@ -589,9 +581,9 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
 }
 
 table_slice
-select_columns(const table_slice& slice, const std::vector<offset>& indices) {
-  auto [schema, batch]
-    = select_columns(slice.schema(), to_record_batch(slice), indices);
+select_columns(const table_slice& slice, std::vector<offset> indices) {
+  auto [schema, batch] = select_columns(slice.schema(), to_record_batch(slice),
+                                        std::move(indices));
   if (!schema) {
     return {};
   }

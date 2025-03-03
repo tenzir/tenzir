@@ -31,8 +31,10 @@ struct offset : detail::stack_vector<size_t, 64> {
       .fields(f.field("value", static_cast<super&>(x)));
   }
 
-  friend std::strong_ordering
-  operator<=>(const offset& lhs, const offset& rhs) noexcept;
+  friend auto operator<=>(const offset& lhs, const offset& rhs) noexcept
+    -> std::strong_ordering;
+
+  friend auto operator==(const offset& lhs, const offset& rhs) noexcept -> bool;
 
   /// Access a nested array in a table slice, record batch, or struct array. The
   /// offset is assumed to be valid.

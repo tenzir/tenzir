@@ -27,7 +27,11 @@ as the `header` for the parsed values.
 
 ### `list_separator = string (optional)`
 
-The string separating different elements in a list within a single field.
+The `string` separating the elements _inside_ a list. If this string is found
+outside of quotes in a field, that field will become a list. If this string is
+empty, list parsing is disabled.
+
+Defaults to `,`.
 
 ### `null_value = string (optional)`
 

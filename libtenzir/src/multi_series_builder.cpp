@@ -191,6 +191,15 @@ auto object_generator::record() -> record_generator {
       if (not writable()) {
         return record_generator{};
       }
+      // If the builder was created with a schema that specifies this field as
+      // anything but a `record`, we cannot continue here. Instead we omit
+      // writing data, causing an implicit null in the series builder.
+      if (b.is_protected() and b.kind() != type_kind::of<record_type>) {
+        diagnostic::warning("type mismatch between data and given schema")
+          .note("schema specifies `{}`, but got `record`", b.kind())
+          .emit(msb_->dh_);
+        return record_generator{};
+      }
       return record_generator{msb_, b.record()};
     },
     [&](raw_pointer raw) {
@@ -207,6 +216,15 @@ auto object_generator::list() -> list_generator {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       if (not writable()) {
+        return list_generator{};
+      }
+      // If the builder was created with a schema that specifies this field as
+      // anything but a `list`, we cannot continue here. Instead we omit writing
+      // data, causing an implicit null in the series builder.
+      if (b.is_protected() and b.kind() != type_kind::of<list_type>) {
+        diagnostic::warning("type mismatch between data and given schema")
+          .note("schema specifies `{}`, but got `list`", b.kind())
+          .emit(msb_->dh_);
         return list_generator{};
       }
       return list_generator{msb_, b.list()};
@@ -336,6 +354,12 @@ auto list_generator::record() -> record_generator {
       if (not writable()) {
         return record_generator{};
       }
+      if (b.is_protected() and b.kind() != type_kind::of<record_type>) {
+        diagnostic::warning("type mismatch between data and given schema")
+          .note("schema specifies `{}`, but got `record`", b.kind())
+          .emit(msb_->dh_);
+        return record_generator{};
+      }
       return record_generator{msb_, b.record()};
     },
     [&](raw_pointer raw) {
@@ -352,6 +376,12 @@ auto list_generator::list() -> list_generator {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       if (not writable()) {
+        return list_generator{};
+      }
+      if (b.is_protected() and b.kind() != type_kind::of<list_type>) {
+        diagnostic::warning("type mismatch between data and given schema")
+          .note("schema specifies `{}`, but got `list`", b.kind())
+          .emit(msb_->dh_);
         return list_generator{};
       }
       return list_generator{msb_, b.list()};

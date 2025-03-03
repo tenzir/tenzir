@@ -713,8 +713,9 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
 }
 
 namespace {
-constexpr static auto resolve_enumerations_transformation = [](
-  struct record_type::field field, std::shared_ptr<arrow::Array> array) noexcept
+constexpr static auto resolve_enumerations_transformation
+  = [](struct record_type::field field,
+       std::shared_ptr<arrow::Array> array) noexcept
   -> std::vector<
     std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
   const auto& et = as<enumeration_type>(field.type);
@@ -755,7 +756,7 @@ table_slice resolve_enumerations(table_slice slice) {
     }
     transformations.emplace_back(index, resolve_enumerations_transformation);
   }
-  return transform_columns(slice, transformations);
+  return transform_columns(slice, std::move(transformations));
 }
 
 auto resolve_enumerations(series s) -> series {
@@ -802,8 +803,8 @@ auto resolve_enumerations(
     }
     transformations.emplace_back(index, resolve_enumerations_transformation);
   }
-  auto transform_result = transform_columns(tenzir::type{std::move(schema)},
-                                            struct_array, transformations);
+  auto transform_result = transform_columns(
+    tenzir::type{std::move(schema)}, struct_array, std::move(transformations));
   auto result_array = std::static_pointer_cast<arrow::StructArray>(
     std::move(transform_result.second));
   TENZIR_ASSERT(result_array);
@@ -1048,7 +1049,7 @@ auto flatten_record(
        make_flatten_transformation(separator, next_name_prefix, list_offsets)});
   }
   auto [output_type, output_struct_array]
-    = transform_columns(field.type, struct_array, transformations);
+    = transform_columns(field.type, struct_array, std::move(transformations));
   TENZIR_ASSERT(output_type);
   TENZIR_ASSERT(output_struct_array);
   auto result = indexed_transformation::result_type{};
@@ -1145,7 +1146,7 @@ auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
       {offset{i}, make_flatten_transformation(separator, "", {})});
   }
   const auto& [new_schema, transformed]
-    = transform_columns(schema, array, transformations);
+    = transform_columns(schema, array, std::move(transformations));
   // The slice may contain duplicate field name here, so we perform an
   // additional transformation to rename them in case we detect any.
   transformations.clear();
@@ -1188,10 +1189,8 @@ auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
       }
     }
   }
-  TENZIR_ASSERT_EXPENSIVE(
-    std::is_sorted(transformations.begin(), transformations.end()));
   const auto& [sch, arr]
-    = transform_columns(new_schema, transformed, transformations);
+    = transform_columns(new_schema, transformed, std::move(transformations));
   return {sch, arr, renamed_fields};
 }
 
