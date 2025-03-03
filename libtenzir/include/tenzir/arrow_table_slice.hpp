@@ -412,12 +412,13 @@ auto make_struct_array(int64_t length,
 auto make_struct_array(int64_t length,
                        std::shared_ptr<arrow::Buffer> null_bitmap,
                        std::vector<std::string> field_names,
-                       const arrow::ArrayVector& field_arrays)
+                       const arrow::ArrayVector& field_arrays,
+                       const record_type& rt)
   -> std::shared_ptr<arrow::StructArray>;
 auto make_struct_array(
   int64_t length, std::shared_ptr<arrow::Buffer> null_bitmap,
-  std::vector<std::pair<std::string, std::shared_ptr<arrow::Array>>> fields)
-  -> std::shared_ptr<arrow::StructArray>;
+  std::vector<std::pair<std::string, std::shared_ptr<arrow::Array>>> fields,
+  const record_type& rt) -> std::shared_ptr<arrow::StructArray>;
 
 // -- template machinery -------------------------------------------------------
 

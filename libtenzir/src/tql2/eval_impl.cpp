@@ -63,11 +63,15 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
     auto field_types = fields | std::views::transform([](auto& x) {
                          return record_type::field_view{x.first, x.second.type};
                        });
-    auto result = make_struct_array(
-      length_, nullptr, std::vector(field_names.begin(), field_names.end()),
-      std::vector(field_arrays.begin(), field_arrays.end()));
+    auto new_type
+      = type{record_type{std::vector(field_types.begin(), field_types.end())}};
+    auto result
+      = make_struct_array(length_, nullptr,
+                          std::vector(field_names.begin(), field_names.end()),
+                          std::vector(field_arrays.begin(), field_arrays.end()),
+                          as<record_type>(new_type));
     return series{
-      type{record_type{std::vector(field_types.begin(), field_types.end())}},
+      std::move(new_type),
       std::move(result),
     };
   });
