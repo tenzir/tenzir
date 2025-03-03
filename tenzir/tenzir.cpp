@@ -13,6 +13,7 @@
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
@@ -34,6 +35,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <ranges>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
@@ -228,6 +230,7 @@ auto main(int argc, char** argv) -> int {
                                       std::cerr);
     auto provider = session_provider::make(*dh);
     auto ctx = provider.as_session();
+    auto tql2_udos = std::unordered_map<std::string, ast::pipeline>{};
     for (auto&& [name, value] : *r) {
       auto* definition = try_as<std::string>(&value);
       if (!definition) {
@@ -243,23 +246,54 @@ auto main(int argc, char** argv) -> int {
           TENZIR_ERROR("parsing of user-defined operator `{}` failed", name);
           return EXIT_FAILURE;
         }
-        // We already resolve entities here. This means that we can provide
-        // earlier errors, but that it's impossible to form cyclic references.
-        // We do not resolve `let` bindings yet in order to delay their
-        // evaluation in cases such as `let $t = now()`.
-        if (not resolve_entities(*pipe, ctx)) {
-          TENZIR_ERROR("entity resolving in user-defined operator `{}` failed",
-                       name);
-          return EXIT_FAILURE;
-        }
-        global_registry_mut().add(entity_pkg::cfg, name,
-                                  user_defined_operator{std::move(*pipe)});
+        TENZIR_ASSERT(not tql2_udos.contains(name));
+        tql2_udos[name] = std::move(*pipe);
       } else {
         aliases.emplace(std::move(name), *definition);
       }
     }
+    tql::set_operator_aliases(std::move(aliases));
+    // We parse user-defined operators in a loop; if in one iteration not a
+    // single operator resolved, we know that the definition is invalid.
+    // Note that this algorithm has a worst-case complexity of O(n^2), but that
+    // should be a non-issue in practice as the number of UDOs defined is
+    // usually rather small.
+    while (not tql2_udos.empty()) {
+      auto resolved = std::vector<std::string>{};
+      auto unresolved_diags = std::vector<diagnostic>{};
+      for (auto it = tql2_udos.begin(); it != tql2_udos.end(); ++it) {
+        auto resolve_dh = collecting_diagnostic_handler{};
+        auto resolve_provider = session_provider::make(resolve_dh);
+        auto resolve_ctx = resolve_provider.as_session();
+        // We already resolve entities here. This means that we can provide
+        // earlier errors, but that it's impossible to form cyclic references.
+        // We do not resolve `let` bindings yet in order to delay their
+        // evaluation in cases such as `let $t = now()`.
+        if (not resolve_entities(it->second, resolve_ctx)) {
+          std::ranges::move(std::move(resolve_dh).collect(),
+                            std::back_inserter(unresolved_diags));
+          continue;
+        }
+        for (auto diag : std::move(resolve_dh).collect()) {
+          dh->emit(std::move(diag));
+        }
+        resolved.push_back(it->first);
+        global_registry_mut().add(entity_pkg::cfg, it->first,
+                                  user_defined_operator{std::move(it->second)});
+      }
+      if (resolved.empty()) {
+        for (auto& diag : unresolved_diags) {
+          dh->emit(std::move(diag));
+        }
+        TENZIR_ERROR("failed to resolve user-defined operators: `{}`",
+                     fmt::join(tql2_udos | std::ranges::views::keys, "`, `"));
+        return EXIT_FAILURE;
+      }
+      for (const auto& name : std::exchange(resolved, {})) {
+        tql2_udos.erase(name);
+      }
+    }
   }
-  tql::set_operator_aliases(std::move(aliases));
   // Lastly, initialize the actor system context, and execute the given
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
