@@ -20,7 +20,7 @@ The location of the ClickHouse Server.
 
 Defaults to `"localhost:9000"`.
 
-### `user = string ( optional)`
+### `user = string (optional)`
 
 The user to use for authentication.
 
@@ -41,7 +41,7 @@ Defaults to `""`.
 
 Defaults to `"create_append"`.
 
-### `primary = field (optionally required)`
+### `primary = field (optional)`
 
 The primary key to use when creating a table. Required for `mode = "create"` as
 well as for `mode = "create_append"` if the table does not yet exist.

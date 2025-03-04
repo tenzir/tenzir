@@ -18,9 +18,9 @@ TenzirSystemizeTarget(clickhouse-cpp-lib)
 
 TenzirRegisterPlugin(
   TARGET clickhouse
-  ENTRYPOINT builtins/stub.cpp
+  ENTRYPOINT src/plugin.cpp
   SOURCES GLOB src/*.cpp
-  BUILTINS builtins/to_clickhouse.cpp
+  BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
   INCLUDE_DIRECTORIES include
 )
 
