@@ -68,10 +68,7 @@ public:
       client->insert(slice);
       co_yield {};
     }
-  } catch (std::exception& e) {
-    // TODO `TENZIR_ASSERT` currently throws a runtime error, which is caught
-    // here. Once the custom exception type for this is merged, we can
-    // catch&rethrow that instead of reporting it ourselves.
+  } catch (::clickhouse::Error& e) {
     diagnostic::error("unexpected error: {}", e.what())
       .primary(args_.operator_location)
       .emit(ctrl.diagnostics());

@@ -4,7 +4,8 @@ Sends events to a ClickHouse table.
 
 ```tql
 to_clickhouse table=string, [url=string, user=string, password=string,
-                             mode=string, primary=field]
+                             mode=string, primary=field,
+                             tls=bool, cacert=string, certfile=string, keyfile=string]
 ```
 
 ## Description
@@ -45,6 +46,30 @@ Defaults to `"create_append"`.
 
 The primary key to use when creating a table. Required for `mode = "create"` as
 well as for `mode = "create_append"` if the table does not yet exist.
+
+### `tls = bool (optional)`
+
+Enables TLS.
+
+Defaults to `false`.
+
+### `skip_peer_verification = bool (optional)`
+
+Toggles TLS certificate verification.
+
+Defaults to `false`.
+
+### `cacert = string (optional)`
+
+Path to the CA certificate used to verify the server's certificate.
+
+### `certfile = string (optional)`
+
+Path to the client certificate.
+
+### `keyfile = string (optional)`
+
+Path to the key for the client certificate.
 
 ## Types
 
