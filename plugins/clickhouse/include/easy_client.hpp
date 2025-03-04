@@ -25,13 +25,12 @@ public:
   static auto
   make(Arguments args, diagnostic_handler& dh) -> std::unique_ptr<Easy_Client>;
 
-  auto table_exists() -> bool;
-
-  auto get_schema_transformations() -> bool;
-
-  auto create_table(const tenzir::record_type& schema) -> bool;
-
   auto insert(const table_slice& slice) -> bool;
+
+private:
+  auto table_exists() -> bool;
+  auto get_schema_transformations() -> bool;
+  auto create_table(const tenzir::record_type& schema) -> bool;
 
 private:
   ::clickhouse::Client client_;
