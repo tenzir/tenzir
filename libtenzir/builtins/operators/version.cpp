@@ -169,8 +169,11 @@ public:
 class version_exec {
 public:
   explicit version_exec(exec::operator_actor::pointer self,
-                        exec::operator_shutdown_actor operator_shutdown)
-    : self_{self}, operator_shutdown_{std::move(operator_shutdown)} {
+                        exec::operator_shutdown_actor operator_shutdown,
+                        exec::operator_stop_actor operator_stop)
+    : self_{self},
+      operator_shutdown_{std::move(operator_shutdown)},
+      operator_stop_{std::move(operator_stop)} {
   }
 
   auto make_behavior() -> exec::operator_actor::behavior_type {
@@ -184,22 +187,41 @@ public:
               // TODO: Concat keeps order. We just want to inject, so merge?
               .merge(self_->make_observable().just(
                 exec::message<table_slice>{table_slice{}}))
-              .map([this](exec::message<table_slice> message)
-                     -> exec::message<table_slice> {
-                // TODO: This should be sent after we send the table slice...
+              // TODO: This is quite bad.
+              .concat_map([this](exec::message<table_slice> message) {
+                // TODO: This should be sent after we send the table slice?
+                auto out = std::vector<exec::message<table_slice>>{};
                 if (is<table_slice>(message)) {
                   TENZIR_WARN("version completed, notifying executor");
-                  self_->mail(atom::done_v)
-                    .request(operator_shutdown_, caf::infinite)
+                  self_
+                    ->mail(atom::done_v)
+                    // TODO: Timeout.
+                    .request(operator_shutdown_, std::chrono::seconds{1})
                     .then(
                       []() {
-
+                        TENZIR_WARN("shutdown notified");
                       },
                       [](caf::error err) {
                         TENZIR_WARN("ERROR: {}", err);
                       });
+                  out.reserve(2);
+                  out.push_back(std::move(message));
+                  out.emplace_back(exec::exhausted{});
+                  TENZIR_ASSERT(operator_stop_);
+                  self_->mail(atom::stop_v)
+                    .request(operator_stop_, caf::infinite)
+                    .then(
+                      [] {
+                        TENZIR_WARN("stop notified");
+                      },
+                      [](caf::error err) {
+                        TENZIR_WARN("ERROR: {}", err);
+                      });
+                } else {
+                  out.reserve(1);
+                  out.push_back(std::move(message));
                 }
-                return message;
+                return self_->make_observable().from_container(std::move(out));
               })
               .do_on_complete([] {
                 TENZIR_WARN("version stream terminated");
@@ -208,7 +230,8 @@ public:
         return {std::move(out)};
       },
       [](exec::checkpoint) -> caf::result<void> {
-        TENZIR_TODO();
+        // no post-commit logic here
+        return {};
       },
       [](atom::stop) -> caf::result<void> {
         TENZIR_TODO();
@@ -219,6 +242,7 @@ public:
 private:
   exec::operator_actor::pointer self_;
   exec::operator_shutdown_actor operator_shutdown_;
+  exec::operator_stop_actor operator_stop_;
 };
 
 class version_bp final : public bp::operator_base {
@@ -231,7 +255,7 @@ public:
 
   auto spawn(spawn_args args) const -> exec::operator_actor override {
     return args.sys.spawn(caf::actor_from_state<version_exec>,
-                          args.operator_shutdown);
+                          args.operator_shutdown, args.operator_stop);
   }
 
   friend auto inspect(auto& f, version_bp& x) -> bool {

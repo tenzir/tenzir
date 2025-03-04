@@ -103,6 +103,7 @@ public:
               diagnostic::warning("wow, we got so many events").emit(ctx_);
               // The first time we reach this, we also emit `exhausted`.
               output.emplace_back(exec::exhausted{});
+              // And we also signal the previous operator that we are done.
             }
             return self_->make_observable()
               .from_container(std::move(output))
@@ -211,6 +212,8 @@ private:
 
 class head_ir final : public ir::operator_base {
 public:
+  head_ir() = default;
+
   explicit head_ir(ast::expression count) : count_{std::move(count)} {
   }
 
@@ -235,8 +238,19 @@ public:
     return {};
   }
 
+  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<operator_type2>> override {
+    // TODO!
+    TENZIR_ASSERT(input.is<table_slice>());
+    return operator_type2{tag_v<table_slice>};
+  }
+
   auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
     return std::make_unique<head_bp>(as<int64_t>(count_));
+  }
+
+  friend auto inspect(auto& f, head_ir& x) -> bool {
+    return f.apply(x.count_);
   }
 
 private:
@@ -283,3 +297,5 @@ public:
 } // namespace tenzir::plugins::head
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::head::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::inspection_plugin<tenzir::ir::operator_base,
+                                                 tenzir::plugins::head::head_ir>)

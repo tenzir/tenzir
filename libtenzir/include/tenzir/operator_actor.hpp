@@ -96,6 +96,10 @@ struct operator_actor_traits {
     auto(atom::stop)->caf::result<void>>;
 };
 
+/// Handler for when an operator declares that it doesn't need any more input.
+using operator_stop_actor
+  = caf::typed_actor<auto(atom::stop)->caf::result<void>>;
+
 using operator_actor = caf::typed_actor<operator_actor_traits>;
 
 // TODO: is this the rollback manager?

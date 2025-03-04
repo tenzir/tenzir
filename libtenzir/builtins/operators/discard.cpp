@@ -78,8 +78,11 @@ struct serializable_actor {
 class discard_exec : public serializable_actor<discard_exec> {
 public:
   explicit discard_exec(exec::operator_actor::pointer self,
-                        exec::checkpoint_receiver_actor checkpoint_receiver)
-    : self_{self}, checkpoint_receiver_{std::move(checkpoint_receiver)} {
+                        exec::checkpoint_receiver_actor checkpoint_receiver,
+                        exec::operator_shutdown_actor operator_shutdown)
+    : self_{self},
+      checkpoint_receiver_{std::move(checkpoint_receiver)},
+      operator_shutdown_{std::move(operator_shutdown)} {
     // TODO: Does this make sense?
     deserialize(chunk_ptr{});
   }
@@ -90,24 +93,42 @@ public:
         auto out
           = self_->observe(as<exec::stream<table_slice>>(hs.input), 30, 10)
               .concat_map([this](exec::message<table_slice> msg)
-                            -> caf::flow::observable<exec::message<void>> {
-                if (auto checkpoint = try_as<exec::checkpoint>(msg)) {
-                  TENZIR_WARN("got checkpoint");
-                  return self_->mail(*checkpoint, serialize())
-                    .request(checkpoint_receiver_, caf::infinite)
-                    .as_observable()
-                    .map([checkpoint = *checkpoint](caf::unit_t) {
-                      // precommit
-                      TENZIR_WARN("discard pre-commit");
-                      return exec::message<void>{checkpoint};
-                    })
-                    .as_observable();
-                }
+                            -> exec::observable<void> {
+                return match(
+                  msg,
+                  [&](exec::checkpoint checkpoint) -> exec::observable<void> {
+                    TENZIR_WARN("got checkpoint");
+                    return self_->mail(checkpoint, serialize())
+                      .request(checkpoint_receiver_, caf::infinite)
+                      .as_observable()
+                      .map([checkpoint](caf::unit_t) {
+                        // precommit
+                        TENZIR_WARN("pre-commit done");
+                        return exec::message<void>{checkpoint};
+                      })
+                      .as_observable();
+                  },
+                  [&](exec::exhausted exhausted) -> exec::observable<void> {
+                    TENZIR_WARN("got exhausted");
+                    self_->mail(atom::done_v)
+                      .request(operator_shutdown_, caf::infinite)
+                      .then(
+                        []() {
 
-                TENZIR_WARN("discard got table slice");
-                return self_->make_observable()
-                  .empty<exec::message<void>>()
-                  .as_observable();
+                        },
+                        [](caf::error err) {
+                          TENZIR_WARN("ERROR: {}", err);
+                        });
+                    return self_->make_observable()
+                      .empty<exec::message<void>>()
+                      .as_observable();
+                  },
+                  [&](table_slice slice) -> exec::observable<void> {
+                    TENZIR_WARN("discard got table slice");
+                    return self_->make_observable()
+                      .empty<exec::message<void>>()
+                      .as_observable();
+                  });
               })
               .do_on_complete([] {
                 TENZIR_WARN("discard completed");
@@ -135,6 +156,7 @@ public:
 private:
   exec::operator_actor::pointer self_;
   exec::checkpoint_receiver_actor checkpoint_receiver_;
+  exec::operator_shutdown_actor operator_shutdown_;
 };
 
 class discard_bp final : public bp::operator_base {
@@ -147,7 +169,8 @@ public:
 
   auto spawn(spawn_args args) const -> exec::operator_actor override {
     return args.sys.spawn(caf::actor_from_state<discard_exec>,
-                          std::move(args.checkpoint_receiver));
+                          std::move(args.checkpoint_receiver),
+                          std::move(args.operator_shutdown));
   }
 
   friend auto inspect(auto& f, discard_bp& x) -> bool {

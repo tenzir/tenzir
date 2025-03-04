@@ -54,8 +54,7 @@ public:
         auto group_bp = make_group(value).unwrap();
         // TODO
         auto new_group = group_t{
-          ctx_.system().spawn(caf::actor_from_state<exec::pipeline>,
-                              std::move(group_bp), std::nullopt, ctx_),
+          exec::make_pipeline(std::move(group_bp), std::nullopt, ctx_),
         };
         auto [new_it, inserted]
           = groups_.try_emplace(std::move(value), std::move(new_group));

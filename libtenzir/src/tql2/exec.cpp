@@ -397,10 +397,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return false;
   }
   // Start the actual execution.
-  auto exec = b_ctx.system().spawn(caf::actor_from_state<exec::pipeline>,
-                                   std::move(finalized), std::nullopt,
-                                   // TODO
-                                   b_ctx);
+  auto exec = exec::make_pipeline(std::move(finalized), std::nullopt, b_ctx);
   return run_pipeline(std::move(exec), b_ctx).is_success();
 }
 
@@ -412,10 +409,9 @@ auto exec_restore(std::span<const std::byte> bp_chunk,
   auto pipe_bp = bp::pipeline{};
   auto ok = f.apply(pipe_bp);
   TENZIR_ASSERT(ok);
-  auto pipe
-    = ctx.system().spawn(caf::actor_from_state<exec::pipeline>,
-                         std::move(pipe_bp), std::move(checkpoint_reader), ctx);
-  return run_pipeline(std::move(pipe), ctx);
+  auto exec = exec::make_pipeline(std::move(pipe_bp),
+                                  std::move(checkpoint_reader), ctx);
+  return run_pipeline(std::move(exec), ctx);
 }
 
 } // namespace
