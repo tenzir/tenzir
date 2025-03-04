@@ -333,13 +333,13 @@ TEST(data) {
   data c{uint64_t{23}};
   CHECK_TO_STRING(c, "23");
   data i{int64_t{42}};
-  CHECK_TO_STRING(i, "+42");
+  CHECK_TO_STRING(i, "42");
   data s{std::string{"foobar"}};
   CHECK_TO_STRING(s, "\"foobar\"");
   data d{duration{512}};
   CHECK_TO_STRING(d, "512ns");
   data v{list{r, b, c, i, s, d}};
-  CHECK_TO_STRING(v, "[12.21, true, 23, +42, \"foobar\", 512ns]");
+  CHECK_TO_STRING(v, "[12.21, true, 23, 42, \"foobar\", 512ns]");
 }
 
 // -- std::chrono types -------------------------------------------------------
