@@ -342,8 +342,6 @@ RUN apt-get update && \
     rm -rf /tmp/custom-packages && \
     rm -rf /var/lib/apt/lists/*
 
-USER tenzir:tenzir
-
 WORKDIR /var/lib/tenzir
 VOLUME ["/var/cache/tenzir", "/var/lib/tenzir"]
 
@@ -507,8 +505,6 @@ RUN if [ "$(uname -m)" = "x86_64" ]; then \
     fi
 
 COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
-
-USER tenzir:tenzir
 
 FROM tenzir-ce-${TARGETARCH} AS tenzir-ce
 
