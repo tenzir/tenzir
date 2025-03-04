@@ -85,7 +85,6 @@ unpack_config_list_to_vector(const caf::config_value& cfg_value) {
     }
     ret.push_back(*val);
   }
-
   return ret;
 }
 

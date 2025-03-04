@@ -39,13 +39,12 @@ struct is_same_signedness
 
 /// A checked cast that panics if the cast changed the value.
 template <class T, class U>
-auto narrow(U y, std::source_location source = std::source_location::current())
-  -> T {
+auto narrow(U y, std::source_location location
+                 = std::source_location::current()) -> T {
   T x = narrow_cast<T>(y);
   if (static_cast<U>(x) != y
       && (is_same_signedness<T, U>::value || (x < T{}) != (y < U{}))) {
-    detail::panic_impl(
-      fmt::format("cannot narrow {} to {}", y, typeid(T).name()), source);
+    panic_at(location, "cannot narrow {} to {}", y, typeid(T).name());
   }
   return x;
 }

@@ -24,7 +24,7 @@ inline void
 check(const arrow::Status& status, std::source_location location
                                    = std::source_location::current()) {
   if (not status.ok()) [[unlikely]] {
-    detail::panic_impl(status.ToString(), location);
+    panic_at(location, "{}", status.ToString());
   }
 }
 

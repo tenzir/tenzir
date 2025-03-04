@@ -19,7 +19,7 @@ template <class T>
 check(simdjson::simdjson_result<T> result,
       std::source_location location = std::source_location::current()) -> T {
   if (result.error() != simdjson::error_code::SUCCESS) [[unlikely]] {
-    detail::panic_impl(simdjson::error_message(result.error()), location);
+    panic_at(location, "{}", simdjson::error_message(result.error()));
   }
   return std::move(result).value_unsafe();
 }

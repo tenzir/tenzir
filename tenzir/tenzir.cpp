@@ -40,7 +40,19 @@
 #include <thread>
 #include <unordered_map>
 
-auto main(int argc, char** argv) -> int {
+namespace {
+
+auto is_server_from_app_path(std::string_view app_path) {
+  const auto last_slash = app_path.find_last_of('/');
+  const auto app_name = last_slash == std::string_view::npos
+                          ? app_path
+                          : app_path.substr(last_slash + 1);
+  return app_name == "tenzir-node";
+}
+
+} // namespace
+
+auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
   // Set a signal handler for fatal conditions. Prints a backtrace if support
   // for that is enabled.
@@ -95,12 +107,7 @@ auto main(int argc, char** argv) -> int {
   detail::merge_settings(invocation->options, cfg.content,
                          policy::merge_lists::yes);
   // Tweak CAF parameters in case we're running a client command.
-  const auto app_path = std::string_view{argv[0]};
-  const auto last_slash = app_path.find_last_of('/');
-  const auto app_name = last_slash == std::string_view::npos
-                          ? app_path
-                          : app_path.substr(last_slash + 1);
-  bool is_server = (app_name == "tenzir-node");
+  const auto is_server = is_server_from_app_path(argv[0]);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
   if (!log_context) {
@@ -125,7 +132,7 @@ auto main(int argc, char** argv) -> int {
     }
   }
 #if TENZIR_POSIX
-  struct rlimit rlimit{};
+  struct rlimit rlimit {};
   if (::getrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
     TENZIR_ERROR("failed to get RLIMIT_NOFILE: {}", detail::describe_errno());
     return -errno;
@@ -341,4 +348,24 @@ auto main(int argc, char** argv) -> int {
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
+} catch (tenzir::panic_exception& e) {
+  auto diagnostic = to_diagnostic(e);
+  const auto is_server = is_server_from_app_path(argv[0]);
+  if (not is_server) {
+    auto dh = make_diagnostic_printer(
+      std::nullopt, tenzir::color_diagnostics::yes, std::cerr);
+    dh->emit(std::move(diagnostic));
+  } else {
+    auto buffer = std::stringstream{};
+    buffer << "internal error\n";
+    auto printer = make_diagnostic_printer(
+      std::nullopt, tenzir::color_diagnostics::no, buffer);
+    printer->emit(diagnostic);
+    auto string = std::move(buffer).str();
+    if (not string.empty() and string.back() == '\n') {
+      string.pop_back();
+    }
+    TENZIR_ERROR(string);
+  }
+  return EXIT_FAILURE;
 }
