@@ -1,2 +1,2 @@
-We have reworked how internal errors are presented to the user,
-enabling much better bug reporting and resolution.
+We have improved how internal errors are presented to the user, making it easier
+to report and analyze bugs.

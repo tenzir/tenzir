@@ -143,8 +143,7 @@ inline auto split_at_null(generator<chunk_ptr> input)
   }
 }
 
-static auto
-truncate(std::string_view text, const size_t N = 50) -> std::string {
+auto truncate(std::string_view text, const size_t N = 50) -> std::string {
   return std::string{text.substr(0, N)}
          + (text.size() > N ? " ... (truncated)" : "");
 }
@@ -558,7 +557,7 @@ public:
           }
           abort_requested = true;
           diagnostic::error("{}", error_message(err))
-            .note("skips invalid JSON '{}'", view)
+            .note("skips invalid JSON '{}'", truncate(view))
             .emit(*dh);
           return;
         }
@@ -649,7 +648,7 @@ private:
     if (truncated_bytes > buffer_.view().size()) {
       abort_requested = true;
       diagnostic::error("detected malformed JSON")
-        .note("in input '{}'", buffer_.view())
+        .note("in input '{}'", truncate(buffer_.view()))
         .emit(*dh);
       return;
     }

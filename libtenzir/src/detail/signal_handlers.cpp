@@ -10,14 +10,12 @@
 
 #include "tenzir/config.hpp"
 #include "tenzir/detail/backtrace.hpp"
-#include "tenzir/diagnostics.hpp"
 
 #include <boost/stacktrace/stacktrace.hpp>
 
 #include <csignal>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <string.h>
 #include <unistd.h>
 
 extern "C" void fatal_handler(int sig) {

@@ -12,6 +12,6 @@
 
 namespace tenzir::detail {
 
-auto format_frame(const boost::stacktrace::frame&) -> std::string;
+auto format_frame(const boost::stacktrace::frame& frame) -> std::string;
 
 } // namespace tenzir::detail

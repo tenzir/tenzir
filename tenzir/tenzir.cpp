@@ -41,6 +41,7 @@
 #include <unordered_map>
 
 namespace {
+
 auto is_server_from_app_path(std::string_view app_path) {
   const auto last_slash = app_path.find_last_of('/');
   const auto app_name = last_slash == std::string_view::npos
@@ -48,6 +49,7 @@ auto is_server_from_app_path(std::string_view app_path) {
                           : app_path.substr(last_slash + 1);
   return app_name == "tenzir-node";
 }
+
 } // namespace
 
 auto main(int argc, char** argv) -> int try {
@@ -355,7 +357,7 @@ auto main(int argc, char** argv) -> int try {
     dh->emit(std::move(diagnostic));
   } else {
     auto buffer = std::stringstream{};
-    buffer << "panic in execution node\n";
+    buffer << "internal error\n";
     auto printer = make_diagnostic_printer(
       std::nullopt, tenzir::color_diagnostics::no, buffer);
     printer->emit(diagnostic);

@@ -11,29 +11,33 @@
 #include "tenzir/panic.hpp"
 
 namespace tenzir::detail {
+
 template <typename... Ts>
   requires(sizeof...(Ts) > 0)
 [[noreturn]] TENZIR_NO_INLINE void
 assertion_failure(const char* cond, std::source_location location,
                   fmt::format_string<Ts...> string, Ts&&... args) {
   TENZIR_UNUSED(cond);
-  auto message = std::string{"assertion failed:"};
+  auto message = std::string{"assertion failed: "};
   fmt::format_to(std::back_inserter(message), string,
                  std::forward<Ts>(args)...);
-  ::tenzir::panic<1>(std::move(message), location);
+  panic<1>(std::move(message), location);
 }
 
 template <typename T>
 [[noreturn]] TENZIR_NO_INLINE void
-assertion_failure(const char* cond, std::source_location location, T&& string) {
+assertion_failure(const char* cond, std::source_location location, T&& x) {
   TENZIR_UNUSED(cond);
-  ::tenzir::panic<1>(std::forward<T>(string), location);
+  auto message = std::string{"assertion failed: "};
+  fmt::format_to(std::back_inserter(message), "{}", std::forward<T>(x));
+  panic<1>(std::move(message), location);
 }
 
 [[noreturn]] TENZIR_NO_INLINE inline void
 assertion_failure(const char* cond, std::source_location location) {
-  ::tenzir::panic<1>(fmt::format("assertion `{}` failed", cond), location);
+  panic<1>(fmt::format("assertion `{}` failed", cond), location);
 }
+
 } // namespace tenzir::detail
 
 #define TENZIR_ASSERT_ALWAYS(expr, ...)                                        \
