@@ -84,7 +84,7 @@ translation from Tenzir's types to ClickHouse:
 | `double` | `Float64` | |
 | `ip` | `IPv6` | |
 | `subnet` | `Tuple(ip IPv6, length UInt8)` | |
-| `time` | `DateTime64(8)` | |
+| `time` | `DateTime64(9)` | |
 | `duration` | `Int64` | Converted as `nanoseconds(duration)` |
 | `record` | `Tuple(...)` | Fields in the tuple will be named with the field name |
 | `list<T>` | `Array(T)` | |

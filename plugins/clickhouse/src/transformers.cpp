@@ -165,13 +165,13 @@ auto value_transform(auto v) {
   return v;
 }
 
-auto value_transform(tenzir::time v) {
+auto value_transform(tenzir::time v) -> int64_t {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(
            v.time_since_epoch())
     .count();
 }
 
-auto value_transform(tenzir::duration v) {
+auto value_transform(tenzir::duration v) -> int64_t {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(v).count();
 }
 
@@ -228,7 +228,7 @@ X(ip_type, ColumnIPv6, "IPv6");
 
 template <>
 struct tenzir_to_clickhouse_trait<time_type> {
-  constexpr static std::string_view name = "DateTime64(8)";
+  constexpr static std::string_view name = "DateTime64(9)";
   using column_type = ColumnDateTime64;
 
   constexpr static auto null_value = std::nullopt;
@@ -244,7 +244,7 @@ struct tenzir_to_clickhouse_trait<time_type> {
   static auto allocate(size_t n) {
     using Column_Type
       = std::conditional_t<nullable, ColumnNullableT<column_type>, column_type>;
-    auto res = std::make_shared<Column_Type>(8);
+    auto res = std::make_shared<Column_Type>(9);
     res->Reserve(n);
     return res;
   }
