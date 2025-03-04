@@ -137,6 +137,8 @@ export def run [
   #  git-tag: string
   #>
 ] {
+  # Update the tenzir-plugins submodule source info.
+  nix/update-plugins.sh
   # Run local effects by building all requested editions.
   if ($cfg.git-tag? != null) {
     $env.extra_options = "--override-input isReleaseBuild github:boolean-option/true"
