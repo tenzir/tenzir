@@ -3,19 +3,19 @@ on:
   workflow_dispatch:
     inputs:
       path:
-        description: 'Must match the path value passed to actions/cache/save'
+        description: "Must match the path value passed to actions/cache/save"
         type: string
         required: true
         default: /tmp/ccache
       key:
-        description: 'Must match the key value passed to actions/cache/save'
+        description: "Must match the key value passed to actions/cache/save"
         type: string
         required: true
 
 jobs:
   upload:
     name: Copy Cache Entry to GCS
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Fetch Cache Entry
         uses: actions/cache/restore@v4
