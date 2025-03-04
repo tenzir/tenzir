@@ -221,10 +221,9 @@ auto package_input::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(type)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
     TRY_CONVERT_TO_STRING(default, default_);
-    return diagnostic::error("unknown key '{}'", key)
-      .note("while trying to parse 'input'")
-      .note("invalid package source definition")
-      .to_error();
+    TENZIR_WARN("ignoring unknown key `{}` in `input` entry in package "
+                "definition",
+                key);
   }
   REQUIRED_FIELD(name);
   return result;
@@ -237,10 +236,9 @@ auto package_source::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(repository)
     TRY_ASSIGN_STRING_TO_RESULT(directory)
     TRY_ASSIGN_STRING_TO_RESULT(revision)
-    return diagnostic::error("unknown key '{}'", key)
-      .note("while trying to parse 'source' entry")
-      .note("invalid package source definition")
-      .to_error();
+    TENZIR_WARN("ignoring unknown key `{}` in `source` entry in package "
+                "definition",
+                key);
   }
   REQUIRED_FIELD(repository)
   REQUIRED_FIELD(directory)
@@ -257,10 +255,9 @@ auto package_config::parse(const view<record>& data)
     TRY_ASSIGN_STRINGMAP_CONVERSION_TO_RESULT(inputs);
     TRY_ASSIGN_RECORD_TO_RESULT(overrides);
     TRY_ASSIGN_RECORD_TO_RESULT(metadata);
-    return diagnostic::error("unknown key '{}'", key)
-      .note("while trying to parse 'config' entry")
-      .note("invalid package definition")
-      .to_error();
+    TENZIR_WARN("ignoring unknown key `{}` in `config` entry in package "
+                "definition",
+                key);
   }
   return result;
 }
@@ -296,13 +293,13 @@ auto package_pipeline::parse(const view<record>& data)
         return diagnostic::error("`restart-on-error` must be a "
                                  "be a "
                                  "bool or a positive duration")
-          .note("got '{}'", value)
+          .note("got `{}`", value)
           .to_error();
       }
       if (on_off) {
         result.restart_on_error
           = *on_off ? std::optional<
-              duration>{defaults::packaged_pipeline_restart_on_error}
+                        duration>{defaults::packaged_pipeline_restart_on_error}
                     : std::optional<duration>{std::nullopt};
         continue;
       }
@@ -314,15 +311,14 @@ auto package_pipeline::parse(const view<record>& data)
       result.restart_on_error = *retry_delay;
       continue;
     }
-    // Hack: Ignore the 'labels' key so we can reuse this function to
+    // Hack: Ignore the `labels` key so we can reuse this function to
     // parse configured pipelines as well.
     if (key == "labels") {
       continue;
     }
-    return diagnostic::error("unknown key '{}'", key)
-      .note("while trying to parse 'pipeline' entry")
-      .note("invalid package source definition")
-      .to_error();
+    TENZIR_WARN("ignoring unknown key `{}` in `pipeline` entry in package "
+                "definition",
+                key);
   }
   REQUIRED_FIELD(definition)
   return result;
@@ -355,7 +351,7 @@ auto package_example::parse(const view<record>& data)
 
 auto package::parse(const view<record>& data) -> caf::expected<package> {
   auto result = package{};
-  // Briefly support both 'snippets' and 'examples' to enable a smooth transition
+  // Briefly support both `snippets` and `examples` to enable a smooth transition
   auto legacy_snippets = std::vector<package_example>{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(id);
@@ -370,11 +366,9 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_STRUCTURE_TO_RESULT(config, package_config);
     TRY_ASSIGN_LIST_TO_RESULT(examples, package_example);
     TRY_ASSIGN_LIST(snippets, package_example, legacy_snippets);
-    // Reject unknown keys in the package definition.
-    return diagnostic::error("unknown key '{}'", key)
-      .note("while trying to parse 'package' entry")
-      .note("invalid package definition")
-      .to_error();
+    TENZIR_WARN("ignoring unknown key `{}` in `package` entry in package "
+                "definition",
+                key);
   }
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
