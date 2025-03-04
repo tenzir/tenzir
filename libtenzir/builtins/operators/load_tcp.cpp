@@ -212,6 +212,10 @@ public:
     auto connection_manager = connection_manager_.lock();
     TENZIR_ASSERT(connection_manager);
     for (auto&& elements : input) {
+      if (size(elements) == 0) {
+        co_yield {};
+        continue;
+      }
       ctrl.set_waiting(true);
       ctrl.self()
         .mail(atom::write_v, std::move(elements))
@@ -692,9 +696,11 @@ struct connection_manager_state {
   }
 
   auto write_elements(Elements elements) -> caf::result<void> {
+    TENZIR_ASSERT(size(elements) > 0);
     if (read_rp.pending()) {
       TENZIR_ASSERT(buffer.empty());
       read_rp.deliver(std::move(elements));
+      return {};
     }
     buffer.push(std::move(elements));
     if (buffer.size() < max_buffered_batches) {
@@ -707,6 +713,7 @@ struct connection_manager_state {
     TENZIR_ASSERT(not read_rp.pending());
     if (not buffer.empty()) {
       auto elements = std::move(buffer.front());
+      TENZIR_ASSERT(size(elements) > 0);
       buffer.pop();
       if (buffer.size() < max_buffered_batches) {
         // Unblock all connections as soon as at least one free slot in the
@@ -813,6 +820,7 @@ public:
         .request(connection_manager_actor.get(), caf::infinite)
         .then(
           [&](Elements& elements) {
+            TENZIR_ASSERT(size(elements) > 0);
             ctrl.set_waiting(false);
             result = std::move(elements);
           },

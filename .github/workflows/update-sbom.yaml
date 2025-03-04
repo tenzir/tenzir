@@ -1,6 +1,5 @@
 name: Update SBOM
-on:
-  workflow_dispatch
+on: workflow_dispatch
 
 permissions:
   pull-requests: write
@@ -8,7 +7,7 @@ permissions:
 jobs:
   sbom:
     name: Generate SBOM
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Install Nix
         uses: cachix/install-nix-action@v30
@@ -26,8 +25,7 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: true
       - name: Regenerate SBOM
-        run:
-          nix run .#generate-sbom
+        run: nix run .#generate-sbom
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:

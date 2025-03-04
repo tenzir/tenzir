@@ -16,7 +16,7 @@ concurrency:
 jobs:
   code-coverage:
     name: Code Coverage
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container: debian:bookworm-20230227-slim
     strategy:
       fail-fast: false

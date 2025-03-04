@@ -57,7 +57,7 @@ permissions:
 jobs:
   configure:
     name: Configure
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     outputs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
@@ -321,7 +321,7 @@ jobs:
     needs:
       - configure
     if: github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -377,7 +377,7 @@ jobs:
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-changelog == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container: debian:bookworm-slim
     steps:
       - name: Install git
@@ -410,7 +410,7 @@ jobs:
       - changelog
     if: ${{ needs.configure.outputs.run-docs == 'true' }}
     name: Documentation
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -462,7 +462,7 @@ jobs:
       - configure
     if: needs.configure.outputs.run-docker-tenzir == 'true'
     name: OpenAPI Spec
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       DOCKER_BUILDKIT: 1
     steps:
@@ -498,7 +498,7 @@ jobs:
       matrix:
         regression-tests: ${{ fromJson(needs.configure.outputs.version-matrix) }}
     name: Regression Tests (${{ matrix.regression-tests.version }})
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       DOCKER_BUILDKIT: 1
     steps:
@@ -784,7 +784,7 @@ jobs:
       - configure
     if: ${{ needs.configure.outputs.run-python-package == 'true' }}
     name: Python Package
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
