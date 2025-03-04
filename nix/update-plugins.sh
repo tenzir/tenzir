@@ -1,39 +1,51 @@
 #!/usr/bin/env bash
 
+: "${GH_TOKEN:=$GITHUB_TOKEN}"
+
+if [[ -z "${GH_TOKEN}" ]]; then
+  echo "Either GH_TOKEN or GITHUB_TOKEN is required"
+  exit 1
+fi
+
 set -euo pipefail
+
+declare -a on_exit=()
+trap '{
+  for (( i = 0; i < ${#on_exit[@]}; i++ )); do
+    eval "${on_exit[$i]}"
+  done
+}' INT TERM EXIT
 
 dir=$(dirname "$(readlink -f "$0")")
 toplevel=$(git -C "${dir}" rev-parse --show-toplevel)
+
+name="tenzir-plugins.tar.gz"
+url_base="https://github.com/tenzir/tenzir-plugins/archive"
 
 get-submodule-rev() {
   local _submodule="$1"
   git -C "${toplevel}" submodule status -- "${_submodule}" | cut -c2- | cut -d' ' -f 1
 }
 
+NETRC_DIR="$(mktemp -d)"
+on_exit=("rm -rf ${NETRC_DIR}" "${on_exit[@]}")
+
+cat <<EOF > "$NETRC_DIR/netrc"
+machine github.com
+    password $GH_TOKEN
+EOF
+
+
 echo "Updating contrib/tenzir-plugins"
 tenzir_plugins_rev="$(get-submodule-rev "${toplevel}/contrib/tenzir-plugins")"
-tenzir_plugins_json="$(jq --arg rev "${tenzir_plugins_rev#rev}" \
-  '."rev" = $rev' "${dir}/tenzir/plugins/source.json")"
 
-if git -C "${toplevel}/contrib/tenzir-plugins" merge-base --is-ancestor \
-  "$(git -C "${toplevel}/contrib/tenzir-plugins" rev-parse HEAD)" \
-  "$(git -C "${toplevel}/contrib/tenzir-plugins" rev-parse origin/main)"; then
-  # Remove 'allRefs = true' in case it was there before.
-  tenzir_plugins_json="$(jq 'del(.allRefs)' <<< "$tenzir_plugins_json")"
-else
-  # Insert 'allRefs = true' so Nix will find the rev that is not on the main
-  # branch.
-  tenzir_plugins_json="$(jq '."allRefs" = true' <<< "$tenzir_plugins_json")"
-fi
-
-echo -E "${tenzir_plugins_json}" > "${dir}/tenzir/plugins/source.json"
-
-echo "Extracting plugin versions..."
-{
-  printf "[\n"
-  for cm in "${toplevel}"/contrib/tenzir-plugins/*/CMakeLists.txt; do
-    plugin="$(basename "$(dirname "$cm")")"
-    echo "  \"$plugin\""
-  done
-  printf "]\n"
-} > "${dir}/tenzir/plugins/names.nix"
+nix store prefetch-file \
+  --name "${name}" \
+  --json \
+  --netrc-file "$NETRC_DIR/netrc" \
+  "${url_base}/${tenzir_plugins_rev}.tar.gz" \
+  | jq \
+    --arg url "${url_base}/${tenzir_plugins_rev}.tar.gz" \
+    --arg name "${name}" \
+    '.name = $name | .url = $url | del(.storePath)' \
+  > "${dir}/tenzir/plugins/source.json"
