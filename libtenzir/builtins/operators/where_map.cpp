@@ -729,7 +729,7 @@ private:
         auto response = exec::handshake_response{};
         response.output
           = impl(self_->observe(std::move(input), 30, 10))
-              .to_typed_stream("where-stream", duration::zero(), 1);
+              .to_typed_stream("where-stream", std::chrono::milliseconds{1}, 1);
         return response;
       });
   }

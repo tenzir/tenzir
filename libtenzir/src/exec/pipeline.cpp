@@ -71,9 +71,6 @@ public:
   }
 
   auto make_behavior() -> pipeline_executor_actor::behavior_type {
-    detail::weak_run_delayed_loop(self_, std::chrono::seconds{1}, [] {
-      TENZIR_WARN(".");
-    });
     return {
       [this](atom::start) -> caf::result<void> {
         return start();
@@ -309,19 +306,19 @@ private:
         std::move(p), self_, caf::make_action([] {}), caf::make_action([] {}));
       TENZIR_ASSERT(producer);
       producer_ = std::move(*producer);
-      // TODO: This doesn't work in debug mode. Looks like we need a producer
-      // object to be set. This might also address the backpressure question.
-      // p2->set_producer(/*TODO*/);
       TENZIR_WARN("beginning checkpoint stream");
-      detail::weak_run_delayed_loop(self_, std::chrono::seconds{5}, [this] {
-        // TODO: How does this interact with
-        // backpressure? Do we even get
-        // backpressure here?
-        // TODO: Shutdown?
-        producer_.push(checkpoint{});
-      });
-      auto initial
-        = c.observe_on(self_).to_typed_stream("initial", duration::zero(), 1);
+      detail::weak_run_delayed_loop(
+        self_, std::chrono::seconds{5},
+        [this] {
+          // TODO: How does this interact with
+          // backpressure? Do we even get
+          // backpressure here?
+          // TODO: Shutdown?
+          producer_.push(checkpoint{});
+        },
+        false);
+      auto initial = c.observe_on(self_).to_typed_stream(
+        "initial", std::chrono::milliseconds{1}, 1);
       continue_start(handshake{std::move(initial)}, 0,
                      [this, rp](caf::expected<handshake_response> hr) mutable {
                        finish_start(std::move(hr), std::move(rp));

@@ -133,7 +133,7 @@ public:
               .do_on_complete([] {
                 TENZIR_WARN("discard completed");
               })
-              .to_typed_stream("discard-exec", duration::zero(), 1);
+              .to_typed_stream("discard-exec", std::chrono::milliseconds{1}, 1);
         return {std::move(out)};
       },
       // post-commit

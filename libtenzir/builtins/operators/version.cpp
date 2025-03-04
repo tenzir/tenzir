@@ -178,13 +178,6 @@ public:
   }
 
   auto make_behavior() -> exec::operator_actor::behavior_type {
-    caf::detail::set_thread_name("version");
-    self_->attach_functor([] {
-      TENZIR_ERROR("yo");
-    });
-    detail::weak_run_delayed_loop(self_, std::chrono::seconds{1}, [] {
-      TENZIR_WARN("!");
-    });
     return {
       [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
         auto out
@@ -234,7 +227,7 @@ public:
               .do_on_complete([] {
                 TENZIR_WARN("version stream terminated");
               })
-              .to_typed_stream("version-exec", duration::zero(), 1);
+              .to_typed_stream("version-exec", std::chrono::milliseconds{1}, 1);
         return {std::move(out)};
       },
       [](exec::checkpoint) -> caf::result<void> {

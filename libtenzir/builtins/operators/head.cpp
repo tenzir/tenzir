@@ -72,7 +72,8 @@ public:
       },
       [&](exec::stream<table_slice> s) {
         auto output = run(self_->observe(std::move(s), 10, 30))
-                        .to_typed_stream("output-stream", duration::zero(), 1);
+                        .to_typed_stream("output-stream",
+                                         std::chrono::milliseconds{1}, 1);
         return exec::handshake_response{std::move(output)};
       });
   }
