@@ -386,18 +386,15 @@ struct connection_manager_state {
         {
           auto lock = std::unique_lock{connection->mutex};
           if (connection->rp.pending()) {
-            caf::anon_mail(caf::make_action(
-                             [self, connection, ec, chunk = std::move(chunk),
-                              diagnostics = std::move(diagnostics)]() mutable {
-                               auto lock = std::unique_lock{connection->mutex};
-                               TENZIR_ASSERT(connection->rp.pending());
-                               connection->rp.deliver(std::move(chunk));
-                               if (not ec) {
-                                 connection->async_read(self,
-                                                        std::move(diagnostics));
-                               }
-                             }))
-              .send(caf::actor_cast<caf::actor>(self));
+            self->schedule_fn([self, connection, ec, chunk = std::move(chunk),
+                               diagnostics = std::move(diagnostics)]() mutable {
+              auto lock = std::unique_lock{connection->mutex};
+              TENZIR_ASSERT(connection->rp.pending());
+              connection->rp.deliver(std::move(chunk));
+              if (not ec) {
+                connection->async_read(self, std::move(diagnostics));
+              }
+            });
             TENZIR_ASSERT(connection->chunks.empty());
             return;
           }
@@ -646,25 +643,23 @@ struct connection_manager_state {
   }
 
   auto async_accept() -> void {
-    acceptor->async_accept(
-      [this, handle = caf::actor_cast<caf::actor>(self)](
-        boost::system::error_code ec, boost::asio::ip::tcp::socket socket) {
-        auto action = [this, ec, socket = std::move(socket)]() mutable {
-          // Always start accepting the next connection.
-          async_accept();
-          // If there's an error accepting connections, then we just warn about
-          // it but continue to accept new ones.
-          if (ec) {
-            diagnostic::warning("{}", ec.message())
-              .note("failed to accept connection")
-              .primary(args.endpoint.source)
-              .emit(diagnostics);
-            return;
-          }
-          handle_connection(std::move(socket));
-        };
-        caf::anon_mail(caf::make_action(std::move(action))).send(handle);
+    acceptor->async_accept([this](boost::system::error_code ec,
+                                  boost::asio::ip::tcp::socket socket) {
+      self->schedule_fn([this, ec, socket = std::move(socket)]() mutable {
+        // Always start accepting the next connection.
+        async_accept();
+        // If there's an error accepting connections, then we just warn about
+        // it but continue to accept new ones.
+        if (ec) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to accept connection")
+            .primary(args.endpoint.source)
+            .emit(diagnostics);
+          return;
+        }
+        handle_connection(std::move(socket));
       });
+    });
   }
 
   auto
