@@ -322,6 +322,11 @@ public:
   /// @pre `is<record_type>(*this)`
   [[nodiscard]] std::shared_ptr<arrow::Schema> to_arrow_schema() const noexcept;
 
+  /// Creates Arrow metadata from the type. Returns `nullptr` if the type has no
+  /// metadata.
+  [[nodiscard]] auto make_arrow_metadata() const
+    -> std::shared_ptr<arrow::KeyValueMetadata>;
+
   /// Creates an Arrow ArrayBuilder from the type.
   [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
   make_arrow_builder(arrow::MemoryPool* pool) const noexcept;

@@ -41,9 +41,14 @@ auto consume_path(std::span<const ast::identifier> path, series value)
     return value;
   }
   value = consume_path(path.subspan(1), std::move(value));
-  return series{record_type{record_type::field_view{path[0].name, value.type}},
-                make_struct_array(value.length(), nullptr, {path[0].name},
-                                  {value.array})};
+  auto new_type
+    = type{record_type{record_type::field_view{path[0].name, value.type}}};
+  auto new_array = make_struct_array(value.length(), nullptr, {path[0].name},
+                                     {value.array}, as<record_type>(new_type));
+  return series{
+    std::move(new_type),
+    std::move(new_array),
+  };
 }
 
 auto assign(std::span<const ast::identifier> left, series right, series input,
@@ -111,12 +116,12 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
   }
   auto new_ty_field_names
     = new_ty_fields | std::views::transform(&record_type::field_view::name);
+  auto new_type = type{record_type{new_ty_fields}};
   auto new_array
     = make_struct_array(array.length(), nullptr,
                         std::vector<std::string>{new_ty_field_names.begin(),
                                                  new_ty_field_names.end()},
-                        new_field_arrays);
-  auto new_type = type{record_type{new_ty_fields}};
+                        new_field_arrays, as<record_type>(new_type));
   // TODO: What to do with metadata on record?
   // new_type.assign_metadata(input.type);
   return series{std::move(new_type), std::move(new_array)};
@@ -278,7 +283,8 @@ auto assign(const ast::simple_selector& left, series right,
                         result.type.kind())
       .primary(left)
       .emit(dh);
-    result = {record_type{}, make_struct_array(result.length(), nullptr, {})};
+    result = {record_type{},
+              make_struct_array(result.length(), nullptr, {}, record_type{})};
   }
   result.type.assign_metadata(input.schema());
   auto schema = arrow::schema(result.array->type()->fields(),

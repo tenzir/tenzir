@@ -9,6 +9,7 @@
 #include "tenzir/arrow_table_slice.hpp"
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/collect.hpp"
 #include "tenzir/config.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
@@ -605,12 +606,16 @@ auto make_struct_array(int64_t length,
 auto make_struct_array(int64_t length,
                        std::shared_ptr<arrow::Buffer> null_bitmap,
                        std::vector<std::string> field_names,
-                       const arrow::ArrayVector& field_arrays)
+                       const arrow::ArrayVector& field_arrays,
+                       const record_type& rt)
   -> std::shared_ptr<arrow::StructArray> {
   auto field_types = arrow::FieldVector{};
-  for (auto [name, array] : detail::zip(field_names, field_arrays)) {
+  const auto rt_fields = collect(rt.fields());
+  for (const auto& [name, array, rt_field] :
+       detail::zip(field_names, field_arrays, rt_fields)) {
     field_types.push_back(
-      std::make_shared<arrow::Field>(std::move(name), array->type()));
+      std::make_shared<arrow::Field>(std::move(name), array->type(), true,
+                                     rt_field.type.make_arrow_metadata()));
   }
   return make_struct_array(length, std::move(null_bitmap), field_types,
                            field_arrays);
@@ -618,15 +623,17 @@ auto make_struct_array(int64_t length,
 
 auto make_struct_array(
   int64_t length, std::shared_ptr<arrow::Buffer> null_bitmap,
-  std::vector<std::pair<std::string, std::shared_ptr<arrow::Array>>> fields)
-  -> std::shared_ptr<arrow::StructArray> {
+  std::vector<std::pair<std::string, std::shared_ptr<arrow::Array>>> fields,
+  const record_type& rt) -> std::shared_ptr<arrow::StructArray> {
   auto field_types = arrow::FieldVector{};
   field_types.reserve(fields.size());
   auto field_arrays = std::vector<std::shared_ptr<arrow::Array>>{};
   field_arrays.reserve(fields.size());
-  for (auto& field : fields) {
+  auto rt_fields = collect(rt.fields());
+  for (const auto& [field, rt_field] : detail::zip(fields, rt_fields)) {
     field_types.push_back(
-      std::make_shared<arrow::Field>(field.first, field.second->type()));
+      std::make_shared<arrow::Field>(field.first, field.second->type(), true,
+                                     rt_field.type.make_arrow_metadata()));
     field_arrays.push_back(std::move(field.second));
   }
   return make_struct_array(length, std::move(null_bitmap), field_types,
