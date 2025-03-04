@@ -71,6 +71,9 @@ public:
   }
 
   auto make_behavior() -> pipeline_executor_actor::behavior_type {
+    detail::weak_run_delayed_loop(self_, std::chrono::seconds{1}, [] {
+      TENZIR_WARN(".");
+    });
     return {
       [this](atom::start) -> caf::result<void> {
         return start();
@@ -190,8 +193,8 @@ private:
     }
     self_->observe(*output, 30, 10)
       .do_on_error([this](caf::error err) {
-        TENZIR_WARN("error: {}", err);
-        self_->quit(std::move(err));
+        TENZIR_ERROR("from stream: {}", err);
+        // self_->quit(std::move(err));
       })
       .do_on_complete([this] {
         // TODO: Facing an infinite checkpoint stream, how do

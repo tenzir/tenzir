@@ -50,10 +50,14 @@ struct head_state {
 class head {
 public:
   head(exec::operator_actor::pointer self,
-       exec::checkpoint_receiver_actor checkpoint_receiver, base_ctx ctx,
-       uint64_t count, uint64_t seen)
+       exec::checkpoint_receiver_actor checkpoint_receiver,
+       exec::operator_shutdown_actor operator_shutdown,
+       exec::operator_stop_actor operator_stop, base_ctx ctx, uint64_t count,
+       uint64_t seen)
     : self_{self},
       checkpoint_receiver_{std::move(checkpoint_receiver)},
+      operator_shutdown_{std::move(operator_shutdown)},
+      operator_stop_{std::move(operator_stop)},
       ctx_{ctx},
       count_{count},
       seen_{seen} {
@@ -68,7 +72,7 @@ public:
       },
       [&](exec::stream<table_slice> s) {
         auto output = run(self_->observe(std::move(s), 10, 30))
-                        .to_typed_stream("output-stream", duration::zero(), 0);
+                        .to_typed_stream("output-stream", duration::zero(), 1);
         return exec::handshake_response{std::move(output)};
       });
   }
@@ -127,6 +131,13 @@ public:
               .as_observable();
           },
           [&](exec::exhausted exhausted) -> exec::observable<table_slice> {
+            TENZIR_WARN("head received exhausted");
+            self_->mail(atom::done_v)
+              .request(operator_shutdown_, caf::infinite)
+              .then([] {});
+            self_->mail(atom::stop_v)
+              .request(operator_stop_, caf::infinite)
+              .then([] {});
             return self_->make_observable()
               .just(exec::message<table_slice>{exhausted})
               .as_observable();
@@ -170,6 +181,8 @@ public:
 private:
   exec::operator_actor::pointer self_;
   exec::checkpoint_receiver_actor checkpoint_receiver_;
+  exec::operator_shutdown_actor operator_shutdown_;
+  exec::operator_stop_actor operator_stop_;
   base_ctx ctx_; // <-- assume we need a way to emit diags
 
   uint64_t count_; // <-- this should be immutable…
@@ -198,7 +211,9 @@ public:
       TENZIR_ASSERT(ok);
     }
     return args.sys.spawn(caf::actor_from_state<head>,
-                          std::move(args.checkpoint_receiver), args.ctx, count_,
+                          std::move(args.checkpoint_receiver),
+                          std::move(args.operator_shutdown),
+                          std::move(args.operator_stop), args.ctx, count_,
                           seen);
   }
 

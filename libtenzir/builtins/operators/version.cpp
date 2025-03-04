@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/compile_ctx.hpp"
+#include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/operator_actor.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -177,6 +178,13 @@ public:
   }
 
   auto make_behavior() -> exec::operator_actor::behavior_type {
+    caf::detail::set_thread_name("version");
+    self_->attach_functor([] {
+      TENZIR_ERROR("yo");
+    });
+    detail::weak_run_delayed_loop(self_, std::chrono::seconds{1}, [] {
+      TENZIR_WARN("!");
+    });
     return {
       [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
         auto out
@@ -234,7 +242,8 @@ public:
         return {};
       },
       [](atom::stop) -> caf::result<void> {
-        TENZIR_TODO();
+        // No need to react, we are one-shot anyway.
+        return {};
       },
     };
   }
@@ -254,8 +263,9 @@ public:
   }
 
   auto spawn(spawn_args args) const -> exec::operator_actor override {
-    return args.sys.spawn(caf::actor_from_state<version_exec>,
-                          args.operator_shutdown, args.operator_stop);
+    return args.sys.spawn<caf::detached>(caf::actor_from_state<version_exec>,
+                                         args.operator_shutdown,
+                                         args.operator_stop);
   }
 
   friend auto inspect(auto& f, version_bp& x) -> bool {
