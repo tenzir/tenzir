@@ -226,9 +226,13 @@ struct exec_node_state {
                         key);
       key = std::max(min, key);
     };
-    read_config(min_elements, "min-elements", 1);
-    read_config(max_elements, "max-elements", min_elements);
-    read_config(max_batches, "max-batches", 1);
+    const auto demand_settings = op->demand();
+    read_config(min_elements, "min-elements",
+                demand_settings.min_elements.value_or(1));
+    read_config(max_elements, "max-elements",
+                demand_settings.max_elements.value_or(min_elements));
+    read_config(max_batches, "max-batches",
+                demand_settings.max_batches.value_or(1));
     auto time_starting_guard
       = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
     metrics.operator_index = index;

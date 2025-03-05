@@ -181,6 +181,11 @@ public:
                                      : pipe_.operators()[0]->idle_after();
   }
 
+  auto demand() const -> demand_settings override {
+    return pipe_.operators().empty() ? demand_settings{}
+                                     : pipe_.operators()[0]->demand();
+  }
+
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
     return pipe_.infer_type(input);
