@@ -156,17 +156,18 @@ private:
         return false;
       }
     }
-    cache_size_ += events.rows();
-    byte_size_ += events.approx_bytes();
+    const auto approx_bytes = events.approx_bytes();
     // If a single cache exceeds the total capacity, we stop short of adding the
     // batch of events that'd make it go over the limit. This is better than
     // being evicted immediately.
-    if (byte_size_ > max_bytes_ and not exceeded_capacity) {
+    if (byte_size_ + approx_bytes > max_bytes_ and not exceeded_capacity) {
       diagnostic::warning("cache exceeded total capacity in bytes")
         .hint("consider increasing `tenzir.cache.capacity` option")
         .emit(diagnostics_);
       return false;
     }
+    cache_size_ += events.rows();
+    byte_size_ += approx_bytes;
     update_multicaster_.push(cache_update{
       .approx_bytes = byte_size_,
       .state = cache_state::open,
