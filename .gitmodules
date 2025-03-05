@@ -41,5 +41,5 @@
 	shallow = true
 [submodule "plugins/clickhouse/aux/clickhouse-cpp"]
 	path = plugins/clickhouse/aux/clickhouse-cpp
-	url = git@github.com:ClickHouse/clickhouse-cpp.git
+	url = https://github.com/ClickHouse/clickhouse-cpp
 	shallow = true
