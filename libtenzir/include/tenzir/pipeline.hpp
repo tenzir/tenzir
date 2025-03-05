@@ -263,9 +263,9 @@ struct [[nodiscard]] operator_metric {
 
 /// Configures the maximum demand from an operator to its upstream.
 struct demand_settings {
-  std::optional<uint64_t> min_elements = 0;
-  std::optional<uint64_t> max_elements = 0;
-  std::optional<uint64_t> max_batches = 0;
+  std::optional<uint64_t> min_elements = {};
+  std::optional<uint64_t> max_elements = {};
+  std::optional<uint64_t> max_batches = {};
 };
 
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.

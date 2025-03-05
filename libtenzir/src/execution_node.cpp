@@ -217,22 +217,27 @@ struct exec_node_state {
       run_id{run_id},
       op{std::move(op)},
       metrics_receiver{metrics_receiver} {
-    auto read_config = [&](auto& key, std::string_view config, uint64_t min) {
-      key = caf::get_or(content(self->system().config()),
-                        fmt::format("tenzir.demand.{}", config), key);
-      key = caf::get_or(content(self->system().config()),
-                        fmt::format("tenzir.demand.{}.{}", config,
-                                    operator_type_name<Input>()),
-                        key);
-      key = std::max(min, key);
+    auto read_config = [&](std::string_view config, uint64_t min,
+                           uint64_t fallback) -> uint64_t {
+      auto result
+        = caf::get_or(content(self->system().config()),
+                      fmt::format("tenzir.demand.{}", config), fallback);
+      result = caf::get_or(content(self->system().config()),
+                           fmt::format("tenzir.demand.{}.{}", config,
+                                       operator_type_name<Input>()),
+                           result);
+      return std::max(min, result);
     };
-    const auto demand_settings = op->demand();
-    read_config(min_elements, "min-elements",
-                demand_settings.min_elements.value_or(1));
-    read_config(max_elements, "max-elements",
-                demand_settings.max_elements.value_or(min_elements));
-    read_config(max_batches, "max-batches",
-                demand_settings.max_batches.value_or(1));
+    const auto demand_settings = this->op->demand();
+    min_elements = demand_settings.min_elements
+                     ? *demand_settings.min_elements
+                     : read_config("min-elements", 1, min_elements);
+    max_elements = demand_settings.max_elements
+                     ? *demand_settings.max_elements
+                     : read_config("max-elements", min_elements, max_elements);
+    max_batches = demand_settings.max_batches
+                    ? *demand_settings.max_batches
+                    : read_config("max-batches", 1, max_batches);
     auto time_starting_guard
       = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
     metrics.operator_index = index;
