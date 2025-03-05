@@ -18,7 +18,9 @@ all interfaces.
 
 ### `parallel = int (optional)`
 
-Maximum number of parallel connections at once.
+Number of threads to use for reading from connections.
+
+Defaults to 1.
 
 ### `tls = bool (optional)`
 
@@ -31,6 +33,12 @@ Path to a `.pem` file containing the TLS certificate.
 ### `keyfile = string (optional)`
 
 Path to a `.pem` file containing the private key for the certificate.
+
+### `max_buffered_packets = int (optional)`
+
+Maximum number of buffered packets per connection.
+
+Defaults to 10.
 
 ### `{ … } (optional)`
 

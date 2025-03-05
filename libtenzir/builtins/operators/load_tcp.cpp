@@ -78,6 +78,7 @@ struct load_tcp_args {
   std::optional<location> tls = {};
   std::optional<located<std::string>> certfile = {};
   std::optional<located<std::string>> keyfile = {};
+  std::optional<located<uint64_t>> max_buffered_packets = {};
   std::optional<located<class pipeline>> pipeline = {};
 
   friend auto inspect(auto& f, load_tcp_args& x) -> bool {
@@ -85,6 +86,7 @@ struct load_tcp_args {
       f.field("endpoint", x.endpoint), f.field("parallel", x.parallel),
       f.field("connect", x.connect), f.field("tls", x.tls),
       f.field("certfile", x.certfile), f.field("keyfile", x.keyfile),
+      f.field("max_buffered_packets", x.max_buffered_packets),
       f.field("pipeline", x.pipeline));
   }
 };
@@ -306,7 +308,6 @@ struct connection_manager_state {
       emit_metrics(nullptr);
     }
 
-    static constexpr auto max_queued_chunks = size_t{10};
     static constexpr auto read_buffer_size = size_t{65'536};
 
     std::optional<boost::asio::ip::tcp::socket> socket = {};
@@ -351,7 +352,8 @@ struct connection_manager_state {
     }
 
     auto async_read(connection_manager_actor<Elements>::pointer self,
-                    shared_diagnostic_handler diagnostics) -> void {
+                    shared_diagnostic_handler diagnostics,
+                    uint64_t max_buffered_packets) -> void {
       // NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays)
       auto read_buffer
         = std::make_unique<chunk::value_type[]>(read_buffer_size);
@@ -360,8 +362,9 @@ struct connection_manager_state {
         = boost::asio::buffer(read_buffer.get(), read_buffer_size);
       auto on_read = [connection = this->shared_from_this(), self,
                       diagnostics = std::move(diagnostics),
-                      read_buffer = std::move(read_buffer)](
-                       boost::system::error_code ec, size_t length) mutable {
+                      read_buffer = std::move(read_buffer),
+                      max_buffered_packets](boost::system::error_code ec,
+                                            size_t length) mutable {
         connection->reads += 1;
         connection->bytes_read += length;
         if (ec) {
@@ -387,23 +390,26 @@ struct connection_manager_state {
           auto lock = std::unique_lock{connection->mutex};
           if (connection->rp.pending()) {
             self->schedule_fn([self, connection, ec, chunk = std::move(chunk),
-                               diagnostics = std::move(diagnostics)]() mutable {
+                               diagnostics = std::move(diagnostics),
+                               max_buffered_packets]() mutable {
               auto lock = std::unique_lock{connection->mutex};
               TENZIR_ASSERT(connection->rp.pending());
               connection->rp.deliver(std::move(chunk));
               if (not ec) {
-                connection->async_read(self, std::move(diagnostics));
+                connection->async_read(self, std::move(diagnostics),
+                                       max_buffered_packets);
               }
             });
             TENZIR_ASSERT(connection->chunks.empty());
             return;
           }
           connection->chunks.push(std::move(chunk));
-          TENZIR_ASSERT(connection->chunks.size() <= max_queued_chunks);
-          should_read = connection->chunks.size() < max_queued_chunks;
+          TENZIR_ASSERT(connection->chunks.size() <= max_buffered_packets);
+          should_read = connection->chunks.size() < max_buffered_packets;
         }
         if (not ec and should_read) {
-          connection->async_read(self, std::move(diagnostics));
+          connection->async_read(self, std::move(diagnostics),
+                                 max_buffered_packets);
         }
       };
       if (tls_socket) {
@@ -630,7 +636,8 @@ struct connection_manager_state {
           // Start the async read loop for this connection.
           auto connection = connections.find(handle);
           TENZIR_ASSERT(connection != connections.end());
-          connection->second->async_read(self, diagnostics);
+          connection->second->async_read(self, diagnostics,
+                                         args.max_buffered_packets->inner);
         },
         [this, handle
                = connection->socket->native_handle()](const caf::error& err) {
@@ -679,13 +686,14 @@ struct connection_manager_state {
           = self->template make_response_promise<chunk_ptr>();
         return connection->second->rp;
       }
-      should_read = connection->second->chunks.size()
-                    == connection_state::max_queued_chunks;
+      should_read
+        = connection->second->chunks.size() == args.max_buffered_packets->inner;
       chunk = std::move(connection->second->chunks.front());
       connection->second->chunks.pop();
     }
     if (should_read) {
-      connection->second->async_read(self, diagnostics);
+      connection->second->async_read(self, diagnostics,
+                                     args.max_buffered_packets->inner);
     }
     return chunk;
   }
@@ -880,6 +888,7 @@ public:
                     .named("tls", tls)
                     .named("certfile", args.certfile)
                     .named("keyfile", args.keyfile)
+                    .named("max_buffered_packets", args.max_buffered_packets)
                     .positional("{ … }", args.pipeline);
     TRY(parser.parse(inv, ctx));
     auto failed = false;
@@ -953,6 +962,15 @@ public:
       // If the user does not provide a pipeline, we fall back to just an empty
       // pipeline, i.e., pass the bytes for all connections through.
       args.pipeline.emplace(pipeline{}, location::unknown);
+    }
+    if (args.max_buffered_packets and args.max_buffered_packets->inner == 0) {
+      diagnostic::error("`max_buffered_packets` must be greater than zero")
+        .primary(args.max_buffered_packets->source)
+        .emit(ctx);
+      failed = true;
+    }
+    if (not args.max_buffered_packets) {
+      args.max_buffered_packets.emplace(10, location::unknown);
     }
     const auto output_type = args.pipeline->inner.infer_type(tag_v<chunk_ptr>);
     if (not output_type) {
