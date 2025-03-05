@@ -16,10 +16,10 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/transfer.hpp>
 
-#include <filesystem>
+#include <caf/actor_system_config.hpp>
+
 #include <regex>
 #include <string_view>
-#include <system_error>
 
 using namespace std::chrono_literals;
 
@@ -398,6 +398,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     // TODO: Clean this up.
+    auto& config = ctrl.self().system().config();
     auto loader = curl_loader<"TODO: not using this">{args_};
     auto gen = loader.instantiate(ctrl);
     TENZIR_ASSERT(gen);
