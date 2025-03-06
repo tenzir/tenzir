@@ -30,7 +30,6 @@ struct saver_args {
   std::optional<std::string> subject;
   transfer_options transfer_opts;
   bool mime;
-  std::optional<located<bool>> tls;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
@@ -65,7 +64,9 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto tx = transfer{args_.transfer_opts};
+    auto transfer_opts = args_.transfer_opts;
+    transfer_opts.ssl.update_cacert(ctrl);
+    auto tx = transfer{transfer_opts};
     if (auto err = tx.prepare(std::move(args_.endpoint))) {
       diagnostic::error("failed to prepare SMTP server request")
         .note("{}", err)
@@ -73,21 +74,6 @@ public:
       return err;
     }
     if (auto err = to_error(tx.handle().set(CURLOPT_UPLOAD, 1))) {
-      return err;
-    }
-    const auto set_tls_opts = [&] {
-      if (args_.tls) {
-        return to_error(tx.handle().set(CURLOPT_USE_SSL, args_.tls->inner
-                                                           ? CURLUSESSL_ALL
-                                                           : CURLUSESSL_NONE));
-      } else {
-        return to_error(tx.handle().set(CURLOPT_USE_SSL, CURLUSESSL_TRY));
-      }
-    };
-    if (auto err = set_tls_opts()) {
-      diagnostic::error("failed to set TLS options")
-        .note("{}", err)
-        .emit(ctrl.diagnostics());
       return err;
     }
     if (args_.from) {
@@ -220,9 +206,9 @@ public:
     parser.add("-a,--authorization", args.transfer_opts.authorization,
                "<string>");
     parser.add("-P,--skip-peer-verification",
-               args.transfer_opts.skip_peer_verification);
+               args.transfer_opts.ssl.skip_peer_verification);
     parser.add("-H,--skip-hostname-verification",
-               args.transfer_opts.skip_hostname_verification);
+               args.transfer_opts.ssl.skip_hostname_verification);
     parser.add("-m,--mime", args.mime);
     parser.add("-v,--verbose", args.transfer_opts.verbose);
     parser.add(args.to, "<email>");
@@ -268,11 +254,7 @@ class save_plugin final
     parser.named("password", args.transfer_opts.password);
     parser.named("authzid", args.transfer_opts.authzid);
     parser.named("authorization", args.transfer_opts.authorization);
-    parser.named("tls", args.tls);
-    parser.named("skip_peer_verification",
-                 args.transfer_opts.skip_peer_verification);
-    parser.named("skip_hostname_verification",
-                 args.transfer_opts.skip_hostname_verification);
+    args.transfer_opts.ssl.add_tls_options(parser);
     parser.named("mime", args.mime);
     parser.named("verbose", args.transfer_opts.verbose);
     TRY(parser.parse(inv, ctx));
@@ -283,6 +265,8 @@ class save_plugin final
       args.endpoint.erase(0, 5);
       args.endpoint.insert(0, "smtp");
     }
+    TRY(args.transfer_opts.ssl.validate(
+      located{args.endpoint, location::unknown}, ctx));
     if (to.inner.empty()) {
       diagnostic::error("empty recipient specified").primary(to).emit(ctx);
       return failure::promise();

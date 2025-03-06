@@ -47,6 +47,13 @@ tenzir:
   # Always use TQL2 for pipelines.
   #tql2: false
 
+  # A certificate file used as the default for operators accepting a `cacert`
+  # option. This will default to an appropriate directory for the system. For
+  # example:
+  #   - /etc/ssl/certs/ca-bundle.crt on RedHat
+  #   - /etc/ssl/certs/ca-certificates.crt on Ubuntu
+  #cacert:
+
   # The file system path used for persistent state.
   # Defaults to one of the following paths, selecting the first that is
   # available:

@@ -18,6 +18,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
+#include <tenzir/ssl_options.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
@@ -71,18 +72,16 @@ struct endpoint {
   }
 };
 
-struct load_tcp_args {
+struct load_tcp_args : ssl_options {
   located<struct endpoint> endpoint = {};
   located<uint64_t> parallel = {};
   std::optional<location> connect = {};
-  std::optional<location> tls = {};
-  std::optional<located<std::string>> certfile = {};
-  std::optional<located<std::string>> keyfile = {};
   std::optional<located<uint64_t>> max_buffered_chunks = {};
   std::optional<located<class pipeline>> pipeline = {};
 
   friend auto inspect(auto& f, load_tcp_args& x) -> bool {
     return f.object(x).fields(
+      f.field("ssl_options", static_cast<ssl_options&>(x)),
       f.field("endpoint", x.endpoint), f.field("parallel", x.parallel),
       f.field("connect", x.connect), f.field("tls", x.tls),
       f.field("certfile", x.certfile), f.field("keyfile", x.keyfile),
@@ -541,7 +540,7 @@ struct connection_manager_state {
     connection->metrics_receiver = metrics_receiver;
     connection->operator_id = operator_id;
     connection->emit_metrics(self);
-    if (args.tls) {
+    if (args.tls.inner) {
       TENZIR_ASSERT(not connection->ssl_ctx);
       connection->ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
       auto ec = boost::system::error_code{};
@@ -567,14 +566,39 @@ struct connection_manager_state {
           return;
         }
       }
-      if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
-                                               ec)) {
-        diagnostic::warning("{}", ec.message())
-          .note("failed to disable peer certificate verification")
-          .note("handle `{}`", connection->socket->native_handle())
-          .primary(*args.tls)
-          .emit(diagnostics);
-        return;
+      if (args.skip_peer_verification) {
+        if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
+                                                 ec)) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to disable peer certificate verification")
+            .note("handle `{}`", connection->socket->native_handle())
+            .primary(*args.skip_peer_verification)
+            .emit(diagnostics);
+          return;
+        }
+      } else {
+        if (connection->ssl_ctx->set_verify_mode(
+              boost::asio::ssl::verify_peer
+                | boost::asio::ssl::verify_fail_if_no_peer_cert,
+              ec)) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to enable peer certificate verification")
+            .note("handle `{}`", connection->socket->native_handle())
+            .primary(args.tls)
+            .emit(diagnostics);
+          return;
+        }
+        if (args.cacert) {
+          if (connection->ssl_ctx->load_verify_file(args.cacert->inner, ec)) {
+            diagnostic::warning("{}", ec.message())
+              .note("failed to load cacert file `{}`: {}", args.cacert->inner,
+                    ec.message())
+              .note("handle `{}`", connection->socket->native_handle())
+              .primary(args.cacert->source)
+              .emit(diagnostics);
+            return;
+          }
+        }
       }
       TENZIR_ASSERT(not connection->tls_socket);
       connection->tls_socket.emplace(*connection->socket, *connection->ssl_ctx);
@@ -584,7 +608,7 @@ struct connection_manager_state {
         diagnostic::warning("{}", ec.message())
           .note("failed to perform TLS handshake")
           .note("handle `{}`", connection->socket->native_handle())
-          .primary(*args.tls)
+          .primary(args.tls)
           .emit(diagnostics);
         return;
       }
@@ -880,21 +904,22 @@ public:
     -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};
     auto parallel = std::optional<located<uint64_t>>{};
-    auto tls = std::optional<located<bool>>{};
     auto args = load_tcp_args{};
+    args.tls = located{false, inv.self.get_location()};
     auto parser = argument_parser2::operator_("load_tcp")
                     .positional("endpoint", endpoint)
                     .named("parallel", parallel)
-                    .named("tls", tls)
-                    .named("certfile", args.certfile)
-                    .named("keyfile", args.keyfile)
                     .named("max_buffered_chunks", args.max_buffered_chunks)
                     .positional("{ … }", args.pipeline);
+    args.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
     auto failed = false;
     if (endpoint.inner.starts_with("tcp://")) {
       endpoint.inner = endpoint.inner.substr(6);
-      endpoint.source.begin += 6;
+      if (endpoint.source.end - endpoint.source.begin
+          == endpoint.inner.size() + 2) {
+        endpoint.source.begin += 6;
+      }
     }
     if (const auto splits = detail::split(endpoint.inner, ":", 1);
         splits.size() != 2) {
@@ -933,10 +958,11 @@ public:
     } else {
       args.parallel = {1, location::unknown};
     }
-    if (tls and not tls->inner) {
+    TRY(args.validate(endpoint, ctx));
+    if (not args.tls.inner) {
       if (args.certfile) {
         diagnostic::error("conflicting option: `certfile` requires `tls`")
-          .primary(tls->source)
+          .primary(args.tls)
           .primary(args.certfile->source)
           .usage(parser.usage())
           .docs(parser.docs())
@@ -945,18 +971,13 @@ public:
       }
       if (args.keyfile) {
         diagnostic::error("conflicting option: `keyfile` requires `tls`")
-          .primary(tls->source)
+          .primary(args.tls)
           .primary(args.keyfile->source)
           .usage(parser.usage())
           .docs(parser.docs())
           .emit(ctx);
         failed = true;
       }
-    }
-    if (tls) {
-      args.tls.emplace(tls->source);
-    } else if (args.certfile or args.keyfile) {
-      args.tls.emplace(location::unknown);
     }
     if (not args.pipeline) {
       // If the user does not provide a pipeline, we fall back to just an empty

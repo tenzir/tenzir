@@ -14,6 +14,7 @@
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/ssl_options.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
@@ -35,8 +36,9 @@ namespace {
 
 using tcp_bridge_actor = caf::typed_actor<
   // Connect to a TCP endpoint.
-  auto(atom::connect, bool tls, bool skip_peer_verification,
-       std::string hostname, std::string port)
+  auto(atom::connect, bool tls, std::string cacert, std::string certfile,
+       std::string keyfile, bool skip_peer_verification, std::string hostname,
+       std::string port)
     ->caf::result<void>,
   // Wait for an incoming TCP connection.
   auto(atom::accept, std::string hostname, std::string port,
@@ -136,8 +138,9 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
     },
     /*run_immediately=*/false);
   return {
-    [self](atom::connect, bool tls, bool skip_peer_verification,
-           const std::string& hostname,
+    [self](atom::connect, bool tls, const std::string& cacert,
+           const std::string& certfile, const std::string& keyfile,
+           bool skip_peer_verification, const std::string& hostname,
            const std::string& service) -> caf::result<void> {
       if (self->state().connection_rp.pending()) {
         return caf::make_error(ec::logic_error,
@@ -164,12 +167,41 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
       if (tls) {
         self->state().ssl_ctx.emplace(boost::asio::ssl::context::tls_client);
         self->state().ssl_ctx->set_default_verify_paths();
+        auto ec = boost::system::error_code{};
         if (skip_peer_verification) {
           self->state().ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
         } else {
           self->state().ssl_ctx->set_verify_mode(
             boost::asio::ssl::verify_peer
             | boost::asio::ssl::verify_fail_if_no_peer_cert);
+          if (not cacert.empty()) {
+            if (self->state().ssl_ctx->load_verify_file(cacert, ec).failed()) {
+              return caf::make_error(ec::system_error,
+                                     fmt::format("failed to load cacert file "
+                                                 "`{}`: {}",
+                                                 cacert, ec.message()));
+            }
+          }
+        }
+        if (not certfile.empty()) {
+          if (self->state()
+                .ssl_ctx->use_certificate_chain_file(certfile, ec)
+                .failed()) {
+            return caf::make_error(
+              ec::system_error, fmt::format("failed to load certfile `{}`: {}",
+                                            certfile, ec.message()));
+          }
+        }
+        if (not keyfile.empty()) {
+          if (self->state()
+                .ssl_ctx
+                ->use_private_key_file(keyfile, boost::asio::ssl::context::pem,
+                                       ec)
+                .failed()) {
+            return caf::make_error(
+              ec::system_error, fmt::format("failed to load keyfile `{}`: {}",
+                                            keyfile, ec.message()));
+          }
         }
         self->state().tls_socket.emplace(*self->state().socket,
                                          *self->state().ssl_ctx);
@@ -437,26 +469,26 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
   };
 }
 
-struct connector_args {
+struct connector_args : ssl_options {
   std::string hostname = {};
   std::string port = {};
   bool listen_once = false;
-  bool tls = false;
-  bool skip_peer_verification = false;
-  std::optional<std::string> tls_certfile = {};
-  std::optional<std::string> tls_keyfile = {};
+
+  friend auto inspect(auto& f, connector_args& x) -> bool {
+    return f.object(x).fields(
+      f.field("ssl_options", static_cast<ssl_options&>(x)),
+      f.field("hostname", x.hostname), f.field("port", x.port),
+      f.field("listen_once", x.listen_once));
+  }
 };
 
 struct loader_args : connector_args {
   template <class Inspector>
-  friend auto inspect(Inspector& f, loader_args& x) -> bool {
+  friend auto inspect(auto& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.tcp.loader_args")
-      .fields(f.field("hostname", x.hostname), f.field("port", x.port),
-              f.field("listen_once", x.listen_once),
-              f.field("connect", x.connect), f.field("tls", x.tls),
-              f.field("tls_certfile", x.tls_certfile),
-              f.field("tls_keyfile", x.tls_keyfile));
+      .fields(f.field("connector_args", static_cast<connector_args&>(x)),
+              f.field("connect", x.connect));
   }
 
   bool connect = false;
@@ -466,12 +498,9 @@ struct saver_args : connector_args {
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
     return f.object(x)
-      .pretty_name("tenzir.plugins.tcp.saver_args")
-      .fields(f.field("hostname", x.hostname), f.field("port", x.port),
-              f.field("listen_once", x.listen_once),
-              f.field("listen", x.listen), f.field("tls", x.tls),
-              f.field("tls_certfile", x.tls_certfile),
-              f.field("tls_keyfile", x.tls_keyfile));
+      .pretty_name("tenzir.plugins.tcp.loader_args")
+      .fields(f.field("connector_args", static_cast<connector_args&>(x)),
+              f.field("listen", x.listen));
   }
 
   bool listen = false;
@@ -486,13 +515,13 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    if (args_.tls and not args_.connect) {
+    if (args_.tls.inner and not args_.connect) {
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in OpenSSL.
-      TENZIR_ASSERT(args_.tls_keyfile);
-      TENZIR_ASSERT(args_.tls_certfile);
-      auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
+      TENZIR_ASSERT(args_.keyfile);
+      TENZIR_ASSERT(args_.certfile);
+      auto* keyfile = std::fopen(args_.keyfile->inner.c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);
       } else {
@@ -502,7 +531,7 @@ public:
           .emit(ctrl.diagnostics());
         return {};
       }
-      auto* certfile = std::fopen(args_.tls_certfile->c_str(), "r");
+      auto* certfile = std::fopen(args_.certfile->inner.c_str(), "r");
       if (certfile) {
         std::fclose(certfile);
       } else {
@@ -529,8 +558,16 @@ public:
                                           }));
       do {
         if (args.connect) {
+          auto cacert = args.cacert.has_value()
+                          ? args.cacert->inner
+                          : ssl_options::query_cacert_fallback(ctrl);
+          auto certfile
+            = args.certfile.has_value() ? args.certfile->inner : std::string{};
+          auto keyfile
+            = args.keyfile.has_value() ? args.keyfile->inner : std::string{};
           ctrl.self()
-            .mail(atom::connect_v, args.tls, false, args.hostname, args.port)
+            .mail(atom::connect_v, args.tls.inner, cacert, certfile, keyfile,
+                  false, args.hostname, args.port)
             .request(tcp_bridge, caf::infinite)
             .await(
               [&]() {
@@ -544,9 +581,12 @@ public:
               });
         } else {
           ctrl.self()
-            .mail(atom::accept_v, args.hostname, args.port,
-                  args.tls_certfile.value_or(std::string{}),
-                  args.tls_keyfile.value_or(std::string{}))
+            .mail(
+              atom::accept_v, args.hostname, args.port,
+              args.certfile.value_or(located{std::string{}, location::unknown})
+                .inner,
+              args.keyfile.value_or(located{std::string{}, location::unknown})
+                .inner)
             .request(tcp_bridge, caf::infinite)
             .await(
               [&]() {
@@ -608,13 +648,13 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    if (args_.tls and args_.listen) {
+    if (args_.tls.inner and args_.listen) {
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in OpenSSL.
-      TENZIR_ASSERT(args_.tls_keyfile);
-      TENZIR_ASSERT(args_.tls_certfile);
-      auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
+      TENZIR_ASSERT(args_.keyfile);
+      TENZIR_ASSERT(args_.certfile);
+      auto* keyfile = std::fopen(args_.keyfile->inner.c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);
       } else {
@@ -624,7 +664,7 @@ public:
           .emit(ctrl.diagnostics());
         return caf::make_error(ec::invalid_argument);
       }
-      auto* certfile = std::fopen(args_.tls_certfile->c_str(), "r");
+      auto* certfile = std::fopen(args_.certfile->inner.c_str(), "r");
       if (certfile) {
         std::fclose(certfile);
       } else {
@@ -648,9 +688,17 @@ public:
                                            }));
 
     if (not args_.listen) {
+      auto cacert = args_.cacert.has_value()
+                      ? args_.cacert->inner
+                      : ssl_options::query_cacert_fallback(ctrl);
+      auto certfile
+        = args_.certfile.has_value() ? args_.certfile->inner : std::string{};
+      auto keyfile
+        = args_.keyfile.has_value() ? args_.keyfile->inner : std::string{};
       ctrl.self()
-        .mail(atom::connect_v, args_.tls, args_.skip_peer_verification,
-              args_.hostname, args_.port)
+        .mail(atom::connect_v, args_.tls.inner, cacert, certfile, keyfile,
+              args_.skip_peer_verification.has_value(), args_.hostname,
+              args_.port)
         .request(tcp_bridge, caf::infinite)
         .await(
           [&]() {
@@ -665,8 +713,10 @@ public:
     } else {
       ctrl.self()
         .mail(atom::accept_v, args_.hostname, args_.port,
-              args_.tls_certfile.value_or(std::string{}),
-              args_.tls_keyfile.value_or(std::string{}))
+              args_.certfile.value_or(located{std::string{}, location::unknown})
+                .inner,
+              args_.keyfile.value_or(located{std::string{}, location::unknown})
+                .inner)
         .request(tcp_bridge, caf::infinite)
         .await(
           [&]() {
@@ -749,9 +799,9 @@ public:
       parser.add("-l,--listen", args.listen);
     }
     parser.add("-o,--listen-once", args.listen_once);
-    parser.add("--tls", args.tls);
-    parser.add("--certfile", args.tls_certfile, "TLS certificate");
-    parser.add("--keyfile", args.tls_keyfile, "TLS private key");
+    parser.add("--tls", args.tls.inner);
+    parser.add("--certfile", args.certfile, "TLS certificate");
+    parser.add("--keyfile", args.keyfile, "TLS private key");
     parser.parse(p);
     remove_scheme(uri.inner);
     auto split = detail::split(uri.inner, ":", 1);
@@ -764,13 +814,13 @@ public:
       args.hostname = std::string{split[0]};
       args.port = std::string{split[1]};
     }
-    if (not args.tls) {
-      if (args.tls_certfile and not args.tls_certfile->empty()) {
+    if (not args.tls.inner) {
+      if (args.certfile and not args.certfile->inner.empty()) {
         diagnostic::error("certificate provided, but TLS disabled")
           .hint("add --tls to use an encrypted connection")
           .throw_();
       }
-      if (args.tls_keyfile and not args.tls_keyfile->empty()) {
+      if (args.keyfile and not args.keyfile->inner.empty()) {
         diagnostic::error("keyfile provided, but TLS disabled")
           .hint("add --tls to use an encrypted connection")
           .throw_();
@@ -781,13 +831,13 @@ public:
         diagnostic::error("conflicting options `--connect` and `--listen-once`")
           .throw_();
       }
-      if (not args.connect and args.tls) {
-        if (not args.tls_certfile or args.tls_certfile->empty()) {
+      if (not args.connect and args.tls.inner) {
+        if (not args.certfile or args.certfile->inner.empty()) {
           diagnostic::error("invalid TLS settings")
             .hint("missing --certfile")
             .throw_();
         }
-        if (not args.tls_keyfile or args.tls_keyfile->empty()) {
+        if (not args.keyfile or args.keyfile->inner.empty()) {
           diagnostic::error("invalid TLS settings")
             .hint("missing --keyfile")
             .throw_();
@@ -808,18 +858,19 @@ public:
 };
 
 class save_tcp final : public virtual operator_plugin2<saver_adapter<saver>> {
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = saver_args{};
+    args.tls = located{false, inv.self.get_location()};
     auto parser = argument_parser2::operator_(name());
     auto uri = located<std::string>{};
     parser.positional("endpoint", uri, "string");
-    parser.named("tls", args.tls);
-    parser.named("skip_peer_verification", args.skip_peer_verification);
+    args.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
     if (uri.inner.starts_with("tcp://")) {
       uri.inner.erase(0, 6);
     }
+    TRY(args.validate(uri, ctx));
     auto split = detail::split(uri.inner, ":", 1);
     if (split.size() != 2) {
       diagnostic::error("malformed endpoint")
@@ -830,9 +881,6 @@ class save_tcp final : public virtual operator_plugin2<saver_adapter<saver>> {
     }
     args.hostname = std::string{split[0]};
     args.port = std::string{split[1]};
-    if (args.skip_peer_verification) {
-      args.tls = true;
-    }
     return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
   }
 
