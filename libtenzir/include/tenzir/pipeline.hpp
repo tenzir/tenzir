@@ -261,6 +261,16 @@ struct [[nodiscard]] operator_metric {
   }
 };
 
+/// Configures the maximum demand from an operator to its upstream.
+struct demand_settings {
+  std::optional<uint64_t> min_elements = {};
+  std::optional<uint64_t> max_elements = {};
+  std::optional<uint64_t> max_batches = {};
+  std::optional<duration> min_backoff = {};
+  std::optional<duration> max_backoff = {};
+  std::optional<double> backoff_rate = {};
+};
+
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
 public:
@@ -384,6 +394,11 @@ public:
   /// `duration::max()` to cause the operator to be polled.
   virtual auto idle_after() const -> duration {
     return duration::zero();
+  }
+
+  /// Returns the maximum demand from an operator to its upstream.
+  virtual auto demand() const -> demand_settings {
+    return {};
   }
 
   /// Retrieve the output type of this operator for a given input.
@@ -541,6 +556,10 @@ public:
 
   auto idle_after() const -> duration override {
     panic("pipeline::idle_after() must not be called");
+  }
+
+  auto demand() const -> demand_settings override {
+    panic("pipeline::demand() must not be called");
   }
 
   auto instantiate(operator_input input, operator_control_plane& control) const

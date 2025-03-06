@@ -87,6 +87,10 @@ public:
     return op_->idle_after();
   }
 
+  auto demand() const -> demand_settings override {
+    return op_->demand();
+  }
+
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
     return op_->infer_type(input);

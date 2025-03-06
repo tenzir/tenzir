@@ -183,6 +183,10 @@ public:
     : result_{severity, std::move(message), {}, {}} {
   }
 
+  auto compose(auto fn) && {
+    return std::move(fn)(std::move(*this));
+  }
+
   // -- annotations -----------------------------------------------------------
 
   auto primary(into_location source, std::string text
