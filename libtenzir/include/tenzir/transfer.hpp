@@ -12,6 +12,7 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/http.hpp"
+#include "tenzir/ssl_options.hpp"
 
 #include <chrono>
 #include <string>
@@ -29,8 +30,9 @@ struct transfer_options {
   std::optional<std::string> password = {};
   std::optional<std::string> authzid = {};
   std::optional<std::string> authorization = {};
-  bool skip_peer_verification = false;
-  bool skip_hostname_verification = false;
+  ssl_options ssl = {};
+  //bool skip_peer_verification = false;
+  //bool skip_hostname_verification = false;
 
   friend auto inspect(auto& f, transfer_options& x) -> bool {
     return f.object(x)
@@ -41,8 +43,7 @@ struct transfer_options {
               f.field("username", x.username), f.field("password", x.password),
               f.field("authzid", x.authzid),
               f.field("authorization", x.authorization),
-              f.field("skip_peer_verification", x.skip_peer_verification),
-              f.field("skip_host_verification", x.skip_hostname_verification));
+              f.field("ssl", x.ssl));
   }
 };
 

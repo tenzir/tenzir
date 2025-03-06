@@ -6,11 +6,46 @@
 // SPDX-FileCopyrightText: (c) 2024 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/ssl_options.hpp"
+
 #include "fluent-bit/fluent-bit_operator.hpp"
 
 namespace tenzir::plugins::fluentbit {
 
 namespace {
+
+auto tls_to_fluentbit(const ssl_options& ssl, property_map& properties,
+                      diagnostic_handler& dh) -> failure_or<void> {
+  const auto set = [&](std::string key, std::string value,
+                       location loc) -> failure_or<void> {
+    auto [it, inserted] = properties.try_emplace(key, std::move(value));
+    if (not inserted and it->second != value) {
+      diagnostic::error("conflicting values between tenzir option and "
+                        "fluent-bit option `{}`",
+                        key)
+        .primary(loc)
+        .note("tenzir option evaluates to `{}`, fluent-bit option is `{}`",
+              value, it->second)
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  };
+  TRY(set("tls", ssl.tls.inner ? "On" : "Off", ssl.tls.source));
+  if (ssl.skip_peer_verification or ssl.skip_hostname_verification) {
+    TRY(set("tls.verify", "Off", location::unknown));
+  }
+  if (ssl.cacert) {
+    TRY(set("tls.ca_file", ssl.cacert->inner, ssl.cacert->source));
+  }
+  if (ssl.certfile) {
+    TRY(set("tls.crt_file", ssl.certfile->inner, ssl.certfile->source));
+  }
+  if (ssl.keyfile) {
+    TRY(set("tls.key_file", ssl.keyfile->inner, ssl.keyfile->source));
+  }
+  return {};
+}
 
 class from_fluent_bit_plugin final
   : public operator_plugin2<fluent_bit_source_operator> {
@@ -38,18 +73,21 @@ public:
     located<std::string> plugin;
     std::optional<tenzir::record> plugin_options;
     std::optional<tenzir::record> fluentbit_options;
+    auto ssl = ssl_options{};
     parser.positional("plugin", plugin)
       .named("options", plugin_options)
       .named("fluent_bit_options", fluentbit_options);
+    ssl.add_tls_options(parser);
     auto opt_parser = multi_series_builder_argument_parser{};
     opt_parser.add_all_to_parser(parser);
-    auto result = parser.parse(inv, ctx);
-    TRY(result);
+    TRY(parser.parse(inv, ctx));
+    TRY(ssl.validate(located{std::string{}, location::unknown}, ctx));
     auto args = operator_args{
       .plugin = std::move(plugin),
       .service_properties = to_property_map(fluentbit_options),
       .args = to_property_map(plugin_options),
     };
+    TRY(tls_to_fluentbit(ssl, args.args, ctx));
     TRY(auto builder_options, opt_parser.get_options(ctx.dh()));
     builder_options.settings.default_schema_name
       = fmt::format("fluent_bit.{}", args.plugin.inner);
@@ -97,16 +135,18 @@ public:
     located<std::string> plugin;
     std::optional<tenzir::record> plugin_options;
     std::optional<tenzir::record> fluentbit_options;
+    auto ssl = ssl_options{};
     parser.positional("plugin", plugin)
       .named("options", plugin_options)
       .named("fluent_bit_options", fluentbit_options);
-    auto result = parser.parse(inv, ctx);
-    TRY(result);
+    TRY(parser.parse(inv, ctx));
+    TRY(ssl.validate(located{std::string{}, location::unknown}, ctx));
     auto args = operator_args{
       .plugin = std::move(plugin),
       .service_properties = to_property_map(fluentbit_options),
       .args = to_property_map(plugin_options),
     };
+    TRY(tls_to_fluentbit(ssl, args.args, ctx));
     return std::make_unique<fluent_bit_sink_operator>(std::move(args), config_);
   }
 
