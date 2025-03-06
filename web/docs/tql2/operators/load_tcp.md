@@ -34,9 +34,9 @@ Path to a `.pem` file containing the TLS certificate.
 
 Path to a `.pem` file containing the private key for the certificate.
 
-### `max_buffered_packets = int (optional)`
+### `max_buffered_chunks = int (optional)`
 
-Maximum number of buffered packets per connection.
+Maximum number of buffered chunks per connection.
 
 Defaults to 10.
 
