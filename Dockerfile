@@ -523,7 +523,8 @@ ENTRYPOINT ["tenzir-node"]
 FROM tenzir-node-ce AS tenzir-demo
 
 COPY /scripts/install-demo-node-package.tql /tmp/install-demo-node-package.tql
-ENV TENZIR_START__COMMANDS="exec --file /tmp/install-demo-node-package.tql" \
+ENV TENZIR_CACHE__CAPACITY="64Mi" \
+    TENZIR_START__COMMANDS="exec --file /tmp/install-demo-node-package.tql" \
     TENZIR_TQL2="true"
 
 # -- tenzir-node -----------------------------------------------------------------
