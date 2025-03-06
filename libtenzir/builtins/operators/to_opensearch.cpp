@@ -13,6 +13,7 @@
 #include <tenzir/detail/url.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/ssl_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 
 #include <arrow/util/compression.h>
@@ -30,11 +31,7 @@ struct opensearch_args {
   std::optional<ast::expression> id;
   std::optional<std::string> user;
   std::optional<std::string> passwd;
-  std::optional<located<bool>> tls;
-  std::optional<location> skip_peer_verification;
-  std::optional<located<std::string>> cacert;
-  std::optional<located<std::string>> certfile;
-  std::optional<located<std::string>> keyfile;
+  ssl_options ssl;
   std::optional<location> include_nulls;
   std::optional<located<uint64_t>> max_content_length
     = located{5'000'000, location::unknown};
@@ -52,16 +49,12 @@ struct opensearch_args {
       .named("doc", doc, "record")
       .named("user", user)
       .named("passwd", passwd)
-      .named("tls", tls)
-      .named("skip_peer_verification", skip_peer_verification)
-      .named("cacert", cacert)
-      .named("certfile", certfile)
-      .named("keyfile", keyfile)
       .named("include_nulls", include_nulls)
       .named("max_content_length", max_content_length)
       .named("buffer_timeout", buffer_timeout)
       .named("compress", compress)
       .named("_debug_curl", _debug_curl);
+    ssl.add_tls_options(parser);
   }
 
   auto validate(diagnostic_handler& dh) -> failure_or<void> {
@@ -70,24 +63,6 @@ struct opensearch_args {
       diagnostic::error("failed to parse url").primary(url).emit(dh);
       return failure::promise();
     }
-    auto tls_logic
-      = [&](auto& thing, std::string_view name) -> failure_or<void> {
-      if (tls and not tls->inner and thing) {
-        diagnostic::error("`{}` requires TLS", name)
-          .primary(tls->source, "TLS is disabled")
-          .primary(*thing)
-          .emit(dh);
-        return failure::promise();
-      }
-      if (thing and not tls) {
-        tls = located{true, into_location{*thing}};
-      }
-      return {};
-    };
-    TRY(tls_logic(skip_peer_verification, "skip_peer_verification"));
-    TRY(tls_logic(cacert, "cacert"));
-    TRY(tls_logic(certfile, "certfile"));
-    TRY(tls_logic(keyfile, "keyfile"));
     if (v->segments().empty() or v->segments().back() != "_bulk") {
       auto u = boost::urls::url{*v};
       u.segments().push_back("_bulk");
@@ -105,24 +80,7 @@ struct opensearch_args {
         .emit(dh);
       return failure::promise();
     }
-    if (cacert and not std::filesystem::exists(cacert->inner)) {
-      diagnostic::error("File not found: {}", cacert->inner)
-        .primary(cacert->source)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (certfile and not std::filesystem::exists(certfile->inner)) {
-      diagnostic::error("File not found: {}", certfile->inner)
-        .primary(certfile->source)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (keyfile and not std::filesystem::exists(keyfile->inner)) {
-      diagnostic::error("File not found: {}", keyfile->inner)
-        .primary(keyfile->source)
-        .emit(dh);
-      return failure::promise();
-    }
+    TRY(ssl.validate(url, dh));
     return {};
   }
 
@@ -131,10 +89,7 @@ struct opensearch_args {
       f.field("url", x.url), f.field("index", x.index),
       f.field("action", x.action), f.field("doc", x.doc), f.field("id", x.id),
       f.field("user", x.user), f.field("passwd", x.passwd),
-      f.field("tls", x.tls),
-      f.field("skip_peer_verification", x.skip_peer_verification),
-      f.field("cacert", x.cacert), f.field("certfile", x.certfile),
-      f.field("keyfile", x.keyfile), f.field("include_nulls", x.include_nulls),
+      f.field("ssl", x.ssl), f.field("include_nulls", x.include_nulls),
       f.field("max_content_length", x.max_content_length),
       f.field("buffer_timeout", x.buffer_timeout),
       f.field("compress", x.compress), f.field("_debug_curl", x._debug_curl),
@@ -323,7 +278,8 @@ public:
   opensearch_operator(opensearch_args args) : args_{std::move(args)} {
   }
 
-  auto new_req(diagnostic_handler& dh) const -> failure_or<curl::easy> {
+  auto new_req(diagnostic_handler& dh,
+               operator_control_plane& ctrl) const -> failure_or<curl::easy> {
     auto req = curl::easy{};
     if (args_.user or args_.passwd) {
       const auto token = detail::base64::encode(fmt::format(
@@ -334,36 +290,12 @@ public:
     if (args_.compress) {
       req.set_http_header("Content-Encoding", "gzip");
     }
-    if (args_.cacert) {
-      if (const auto ec = req.set(CURLOPT_CAINFO, args_.cacert->inner.data());
-          ec != curl::easy::code::ok) {
-        diagnostic::error("failed to set `cacert`: {}", to_string(ec)).emit(dh);
-        return failure::promise();
-      }
-    }
-    if (args_.certfile) {
-      if (auto ec = req.set(CURLOPT_SSLCERT, args_.certfile->inner);
-          ec != curl::easy::code::ok) {
-        diagnostic::error("failed to set `certfile`: {}", to_string(ec))
-          .emit(dh);
-        return failure::promise();
-      }
-    }
-    if (args_.keyfile) {
-      if (const auto ec = req.set(CURLOPT_SSLKEY, args_.keyfile->inner);
-          ec != curl::easy::code::ok) {
-        diagnostic::error("failed to set `keyfile`: {}", to_string(ec)).emit(dh);
-        return failure::promise();
-      }
+    if (auto e = args_.ssl.apply_to(req, ctrl)) {
+      diagnostic::error(e).emit(dh);
+      return failure::promise();
     }
     check(req.set(CURLOPT_POST, 1));
     check(req.set(CURLOPT_URL, args_.url.inner));
-    if (args_.tls) {
-      check(req.set(CURLOPT_USE_SSL,
-                    args_.tls->inner ? CURLUSESSL_ALL : CURLUSESSL_NONE));
-    }
-    check(
-      req.set(CURLOPT_SSL_VERIFYPEER, args_.skip_peer_verification ? 0 : 1));
     check(req.set(CURLOPT_VERBOSE, args_._debug_curl ? 1 : 0));
     return req;
   }
@@ -420,7 +352,7 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
-    auto wrapped_req = new_req(dh);
+    auto wrapped_req = new_req(dh, ctrl);
     if (not wrapped_req) {
       co_return;
     }

@@ -306,10 +306,11 @@ private:
           // connectors, such as email.
         } else if (arg->inner == "-P"
                    || arg->inner == "--skip-peer-verification") {
-          result.transfer_opts.skip_peer_verification = true;
+          result.transfer_opts.ssl.skip_peer_verification = location::unknown;
         } else if (arg->inner == "-H"
                    || arg->inner == "--skip-hostname-verification") {
-          result.transfer_opts.skip_hostname_verification = true;
+          result.transfer_opts.ssl.skip_hostname_verification
+            = location::unknown;
         } else {
           args.push_back(std::move(*arg));
         }
@@ -398,8 +399,9 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     // TODO: Clean this up.
-    auto& config = ctrl.self().system().config();
-    auto loader = curl_loader<"TODO: not using this">{args_};
+    auto args = args_;
+    args.transfer_opts.ssl.update_cacert(ctrl);
+    auto loader = curl_loader<"TODO: not using this">{args};
     auto gen = loader.instantiate(ctrl);
     TENZIR_ASSERT(gen);
     for (auto chunk : *gen) {
@@ -444,7 +446,9 @@ public:
   operator()(generator<chunk_ptr> input,
              operator_control_plane& ctrl) const -> generator<std::monostate> {
     // TODO: Clean this up.
-    auto saver = curl_saver<"TODO: not using this">{args_};
+    auto args = args_;
+    args.transfer_opts.ssl.update_cacert(ctrl);
+    auto saver = curl_saver<"TODO: not using this">{args};
     auto func = saver.instantiate(ctrl, std::nullopt);
     if (not func) {
       diagnostic::error(func.error()).emit(ctrl.diagnostics());
@@ -504,6 +508,7 @@ auto parse_http_args(std::string name,
   args.transfer_opts.ssl.add_tls_options(parser);
   parser.named("_verbose", args.transfer_opts.verbose);
   TRY(parser.parse(inv, ctx));
+  TRY(args.transfer_opts.ssl.validate(located{url, location::unknown}, ctx));
   args.url = std::move(url);
   if (form) {
     args.http_opts.form = true;
@@ -584,6 +589,21 @@ public:
   }
 };
 
+auto parse_ftp_args(std::string name,
+                    const operator_factory_plugin::invocation& inv,
+                    session ctx) -> failure_or<connector_args> {
+  auto args = connector_args{};
+  auto parser = argument_parser2::operator_(name);
+  args.transfer_opts.ssl.add_tls_options(parser);
+  TRY(parser.parse(inv, ctx));
+  if (not(args.url.starts_with("ftp://") or args.url.starts_with("ftps://"))) {
+    args.url.insert(0, "ftp://");
+  }
+  TRY(
+    args.transfer_opts.ssl.validate(located{args.url, location::unknown}, ctx));
+  return args;
+}
+
 class load_ftp_plugin final
   : public virtual operator_plugin2<load_http_operator> {
 public:
@@ -593,13 +613,7 @@ public:
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    auto args = connector_args{};
-    TRY(argument_parser2::operator_(name())
-          .positional("url", args.url)
-          .parse(inv, ctx));
-    if (not args.url.starts_with("ftp://")) {
-      args.url.insert(0, "ftp://");
-    }
+    TRY(auto args, parse_ftp_args(name(), inv, ctx));
     return std::make_unique<load_http_operator>(std::move(args));
   }
 
@@ -619,13 +633,7 @@ public:
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    auto args = connector_args{};
-    TRY(argument_parser2::operator_(name())
-          .positional("url", args.url)
-          .parse(inv, ctx));
-    if (not args.url.starts_with("ftp://")) {
-      args.url.insert(0, "ftp://");
-    }
+    TRY(auto args, parse_ftp_args(name(), inv, ctx));
     return std::make_unique<save_http_operator>(std::move(args));
   }
 

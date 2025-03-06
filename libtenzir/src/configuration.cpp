@@ -556,14 +556,13 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
       }
     }
   }
-  auto foo = config;
   // Set the OPENSSL environment variable for the cert file path if it is not
   // set and not the default value.
   if (auto cacert_path = get_if<std::string>(&*config, "tenzir.cacert")) {
     if (not cacert_path_env) {
       if (auto err = detail::setenv(cacert_path_env_name, *cacert_path)) {
         // TODO: Consider just ignoring instead?
-        fmt::println(stderr, "failed to set {}: {}", cacert_path_env_name, err);
+        TENZIR_ERROR("failed to set {}: {}", cacert_path_env_name, err);
       }
     }
   }
