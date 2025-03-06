@@ -559,7 +559,7 @@ public:
   }
 
   auto demand() const -> demand_settings override {
-    panic("pipeline::max_demand() must not be called");
+    panic("pipeline::demand() must not be called");
   }
 
   auto instantiate(operator_input input, operator_control_plane& control) const

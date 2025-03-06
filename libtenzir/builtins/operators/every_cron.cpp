@@ -182,7 +182,7 @@ public:
   }
 
   auto demand() const -> demand_settings override {
-    return pipe_.operators().empty() ? demand_settings{}
+    return pipe_.operators().empty() ? operator_base::demand()
                                      : pipe_.operators()[0]->demand();
   }
 
