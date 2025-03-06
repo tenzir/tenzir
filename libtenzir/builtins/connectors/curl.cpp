@@ -501,10 +501,7 @@ auto parse_http_args(std::string name,
     parser.named("chunked", args.http_opts.chunked);
     parser.named("multipart", args.http_opts.multipart);
   }
-  parser.named("skip_peer_verification",
-               args.transfer_opts.skip_peer_verification);
-  parser.named("skip_hostname_verification",
-               args.transfer_opts.skip_hostname_verification);
+  args.transfer_opts.ssl.add_tls_options(parser);
   parser.named("_verbose", args.transfer_opts.verbose);
   TRY(parser.parse(inv, ctx));
   args.url = std::move(url);
