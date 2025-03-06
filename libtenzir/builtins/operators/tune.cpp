@@ -40,10 +40,6 @@ public:
 
   explicit tune_operator(operator_ptr op, tune_args args)
     : op_{std::move(op)}, args_{std::move(args)} {
-    if (auto* op = dynamic_cast<tune_operator*>(op_.get())) {
-      op_ = std::move(op->op_);
-    }
-    TENZIR_ASSERT(not dynamic_cast<const tune_operator*>(op_.get()));
   }
 
   auto optimize(const expression& filter, event_order order) const
