@@ -14,18 +14,19 @@
 namespace tenzir {
 
 struct ssl_options {
-  ssl_options( std::string_view default_cacert );
+  ssl_options();
 
-  located<std::string> url;
   std::optional<located<bool>> tls;
   std::optional<location> skip_peer_verification;
+  std::optional<location> skip_hostname_verification;
   std::optional<located<std::string>> cacert;
   std::optional<located<std::string>> certfile;
   std::optional<located<std::string>> keyfile;
 
-  auto add_url_option( argument_parser2&, bool positional ) -> void;
-  auto add_tls_options( argument_parser2& ) -> void;
-  auto validate( diagnostic_handler& ) -> failure_or<void>;
-  auto apply_to( curl::easy& easy, diagnostic_handler& dh ) -> bool;
+  auto set_fallback_cacert(std::string_view) -> void;
+  auto add_tls_options(argument_parser2&) -> void;
+  auto validate(diagnostic_handler&) -> failure_or<void>;
+  auto apply_to(curl::easy& easy) const -> caf::error;
 };
-}
+
+} // namespace tenzir

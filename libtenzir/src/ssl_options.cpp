@@ -13,9 +13,7 @@
 
 namespace tenzir {
 
-ssl_options::ssl_options(std::string_view default_cacert) {
-  cacert = located{default_cacert, location::unknown};
-}
+ssl_options::ssl_options() = default;
 
 auto ssl_options::add_url_option(argument_parser2& parser,
                                  bool positional) -> void {
@@ -64,6 +62,7 @@ auto ssl_options::validate(diagnostic_handler& dh) -> failure_or<void> {
     return {};
   };
   TRY(tls_logic(skip_peer_verification, "skip_peer_verification"));
+  TRY(tls_logic(skip_hostname_verification, "skip_hostname_verification"));
   TRY(tls_logic(cacert, "cacert"));
   TRY(tls_logic(certfile, "certfile"));
   TRY(tls_logic(keyfile, "keyfile"));
@@ -85,27 +84,25 @@ auto ssl_options::validate(diagnostic_handler& dh) -> failure_or<void> {
   return {};
 }
 
-auto ssl_options::apply_to(curl::easy& easy, diagnostic_handler& dh) -> bool {
+auto ssl_options::apply_to(curl::easy& easy) -> caf::error {
   check(easy.set(CURLOPT_URL, url.inner));
   if (cacert) {
     if (auto ec = easy.set(CURLOPT_CAINFO, cacert->inner);
         ec != curl::easy::code::ok) {
-      diagnostic::error("failed to set `cacert`: {}", to_string(ec)).emit(dh);
-      return false;
+      return diagnostic::error("failed to set `cacert`: {}", to_string(ec)).to_error();
     }
   }
   if (certfile) {
     if (auto ec = easy.set(CURLOPT_SSLCERT, certfile->inner);
         ec != curl::easy::code::ok) {
-      diagnostic::error("failed to set `certfile`: {}", to_string(ec)).emit(dh);
-      return false;
+      return diagnostic::error("failed to set `certfile`: {}", to_string(ec)).to_error();
     }
   }
   if (keyfile) {
     if (auto ec = easy.set(CURLOPT_SSLKEY, keyfile->inner);
         ec != curl::easy::code::ok) {
-      diagnostic::error("failed to set `keyfile`: {}", to_string(ec)).emit(dh);
-      return false;
+      return diagnostic::error("failed to set `keyfile`: {}", to_string(ec))
+        .to_error();
     }
   }
   TENZIR_ASSERT(tls.has_value());
@@ -113,6 +110,13 @@ auto ssl_options::apply_to(curl::easy& easy, diagnostic_handler& dh) -> bool {
     easy.set(CURLOPT_USE_SSL, tls->inner ? CURLUSESSL_ALL : CURLUSESSL_NONE));
   check(easy.set(CURLOPT_SSL_VERIFYPEER, skip_peer_verification ? 0 : 1));
   check(easy.set(CURLOPT_SSL_VERIFYHOST, skip_peer_verification ? 0 : 1));
-  return true;
+  return {};
 }
+
+auto ssl_options::set_fallback_cacert(std::string_view default_cert) -> void {
+  if (not cacert.has_value()) {
+    cacert = located{std::string{default_cert}, location::unknown};
+  }
+}
+
 } // namespace tenzir

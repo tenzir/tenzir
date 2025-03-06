@@ -40,6 +40,7 @@ auto transfer::prepare(http::request req) -> caf::error {
   if (auto err = to_error(easy.set(CURLOPT_URL, req.uri))) {
     return err;
   }
+  TRY(options.ssl.apply_to(easy));
   // Set method.
   TENZIR_DEBUG("setting method: {}", req.method);
   if (req.method == "GET") {
@@ -269,11 +270,11 @@ auto transfer::reset() -> caf::error {
         .to_error();
     }
   }
-  if (options.skip_peer_verification) {
+  if (options.ssl.skip_peer_verification) {
     auto code = easy_.set(CURLOPT_SSL_VERIFYPEER, 0);
     TENZIR_ASSERT(code == curl::easy::code::ok);
   }
-  if (options.skip_hostname_verification) {
+  if (options.ssl.skip_hostname_verification) {
     auto code = easy_.set(CURLOPT_SSL_VERIFYHOST, 0);
     TENZIR_ASSERT(code == curl::easy::code::ok);
   }
