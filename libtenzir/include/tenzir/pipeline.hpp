@@ -266,6 +266,9 @@ struct demand_settings {
   std::optional<uint64_t> min_elements = {};
   std::optional<uint64_t> max_elements = {};
   std::optional<uint64_t> max_batches = {};
+  std::optional<duration> min_backoff = {};
+  std::optional<duration> max_backoff = {};
+  std::optional<double> backoff_rate = {};
 };
 
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.

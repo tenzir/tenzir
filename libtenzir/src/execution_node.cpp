@@ -217,27 +217,45 @@ struct exec_node_state {
       run_id{run_id},
       op{std::move(op)},
       metrics_receiver{metrics_receiver} {
-    auto read_config = [&](std::string_view config, uint64_t min,
-                           uint64_t fallback) -> uint64_t {
+    auto read_config = [&]<class T>(std::string_view config, T min, T fallback,
+                                    bool element_specific) -> T {
+      static_assert(caf::detail::tl_contains_v<data::types, T>);
       auto result
         = caf::get_or(content(self->system().config()),
                       fmt::format("tenzir.demand.{}", config), fallback);
-      result = caf::get_or(content(self->system().config()),
-                           fmt::format("tenzir.demand.{}.{}", config,
-                                       operator_type_name<Input>()),
-                           result);
+      if (element_specific) {
+        result = caf::get_or(content(self->system().config()),
+                             fmt::format("tenzir.demand.{}.{}", config,
+                                         operator_type_name<Input>()),
+                             result);
+      }
       return std::max(min, result);
     };
     const auto demand_settings = this->op->demand();
-    min_elements = demand_settings.min_elements
-                     ? *demand_settings.min_elements
-                     : read_config("min-elements", 1, min_elements);
-    max_elements = demand_settings.max_elements
-                     ? *demand_settings.max_elements
-                     : read_config("max-elements", min_elements, max_elements);
-    max_batches = demand_settings.max_batches
-                    ? *demand_settings.max_batches
-                    : read_config("max-batches", 1, max_batches);
+    min_elements
+      = demand_settings.min_elements
+          ? *demand_settings.min_elements
+          : read_config("min-elements", uint64_t{1}, min_elements, true);
+    max_elements
+      = demand_settings.max_elements
+          ? *demand_settings.max_elements
+          : read_config("max-elements", min_elements, max_elements, true);
+    max_batches
+      = demand_settings.max_batches
+          ? *demand_settings.max_batches
+          : read_config("max-batches", uint64_t{1}, max_batches, false);
+    min_backoff
+      = demand_settings.min_backoff
+          ? *demand_settings.min_backoff
+          : read_config("min-backoff", duration{std::chrono::milliseconds{10}},
+                        min_backoff, false);
+    max_backoff
+      = demand_settings.max_backoff
+          ? *demand_settings.max_backoff
+          : read_config("min-backoff", min_backoff, max_backoff, false);
+    backoff_rate = demand_settings.backoff_rate
+                     ? *demand_settings.backoff_rate
+                     : read_config("backoff-rate", 1.0, backoff_rate, false);
     auto time_starting_guard
       = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
     metrics.operator_index = index;
@@ -419,9 +437,9 @@ struct exec_node_state {
   caf::typed_response_promise<void> start_rp = {};
 
   /// Exponential backoff for scheduling.
-  static constexpr duration min_backoff = std::chrono::milliseconds{30};
-  static constexpr duration max_backoff = std::chrono::minutes{1};
-  static constexpr double backoff_rate = 2.0;
+  duration min_backoff = std::chrono::milliseconds{30};
+  duration max_backoff = std::chrono::minutes{1};
+  double backoff_rate = 2.0;
   duration backoff = duration::zero();
   caf::disposable backoff_disposable = {};
   std::optional<std::chrono::steady_clock::time_point> idle_since = {};

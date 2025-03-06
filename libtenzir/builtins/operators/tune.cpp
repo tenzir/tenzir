@@ -17,6 +17,9 @@ struct tune_args {
   std::optional<located<uint64_t>> min_demand_elements = {};
   std::optional<located<uint64_t>> max_demand_elements = {};
   std::optional<located<uint64_t>> max_demand_batches = {};
+  std::optional<located<duration>> min_backoff = {};
+  std::optional<located<duration>> max_backoff = {};
+  std::optional<located<double>> backoff_rate = {};
   std::optional<located<bool>> detached = {};
 
   friend auto inspect(auto& f, tune_args& x) {
@@ -25,7 +28,9 @@ struct tune_args {
       f.field("min_demand_elements", x.min_demand_elements),
       f.field("max_demand_elements", x.max_demand_elements),
       f.field("max_demand_batches", x.max_demand_batches),
-      f.field("detached", x.detached));
+      f.field("min_backoff", x.min_backoff),
+      f.field("max_backoff", x.max_backoff),
+      f.field("backoff_rate", x.backoff_rate), f.field("detached", x.detached));
   }
 };
 
@@ -88,6 +93,15 @@ public:
     if (args_.max_demand_batches) {
       result.max_batches = args_.max_demand_batches->inner;
     }
+    if (args_.min_backoff) {
+      result.min_backoff = args_.min_backoff->inner;
+    }
+    if (args_.max_backoff) {
+      result.max_backoff = args_.max_backoff->inner;
+    }
+    if (args_.backoff_rate) {
+      result.backoff_rate = args_.backoff_rate->inner;
+    }
     return result;
   }
 
@@ -123,6 +137,9 @@ public:
     parser.named("min_demand_elements", args.min_demand_elements, "<number>");
     parser.named("max_demand_elements", args.max_demand_elements, "<number>");
     parser.named("max_demand_batches", args.max_demand_batches, "<number>");
+    parser.named("min_backoff", args.min_backoff, "<duration>");
+    parser.named("max_backoff", args.max_backoff, "<duration>");
+    parser.named("backoff_rate", args.backoff_rate, "<number>");
     parser.named("detached", args.detached, "<bool>");
     parser.positional("{ … }", pipe);
     TRY(parser.parse(inv, ctx));
@@ -159,6 +176,43 @@ public:
         .primary(args.max_demand_batches->source)
         .emit(ctx);
       failed = true;
+    }
+    if (args.min_backoff
+        and args.min_backoff->inner < std::chrono::milliseconds{10}) {
+      diagnostic::error("`min_backoff` must be greater than or equal to 10ms")
+        .primary(args.min_backoff->source)
+        .emit(ctx);
+      failed = true;
+    }
+    if (args.max_backoff
+        and args.max_backoff->inner <= std::chrono::milliseconds{10}) {
+      diagnostic::error("`max_backoff` must be greater than or equal to 10ms")
+        .primary(args.max_backoff->source)
+        .emit(ctx);
+      failed = true;
+    }
+    if (args.min_backoff and args.max_backoff
+        and args.min_backoff->inner > args.max_backoff->inner) {
+      diagnostic::error(
+        "`max_backoff` must be greater or equal than `min_backoff`")
+        .primary(args.max_backoff->source)
+        .primary(args.min_backoff->source)
+        .emit(ctx);
+      failed = true;
+    }
+    if (args.backoff_rate and args.backoff_rate->inner < 1.0) {
+      diagnostic::error("`backoff_rate` must be greater than or equal to 1.0")
+        .primary(args.backoff_rate->source)
+        .emit(ctx);
+      failed = true;
+    }
+    if (args.backoff_rate and args.backoff_rate->inner == 1.0
+        and args.max_backoff) {
+      diagnostic::warning("`backoff_rate` is equal to 1.0, which causes "
+                          "`max_backoff` to be ignored")
+        .primary(args.backoff_rate->source)
+        .secondary(args.max_backoff->source)
+        .emit(ctx);
     }
     if (not pipe) {
       diagnostic::error("missing pipeline argument").primary(inv.self).emit(ctx);
