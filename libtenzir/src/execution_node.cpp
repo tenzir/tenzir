@@ -438,7 +438,7 @@ struct exec_node_state {
 
   /// Exponential backoff for scheduling.
   duration min_backoff = std::chrono::milliseconds{30};
-  duration max_backoff = std::chrono::minutes{1};
+  duration max_backoff = std::chrono::seconds{1};
   double backoff_rate = 2.0;
   duration backoff = duration::zero();
   caf::disposable backoff_disposable = {};

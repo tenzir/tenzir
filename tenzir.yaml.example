@@ -202,7 +202,7 @@ tenzir:
     min-backoff: 10ms
     # Controls the maximum backoff duration after an operator is detected to be
     # idle. Must be at least 10ms.
-    max-backoff: 1min
+    max-backoff: 1s
     # Controls the growth rate of the backoff duration for operators that
     # continue to be idle. Must be at least 1.0. Note that setting a growth rate
     # of 1.0 causes the `max-backoff` duration to be ignored, replacing the
