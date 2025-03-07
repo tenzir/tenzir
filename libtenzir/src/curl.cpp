@@ -8,6 +8,7 @@
 
 #include "tenzir/curl.hpp"
 
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/concept/parseable/numeric.hpp"
 #include "tenzir/concept/printable/tenzir/data.hpp"
@@ -426,6 +427,21 @@ auto set(easy& handle, chunk_ptr chunk) -> caf::error {
     return buffer.size();
   };
   return to_error(handle.set(on_read));
+}
+
+auto easy::validate_cacert(diagnostic_handler& dh) -> bool {
+  auto cainfo = get_checked<info::cainfo>();
+  if (cainfo) {
+    if (!std::filesystem::exists(cainfo)) {
+      diagnostic::error("the configured CA certificate bundle does not exist")
+        .note("configured location: {}", cainfo)
+        .emit(dh);
+      return false;
+    }
+    return true;
+  }
+  diagnostic::error("no CA certificate file configured").emit(dh);
+  return false;
 }
 
 } // namespace tenzir::curl

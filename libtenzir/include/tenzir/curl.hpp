@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/data.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/generator.hpp"
 
 #include <caf/error.hpp>
@@ -296,6 +297,9 @@ public:
   template <info what>
   auto get() -> std::pair<code, typename info_type<what>::type>;
 
+  template <info what>
+  auto get_checked() -> typename info_type<what>::type;
+
   /// Sets an option to NULL / nullptr.
   auto unset(CURLoption option) -> code;
 
@@ -344,6 +348,9 @@ public:
 
   /// `curl_easy_reset`
   auto reset() -> void;
+
+  /// Checks that the
+  auto validate_cacert(diagnostic_handler& dh) -> bool;
 
 private:
   struct curl_deleter {
@@ -435,6 +442,13 @@ auto easy::get() -> std::pair<code, info_type_t<what>> {
   auto res = info_type_t<what>{};
   auto c = curl_easy_getinfo(easy_.get(), curl_info, &res);
   return {static_cast<code>(c), res};
+}
+
+template <easy::info what>
+auto easy::get_checked() -> info_type_t<what> {
+  auto [code, result] = get<what>();
+  check(code);
+  return result;
 }
 
 /// @relates easy
