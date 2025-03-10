@@ -86,16 +86,16 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | `amqp` | [`save_amqp`](save_amqp.md) | `to "amqp://…` |
 | `elasticsearch` | [`to_opensearch`](to_opensearch.md) | `to "elasticsearch://…` |
 | `file` | [`save_file`](save_file.md) | `to "file://path/to/file.json"` |
-| `fluent-bit` | [`to_fluent_bit`](to_fluent_bit.md) | `to "fluent-bit://elasticsearch"` |
-| `ftp`, `ftps` | [`save_ftp`](save_ftp.md) | `to "ftp://example.com/file.json"` |
+| `fluent-bit` | [`to_fluent_bit`](to_fluent_bit.mdx) | `to "fluent-bit://elasticsearch"` |
+| `ftp`, `ftps` | [`save_ftp`](save_ftp.mdx) | `to "ftp://example.com/file.json"` |
 | `gcps` | [`save_google_cloud_pubsub`](save_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id" { … }` |
-| `http`, `https` | [`save_http`](save_http.md) | `to "http://example.com/file.json"` |
+| `http`, `https` | [`save_http`](save_http.mdx) | `to "http://example.com/file.json"` |
 | `inproc` | [`save_zmq`](save_zmq.md) | `to "inproc://127.0.0.1:56789" { write_json }` |
 | `kafka` | [`save_kafka`](save_kafka.md) | `to "kafka://topic" { write_json }` |
-| `opensearch` | [`to_opensearch`](to_opensearch.md) | `to "opensearch://…` |
+| `opensearch` | [`to_opensearch`](to_opensearch.mdx) | `to "opensearch://…` |
 | `s3` | [`save_s3`](save_s3.md) | `to "s3://bucket/file.json"` |
 | `sqs` | [`save_sqs`](save_sqs.md) | `to "sqs://my-queue" { write_json }` |
-| `tcp` | [`save_tcp`](save_tcp.md) | `to "tcp://127.0.0.1:56789" { write_json }` |
+| `tcp` | [`save_tcp`](save_tcp.mdx) | `to "tcp://127.0.0.1:56789" { write_json }` |
 | `udp` | [`save_udp`](save_udp.md) | `to "udp://127.0.0.1:56789" { write_json }` |
 | `zmq` | [`save_zmq`](save_zmq.md) | `to "zmq://127.0.0.1:56789" { write_json }` |
 

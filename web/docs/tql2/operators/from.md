@@ -88,7 +88,7 @@ if you e.g. know that the input is `suricata` or `ndjson` instead of just plain 
 
 ### The pipeline argument & its relation to the loader
 
-Some loaders, such as the [`load_tcp` operator](load_tcp.md), accept a sub-pipeline
+Some loaders, such as the [`load_tcp` operator](load_tcp.mdx), accept a sub-pipeline
 directly. If the selected loader accepts a sub-pipeline, the `from` operator will
 dispatch decompression and parsing into that sub-pipeline. If a an explicit
 pipeline argument is provided it is forwarded as-is. If the loader does not accept
@@ -129,14 +129,14 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 | `amqp` | [`load_amqp`](load_amqp.md) | `from "amqp://…` |
 | `file` | [`load_file`](load_file.md) | `from "file://path/to/file.json"` |
 | `fluent-bit` | [`from_fluent_bit`](from_fluent_bit.mdx) | `from "fluent-bit://elasticsearch"` |
-| `ftp`, `ftps` | [`load_ftp`](load_ftp.md) | `from "ftp://example.com/file.json"` |
+| `ftp`, `ftps` | [`load_ftp`](load_ftp.mdx) | `from "ftp://example.com/file.json"` |
 | `gcps` | [`load_google_cloud_pubsub`](load_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id" { … }` |
-| `http`, `https` | [`load_http`](load_http.md) | `from "http://example.com/file.json"` |
+| `http`, `https` | [`load_http`](load_http.mdx) | `from "http://example.com/file.json"` |
 | `inproc` | [`load_zmq`](load_zmq.md) | `from "inproc://127.0.0.1:56789" { read_json }` |
 | `kafka` | [`load_kafka`](load_kafka.md) | `from "kafka://topic" { read_json }` |
 | `s3` | [`load_s3`](load_s3.md) | `from "s3://bucket/file.json"` |
 | `sqs` | [`load_sqs`](load_sqs.md) | `from "sqs://my-queue" { read_json }` |
-| `tcp` | [`load_tcp`](load_tcp.md) | `from "tcp://127.0.0.1:13245" { read_json }` |
+| `tcp` | [`load_tcp`](load_tcp.mdx) | `from "tcp://127.0.0.1:13245" { read_json }` |
 | `udp` | [`load_udp`](load_udp.md) | `from "udp://127.0.0.1:56789" { read_json }` |
 | `zmq` | [`load_zmq`](load_zmq.md) | `from "zmq://127.0.0.1:56789" { read_json }` |
 

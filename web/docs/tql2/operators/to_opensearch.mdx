@@ -1,3 +1,5 @@
+import TLSOptions from './_common_tls_options.mdx';
+
 # to_opensearch
 
 Sends events to an OpenSearch-compatible Bulk API.
@@ -63,30 +65,7 @@ Optional user for HTTP Basic Authentication.
 
 Optional password for HTTP Basic Authentication.
 
-### `tls = bool (optional)`
-
-Enables TLS.
-
-If the URL scheme is `https`, or any of the other TLS related
-options are set, the option defaults to `true`, otherwise it is `false`.
-
-### `skip_peer_verification = bool (optional)`
-
-Toggles TLS certificate verification.
-
-Defaults to `false`.
-
-### `cacert = string (optional)`
-
-Path to the CA certificate used to verify the server's certificate.
-
-### `certfile = string (optional)`
-
-Path to the client certificate.
-
-### `keyfile = string (optional)`
-
-Path to the key for the client certificate.
+<TLSOptions tls_default="true"/>
 
 ### `include_nulls = bool (optional)`
 

@@ -12,7 +12,7 @@ events before shipping them within a single API call. You can control batching
 behavior with the `max_content_length` and `send_timeout` options.
 
 For more details, see the documentation for the
-[`to_opensearch`](../../tql2/operators/to_opensearch.md) operator.
+[`to_opensearch`](../../tql2/operators/to_opensearch.mdx) operator.
 
 ## Examples
 

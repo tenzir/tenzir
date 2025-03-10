@@ -1,3 +1,5 @@
+import TLSOptions from './_common_tls_options.mdx';
+
 # to_fluent_bit
 
 Sends events via [Fluent Bit](https://docs.fluentbit.io/).
@@ -5,7 +7,9 @@ Sends events via [Fluent Bit](https://docs.fluentbit.io/).
 ## Synopsis
 
 ```tql
-to_fluent_bit plugin:string, [options=record, fluent_bit_options=record]
+to_fluent_bit plugin:string, [options=record, fluent_bit_options=record,
+              tls=bool, cacert=string, certfile=string, keyfile=string,
+              skip_peer_verification=bool, skip_hostname_verification=bool]
 ```
 
 ## Description
@@ -59,6 +63,8 @@ Fluent Bit according to your needs.
 We recommend factoring these options into the plugin-specific `fluent-bit.yaml`
 so that they are independent of the `fluent-bit` operator arguments.
 
+<TLSOptions tls_default="true"/>
+
 ## URI support & integration with `from`
 
 The `to_fluent_bit` operator can also be used from the [`to`](to.md)
@@ -99,5 +105,5 @@ to_fluent_bit "slack", options={webhook: $slack_hook}
 ### Splunk
 
 :::tip
-Use the dedicated [`to_splunk` operator](to_splunk.md) instead
+Use the dedicated [`to_splunk` operator](to_splunk.mdx) instead
 :::

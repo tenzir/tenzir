@@ -3,7 +3,7 @@
 [Fluent Bit](https://fluentbit.io) is a an open source observability
 pipeline. Tenzir embeds Fluent Bit, exposing all its [inputs][inputs] via
 [`from_fluent_bit`](tql2/operators/from_fluent_bit.mdx) and
-[outputs][outputs] via [`to_fluent_bit`](tql2/operators/to_fluent_bit.md)
+[outputs][outputs] via [`to_fluent_bit`](tql2/operators/to_fluent_bit.mdx)
 
 This makes Tenzir effectively a superset of Fluent Bit.
 
@@ -40,7 +40,7 @@ operator as follows:
 from_fluent_bit "input_plugin", options={key1: value1, key2: value2, …}
 ```
 
-with the [`to_fluent_bit`](tql2/operators/to_fluent_bit.md) operator working
+with the [`to_fluent_bit`](tql2/operators/to_fluent_bit.mdx) operator working
 exactly analogous.
 
 ## Examples

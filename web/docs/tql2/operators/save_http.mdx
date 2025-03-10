@@ -1,11 +1,13 @@
+import TLSOptions from './_common_tls_options.mdx';
+
 # save_http
 
 Sends a byte stream via HTTP.
 
 ```tql
 save_http url:string, [params=record, headers=record, method=string,
-          skip_peer_verification=bool, skip_hostname_verification=bool,
-          verbose=bool]
+          parallel=int, tls=bool, cacert=string, certifle=string,
+          keyfile=string, skip_peer_verification=bool, skip_host_verification=bool]
 ```
 
 ## Description
@@ -31,23 +33,7 @@ The query parameters for the request.
 
 The headers for the request.
 
-### `skip_peer_verification = bool (optional)`
-
-Whether to skip TLS peer verification.
-
-Defaults to `false`.
-
-### `skip_hostname_verification = bool (optional)`
-
-Whether to skip TLS peer verification.
-
-Defaults to `false`.
-
-<!-- ### `verbose = bool (optional)` -->
-<!---->
-<!-- Whether to emit verbose output. -->
-<!---->
-<!-- Defaults to `false`. -->
+<TLSOptions tls_default="true"/>
 
 ## Examples
 
@@ -59,4 +45,4 @@ save_http "example.org/api", headers={"X-API-Token": "0000-0000-0000"}
 
 ## See Also
 
-[`load_http`](load_http.md)
+[`load_http`](load_http.mdx)
