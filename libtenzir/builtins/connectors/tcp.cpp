@@ -799,6 +799,7 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = Args{};
+    args.tls.inner = false;
     auto uri = located<std::string>{};
     parser.add(uri, "<endpoint>");
     if constexpr (std::is_same_v<Args, loader_args>) {

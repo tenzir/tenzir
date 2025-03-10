@@ -5,8 +5,9 @@
       verbose: false,
       default_protocol: "https",
       poll_timeout: "100ms",
-      skip_peer_verification: false,
-      skip_host_verification: false
+      ssl: {
+        tls: true @ 0..0
+      }
     },
     http_opts: {
       json: false,

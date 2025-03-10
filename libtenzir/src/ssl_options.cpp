@@ -57,9 +57,9 @@ auto ssl_options::validate(const located<std::string>& url,
   TRY(tls_logic(certfile, "certfile"));
   TRY(tls_logic(keyfile, "keyfile"));
   if (tls.inner and not skip_peer_verification) {
-    if (!std::filesystem::exists(cacert->inner)) {
+    if (cacert and not std::filesystem::exists(cacert->inner)) {
       diagnostic::error("the configured CA certificate bundle does not exist")
-        .note("configured location: {}", cacert->inner)
+        .note("configured location: `{}`", cacert->inner)
         .primary(*cacert)
         .emit(dh);
       return failure::promise();
