@@ -490,27 +490,25 @@ struct connector_args : ssl_options {
 };
 
 struct loader_args : connector_args {
-  template <class Inspector>
+  bool connect = false;
+
   friend auto inspect(auto& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.tcp.loader_args")
       .fields(f.field("connector_args", static_cast<connector_args&>(x)),
               f.field("connect", x.connect));
   }
-
-  bool connect = false;
 };
 
 struct saver_args : connector_args {
-  template <class Inspector>
-  friend auto inspect(Inspector& f, saver_args& x) -> bool {
+  bool listen = false;
+
+  friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.tcp.loader_args")
       .fields(f.field("connector_args", static_cast<connector_args&>(x)),
               f.field("listen", x.listen));
   }
-
-  bool listen = false;
 };
 
 class loader final : public plugin_loader {

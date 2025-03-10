@@ -68,7 +68,7 @@ from_fluent_bit "splunk", options = {port: 8088}
 ```
 
 :::tip
-Use the dedicated [`to_splunk` operator](tql2/operators/to_splunk.md) to send
+Use the dedicated [`to_splunk` operator](tql2/operators/to_splunk.mdx) to send
 events to a Splunk HEC.
 :::
 

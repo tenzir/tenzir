@@ -13,8 +13,8 @@ behavior with the `max_content_length` and `send_timeout` options.
 
 :::info Advanced Details
 For more details and possible configuration, see the documentation for the
-[`to_opensearch`](../../tql2/operators/to_opensearch.md) operator. When you use
-[`to`](../../tql2/operators/to.mdx) with the `elasticsearch://` URL scheme, the
+[`to_opensearch`](../../tql2/operators/to_opensearch.mdx) operator. When you use
+[`to`](../../tql2/operators/to.md) with the `elasticsearch://` URL scheme, the
 pipeline uses the `to_opensearch` operator under the hood.
 :::
 
