@@ -35,11 +35,12 @@ auto split_multi_series(std::span<const multi_series> input,
     auto shortest_length = std::numeric_limits<int64_t>::max();
     for (auto i = size_t{0}; i < input.size(); ++i) {
       auto [part, start] = positions[i];
-      if (part >= input[i].parts().size()) {
+      TENZIR_ASSERT(part <= input[i].parts().size());
+      if (part == input[i].parts().size()) {
         // We assert that everything else is done as well.
         for (auto j = size_t{0}; j < input.size(); ++j) {
           std::tie(part, start) = positions[j];
-          TENZIR_ASSERT(part == input[i].parts().size());
+          TENZIR_ASSERT(part == input[j].parts().size());
           TENZIR_ASSERT(start == 0);
         }
         co_return;
@@ -52,7 +53,7 @@ auto split_multi_series(std::span<const multi_series> input,
     // Split everything to the shortest length.
     for (auto i = size_t{0}; i < input.size(); ++i) {
       auto& [part, start] = positions[i];
-      output[i] = input[i].part(part).slice(start, shortest_length);
+      output[i] = input[i].part(part).slice(start, start + shortest_length);
       // Adjust the position.
       auto length = input[i].part(part).length() - start;
       if (length > shortest_length) {
