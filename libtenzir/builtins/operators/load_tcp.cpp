@@ -566,6 +566,20 @@ struct connection_manager_state {
           return;
         }
       }
+      if (not args.skip_hostname_verification
+          or not args.skip_peer_verification) {
+        if (args.cacert) {
+          if (connection->ssl_ctx->load_verify_file(args.cacert->inner, ec)) {
+            diagnostic::warning("{}", ec.message())
+              .note("failed to load cacert file `{}`: {}", args.cacert->inner,
+                    ec.message())
+              .note("handle `{}`", connection->socket->native_handle())
+              .primary(args.cacert->source)
+              .emit(diagnostics);
+            return;
+          }
+        }
+      }
       if (args.skip_peer_verification) {
         if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
                                                  ec)) {
@@ -588,17 +602,11 @@ struct connection_manager_state {
             .emit(diagnostics);
           return;
         }
-        if (args.cacert) {
-          if (connection->ssl_ctx->load_verify_file(args.cacert->inner, ec)) {
-            diagnostic::warning("{}", ec.message())
-              .note("failed to load cacert file `{}`: {}", args.cacert->inner,
-                    ec.message())
-              .note("handle `{}`", connection->socket->native_handle())
-              .primary(args.cacert->source)
-              .emit(diagnostics);
-            return;
-          }
-        }
+      }
+      if (not args.skip_hostname_verification) {
+        connection->ssl_ctx->set_verify_callback(
+          boost::asio::ssl::host_name_verification{
+            args.endpoint.inner.hostname});
       }
       TENZIR_ASSERT(not connection->tls_socket);
       connection->tls_socket.emplace(*connection->socket, *connection->ssl_ctx);

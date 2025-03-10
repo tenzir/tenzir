@@ -37,8 +37,8 @@ namespace {
 using tcp_bridge_actor = caf::typed_actor<
   // Connect to a TCP endpoint.
   auto(atom::connect, bool tls, std::string cacert, std::string certfile,
-       std::string keyfile, bool skip_peer_verification, std::string hostname,
-       std::string port)
+       std::string keyfile, bool skip_peer_verification,
+       bool skip_host_verification, std::string hostname, std::string port)
     ->caf::result<void>,
   // Wait for an incoming TCP connection.
   auto(atom::accept, std::string hostname, std::string port,
@@ -140,7 +140,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
   return {
     [self](atom::connect, bool tls, const std::string& cacert,
            const std::string& certfile, const std::string& keyfile,
-           bool skip_peer_verification, const std::string& hostname,
+           bool skip_peer_verification, bool skip_host_verification,
+           const std::string& hostname,
            const std::string& service) -> caf::result<void> {
       if (self->state().connection_rp.pending()) {
         return caf::make_error(ec::logic_error,
@@ -168,12 +169,7 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
         self->state().ssl_ctx.emplace(boost::asio::ssl::context::tls_client);
         self->state().ssl_ctx->set_default_verify_paths();
         auto ec = boost::system::error_code{};
-        if (skip_peer_verification) {
-          self->state().ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
-        } else {
-          self->state().ssl_ctx->set_verify_mode(
-            boost::asio::ssl::verify_peer
-            | boost::asio::ssl::verify_fail_if_no_peer_cert);
+        if (not skip_peer_verification or not skip_host_verification) {
           if (not cacert.empty()) {
             if (self->state().ssl_ctx->load_verify_file(cacert, ec).failed()) {
               return caf::make_error(ec::system_error,
@@ -182,6 +178,17 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                                                  cacert, ec.message()));
             }
           }
+        }
+        if (skip_peer_verification) {
+          self->state().ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
+        } else {
+          self->state().ssl_ctx->set_verify_mode(
+            boost::asio::ssl::verify_peer
+            | boost::asio::ssl::verify_fail_if_no_peer_cert);
+        }
+        if (not skip_host_verification) {
+          self->state().ssl_ctx->set_verify_callback(
+            boost::asio::ssl::host_name_verification{hostname});
         }
         if (not certfile.empty()) {
           if (self->state()
@@ -567,7 +574,7 @@ public:
             = args.keyfile.has_value() ? args.keyfile->inner : std::string{};
           ctrl.self()
             .mail(atom::connect_v, args.tls.inner, cacert, certfile, keyfile,
-                  false, args.hostname, args.port)
+                  false, false, args.hostname, args.port)
             .request(tcp_bridge, caf::infinite)
             .await(
               [&]() {
@@ -697,7 +704,8 @@ public:
         = args_.keyfile.has_value() ? args_.keyfile->inner : std::string{};
       ctrl.self()
         .mail(atom::connect_v, args_.tls.inner, cacert, certfile, keyfile,
-              args_.skip_peer_verification.has_value(), args_.hostname,
+              args_.skip_peer_verification.has_value(),
+              args_.skip_hostname_verification.has_value(), args_.hostname,
               args_.port)
         .request(tcp_bridge, caf::infinite)
         .await(
