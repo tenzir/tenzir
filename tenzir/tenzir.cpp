@@ -325,6 +325,13 @@ auto main(int argc, char** argv) -> int try {
             .urgent().send(reflector.get());
         }
       });
+  auto signal_monitoring_joiner = detail::scope_guard{[&]() noexcept {
+    stop = true;
+    if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0) {
+      TENZIR_ERROR("failed to cancel signal monitoring thread");
+    }
+    signal_monitoring_thread.join();
+  }};
   // clang-format on
   // Put it into the actor registry so any actor can communicate with it.
   sys.registry().put("signal-reflector", reflector.get());
@@ -337,11 +344,7 @@ auto main(int argc, char** argv) -> int try {
     }}(*result);
   }
   sys.registry().erase("signal-reflector");
-  stop = true;
-  if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0) {
-    TENZIR_ERROR("failed to cancel signal monitoring thread");
-  }
-  signal_monitoring_thread.join();
+  signal_monitoring_joiner.trigger();
   pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
   if (run_error) {
     render_error(*root, run_error, std::cerr);
