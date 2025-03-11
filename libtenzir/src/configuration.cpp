@@ -562,7 +562,8 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
     if (not cacert_path_env) {
       if (auto err = detail::setenv(cacert_path_env_name, *cacert_path)) {
         // TODO: Consider just ignoring instead?
-        TENZIR_ERROR("failed to set {}: {}", cacert_path_env_name, err);
+        fmt::print(stderr, "failed to set environment variable `{}`: {}\n",
+                   cacert_path_env_name, err);
       }
     }
   }
