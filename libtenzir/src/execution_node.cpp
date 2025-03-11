@@ -321,10 +321,6 @@ struct exec_node_state {
         return error;
       });
     return {
-      [this](atom::internal, atom::run) -> caf::result<void> {
-        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-        return internal_run();
-      },
       [this](atom::start,
              std::vector<caf::actor>& all_previous) -> caf::result<void> {
         auto time_scheduled_guard
@@ -762,19 +758,16 @@ struct exec_node_state {
     TENZIR_TRACE("{} {} schedules run with a delay of {}", *self, op->name(),
                  data{backoff});
     run_scheduled = true;
+    auto async_run = [this] {
+      auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+      run();
+    };
     if (backoff == duration::zero()) {
-      self->mail(atom::internal_v, atom::run_v).send(self);
+      self->schedule_fn(std::move(async_run));
     } else {
-      backoff_disposable = detail::weak_run_delayed(self, backoff, [this] {
-        self->mail(atom::internal_v, atom::run_v).send(self);
-      });
+      backoff_disposable
+        = self->run_delayed_weak(backoff, std::move(async_run));
     }
-  }
-
-  auto internal_run() -> caf::result<void> {
-    run_scheduled = false;
-    run();
-    return {};
   }
 
   auto issue_demand() -> void {
@@ -819,6 +812,7 @@ struct exec_node_state {
   }
 
   auto run() -> void {
+    run_scheduled = false;
     if (waiting or paused_at or not instance) {
       return;
     }
