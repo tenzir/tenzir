@@ -8,33 +8,34 @@
 
 #pragma once
 
-#include "clickhouse/client.h"
+#include "clickhouse/arguments.hpp"
+#include "clickhouse/transformers.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/type.hpp"
 
-#include "arguments.hpp"
-#include "transformers.hpp"
+#include <clickhouse/client.h>
 
 namespace tenzir::plugins::clickhouse {
-class Easy_Client {
+
+class easy_client {
 public:
-  explicit Easy_Client(Arguments args, diagnostic_handler& dh)
+  explicit easy_client(arguments args, diagnostic_handler& dh)
     : client_{args.make_options()}, args_{std::move(args)}, dh_{dh} {
   }
 
   static auto
-  make(Arguments args, diagnostic_handler& dh) -> std::unique_ptr<Easy_Client>;
+  make(arguments args, diagnostic_handler& dh) -> std::unique_ptr<easy_client>;
 
-  auto insert(const table_slice& slice) -> bool;
+  auto insert(const table_slice& slice) -> failure_or<void>;
 
 private:
   auto table_exists() -> bool;
-  auto get_schema_transformations() -> bool;
-  auto create_table(const tenzir::record_type& schema) -> bool;
+  auto get_schema_transformations() -> failure_or<void>;
+  auto create_table(const tenzir::record_type& schema) -> failure_or<void>;
 
 private:
   ::clickhouse::Client client_;
-  Arguments args_;
+  arguments args_;
   diagnostic_handler& dh_;
   std::optional<transformer_record> transformations_;
   dropmask_type dropmask_;

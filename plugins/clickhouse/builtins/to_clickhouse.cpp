@@ -6,10 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/enumerate.hpp"
+#include "clickhouse/easy_client.hpp"
 #include "tenzir/tql2/plugin.hpp"
-
-#include "easy_client.hpp"
 
 using namespace clickhouse;
 
@@ -22,7 +20,7 @@ class clickhouse_sink_operator final
 public:
   clickhouse_sink_operator() = default;
 
-  clickhouse_sink_operator(Arguments args) : args_{std::move(args)} {
+  clickhouse_sink_operator(arguments args) : args_{std::move(args)} {
   }
 
   friend auto inspect(auto& f, clickhouse_sink_operator& x) -> bool {
@@ -50,7 +48,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> try {
-    auto client = Easy_Client::make(args_, ctrl.diagnostics());
+    auto client = easy_client::make(args_, ctrl.diagnostics());
     if (not client) {
       co_yield {};
       co_return;
@@ -61,12 +59,13 @@ public:
         continue;
       }
       if (slice.columns() == 0) {
-        co_yield {};
+        diagnostic::warning("empty event will be dropped")
+          .primary(args_.operator_location)
+          .emit(ctrl.diagnostics());
         continue;
       }
       slice = resolve_enumerations(slice);
       client->insert(slice);
-      co_yield {};
     }
   } catch (::clickhouse::Error& e) {
     diagnostic::error("unexpected error: {}", e.what())
@@ -76,14 +75,14 @@ public:
   }
 
 private:
-  Arguments args_;
+  arguments args_;
 };
 
 class to_clickhouse final : public operator_plugin2<clickhouse_sink_operator> {
 public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    TRY(auto args, Arguments::try_parse(name(), inv, ctx));
+    TRY(auto args, arguments::try_parse(name(), inv, ctx));
     return std::make_unique<clickhouse_sink_operator>(std::move(args));
   }
 };

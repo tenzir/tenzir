@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "clickhouse/columns/column.h"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/stable_map.hpp"
@@ -16,42 +15,11 @@
 #include "tenzir/generator.hpp"
 #include "tenzir/table_slice.hpp"
 
-// TODO: This should go into table_slice.hpp or somewhere like that
-namespace tenzir {
-struct column_view {
-  std::string_view name;
-  const tenzir::type& type;
-  const arrow::Array& array;
-};
-
-inline auto columns_of(const table_slice& slice) -> generator<column_view> {
-  const auto& schema = as<record_type>(slice.schema());
-  for (auto [i, kt] : detail::enumerate(schema.fields())) {
-    const auto& [k, _] = kt;
-    auto offset = tenzir::offset{};
-    offset.push_back(i);
-    auto [t, arr] = offset.get(slice);
-    co_yield column_view{k, t, *arr};
-  }
-}
-
-inline auto
-columns_of(const record_type& schema,
-           const arrow::StructArray& array) -> generator<column_view> {
-  for (auto [i, kt] : detail::enumerate(schema.fields())) {
-    const auto& [k, t] = kt;
-    auto offset = tenzir::offset{};
-    offset.push_back(i);
-    auto arr = offset.get(array);
-    co_yield column_view{k, t, *arr};
-  }
-}
-} // namespace tenzir
+#include <clickhouse/columns/column.h>
 
 namespace tenzir::plugins::clickhouse {
 
-  using dropmask_type = std::vector<char>;
-
+using dropmask_type = std::vector<char>;
 using dropmask_ref = std::span<char>;
 using dropmask_cref = std::span<const char>;
 
@@ -146,6 +114,11 @@ auto plain_clickhouse_tuple_elements(const record_type& record,
                                      std::string_view primary
                                      = "") -> std::string;
 
-auto make_functions_from_clickhouse(const std::string_view clickhouse_typename)
+auto make_functions_from_clickhouse(const std::string_view clickhouse_typename,
+                                    diagnostic_handler&)
   -> std::unique_ptr<transformer>;
-}
+
+auto emit_unsupported_type_diagnostic(std::string_view clickhouse_typename,
+                                      diagnostic_handler& dh) -> void;
+
+} // namespace tenzir::plugins::clickhouse

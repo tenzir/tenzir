@@ -15,6 +15,7 @@
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/default_formatter.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/expression.hpp"
@@ -1397,6 +1398,30 @@ auto table_slice::approx_bytes() const -> uint64_t {
     },
   };
   return visit(f, as_flatbuffer(chunk_));
+}
+
+auto columns_of(const table_slice& slice) -> generator<column_view> {
+  const auto& schema = as<record_type>(slice.schema());
+  const auto& batch = to_record_batch(slice);
+  for (auto i = size_t{0}; i < schema.num_fields(); ++i) {
+    auto field = schema.field(i);
+    co_yield column_view{
+      .name = field.name,
+      .type = field.type,
+      .array = *batch->column(i),
+    };
+  }
+}
+
+auto columns_of(const record_type& schema,
+                const arrow::StructArray& array) -> generator<column_view> {
+  for (auto [i, kt] : detail::enumerate(schema.fields())) {
+    const auto& [k, t] = kt;
+    auto offset = tenzir::offset{};
+    offset.push_back(i);
+    auto arr = offset.get(array);
+    co_yield column_view{k, t, *arr};
+  }
 }
 
 } // namespace tenzir

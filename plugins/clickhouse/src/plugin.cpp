@@ -14,13 +14,13 @@ namespace {
 
 class clickhouse_stub final : public virtual plugin {
 public:
-  auto name() const -> std::string override { return "clickhouse"; }
-
-  // This is an intentional stub
+  auto name() const -> std::string override {
+    return "clickhouse";
+  }
 };
 
 } // namespace
 
-} // namespace tenzir::plugins::example
+} // namespace tenzir::plugins::clickhouse
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::clickhouse::clickhouse_stub)

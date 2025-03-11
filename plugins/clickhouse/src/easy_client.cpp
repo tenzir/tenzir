@@ -5,7 +5,7 @@
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
-#include "easy_client.hpp"
+#include "clickhouse/easy_client.hpp"
 
 #include "clickhouse/client.h"
 #include "tenzir/detail/enumerate.hpp"
@@ -18,21 +18,11 @@
 using namespace clickhouse;
 using namespace std::string_view_literals;
 
-/// The implementation works via multiple customization points:
-/// * Implementing the entire transformer by hand. This is done for Tuple and
-///   Array
-/// * A common implementation for non-structural types that works via
-///   * A trait to handle names and allocations.
-///     * This trait is auto-implemented for most types via a X-macro.
-///     * It is specialized for some types with special requirements
-///   * A `value_transform` function that translates between a tenzir::data
-///     value and the expected clickhouse API value.
-
 namespace tenzir::plugins::clickhouse {
 
-auto Easy_Client::make(Arguments args,
-                       diagnostic_handler& dh) -> std::unique_ptr<Easy_Client> {
-  auto client = std::make_unique<Easy_Client>(std::move(args), dh);
+auto easy_client::make(arguments args,
+                       diagnostic_handler& dh) -> std::unique_ptr<easy_client> {
+  auto client = std::make_unique<easy_client>(std::move(args), dh);
   /// Note that technically, we have a ToCToU bug here. The table could be
   /// created or deleted in between this, the `get` call below and the potential
   /// creation in `insert`
@@ -71,7 +61,7 @@ auto Easy_Client::make(Arguments args,
   return client;
 }
 
-auto Easy_Client::table_exists() -> bool {
+auto easy_client::table_exists() -> bool {
   // // This does not work for some reason. It returns a table with 0 rows.
   // auto query = Query{fmt::format("EXISTS TABLE {}", table)};
   // auto exists = false;
@@ -100,38 +90,20 @@ auto Easy_Client::table_exists() -> bool {
   return exists;
 }
 
-auto Easy_Client::get_schema_transformations() -> bool {
+auto easy_client::get_schema_transformations() -> failure_or<void> {
   auto query = Query{fmt::format("DESCRIBE TABLE {} "
                                  "SETTINGS describe_compact_output=1",
                                  args_.table.inner)};
-  auto error = false;
+  bool failed = false;
   auto cb = [&](const Block& block) {
     for (size_t i = 0; i < block.GetRowCount(); ++i) {
       auto name = block[0]->As<ColumnString>()->At(i);
       auto type_str = remove_non_significant_whitespace(
         block[1]->As<ColumnString>()->At(i));
-      auto functions = make_functions_from_clickhouse(type_str);
+      auto functions = make_functions_from_clickhouse(type_str, dh_);
       if (not functions) {
-        error = true;
-        auto diag
-          = diagnostic::error("unsupported column type in pre-existing table "
-                              "`{}`",
-                              args_.table.inner)
-              .primary(args_.operator_location)
-              .note("column `{}` has unsupported type `{}`", name, type_str);
-        // A few helpful suggestions for the types that we do support
-        if (name.starts_with("Date")) {
-          diag = std::move(diag).note("use `DateTime64(8)` instead");
-        } else if (name.starts_with("UInt")) {
-          diag = std::move(diag).note("use `UInt64` instead");
-        } else if (name.starts_with("Int")) {
-          diag = std::move(diag).note("use `Int64` instead");
-        } else if (name.starts_with("Float")) {
-          diag = std::move(diag).note("use `Float64` instead");
-        } else if (name == "IPv4") {
-          diag = std::move(diag).note("use `IPv6` instead");
-        }
-        std::move(diag).emit(dh_);
+        failed = true;
+        return;
       }
       transformations_->transformations.try_emplace(std::string{name},
                                                     std::move(functions));
@@ -139,28 +111,29 @@ auto Easy_Client::get_schema_transformations() -> bool {
   };
   query.OnData(cb);
   client_.Execute(query);
-  if (error) {
-    return true;
+  if (failed) {
+    return failure::promise();
   }
   transformations_->found_column.resize(
     transformations_->transformations.size(), false);
-  return false;
+  return {};
 }
 
-auto Easy_Client::create_table(const tenzir::record_type& schema) -> bool {
+auto easy_client::create_table(const tenzir::record_type& schema)
+  -> failure_or<void> {
   auto columns = std::string{};
   auto trafos = transformer_record::schema_transformations{};
   auto primary_found = false;
   for (auto [k, t] : schema.fields()) {
+    if (not validate_identifier(k)) {
+      emit_invalid_identifier("column name", k, args_.operator_location, dh_);
+      return failure::promise();
+    }
     auto clickhouse_type
       = type_to_clickhouse_typename(t, k != args_.primary->inner);
-    auto functions = make_functions_from_clickhouse(clickhouse_type);
+    auto functions = make_functions_from_clickhouse(clickhouse_type, dh_);
     if (not functions) {
-      diagnostic::error("cannot create table: unsupported column type in input")
-        .primary(args_.operator_location)
-        .note("type `{}` is not supported", t)
-        .emit(dh_);
-      return false;
+      return failure::promise();
     }
     primary_found |= k == args_.primary->inner;
     trafos.try_emplace(std::string{k}, std::move(functions));
@@ -171,7 +144,7 @@ auto Easy_Client::create_table(const tenzir::record_type& schema) -> bool {
       .primary(*args_.primary, "column `{}` does not exist",
                args_.primary->inner)
       .emit(dh_);
-    return false;
+    return failure::promise();
   }
   transformations_ = transformer_record{"UNUSED", std::move(trafos)};
   constexpr static std::string_view engine = "MergeTree";
@@ -185,16 +158,15 @@ auto Easy_Client::create_table(const tenzir::record_type& schema) -> bool {
                   engine, args_.primary->inner);
   auto query = Query{query_text};
   client_.Execute(query);
-  return true;
+  return {};
 }
 
-auto Easy_Client::insert(const table_slice& slice) -> bool {
+auto easy_client::insert(const table_slice& slice) -> failure_or<void> {
   if (not transformations_) {
-    auto& schema = as<record_type>(slice.schema());
-    if (not create_table(schema)) {
-      return false;
-    }
+    const auto& schema = as<record_type>(slice.schema());
+    TRY(create_table(schema));
     TENZIR_TRACE("created table");
+    TENZIR_ASSERT(transformations_);
   }
   dropmask_.clear();
   dropmask_.resize(slice.rows());
@@ -203,27 +175,31 @@ auto Easy_Client::insert(const table_slice& slice) -> bool {
   for (const auto& [k, t, arr] : columns_of(slice)) {
     auto [trafo, idx] = transformations_->transfrom_and_index_for(k);
     if (not trafo) {
-      /// TODO diagnostic
+      diagnostic::warning("column `{}` does not exist in the ClickHouse table",
+                          k)
+        .note("column will be dropped")
+        .primary(args_.operator_location)
+        .emit(dh_);
     }
     transformations_->found_column[idx] = true;
     updated = updated | trafo->update_dropmask(t, arr, dropmask_, dh_);
-    for (const auto& [i, kvp] :
-         detail::enumerate(transformations_->transformations)) {
-      if (transformations_->found_column[i]) {
-        continue;
-      }
-      if (kvp.second->clickhouse_nullable) {
-        continue;
-      }
-      diagnostic::warning(
-        "required column missing in input, event will be dropped")
-        .note("column `{}` is missing", kvp.first)
-        .emit(dh_);
-      return false;
+    if (updated == transformer::drop::all) {
+      return failure::promise();
     }
   }
-  if (updated == transformer::drop::all) {
-    return false;
+  for (const auto& [i, kvp] :
+       detail::enumerate(transformations_->transformations)) {
+    if (transformations_->found_column[i]) {
+      continue;
+    }
+    if (kvp.second->clickhouse_nullable) {
+      continue;
+    }
+    diagnostic::warning(
+      "required column missing in input, event will be dropped")
+      .note("column `{}` is missing", kvp.first)
+      .emit(dh_);
+    return failure::promise();
   }
   auto block = ::clickhouse::Block{};
   for (const auto& [k, t, arr] : columns_of(slice)) {
@@ -232,7 +208,6 @@ auto Easy_Client::insert(const table_slice& slice) -> bool {
       continue;
     }
     auto this_column = trafo->create_column(t, arr, dropmask_, dh_);
-    // TODO: re-evaluate this
     TENZIR_ASSERT(this_column);
     block.AppendColumn(std::string{k}, std::move(this_column));
   }
@@ -240,6 +215,6 @@ auto Easy_Client::insert(const table_slice& slice) -> bool {
   if (block.GetColumnCount() > 0) {
     client_.Insert(args_.table.inner, block);
   }
-  return true;
+  return {};
 }
 } // namespace tenzir::plugins::clickhouse

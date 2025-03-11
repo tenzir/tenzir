@@ -39,6 +39,7 @@ jobs:
         run: |
           pip install --upgrade black
           # Note: black fails when it doesn't have to do anything.
+          git add --intent-to-add --all
           git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
             tr '\\n' '\\0' |
             grep '\.py$' |
@@ -59,6 +60,7 @@ jobs:
           pip install --upgrade clang-format
           which clang-format
           clang-format --version
+          git add --intent-to-add --all
           git diff --submodule=diff -U0 --no-color $(git merge-base origin/main HEAD) -- \
               '*.cpp' '*.cpp.in' '*.hpp' '*.hpp.in' |
             scripts/clang-format-diff.py -p1
@@ -79,6 +81,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Run cmake-format
         run: |
+          git add --intent-to-add --all
           git ls-files -z -- 'CMakeLists.txt' '*.cmake' |
             xargs -0 uvx --from cmakelang cmake-format --in-place
           git -C contrib/tenzir-plugins ls-files -z -- 'CMakeLists.txt' '*.cmake' |
@@ -113,6 +116,7 @@ jobs:
       - name: Check
         run: |
           pip install --upgrade shellcheck-py
+          git add --intent-to-add --all
           git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
             scripts/shellcheck.bash
 
@@ -128,6 +132,7 @@ jobs:
       - name: Check
         run: |
           pip install --upgrade shfmt-py
+          git add --intent-to-add --all
           git ls-files --recurse-submodules -z -- '*.bats' ':!:tenzir/bats/lib/bats*/**' |
             xargs -0 shfmt -l -w
           git diff --submodule=diff --exit-code
@@ -154,6 +159,7 @@ jobs:
       - name: Check
         run: |
           pip install --upgrade yamllint
+          git add --intent-to-add --all
           git ls-files --recurse-submodules -z -- '*.yaml' '.yml' |
             xargs -0 yamllint
 

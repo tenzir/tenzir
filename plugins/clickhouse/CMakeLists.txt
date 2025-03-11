@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.19...3.28 FATAL_ERROR)
 
 project(
   clickhouse
-  DESCRIPTION "Clickhouse Integration for Tenzir"
+  DESCRIPTION "Clickhouse integration for Tenzir"
   LANGUAGES CXX)
 
 find_package(Tenzir REQUIRED)
