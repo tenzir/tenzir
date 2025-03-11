@@ -954,6 +954,8 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
       PROGRAMS "${TENZIR_UV_PATH}"
       DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
       COMPONENT Runtime)
+  else ()
+    set(TENZIR_UV_PATH "uv")
   endif ()
 endif ()
 
