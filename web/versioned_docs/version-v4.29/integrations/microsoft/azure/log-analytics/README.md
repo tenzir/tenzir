@@ -14,7 +14,7 @@ that which is a unique environment for log data, such as from [Microsoft
 Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/overview?tabs=azure-portal)
 and [Microsoft Defender for
 Cloud](https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-cloud-introduction).
-Log Anlaytics tables are either pre-defined [standard
+Log Analytics tables are either pre-defined [standard
 tables](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview#supported-tables)
 that follow a given schema, or user-defined [custom
 tables](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table#create-a-custom-table).
