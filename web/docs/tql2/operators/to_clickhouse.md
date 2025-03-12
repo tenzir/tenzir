@@ -3,7 +3,7 @@
 Sends events to a ClickHouse table.
 
 ```tql
-to_clickhouse table=string, [url=string, user=string, password=string,
+to_clickhouse table=string, [host=string, port=int, user=string, password=string,
                              mode=string, primary=field,
                              tls=bool, cacert=string, certfile=string, keyfile=string]
 ```
@@ -15,11 +15,17 @@ to_clickhouse table=string, [url=string, user=string, password=string,
 The name of the table you want to write to. When giving a plain table name, it
 will use the `default` database, otherwise `database.table` can be specified.
 
-### `url = string (optional)`
+### `host = string (optional)`
 
-The location of the ClickHouse Server.
+The hostname for the ClickHouse server.
 
-Defaults to `"localhost:9000"`.
+Defaults to `"localhost"`.
+
+### `port = int (optional)`
+
+The port for the ClickHouse server.
+
+Defaults to `9000` without TLS and `9440` with TLS.
 
 ### `user = string (optional)`
 

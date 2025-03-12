@@ -66,13 +66,11 @@ struct arguments {
       to_string(mode::create_append),
       res.operator_location,
     };
-    auto url_str = located<std::string>{
-      res.host.inner + ":" + std::to_string(res.port.inner),
-      res.operator_location,
-    };
+    auto port = std::optional<located<int64_t>>{};
     auto primary_selector = std::optional<ast::simple_selector>{};
     auto parser = argument_parser2::operator_(operator_name);
-    parser.named_optional("url", url_str);
+    parser.named_optional("host", res.host);
+    parser.named("port", port);
     parser.named_optional("user", res.user);
     parser.named_optional("password", res.password);
     parser.named("table", res.table);
@@ -87,15 +85,6 @@ struct arguments {
     if (not validate_identifier(res.table.inner)) {
       emit_invalid_identifier("table", res.table.inner, res.table.source, ctx);
       return failure::promise();
-    }
-    auto parsed_url = boost::urls::parse_uri(url_str.inner);
-    if (not parsed_url) {
-      res.host = url_str;
-    } else {
-      if (parsed_url->has_port()) {
-        res.port = {parsed_url->port_number(), url_str.source};
-      }
-      res.host = {parsed_url->host(), url_str.source};
     }
     if (auto x = from_string<enum mode>(mode_str.inner)) {
       res.mode = located{*x, mode_str.source};
@@ -146,6 +135,14 @@ struct arguments {
     TRY(tls_logic(res.cacert, "cacert"));
     TRY(tls_logic(res.certfile, "certfile"));
     TRY(tls_logic(res.keyfile, "keyfile"));
+    if (not port) {
+      if (res.tls and res.tls->inner) {
+        port = located{9440, res.operator_location};
+      } else {
+        port = located{9000, res.operator_location};
+      }
+    }
+    res.port = *port;
     return res;
   }
 

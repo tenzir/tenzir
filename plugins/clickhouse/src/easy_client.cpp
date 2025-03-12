@@ -94,6 +94,8 @@ auto easy_client::get_schema_transformations() -> failure_or<void> {
   auto query = Query{fmt::format("DESCRIBE TABLE {} "
                                  "SETTINGS describe_compact_output=1",
                                  args_.table.inner)};
+  TENZIR_ASSERT(not transformations_);
+  transformations_.emplace();
   bool failed = false;
   auto cb = [&](const Block& block) {
     for (size_t i = 0; i < block.GetRowCount(); ++i) {

@@ -65,7 +65,7 @@ public:
         continue;
       }
       slice = resolve_enumerations(slice);
-      client->insert(slice);
+      (void)client->insert(slice);
     }
   } catch (::clickhouse::Error& e) {
     diagnostic::error("unexpected error: {}", e.what())
