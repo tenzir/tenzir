@@ -40,8 +40,8 @@ public:
     return "tql2.from_events";
   }
 
-  auto
-  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto sp = session_provider::make(ctrl.diagnostics());
     const auto non_const_eval = [&](const ast::expression& expr) {
       auto value = evaluator{nullptr, sp.as_session()}.eval(expr);
@@ -61,8 +61,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -175,7 +175,13 @@ auto find_plugin(std::string_view extension)
   for (const auto& plugin : plugins::get<operator_factory_plugin>()) {
     const auto props = (plugin->*getter)();
     for (const auto& possibility : props.*member) {
-      if (extension.ends_with(possibility)) {
+      TENZIR_ASSERT(not possibility.starts_with('.'));
+      TENZIR_ASSERT(not possibility.empty());
+      const auto matches
+        = extension.size() > possibility.size()
+          and extension[extension.size() - possibility.size() - 1] == '.'
+          and extension.ends_with(possibility);
+      if (matches) {
         TENZIR_ASSERT(not found_plugin);
         found_plugin = plugin;
         found_extension = possibility;
@@ -228,11 +234,11 @@ auto find_compression_and_format(std::string_view extension,
                                 "deduction: `{}`",
                                 fmt::join(all_compression_extensions, "`, `"));
   }
-    diag = std::move(diag)
-             .hint("you can pass a pipeline to handle compression and format")
-             .docs(docs);
-    std::move(diag).emit(ctx);
-    return {};
+  diag = std::move(diag)
+           .hint("you can pass a pipeline to handle compression and format")
+           .docs(docs);
+  std::move(diag).emit(ctx);
+  return {};
 }
 
 auto strip_scheme(ast::expression& expr, std::string_view scheme) -> void {
@@ -256,7 +262,8 @@ auto strip_scheme(ast::expression& expr, std::string_view scheme) -> void {
     });
 }
 
-auto get_as_located_string(const ast::expression& expr) -> located<std::string> {
+auto get_as_located_string(const ast::expression& expr)
+  -> located<std::string> {
   auto arg = try_as<ast::constant>(expr);
   TENZIR_ASSERT(arg);
   auto loc = arg->get_location();
@@ -291,8 +298,8 @@ auto get_file(const boost::urls::url_view& url) -> std::string {
 template <bool is_loading>
 auto create_pipeline_from_uri(std::string path,
                               operator_factory_plugin::invocation inv,
-                              session ctx,
-                              const char* docs) -> failure_or<operator_ptr> {
+                              session ctx, const char* docs)
+  -> failure_or<operator_ptr> {
   using traits = from_to_trait<is_loading>;
   /// We do this to make our lives easier in the code below
   inv.args.front() = ast::constant{path, inv.args.front().get_location()};
@@ -477,8 +484,8 @@ public:
     return "tql2.from";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     if (inv.args.empty()) {
       diagnostic::error("expected positional argument `uri|events`")
         .primary(inv.self)
@@ -544,8 +551,8 @@ public:
     return "tql2.to";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     if (inv.args.empty()) {
       diagnostic::error("expected positional argument `uri`")
         .primary(inv.self)
