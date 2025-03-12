@@ -417,7 +417,8 @@ public:
               return series::null(result_type, array.length());
             },
             [&](const auto&) {
-              diagnostic::warning("`parse_time` expected `time`, but got `{}`",
+              diagnostic::warning("`parse_time` expected `string`, but got "
+                                  "`{}`",
                                   subject.type.kind())
                 .primary(subject_expr)
                 .emit(ctx);
