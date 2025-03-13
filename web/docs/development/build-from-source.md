@@ -29,7 +29,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 |Required|Dependency|Version|Description|
 |:-:|:-:|:-:|-|
 |✓|C++ Compiler|C++20 required|Tenzir is tested to compile with GCC >= 12.0 and Clang >= 15.0.|
-|✓|[CMake](https://cmake.org)|>= 3.19|Cross-platform tool for building, testing and packaging software.|
+|✓|[CMake](https://cmake.org)|>= 3.25|Cross-platform tool for building, testing and packaging software.|
 |✓|[CAF](https://github.com/actor-framework/actor-framework)|>= 0.18.7|Implementation of the actor model in C++. (Bundled as submodule.)|
 |✓|[OpenSSL](https://www.openssl.org)||Utilities for secure networking and cryptography.|
 |✓|[FlatBuffers](https://google.github.io/flatbuffers/)|>= 2.0.8|Memory-efficient cross-platform serialization library.|
