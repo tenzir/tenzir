@@ -286,72 +286,6 @@ type enrich_type_with_arrow_metadata(class type type,
   return type;
 }
 
-/// Creates Arrow Metadata from a type's name and attributes.
-std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
-  // Helper function for serializing attributes to a string.
-  auto serialize_attributes = [](const auto& attributes) noexcept {
-    auto result = std::string{};
-    auto inserter = std::back_inserter(result);
-    fmt::format_to(inserter, "{{ ");
-    for (auto add_comma = false; const auto* attribute : attributes) {
-      if (std::exchange(add_comma, true)) {
-        fmt::format_to(inserter, ", ");
-      }
-      if (attribute->value()) {
-        fmt::format_to(inserter, R"("{}": "{}")",
-                       attribute->key()->string_view(),
-                       attribute->value()->string_view());
-      } else {
-        fmt::format_to(inserter, R"("{}": "")",
-                       attribute->key()->string_view());
-      }
-    }
-    fmt::format_to(inserter, " }}");
-    return result;
-  };
-  auto keys = std::vector<std::string>{};
-  auto values = std::vector<std::string>{};
-  const auto* root = &type.table(type::transparent::no);
-  for (auto nesting_depth = 0; root != nullptr; ++nesting_depth) {
-    switch (root->type_type()) {
-      case fbs::type::Type::pattern_type:
-        __builtin_unreachable();
-      case fbs::type::Type::NONE:
-      case fbs::type::Type::bool_type:
-      case fbs::type::Type::int64_type:
-      case fbs::type::Type::uint64_type:
-      case fbs::type::Type::double_type:
-      case fbs::type::Type::duration_type:
-      case fbs::type::Type::time_type:
-      case fbs::type::Type::string_type:
-      case fbs::type::Type::blob_type:
-      case fbs::type::Type::ip_type:
-      case fbs::type::Type::subnet_type:
-      case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
-      case fbs::type::Type::record_type:
-        root = nullptr;
-        break;
-      case fbs::type::Type::enriched_type: {
-        const auto* enriched_type = root->type_as_enriched_type();
-        if (enriched_type->name()) {
-          keys.push_back(fmt::format("TENZIR:name:{}", nesting_depth));
-          values.push_back(enriched_type->name()->str());
-        }
-        if (enriched_type->attributes()) {
-          keys.push_back(fmt::format("TENZIR:attributes:{}", nesting_depth));
-          values.push_back(serialize_attributes(*enriched_type->attributes()));
-        }
-        root = enriched_type->type_nested_root();
-        TENZIR_ASSERT(root);
-        break;
-      }
-    }
-  }
-  return arrow::KeyValueMetadata::Make(std::move(keys), std::move(values));
-}
-
 } // namespace
 
 // -- type --------------------------------------------------------------------
@@ -947,14 +881,84 @@ std::shared_ptr<arrow::DataType> type::to_arrow_type() const noexcept {
 std::shared_ptr<arrow::Field>
 type::to_arrow_field(std::string_view name, bool nullable) const noexcept {
   return arrow::field(std::string{name}, to_arrow_type(), nullable,
-                      make_arrow_metadata(*this));
+                      make_arrow_metadata());
 }
 
 std::shared_ptr<arrow::Schema> type::to_arrow_schema() const noexcept {
   TENZIR_ASSERT(!name().empty());
   TENZIR_ASSERT(is<record_type>(*this));
   return arrow::schema(as<record_type>(*this).to_arrow_type()->fields(),
-                       make_arrow_metadata(*this));
+                       make_arrow_metadata());
+}
+
+auto type::make_arrow_metadata() const
+  -> std::shared_ptr<arrow::KeyValueMetadata> {
+  // Helper function for serializing attributes to a string.
+  auto serialize_attributes = [](const auto& attributes) noexcept {
+    auto result = std::string{};
+    auto inserter = std::back_inserter(result);
+    fmt::format_to(inserter, "{{ ");
+    for (auto add_comma = false; const auto* attribute : attributes) {
+      if (std::exchange(add_comma, true)) {
+        fmt::format_to(inserter, ", ");
+      }
+      if (attribute->value()) {
+        fmt::format_to(inserter, R"("{}": "{}")",
+                       attribute->key()->string_view(),
+                       attribute->value()->string_view());
+      } else {
+        fmt::format_to(inserter, R"("{}": "")",
+                       attribute->key()->string_view());
+      }
+    }
+    fmt::format_to(inserter, " }}");
+    return result;
+  };
+  auto keys = std::vector<std::string>{};
+  auto values = std::vector<std::string>{};
+  const auto* root = &table(type::transparent::no);
+  for (auto nesting_depth = 0; root != nullptr; ++nesting_depth) {
+    switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::int64_type:
+      case fbs::type::Type::uint64_type:
+      case fbs::type::Type::double_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
+      case fbs::type::Type::ip_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type:
+      case fbs::type::Type::record_type:
+        root = nullptr;
+        break;
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched_type = root->type_as_enriched_type();
+        if (enriched_type->name()) {
+          keys.push_back(fmt::format("TENZIR:name:{}", nesting_depth));
+          values.push_back(enriched_type->name()->str());
+        }
+        if (enriched_type->attributes()) {
+          keys.push_back(fmt::format("TENZIR:attributes:{}", nesting_depth));
+          values.push_back(serialize_attributes(*enriched_type->attributes()));
+        }
+        root = enriched_type->type_nested_root();
+        TENZIR_ASSERT(root);
+        break;
+      }
+    }
+  }
+  if (keys.empty()) {
+    TENZIR_ASSERT(values.empty());
+    return nullptr;
+  }
+  return arrow::KeyValueMetadata::Make(std::move(keys), std::move(values));
 }
 
 std::shared_ptr<arrow::ArrayBuilder>

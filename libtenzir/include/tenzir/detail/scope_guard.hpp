@@ -38,8 +38,13 @@ public:
   }
 
   ~scope_guard() noexcept {
+    trigger();
+  }
+
+  void trigger() noexcept {
     if (enabled_) {
       fun_();
+      enabled_ = false;
     }
   }
 

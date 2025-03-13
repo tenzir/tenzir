@@ -312,7 +312,7 @@ TEST(positive int64_t to string) {
   auto out = tenzir::cast_value(tenzir::int64_type{}, int64_t{5},
                                 tenzir::string_type{});
   REQUIRE(out);
-  CHECK_EQUAL(*out, "+5");
+  CHECK_EQUAL(*out, "5");
 }
 
 TEST(negative int64_t to string) {
@@ -416,7 +416,7 @@ TEST(list to string) {
                                 tenzir::list{int64_t{1}, int64_t{-1}},
                                 tenzir::string_type{});
   REQUIRE(out);
-  CHECK_EQUAL(*out, "[+1, -1]");
+  CHECK_EQUAL(*out, "[1, -1]");
 }
 
 TEST(record to string) {
@@ -428,7 +428,7 @@ TEST(record to string) {
     tenzir::record{{"int", int64_t{100}}, {"str", "strr"}},
     tenzir::string_type{});
   REQUIRE(out);
-  CHECK_EQUAL(*out, R"(<int: +100, str: "strr">)");
+  CHECK_EQUAL(*out, R"(<int: 100, str: "strr">)");
 }
 
 TEST(string to time) {
@@ -620,7 +620,7 @@ TEST(cast value type erased) {
   auto out
     = tenzir::cast_value(type, tenzir::data{int64_t{2}}, tenzir::string_type{});
   REQUIRE(out);
-  CHECK_EQUAL(*out, "+2");
+  CHECK_EQUAL(*out, "2");
 }
 
 TEST(cast value type erased 2) {
@@ -708,10 +708,10 @@ TEST(cast int64_t array to a string builder) {
     views.push_back(val);
   }
   REQUIRE_EQUAL(views.size(), 4u);
-  CHECK_EQUAL(materialize(views[0]), "+1");
-  CHECK_EQUAL(materialize(views[1]), "+2");
+  CHECK_EQUAL(materialize(views[0]), "1");
+  CHECK_EQUAL(materialize(views[1]), "2");
   CHECK_EQUAL(materialize(views[2]), caf::none);
-  CHECK_EQUAL(materialize(views[3]), "+3");
+  CHECK_EQUAL(materialize(views[3]), "3");
 }
 
 TEST(casting builder with no compatible types results in an error) {

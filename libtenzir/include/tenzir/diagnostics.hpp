@@ -183,6 +183,10 @@ public:
     : result_{severity, std::move(message), {}, {}} {
   }
 
+  auto compose(auto fn) && {
+    return std::move(fn)(std::move(*this));
+  }
+
   // -- annotations -----------------------------------------------------------
 
   auto primary(into_location source, std::string text
@@ -523,6 +527,8 @@ private:
 
   tsl::robin_set<seen_t, hasher> seen_;
 };
+
+auto to_diagnostic(const panic_exception& e) -> diagnostic;
 
 } // namespace tenzir
 

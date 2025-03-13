@@ -25,7 +25,7 @@ on:
 jobs:
   configure:
     name: Configure Inputs
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     outputs:
       docker-config: ${{ steps.docker.outputs.docker-config }}
     steps:

@@ -25,6 +25,7 @@
 #include <arrow/util/byte_size.h>
 #include <caf/actor_addr.hpp>
 #include <caf/actor_from_state.hpp>
+#include <caf/actor_registry.hpp>
 #include <caf/anon_mail.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -216,18 +217,45 @@ struct exec_node_state {
       run_id{run_id},
       op{std::move(op)},
       metrics_receiver{metrics_receiver} {
-    auto read_config = [&](auto& key, std::string_view config, uint64_t min) {
-      key = caf::get_or(content(self->system().config()),
-                        fmt::format("tenzir.demand.{}", config), key);
-      key = caf::get_or(content(self->system().config()),
-                        fmt::format("tenzir.demand.{}.{}", config,
-                                    operator_type_name<Input>()),
-                        key);
-      key = std::max(min, key);
+    auto read_config = [&]<class T>(std::string_view config, T min, T fallback,
+                                    bool element_specific) -> T {
+      static_assert(caf::detail::tl_contains_v<data::types, T>);
+      auto result
+        = caf::get_or(content(self->system().config()),
+                      fmt::format("tenzir.demand.{}", config), fallback);
+      if (element_specific) {
+        result = caf::get_or(content(self->system().config()),
+                             fmt::format("tenzir.demand.{}.{}", config,
+                                         operator_type_name<Input>()),
+                             result);
+      }
+      return std::max(min, result);
     };
-    read_config(min_elements, "min-elements", 1);
-    read_config(max_elements, "max-elements", min_elements);
-    read_config(max_batches, "max-batches", 1);
+    const auto demand_settings = this->op->demand();
+    min_elements
+      = demand_settings.min_elements
+          ? *demand_settings.min_elements
+          : read_config("min-elements", uint64_t{1}, min_elements, true);
+    max_elements
+      = demand_settings.max_elements
+          ? *demand_settings.max_elements
+          : read_config("max-elements", min_elements, max_elements, true);
+    max_batches
+      = demand_settings.max_batches
+          ? *demand_settings.max_batches
+          : read_config("max-batches", uint64_t{1}, max_batches, false);
+    min_backoff
+      = demand_settings.min_backoff
+          ? *demand_settings.min_backoff
+          : read_config("min-backoff", duration{std::chrono::milliseconds{10}},
+                        min_backoff, false);
+    max_backoff
+      = demand_settings.max_backoff
+          ? *demand_settings.max_backoff
+          : read_config("min-backoff", min_backoff, max_backoff, false);
+    backoff_rate = demand_settings.backoff_rate
+                     ? *demand_settings.backoff_rate
+                     : read_config("backoff-rate", 1.0, backoff_rate, false);
     auto time_starting_guard
       = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
     metrics.operator_index = index;
@@ -259,6 +287,23 @@ struct exec_node_state {
             std::rethrow_exception(exception);
           } catch (diagnostic& diag) {
             return std::move(diag).to_error();
+          } catch (panic_exception& panic) {
+            auto has_node
+              = self->system().registry().get("tenzir.node") != nullptr;
+            auto diagnostic = to_diagnostic(panic);
+            if (has_node) {
+              auto buffer = std::stringstream{};
+              buffer << "internal error in operator\n";
+              auto printer = make_diagnostic_printer(
+                std::nullopt, color_diagnostics::no, buffer);
+              printer->emit(diagnostic);
+              auto string = std::move(buffer).str();
+              if (not string.empty() and string.back() == '\n') {
+                string.pop_back();
+              }
+              TENZIR_ERROR(string);
+            }
+            return std::move(diagnostic).to_error();
           } catch (const std::exception& err) {
             return diagnostic::error("{}", err.what())
               .note("unhandled exception in {} {}", *self, op->name())
@@ -392,9 +437,9 @@ struct exec_node_state {
   caf::typed_response_promise<void> start_rp = {};
 
   /// Exponential backoff for scheduling.
-  static constexpr duration min_backoff = std::chrono::milliseconds{30};
-  static constexpr duration max_backoff = std::chrono::minutes{1};
-  static constexpr double backoff_rate = 2.0;
+  duration min_backoff = std::chrono::milliseconds{30};
+  duration max_backoff = std::chrono::seconds{1};
+  double backoff_rate = 2.0;
   duration backoff = duration::zero();
   caf::disposable backoff_disposable = {};
   std::optional<std::chrono::steady_clock::time_point> idle_since = {};

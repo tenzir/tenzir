@@ -55,7 +55,15 @@ auto argument_parser2::parse(const ast::entity& self,
     if (d.inner().severity == severity::error) {
       result = failure::promise();
     }
-    std::move(d).usage(usage()).docs(docs()).emit(ctx);
+    std::move(d)
+      .usage(usage())
+      .compose([&](auto d) {
+        if (name_.starts_with('_')) {
+          return d;
+        }
+        return std::move(d).docs(docs());
+      })
+      .emit(ctx);
   };
   auto kind = [](const data& x) -> std::string_view {
     // TODO: Refactor this.
@@ -527,7 +535,8 @@ struct instantiate_argument_parser_methods {
 template struct instantiate_argument_parser_methods<std::monostate{}>;
 
 auto check_no_substrings(diagnostic_handler& dh,
-                         std::vector<argument_info> values) -> failure_or<void> {
+                         std::vector<argument_info> values)
+  -> failure_or<void> {
   for (size_t i = 0; i < values.size(); ++i) {
     for (size_t j = i + 1; j < values.size(); ++j) {
       const auto i_larger = values[i].value.size() > values[j].value.size();

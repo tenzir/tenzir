@@ -32,6 +32,7 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
       })));
   }
   return map_series(arrays, [&](std::span<series> arrays) {
+    auto length = arrays.empty() ? length_ : arrays.front().length();
     auto fields = detail::stable_map<std::string, series>{};
     for (auto [array, item] : detail::zip_equal(arrays, x.items)) {
       match(
@@ -42,13 +43,17 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
         [&](const ast::spread& spread) {
           auto records = array.as<record_type>();
           if (not records) {
-            diagnostic::warning("expected record, got {}", array.type.kind())
-              .primary(spread.expr)
-              .emit(ctx_);
+            if (array.type.kind().is_not<null_type>()) {
+              diagnostic::warning("expected record, got {}", array.type.kind())
+                .primary(spread.expr)
+                .emit(ctx_);
+            }
             return;
           }
+          // TODO: We could also make sure that record-nulls do not create any
+          // fields. This will create an additional splitting point.
           for (auto [i, field_array] :
-               detail::enumerate(records->array->fields())) {
+               detail::enumerate(check(records->array->Flatten()))) {
             auto field = records->type.field(i);
             fields[field.name] = series{field.type, field_array};
           }
@@ -63,11 +68,15 @@ auto evaluator::eval(const ast::record& x) -> multi_series {
     auto field_types = fields | std::views::transform([](auto& x) {
                          return record_type::field_view{x.first, x.second.type};
                        });
-    auto result = make_struct_array(
-      length_, nullptr, std::vector(field_names.begin(), field_names.end()),
-      std::vector(field_arrays.begin(), field_arrays.end()));
+    auto new_type
+      = type{record_type{std::vector(field_types.begin(), field_types.end())}};
+    auto result
+      = make_struct_array(length, nullptr,
+                          std::vector(field_names.begin(), field_names.end()),
+                          std::vector(field_arrays.begin(), field_arrays.end()),
+                          as<record_type>(new_type));
     return series{
-      type{record_type{std::vector(field_types.begin(), field_types.end())}},
+      std::move(new_type),
       std::move(result),
     };
   });

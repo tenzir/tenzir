@@ -44,6 +44,8 @@ struct cache_update {
 
 struct cache_actor_traits {
   using signatures = caf::type_list<
+    // Make the cache actor monitor the sender.
+    auto(atom::announce)->caf::result<void>,
     // Check if the cache already has a writer.
     auto(atom::write, atom::ok)->caf::result<bool>,
     // Write events into the cache.
@@ -81,8 +83,17 @@ public:
       .subscribe(std::move(update_producer));
   }
 
+  ~cache() noexcept {
+    for (auto& [_, reader] : readers_) {
+      reader.rp.deliver({});
+    }
+  }
+
   auto make_behavior() -> cache_actor::behavior_type {
     return {
+      [this](atom::announce) -> caf::result<void> {
+        return announce();
+      },
       [this](atom::write, atom::ok) -> caf::result<bool> {
         return write_ok();
       },
@@ -115,15 +126,9 @@ private:
     });
   }
 
-  auto write_ok() -> caf::result<bool> {
-    return writer_;
-  }
-
-  auto write(table_slice events) -> caf::result<bool> {
-    TENZIR_ASSERT(events.rows() > 0);
-    const auto sender = self_->current_sender();
-    TENZIR_ASSERT(sender);
+  auto announce() -> caf::result<void> {
     if (not writer_) {
+      const auto sender = self_->current_sender();
       writer_ = sender->address();
       self_->monitor(sender, [this](const caf::error& err) {
         TENZIR_ASSERT(not done_);
@@ -142,7 +147,20 @@ private:
         }
       });
       set_write_timeout();
-    } else if (writer_ != sender->address()) {
+    }
+    return {};
+  }
+
+  auto write_ok() -> caf::result<bool> {
+    return writer_;
+  }
+
+  auto write(table_slice events) -> caf::result<bool> {
+    TENZIR_ASSERT(writer_);
+    TENZIR_ASSERT(events.rows() > 0);
+    const auto sender = self_->current_sender();
+    TENZIR_ASSERT(sender);
+    if (writer_ != sender->address()) {
       return false;
     }
     auto exceeded_capacity = false;
@@ -156,17 +174,18 @@ private:
         return false;
       }
     }
-    cache_size_ += events.rows();
-    byte_size_ += events.approx_bytes();
+    const auto approx_bytes = events.approx_bytes();
     // If a single cache exceeds the total capacity, we stop short of adding the
     // batch of events that'd make it go over the limit. This is better than
     // being evicted immediately.
-    if (byte_size_ > max_bytes_ and not exceeded_capacity) {
+    if (byte_size_ + approx_bytes > max_bytes_ and not exceeded_capacity) {
       diagnostic::warning("cache exceeded total capacity in bytes")
         .hint("consider increasing `tenzir.cache.capacity` option")
         .emit(diagnostics_);
       return false;
     }
+    cache_size_ += events.rows();
+    byte_size_ += approx_bytes;
     update_multicaster_.push(cache_update{
       .approx_bytes = byte_size_,
       .state = cache_state::open,
@@ -468,6 +487,21 @@ public:
       }
       co_yield {};
     }
+    ctrl.set_waiting(true);
+    ctrl.self()
+      .mail(atom::announce_v)
+      .request(cache, caf::infinite)
+      .then(
+        [&]() {
+          ctrl.set_waiting(false);
+        },
+        [&](caf::error& err) {
+          diagnostic::error(err)
+            .note("failed to announce write-cache operator to cache")
+            .primary(id_.source)
+            .emit(ctrl.diagnostics());
+        });
+    co_yield {};
     // Now, all we need to do is send our inputs to the cache batch by batch.
     for (auto&& events : input) {
       if (events.rows() == 0) {

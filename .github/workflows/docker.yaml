@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         build:
-          - runner: ubuntu-20.04
+          - runner: ubuntu-latest
             arch: linux/amd64
             tag: amd64
           - runner: ubicloud-standard-4-arm
@@ -128,7 +128,7 @@ jobs:
 
   push-manifest:
     name: Push Manifest
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs:
       - build
     steps:

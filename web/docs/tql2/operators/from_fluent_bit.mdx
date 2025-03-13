@@ -1,4 +1,5 @@
 import CommonOptions from './_common_parsing_options.mdx';
+import TLSOptions from './_common_tls_options.mdx';
 
 # from_fluent_bit
 
@@ -8,8 +9,10 @@ Receives events via [Fluent Bit](https://docs.fluentbit.io/).
 
 ```tql
 from_fluent_bit plugin:string, [options=record, fluent_bit_options=record,
-                schema=string, selector=string, schema_only=bool, merge=bool, raw=bool,
-                unflatten=string, arrays_of_objects=bool]
+                schema=string, selector=string, schema_only=bool, merge=bool,
+                raw=bool, unflatten=string,
+                tls=bool, cacert=string, certfile=string, keyfile=string,
+                skip_peer_verification=bool, skip_hostname_verification=bool]
 ```
 
 ## Description
@@ -32,7 +35,7 @@ from_fluent_bit "plugin", options={key1: value1, key2: value2, …}
 ```
 
 :::tip Output to Fluent Bit
-You can output events to Fluent Bit using the [`to_fluent_bit` operator](to_fluent_bit.md).
+You can output events to Fluent Bit using the [`to_fluent_bit` operator](to_fluent_bit.mdx).
 :::
 
 ### `plugin: string`
@@ -64,6 +67,8 @@ We recommend factoring these options into the plugin-specific `fluent-bit.yaml`
 so that they are independent of the `fluent-bit` operator arguments.
 
 <CommonOptions />
+
+<TLSOptions tls_default="true"/>
 
 ## URI support & integration with `from`
 

@@ -47,6 +47,13 @@ tenzir:
   # Always use TQL2 for pipelines.
   #tql2: false
 
+  # A certificate file used as the default for operators accepting a `cacert`
+  # option. This will default to an appropriate directory for the system. For
+  # example:
+  #   - /etc/ssl/certs/ca-bundle.crt on RedHat
+  #   - /etc/ssl/certs/ca-certificates.crt on Ubuntu
+  #cacert:
+
   # The file system path used for persistent state.
   # Defaults to one of the following paths, selecting the first that is
   # available:
@@ -177,23 +184,37 @@ tenzir:
 
   # Control how operator's calculate demand from their upstream operator. Note
   # that this is an expert feature and should only be changed if you know what
-  # you are doing. All values may either be set to a number, or to a record
-  # containing `bytes` and `events` fields with numbers depending on the
-  # operator's input type.
+  # you are doing. The configured values can also be changed per operator by
+  # using the `_tune` operator.
   demand:
     # Issue demand only if room for at least this many elements is available.
-    # Must be greater than zero.
+    # Must be greater than zero. Values may either be set to a number, or to a
+    # record containing `bytes` and `events` fields with numbers depending on
+    # the operator's input type.
     min-elements:
       bytes: 128Ki
       events: 8Ki
     # Controls how many elements may be buffered until the operator stops
-    # issuing demand. Must be greater or equal to min-elements.
+    # issuing demand. Must be greater or equal to min-elements. Values may
+    # either be set to a number, or to a record containing `bytes` and `events`
+    # fields with numbers depending on the operator's input type.
     max-elements:
       bytes: 4Mi
       events: 254Ki
     # Controls how many batches of elements may be buffered until the operator
     # stops issuing demand. Must be greater than zero.
     max-batches: 20
+    # Controls the minimum backoff duration after an operator is detected to be
+    # idle. Must be at least 10ms.
+    min-backoff: 10ms
+    # Controls the maximum backoff duration after an operator is detected to be
+    # idle. Must be at least 10ms.
+    max-backoff: 1s
+    # Controls the growth rate of the backoff duration for operators that
+    # continue to be idle. Must be at least 1.0. Note that setting a growth rate
+    # of 1.0 causes the `max-backoff` duration to be ignored, replacing the
+    # exponential growth with a constant value.
+    backoff-rate: 2.0
 
   # Context configured as part of the configuration that are always available.
   contexts:

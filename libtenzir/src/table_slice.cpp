@@ -1255,13 +1255,15 @@ auto realize(unflatten_entry&& entry) -> std::shared_ptr<arrow::Array> {
 }
 
 auto realize(unflatten_record&& record) -> std::shared_ptr<arrow::StructArray> {
-  auto names = std::vector<std::string>{};
+  auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
   auto arrays = std::vector<std::shared_ptr<arrow::Array>>{};
   for (auto& [name, entry] : record.fields) {
-    names.emplace_back(name);
-    arrays.push_back(realize(std::move(entry)));
+    auto array = realize(std::move(entry));
+    fields.push_back(
+      std::make_shared<arrow::Field>(std::string{name}, array->type()));
+    arrays.push_back(std::move(array));
   }
-  return make_struct_array(record.length, record.null_bitmap, std::move(names),
+  return make_struct_array(record.length, record.null_bitmap, std::move(fields),
                            arrays);
 }
 

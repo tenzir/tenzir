@@ -75,15 +75,15 @@ Operator | Description | Example
 [`load_amqp`](./operators/load_amqp.md) | Loads bytes from an AMQP server | `load_amqp`
 [`load_azure_blob…`](./operators/load_azure_blob_storage.md) | Load bytes from an Azure Blob Storage | `load_azure_blob_storage "abfs://…`
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
-[`load_ftp`](./operators/load_ftp.md) | Loads bytes via FTP | `load_ftp "ftp.example.org"`
+[`load_ftp`](./operators/load_ftp.mdx) | Loads bytes via FTP | `load_ftp "ftp.example.org"`
 [`load_google_c…`](./operators/load_google_cloud_pubsub.md) | Listen to a Google Cloud Pub/Sub subscription | `load_google_cloud_pubsub project_id=…`
-[`load_http`](./operators/load_http.md) | Receives bytes from a HTTP request | `load_http "example.org", params={n: 5}`
+[`load_http`](./operators/load_http.mdx) | Receives bytes from a HTTP request | `load_http "example.org", params={n: 5}`
 [`load_kafka`](./operators/load_kafka.md) | Receives bytes from an Apache Kafka topic | `load_kafka topic="example"`
 [`load_nic`](./operators/load_nic.md) | Receives bytes from a Network Interface Card | `load_nic "eth0"`
 [`load_s3`](./operators/load_s3.md) | Receives bytes from an Amazon S3 object | `load_s3 "s3://my-bucket/obj.csv"`
 [`load_stdin`](./operators/load_stdin.md) | Receives bytes standard input | `load_stdin`
 [`load_sqs`](./operators/load_sqs.md) | Receives bytes from an Amazon SQS queue | `load_sqs "sqs://tenzir"`
-[`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
+[`load_tcp`](./operators/load_tcp.mdx) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
 [`load_udp`](./operators/load_udp.md) | Loads bytes from a UDP socket | `load_udp "0.0.0.0:8090"`
 [`load_zmq`](./operators/load_zmq.md) | Receives bytes from ZeroMQ messages | `load_zmq`
 
@@ -97,11 +97,11 @@ Operator | Description | Example
 [`to_asl`](./operators/to_asl.md) | Sends OCSF events to an Amazon Security Lake | `to_asl "s3://…"`
 [`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
 [`to_clickhouse`](./operators/to_clickhouse.md) | Sends events to a ClickHouse Table | `to_clickhouse table="my_table"`
-[`to_fluent_bit`](./operators/to_fluent_bit.md) | Sends events to Fluent Bit| `to_fluent_bit "elasticsearch" …`
+[`to_fluent_bit`](./operators/to_fluent_bit.mdx) | Sends events to Fluent Bit| `to_fluent_bit "elasticsearch" …`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
-[`to_opensearch`](./operators/to_opensearch.md) | Sends incoming events to the OpenSearch Bulk API | `to_opensearch 'localhost:9200", …`
+[`to_opensearch`](./operators/to_opensearch.mdx) | Sends incoming events to the OpenSearch Bulk API | `to_opensearch 'localhost:9200", …`
 [`to_snowflake`](./operators/to_snowflake.md) | Sends incoming events to a Snowflake database | `to_snowflake account_identifier="…`
-[`to_splunk`](./operators/to_splunk.md) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
+[`to_splunk`](./operators/to_splunk.mdx) | Sends incoming events to a Splunk HEC | `to_splunk "localhost:8088", …`
 
 #### Bytes
 
@@ -111,14 +111,14 @@ Operator | Description | Example
 [`save_azure_blob…`](./operators/save_azure_blob_storage.md) | Saves to an Azure Blob Storage | `save_azure_blob_storage "abfs://…`
 [`save_email`](./operators/save_email.md) | Saves incoming bytes through an SMTP server | `save_email "user@example.org"`
 [`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`
-[`save_ftp`](./operators/save_ftp.md) | Saves incoming bytes via FTP | `save_ftp "ftp.example.org"`
+[`save_ftp`](./operators/save_ftp.mdx) | Saves incoming bytes via FTP | `save_ftp "ftp.example.org"`
 [`save_google_cloud…`](./operators/save_google_cloud_pubsub.md) | Publishes to a Google Cloud Pub/Sub topic | `save_google_cloud_pubsub project…`
-[`save_http`](./operators/save_http.md) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
+[`save_http`](./operators/save_http.mdx) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
 [`save_kafka`](./operators/save_kafka.md) | Saves incoming bytes to an Apache Kafka topic | `save_kafka topic="example"`
 [`save_s3`](./operators/save_s3.md) | Saves incoming bytes to an Amazon S3 object | `save_s3 "s3://my-bucket/obj.csv"`
 [`save_stdout`](./operators/save_stdout.md) | Saves incoming bytes to standard output | `save_stdout`
 [`save_sqs`](./operators/save_sqs.md) | Saves incoming bytes to an Amazon SQS queue | `save_sqs "sqs://tenzir"`
-[`save_tcp`](./operators/save_tcp.md) | Saves incoming bytes to a TCP or TLS connection | `save_tcp "0.0.0.0:8090", tls=true`
+[`save_tcp`](./operators/save_tcp.mdx) | Saves incoming bytes to a TCP or TLS connection | `save_tcp "0.0.0.0:8090", tls=true`
 [`save_udp`](./operators/save_udp.md) | Saves incoming bytes to a UDP socket | `save_udp "0.0.0.0:8090"`
 [`save_zmq`](./operators/save_zmq.md) | Saves incoming bytes to ZeroMQ messages | `save_zmq`
 

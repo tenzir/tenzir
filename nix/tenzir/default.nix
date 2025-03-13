@@ -174,7 +174,6 @@
             "-DCAF_ROOT_DIR=${caf}"
             "-DTENZIR_EDITION_NAME=${lib.toUpper pname}"
             "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
-            "-DTENZIR_ENABLE_BACKTRACE=ON"
             "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
             "-DTENZIR_ENABLE_MANPAGES=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
@@ -206,7 +205,6 @@
             "-DTENZIR_UV_PATH:STRING=${lib.getExe uv}"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
-            "-DTENZIR_ENABLE_BACKTRACE=${lib.boolToString (!stdenv.hostPlatform.isDarwin)}"
           ]
           ++ lib.optionals stdenv.hostPlatform.isx86_64 [
             "-DTENZIR_ENABLE_SSE3_INSTRUCTIONS=ON"

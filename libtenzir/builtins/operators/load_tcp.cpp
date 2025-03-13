@@ -18,6 +18,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
+#include <tenzir/ssl_options.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
@@ -71,20 +72,20 @@ struct endpoint {
   }
 };
 
-struct load_tcp_args {
+struct load_tcp_args : ssl_options {
   located<struct endpoint> endpoint = {};
   located<uint64_t> parallel = {};
   std::optional<location> connect = {};
-  std::optional<location> tls = {};
-  std::optional<located<std::string>> certfile = {};
-  std::optional<located<std::string>> keyfile = {};
+  std::optional<located<uint64_t>> max_buffered_chunks = {};
   std::optional<located<class pipeline>> pipeline = {};
 
   friend auto inspect(auto& f, load_tcp_args& x) -> bool {
     return f.object(x).fields(
+      f.field("ssl_options", static_cast<ssl_options&>(x)),
       f.field("endpoint", x.endpoint), f.field("parallel", x.parallel),
       f.field("connect", x.connect), f.field("tls", x.tls),
       f.field("certfile", x.certfile), f.field("keyfile", x.keyfile),
+      f.field("max_buffered_chunks", x.max_buffered_chunks),
       f.field("pipeline", x.pipeline));
   }
 };
@@ -212,6 +213,10 @@ public:
     auto connection_manager = connection_manager_.lock();
     TENZIR_ASSERT(connection_manager);
     for (auto&& elements : input) {
+      if (size(elements) == 0) {
+        co_yield {};
+        continue;
+      }
       ctrl.set_waiting(true);
       ctrl.self()
         .mail(atom::write_v, std::move(elements))
@@ -302,7 +307,6 @@ struct connection_manager_state {
       emit_metrics(nullptr);
     }
 
-    static constexpr auto max_queued_chunks = size_t{10};
     static constexpr auto read_buffer_size = size_t{65'536};
 
     std::optional<boost::asio::ip::tcp::socket> socket = {};
@@ -347,7 +351,8 @@ struct connection_manager_state {
     }
 
     auto async_read(connection_manager_actor<Elements>::pointer self,
-                    shared_diagnostic_handler diagnostics) -> void {
+                    shared_diagnostic_handler diagnostics,
+                    uint64_t max_buffered_chunks) -> void {
       // NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays)
       auto read_buffer
         = std::make_unique<chunk::value_type[]>(read_buffer_size);
@@ -356,8 +361,9 @@ struct connection_manager_state {
         = boost::asio::buffer(read_buffer.get(), read_buffer_size);
       auto on_read = [connection = this->shared_from_this(), self,
                       diagnostics = std::move(diagnostics),
-                      read_buffer = std::move(read_buffer)](
-                       boost::system::error_code ec, size_t length) mutable {
+                      read_buffer = std::move(read_buffer),
+                      max_buffered_chunks](boost::system::error_code ec,
+                                           size_t length) mutable {
         connection->reads += 1;
         connection->bytes_read += length;
         if (ec) {
@@ -382,27 +388,27 @@ struct connection_manager_state {
         {
           auto lock = std::unique_lock{connection->mutex};
           if (connection->rp.pending()) {
-            caf::anon_mail(caf::make_action(
-                             [self, connection, ec, chunk = std::move(chunk),
-                              diagnostics = std::move(diagnostics)]() mutable {
-                               auto lock = std::unique_lock{connection->mutex};
-                               TENZIR_ASSERT(connection->rp.pending());
-                               connection->rp.deliver(std::move(chunk));
-                               if (not ec) {
-                                 connection->async_read(self,
-                                                        std::move(diagnostics));
-                               }
-                             }))
-              .send(caf::actor_cast<caf::actor>(self));
+            self->schedule_fn([self, connection, ec, chunk = std::move(chunk),
+                               diagnostics = std::move(diagnostics),
+                               max_buffered_chunks]() mutable {
+              auto lock = std::unique_lock{connection->mutex};
+              TENZIR_ASSERT(connection->rp.pending());
+              connection->rp.deliver(std::move(chunk));
+              if (not ec) {
+                connection->async_read(self, std::move(diagnostics),
+                                       max_buffered_chunks);
+              }
+            });
             TENZIR_ASSERT(connection->chunks.empty());
             return;
           }
           connection->chunks.push(std::move(chunk));
-          TENZIR_ASSERT(connection->chunks.size() <= max_queued_chunks);
-          should_read = connection->chunks.size() < max_queued_chunks;
+          TENZIR_ASSERT(connection->chunks.size() <= max_buffered_chunks);
+          should_read = connection->chunks.size() < max_buffered_chunks;
         }
         if (not ec and should_read) {
-          connection->async_read(self, std::move(diagnostics));
+          connection->async_read(self, std::move(diagnostics),
+                                 max_buffered_chunks);
         }
       };
       if (tls_socket) {
@@ -534,7 +540,7 @@ struct connection_manager_state {
     connection->metrics_receiver = metrics_receiver;
     connection->operator_id = operator_id;
     connection->emit_metrics(self);
-    if (args.tls) {
+    if (args.tls.inner) {
       TENZIR_ASSERT(not connection->ssl_ctx);
       connection->ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
       auto ec = boost::system::error_code{};
@@ -560,14 +566,47 @@ struct connection_manager_state {
           return;
         }
       }
-      if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
-                                               ec)) {
-        diagnostic::warning("{}", ec.message())
-          .note("failed to disable peer certificate verification")
-          .note("handle `{}`", connection->socket->native_handle())
-          .primary(*args.tls)
-          .emit(diagnostics);
-        return;
+      if (not args.skip_hostname_verification
+          or not args.skip_peer_verification) {
+        if (args.cacert) {
+          if (connection->ssl_ctx->load_verify_file(args.cacert->inner, ec)) {
+            diagnostic::warning("{}", ec.message())
+              .note("failed to load cacert file `{}`: {}", args.cacert->inner,
+                    ec.message())
+              .note("handle `{}`", connection->socket->native_handle())
+              .primary(args.cacert->source)
+              .emit(diagnostics);
+            return;
+          }
+        }
+      }
+      if (args.skip_peer_verification) {
+        if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
+                                                 ec)) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to disable peer certificate verification")
+            .note("handle `{}`", connection->socket->native_handle())
+            .primary(*args.skip_peer_verification)
+            .emit(diagnostics);
+          return;
+        }
+      } else {
+        if (connection->ssl_ctx->set_verify_mode(
+              boost::asio::ssl::verify_peer
+                | boost::asio::ssl::verify_fail_if_no_peer_cert,
+              ec)) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to enable peer certificate verification")
+            .note("handle `{}`", connection->socket->native_handle())
+            .primary(args.tls)
+            .emit(diagnostics);
+          return;
+        }
+      }
+      if (not args.skip_hostname_verification) {
+        connection->ssl_ctx->set_verify_callback(
+          boost::asio::ssl::host_name_verification{
+            args.endpoint.inner.hostname});
       }
       TENZIR_ASSERT(not connection->tls_socket);
       connection->tls_socket.emplace(*connection->socket, *connection->ssl_ctx);
@@ -577,7 +616,7 @@ struct connection_manager_state {
         diagnostic::warning("{}", ec.message())
           .note("failed to perform TLS handshake")
           .note("handle `{}`", connection->socket->native_handle())
-          .primary(*args.tls)
+          .primary(args.tls)
           .emit(diagnostics);
         return;
       }
@@ -629,7 +668,8 @@ struct connection_manager_state {
           // Start the async read loop for this connection.
           auto connection = connections.find(handle);
           TENZIR_ASSERT(connection != connections.end());
-          connection->second->async_read(self, diagnostics);
+          connection->second->async_read(self, diagnostics,
+                                         args.max_buffered_chunks->inner);
         },
         [this, handle
                = connection->socket->native_handle()](const caf::error& err) {
@@ -642,25 +682,23 @@ struct connection_manager_state {
   }
 
   auto async_accept() -> void {
-    acceptor->async_accept(
-      [this, handle = caf::actor_cast<caf::actor>(self)](
-        boost::system::error_code ec, boost::asio::ip::tcp::socket socket) {
-        auto action = [this, ec, socket = std::move(socket)]() mutable {
-          // Always start accepting the next connection.
-          async_accept();
-          // If there's an error accepting connections, then we just warn about
-          // it but continue to accept new ones.
-          if (ec) {
-            diagnostic::warning("{}", ec.message())
-              .note("failed to accept connection")
-              .primary(args.endpoint.source)
-              .emit(diagnostics);
-            return;
-          }
-          handle_connection(std::move(socket));
-        };
-        caf::anon_mail(caf::make_action(std::move(action))).send(handle);
+    acceptor->async_accept([this](boost::system::error_code ec,
+                                  boost::asio::ip::tcp::socket socket) {
+      self->schedule_fn([this, ec, socket = std::move(socket)]() mutable {
+        // Always start accepting the next connection.
+        async_accept();
+        // If there's an error accepting connections, then we just warn about
+        // it but continue to accept new ones.
+        if (ec) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to accept connection")
+            .primary(args.endpoint.source)
+            .emit(diagnostics);
+          return;
+        }
+        handle_connection(std::move(socket));
       });
+    });
   }
 
   auto
@@ -680,21 +718,24 @@ struct connection_manager_state {
           = self->template make_response_promise<chunk_ptr>();
         return connection->second->rp;
       }
-      should_read = connection->second->chunks.size()
-                    == connection_state::max_queued_chunks;
+      should_read
+        = connection->second->chunks.size() == args.max_buffered_chunks->inner;
       chunk = std::move(connection->second->chunks.front());
       connection->second->chunks.pop();
     }
     if (should_read) {
-      connection->second->async_read(self, diagnostics);
+      connection->second->async_read(self, diagnostics,
+                                     args.max_buffered_chunks->inner);
     }
     return chunk;
   }
 
   auto write_elements(Elements elements) -> caf::result<void> {
+    TENZIR_ASSERT(size(elements) > 0);
     if (read_rp.pending()) {
       TENZIR_ASSERT(buffer.empty());
       read_rp.deliver(std::move(elements));
+      return {};
     }
     buffer.push(std::move(elements));
     if (buffer.size() < max_buffered_batches) {
@@ -707,6 +748,7 @@ struct connection_manager_state {
     TENZIR_ASSERT(not read_rp.pending());
     if (not buffer.empty()) {
       auto elements = std::move(buffer.front());
+      TENZIR_ASSERT(size(elements) > 0);
       buffer.pop();
       if (buffer.size() < max_buffered_batches) {
         // Unblock all connections as soon as at least one free slot in the
@@ -813,6 +855,7 @@ public:
         .request(connection_manager_actor.get(), caf::infinite)
         .then(
           [&](Elements& elements) {
+            TENZIR_ASSERT(size(elements) > 0);
             ctrl.set_waiting(false);
             result = std::move(elements);
           },
@@ -869,20 +912,22 @@ public:
     -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};
     auto parallel = std::optional<located<uint64_t>>{};
-    auto tls = std::optional<located<bool>>{};
     auto args = load_tcp_args{};
+    args.tls = located{false, inv.self.get_location()};
     auto parser = argument_parser2::operator_("load_tcp")
                     .positional("endpoint", endpoint)
                     .named("parallel", parallel)
-                    .named("tls", tls)
-                    .named("certfile", args.certfile)
-                    .named("keyfile", args.keyfile)
+                    .named("max_buffered_chunks", args.max_buffered_chunks)
                     .positional("{ … }", args.pipeline);
+    args.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
     auto failed = false;
     if (endpoint.inner.starts_with("tcp://")) {
       endpoint.inner = endpoint.inner.substr(6);
-      endpoint.source.begin += 6;
+      if (endpoint.source.end - endpoint.source.begin
+          == endpoint.inner.size() + 2) {
+        endpoint.source.begin += 6;
+      }
     }
     if (const auto splits = detail::split(endpoint.inner, ":", 1);
         splits.size() != 2) {
@@ -921,10 +966,11 @@ public:
     } else {
       args.parallel = {1, location::unknown};
     }
-    if (tls and not tls->inner) {
+    TRY(args.validate(endpoint, ctx));
+    if (not args.tls.inner) {
       if (args.certfile) {
         diagnostic::error("conflicting option: `certfile` requires `tls`")
-          .primary(tls->source)
+          .primary(args.tls)
           .primary(args.certfile->source)
           .usage(parser.usage())
           .docs(parser.docs())
@@ -933,7 +979,7 @@ public:
       }
       if (args.keyfile) {
         diagnostic::error("conflicting option: `keyfile` requires `tls`")
-          .primary(tls->source)
+          .primary(args.tls)
           .primary(args.keyfile->source)
           .usage(parser.usage())
           .docs(parser.docs())
@@ -941,15 +987,19 @@ public:
         failed = true;
       }
     }
-    if (tls) {
-      args.tls.emplace(tls->source);
-    } else if (args.certfile or args.keyfile) {
-      args.tls.emplace(location::unknown);
-    }
     if (not args.pipeline) {
       // If the user does not provide a pipeline, we fall back to just an empty
       // pipeline, i.e., pass the bytes for all connections through.
       args.pipeline.emplace(pipeline{}, location::unknown);
+    }
+    if (args.max_buffered_chunks and args.max_buffered_chunks->inner == 0) {
+      diagnostic::error("`max_buffered_chunks` must be greater than zero")
+        .primary(args.max_buffered_chunks->source)
+        .emit(ctx);
+      failed = true;
+    }
+    if (not args.max_buffered_chunks) {
+      args.max_buffered_chunks.emplace(10, location::unknown);
     }
     const auto output_type = args.pipeline->inner.infer_type(tag_v<chunk_ptr>);
     if (not output_type) {

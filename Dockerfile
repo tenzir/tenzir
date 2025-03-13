@@ -313,6 +313,7 @@ RUN apt-get update && \
       libasan6 \
       libboost-filesystem++1.81 \
       libboost-url1.81 \
+      libboost-stacktrace1.81 \
       libc++1 \
       libc++abi1 \
       libflatbuffers2 \
@@ -522,7 +523,9 @@ ENTRYPOINT ["tenzir-node"]
 FROM tenzir-node-ce AS tenzir-demo
 
 COPY /scripts/install-demo-node-package.tql /tmp/install-demo-node-package.tql
-ENV TENZIR_START__COMMANDS="exec --file /tmp/install-demo-node-package.tql" \
+ENV TENZIR_CACHE__CAPACITY="64Mi" \
+    TENZIR_DEMAND__MAX_BATCHES=3 \
+    TENZIR_START__COMMANDS="exec --file /tmp/install-demo-node-package.tql" \
     TENZIR_TQL2="true"
 
 # -- tenzir-node -----------------------------------------------------------------

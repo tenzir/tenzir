@@ -1,9 +1,14 @@
+import TLSOptions from './_common_tls_options.mdx';
+
 # load_tcp
 
 Loads bytes from a TCP or TLS connection.
 
 ```tql
-load_tcp endpoint:string, [parallel=int, tls=bool, certfile=string, keyfile=string { … }]
+load_tcp endpoint:string, [parallel=int, tls=bool, cacert=string, certifle=string,
+                           keyfile=string, skip_peer_verification=bool,
+                           skip_host_verification=bool, max_buffered_chunks=int
+                           { … }]
 ```
 
 ## Description
@@ -18,19 +23,17 @@ all interfaces.
 
 ### `parallel = int (optional)`
 
-Maximum number of parallel connections at once.
+Number of threads to use for reading from connections.
 
-### `tls = bool (optional)`
+Defaults to 1.
 
-Whether to use TLS.
+<TLSOptions tls_default="false"/>
 
-### `certfile = string (optional)`
+### `max_buffered_chunks = int (optional)`
 
-Path to a `.pem` file containing the TLS certificate.
+Maximum number of buffered chunks per connection.
 
-### `keyfile = string (optional)`
-
-Path to a `.pem` file containing the private key for the certificate.
+Defaults to 10.
 
 ### `{ … } (optional)`
 

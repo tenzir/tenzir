@@ -11,16 +11,20 @@
 #include "tenzir/config.hpp"
 #include "tenzir/detail/backtrace.hpp"
 
+#include <boost/stacktrace/stacktrace.hpp>
+
 #include <csignal>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <string.h>
 #include <unistd.h>
 
 extern "C" void fatal_handler(int sig) {
-  ::fprintf(stderr, "tenzir-%s: Error: signal %d (%s)\n",
+  ::fprintf(stderr, "tenzir-%s: Error: fatal signal %d (%s)\n",
             tenzir::version::version, sig, ::strsignal(sig));
-  tenzir::detail::backtrace();
+  auto trace = boost::stacktrace::stacktrace{1, 1000};
+  for (const auto& frame : trace) {
+    ::fprintf(stderr, "%s\n", tenzir::detail::format_frame(frame).c_str());
+  }
   // Reinstall the default handler and call that too.
   signal(sig, SIG_DFL);
   kill(getpid(), sig);
