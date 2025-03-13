@@ -5,9 +5,10 @@ sidebar_position: 0
 # Run pipelines
 
 You can run a [pipeline](../../pipelines/README.md) in the
-[app](https://app.tenzir.com) or on the command line using the `tenzir` binary.
+[platform](https://app.tenzir.com) or on the command line using the `tenzir`
+binary.
 
-## In the app
+## In the platform
 
 Run a pipeline by writing typing it in the editor and hitting the *Run* button.
 

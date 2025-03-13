@@ -251,15 +251,15 @@ To stop an ongoing rebuild, use `tenzir-ctl rebuild stop`.
 
 ## Logging
 
-The Tenzir server writes log files into a file named `server.log` in the
-database directory by default. Set the option `tenzir.log-file` to change the
-location of the log file.
+The Tenzir Node writes log files into a file named `server.log` in the database
+directory by default. Set the option `tenzir.log-file` to change the location of
+the log file.
 
-Tenzir client processes do not write logs by default. Set the option
+`tenzir` client processes do not write logs by default. Set the option
 `tenzir.client-log-file` to enable logging. Note that relative paths are
 interpreted relative to the current working directory of the client process.
 
-Server log files rotate automatically after 10 MiB. The option
+Node log files rotate automatically after 10 MiB. The option
 `tenzir.disable-log-rotation` allows for disabling log rotation entirely, and
 the option `tenzir.log-rotation-threshold` sets the size limit when a log file
 should be rotated.
@@ -267,3 +267,50 @@ should be rotated.
 Tenzir processes log messages in a dedicated thread, which by default buffers up
 to 1M messages for servers, and 100 for clients. The option
 `tenzir.log-queue-size` controls this setting.
+
+## Caching
+
+Tenzir Nodes cache results for results for pipelines used in the Tenzir
+Platform's Explorer. Internally, this utilizes the
+[`cache`](/tql2/operators/cache.md) operator.
+
+Caches have two primary tuning knobs:
+
+1. The `tenzir.cache.capacity` option controls the total memory usage in
+   bytes caches may use in the node. If this capacity is exceeded, the oldest
+   caches will be removed. The option defaults to 1Gi, and must be set to at
+   least 64Mi.
+2. The `tenzir.cache.lifetime` option controls the maximum age of each cache.
+   The option defaults to 10min.
+
+If you expect that many users will be using the Explorer with a node at the same
+time, or if you want to explore large data sets with the Explorer, we recommend
+increasing the cache capacity option of the node. Otherwise, the Explorer may
+need to re-run pipelines more frequently because the caches get evicted earlier.
+
+We recommend reducing the cache capacity to its minimum of 64Mi only when
+running in a memory-constrained environment.
+
+Here's how you can set the options:
+
+```yaml
+# /opt/tenzir/etc/tenzir/tenzir.yaml
+tenzir:
+  cache:
+    # Total cache capacity in bytes for the node. Must be at least 64Mi.
+    # Defaults to 1Gi.
+    capacity: 1Gi
+    # Maximum lifetime of a cache. Defaults to 10min.
+    lifetime: 10min
+```
+
+The options can also be specified as the `TENZIR_CACHE__CAPACITY` and
+`TENZIR_CACHE__LIFETIME` environment variables, respectively.
+
+Restart the node after changing these options for them to take effect.
+
+Additionally, in the Explorer, users can control how many events they want to
+cache per run of a pipeline. The available options are 1k, 10k, 100k, or 1M
+events, defaulting to 10k. Avoid using higher limits to be fair to other users
+of the Explorer on the same node, and only increase it when you must.
+
