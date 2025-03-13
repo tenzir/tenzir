@@ -313,4 +313,3 @@ Additionally, in the Explorer, users can control how many events they want to
 cache per run of a pipeline. The available options are 1k, 10k, 100k, or 1M
 events, defaulting to 10k. Avoid using higher limits to be fair to other users
 of the Explorer on the same node, and only increase it when you must.
-
