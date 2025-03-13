@@ -1,3 +1,5 @@
+import TLSOptions from './_common_tls_options.mdx';
+
 # to_clickhouse
 
 Sends events to a ClickHouse table.
@@ -5,7 +7,8 @@ Sends events to a ClickHouse table.
 ```tql
 to_clickhouse table=string, [host=string, port=int, user=string, password=string,
                              mode=string, primary=field,
-                             tls=bool, cacert=string, certfile=string, keyfile=string]
+                             tls=bool, cacert=string, certfile=string, keyfile=string,
+                             skip_peer_verification=bool, skip_host_verification=bool]
 ```
 
 ## Description
@@ -53,27 +56,7 @@ Defaults to `"create_append"`.
 The primary key to use when creating a table. Required for `mode = "create"` as
 well as for `mode = "create_append"` if the table does not yet exist.
 
-### `tls = bool (optional)`
-
-Enables TLS.
-
-Defaults to `false`.
-
-### `skip_peer_verification = bool (optional)`
-
-Toggles TLS certificate verification.
-
-Defaults to `false`.
-
-### `cacert = string (optional)`
-
-Path to the CA certificate used to verify the server's certificate.
-
-### `certfile = string (optional)`
-
-Path to the client certificate.
-
-### `keyfile = string (optional)`
+<TLSOptions tls_default="true"/>
 
 Path to the key for the client certificate.
 
@@ -106,9 +89,9 @@ The table will be created from the first event the operator receives.
 
 ## Examples
 
-### Send CSV file to a local ClickHouse instance
+### Send CSV file to a local ClickHouse instance, without TLS
 
 ```tql
 from "my_file.csv"
-to_clickhouse table="my_table"
+to_clickhouse table="my_table", tls=false
 ```

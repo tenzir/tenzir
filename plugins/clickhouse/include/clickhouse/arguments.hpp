@@ -11,6 +11,7 @@
 #include "clickhouse/client.h"
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/ssl_options.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <boost/regex.hpp>
@@ -51,12 +52,7 @@ struct arguments {
   located<std::string> table = {"REQUIRED", location::unknown};
   located<enum mode> mode = located{mode::create_append, operator_location};
   std::optional<located<std::string>> primary = std::nullopt;
-
-  std::optional<located<bool>> tls = std::nullopt;
-  std::optional<located<bool>> skip_peer_verification = std::nullopt;
-  std::optional<located<std::string>> cacert = std::nullopt;
-  std::optional<located<std::string>> certfile = std::nullopt;
-  std::optional<located<std::string>> keyfile = std::nullopt;
+  ssl_options ssl = {};
 
   static auto
   try_parse(std::string operator_name, operator_factory_plugin::invocation inv,
@@ -76,11 +72,7 @@ struct arguments {
     parser.named("table", res.table);
     parser.named_optional("mode", mode_str);
     parser.named("primary", primary_selector, "field");
-    parser.named("tls", res.tls);
-    parser.named("skip_peer_verification", res.skip_peer_verification);
-    parser.named("cacert", res.cacert);
-    parser.named("certfile", res.certfile);
-    parser.named("keyfile", res.keyfile);
+    res.ssl.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
     if (not validate_identifier(res.table.inner)) {
       emit_invalid_identifier("table", res.table.inner, res.table.source, ctx);
@@ -116,27 +108,9 @@ struct arguments {
         return failure::promise();
       }
     }
-    // TODO this thing should really be a common component somewhere...
-    auto tls_logic
-      = [&](auto& thing, std::string_view name) -> failure_or<void> {
-      if (res.tls and not res.tls->inner and thing) {
-        diagnostic::error("`{}` requires TLS", name)
-          .primary(res.tls->source, "TLS is disabled")
-          .primary(*thing)
-          .emit(ctx);
-        return failure::promise();
-      }
-      if (thing and not res.tls) {
-        res.tls = located{true, into_location{*thing}};
-      }
-      return {};
-    };
-    TRY(tls_logic(res.skip_peer_verification, "skip_peer_verification"));
-    TRY(tls_logic(res.cacert, "cacert"));
-    TRY(tls_logic(res.certfile, "certfile"));
-    TRY(tls_logic(res.keyfile, "keyfile"));
+    TRY(res.ssl.validate(res.host, ctx));
     if (not port) {
-      if (res.tls and res.tls->inner) {
+      if (res.ssl.tls.inner) {
         port = located{9440, res.operator_location};
       } else {
         port = located{9000, res.operator_location};
@@ -151,20 +125,19 @@ struct arguments {
                   .SetEndpoints({{host.inner, port.inner}})
                   .SetUser(user.inner)
                   .SetPassword(password.inner);
-    if (tls and tls->inner) {
+    if (ssl.tls.inner) {
       auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
-      tls_opts.SetSkipVerification(skip_peer_verification
-                                   and skip_peer_verification->inner);
+      tls_opts.SetSkipVerification(ssl.skip_peer_verification.has_value());
       auto commands
         = std::vector<::clickhouse::ClientOptions::SSLOptions::CommandAndValue>{};
-      if (cacert) {
-        commands.emplace_back("ChainCAFile", cacert->inner);
+      if (ssl.cacert) {
+        commands.emplace_back("ChainCAFile", ssl.cacert->inner);
       }
-      if (certfile) {
-        commands.emplace_back("Certificate", certfile->inner);
+      if (ssl.certfile) {
+        commands.emplace_back("Certificate", ssl.certfile->inner);
       }
-      if (keyfile) {
-        commands.emplace_back("PrivateKey", keyfile->inner);
+      if (ssl.keyfile) {
+        commands.emplace_back("PrivateKey", ssl.keyfile->inner);
       }
       tls_opts.SetConfiguration(commands);
       opts.SetSSLOptions(std::move(tls_opts));
@@ -178,10 +151,7 @@ struct arguments {
       f.field("host", x.host), f.field("port", x.port), f.field("user", x.user),
       f.field("password", x.password), f.field("table", x.table),
       f.field("mode", x.mode), f.field("primary", x.primary),
-      f.field("tls", x.tls),
-      f.field("skip_peer_verification", x.skip_peer_verification),
-      f.field("cacert", x.cacert), f.field("certfile", x.certfile),
-      f.field("keyfile", x.keyfile));
+      f.field("ssl", x.ssl));
   }
 };
 } // namespace tenzir::plugins::clickhouse

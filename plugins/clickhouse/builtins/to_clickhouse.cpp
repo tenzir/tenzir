@@ -48,7 +48,9 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> try {
-    auto client = easy_client::make(args_, ctrl.diagnostics());
+    auto args = args_;
+    args.ssl.update_cacert(ctrl);
+    auto client = easy_client::make(args, ctrl.diagnostics());
     if (not client) {
       co_yield {};
       co_return;
@@ -60,7 +62,7 @@ public:
       }
       if (slice.columns() == 0) {
         diagnostic::warning("empty event will be dropped")
-          .primary(args_.operator_location)
+          .primary(args.operator_location)
           .emit(ctrl.diagnostics());
         continue;
       }
@@ -69,7 +71,7 @@ public:
     }
   } catch (::clickhouse::Error& e) {
     diagnostic::error("unexpected error: {}", e.what())
-      .primary(args_.operator_location)
+      .primary(args.operator_location)
       .emit(ctrl.diagnostics());
     co_return;
   }
