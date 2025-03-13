@@ -180,8 +180,8 @@ private:
     // batch of events that'd make it go over the limit. This is better than
     // being evicted immediately.
     if (byte_size_ + approx_bytes > max_bytes_ and not exceeded_capacity) {
-      diagnostic::warning("cache exceeded total capacity of {} bytes",
-                          max_bytes_)
+      diagnostic::warning("cache exceeded total capacity of {} MiB",
+                          max_bytes_ / (1 << 20))
         .hint("consider increasing `tenzir.cache.capacity` option")
         .emit(diagnostics_);
       return false;
