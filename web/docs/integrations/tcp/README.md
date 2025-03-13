@@ -12,8 +12,8 @@ Use the IP address `0.0.0.0` to listen on all available network interfaces.
 
 :::tip URL Support
 The URL schemes `tcp://` and `tcps://` dispatch to
-[`load_tcp`](../../tql2/operators/load_tcp.md) and
-[`save_tcp`](../../tql2/operators/save_tcp.md) for seamless URL-style use via
+[`load_tcp`](../../tql2/operators/load_tcp.mdx) and
+[`save_tcp`](../../tql2/operators/save_tcp.mdx) for seamless URL-style use via
 [`from`](../../tql2/operators/from.md) and [`to`](../../tql2/operators/to.md).
 :::
 

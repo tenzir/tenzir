@@ -1,3 +1,5 @@
+import TLSOptions from './_common_tls_options.mdx';
+
 # load_http
 
 Loads a byte stream via HTTP.
@@ -5,7 +7,8 @@ Loads a byte stream via HTTP.
 ```tql
 load_http url:string, [data=record, params=record, headers=record,
           method=string, form=bool, chunked=bool, multipart=bool,
-          skip_peer_verification=bool, skip_hostname_verification=bool, verbose=bool]
+          parallel=int, tls=bool, cacert=string, certifle=string,
+          keyfile=string, skip_peer_verification=bool, skip_host_verification=bool]
 ```
 
 ## Description
@@ -62,23 +65,7 @@ This automatically sets the `Content-Type` header to
 
 Defaults to `false`.
 
-### `skip_peer_verification = bool (optional)`
-
-Whether to skip TLS peer verification.
-
-Defaults to `false`.
-
-### `skip_hostname_verification = bool (optional)`
-
-Whether to skip TLS peer verification.
-
-Defaults to `false`.
-
-<!-- ### `verbose = bool (optional)` -->
-<!---->
-<!-- Whether to emit verbose output. -->
-<!---->
-<!-- Defaults to `false`. -->
+<TLSOptions tls_default="true"/>
 
 ## Examples
 
@@ -90,4 +77,4 @@ load_http "example.org/api", headers={"X-API-Token": "0000-0000-0000"}
 
 ## See Also
 
-[`save_http`](save_http.md)
+[`save_http`](save_http.mdx)

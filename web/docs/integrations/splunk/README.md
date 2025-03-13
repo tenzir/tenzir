@@ -10,7 +10,7 @@ and processing logs. Tenzir can send data to Splunk via HEC.
 ### Send data to an existing HEC endpoint
 
 To send data from a pipeline to a Splunk [HTTP Event Collector (HEC)][hec]
-endpoint, use the [`to_splunk`](../../tql2/operators/to_splunk.md) operator.
+endpoint, use the [`to_splunk`](../../tql2/operators/to_splunk.mdx) operator.
 
 For example, deploy the following pipeline to forward
 [Suricata](../suricata/README.md) alerts to Splunk:
@@ -25,7 +25,7 @@ Replace `1.2.3.4` with the IP address of your Splunk host and `TOKEN` with your
 HEC token.
 
 For more details, see the documentation for the
-[`to_splunk`](../../tql2/operators/to_splunk.md) operator.
+[`to_splunk`](../../tql2/operators/to_splunk.mdx) operator.
 
 ### Spawn a HEC endpoint as pipeline source
 

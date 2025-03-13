@@ -1,9 +1,13 @@
+import TLSOptions from './_common_tls_options.mdx';
+
 # save_tcp
 
 Saves bytes to a TCP or TLS connection.
 
 ```tql
-save_tcp endpoint:string, [tls=bool, skip_peer_verification=bool]
+save_tcp endpoint:string, [tls=bool, cacert=string, certifle=string,
+                           keyfile=string, skip_peer_verification=bool,
+                           skip_host_verification=bool]
 ```
 
 ## Description
@@ -15,22 +19,7 @@ Saves bytes to the given endpoint via TCP or TLS.
 The endpoint to which the server will connect. Must be of the form
 `[tcp://]<hostname>:<port>`.
 
-### `tls = bool (optional)`
-
-Whether to use TLS.
-
-Defaults to `false`.
-
-### `skip_peer_verification = bool (optional)`
-
-Whether to verify the TLS Certificate when connecting.
-
-Defaults to `true` if TLS is being used.
-
-:::tip Self-Signed Certificates
-If you experience failures when using TLS with a Self-Signed Certificate,
-try setting `skip_peer_verification=true`.
-:::
+<TLSOptions tls_default="false"/>
 
 ## Examples
 
