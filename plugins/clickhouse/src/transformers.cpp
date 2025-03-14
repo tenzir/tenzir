@@ -233,6 +233,7 @@ struct tenzir_to_clickhouse_trait;
     }                                                                          \
   }
 
+X(bool_type, ColumnUInt8, "UInt8");
 X(int64_type, ColumnInt64, "Int64");
 X(uint64_type, ColumnUInt64, "UInt64");
 X(double_type, ColumnFloat64, "Float64");
@@ -651,6 +652,7 @@ auto make_functions_from_clickhouse(const std::string_view clickhouse_typename,
       == tenzir_to_clickhouse_trait<TENZIR_TYPE>::clickhouse_typename(true)) { \
     return make_transformer_impl<TENZIR_TYPE>(true);                           \
   }
+  X(bool_type);
   X(int64_type);
   X(uint64_type);
   X(double_type);

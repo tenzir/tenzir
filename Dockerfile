@@ -151,6 +151,16 @@ RUN cmake -S plugins/azure-blob-storage -B build-azure-blob-storage -G Ninja \
       DESTDIR=/plugin/azure-blob-storage cmake --install build-azure-blob-storage --strip --component Runtime && \
       rm -rf build-build-azure-blob-storage
 
+FROM plugins-source AS clickhouse-plugin
+
+COPY plugins/clickhouse ./plugins/clickhouse
+RUN cmake -S plugins/clickhouse -B build-clickhouse -G Ninja \
+        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-clickhouse --parallel && \
+      cmake --build build-clickhouse --target bats && \
+      DESTDIR=/plugin/clickhouse cmake --install build-clickhouse --strip --component Runtime && \
+      rm -rf build-build-clickhouse
+
 FROM plugins-source AS fluent-bit-plugin
 
 COPY plugins/fluent-bit ./plugins/fluent-bit
@@ -355,6 +365,7 @@ CMD ["--help"]
 
 COPY --from=amqp-plugin --chown=tenzir:tenzir /plugin/amqp /
 COPY --from=azure-blob-storage-plugin --chown=tenzir:tenzir /plugin/azure-blob-storage /
+COPY --from=clickhouse-plugin --chown=tenzir:tenzir /plugin/clickhouse /
 COPY --from=fluent-bit-plugin --chown=tenzir:tenzir /plugin/fluent-bit /
 COPY --from=gcs-plugin --chown=tenzir:tenzir /plugin/gcs /
 COPY --from=google-cloud-pubsub-plugin --chown=tenzir:tenzir /plugin/google-cloud-pubsub /

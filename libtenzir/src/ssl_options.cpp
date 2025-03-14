@@ -41,7 +41,7 @@ auto ssl_options::validate(const located<std::string>& url,
   }
   const auto tls_logic
     = [&](auto& thing, std::string_view name) -> failure_or<void> {
-    if (tls.inner and thing) {
+    if (not tls.inner and thing) {
       diagnostic::error("`{}` requires TLS", name)
         .primary(tls.source, "TLS is disabled")
         .primary(*thing)

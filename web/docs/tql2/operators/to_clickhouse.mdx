@@ -68,6 +68,7 @@ translation from Tenzir's types to ClickHouse:
 
 | Tenzir | ClickHouse | Comment |
 |:--- | :--- | :--- |
+| `bool` | `UInt8` | |
 | `int64` | `Int64` | |
 | `uint64` | `Unt64` | |
 | `double` | `Float64` | |
@@ -94,4 +95,22 @@ The table will be created from the first event the operator receives.
 ```tql
 from "my_file.csv"
 to_clickhouse table="my_table", tls=false
+```
+
+### Create a new table with multiple fields
+
+```tql
+from { i: 42, d: 10.0, b: true, l: [42], r:{ s:"string" } }
+to_clickhouse table="example", primary=i
+```
+This creates the following table:
+```
+   ┌─name─┬─type────────────────────┐
+1. │ i    │ Int64                   │
+2. │ d    │ Nullable(Float64)       │
+3. │ b    │ Nullable(UInt8)         │
+4. │ l    │ Array(Nullable(Int64))  │
+5. │ r    │ Tuple(                 ↴│
+   │      │↳    s Nullable(String)) │
+   └──────┴─────────────────────────┘
 ```
