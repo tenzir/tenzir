@@ -166,7 +166,8 @@ private:
     auto exceeded_capacity = false;
     if (cache_size_ + events.rows() > max_events_.inner) {
       events = head(std::move(events), max_events_.inner - cache_size_);
-      diagnostic::warning("cache exceeded capacity")
+      diagnostic::warning("cache exceeded capacity of {} events",
+                          max_events_.inner)
         .primary(max_events_.source)
         .emit(diagnostics_);
       exceeded_capacity = true;
@@ -179,7 +180,8 @@ private:
     // batch of events that'd make it go over the limit. This is better than
     // being evicted immediately.
     if (byte_size_ + approx_bytes > max_bytes_ and not exceeded_capacity) {
-      diagnostic::warning("cache exceeded total capacity in bytes")
+      diagnostic::warning("cache exceeded total capacity of {} MiB",
+                          max_bytes_ / (1 << 20))
         .hint("consider increasing `tenzir.cache.capacity` option")
         .emit(diagnostics_);
       return false;

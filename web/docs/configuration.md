@@ -72,7 +72,7 @@ TENZIR_ENDPOINT=0.0.0.0:42000 tenzir-node
 tenzir-node --endpoint=0.0.0.0:42000
 ```
 
-:::caution CAF and plugin Settings
+:::caution CAF and Plugin Settings
 To provide [CAF](https://github.com/actor-framework/actor-framework) and plugin
 settings, which have the form `caf.x.y.z` and `plugins.name.x.y.z` in the
 configuration file, the environment variable must have the form
@@ -101,9 +101,9 @@ be inferred. For example, `TENZIR_PLUGINS=` will not be considered.
 Tenzir's configuration file is in YAML format. On startup, Tenzir attempts to
 read configuration files from the following places, in order:
 
-1. `<sysconfdir>/tenzir/tenzir.yaml` for system-wide configuration, where
-   `sysconfdir` is the platform-specific directory for configuration files,
-   e.g., `<install-prefix>/etc`.
+1. `/opt/tenzir/etc/tenzir/tenzir.yaml` for system-wide configuration, where
+   `/opt/tenzir` is the default install prefix and `/etc/tenzir` is the default
+   sysconfdir.
 
 2. `~/.config/tenzir/tenzir.yaml` for user-specific configuration. Tenzir
    respects the XDG base directory specification and its environment variables.
