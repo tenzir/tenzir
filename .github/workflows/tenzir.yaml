@@ -359,18 +359,6 @@ jobs:
             pr_number=$(gh pr --repo tenzir/tenzir-plugins list --search $plugins_sha --json number -q .[0].number)
             [ $pr_number ] # Assert the pr number was non-empty
           fi
-      - name: Install Nix
-        uses: cachix/install-nix-action@v30
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      - name: Verify Nix sources are synchronized
-        run: |
-          nix/update.sh
-          git diff --quiet --exit-code || {
-            echo "Some Nix source references are not aligned with the git submodules."
-            echo "Please run *nix/update.sh* or apply the following diff directly:"
-            git diff --exit-code
-          }
 
   changelog:
     name: Changelog

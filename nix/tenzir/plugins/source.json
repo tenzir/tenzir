@@ -1,8 +1,5 @@
 {
-  "name": "tenzir-plugins",
-  "url": "git@github.com:tenzir/tenzir-plugins",
-  "ref": "main",
-  "rev": "be69827c5c976573ef7af326de21114ab8dec1a9",
-  "submodules": true,
-  "shallow": true
+  "hash": "sha256-4Ueq+uRrYlg5DMTY3Ap/fEKPv1pUSwEULQhLY8SnKSk=",
+  "name": "tenzir-plugins.tar.gz",
+  "url": "https://github.com/tenzir/tenzir-plugins/archive/be69827c5c976573ef7af326de21114ab8dec1a9.tar.gz"
 }
