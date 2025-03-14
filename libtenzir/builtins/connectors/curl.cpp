@@ -309,8 +309,7 @@ private:
           result.transfer_opts.ssl.skip_peer_verification = location::unknown;
         } else if (arg->inner == "-H"
                    || arg->inner == "--skip-hostname-verification") {
-          result.transfer_opts.ssl.skip_hostname_verification
-            = location::unknown;
+          result.transfer_opts.ssl.skip_peer_verification = location::unknown;
         } else {
           args.push_back(std::move(*arg));
         }

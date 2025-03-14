@@ -31,8 +31,6 @@ struct transfer_options {
   std::optional<std::string> authzid = {};
   std::optional<std::string> authorization = {};
   ssl_options ssl = {};
-  //bool skip_peer_verification = false;
-  //bool skip_hostname_verification = false;
 
   friend auto inspect(auto& f, transfer_options& x) -> bool {
     return f.object(x)

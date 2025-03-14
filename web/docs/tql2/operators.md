@@ -96,7 +96,7 @@ Operator | Description | Example
 [`to`](./operators/to.md) | Writes events to an URI | `to "s3://examplebucket/obj.json.gz"` <!--at the top because its important-->
 [`to_asl`](./operators/to_asl.md) | Sends OCSF events to an Amazon Security Lake | `to_asl "s3://…"`
 [`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics | `to_azure_log_analytics tenant_id=…`
-[`to_clickhouse`](./operators/to_clickhouse.md) | Sends events to a ClickHouse Table | `to_clickhouse table="my_table"`
+[`to_clickhouse`](./operators/to_clickhouse.mdx) | Sends events to a ClickHouse Table | `to_clickhouse table="my_table"`
 [`to_fluent_bit`](./operators/to_fluent_bit.mdx) | Sends events to Fluent Bit| `to_fluent_bit "elasticsearch" …`
 [`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
 [`to_opensearch`](./operators/to_opensearch.mdx) | Sends incoming events to the OpenSearch Bulk API | `to_opensearch 'localhost:9200", …`
@@ -109,7 +109,7 @@ Operator | Description | Example
 :--------|:------------|:-------
 [`save_amqp`](./operators/save_amqp.md) | Saves incoming bytes to an AMQP server | `save_amqp`
 [`save_azure_blob…`](./operators/save_azure_blob_storage.md) | Saves to an Azure Blob Storage | `save_azure_blob_storage "abfs://…`
-[`save_email`](./operators/save_email.md) | Saves incoming bytes through an SMTP server | `save_email "user@example.org"`
+[`save_email`](./operators/save_email.mdx) | Saves incoming bytes through an SMTP server | `save_email "user@example.org"`
 [`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`
 [`save_ftp`](./operators/save_ftp.mdx) | Saves incoming bytes via FTP | `save_ftp "ftp.example.org"`
 [`save_google_cloud…`](./operators/save_google_cloud_pubsub.md) | Publishes to a Google Cloud Pub/Sub topic | `save_google_cloud_pubsub project…`

@@ -13,8 +13,6 @@ using namespace clickhouse;
 
 namespace tenzir::plugins::clickhouse {
 
-/// TODO: SSL
-
 class clickhouse_sink_operator final
   : public crtp_operator<clickhouse_sink_operator> {
 public:
@@ -71,7 +69,7 @@ public:
     }
   } catch (::clickhouse::Error& e) {
     diagnostic::error("unexpected error: {}", e.what())
-      .primary(args.operator_location)
+      .primary(args_.operator_location)
       .emit(ctrl.diagnostics());
     co_return;
   }

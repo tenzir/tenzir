@@ -2,7 +2,7 @@
 
 [clickhouse]: https://clickhouse.com/
 [clickhouse-cpp]: https://github.com/ClickHouse/clickhouse-cpp/
-[operator-docs]: ../../tql2/operators/to_clickhouse.md
+[operator-docs]: ../../tql2/operators/to_clickhouse.mdx
 
 [ClickHouse][clickhouse] is a high-performance, column-oriented SQL
 database management system (DBMS) for online analytical processing (OLAP).

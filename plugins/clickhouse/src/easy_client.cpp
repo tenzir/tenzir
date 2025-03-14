@@ -25,7 +25,7 @@ auto easy_client::make(arguments args,
   auto client = std::make_unique<easy_client>(std::move(args), dh);
   /// Note that technically, we have a ToCToU bug here. The table could be
   /// created or deleted in between this, the `get` call below and the potential
-  /// creation in `insert`
+  /// creation in `insert`.
   const auto table_existed = client->table_exists();
   TENZIR_TRACE("table exists: {}", table_existed);
   if (client->args_.mode.inner == mode::create and table_existed) {

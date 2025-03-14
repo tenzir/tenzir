@@ -1,3 +1,5 @@
+import TLSOptions from './_common_tls_options.mdx';
+
 # save_email
 
 Saves bytes through an SMTP server.
@@ -5,8 +7,8 @@ Saves bytes through an SMTP server.
 ```tql
 save_email recipient:str, [endpoint=str, from=str, subject=str, username=str,
       password=str, authzid=str, authorization=str, tls=bool,
-      skip_peer_verification=bool, skip_hostname_verification=bool,
-      mime=bool, verbose=bool]
+      skip_peer_verification=bool, cacert=string, certfile=string, keyfile=string,
+      mime=bool]
 ```
 
 ## Description
@@ -70,40 +72,7 @@ The authorization options for an authenticated SMTP connection.
 This login option defines the preferred authentication mechanism, e.g.,
 `AUTH=PLAIN`, `AUTH=LOGIN`, or `AUTH=*`.
 
-### `tls = bool (optional)`
-
-If to use TLS. If `true`, tries to use TLS and fails if a TLS connection
-cannot be establised.
-
-Defaults to trying TLS but falling back to unsecure version.
-
-### `skip_peer_verification = bool (optional)`
-
-If to skip certificate verification.
-
-By default, an SMTPS connection verifies the authenticity of the peer's
-certificate. During connection negotiation, the server sends a certificate
-indicating its identity. We verify whether the certificate is authentic,
-i.e., that you can trust that the server is who the certificate says it is.
-
-If `true`, disables loading of the CA certificates and verification of
-the peer certificate.
-
-### `skip_hostname_verification = bool (optional)`
-
-If to ignore verification of the server name in the certificate.
-
-When negotiating TLS and SSL connections, the server sends a certificate
-indicating its identity. By default, that certificate must indicate that the
-server is the server to which you meant to connect, or the connection fails.
-That is, the server has to have the same name in the certificate as is in the
-URL you operate against. We consider the server the intended one when the
-*Common Name* field or a *Subject Alternate Name* field in the certificate
-matches the hostname in the URL.
-
-Setting this to `true` skips this check, but it makes the connection insecure.
-
-Defaults to `false`.
+<TLSOptions tls_default="false"/>
 
 ### `mime = bool (optional)`
 
@@ -111,14 +80,6 @@ If to wrap the chunk into a MIME part.
 
 The operator uses the metadata of the byte chunk for the
 `Content-Type` MIME header.
-
-Defaults to `false`.
-
-### `verbose = bool (optional)`
-
-Enables verbose output on stderr.
-
-This option is helpful for debugging on the command line.
 
 Defaults to `false`.
 
