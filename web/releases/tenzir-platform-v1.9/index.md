@@ -1,5 +1,5 @@
 ---
-title: "Tenzir Platform v1.9: Next-Gen Explorer"
+title: "Tenzir Platform v1.9: Accelerated Data Exploration"
 slug: tenzir-platform-v1.9
 authors: [dominiklohmann]
 date: 2025-03-14
