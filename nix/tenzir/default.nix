@@ -19,6 +19,7 @@
     arrow-adbc-cpp,
     aws-sdk-cpp-tenzir,
     azure-sdk-for-cpp,
+    clickhouse-cpp,
     fast-float,
     flatbuffers,
     fluent-bit,
@@ -61,6 +62,7 @@
       [
         "plugins/amqp"
         "plugins/azure-blob-storage"
+        "plugins/clickhouse"
         "plugins/fluent-bit"
         "plugins/from_velociraptor"
         "plugins/gcs"
@@ -125,6 +127,7 @@
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           aws-sdk-cpp-tenzir
+          clickhouse-cpp
           fast-float
           fluent-bit
           google-cloud-cpp
