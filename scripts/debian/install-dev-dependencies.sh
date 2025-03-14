@@ -42,6 +42,8 @@ apt-get -y --no-install-recommends install \
     libxxhash-dev \
     libyaml-cpp-dev \
     libyara-dev \
+    liblz4-dev \
+    libzstd-dev \
     lsb-release \
     lsof \
     ncat \

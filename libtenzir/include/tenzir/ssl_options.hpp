@@ -18,7 +18,6 @@ struct ssl_options {
 
   located<bool> tls = located{true, location::unknown};
   std::optional<location> skip_peer_verification;
-  std::optional<location> skip_hostname_verification;
   std::optional<located<std::string>> cacert;
   std::optional<located<std::string>> certfile;
   std::optional<located<std::string>> keyfile;
@@ -46,7 +45,6 @@ struct ssl_options {
     return f.object(x).fields(
       f.field("tls", x.tls),
       f.field("skip_peer_verification", x.skip_peer_verification),
-      f.field("skip_hostname_verification", x.skip_hostname_verification),
       f.field("cacert", x.cacert), f.field("certfile", x.certfile),
       f.field("keyfile", x.keyfile));
   }

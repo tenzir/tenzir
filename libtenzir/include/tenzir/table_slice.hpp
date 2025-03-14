@@ -471,6 +471,19 @@ auto flatten(table_slice slice, std::string_view separator = ".")
 auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
              std::string_view separator) -> flatten_array_result;
 
+/// A view of a column in a record
+struct column_view {
+  std::string_view name;
+  const tenzir::type& type;
+  const arrow::Array& array;
+};
+
+/// Iterates all top level columns of a `table_slice`
+auto columns_of(const table_slice& slice) -> generator<column_view>;
+
+/// Iterates all top level columns of a `StructArray`
+auto columns_of(const record_type& schema,
+                const arrow::StructArray& array) -> generator<column_view>;
 } // namespace tenzir
 
 #include "tenzir/concept/printable/tenzir/table_slice.hpp"

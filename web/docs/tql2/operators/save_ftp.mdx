@@ -5,10 +5,8 @@ import TLSOptions from './_common_tls_options.mdx';
 Saves a byte stream via FTP.
 
 ```tql
-save_ftp url:str [
-load_tcp endpoint:string, [parallel=int, tls=bool, cacert=string, certifle=string,
-                           keyfile=string, skip_peer_verification=bool,
-                           skip_host_verification=bool]
+save_ftp url:str [tls=bool, cacert=string, certifle=string,
+                  keyfile=string, skip_peer_verification=bool]
 ```
 
 ## Description

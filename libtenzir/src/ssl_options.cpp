@@ -21,7 +21,6 @@ ssl_options::ssl_options() = default;
 auto ssl_options::add_tls_options(argument_parser2& parser) -> void {
   parser.named_optional("tls", tls)
     .named("skip_peer_verification", skip_peer_verification)
-    .named("skip_host_verification", skip_hostname_verification)
     .named("cacert", cacert)
     .named("certfile", certfile)
     .named("keyfile", keyfile);
@@ -42,7 +41,7 @@ auto ssl_options::validate(const located<std::string>& url,
   }
   const auto tls_logic
     = [&](auto& thing, std::string_view name) -> failure_or<void> {
-    if (tls.inner and thing) {
+    if (not tls.inner and thing) {
       diagnostic::error("`{}` requires TLS", name)
         .primary(tls.source, "TLS is disabled")
         .primary(*thing)
@@ -52,7 +51,6 @@ auto ssl_options::validate(const located<std::string>& url,
     return {};
   };
   TRY(tls_logic(skip_peer_verification, "skip_peer_verification"));
-  TRY(tls_logic(skip_hostname_verification, "skip_hostname_verification"));
   TRY(tls_logic(cacert, "cacert"));
   TRY(tls_logic(certfile, "certfile"));
   TRY(tls_logic(keyfile, "keyfile"));

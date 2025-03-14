@@ -62,6 +62,7 @@ in {
     ];
   });
   azure-sdk-for-cpp = prev.callPackage ./azure-sdk-for-cpp { };
+  clickhouse-cpp = prev.callPackage ./clickhouse-cpp { };
   arrow-cpp = let
     arrow-cpp' = prev.arrow-cpp.override {
       aws-sdk-cpp-arrow = final.aws-sdk-cpp-tenzir;
