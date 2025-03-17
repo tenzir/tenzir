@@ -27,6 +27,7 @@ endif ()
 
 include(TenzirMacDependencyPaths)
 include(TenzirRegisterPlugin)
+include(TenzirUtilities)
 
 find_package(Flatbuffers CONFIG)
 if (NOT Flatbuffers_FOUND)
