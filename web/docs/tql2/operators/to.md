@@ -88,7 +88,8 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | `file` | [`save_file`](save_file.md) | `to "file://path/to/file.json"` |
 | `fluent-bit` | [`to_fluent_bit`](to_fluent_bit.mdx) | `to "fluent-bit://elasticsearch"` |
 | `ftp`, `ftps` | [`save_ftp`](save_ftp.mdx) | `to "ftp://example.com/file.json"` |
-| `gcps` | [`save_google_cloud_pubsub`](save_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id" { … }` |
+| `gcps` | [`save_google_cloud_pubsub`](save_google_cloud_pubsub.md) | `to "gcps://project_id/topic_id" { … }` |
+| `gs` | [`save_gcs`](save_gcs.md) | `to "gs://bucket/object.json"` |
 | `http`, `https` | [`save_http`](save_http.mdx) | `to "http://example.com/file.json"` |
 | `inproc` | [`save_zmq`](save_zmq.md) | `to "inproc://127.0.0.1:56789" { write_json }` |
 | `kafka` | [`save_kafka`](save_kafka.md) | `to "kafka://topic" { write_json }` |

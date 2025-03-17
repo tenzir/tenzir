@@ -77,6 +77,7 @@ Operator | Description | Example
 [`load_file`](./operators/load_file.md) | Loads bytes from a file | `load_file "/tmp/data.json"`
 [`load_ftp`](./operators/load_ftp.mdx) | Loads bytes via FTP | `load_ftp "ftp.example.org"`
 [`load_google_c…`](./operators/load_google_cloud_pubsub.md) | Listen to a Google Cloud Pub/Sub subscription | `load_google_cloud_pubsub project_id=…`
+[`load_gcs`](./operators/load_gcs.md) | Loads bytes from a Google Cloud Storage object | `load_gcs "gs://bucket/object.json"`
 [`load_http`](./operators/load_http.mdx) | Receives bytes from a HTTP request | `load_http "example.org", params={n: 5}`
 [`load_kafka`](./operators/load_kafka.md) | Receives bytes from an Apache Kafka topic | `load_kafka topic="example"`
 [`load_nic`](./operators/load_nic.md) | Receives bytes from a Network Interface Card | `load_nic "eth0"`
@@ -112,6 +113,7 @@ Operator | Description | Example
 [`save_file`](./operators/save_file.md) | Saves incoming bytes into a file | `save_file "/tmp/out.json"`
 [`save_ftp`](./operators/save_ftp.mdx) | Saves incoming bytes via FTP | `save_ftp "ftp.example.org"`
 [`save_google_cloud…`](./operators/save_google_cloud_pubsub.md) | Publishes to a Google Cloud Pub/Sub topic | `save_google_cloud_pubsub project…`
+[`save_gcs`](./operators/save_gcs.md) | Saves bytes to a Google Cloud Storage object | `save_gcs "gs://bucket/object.json"`
 [`save_http`](./operators/save_http.mdx) | Sends incoming bytes over a HTTP connection | `save_http "example.org/api"`
 [`save_kafka`](./operators/save_kafka.md) | Saves incoming bytes to an Apache Kafka topic | `save_kafka topic="example"`
 [`save_s3`](./operators/save_s3.md) | Saves incoming bytes to an Amazon S3 object | `save_s3 "s3://my-bucket/obj.csv"`
