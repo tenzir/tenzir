@@ -131,6 +131,7 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 | `fluent-bit` | [`from_fluent_bit`](from_fluent_bit.mdx) | `from "fluent-bit://elasticsearch"` |
 | `ftp`, `ftps` | [`load_ftp`](load_ftp.mdx) | `from "ftp://example.com/file.json"` |
 | `gcps` | [`load_google_cloud_pubsub`](load_google_cloud_pubsub.md) | `from "gcps://project_id/subscription_id" { … }` |
+| `gs` | [`load_gcs`](load_gcs.md) | `from "gs://bucket/object.json"` |
 | `http`, `https` | [`load_http`](load_http.mdx) | `from "http://example.com/file.json"` |
 | `inproc` | [`load_zmq`](load_zmq.md) | `from "inproc://127.0.0.1:56789" { read_json }` |
 | `kafka` | [`load_kafka`](load_kafka.md) | `from "kafka://topic" { read_json }` |
