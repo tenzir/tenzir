@@ -662,13 +662,13 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         const auto make_unset_parser = [&, field]() {
           return ignore(parsers::str{document.unset_field}
                         >> &(parsers::chr{document.separator} | parsers::eoi))
-            .then([&]() {
+            .then([&, field]() {
               document.event->field(field).null();
               return true;
             });
         };
         const auto make_empty_parser
-          = [&]<concrete_type Type>(const Type& type) {
+          = [&, field]<concrete_type Type>(const Type& type) {
               return ignore(parsers::str{document.empty_field} >> &(
                               parsers::chr{document.separator} | parsers::eoi))
                 .then([&, field]() {
