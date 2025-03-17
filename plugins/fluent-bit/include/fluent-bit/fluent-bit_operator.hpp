@@ -229,6 +229,12 @@ inline auto to_property_map(const std::optional<tenzir::record>& rec)
     return res;
   }
   for (const auto& [key, value] : *rec) {
+    // Avoid double quotes around strings.
+    if (const auto* str = try_as<std::string>(&value)) {
+      const auto [it, inserted] = res.try_emplace(key, *str);
+      TENZIR_ASSERT(inserted);
+      continue;
+    }
     const auto [it, inserted] = res.try_emplace(key, fmt::format("{}", value));
     TENZIR_ASSERT(inserted);
   }
@@ -389,7 +395,7 @@ public:
   auto push(std::string_view data) -> bool {
     TENZIR_ASSERT(ctx_ != nullptr);
     TENZIR_ASSERT(ffd_ >= 0);
-    return flb_lib_push(ctx_, ffd_, data.data(), data.size()) != 0;
+    return flb_lib_push(ctx_, ffd_, data.data(), data.size()) != FLB_LIB_ERROR;
   }
 
 private:
@@ -798,6 +804,7 @@ public:
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto it = std::back_inserter(event);
+      auto failed = false;
       for (const auto& row : values3(*array)) {
         TENZIR_ASSERT(row);
         auto printer = json_printer{{
@@ -807,10 +814,14 @@ public:
         TENZIR_ASSERT(ok);
         // Wrap JSON object in the 2-element JSON array that Fluent Bit expects.
         auto message = fmt::format("[{}, {}]", flb_time_now(), event);
-        if (engine->push(message)) {
-          TENZIR_ERROR("failed to push data into Fluent Bit engine");
+        if (not engine->push(message)) {
+          failed = true;
         }
         event.clear();
+      }
+      if (failed) {
+        diagnostic::warning("failed to push data into Fluent Bit Engine")
+          .emit(ctrl.diagnostics());
       }
       co_yield {};
     }
