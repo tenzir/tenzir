@@ -35,3 +35,8 @@ subscribe "network"
 assert @name == "ocsf.network_activity"
 // continue processing
 ```
+
+## See Also
+
+[`assert_throughput`](assert_throughput.md),
+[`where`](where.md)
