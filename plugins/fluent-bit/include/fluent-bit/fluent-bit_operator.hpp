@@ -229,6 +229,12 @@ inline auto to_property_map(const std::optional<tenzir::record>& rec)
     return res;
   }
   for (const auto& [key, value] : *rec) {
+    // Avoid double quotes around strings.
+    if (const auto* str = try_as<std::string>(&value)) {
+      const auto [it, inserted] = res.try_emplace(key, *str);
+      TENZIR_ASSERT(inserted);
+      continue;
+    }
     const auto [it, inserted] = res.try_emplace(key, fmt::format("{}", value));
     TENZIR_ASSERT(inserted);
   }
