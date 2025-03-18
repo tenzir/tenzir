@@ -248,6 +248,14 @@ Contains a measurement of the available memory on the host.
 Contains input and output measurements over some amount of time for a single
 operator instantiation.
 
+:::warning Deprecation Notice
+Operator metrics are deprecated and will be removed in a future release. Use
+[pipeline metrics](#tenzirmetricspipeline) instead. While they offered great
+insight into the performance of operators, they were not as useful as pipeline
+metrics for understanding the overall performance of a pipeline, and were too
+expensive to collect and store.
+:::
+
 | Field                 | Type       | Description                                                                     |
 | :-------------------- | :--------- | :------------------------------------------------------------------------------ |
 | `pipeline_id`         | `string`   | The ID of the pipeline where the associated operator is from.                   |
@@ -275,7 +283,29 @@ The records `input` and `output` have the following schema:
 | `unit`         | `string` | The type of the elements, which is `void`, `bytes` or `events`. |
 | `elements`     | `uint64` | Number of elements that were seen during the collection period. |
 | `approx_bytes` | `uint64` | An approximation for the number of bytes transmitted.           |
-| `batches` | `uint64` | The number of batches included in this metric.                       |
+| `batches`      | `uint64` | The number of batches included in this metric.                  |
+
+### `tenzir.metrics.pipeline`
+
+Contains measurements of data flowing through pipelines, emitted once every 10
+seconds.
+
+| Field         | Type     | Description                                     |
+| :------------ | :------- | :---------------------------------------------- |
+| `timestamp`   | `time`   | The time at which this metric was recorded.     |
+| `pipeline_id` | `string` | The ID of the pipeline these metrics represent. |
+| `ingress`     | `record` | Measurement of data entering the pipeline.      |
+| `egress`      | `record` | Measurement of data exiting the pipeline.       |
+
+The records `ingress` and `egress` have the following schema:
+
+| Field      | Type       | Description                                              |
+| :--------- | :--------- | :------------------------------------------------------- |
+| `duration` | `duration` | The timespan over which this data was collected.         |
+| `events`   | `uint64`   | Number of events that passed through during this period. |
+| `bytes`    | `uint64`   | Approximate number of bytes that passed through.         |
+| `batches`  | `uint64`   | Number of batches that passed through.                   |
+| `internal` | `bool`     | True if the data flow is considered internal to Tenzir.  |
 
 ### `tenzir.metrics.platform`
 

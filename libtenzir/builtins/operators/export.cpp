@@ -675,7 +675,7 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto name = std::optional<std::string>{};
+    auto name = std::optional<located<std::string>>{};
     auto live = false;
     auto retro = false;
     const auto internal = true;
@@ -694,6 +694,12 @@ public:
       TENZIR_ASSERT(result);
       return std::move(*result);
     }();
+    if (name and name->inner == "operator") {
+      diagnostic::warning("operator metrics are deprecated")
+        .hint("use `pipeline` metrics instead")
+        .primary(*name)
+        .emit(ctx);
+    }
     return std::make_unique<export_operator>(
       expression{
         conjunction{
@@ -705,7 +711,7 @@ public:
           predicate{
             meta_extractor{meta_extractor::schema},
             relational_operator::equal,
-            name ? data{fmt::format("tenzir.metrics.{}", *name)}
+            name ? data{fmt::format("tenzir.metrics.{}", name->inner)}
                  : data{all_metrics},
           },
         },
