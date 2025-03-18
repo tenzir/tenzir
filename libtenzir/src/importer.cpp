@@ -14,8 +14,6 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
-#include "tenzir/diagnostics.hpp"
-#include "tenzir/logger.hpp"
 #include "tenzir/retention_policy.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/status.hpp"
@@ -24,17 +22,13 @@
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
 
-#include <filesystem>
-
 namespace tenzir {
 
-importer_state::importer_state(importer_actor::pointer self) : self{self} {
-  // nop
+importer::importer(importer_actor::pointer self, index_actor index)
+  : self{self}, index{std::move(index)} {
 }
 
-importer_state::~importer_state() = default;
-
-void importer_state::on_process(const table_slice& slice) {
+void importer::on_process(const table_slice& slice) {
   const auto rows = slice.rows();
   TENZIR_ASSERT(rows > 0);
   const auto is_internal = slice.schema().attribute("internal").has_value();
@@ -49,7 +43,7 @@ void importer_state::on_process(const table_slice& slice) {
   unpersisted_events.push_back(std::move(slice));
 }
 
-void importer_state::handle_slice(table_slice&& slice) {
+void importer::handle_slice(table_slice&& slice) {
   slice.import_time(time::clock::now());
   on_process(slice);
   if (retention_policy.should_be_persisted(slice)) {
@@ -57,16 +51,10 @@ void importer_state::handle_slice(table_slice&& slice) {
   }
 }
 
-importer_actor::behavior_type
-importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, index_actor index) {
-  TENZIR_TRACE("importer {} {}", TENZIR_ARG(self->id()), TENZIR_ARG(dir));
-  if (index) {
-    self->state().index = std::move(index);
-  }
+auto importer::make_behavior() -> importer_actor::behavior_type {
   if (auto policy
       = retention_policy::make(check(to<record>(content(self->config()))))) {
-    self->state().retention_policy = std::move(*policy);
+    retention_policy = std::move(*policy);
   } else {
     self->quit(std::move(policy.error()));
     return importer_actor::behavior_type::make_empty_behavior();
@@ -86,24 +74,23 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   }};
   detail::weak_run_delayed_loop(
     self, defaults::metrics_interval,
-    [self, builder = std::move(builder),
+    [this, builder = std::move(builder),
      actor_metrics_builder = detail::make_actor_metrics_builder()]() mutable {
-      self->state().handle_slice(
-        detail::generate_actor_metrics(actor_metrics_builder, self));
+      handle_slice(detail::generate_actor_metrics(actor_metrics_builder, self));
       const auto now = time::clock::now();
-      for (const auto& [schema, count] : self->state().schema_counters) {
+      for (const auto& [schema, count] : schema_counters) {
         auto event = builder.record();
         event.field("timestamp", now);
         event.field("schema", schema.name());
         event.field("schema_id", schema.make_fingerprint());
         event.field("events", count);
       }
-      self->state().schema_counters.clear();
+      schema_counters.clear();
       auto slice = builder.finish_assert_one_slice();
       if (slice.rows() == 0) {
         return;
       }
-      self->state().handle_slice(std::move(slice));
+      handle_slice(std::move(slice));
     });
   // Clean up unpersisted events every second.
   const auto active_partition_timeout
@@ -111,51 +98,46 @@ importer(importer_actor::stateful_pointer<importer_state> self,
                   "tenzir.active-partition-timeout",
                   defaults::active_partition_timeout);
   detail::weak_run_delayed_loop(
-    self, std::chrono::seconds{1}, [self, active_partition_timeout] {
+    self, std::chrono::seconds{1}, [this, active_partition_timeout] {
       // We clear everything that's older than the active partition timeout plus
       // a fixed 10 seconds to allow some processing to happen. This is an
       // estimate, and it's definitely not a perfect solution, but it's good
       // enough hopefully.
       const auto cutoff = time::clock::now() - active_partition_timeout
                           - std::chrono::seconds{10};
-      const auto it = std::ranges::find_if(
-        self->state().unpersisted_events, [&](const auto& slice) {
-          return slice.import_time() > cutoff;
-        });
-      self->state().unpersisted_events.erase(
-        self->state().unpersisted_events.begin(), it);
+      const auto it
+        = std::ranges::find_if(unpersisted_events, [&](const auto& slice) {
+            return slice.import_time() > cutoff;
+          });
+      unpersisted_events.erase(unpersisted_events.begin(), it);
     });
   return {
-    [self](atom::flush) -> caf::result<void> {
-      auto rp = self->make_response_promise<void>();
-      rp.delegate(self->state().index, atom::flush_v);
-      return rp;
+    [this](atom::flush) -> caf::result<void> {
+      return self->mail(atom::flush_v).delegate(index);
     },
-    [self](table_slice& slice) -> caf::result<void> {
-      self->state().handle_slice(std::move(slice));
+    [this](table_slice& slice) -> caf::result<void> {
+      handle_slice(std::move(slice));
       return {};
     },
-    [self](atom::subscribe, receiver_actor<table_slice>& subscriber,
+    [this](atom::subscribe, receiver_actor<table_slice>& subscriber,
            bool internal) -> std::vector<table_slice> {
       self->monitor(
-        subscriber, [self, source = subscriber->address()](const caf::error&) {
+        subscriber, [this, source = subscriber->address()](const caf::error&) {
           const auto subscriber
-            = std::remove_if(self->state().subscribers.begin(),
-                             self->state().subscribers.end(),
+            = std::remove_if(subscribers.begin(), subscribers.end(),
                              [&](const auto& subscriber) {
                                return subscriber.first.address() == source;
                              });
-          self->state().subscribers.erase(subscriber,
-                                          self->state().subscribers.end());
+          subscribers.erase(subscriber, subscribers.end());
         });
-      self->state().subscribers.emplace_back(std::move(subscriber), internal);
-      return self->state().unpersisted_events;
+      subscribers.emplace_back(std::move(subscriber), internal);
+      return unpersisted_events;
     },
     // -- status_client_actor --------------------------------------------------
     [](atom::status, status_verbosity, duration) { //
       return record{};
     },
-    [self](const caf::exit_msg& msg) {
+    [this](const caf::exit_msg& msg) {
       self->quit(msg.reason);
     },
   };

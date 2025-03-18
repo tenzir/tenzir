@@ -37,6 +37,7 @@
 #include "tenzir/uuid.hpp"
 #include "tenzir/version.hpp"
 
+#include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/function_view.hpp>
@@ -225,8 +226,7 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
 
 auto spawn_importer(node_actor::stateful_pointer<node_state> self,
                     const index_actor& index) -> importer_actor {
-  auto importer
-    = self->spawn(tenzir::importer, self->state().dir / "importer", index);
+  auto importer = self->spawn(caf::actor_from_state<tenzir::importer>, index);
   TENZIR_ASSERT(importer);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(importer),
                                     "importer")) {
