@@ -13,6 +13,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/metric_handler.hpp"
+#include "tenzir/secret_resolution.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 
 #include <caf/typed_actor.hpp>
@@ -60,13 +61,33 @@ struct operator_control_plane {
   /// background.
   virtual auto is_hidden() const noexcept -> bool = 0;
 
+  struct secret_request {
+    secret_view s;
+    resolved_secret_value& out;
+    location loc = location::unknown;
+  };
+  /// Resolves multiple secrets. The implementation in the
+  /// `exec_node_control_plane` will first check the config and then try and
+  /// dispatch to the platform plugin. The platform query is async, so this
+  /// function will perform `set_waiting(true)`, and only re-schedule the actor
+  /// after the request has been fulfilled.
+  /// Users MUST `co_yield {}` after a call to `resolve_secret_must_yield`, but
+  /// are guaranteed that resolution is completed once the operator resumes.
+  virtual auto
+  resolve_secrets_must_yield(std::vector<secret_request> requests) -> void = 0;
+
+  auto resolve_secret_must_yield(const located<secret>& s,
+                                 resolved_secret_value& out) -> void {
+    return resolve_secrets_must_yield({{s.inner, out, s.source}});
+  }
+
   /// Suspend or resume the operator's runloop. A suspended operator will not
   /// get resumed after it yielded to the executor.
   virtual auto set_waiting(bool value) noexcept -> void = 0;
 
   /// Return a version of the diagnostic handler that may be passed to other
   /// threads. NOTE: Unlike for the regular diagnostic handler, emitting an
-  /// erorr via the shared diagnostic handler does not shut down the operator
+  /// error via the shared diagnostic handler does not shut down the operator
   /// immediately.
   inline auto shared_diagnostics() noexcept -> shared_diagnostic_handler {
     return shared_diagnostic_handler{exec_node_actor{&(self())}};

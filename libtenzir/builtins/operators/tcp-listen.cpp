@@ -133,6 +133,11 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
+  virtual auto
+  resolve_secrets_must_yield(std::vector<secret_request>) -> void override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
 private:
   shared_diagnostic_handler diagnostics_;
   metrics_receiver_actor metrics_receiver_;

@@ -327,9 +327,9 @@ using metrics_receiver_actor = typed_actor_fwd<
 struct node_actor_traits {
   using signatures = caf::type_list<
     // Execute a REST endpoint on this node.
-    // Note that nodes connected via CAF trust each other completely,
-    // so this skips all authorization and access control mechanisms
-    // that come with HTTP(s).
+    // Note that nodes connected via CAF trust each other
+    // completely, so this skips all authorization and access
+    // control mechanisms that come with HTTP(s).
     auto(atom::proxy, http_request_description, std::string)
       ->caf::result<rest_response>,
     // Retrieve components by their label from the component registry.
@@ -342,7 +342,10 @@ struct node_actor_traits {
     auto(atom::spawn, operator_box, operator_type, std::string definition,
          receiver_actor<diagnostic>, metrics_receiver_actor, int index,
          bool is_hidden, uuid run_id)
-      ->caf::result<exec_node_actor>>;
+      ->caf::result<exec_node_actor>,
+    // Resolves a secret.
+    auto(atom::resolve, std::string name, std::string public_key)
+      ->caf::result<secret_resolution_result>>;
 };
 using node_actor = caf::typed_actor<node_actor_traits>;
 

@@ -300,6 +300,9 @@ struct zeek_printer {
       [](const map_type&) -> std::string {
         TENZIR_UNREACHABLE();
       },
+      [](const secret_type&) -> std::string {
+        return "secret";
+      },
       [](const record_type&) -> std::string {
         return "record";
       },

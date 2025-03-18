@@ -647,6 +647,12 @@ void multi_series_builder::complete_last_event() {
             .emit(dh_);
           return {};
         },
+        [this](const secret&) -> std::string {
+          diagnostic::warning("selector field contains `secret`, "
+                              "which cannot be used as a selector")
+            .emit(dh_);
+          return {};
+        },
         [this](const auto&) -> std::string {
           diagnostic::warning("selector field contains structural "
                               "type, which cannot be used as a selector")
