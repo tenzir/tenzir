@@ -45,7 +45,7 @@ void importer::handle_slice(table_slice&& slice) {
       self->mail(slice).send(subscriber);
     }
   }
-  recent_events.push_back(std::move(slice));
+  recent_events.push_back(slice);
   if (retention_policy.should_be_persisted(slice)) {
     auto& entry = unpersisted_events[slice.schema()];
     entry.push_back(std::move(slice));
