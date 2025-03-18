@@ -221,7 +221,7 @@ inline constexpr size_t max_partition_size = 4'194'304; // 4 Mi
 
 /// Timeout after which an active partition is forcibly flushed.
 inline constexpr caf::timespan active_partition_timeout
-  = std::chrono::seconds{30};
+  = std::chrono::minutes{5};
 
 /// Timeout after which a new automatic rebuild is triggered.
 inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{120};
