@@ -145,14 +145,7 @@ public:
       "https://docs.tenzir.com/operators/import",
     };
     parser.parse(p);
-    auto pipe = pipeline::internal_parse("batch --timeout 1s");
-    if (not pipe) {
-      diagnostic::error(pipe.error())
-        .note("failed to parse `batch` operator")
-        .throw_();
-    }
-    pipe->append(std::make_unique<import_operator>());
-    return std::make_unique<pipeline>(std::move(*pipe));
+    return std::make_unique<import_operator>();
   }
 
   auto make(invocation inv, session ctx) const

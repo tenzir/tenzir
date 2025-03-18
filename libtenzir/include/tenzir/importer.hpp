@@ -33,8 +33,6 @@ public:
 private:
   void send_report();
 
-  void on_process(const table_slice& slice);
-
   /// Process a slice and forward it to the index.
   void handle_slice(table_slice&& slice);
 
@@ -48,7 +46,8 @@ private:
   struct retention_policy retention_policy = {};
 
   /// Potentially unpersisted events.
-  std::vector<table_slice> unpersisted_events = {};
+  std::vector<table_slice> recent_events = {};
+  std::unordered_map<type, std::vector<table_slice>> unpersisted_events = {};
 
   /// A list of subscribers for incoming events.
   std::vector<std::pair<receiver_actor<table_slice>, bool /*internal*/>>

@@ -28,9 +28,10 @@ importer::importer(importer_actor::pointer self, index_actor index)
   : self{self}, index{std::move(index)} {
 }
 
-void importer::on_process(const table_slice& slice) {
+void importer::handle_slice(table_slice&& slice) {
   const auto rows = slice.rows();
   TENZIR_ASSERT(rows > 0);
+  slice.import_time(time::clock::now());
   const auto is_internal = slice.schema().attribute("internal").has_value();
   if (not is_internal) {
     schema_counters[slice.schema()] += rows;
@@ -40,14 +41,10 @@ void importer::on_process(const table_slice& slice) {
       self->mail(slice).send(subscriber);
     }
   }
-  unpersisted_events.push_back(std::move(slice));
-}
-
-void importer::handle_slice(table_slice&& slice) {
-  slice.import_time(time::clock::now());
-  on_process(slice);
+  recent_events.push_back(std::move(slice));
   if (retention_policy.should_be_persisted(slice)) {
-    self->mail(std::move(slice)).send(index);
+    auto& entry = unpersisted_events[slice.schema()];
+    entry.push_back(std::move(slice));
   }
 }
 
@@ -98,7 +95,34 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
                   "tenzir.active-partition-timeout",
                   defaults::active_partition_timeout);
   detail::weak_run_delayed_loop(
-    self, std::chrono::seconds{1}, [this, active_partition_timeout] {
+    self, std::chrono::seconds{10},
+    [this] {
+      // Every 10 seconds, we clear out all of the unpersisted events and
+      // forward them to the index.
+      auto concat_buffer_size = size_t{0};
+      auto concat_buffer = std::vector<table_slice>{};
+      for (auto& [_, events] : unpersisted_events) {
+        for (auto& slice : events) {
+          concat_buffer_size += slice.rows();
+          concat_buffer.push_back(std::move(slice));
+          if (concat_buffer_size > defaults::import::table_slice_size) {
+            self->mail(concatenate(std::move(concat_buffer))).send(index);
+            concat_buffer_size = 0;
+            concat_buffer.clear();
+          }
+        }
+        if (concat_buffer_size > 0) {
+          self->mail(concatenate(std::move(concat_buffer))).send(index);
+          concat_buffer_size = 0;
+          concat_buffer.clear();
+        }
+      }
+      unpersisted_events.clear();
+    },
+    false);
+  detail::weak_run_delayed_loop(
+    self, std::chrono::seconds{1},
+    [this, active_partition_timeout] {
       // We clear everything that's older than the active partition timeout plus
       // a fixed 10 seconds to allow some processing to happen. This is an
       // estimate, and it's definitely not a perfect solution, but it's good
@@ -106,11 +130,12 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
       const auto cutoff = time::clock::now() - active_partition_timeout
                           - std::chrono::seconds{10};
       const auto it
-        = std::ranges::find_if(unpersisted_events, [&](const auto& slice) {
+        = std::ranges::find_if(recent_events, [&](const auto& slice) {
             return slice.import_time() > cutoff;
           });
-      unpersisted_events.erase(unpersisted_events.begin(), it);
-    });
+      recent_events.erase(recent_events.begin(), it);
+    },
+    false);
   return {
     [this](atom::flush) -> caf::result<void> {
       return self->mail(atom::flush_v).delegate(index);
@@ -131,7 +156,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
           subscribers.erase(subscriber, subscribers.end());
         });
       subscribers.emplace_back(std::move(subscriber), internal);
-      return unpersisted_events;
+      return recent_events;
     },
     // -- status_client_actor --------------------------------------------------
     [](atom::status, status_verbosity, duration) { //

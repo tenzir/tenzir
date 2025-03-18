@@ -96,7 +96,7 @@ immutable *passive partitions* that Tenzir reads from during query execution.
 When constructing a partition, the parameter `tenzir.max-partition-size`
 (default: 4Mi / 2^22) sets an upper bound on the number of records in a
 partition, across all table slices. The parameter
-`tenzir.active-partition-timeout` (default: 10 seconds) provides a time-based
+`tenzir.active-partition-timeout` (default: 5min) provides a time-based
 upper bound: once reached, Tenzir considers the partition as complete,
 regardless of the number of records.
 
