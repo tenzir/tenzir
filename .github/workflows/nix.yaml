@@ -109,6 +109,7 @@ jobs:
           pushFilter: "tenzir-ee"
       - name: Build Nix Packages
         env:
+          GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
           RCLONE_GCS_BUCKET_POLICY_ONLY: True
