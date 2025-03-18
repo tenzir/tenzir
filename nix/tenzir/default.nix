@@ -332,6 +332,13 @@
               symlinkJoin {
                 inherit (self) passthru meta pname version name;
                 paths = [ self ] ++ actualPlugins;
+                nativeBuildInputs = [ makeBinaryWrapper ];
+                postBuild = ''
+                  rm $out/bin/tenzir
+                  makeWrapper ${self}/bin/tenzir $out/bin/tenzir \
+                    --inherit-argv0 \
+                    --set-default TENZIR_RUNTIME_PREFIX $out
+                '';
               };
         };
 
