@@ -48,6 +48,28 @@ void importer::handle_slice(table_slice&& slice) {
   }
 }
 
+void importer::flush() {
+  auto concat_buffer_size = size_t{0};
+  auto concat_buffer = std::vector<table_slice>{};
+  for (auto& [_, events] : unpersisted_events) {
+    for (auto& slice : events) {
+      concat_buffer_size += slice.rows();
+      concat_buffer.push_back(std::move(slice));
+      if (concat_buffer_size > defaults::import::table_slice_size) {
+        self->mail(concatenate(std::move(concat_buffer))).send(index);
+        concat_buffer_size = 0;
+        concat_buffer.clear();
+      }
+    }
+    if (concat_buffer_size > 0) {
+      self->mail(concatenate(std::move(concat_buffer))).send(index);
+      concat_buffer_size = 0;
+      concat_buffer.clear();
+    }
+  }
+  unpersisted_events.clear();
+}
+
 auto importer::make_behavior() -> importer_actor::behavior_type {
   if (auto policy
       = retention_policy::make(check(to<record>(content(self->config()))))) {
@@ -99,25 +121,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
     [this] {
       // Every 10 seconds, we clear out all of the unpersisted events and
       // forward them to the index.
-      auto concat_buffer_size = size_t{0};
-      auto concat_buffer = std::vector<table_slice>{};
-      for (auto& [_, events] : unpersisted_events) {
-        for (auto& slice : events) {
-          concat_buffer_size += slice.rows();
-          concat_buffer.push_back(std::move(slice));
-          if (concat_buffer_size > defaults::import::table_slice_size) {
-            self->mail(concatenate(std::move(concat_buffer))).send(index);
-            concat_buffer_size = 0;
-            concat_buffer.clear();
-          }
-        }
-        if (concat_buffer_size > 0) {
-          self->mail(concatenate(std::move(concat_buffer))).send(index);
-          concat_buffer_size = 0;
-          concat_buffer.clear();
-        }
-      }
-      unpersisted_events.clear();
+      flush();
     },
     false);
   detail::weak_run_delayed_loop(
@@ -138,6 +142,7 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
     false);
   return {
     [this](atom::flush) -> caf::result<void> {
+      flush();
       return self->mail(atom::flush_v).delegate(index);
     },
     [this](table_slice& slice) -> caf::result<void> {

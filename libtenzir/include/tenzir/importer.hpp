@@ -36,6 +36,8 @@ private:
   /// Process a slice and forward it to the index.
   void handle_slice(table_slice&& slice);
 
+  void flush();
+
   /// Pointer to the owning actor.
   importer_actor::pointer self;
 
