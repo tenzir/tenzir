@@ -55,7 +55,7 @@ void importer::flush() {
     for (auto& slice : events) {
       concat_buffer_size += slice.rows();
       concat_buffer.push_back(std::move(slice));
-      if (concat_buffer_size > defaults::import::table_slice_size) {
+      if (concat_buffer_size >= defaults::import::table_slice_size) {
         self->mail(concatenate(std::move(concat_buffer))).send(index);
         concat_buffer_size = 0;
         concat_buffer.clear();
