@@ -273,9 +273,7 @@ auto transfer::reset() -> caf::error {
   if (options.ssl.skip_peer_verification) {
     auto code = easy_.set(CURLOPT_SSL_VERIFYPEER, 0);
     TENZIR_ASSERT(code == curl::easy::code::ok);
-  }
-  if (options.ssl.skip_hostname_verification) {
-    auto code = easy_.set(CURLOPT_SSL_VERIFYHOST, 0);
+    code = easy_.set(CURLOPT_SSL_VERIFYHOST, 0);
     TENZIR_ASSERT(code == curl::easy::code::ok);
   }
   if (options.username) {

@@ -996,6 +996,7 @@ configure_file("${PROJECT_SOURCE_DIR}/cmake/TenzirRegisterPlugin.cmake"
 install(
   FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirRegisterPlugin.cmake"
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirMacDependencyPaths.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirUtilities.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfig.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfigVersion.cmake"
   DESTINATION "${TENZIR_INSTALL_CMAKEDIR}/tenzir"

@@ -27,6 +27,10 @@ struct heterogeneous_string_equal {
     return lhs == sv;
   }
 
+  bool operator()(const std::string_view lhs, const std::string& sv) const {
+    return lhs == sv;
+  }
+
   bool operator()(const std::string& lhs, const char* sv) const {
     return lhs == sv;
   }

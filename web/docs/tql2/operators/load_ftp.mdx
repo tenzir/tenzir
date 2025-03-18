@@ -5,10 +5,8 @@ import TLSOptions from './_common_tls_options.mdx';
 Loads a byte stream via FTP.
 
 ```tql
-load_ftp url:str [
-load_tcp endpoint:string, [parallel=int, tls=bool, cacert=string, certifle=string,
-                           keyfile=string, skip_peer_verification=bool,
-                           skip_host_verification=bool]
+load_ftp url:str [tls=bool, cacert=string, certifle=string,
+                  keyfile=string, skip_peer_verification=bool]
 ```
 
 ## Description

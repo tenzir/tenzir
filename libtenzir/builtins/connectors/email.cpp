@@ -208,7 +208,7 @@ public:
     parser.add("-P,--skip-peer-verification",
                args.transfer_opts.ssl.skip_peer_verification);
     parser.add("-H,--skip-hostname-verification",
-               args.transfer_opts.ssl.skip_hostname_verification);
+               args.transfer_opts.ssl.skip_peer_verification);
     parser.add("-m,--mime", args.mime);
     parser.add("-v,--verbose", args.transfer_opts.verbose);
     parser.add(args.to, "<email>");
@@ -256,7 +256,7 @@ class save_plugin final
     parser.named("authorization", args.transfer_opts.authorization);
     args.transfer_opts.ssl.add_tls_options(parser);
     parser.named("mime", args.mime);
-    parser.named("verbose", args.transfer_opts.verbose);
+    parser.named("_verbose", args.transfer_opts.verbose);
     TRY(parser.parse(inv, ctx));
     args.endpoint = std::move(endpoint).value();
     if (args.endpoint.find("://") == std::string_view::npos) {

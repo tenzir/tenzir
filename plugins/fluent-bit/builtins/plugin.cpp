@@ -32,7 +32,7 @@ auto tls_to_fluentbit(const ssl_options& ssl, property_map& properties,
     return {};
   };
   TRY(set("tls", ssl.tls.inner ? "On" : "Off", ssl.tls.source));
-  if (ssl.skip_peer_verification or ssl.skip_hostname_verification) {
+  if (ssl.skip_peer_verification) {
     TRY(set("tls.verify", "Off", location::unknown));
   }
   if (ssl.cacert) {

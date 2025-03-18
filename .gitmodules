@@ -39,3 +39,7 @@
 	path = tenzir/bats/lib/bats-assert
 	url = https://github.com/bats-core/bats-assert
 	shallow = true
+[submodule "plugins/clickhouse/aux/clickhouse-cpp"]
+	path = plugins/clickhouse/aux/clickhouse-cpp
+	url = https://github.com/ClickHouse/clickhouse-cpp
+	shallow = true

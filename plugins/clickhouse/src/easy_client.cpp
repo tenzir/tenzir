@@ -1,0 +1,222 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+#include "clickhouse/easy_client.hpp"
+
+#include "clickhouse/client.h"
+#include "tenzir/detail/enumerate.hpp"
+#include "tenzir/view3.hpp"
+
+#include <boost/regex.hpp>
+
+#include <ranges>
+
+using namespace clickhouse;
+using namespace std::string_view_literals;
+
+namespace tenzir::plugins::clickhouse {
+
+auto easy_client::make(arguments args,
+                       diagnostic_handler& dh) -> std::unique_ptr<easy_client> {
+  auto client = std::make_unique<easy_client>(std::move(args), dh);
+  /// Note that technically, we have a ToCToU bug here. The table could be
+  /// created or deleted in between this, the `get` call below and the potential
+  /// creation in `insert`.
+  const auto table_existed = client->table_exists();
+  TENZIR_TRACE("table exists: {}", table_existed);
+  if (client->args_.mode.inner == mode::create and table_existed) {
+    diagnostic::error("mode is `create`, but table `{}` already exists",
+                      client->args_.table.inner)
+      .primary(client->args_.mode)
+      .primary(client->args_.table)
+      .emit(client->dh_);
+    return nullptr;
+  }
+  if (client->args_.mode.inner == mode::create_append and not table_existed
+      and not client->args_.primary) {
+    diagnostic::error("table `{}` does not exist, but no `primary` was "
+                      "specified",
+                      client->args_.table.inner)
+      .primary(client->args_.table)
+      .emit(client->dh_);
+    return nullptr;
+  }
+  if (client->args_.mode.inner == mode::append and not table_existed) {
+    diagnostic::error("mode is `append`, but table `{}` does not exist",
+                      client->args_.table.inner)
+      .primary(client->args_.mode)
+      .primary(client->args_.table)
+      .emit(client->dh_);
+    return nullptr;
+  }
+  if (table_existed) {
+    if (not client->get_schema_transformations()) {
+      return nullptr;
+    }
+  }
+  return client;
+}
+
+auto easy_client::table_exists() -> bool {
+  // // This does not work for some reason. It returns a table with 0 rows.
+  // auto query = Query{fmt::format("EXISTS TABLE {}", table)};
+  // auto exists = false;
+  // auto cb = [&](const Block& block) {
+  //   TENZIR_ASSERT(block.GetColumnCount() == 1);
+  //   auto cast = block[0]->As<ColumnUInt8>();
+  //   TENZIR_ASSERT(cast);
+  //   exists = cast->At(0) == 1;
+  // };
+  // query.OnData(cb);
+  // client.Execute(query);
+  // return exists;
+  auto query = Query{fmt::format("SHOW TABLES LIKE '{}'", args_.table.inner)};
+  auto exists = false;
+  auto cb = [&](const Block& block) {
+    for (size_t i = 0; i < block.GetRowCount(); ++i) {
+      auto name = block[0]->As<ColumnString>()->At(i);
+      if (name == args_.table.inner) {
+        exists = true;
+        break;
+      }
+    }
+  };
+  query.OnData(cb);
+  client_.Execute(query);
+  return exists;
+}
+
+auto easy_client::get_schema_transformations() -> failure_or<void> {
+  auto query = Query{fmt::format("DESCRIBE TABLE {} "
+                                 "SETTINGS describe_compact_output=1",
+                                 args_.table.inner)};
+  TENZIR_ASSERT(not transformations_);
+  transformations_.emplace();
+  bool failed = false;
+  auto cb = [&](const Block& block) {
+    for (size_t i = 0; i < block.GetRowCount(); ++i) {
+      auto name = block[0]->As<ColumnString>()->At(i);
+      auto type_str = remove_non_significant_whitespace(
+        block[1]->As<ColumnString>()->At(i));
+      auto functions = make_functions_from_clickhouse(type_str, dh_);
+      if (not functions) {
+        failed = true;
+        return;
+      }
+      transformations_->transformations.try_emplace(std::string{name},
+                                                    std::move(functions));
+    }
+  };
+  query.OnData(cb);
+  client_.Execute(query);
+  if (failed) {
+    return failure::promise();
+  }
+  transformations_->found_column.resize(
+    transformations_->transformations.size(), false);
+  return {};
+}
+
+auto easy_client::create_table(const tenzir::record_type& schema)
+  -> failure_or<void> {
+  auto columns = std::string{};
+  auto trafos = transformer_record::schema_transformations{};
+  auto primary_found = false;
+  for (auto [k, t] : schema.fields()) {
+    if (not validate_identifier(k)) {
+      emit_invalid_identifier("column name", k, args_.operator_location, dh_);
+      return failure::promise();
+    }
+    auto clickhouse_type
+      = type_to_clickhouse_typename(t, k != args_.primary->inner);
+    auto functions = make_functions_from_clickhouse(clickhouse_type, dh_);
+    if (not functions) {
+      return failure::promise();
+    }
+    primary_found |= k == args_.primary->inner;
+    trafos.try_emplace(std::string{k}, std::move(functions));
+  }
+  if (not primary_found) {
+    diagnostic::error(
+      "cannot create table: primary key does not exist in input")
+      .primary(*args_.primary, "column `{}` does not exist",
+               args_.primary->inner)
+      .emit(dh_);
+    return failure::promise();
+  }
+  transformations_ = transformer_record{"UNUSED", std::move(trafos)};
+  constexpr static std::string_view engine = "MergeTree";
+  auto query_text
+    = fmt::format("CREATE TABLE {}"
+                  " {}"
+                  " ENGINE = {}"
+                  " ORDER BY {}",
+                  args_.table.inner,
+                  plain_clickhouse_tuple_elements(schema, args_.primary->inner),
+                  engine, args_.primary->inner);
+  auto query = Query{query_text};
+  client_.Execute(query);
+  return {};
+}
+
+auto easy_client::insert(const table_slice& slice) -> failure_or<void> {
+  if (not transformations_) {
+    const auto& schema = as<record_type>(slice.schema());
+    TRY(create_table(schema));
+    TENZIR_TRACE("created table");
+    TENZIR_ASSERT(transformations_);
+  }
+  dropmask_.clear();
+  dropmask_.resize(slice.rows());
+  TENZIR_ASSERT(transformations_);
+  auto updated = transformer::drop::none;
+  for (const auto& [k, t, arr] : columns_of(slice)) {
+    auto [trafo, idx] = transformations_->transfrom_and_index_for(k);
+    if (not trafo) {
+      diagnostic::warning("column `{}` does not exist in the ClickHouse table",
+                          k)
+        .note("column will be dropped")
+        .primary(args_.operator_location)
+        .emit(dh_);
+    }
+    transformations_->found_column[idx] = true;
+    updated = updated | trafo->update_dropmask(t, arr, dropmask_, dh_);
+    if (updated == transformer::drop::all) {
+      return failure::promise();
+    }
+  }
+  for (const auto& [i, kvp] :
+       detail::enumerate(transformations_->transformations)) {
+    if (transformations_->found_column[i]) {
+      continue;
+    }
+    if (kvp.second->clickhouse_nullable) {
+      continue;
+    }
+    diagnostic::warning(
+      "required column missing in input, event will be dropped")
+      .note("column `{}` is missing", kvp.first)
+      .emit(dh_);
+    return failure::promise();
+  }
+  auto block = ::clickhouse::Block{};
+  for (const auto& [k, t, arr] : columns_of(slice)) {
+    const auto [trafo, out_idx] = transformations_->transfrom_and_index_for(k);
+    if (not trafo) {
+      continue;
+    }
+    auto this_column = trafo->create_column(t, arr, dropmask_, dh_);
+    TENZIR_ASSERT(this_column);
+    block.AppendColumn(std::string{k}, std::move(this_column));
+  }
+
+  if (block.GetColumnCount() > 0) {
+    client_.Insert(args_.table.inner, block);
+  }
+  return {};
+}
+} // namespace tenzir::plugins::clickhouse
