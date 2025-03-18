@@ -18,6 +18,9 @@ apt-get install --no-install-recommends -y \
   curl \
   dh-make \
   flex \
+  libboost1.81-dev \
+  libboost-filesystem1.81-dev \
+  libboost-system1.81-dev \
   libcurl4-openssl-dev \
   libminizip-dev \
   libsasl2-dev \
@@ -41,6 +44,7 @@ cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
   -DAWSSDK_SOURCE=SYSTEM \
+  -DBOOST_SOURCE=SYSTEM \
   -DGOOGLE_CLOUD_CPP_SOURCE=SYSTEM \
   -DARROW_FILESYSTEM=ON \
   -DARROW_AZURE=ON \
@@ -68,5 +72,5 @@ checkinstall \
   --pkgversion="${ARROW_VERSION}" \
   --pkgrelease="TENZIR" \
   --pkgname=arrow \
-  --requires="libc6,libcurl4,libgcc1,libssl3,libstdc++6,libxml2,zlib1g" \
+  --requires="libc6,libboost-filesystem1.81.0,libboost-system1.81.0,libcurl4,libgcc1,libssl3,libstdc++6,libxml2,zlib1g" \
   cmake --install build --strip
