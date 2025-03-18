@@ -73,8 +73,9 @@ else ()
   TenzirSystemizeTarget(clickhouse-cpp-lib)
   set(BUILD_SHARED_LIBS "${_build_shared_libs_before}")
   unset(_build_shared_libs_before)
+  set_target_properties(clickhouse-cpp-lib PROPERTIES POSITION_INDEPENDENT_CODE
+                                                      ON)
 
-  target_include_directories(clickhouse-cpp-lib PUBLIC aux/clickhouse-cpp)
   dependency_summary(
     "clickhouse-cpp" "${CMAKE_CURRENT_SOURCE_DIR}/aux/clickhouse-cpp"
     "Dependencies")
