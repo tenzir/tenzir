@@ -139,7 +139,7 @@ RUN cmake -S plugins/amqp -B build-amqp -G Ninja \
       cmake --build build-amqp --parallel && \
       cmake --build build-amqp --target bats && \
       DESTDIR=/plugin/amqp cmake --install build-amqp --strip --component Runtime && \
-      rm -rf build-build-amqp
+      rm -rf build-amqp
 
 FROM plugins-source AS azure-blob-storage-plugin
 
@@ -149,7 +149,7 @@ RUN cmake -S plugins/azure-blob-storage -B build-azure-blob-storage -G Ninja \
       cmake --build build-azure-blob-storage --parallel && \
       cmake --build build-azure-blob-storage --target bats && \
       DESTDIR=/plugin/azure-blob-storage cmake --install build-azure-blob-storage --strip --component Runtime && \
-      rm -rf build-build-azure-blob-storage
+      rm -rf build-azure-blob-storage
 
 FROM plugins-source AS clickhouse-plugin
 
@@ -159,7 +159,7 @@ RUN cmake -S plugins/clickhouse -B build-clickhouse -G Ninja \
       cmake --build build-clickhouse --parallel && \
       cmake --build build-clickhouse --target bats && \
       DESTDIR=/plugin/clickhouse cmake --install build-clickhouse --strip --component Runtime && \
-      rm -rf build-build-clickhouse
+      rm -rf build-clickhouse
 
 FROM plugins-source AS fluent-bit-plugin
 
@@ -169,7 +169,7 @@ RUN cmake -S plugins/fluent-bit -B build-fluent-bit -G Ninja \
       cmake --build build-fluent-bit --parallel && \
       cmake --build build-fluent-bit --target bats && \
       DESTDIR=/plugin/fluent-bit cmake --install build-fluent-bit --strip --component Runtime && \
-      rm -rf build-build-fluent-bit
+      rm -rf build-fluent-bit
 
 FROM plugins-source AS gcs-plugin
 
@@ -179,7 +179,7 @@ RUN cmake -S plugins/gcs -B build-gcs -G Ninja \
       cmake --build build-gcs --parallel && \
       cmake --build build-gcs --target bats && \
       DESTDIR=/plugin/gcs cmake --install build-gcs --strip --component Runtime && \
-      rm -rf build-build-gcs
+      rm -rf build-gcs
 
 FROM plugins-source AS google-cloud-pubsub-plugin
 
@@ -190,7 +190,7 @@ RUN cmake -S plugins/google-cloud-pubsub -B build-google-cloud-pubsub -G Ninja \
       cmake --build build-google-cloud-pubsub --parallel && \
       cmake --build build-google-cloud-pubsub --target bats && \
       DESTDIR=/plugin/google-cloud-pubsub cmake --install build-google-cloud-pubsub --strip --component Runtime && \
-      rm -rf build-build-google-cloud-pubsub
+      rm -rf build-google-cloud-pubsub
 
 FROM plugins-source AS kafka-plugin
 
@@ -200,7 +200,7 @@ RUN cmake -S plugins/kafka -B build-kafka -G Ninja \
       cmake --build build-kafka --parallel && \
       cmake --build build-kafka --target bats && \
       DESTDIR=/plugin/kafka cmake --install build-kafka --strip --component Runtime && \
-      rm -rf build-build-kafka
+      rm -rf build-kafka
 
 FROM plugins-source AS nic-plugin
 
@@ -210,7 +210,7 @@ RUN cmake -S plugins/nic -B build-nic -G Ninja \
       cmake --build build-nic --parallel && \
       cmake --build build-nic --target bats && \
       DESTDIR=/plugin/nic cmake --install build-nic --strip --component Runtime && \
-      rm -rf build-build-nic
+      rm -rf build-nic
 
 FROM plugins-source AS parquet-plugin
 
@@ -220,7 +220,7 @@ RUN cmake -S plugins/parquet -B build-parquet -G Ninja \
     cmake --build build-parquet --parallel && \
     cmake --build build-parquet --target bats && \
     DESTDIR=/plugin/parquet cmake --install build-parquet --strip --component Runtime && \
-    rm -rf build-build-parquet
+    rm -rf build-parquet
 
 FROM plugins-source AS s3-plugin
 
@@ -230,7 +230,7 @@ RUN cmake -S plugins/s3 -B build-s3 -G Ninja \
       cmake --build build-s3 --parallel && \
       cmake --build build-s3 --target bats && \
       DESTDIR=/plugin/s3 cmake --install build-s3 --strip --component Runtime && \
-      rm -rf build-build-s3
+      rm -rf build-s3
 
 FROM plugins-source AS sigma-plugin
 
@@ -240,7 +240,7 @@ RUN cmake -S plugins/sigma -B build-sigma -G Ninja \
       cmake --build build-sigma --parallel && \
       cmake --build build-sigma --target bats && \
       DESTDIR=/plugin/sigma cmake --install build-sigma --strip --component Runtime && \
-      rm -rf build-build-sigma
+      rm -rf build-sigma
 
 FROM plugins-source AS sqs-plugin
 
@@ -250,7 +250,7 @@ RUN cmake -S plugins/sqs -B build-sqs -G Ninja \
       cmake --build build-sqs --parallel && \
       cmake --build build-sqs --target bats && \
       DESTDIR=/plugin/sqs cmake --install build-sqs --strip --component Runtime && \
-      rm -rf build-build-sqs
+      rm -rf build-sqs
 
 FROM plugins-source AS from_velociraptor-plugin
 
@@ -260,7 +260,7 @@ RUN cmake -S plugins/from_velociraptor -B build-from_velociraptor -G Ninja \
       cmake --build build-from_velociraptor --parallel && \
       cmake --build build-from_velociraptor --target bats && \
       DESTDIR=/plugin/from_velociraptor cmake --install build-from_velociraptor --strip --component Runtime && \
-      rm -rf build-build-from_velociraptor
+      rm -rf build-from_velociraptor
 
 FROM plugins-source AS web-plugin
 
@@ -270,7 +270,7 @@ RUN cmake -S plugins/web -B build-web -G Ninja \
       cmake --build build-web --parallel && \
       cmake --build build-web --target bats && \
       DESTDIR=/plugin/web cmake --install build-web --strip --component Runtime && \
-      rm -rf build-build-web
+      rm -rf build-web
 
 FROM plugins-source AS yara-plugin
 
@@ -280,7 +280,7 @@ RUN cmake -S plugins/yara -B build-yara -G Ninja \
       cmake --build build-yara --parallel && \
       cmake --build build-yara --target bats && \
       DESTDIR=/plugin/yara cmake --install build-yara --strip --component Runtime && \
-      rm -rf build-build-yara
+      rm -rf build-yara
 
 FROM plugins-source AS zmq-plugin
 
@@ -290,7 +290,7 @@ RUN cmake -S plugins/zmq -B build-zmq -G Ninja \
       cmake --build build-zmq --parallel && \
       cmake --build build-zmq --target bats && \
       DESTDIR=/plugin/zmq cmake --install build-zmq --strip --component Runtime && \
-      rm -rf build-build-zmq
+      rm -rf build-zmq
 
 # -- tenzir-de -----------------------------------------------------------------
 
@@ -342,6 +342,8 @@ RUN apt-get update && \
       libyaml-cpp0.7 \
       libyara9 \
       libzmq5 \
+      liblz4-1 \
+      libzstd1 \
       lsb-release \
       openssl \
       python3 \
@@ -396,7 +398,7 @@ RUN cmake -S contrib/tenzir-plugins/azure-log-analytics -B build-azure-log-analy
       cmake --build build-azure-log-analytics --parallel && \
       cmake --build build-azure-log-analytics --target bats && \
       DESTDIR=/plugin/azure-log-analytics cmake --install build-azure-log-analytics --strip --component Runtime && \
-      rm -rf build-build-azure-log-analytics
+      rm -rf build-azure-log-analytics
 
 FROM plugins-source AS compaction-plugin
 
