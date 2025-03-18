@@ -44,13 +44,13 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 |✓|[robin-map](https://github.com/Tessil/robin-map)|>= 0.6.3|Fast hash map and hash set using robin hood hashing. (Bundled as subtree.)|
 |✓|[fast_float](https://github.com/FastFloat/fast_float)|>= 3.2.0|Required for parsing floating point numbers. (Bundled as submodule.)|
 |✓|[libmaxminddb](https://github.com/maxmind/libmaxminddb)|>= 1.8.0|Required for the `geoip` context.|
-|✓|[lz4](https://lz4.org/)||Required as a core utility|
-|✓|[zstd](http://www.zstd.net/)||Required as a core utility|
+|✓|[lz4](https://lz4.org/)||Required as a core utility.|
+|✓|[zstd](http://www.zstd.net/)||Required as a core utility.|
 ||[libpcap](https://www.tcpdump.org)||Required for building the `pcap` plugin.|
 ||[librdkafka](https://github.com/confluentinc/librdkafka)||Required for building the `kafka` plugin.|
 ||[http-parser](https://github.com/nodejs/http-parser)||Required for building the `web` plugin.|
 ||[cppzmq](https://github.com/zeromq/cppzmq)||Required for building the `zmq` plugin.|
-||[clickhouse-cpp](https://github.com/clickhouse/clickhouse-cpp)|>=f606f9a|Required for building the `clickhouse` plugin. (Bundled as a submodule)|
+||[clickhouse-cpp](https://github.com/clickhouse/clickhouse-cpp)|>=f606f9a|Required for building the `clickhouse` plugin. (Bundled as submodule.)|
 ||[pfs](https://github.com/dtrugman/pfs)||Required for the `processes` and `sockets` operators on Linux.|
 ||[Protocol Buffers](https://protobuf.dev)|>= 1.4.1|Required for building the `velociraptor` plugin.|
 ||[gRPC](https://grpci.io)|>= 1.51|Required for building the `velociraptor` plugin.|
