@@ -76,6 +76,13 @@ table Record {
   fields: [RecordField] (required);
 }
 
+table Secret {
+  value: string;
+  name: string;
+  type: int32;
+  encoding: int32;
+}
+
 /// The sum data of all possible types.
 union Data {
   boolean: Boolean,
@@ -93,6 +100,7 @@ union Data {
   map: Map,
   record: Record,
   blob: Blob,
+  secret: Secret,
 }
 
 namespace tenzir.fbs;
