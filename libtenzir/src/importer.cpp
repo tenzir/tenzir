@@ -28,6 +28,10 @@ importer::importer(importer_actor::pointer self, index_actor index)
   : self{self}, index{std::move(index)} {
 }
 
+importer::~importer() noexcept {
+  flush();
+}
+
 void importer::handle_slice(table_slice&& slice) {
   const auto rows = slice.rows();
   TENZIR_ASSERT(rows > 0);

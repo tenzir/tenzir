@@ -27,6 +27,7 @@ public:
   static inline const char* name = "importer";
 
   explicit importer(importer_actor::pointer self, index_actor index);
+  ~importer() noexcept;
 
   auto make_behavior() -> importer_actor::behavior_type;
 
