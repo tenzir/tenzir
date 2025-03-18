@@ -20,7 +20,7 @@ add_feature_info(
   "TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP" TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP
   "always use the bundled clickhouse-cpp library.")
 if (NOT TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP)
-  find_package(clickhouse-cpp)
+  find_package(clickhouse-cpp QUIET)
 endif ()
 
 if (clickhouse-cpp_FOUND)
@@ -67,8 +67,12 @@ else ()
       ON
       CACHE BOOL "")
 
+  set(_build_shared_libs_before "${BUILD_SHARED_LIBS}")
+  set(BUILD_SHARED_LIBS OFF)
   add_subdirectory(aux/clickhouse-cpp)
   TenzirSystemizeTarget(clickhouse-cpp-lib)
+  set(BUILD_SHARED_LIBS "${_build_shared_libs_before}")
+  unset(_build_shared_libs_before)
 
   target_include_directories(clickhouse-cpp-lib PUBLIC aux/clickhouse-cpp)
   dependency_summary(
@@ -82,4 +86,3 @@ if (NOT TARGET clickhouse-cpp-lib)
 endif ()
 
 target_link_libraries(clickhouse PUBLIC clickhouse-cpp-lib)
-set_target_properties(clickhouse PROPERTIES INSTALL_RPATH "${ORIGIN}")
