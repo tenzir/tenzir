@@ -316,6 +316,7 @@ RUN apt-get update && \
       libboost-stacktrace1.81 \
       libc++1 \
       libc++abi1 \
+      libcap2-bin \
       libflatbuffers2 \
       libfmt9 \
       libgrpc++1.51 \
