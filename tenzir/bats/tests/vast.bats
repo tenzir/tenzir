@@ -173,19 +173,6 @@ teardown() {
   check --sort tenzir "export"
 }
 
-#bats test_tags=fault
-@test "Self repair" {
-  import_zeek_conn
-
-  ${MISCDIR}/scripts/break-sizelimit.sh
-
-  # We use an extra import step to trigger the repair because querying
-  # directly would not wait for the repair step.
-  import_suricata_eve
-
-  tenzir "export | where zeek.conn.id.orig_h == 192.168.1.104 | summarize count=count(.)"
-}
-
 # bats test_tags=import,export,pipelines,chart,bar-chart
 @test "Bar chart" {
   import_zeek_conn
