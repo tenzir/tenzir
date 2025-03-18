@@ -168,6 +168,7 @@ class plugin;
 class port;
 class record_type;
 class segment;
+class secret_type;
 class shared_diagnostic_handler;
 class string_type;
 class subnet_type;
@@ -344,6 +345,8 @@ struct blob : std::vector<std::byte> {
   }
 };
 
+class secret;
+
 namespace fbs {
 
 struct Bitmap;
@@ -497,6 +500,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::rest_endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::rest_response))
   TENZIR_ADD_TYPE_ID((tenzir::series))
+  TENZIR_ADD_TYPE_ID((tenzir::secret))
   TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))

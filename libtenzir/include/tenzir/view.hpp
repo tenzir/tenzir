@@ -17,6 +17,7 @@
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/hash/hash.hpp"
+#include "tenzir/secret.hpp"
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
@@ -154,6 +155,11 @@ struct view_trait<blob> {
   using type = blob_view;
 };
 
+template <>
+struct view_trait<secret> {
+  using type = secret_view;
+};
+
 // clang-format off
 /// A type-erased view over various types of data.
 /// @relates view_trait
@@ -173,7 +179,8 @@ using data_view = tenzir::variant<
   view<list>,
   view<map>,
   view<record>,
-  view<blob>
+  view<blob>,
+  view<secret>
 >;
 // clang-format on
 
