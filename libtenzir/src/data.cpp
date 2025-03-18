@@ -97,6 +97,14 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
       return fbs::CreateData(builder, fbs::data::Data::blob,
                              value_offset.Union());
     },
+    [&](const secret& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = fbs::data::CreateSecret(
+        builder, builder.CreateString(value.name()),
+        static_cast<detail::secret_enum_underlying_type>(value.source_type()),
+        static_cast<detail::secret_enum_underlying_type>(value.encoding()));
+      return fbs::CreateData(builder, fbs::data::Data::secret,
+                             value_offset.Union());
+    },
     [&](const pattern& value) -> flatbuffers::Offset<fbs::Data> {
       auto options = fbs::data::CreatePatternOptions(
         builder, value.options().case_insensitive);
@@ -238,6 +246,14 @@ caf::error unpack(const fbs::Data& from, data& to) {
       std::memcpy(&address_buffer, from.data_as_subnet()->ip().bytes()->data(),
                   sizeof(ip));
       to = subnet{address_buffer, from.data_as_subnet()->length()};
+      return caf::none;
+    }
+    case fbs::data::Data::secret: {
+      const auto& from_as_secret = from.data_as_secret();
+      to.get_data().emplace<secret>(
+        from_as_secret->name()->str(),
+        static_cast<secret_source_type>(from_as_secret->source_type()),
+        static_cast<secret_encoding>(from_as_secret->encoding()));
       return caf::none;
     }
     case fbs::data::Data::enumeration: {
@@ -941,6 +957,9 @@ void print(YAML::Emitter& out, const data& x) {
     },
     [&out](const blob& x) {
       out << detail::base64::encode(x);
+    },
+    [&out](const secret& x) {
+      out << to_string(x);
     },
     [&out](const pattern& x) {
       out << to_string(x);

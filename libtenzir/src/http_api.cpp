@@ -184,6 +184,10 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
           }
           return param_data;
         },
+        [&](const secret_type&) -> caf::expected<data> {
+          return caf::make_error(ec::invalid_argument,
+                                 "secret parameters are not supported");
+        },
         [&](const blob_type&) -> caf::expected<data> {
           return caf::make_error(ec::invalid_argument,
                                  "blob parameters are not supported");
@@ -219,6 +223,10 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                 [&](const blob_type&) -> caf::expected<data> {
                   return caf::make_error(ec::invalid_argument,
                                          "blob parameters are not supported");
+                },
+                [&](const secret_type&) -> caf::expected<data> {
+                  return caf::make_error(ec::invalid_argument,
+                                         "secret parameters are not supported");
                 },
                 [&]<basic_type Type>(const Type&) -> caf::expected<data> {
                   using data_t = type_to_data_t<Type>;

@@ -117,6 +117,11 @@ append_builder(const record_type& hint,
                type_to_arrow_builder_t<record_type>& builder,
                const view<type_to_data_t<record_type>>& view) noexcept;
 
+arrow::Status
+append_builder(const secret_type& hint,
+               type_to_arrow_builder_t<secret_type>& builder,
+               const view<type_to_data_t<secret_type>>& view) noexcept;
+
 template <type_or_concrete_type Type>
 arrow::Status
 append_builder(const Type& hint,

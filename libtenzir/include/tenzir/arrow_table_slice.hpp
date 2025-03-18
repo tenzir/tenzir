@@ -179,6 +179,22 @@ auto value_at([[maybe_unused]] const Type& type,
     auto length
       = static_cast<const arrow::UInt8Array&>(*arr.field(1)).GetView(row);
     return {network, length};
+  } else if constexpr (std::is_same_v<Type, secret_type>) {
+    TENZIR_ASSERT_EXPENSIVE(arr.num_fields() == 4);
+    auto name = as<arrow::StringArray>(*arr.field(0)).GetView(row);
+    auto source_type
+      = static_cast<typename secret_type::builder_type::arrow_enum_array_type&>(
+          *arr.field(1))
+          .GetView(row);
+    auto encoding
+      = static_cast<typename secret_type::builder_type::arrow_enum_array_type&>(
+          *arr.field(2))
+          .GetView(row);
+    return secret_view{
+      name,
+      static_cast<secret_source_type>(source_type),
+      static_cast<secret_encoding>(encoding),
+    };
   } else if constexpr (std::is_same_v<Type, enumeration_type>) {
     return detail::narrow_cast<view<type_to_data_t<enumeration_type>>>(
       arr.GetValueIndex(row));
