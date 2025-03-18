@@ -120,6 +120,11 @@ struct atom_view_to_type<view<blob>> {
   using type = blob_type;
 };
 
+template <>
+struct atom_view_to_type<view<secret>> {
+  using type = secret_type;
+};
+
 template <class T>
 using atom_view_to_type_t = atom_view_to_type<T>::type;
 

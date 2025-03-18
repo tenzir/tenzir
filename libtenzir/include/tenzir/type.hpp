@@ -56,7 +56,7 @@ using concrete_types
   = detail::type_list<null_type, bool_type, int64_type, uint64_type,
                       double_type, duration_type, time_type, string_type,
                       ip_type, subnet_type, enumeration_type, list_type,
-                      map_type, record_type, blob_type>;
+                      map_type, record_type, blob_type, secret_type>;
 
 /// Reification of the variant inhabitants of `type`.
 using type_kind = detail::tl_apply_t<concrete_types, tag_variant>;
@@ -1430,6 +1430,99 @@ public:
   make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
+class secret_type final {
+public:
+  /// Returns the type index.
+  static constexpr uint8_t type_index = 17;
+
+  /// The corresponding Arrow DataType.
+  struct arrow_type;
+
+  /// The corresponding Arrow Array.
+  struct array_type final : arrow::ExtensionArray {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionArray::ExtensionArray;
+
+    [[nodiscard]] std::shared_ptr<arrow::StructArray> storage() const;
+
+  private:
+    using arrow::ExtensionArray::storage;
+  };
+
+  /// The corresponding Arrow Scalar.
+  struct scalar_type final : arrow::ExtensionScalar {
+    using TypeClass = arrow_type;
+    using arrow::ExtensionScalar::ExtensionScalar;
+  };
+
+  /// The corresponding Arrow ArrayBuilder.
+  struct builder_type final : arrow::StructBuilder {
+    using TypeClass = arrow_type;
+    using arrow_enum_type = arrow::Int32Type;
+    using arrow_enum_array_type = arrow::TypeTraits<arrow_enum_type>::ArrayType;
+    using arrow_enum_builder_type =
+      typename arrow::TypeTraits<arrow_enum_type>::BuilderType;
+    explicit builder_type(arrow::MemoryPool* pool
+                          = arrow::default_memory_pool());
+    [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
+    [[nodiscard]] arrow::StringBuilder& name_builder() noexcept;
+    [[nodiscard]] arrow_enum_builder_type& source_type_builder() noexcept;
+    [[nodiscard]] arrow_enum_builder_type& encoding_builder() noexcept;
+
+  private:
+    using arrow::StructBuilder::StructBuilder;
+  };
+
+  /// Returns a view of the underlying binary representation.
+  friend std::span<const std::byte> as_bytes(const secret_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static secret construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<builder_type>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
+};
+
+/// An extension type for Arrow representing corresponding to the subnet type.
+struct secret_type::arrow_type : arrow::ExtensionType {
+  /// A unique identifier for this extension type.
+  static constexpr auto name = "tenzir.secret";
+
+  /// Register this extension type.
+  static void register_extension() noexcept;
+
+  /// Create an arrow type representation of a Tenzir pattern type.
+  arrow_type() noexcept;
+
+  /// Unique name to identify the extension type.
+  std::string extension_name() const override;
+
+  /// Compare two extension types for equality, based on the extension name.
+  /// @param other An extension type to test for equality.
+  bool ExtensionEquals(const arrow::ExtensionType& other) const override;
+
+  /// Wrap built-in Array type in an ExtensionArray instance.
+  /// @param data the physical storage for the extension type.
+  std::shared_ptr<arrow::Array>
+  MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
+
+  /// Create an instance of subnet given the actual storage type
+  /// and the serialized representation.
+  /// @param storage_type the physical storage type of the extension.
+  /// @param serialized the serialized form of the extension.
+  arrow::Result<std::shared_ptr<arrow::DataType>>
+  Deserialize(std::shared_ptr<arrow::DataType> storage_type,
+              const std::string& serialized) const override;
+
+  /// Create serialized representation of subnet.
+  /// @return the serialized representation.
+  std::string Serialize() const override;
+};
+
 } // namespace tenzir
 
 // -- misc --------------------------------------------------------------------
@@ -1481,6 +1574,19 @@ public:
   using ArrayType = tenzir::enumeration_type::array_type;
   using ScalarType = tenzir::enumeration_type::scalar_type;
   using BuilderType = tenzir::enumeration_type::builder_type;
+};
+
+template <>
+class TypeTraits<typename tenzir::secret_type::arrow_type>
+  : TypeTraits<StructType> {
+public:
+  using ArrayType = tenzir::secret_type::array_type;
+  using ScalarType = tenzir::secret_type::scalar_type;
+  using BuilderType = tenzir::secret_type::builder_type;
+  constexpr static bool is_parameter_free = true;
+  static inline std::shared_ptr<DataType> type_singleton() {
+    return tenzir::secret_type::to_arrow_type();
+  }
 };
 
 } // namespace arrow
@@ -1901,6 +2007,12 @@ struct formatter<T> {
   auto format(const tenzir::blob_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "blob");
+  }
+
+  template <class FormatContext>
+  auto format(const tenzir::secret_type&,
+              FormatContext& ctx) const -> decltype(ctx.out()) {
+    return fmt::format_to(ctx.out(), "secret");
   }
 };
 

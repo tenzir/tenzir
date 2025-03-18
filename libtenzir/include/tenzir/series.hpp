@@ -50,9 +50,15 @@ struct basic_series {
   }
 
   template <class Other>
-    requires(std::same_as<Type, type> || std::same_as<Other, Type>)
+    requires(not std::same_as<Other, class tenzir::type>)
   basic_series(Other type, std::shared_ptr<type_to_arrow_array_t<Type>> array)
     : type{std::move(type)}, array{std::move(array)} {
+  }
+
+  basic_series(class type type,
+               std::shared_ptr<type_to_arrow_array_t<class type>> array)
+    : type{std::move(type)}, array{std::move(array)} {
+    TENZIR_ASSERT_EXPENSIVE(not this->array or this->type.to_arrow_type()->id() == this->array->type_id());
   }
 
   // TODO: std::get_if, etc.

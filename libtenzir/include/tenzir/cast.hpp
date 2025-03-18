@@ -1074,6 +1074,11 @@ struct cast_helper<string_type, ToType> {
                            fmt::format("unable to convert {} into a blob", in));
   }
 
+  static auto
+  from_str(std::string_view in, const secret_type&) -> caf::expected<secret> {
+    return secret{std::string{in}};
+  }
+
   static auto can_cast(const string_type&, const ToType&) noexcept
     -> caf::expected<void> {
     return {};
@@ -1130,6 +1135,30 @@ struct cast_helper<FromType, duration_type> {
        const duration_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<duration_type>> {
     TENZIR_UNIMPLEMENTED();
+  }
+};
+
+template <>
+struct cast_helper<secret_type, secret_type> {
+  static auto can_cast(const secret_type&,
+                       const secret_type&) noexcept -> caf::expected<void> {
+    return {};
+  }
+
+  static auto cast_value(const secret_type&, secret_view value,
+                         const secret_type&) -> caf::expected<secret> {
+    return secret{
+      std::string{value.name()},
+      value.source_type(),
+      value.encoding(),
+    };
+  }
+
+  static auto cast(const secret_type&,
+                   std::shared_ptr<type_to_arrow_array_t<secret_type>> arr,
+                   const secret_type&) noexcept
+    -> std::shared_ptr<type_to_arrow_array_t<secret_type>> {
+    return arr;
   }
 };
 

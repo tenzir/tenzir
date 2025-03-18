@@ -37,6 +37,7 @@
 #include "tenzir/query_options.hpp"
 #include "tenzir/query_status.hpp"
 #include "tenzir/resource.hpp"
+#include "tenzir/secret_store.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 #include "tenzir/status.hpp"

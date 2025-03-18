@@ -12,12 +12,16 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/ecc.hpp"
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/secret_resolution.hpp"
+#include "tenzir/secret_store.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -205,6 +209,84 @@ struct exec_node_control_plane final : public operator_control_plane {
     state.waiting = value;
     if (not state.waiting) {
       state.schedule_run(false);
+    }
+  }
+
+  virtual auto
+  resolve_secrets_must_yield(std::vector<secret_request> requests) -> void {
+    auto fan = detail::make_fanout_counter(
+      requests.size(),
+      [this]() {
+        set_waiting(false);
+      },
+      [this](caf::error e) {
+        diagnostic::error(std::move(e)).emit(diagnostics());
+      });
+    auto node = this->node();
+    for (auto& r : requests) {
+      const auto name = r.s.name();
+      if (r.s.source_type() == secret_source_type::literal) {
+        r.out = resolved_secret_value{std::string{name}};
+        fan->receive_success();
+        continue;
+      }
+      const auto& cfg = content(state.self->system().config());
+      const auto key = fmt::format("tenzir.secrets.{}", name);
+      const auto value = caf::get_if(&cfg, key);
+      if (value) {
+        auto value_string = caf::get_as<std::string>(*value);
+        if (not value_string) {
+          fan->receive_error(diagnostic::error("secret is not a string")
+                               .primary(r.loc)
+                               .to_error());
+          continue;
+        }
+        fan->receive_success();
+        r.out = resolved_secret_value{std::move(*value_string)};
+        continue;
+      }
+      if (not node) {
+        fan->receive_error(diagnostic::error("unknown secret")
+                             .primary(r.loc, "`{}`", name)
+                             .to_error());
+        continue;
+      }
+      set_waiting(true);
+      auto key_pair = ecc::generate_keypair();
+      TENZIR_ASSERT(key_pair);
+      auto public_key = key_pair->public_key;
+      /// TODO: Better Value? Configurable?
+      constexpr static auto timeout = std::chrono::seconds{5};
+      state.self->mail(atom::resolve_v, std::move(name), std::move(public_key))
+        .request(node, timeout)
+        .then(
+          [this, fan, keys = *key_pair, loc = r.loc,
+           &out = r.out](secret_resolution_result res) {
+            match(
+              res,
+              [&](const encrypted_secret_value& v) {
+                auto decrypted = ecc::decrypt(v.value, keys);
+                if (not decrypted) {
+                  fan->receive_error(
+                    diagnostic::error("failed to decrypt secret")
+                      .primary(loc, fmt::to_string(decrypted.error()))
+                      .to_error());
+                  return;
+                }
+                out = resolved_secret_value{*decrypted};
+                fan->receive_success();
+              },
+              [&](const secret_resolution_error& e) {
+                fan->receive_error(
+                  diagnostic::error("could not get secret value")
+                    .primary(loc, e.message)
+                    .to_error());
+              });
+          },
+          [this, fan, loc = r.loc](caf::error e) {
+            fan->receive_error(
+              diagnostic::error(std::move(e)).primary(loc).to_error());
+          });
     }
   }
 
