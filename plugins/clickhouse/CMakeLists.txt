@@ -12,58 +12,74 @@ TenzirRegisterPlugin(
   ENTRYPOINT src/plugin.cpp
   SOURCES GLOB src/*.cpp
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
-  INCLUDE_DIRECTORIES include
-)
+  INCLUDE_DIRECTORIES include)
 
-option(TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP "Always use the bundled tsl-robin-map"
-  OFF)
+option(TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP
+       "Always use the bundled tsl-robin-map" OFF)
 add_feature_info(
   "TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP" TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP
   "always use the bundled clickhouse-cpp library.")
-if(NOT TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP)
+if (NOT TENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP)
   find_package(clickhouse-cpp)
-endif()
+endif ()
 
-if(clickhouse-cpp_FOUND)
+if (clickhouse-cpp_FOUND)
   dependency_summary("clickhouse-cpp" clickhouse-cpp-lib "Dependencies")
-  if(NOT TARGET lz4::lz4)
+  if (NOT TARGET lz4::lz4)
     add_library(lz4::lz4 ALIAS LZ4::lz4)
-  endif()
-  if(NOT TARGET zstd::zstd)
+  endif ()
+  if (NOT TARGET zstd::zstd)
     add_library(zstd::zstd ALIAS zstd::libzstd)
-  endif()
-else()
+  endif ()
+else ()
   # Add a fallback to the find modules in clickhouse-cpp.
-  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aux/clickhouse-cpp/cmake")
+  list(APPEND CMAKE_MODULE_PATH
+       "${CMAKE_CURRENT_SOURCE_DIR}/aux/clickhouse-cpp/cmake")
   find_package(lz4 REQUIRED)
   # The targets in Findlz4 and Findzstd use different names from the upstream CMake setups.
-  if(NOT TARGET lz4::lz4)
+  if (NOT TARGET lz4::lz4)
     add_library(lz4::lz4 ALIAS LZ4::lz4)
-    set(DEBUG_DEPENDENCIES OFF CACHE BOOL "")
-  endif()
+    set(DEBUG_DEPENDENCIES
+        OFF
+        CACHE BOOL "")
+  endif ()
   find_package(zstd REQUIRED)
-  if(NOT TARGET zstd::zstd)
+  if (NOT TARGET zstd::zstd)
     add_library(zstd::zstd ALIAS zstd::libzstd)
-    set(DEBUG_DEPENDENCIES OFF CACHE BOOL "")
-  endif()
+    set(DEBUG_DEPENDENCIES
+        OFF
+        CACHE BOOL "")
+  endif ()
 
-  set(WITH_OPENSSL ON CACHE BOOL "")
-  set(WITH_SYSTEM_ABSEIL ON CACHE BOOL "")
-  set(WITH_SYSTEM_CITYHASH OFF CACHE BOOL "")
-  set(WITH_SYSTEM_LZ4 ON CACHE BOOL "")
-  set(WITH_SYSTEM_ZSTD ON CACHE BOOL "")
+  set(WITH_OPENSSL
+      ON
+      CACHE BOOL "")
+  set(WITH_SYSTEM_ABSEIL
+      ON
+      CACHE BOOL "")
+  set(WITH_SYSTEM_CITYHASH
+      OFF
+      CACHE BOOL "")
+  set(WITH_SYSTEM_LZ4
+      ON
+      CACHE BOOL "")
+  set(WITH_SYSTEM_ZSTD
+      ON
+      CACHE BOOL "")
 
   add_subdirectory(aux/clickhouse-cpp)
   TenzirSystemizeTarget(clickhouse-cpp-lib)
 
   target_include_directories(clickhouse-cpp-lib PUBLIC aux/clickhouse-cpp)
-  dependency_summary("clickhouse-cpp" "${CMAKE_CURRENT_SOURCE_DIR}/aux/clickhouse-cpp" "Dependencies")
-endif()
+  dependency_summary(
+    "clickhouse-cpp" "${CMAKE_CURRENT_SOURCE_DIR}/aux/clickhouse-cpp"
+    "Dependencies")
+endif ()
 
-if(NOT TARGET clickhouse-cpp-lib)
+if (NOT TARGET clickhouse-cpp-lib)
   message(ERROR "The ClickHouse plugin requires clickhouse-cpp-lib")
   return()
-endif()
+endif ()
 
 target_link_libraries(clickhouse PUBLIC clickhouse-cpp-lib)
 set_target_properties(clickhouse PROPERTIES INSTALL_RPATH "${ORIGIN}")
