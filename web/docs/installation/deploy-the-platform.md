@@ -158,17 +158,13 @@ TENZIR_PLATFORM_API_ENDPOINT=https://api.platform.example
 ### Identity Provider (IdP)
 
 The Tenzir Platform can be configured to use an external Identity Provider.
-This is required when using the platform with multiple users.
+If you want to use the platform with multiple users, this is required.
 
 #### IdP Requirements
 
-In order to use an external identity provider, it must support the OIDC protocol
-including the OIDC Discovery extension, and it must be configured to provide valid
-RS256 ID tokens.
+To use an external identity provider, ensure it supports the OIDC protocol, including the OIDC Discovery extension, and configure it to provide valid RS256 ID tokens.
 
-For full features of the platform, two clients (also called Applications in Auth0 or
-App Registrations in Microsoft Entra) need to be created which we will call `tenzir-app`
-and `tenzir-cli` below.
+Set up the external identity provider by creating two clients (also called Applications in Auth0 or App Registrations in Microsoft Entra) named `tenzir-app` and `tenzir-cli`.
 
 The `tenzir-app` client is used for logging into the Tenzir Platform in the web
 browser.
@@ -209,7 +205,7 @@ TENZIR_PLATFORM_OIDC_APP_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 You must provide the following environment variable containing a JSON object
-containing the OIDC issuer and audiences that should be accepted by the
+with the OIDC issuer and audiences that should be accepted by the
 platform.
 
 ```bash
@@ -217,20 +213,21 @@ TENZIR_PLATFORM_OIDC_TRUSTED_AUDIENCES='{"https://my.idp.example": ["tenzir-cli"
 ```
 
 You must configure the set of `admin` users in your platform instance. An admin
-user is a user who is permitted to run the `tenzir-platform admin` cli command.
-This is done by configuring a list of rules that are evaluated against the ID tokens
-provided by the OIDC  the following environment variable containing a JSON list of
-rules granting access to the admin API. If any of the provided rules match, the user
-is considered to be an admin. The example rule grants admin access to all users with
-a valid and signed `id_token` containing the fields `{"tenzir/org": "TenzirPlatformAdmins"}`.
+user is a user who is permitted to run the `tenzir-platform admin` CLI command.
+
+The `TENZIR_PLATFORM_OIDC_ADMIN_RULES` setting contains a JSON list of access rules
+that determine who is considered an admin for this platform instance.
+If any of the provided rules match, the user is considered to be an admin.
+The example rule grants admin access to all users with a valid and signed `id_token`
+containing the fields `{"tenzir/org": "TenzirPlatformAdmins"}`.
 
 ```bash
 TENZIR_PLATFORM_OIDC_ADMIN_RULES='[{"organization_claim": "tenzir/org", "organization": "TenzirPlatformAdmins", "auth_fn": "auth_organization"}]'
 ```
 
 See the documentation on [Access Rules](/platform-cli#configure-access-rules) for
-more information about the possible types of rules and their syntax. The `-d` option of
-the CLI can be used to generate valid JSON objects that can be entered here.
+more information about the possible types of rules and their syntax. Use the `-d` option of
+the CLI to generate valid JSON objects that you can enter here.
 
 ### PostgreSQL Database
 
