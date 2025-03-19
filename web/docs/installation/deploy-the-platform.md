@@ -158,18 +158,55 @@ TENZIR_PLATFORM_API_ENDPOINT=https://api.platform.example.org
 
 ### Identity Provider (IdP)
 
-The platform requires an external Identity Provider (IdP) supporting the OIDC
-protocol. The IdP must provide valid RS256 ID tokens. The platform must be able
-to access the IdP's issuer URL.
+The Tenzir Platform can be configured to use an external Identity Provider.
+This is required when using the platform with multiple users.
+
+#### IdP Requirements
+
+In order to use an external identity provider, it must support the OIDC protocol
+including the OIDC Discovery extension, and it must be configured to provide valid
+RS256 ID tokens.
+
+For full features of the platform, two clients (also called Applications in Auth0 or
+App Registrations in Microsoft Entra) need to be created which we will call `tenzir-app`
+and `tenzir-cli` below.
+
+The `tenzir-app` client is used for logging into the Tenzir Platform in the web
+browser.
+
+- The **Authorization Code** flow must be enabled.
+- The allowed redirect URLs must include `<platform-url>/login/oauth/callback`.
+- The client secret should be noted down so it can be added to the configuration
+   of the Tenzir Platform in the next step.
+
+The `tenzir-cli` client is used to authenticate with the `tenzir-platform` CLI.
+
+- The **Device Code** flow must be enabled.
+- If the identity provider does not return an `id_token` for the device code
+  flow, then the returned `access_token` must be in JWT format.
+
+Often it is desired to run CLI commands in environments where no user
+is available to perform the device code authorization flow, for example
+when running CLI commands as part of a CI job.
+
+In this case, a third client can be set up with the **Client Credentials** flow
+enabled. The `access_token` obtained from this client must be in JWT format.
+The CLI can make use of the client credentials flow by using
+the `tenzir-platform auth login --non-interactive` option.
+
+#### Platform Configuration
 
 You must provide the following environment variables for the OIDC provider
 configuration used for logging into the platform:
 
 ```bash
-TENZIR_PLATFORM_OIDC_PROVIDER_NAME=YOUR_OIDC_PROVIDER_NAME
-TENZIR_PLATFORM_OIDC_PROVIDER_CLIENT_ID=YOUR_OIDC_PROVIDER_CLIENT_ID
-TENZIR_PLATFORM_OIDC_PROVIDER_CLIENT_SECRET=YOUR_OIDC_PROVIDER_CLIENT_SECRET
-TENZIR_PLATFORM_OIDC_PROVIDER_ISSUER_URL=YOUR_OIDC_PROVIDER_ISSUER_URL
+TENZIR_PLATFORM_OIDC_PROVIDER_NAME=example-idp
+TENZIR_PLATFORM_OIDC_PROVIDER_ISSUER_URL=https://my.idp.example
+
+TENZIR_PLATFORM_OIDC_CLI_CLIENT_ID=tenzir-cli
+
+TENZIR_PLATFORM_OIDC_APP_CLIENT_ID=tenzir-app
+TENZIR_PLATFORM_OIDC_APP_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 You must provide the following environment variable containing a JSON object
@@ -177,17 +214,24 @@ containing the OIDC issuer and audiences that should be accepted by the
 platform.
 
 ```bash
-TENZIR_PLATFORM_OIDC_TRUSTED_AUDIENCES='{"keycloak.example.org": ["tenzir_platform"]}'
+TENZIR_PLATFORM_OIDC_TRUSTED_AUDIENCES='{"https://my.idp.example": ["tenzir-cli", "tenzir-app"]}'
 ```
 
-You must provide the following environment variable containing a JSON list of
-rules granting access to the admin API. The example rule grants admin access to
-all users with a valid and signed `id_token` containing the fields
-`{"connection": "google-oauth2", "tenzir/org": "TenzirPlatformAdmins"}`.
+You must configure the set of `admin` users in your platform instance. An admin
+user is a user who is permitted to run the `tenzir-platform admin` cli command.
+This is done by configuring a list of rules that are evaluated against the ID tokens
+provided by the OIDC  the following environment variable containing a JSON list of
+rules granting access to the admin API. If any of the provided rules match, the user
+is considered to be an admin. The example rule grants admin access to all users with
+a valid and signed `id_token` containing the fields `{"tenzir/org": "TenzirPlatformAdmins"}`.
 
 ```bash
-TENZIR_PLATFORM_OIDC_ADMIN_RULES='[{"connection": "google-oauth2", "organization_claim": "tenzir/org", "organization": "TenzirPlatformAdmins", "auth_fn": "auth_organization"}]'
+TENZIR_PLATFORM_OIDC_ADMIN_RULES='[{"organization_claim": "tenzir/org", "organization": "TenzirPlatformAdmins", "auth_fn": "auth_organization"}]'
 ```
+
+See the documentation on [Access Rules](/platform-cli#configure-access-rules) for
+more information about the possible types of rules and their syntax. The `-d` option of
+the CLI can be used to generate valid JSON objects that can be entered here.
 
 ### PostgreSQL Database
 
