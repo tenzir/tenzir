@@ -220,6 +220,8 @@ tenzir-platform admin add-auth-rule [--dry-run]
     organization-role <workspace_id> <connection> <roles_claim> <role> <organization_claim> <organization>
 tenzir-platform admin add-auth-rule [--dry-run]
     user <workspace_id> <user_id>
+tenzir-platform admin add-auth-rule [--dry-run]
+    allow-all <workspace_id>
 tenzir-platform admin delete-auth-rule <workspace_id> <auth_rule_index>
 ```
 
@@ -263,3 +265,7 @@ rules exist:
 - **User Rule**: `tenzir-platform admin add-auth-rule user` allows access if the
   `id_token` contains a field `sub` that exactly matches the provided
   `<user_id>`.
+
+- **Allow All Rule**: `tenzir-platform admin add-auth-rule allow-all` allows access
+  to every user. This can be useful to e.g. set up a workspace that is shared by all
+  users of a platform instance.
