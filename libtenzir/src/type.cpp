@@ -800,7 +800,7 @@ auto type::to_definition() const noexcept -> record {
   };
   return record{
     {"name", name().empty() ? data{} : data{std::string{name()}}},
-    {"kind", fmt::to_string(kind())},
+    {"kind", std::string{to_string(kind())}},
     {"attributes", make_attributes()},
     {"state", make_state()},
   };
