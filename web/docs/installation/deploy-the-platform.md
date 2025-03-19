@@ -100,7 +100,7 @@ You must provide the following environment variables for interacting with the
 platform through the CLI:
 
 ```bash
-TENZIR_PLATFORM_CLI_API_ENDPOINT=api.platform.example.org:5000
+TENZIR_PLATFORM_CLI_API_ENDPOINT=api.platform.example:5000
 TENZIR_PLATFORM_CLI_OIDC_ISSUER_URL=YOUR_OIDC_ISSUER_URL
 TENZIR_PLATFORM_CLI_OIDC_CLIENT_ID=YOUR_OIDC_CLIENT_ID
 TENZIR_PLATFORM_CLI_OIDC_AUDIENCE=YOUR_OIDC_AUDIENCE
@@ -128,32 +128,32 @@ The platform uses four URLs that require a HTTP reverse proxy. These URLs may be
 mapped to the same or different hostnames.
 
 1. The URL that the user's browser connects to, e.g.,
-   `app.platform.example.org`. This serves a web frontend where the user can
+   `app.platform.example`. This serves a web frontend where the user can
    interact with the platform.
-2. The URL that the nodes connect to, e.g., `nodes.platform.example.org`. Tenzir
+2. The URL that the nodes connect to, e.g., `nodes.platform.example`. Tenzir
    Nodes connect to this URL to establish long-running WebSocket connections.
 3. The URL that the platform's S3-compatible blob storage is accessible at,
-   e.g., `downloads.platform.example.org`. When using the *Download* button
+   e.g., `downloads.platform.example`. When using the *Download* button
    the platform generates download links under this URL.
 4. The URL that the Tenzir Platform CLI connects to, e.g.,
-   `api.platform.example.org`.
+   `api.platform.example`.
 
 You must provide the following environment variables to the platform:
 
 ```bash
 # The domain under which the platform frontend is reachable. Must include the
 # `http://` or `https://` scheme.
-TENZIR_PLATFORM_DOMAIN=https://app.platform.example.org
+TENZIR_PLATFORM_DOMAIN=https://app.platform.example
 
 # The endpoint to which Tenzir nodes should connect. Must include the `ws://`
 # or `wss://` scheme.
-TENZIR_PLATFORM_CONTROL_ENDPOINT=wss://nodes.platform.example.org
+TENZIR_PLATFORM_CONTROL_ENDPOINT=wss://nodes.platform.example
 
 # The URL at which the platform's S3-compatible blob storage is accessible at.
-TENZIR_PLATFORM_BLOBS_ENDPOINT=https://downloads.platform.example.org
+TENZIR_PLATFORM_BLOBS_ENDPOINT=https://downloads.platform.example
 
 # The URL at which the platform's S3-compatible blob storage is accessible at.
-TENZIR_PLATFORM_API_ENDPOINT=https://api.platform.example.org
+TENZIR_PLATFORM_API_ENDPOINT=https://api.platform.example
 ```
 
 ### Identity Provider (IdP)
@@ -175,7 +175,7 @@ The `tenzir-app` client is used for logging into the Tenzir Platform in the web
 browser.
 
 - The **Authorization Code** flow must be enabled.
-- The allowed redirect URLs must include `<platform-url>/login/oauth/callback`.
+- The allowed redirect URLs must include `https://app.platform.example/login/oauth/callback`.
 - The client secret should be noted down so it can be added to the configuration
    of the Tenzir Platform in the next step.
 
