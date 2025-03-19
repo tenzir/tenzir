@@ -157,13 +157,15 @@ TENZIR_PLATFORM_API_ENDPOINT=https://api.platform.example
 
 ### Identity Provider (IdP)
 
-The Tenzir Platform can be configured to use an external Identity Provider.
+You can configure the Tenzir Platform to use an external Identity Provider.
 
 #### IdP Requirements
 
-To use an external identity provider, ensure it supports the OIDC protocol, including the OIDC Discovery extension, and configure it to provide valid RS256 ID tokens.
+To use an external identity provider, ensure it supports the OIDC protocol, including
+the OIDC Discovery extension, and configure it to provide valid RS256 ID tokens.
 
-Set up the external identity provider by creating two clients (also called Applications in Auth0 or App Registrations in Microsoft Entra) named `tenzir-app` and `tenzir-cli`.
+Set up the external identity provider by creating two clients (also called Applications
+in Auth0 or App Registrations in Microsoft Entra) named `tenzir-app` and `tenzir-cli`.
 
 The `tenzir-app` client is used for logging into the Tenzir Platform in the web
 browser.
@@ -171,7 +173,7 @@ browser.
 - The **Authorization Code** flow must be enabled.
 - The allowed redirect URLs must include `https://app.platform.example/login/oauth/callback`.
 - The client secret should be noted down so it can be added to the configuration
-   of the Tenzir Platform in the next step.
+  of the Tenzir Platform in the next step.
 
 The `tenzir-cli` client is used to authenticate with the `tenzir-platform` CLI.
 
@@ -179,11 +181,11 @@ The `tenzir-cli` client is used to authenticate with the `tenzir-platform` CLI.
 - If the identity provider does not return an `id_token` for the device code
   flow, then the returned `access_token` must be in JWT format.
 
-Often it is desired to run CLI commands in environments where no user
+You may want to to run CLI commands in environments where no user
 is available to perform the device code authorization flow, for example
 when running CLI commands as part of a CI job.
 
-In this case, a third client can be set up with the **Client Credentials** flow
+In this case, you can set up another client with the **Client Credentials** flow
 enabled. The `access_token` obtained from this client must be in JWT format.
 The CLI can make use of the client credentials flow by using
 the `tenzir-platform auth login --non-interactive` option.
