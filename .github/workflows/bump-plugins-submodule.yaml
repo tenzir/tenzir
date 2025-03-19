@@ -38,6 +38,10 @@ jobs:
           gpg_private_key: ${{ secrets.TENZIR_BOT_GPG_SIGNING_KEY }}
           git_user_signingkey: true
           git_commit_gpgsign: true
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
       - name: Bump plugins submodule
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
