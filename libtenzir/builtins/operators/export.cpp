@@ -18,6 +18,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/metric_handler.hpp>
+#include <tenzir/modules.hpp>
 #include <tenzir/passive_partition.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -63,11 +64,7 @@ struct export_mode {
   }
 };
 
-enum class event_source {
-  unpersisted,
-  live,
-  retro,
-};
+TENZIR_ENUM(event_source, unpersisted, live, retro);
 
 struct bridge_state {
   static constexpr auto name = "export-bridge";
@@ -75,6 +72,7 @@ struct bridge_state {
   caf::event_based_actor* self = {};
 
   caf::actor_addr importer_address = {};
+  tenzir::taxonomies taxonomies = {};
   expression expr = {};
   std::unordered_map<type, caf::expected<expression>> bound_exprs = {};
 
@@ -106,7 +104,8 @@ struct bridge_state {
     -> const expression* {
     auto it = bound_exprs.find(schema);
     if (it == bound_exprs.end()) {
-      it = bound_exprs.emplace_hint(it, schema, tailor(expr, schema));
+      it = bound_exprs.emplace_hint(
+        it, schema, tailor(check(normalize_and_validate(expr)), schema));
     }
     if (not it->second) {
       return nullptr;
@@ -193,7 +192,8 @@ struct bridge_state {
     }
     // Live and unpersisted events we still need to filter.
     if (source != event_source::retro) {
-      const auto* bound_expr = bind_expr(slice.schema(), expr);
+      const auto resolved = check(resolve(taxonomies, expr, slice.schema()));
+      const auto* bound_expr = bind_expr(slice.schema(), resolved);
       if (not bound_expr) {
         // failing to bind is not an error.
         return;
@@ -240,6 +240,7 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
                  shared_diagnostic_handler diagnostics_handler)
   -> caf::behavior {
   self->state().self = self;
+  self->state().taxonomies.concepts = modules::concepts();
   self->state().expr = normalize(std::move(expr));
   self->state().mode = mode;
   self->state().metrics_handler = std::move(metrics_handler);

@@ -166,17 +166,20 @@ using catalog_actor = typed_actor_fwd<
   ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of an IMPORTER actor.
-using importer_actor = typed_actor_fwd<
-  // Register a subscriber for table slices, returning the currently unpersisted
-  // events immediately.
-  auto(atom::subscribe, receiver_actor<table_slice>, bool internal)
-    ->caf::result<std::vector<table_slice>>,
-  // Push buffered slices downstream to make the data available.
-  auto(atom::flush)->caf::result<void>,
-  // Import a batch of data.
-  auto(table_slice)->caf::result<void>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
+struct importer_actor_traits {
+  using signatures = caf::type_list<
+    // Register a subscriber for table slices, returning the currently
+    // unpersisted events immediately.
+    auto(atom::subscribe, receiver_actor<table_slice>, bool internal)
+      ->caf::result<std::vector<table_slice>>,
+    // Push buffered slices downstream to make the data available.
+    auto(atom::flush)->caf::result<void>,
+    // Import a batch of data.
+    auto(table_slice)->caf::result<void>,
+    // Conform to the protocol of the STATUS CLIENT actor.
+    auto(atom::status, status_verbosity, duration)->caf::result<record>>;
+};
+using importer_actor = caf::typed_actor<importer_actor_traits>;
 
 /// The INDEX actor interface.
 using index_actor = typed_actor_fwd<
@@ -201,8 +204,8 @@ using index_actor = typed_actor_fwd<
   // Erases the given set of partitions from the INDEX.
   auto(atom::erase, std::vector<uuid>)->caf::result<atom::done>,
   // Applies the given pipelineation to the partition.
-  // When keep_original_partition is yes: merges the transformed partitions with
-  // the original ones and returns the new partition infos. When
+  // When keep_original_partition is yes: merges the transformed partitions
+  // with the original ones and returns the new partition infos. When
   // keep_original_partition is no: does an in-place pipeline keeping the old
   // ids, and makes new partitions preserving them.
   auto(atom::apply, pipeline, std::vector<tenzir::partition_info>,

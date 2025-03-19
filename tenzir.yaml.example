@@ -167,9 +167,14 @@ tenzir:
   # be a power of 2.
   max-partition-size: 4Mi
 
+  # Timeout after which the importer forwards events to subscribers like `export
+  # live=true` or `metrics live=true`. Set to 0s for an unbuffered mode. A
+  # higher value increases performance, and a lower value reduces latency.
+  import-buffer-timeout: 1s
+
   # Timeout after which an active partition is forcibly flushed, regardless of
   # its size.
-  active-partition-timeout: 30 seconds
+  active-partition-timeout: 5min
 
   # Automatically rebuild undersized and outdated partitions in the background.
   # The given number controls how much resources to spend on it. Set to 0 to
