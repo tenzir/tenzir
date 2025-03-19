@@ -35,51 +35,97 @@ importer::~importer() noexcept {
 void importer::handle_slice(table_slice&& slice) {
   const auto rows = slice.rows();
   TENZIR_ASSERT(rows > 0);
-  slice.import_time(time::clock::now());
-  const auto is_internal = slice.schema().attribute("internal").has_value();
-  if (not is_internal) {
-    schema_counters[slice.schema()] += rows;
+  // If we're in "unbuffered" mode, we flush immediately.
+  if (import_buffer_timeout == duration::zero()) {
+    flush();
+    return;
   }
-  for (const auto& [subscriber, wants_internal] : subscribers) {
-    if (is_internal == wants_internal) {
-      self->mail(slice).send(subscriber);
-    }
+  // Otherwise, we buffer the slice first, and register it for flushing after
+  // some timeout.
+  auto schema = slice.schema();
+  auto it = unpersisted_events.find(schema);
+  if (it == unpersisted_events.end()) {
+    it
+      = unpersisted_events.emplace_hint(it, schema, std::vector<table_slice>{});
+    self->run_delayed_weak(import_buffer_timeout,
+                           [this, schema = std::move(schema)]() mutable {
+                             flush(std::move(schema));
+                           });
   }
-  recent_events.push_back(slice);
-  if (retention_policy.should_be_persisted(slice)) {
-    auto& entry = unpersisted_events[slice.schema()];
-    entry.push_back(std::move(slice));
-  }
+  it->second.push_back(std::move(slice));
 }
 
-void importer::flush() {
-  auto concat_buffer_size = size_t{0};
-  auto concat_buffer = std::vector<table_slice>{};
-  for (auto& [_, events] : unpersisted_events) {
-    for (auto& slice : events) {
-      concat_buffer_size += slice.rows();
-      concat_buffer.push_back(std::move(slice));
-      if (concat_buffer_size >= defaults::import::table_slice_size) {
-        self->mail(concatenate(std::move(concat_buffer))).send(index);
-        concat_buffer_size = 0;
-        concat_buffer.clear();
-      }
+void importer::flush(std::optional<type> schema) {
+  const auto do_flush
+    = [&](std::vector<table_slice> events, const bool is_internal) {
+        auto concat_buffer_size = size_t{0};
+        auto concat_buffer = std::vector<table_slice>{};
+        const auto rotate_buffer = [&] {
+          auto events = concatenate(std::move(concat_buffer));
+          TENZIR_ASSERT(events.rows() > 0);
+          events.import_time(time::clock::now());
+          if (not is_internal) {
+            schema_counters[events.schema()] += events.rows();
+          }
+          for (const auto& [subscriber, wants_internal] : subscribers) {
+            if (is_internal == wants_internal) {
+              self->mail(events).send(subscriber);
+            }
+          }
+          if (retention_policy.should_be_persisted(events)) {
+            self->mail(events).send(index);
+          }
+          recent_events.push_back(std::move(events));
+          concat_buffer_size = 0;
+          concat_buffer.clear();
+        };
+        for (auto& slice : events) {
+          concat_buffer_size += slice.rows();
+          concat_buffer.push_back(std::move(slice));
+          if (concat_buffer_size >= defaults::import::table_slice_size) {
+            rotate_buffer();
+          }
+        }
+        if (concat_buffer_size > 0) {
+          rotate_buffer();
+        }
+      };
+  if (schema) {
+    const auto it = unpersisted_events.find(*schema);
+    if (it != unpersisted_events.end()) {
+      do_flush(std::move(it->second),
+               it->first.attribute("internal").has_value());
+      unpersisted_events.erase(it);
     }
-    if (concat_buffer_size > 0) {
-      self->mail(concatenate(std::move(concat_buffer))).send(index);
-      concat_buffer_size = 0;
-      concat_buffer.clear();
-    }
+    return;
+  }
+  for (auto& [schema, events] : unpersisted_events) {
+    do_flush(std::move(events), schema.attribute("internal").has_value());
   }
   unpersisted_events.clear();
 }
 
 auto importer::make_behavior() -> importer_actor::behavior_type {
-  if (auto policy
-      = retention_policy::make(check(to<record>(content(self->config()))))) {
+  const auto config = check(to<record>(content(self->config())));
+  if (auto policy = retention_policy::make(config)) {
     retention_policy = std::move(*policy);
   } else {
     self->quit(std::move(policy.error()));
+    return importer_actor::behavior_type::make_empty_behavior();
+  }
+  if (auto timeout
+      = try_get_only<duration>(config, "tenzir.import-buffer-timeout")) {
+    if (*timeout) {
+      if (**timeout < duration::zero()) {
+        self->quit(diagnostic::error("`tenzir.import-buffer-timeout` must be a "
+                                     "positive duration")
+                     .to_error());
+        return importer_actor::behavior_type::make_empty_behavior();
+      }
+      import_buffer_timeout = std::move(**timeout);
+    }
+  } else {
+    self->quit(std::move(timeout.error()));
     return importer_actor::behavior_type::make_empty_behavior();
   }
   // We call the metrics "ingest" to distinguish them from the "import" metrics;
@@ -120,14 +166,6 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
     = caf::get_or(content(self->system().config()),
                   "tenzir.active-partition-timeout",
                   defaults::active_partition_timeout);
-  detail::weak_run_delayed_loop(
-    self, std::chrono::seconds{10},
-    [this] {
-      // Every 10 seconds, we clear out all of the unpersisted events and
-      // forward them to the index.
-      flush();
-    },
-    false);
   detail::weak_run_delayed_loop(
     self, std::chrono::seconds{1},
     [this, active_partition_timeout] {

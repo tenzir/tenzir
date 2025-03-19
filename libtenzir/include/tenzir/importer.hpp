@@ -37,7 +37,7 @@ private:
   /// Process a slice and forward it to the index.
   void handle_slice(table_slice&& slice);
 
-  void flush();
+  void flush(std::optional<type> schema = {});
 
   /// Pointer to the owning actor.
   importer_actor::pointer self;
@@ -47,6 +47,7 @@ private:
   /// The index actor and the policy for retention.
   index_actor index;
   struct retention_policy retention_policy = {};
+  duration import_buffer_timeout = std::chrono::seconds{1};
 
   /// Potentially unpersisted events.
   std::vector<table_slice> recent_events = {};

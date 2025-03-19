@@ -29,52 +29,9 @@ tenzir:
 
 [example-configuration]: ../../configuration.md#example-configuration
 
-## Batching
-
-Tenzir processes events in batches. Because the structured data has the shape of
-a table, we call these batches *table slices*. The following options control
-their shape and behavior.
-
-### Size
-
-Most components in Tenzir operate on table slices, which makes the table slice
-size a fundamental tuning knob on the spectrum of throughput and latency. Small
-table slices allow for shorter processing times, resulting in more scheduler
-context switches and a more balanced workload. But the increased pressure on the
-scheduler comes at the cost of throughput. Conversely, a large table slice size
-creates more work for each actor invocation and makes them yield less frequently
-to the scheduler. As a result, other actors scheduled on the same thread may
-have to wait a little longer.
-
-The option `tenzir.import.batch-size` sets an upper bound for the number of
-events per table slice. It defaults to 65,536.
-
-The option controls the maximum number of events per table slice, but
-not necessarily the number of events until a component forwards a batch to the
-next stage in a stream. The CAF streaming framework uses a credit-based
-flow-control mechanism to determine buffering of tables slices.
-
-:::caution
-Setting `tenzir.import.batch-size` to `0` causes the table slice size to be
-unbounded and leaves it to `tenzir.import.batch-timeout` to produce table slices.
-This can lead to very large table slices for sources with high data rates, and
-is not recommended.
-:::
-
-### Import Timeout
-
-The `tenzir.import.batch-timeout` option sets a timeout for forwarding buffered
-table slices to the remote Tenzir node. If the timeout fires before a table
-slice reaches `tenzir.import.batch-size`, then the table slice will contain fewer
-events and ship immediately.
-
-The `tenzir.import.read-timeout` option determines how long a call to read data
-from the input will block. After the read timeout elapses, Tenzir tries again at
-a later. The default value is 10 seconds.
-
 ## Storage Engine
 
-The central component of Tenzir's storage engine is the *catalog*. It owns the
+The central component of Tenzir's storage engine is the _catalog_. It owns the
 partitions, keeps metadata about them, and maintains a set of sparse secondary
 indexes to identify relevant partitions for a given query.
 
@@ -87,11 +44,20 @@ may yield false positives. Tenzir keeps all sketches in memory.
 The amount of memory that the storage engine can consume is not explicitly
 configurable, but there exist various options that have a direct impact.
 
+### Set the import buffer timeout
+
+The `tenzir.import-buffer-timeout` option sets a timeout for forwarding buffered
+table slices to the catalog. The timeout defaults to 1 second, and determines
+the maximum delay between the `export live=true` and `import` operators.
+
+Choose a higher timeout to improve performance, or minimize latency and disable
+buffering altogether setting the option to `0s`.
+
 ### Control the partition size
 
 Tenzir groups table slices with the same schema in a partition. There exist
-mutable *active partitions* that Tenzir writes to during ingestion, and
-immutable *passive partitions* that Tenzir reads from during query execution.
+mutable _active partitions_ that Tenzir writes to during ingestion, and
+immutable _passive partitions_ that Tenzir reads from during query execution.
 
 When constructing a partition, the parameter `tenzir.max-partition-size`
 (default: 4Mi / 2^22) sets an upper bound on the number of records in a

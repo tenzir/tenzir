@@ -64,11 +64,7 @@ struct export_mode {
   }
 };
 
-enum class event_source {
-  unpersisted,
-  live,
-  retro,
-};
+TENZIR_ENUM(event_source, unpersisted, live, retro);
 
 struct bridge_state {
   static constexpr auto name = "export-bridge";
