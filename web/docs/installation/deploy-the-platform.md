@@ -158,7 +158,6 @@ TENZIR_PLATFORM_API_ENDPOINT=https://api.platform.example
 ### Identity Provider (IdP)
 
 The Tenzir Platform can be configured to use an external Identity Provider.
-If you want to use the platform with multiple users, this is required.
 
 #### IdP Requirements
 
