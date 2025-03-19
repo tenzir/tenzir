@@ -747,62 +747,63 @@ data type::construct() const noexcept {
   });
 }
 
-auto type::to_definition(std::optional<std::string> field_name,
-                         offset parent_path) const noexcept -> record {
-  auto attributes = record{};
-  for (const auto& [key, value] : this->attributes()) {
-    attributes.emplace(key, value.empty() ? data{} : data{std::string{value}});
-  }
-  auto path = list{};
-  for (const auto& index : parent_path) {
-    path.push_back(data{static_cast<int64_t>(index)});
-  }
-  return match(
-    *this,
-    [&](const auto&) noexcept -> record {
-      auto result = record{};
-      result.emplace("name", field_name.value_or(std::string{name()}));
-      result.emplace("kind", std::string{to_string(kind())});
-      result.emplace("type", name().empty() ? std::string{to_string(kind())}
-                                            : std::string{name()});
-      result.emplace("attributes", std::move(attributes));
-      result.emplace("path", std::move(path));
-      result.emplace("fields", list{});
-      return result;
-    },
-    [&](const list_type& self) noexcept -> record {
-      // Recursively create the definition for the nested type, but add a -1 to
-      // it for the values. We override the type to include the list, but leave
-      // the kind as the nested value.
-      if (is<record_type>(self.value_type())) {
-        parent_path.push_back(-1);
-      }
-      auto result = self.value_type().to_definition(
-        field_name.value_or(std::string{name()}), parent_path);
-      result["kind"] = fmt::format("list<{}>", as<std::string>(result["kind"]));
-      result["type"]
-        = name().empty()
-            ? fmt::format("list<{}>", as<std::string>(result["type"]))
-            : std::string{name()};
-      return result;
-    },
-    [&](const record_type& self) noexcept -> record {
-      auto fields = list{};
-      parent_path.push_back(-1);
-      for (const auto& field : self.fields()) {
-        ++parent_path.back();
-        fields.push_back(
-          field.type.to_definition(std::string{field.name}, parent_path));
-      }
-      auto result = record{};
-      result.emplace("name", field_name.value_or(std::string{name()}));
-      result.emplace("kind", "record");
-      result.emplace("type", name().empty() ? "record" : std::string{name()});
-      result.emplace("attributes", std::move(attributes));
-      result.emplace("path", std::move(path));
-      result.emplace("fields", std::move(fields));
-      return result;
-    });
+auto type::to_definition() const noexcept -> record {
+  const auto make_attributes = [&] {
+    auto result = list{};
+    for (const auto& [key, value] : attributes()) {
+      result.push_back(record{
+        {"key", std::string{key}},
+        {"value", std::string{value}},
+      });
+    }
+    return result;
+  };
+  const auto make_state = [&] {
+    return match(
+      *this,
+      [](const enumeration_type& self) -> data {
+        auto result = list{};
+        for (const auto& field : self.fields()) {
+          result.push_back(record{
+            {"key", uint64_t{field.key}},
+            {"name", std::string{field.name}},
+          });
+        }
+        return record{
+          {"fields", std::move(result)},
+        };
+      },
+      [](const list_type& self) -> data {
+        return record{
+          {"type", self.value_type().to_definition()},
+        };
+      },
+      [](const map_type&) -> data {
+        TENZIR_UNREACHABLE();
+      },
+      [](const record_type& self) -> data {
+        auto result = list{};
+        result.reserve(self.num_fields());
+        for (const auto& field : self.fields()) {
+          result.push_back(record{
+            {"name", std::string{field.name}},
+            {"type", field.type.to_definition()},
+          });
+        }
+        return record{
+          {"fields", std::move(result)},
+        };
+      },
+      [](const basic_type auto&) -> data {
+        return {};
+      });
+  };
+  return record{
+    {"name", name().empty() ? data{} : data{std::string{name()}}},
+    {"kind", fmt::to_string(kind())},
+    {"attributes", make_attributes()},
+    {"state", make_state()},
+  };
 }
 
 type type::from_arrow(const arrow::DataType& other) noexcept {
