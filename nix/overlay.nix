@@ -314,7 +314,12 @@ in {
     # Policy: The suffix-less `tenzir' packages come with a few closed source
     # plugins.
     tenzir = let
+      tenzir-plugins-source =
+        if builtins.pathExists ./../contrib/tenzir-plugins/README.md
+          then ./../contrib/tenzir-plugins
+          else prev.callPackage ./tenzir/plugins/source.nix {};
       pkg = final.unchecked.tenzir-de.override {
+        inherit tenzir-plugins-source;
       };
     in
       pkg.withPlugins (ps: [

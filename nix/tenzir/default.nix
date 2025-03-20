@@ -44,6 +44,8 @@
     restinio,
     llhttp,
     pfs,
+    # Defaults to null because it is omitted for the developer edition build.
+    tenzir-plugins-source ? null,
     extraPlugins ? [],
     symlinkJoin,
     extraCmakeFlags ? [],
@@ -320,7 +322,7 @@
         passthru = {
           plugins = bundledPlugins ++ extraPlugins;
           withPlugins = selection: let
-            allPlugins = callPackage ./plugins {tenzir = self;};
+            allPlugins = callPackage ./plugins {tenzir = self; inherit tenzir-plugins-source; };
             actualPlugins = selection allPlugins;
           in
             if isStatic

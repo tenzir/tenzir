@@ -1,21 +1,15 @@
 {
   lib,
   callPackage,
-  runCommand,
   tenzir,
+  tenzir-plugins-source ? callPackage ./source.nix {},
   ...
 }: let
-  source = builtins.fromJSON (builtins.readFile ./source.json);
-  tenzir-plugins-tarball = import <nix/fetchurl.nix> source;
-  tenzir-plugins = runCommand "tenzir-plugins-source" {} ''
-    mkdir -p $out
-    tar --strip-components=1 -C $out -xf ${tenzir-plugins-tarball}
-  '';
   versions = import ./names.nix;
   f = name:
     callPackage ./generic.nix {
       name = "tenzir-plugin-${name}";
-      src = "${tenzir-plugins}/${name}";
+      src = "${tenzir-plugins-source}/${name}";
       inherit tenzir;
     };
 in
