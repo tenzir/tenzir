@@ -120,7 +120,7 @@ auto ssl_options::query_cacert_fallback(operator_control_plane& ctrl)
   -> std::string {
   auto& config = ctrl.self().system().config();
   if (auto* v = caf::get_if<std::string>(&config.content, "tenzir.cacert")) {
-    return std::move(*v);
+    return *v;
   }
   return {};
 }
