@@ -73,8 +73,9 @@ jobs:
 
             # Create a new commit for the updated submodule.
             new_plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/main)
-            nix/update-plugins.sh
             git add contrib/tenzir-plugins
+            sleep 5
+            nix/update-plugins.sh
             git add nix/
             git commit -m "Bump submodule from $plugins_sha_short to $new_plugins_main_sha"
             git push -u origin main
