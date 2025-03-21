@@ -498,9 +498,9 @@ private:
   auto start() -> std::optional<diagnostic> {
     TENZIR_ASSERT(ctx_ != nullptr);
     TENZIR_DEBUG("starting Fluent Bit engine");
+    started_ = true;
     auto ret = flb_start(ctx_);
     if (ret == 0) {
-      started_ = true;
       return {};
     }
     return diagnostic::error("failed to start engine")
@@ -639,12 +639,12 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<table_slice>
     requires enable_source
   {
+    co_yield {};
     auto engine
       = engine::make_source(operator_args_, config_, ctrl.diagnostics());
     if (not engine) {
       co_return;
     }
-    co_yield {};
     auto dh = transforming_diagnostic_handler{
       ctrl.diagnostics(),
       [&](diagnostic d) {
