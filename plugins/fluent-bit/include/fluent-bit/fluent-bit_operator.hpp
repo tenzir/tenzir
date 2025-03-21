@@ -335,11 +335,6 @@ public:
 
   ~engine() {
     if (ctx_ != nullptr) {
-      // Workaround an uninitialized thread-local pointer that causes a bad
-      // `free`.
-      if (not started_) {
-        start();
-      }
       stop();
       flb_destroy(ctx_);
     }
@@ -498,12 +493,12 @@ private:
   auto start() -> std::optional<diagnostic> {
     TENZIR_ASSERT(ctx_ != nullptr);
     TENZIR_DEBUG("starting Fluent Bit engine");
-    started_ = true;
     auto ret = flb_start(ctx_);
     if (ret == 0) {
+      running_ = true;
       return {};
     }
-    return diagnostic::error("failed to start engine")
+    return diagnostic::error("failed to start fluentbit engine")
       .note("return code `{}`", ret)
       .done();
   }
@@ -511,8 +506,9 @@ private:
   /// Stops the engine.
   auto stop() -> bool {
     TENZIR_ASSERT(ctx_ != nullptr);
-    if (not started_) {
-      TENZIR_DEBUG("discarded attempt to stop unstarted engine");
+    if (not running_) {
+      TENZIR_DEBUG(
+        "ignoring `stop()` for since the engine was not started successfully");
       return false;
     }
     TENZIR_DEBUG("stopping Fluent Bit engine");
@@ -522,15 +518,15 @@ private:
     }
     auto ret = flb_stop(ctx_);
     if (ret == 0) {
-      started_ = false;
+      running_ = false;
       return true;
     }
-    TENZIR_ERROR("failed to stop engine ({})", ret);
+    TENZIR_ERROR("failed to stop fluentbit engine ({})", ret);
     return false;
   }
 
   flb_ctx_t* ctx_{nullptr}; ///< Fluent Bit context
-  bool started_{false};     ///< Engine started/stopped status.
+  bool running_{false};     ///< Engine started/stopped status.
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
   std::chrono::milliseconds poll_interval_{}; ///< How fast we check FB
   size_t num_stop_polls_{0};      ///< Number of polls in the destructor

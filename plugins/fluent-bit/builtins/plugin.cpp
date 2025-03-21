@@ -16,33 +16,35 @@ namespace {
 
 auto tls_to_fluentbit(const ssl_options& ssl, property_map& properties,
                       diagnostic_handler& dh) -> failure_or<void> {
-  const auto set = [&](std::string key, std::string value,
-                       location loc) -> failure_or<void> {
+  const auto set = [&](std::string key, std::string tenzir_option_name,
+                       std::string value, location loc) -> failure_or<void> {
     auto [it, inserted] = properties.try_emplace(key, std::move(value));
     if (not inserted and it->second != value) {
       diagnostic::error("conflicting values between tenzir option and "
                         "fluent-bit option `{}`",
                         key)
         .primary(loc)
-        .note("tenzir option evaluates to `{}`, fluent-bit option is `{}`",
-              value, it->second)
+        .note("tenzir option `{}` evaluates to `{}`, fluent-bit option is `{}`",
+              tenzir_option_name, value, it->second)
         .emit(dh);
       return failure::promise();
     }
     return {};
   };
-  TRY(set("tls", ssl.tls.inner ? "On" : "Off", ssl.tls.source));
+  TRY(set("tls", "tls", ssl.tls.inner ? "On" : "Off", ssl.tls.source));
   if (ssl.skip_peer_verification) {
-    TRY(set("tls.verify", "Off", location::unknown));
+    TRY(set("tls.verify", "skip_peer_verification", "Off", location::unknown));
   }
   if (ssl.cacert) {
-    TRY(set("tls.ca_file", ssl.cacert->inner, ssl.cacert->source));
+    TRY(set("tls.ca_file", "cacert", ssl.cacert->inner, ssl.cacert->source));
   }
   if (ssl.certfile) {
-    TRY(set("tls.crt_file", ssl.certfile->inner, ssl.certfile->source));
+    TRY(set("tls.crt_file", "certfile", ssl.certfile->inner,
+            ssl.certfile->source));
   }
   if (ssl.keyfile) {
-    TRY(set("tls.key_file", ssl.keyfile->inner, ssl.keyfile->source));
+    TRY(
+      set("tls.key_file", "keyfile", ssl.keyfile->inner, ssl.keyfile->source));
   }
   return {};
 }
@@ -74,6 +76,7 @@ public:
     std::optional<tenzir::record> plugin_options;
     std::optional<tenzir::record> fluentbit_options;
     auto ssl = ssl_options{};
+    ssl.tls = located{false, location::unknown};
     parser.positional("plugin", plugin)
       .named("options", plugin_options)
       .named("fluent_bit_options", fluentbit_options);
@@ -82,6 +85,9 @@ public:
     opt_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx));
     TRY(ssl.validate(located{std::string{}, location::unknown}, ctx));
+    // TODO: Improve TLS option validation, right now a pipeline like
+    // `from_fluent_bit "elasticsearch", tls=true` will just fail with a
+    // generic "failed to start engine" error.
     auto args = operator_args{
       .plugin = std::move(plugin),
       .service_properties = to_property_map(fluentbit_options),
@@ -136,6 +142,7 @@ public:
     std::optional<tenzir::record> plugin_options;
     std::optional<tenzir::record> fluentbit_options;
     auto ssl = ssl_options{};
+    ssl.tls = located{false, location::unknown};
     parser.positional("plugin", plugin)
       .named("options", plugin_options)
       .named("fluent_bit_options", fluentbit_options);
