@@ -84,6 +84,7 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -120,6 +121,7 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -466,6 +468,9 @@ std::optional<type> type::infer(const data& value) noexcept {
     [](const blob&) noexcept -> std::optional<type> {
       return type{blob_type{}};
     },
+    [](const secret&) noexcept -> std::optional<type> {
+      return type{secret_type{}};
+    },
     [](const pattern&) noexcept -> std::optional<type> {
       return type{string_type{}};
     },
@@ -628,6 +633,10 @@ legacy_type type::to_legacy_type() const noexcept {
     },
     [&](const subnet_type&) noexcept -> legacy_type {
       return legacy_subnet_type{};
+    },
+    [&](const secret_type&) noexcept -> legacy_type {
+      TENZIR_TODO(); /// Is this OK? Do I *need* to introduce a proper type?
+      return legacy_string_type{}.name("secret");
     },
     [&](const enumeration_type& enumeration) noexcept -> legacy_type {
       auto result = legacy_enumeration_type{};
@@ -930,6 +939,7 @@ auto type::make_arrow_metadata() const
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1050,6 +1060,7 @@ std::string_view type::name() const& noexcept {
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1087,6 +1098,7 @@ type::attribute(const char* key) const& noexcept {
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1128,6 +1140,7 @@ bool type::has_attributes() const noexcept {
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1167,6 +1180,7 @@ type::attributes(type::recurse recurse) const& noexcept {
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1217,6 +1231,7 @@ bool is_container(const type& type) noexcept {
     case fbs::type::Type::time_type:
     case fbs::type::Type::string_type:
     case fbs::type::Type::blob_type:
+    case fbs::type::Type::secret_type:
     case fbs::type::Type::ip_type:
     case fbs::type::Type::subnet_type:
     case fbs::type::Type::enumeration_type:
@@ -1844,6 +1859,131 @@ std::shared_ptr<typename arrow::TypeTraits<blob_type::arrow_type>::BuilderType>
 blob_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
   return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
     to_arrow_type(), pool);
+}
+
+// -- secret_type ------------------------------------------------------------
+
+std::span<const std::byte> as_bytes(const secret_type&) noexcept {
+  static const auto buffer = []() noexcept {
+    constexpr auto reserved_size = 32;
+    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    const auto secret_type = fbs::type::CreateSecretType(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::secret_type,
+                                      secret_type.Union());
+    builder.Finish(type);
+    auto result = builder.Release();
+    TENZIR_ASSERT(result.size() == reserved_size);
+    return result;
+  }();
+  return as_bytes(buffer);
+}
+
+auto secret_type::construct() noexcept -> secret {
+  return {};
+}
+
+std::shared_ptr<secret_type::arrow_type> secret_type::to_arrow_type() noexcept {
+  return std::make_shared<arrow_type>();
+}
+
+std::shared_ptr<secret_type::builder_type>
+secret_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<builder_type>(pool);
+}
+
+secret_type::builder_type::builder_type(arrow::MemoryPool* pool)
+  : arrow::StructBuilder(
+      secret_type::to_arrow_type()->storage_type(), pool,
+      {
+        std::make_shared<arrow::StringBuilder>(),
+        std::make_shared<arrow::StringBuilder>(),
+        std::make_shared<
+          typename secret_type::builder_type::arrow_enum_builder_type>(),
+        std::make_shared<
+          typename secret_type::builder_type::arrow_enum_builder_type>(),
+      }) {
+  // nop
+}
+
+std::shared_ptr<arrow::DataType> secret_type::builder_type::type() const {
+  return secret_type::to_arrow_type();
+}
+
+arrow::StringBuilder& secret_type::builder_type::value_builder() noexcept {
+  return static_cast<arrow::StringBuilder&>(*field_builder(0));
+}
+arrow::StringBuilder& secret_type::builder_type::name_builder() noexcept {
+  return static_cast<arrow::StringBuilder&>(*field_builder(1));
+}
+secret_type::builder_type::arrow_enum_builder_type& secret_type::builder_type::type_builder() noexcept {
+  return static_cast<arrow_enum_builder_type&>(*field_builder(2));
+}
+secret_type::builder_type::arrow_enum_builder_type& secret_type::builder_type::encoding_builder() noexcept {
+  return static_cast<arrow_enum_builder_type&>(*field_builder(3));
+}
+
+void secret_type::arrow_type::register_extension() noexcept {
+  if (arrow::GetExtensionType(name)) {
+    return;
+  }
+  auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
+  TENZIR_ASSERT(status.ok());
+  // We also register the subnet type as vast.subnet for backwards
+  // compatibility.
+  struct compat : arrow_type {
+    using arrow_type::arrow_type;
+    auto extension_name() const -> std::string override {
+      return "vast.secret";
+    }
+  };
+  auto compat_status = arrow::RegisterExtensionType(std::make_shared<compat>());
+  TENZIR_ASSERT(compat_status.ok());
+}
+
+secret_type::arrow_type::arrow_type() noexcept
+  : arrow::ExtensionType(arrow::struct_({
+      arrow::field("value", string_type::to_arrow_type()),
+      arrow::field("name", string_type::to_arrow_type()),
+      arrow::field("type", arrow::int32()),
+      arrow::field("encoding", arrow::int32()),
+    })) {
+  // nop
+}
+
+std::string secret_type::arrow_type::extension_name() const {
+  return name;
+}
+
+bool secret_type::arrow_type::ExtensionEquals(
+  const arrow::ExtensionType& other) const {
+  return other.extension_name() == name;
+}
+
+std::shared_ptr<arrow::Array> secret_type::arrow_type::MakeArray(
+  std::shared_ptr<arrow::ArrayData> data) const {
+  return std::make_shared<array_type>(std::move(data));
+}
+
+arrow::Result<std::shared_ptr<arrow::DataType>>
+secret_type::arrow_type::Deserialize(
+  std::shared_ptr<arrow::DataType> storage_type,
+  const std::string& serialized) const {
+  if (serialized != name) {
+    return arrow::Status::Invalid("type identifier does not match");
+  }
+  if (!storage_type->Equals(storage_type_)) {
+    return arrow::Status::Invalid("storage type does not match");
+  }
+  return std::make_shared<arrow_type>();
+}
+
+std::string secret_type::arrow_type::Serialize() const {
+  return name;
+}
+
+std::shared_ptr<arrow::StructArray> secret_type::array_type::storage() const {
+  return std::static_pointer_cast<arrow::StructArray>(
+    arrow::ExtensionArray::storage());
 }
 
 // -- ip_type ------------------------------------------------------------
@@ -2607,6 +2747,7 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2678,6 +2819,7 @@ size_t record_type::num_leaves() const noexcept {
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2736,6 +2878,7 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2801,6 +2944,7 @@ generator<offset> record_type::resolve_key_or_concept(
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2940,6 +3084,7 @@ record_type::resolve_key_suffix(std::string_view key,
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -3052,6 +3197,7 @@ generator<offset> record_type::resolve_type_extractor(
         TENZIR_MATCH(time)
         TENZIR_MATCH(string)
         TENZIR_MATCH(blob)
+        TENZIR_MATCH(secret)
         TENZIR_MATCH(ip)
         TENZIR_MATCH(subnet)
         TENZIR_MATCH(enumeration)
@@ -3186,6 +3332,7 @@ size_t record_type::flat_index(const offset& index) const noexcept {
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
       case fbs::type::Type::blob_type:
+      case fbs::type::Type::secret_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
