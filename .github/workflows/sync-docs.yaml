@@ -31,7 +31,7 @@ jobs:
           cd docs
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add tenzir.yaml.example
+          git add --update
           if ! git diff --cached --quiet; then
             git commit -m "Sync files from tenzir/tenzir"
             git push
