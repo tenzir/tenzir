@@ -2,9 +2,6 @@ name: Sync files to docs repo
 
 on:
   push:
-    paths:
-      - tenzir.yaml.example
-      - web/openapi/openapi.yaml
     branches:
       - main
 
