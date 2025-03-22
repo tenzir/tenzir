@@ -12,9 +12,6 @@ setup() {
 }
 
 @test "invalid fluent-bit plugin" {
-  if [ -n ${NIX_PROFILE} ]; then
-    skip "Observed to produce empty output in the Linux Nix CI"
-  fi
   check ! tenzir 'fluent-bit please-do-not-crash'
 }
 

@@ -403,6 +403,9 @@ private:
       diagnostic::error("failed to create Fluent Bit context").emit(dh);
       return {};
     }
+    // Initialize some TLS variables. If we don't do this we get a bad `free`
+    // call in flb_destroy in case we try to use a plugin that does not exists.
+    flb_sched_ctx_init();
     // Start with a less noisy log level.
     if (flb_service_set(ctx, "log_level", "error", nullptr) != 0) {
       diagnostic::error("failed to adjust Fluent Bit log_level").emit(dh);
