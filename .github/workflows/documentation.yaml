@@ -1,4 +1,4 @@
-name: Sync files to docs repo
+name: Documentation
 
 on:
   push:
@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  sync-file:
+  sync:
+    name: Synchronize
     runs-on: ubuntu-latest
     steps:
       - name: Checkout tenzir/tenzir repo
