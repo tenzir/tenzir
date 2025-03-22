@@ -335,11 +335,6 @@ public:
 
   ~engine() {
     if (ctx_ != nullptr) {
-      // Workaround an uninitialized thread-local pointer that causes a bad
-      // `free`.
-      if (not started_) {
-        start();
-      }
       stop();
       flb_destroy(ctx_);
     }
@@ -408,6 +403,9 @@ private:
       diagnostic::error("failed to create Fluent Bit context").emit(dh);
       return {};
     }
+    // Initialize some TLS variables. If we don't do this we get a bad `free`
+    // call in flb_destroy in case we try to use a plugin that does not exists.
+    flb_sched_ctx_init();
     // Start with a less noisy log level.
     if (flb_service_set(ctx, "log_level", "error", nullptr) != 0) {
       diagnostic::error("failed to adjust Fluent Bit log_level").emit(dh);
@@ -500,10 +498,10 @@ private:
     TENZIR_DEBUG("starting Fluent Bit engine");
     auto ret = flb_start(ctx_);
     if (ret == 0) {
-      started_ = true;
+      running_ = true;
       return {};
     }
-    return diagnostic::error("failed to start engine")
+    return diagnostic::error("failed to start fluentbit engine")
       .note("return code `{}`", ret)
       .done();
   }
@@ -511,8 +509,9 @@ private:
   /// Stops the engine.
   auto stop() -> bool {
     TENZIR_ASSERT(ctx_ != nullptr);
-    if (not started_) {
-      TENZIR_DEBUG("discarded attempt to stop unstarted engine");
+    if (not running_) {
+      TENZIR_DEBUG(
+        "ignoring `stop()` for since the engine was not started successfully");
       return false;
     }
     TENZIR_DEBUG("stopping Fluent Bit engine");
@@ -522,15 +521,15 @@ private:
     }
     auto ret = flb_stop(ctx_);
     if (ret == 0) {
-      started_ = false;
+      running_ = false;
       return true;
     }
-    TENZIR_ERROR("failed to stop engine ({})", ret);
+    TENZIR_ERROR("failed to stop fluentbit engine ({})", ret);
     return false;
   }
 
   flb_ctx_t* ctx_{nullptr}; ///< Fluent Bit context
-  bool started_{false};     ///< Engine started/stopped status.
+  bool running_{false};     ///< Engine started/stopped status.
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
   std::chrono::milliseconds poll_interval_{}; ///< How fast we check FB
   size_t num_stop_polls_{0};      ///< Number of polls in the destructor
@@ -639,12 +638,12 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<table_slice>
     requires enable_source
   {
+    co_yield {};
     auto engine
       = engine::make_source(operator_args_, config_, ctrl.diagnostics());
     if (not engine) {
       co_return;
     }
-    co_yield {};
     auto dh = transforming_diagnostic_handler{
       ctrl.diagnostics(),
       [&](diagnostic d) {
