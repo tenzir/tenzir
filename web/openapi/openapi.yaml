@@ -612,6 +612,11 @@ paths:
                   example: 200ms
                   default: 5s
                   description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 10 seconds.
+                schema:
+                  type: string
+                  example: exact
+                  default: legacy
+                  description: The output format in which schemas are represented. Must be one of "legacy", "exact", or "never". Use "exact" to switch to a type representation matching Tenzir's type system exactly, and "never" to omit schema schema definitions from the output entirely.
       responses:
         200:
           description: Success.
