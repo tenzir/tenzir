@@ -249,7 +249,7 @@ private:
   exec::operator_stop_actor operator_stop_;
 };
 
-class version_bp final : public bp::operator_base {
+class version_bp final : public plan::operator_base {
 public:
   version_bp() = default;
 
@@ -282,7 +282,7 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     TENZIR_UNUSED(ctx);
     return std::make_unique<version_bp>();
   }
@@ -337,5 +337,5 @@ TENZIR_REGISTER_PLUGIN(
   tenzir::inspection_plugin<tenzir::ir::operator_base,
                             tenzir::plugins::version::version_ir>);
 TENZIR_REGISTER_PLUGIN(
-  tenzir::inspection_plugin<tenzir::bp::operator_base,
+  tenzir::inspection_plugin<tenzir::plan::operator_base,
                             tenzir::plugins::version::version_bp>);

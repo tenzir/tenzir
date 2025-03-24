@@ -62,7 +62,7 @@ using internal_pipeline_actor
 
 class pipeline {
 public:
-  pipeline(internal_pipeline_actor::pointer self, bp::pipeline pipe,
+  pipeline(internal_pipeline_actor::pointer self, plan::pipeline pipe,
            pipeline_settings settings,
            std::optional<checkpoint_reader_actor> checkpoint_reader,
            base_ctx ctx)
@@ -161,7 +161,7 @@ private:
         return operators_.back();
       }
     });
-    operators_.push_back(pipe_[index]->spawn(bp::operator_base::spawn_args{
+    operators_.push_back(pipe_[index]->spawn(plan::operator_base::spawn_args{
       self_->system(),
       ctx_,
       std::move(checkpointer),
@@ -392,7 +392,7 @@ private:
   }
 
   internal_pipeline_actor::pointer self_;
-  bp::pipeline pipe_;
+  plan::pipeline pipe_;
   std::optional<checkpoint_reader_actor> checkpoint_reader_;
   base_ctx ctx_;
   std::vector<operator_actor> operators_;
@@ -404,7 +404,7 @@ private:
 
 } // namespace
 
-auto make_pipeline(bp::pipeline pipe, pipeline_settings settings,
+auto make_pipeline(plan::pipeline pipe, pipeline_settings settings,
                    std::optional<checkpoint_reader_actor> checkpoint_reader,
                    base_ctx ctx) -> pipeline_actor {
   return ctx.system().spawn(caf::actor_from_state<pipeline>, std::move(pipe),

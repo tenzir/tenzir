@@ -13,6 +13,7 @@
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plan/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -42,7 +43,7 @@ public:
   }
 };
 
-class head_bp final : public bp::operator_base {
+class head_bp final : public plan::operator_base {
 public:
   explicit head_bp(int64_t count) : count_{count} {
   }
@@ -99,7 +100,7 @@ public:
     return operator_type2{tag_v<table_slice>};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
     return std::make_unique<head_bp>(as<int64_t>(count_));
   }

@@ -13,7 +13,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/uuid.hpp"
 
-namespace tenzir::bp {
+namespace tenzir::plan {
 
 /// Configured instance of an operator that is ready for execution.
 ///
@@ -62,55 +62,4 @@ auto inspect(auto& f, operator_ptr& x) -> bool {
   return plugin_inspect(f, x);
 }
 
-/// An executable pipeline is just a sequence of executable operators.
-///
-/// TODO: Can we assume that it is well-typed?
-class pipeline {
-public:
-  pipeline() = default;
-
-  explicit(false) pipeline(std::vector<operator_ptr> operators)
-    : operators_{std::move(operators)} {
-  }
-
-  template <std::derived_from<operator_base> T>
-  explicit(false) pipeline(std::unique_ptr<T> ptr) {
-    operators_.push_back(std::move(ptr));
-  }
-
-  auto begin() {
-    return operators_.begin();
-  }
-
-  auto end() {
-    return operators_.end();
-  }
-
-  auto unwrap() && -> std::vector<operator_ptr> {
-    return std::move(operators_);
-  }
-
-  auto operator[](size_t index) -> operator_ptr& {
-    return operators_[index];
-  }
-
-  auto id() const -> uuid {
-    return id_;
-  }
-
-  auto size() const -> size_t {
-    return operators_.size();
-  }
-
-  friend auto inspect(auto& f, pipeline& x) -> bool {
-    // TODO: Tests?
-    return f.object(x).fields(f.field("id", x.id_),
-                              f.field("operators", x.operators_));
-  }
-
-private:
-  uuid id_ = uuid::random();
-  std::vector<operator_ptr> operators_;
-};
-
-}; // namespace tenzir::bp
+}; // namespace tenzir::plan

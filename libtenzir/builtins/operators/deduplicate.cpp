@@ -735,7 +735,7 @@ private:
   configuration2 cfg_;
 };
 
-class deduplicate_bp final : public bp::operator_base {
+class deduplicate_bp final : public plan::operator_base {
 public:
   explicit deduplicate_bp(configuration2 cfg) : cfg_{std::move(cfg)} {
   }

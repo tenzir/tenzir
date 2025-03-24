@@ -160,7 +160,7 @@ public:
     exec::operator_actor::pointer self,
     detail::unique_function<auto(actor_state&)->std::unique_ptr<stateless_base>>
       impl,
-    bp::operator_base::spawn_args args)
+    plan::operator_base::spawn_args args)
     : self_{self},
       state_{args.ctx, self, std::move(args.checkpoint_receiver),
              std::move(args.operator_shutdown), std::move(args.operator_stop)},
@@ -320,7 +320,7 @@ private:
 };
 
 template <class T, class... Ts>
-auto spawn_operator(bp::operator_base::spawn_args args,
+auto spawn_operator(plan::operator_base::spawn_args args,
                     typename T::state_type state, Ts&&... xs)
   -> exec::operator_actor {
   if (args.restore) {

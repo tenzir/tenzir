@@ -491,8 +491,8 @@ class plugin final : public virtual operator_plugin<python_operator>,
 public:
   struct config config = {};
 
-  auto initialize(const record& plugin_config,
-                  const record& /*global_config*/) -> caf::error override {
+  auto initialize(const record& plugin_config, const record& /*global_config*/)
+    -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
     if (!create_virtualenv) {

@@ -160,7 +160,7 @@ private:
   exec::operator_shutdown_actor operator_shutdown_;
 };
 
-class discard_bp final : public bp::operator_base {
+class discard_bp final : public plan::operator_base {
 public:
   discard_bp() = default;
 
@@ -193,7 +193,7 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     TENZIR_UNUSED(ctx);
     return std::make_unique<discard_bp>();
   }
@@ -248,5 +248,5 @@ TENZIR_REGISTER_PLUGIN(
   tenzir::inspection_plugin<tenzir::ir::operator_base,
                             tenzir::plugins::discard::discard_ir>);
 TENZIR_REGISTER_PLUGIN(
-  tenzir::inspection_plugin<tenzir::bp::operator_base,
+  tenzir::inspection_plugin<tenzir::plan::operator_base,
                             tenzir::plugins::discard::discard_bp>);

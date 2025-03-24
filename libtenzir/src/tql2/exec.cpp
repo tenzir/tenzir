@@ -8,7 +8,6 @@
 
 #include "tenzir/tql2/exec.hpp"
 
-#include "tenzir/bp.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -17,6 +16,7 @@
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plan/operator.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -410,7 +410,7 @@ auto exec_restore(std::span<const std::byte> bp_chunk,
                   exec::checkpoint_reader_actor checkpoint_reader, base_ctx ctx)
   -> failure_or<void> {
   auto f = caf::binary_deserializer{bp_chunk};
-  auto pipe_bp = bp::pipeline{};
+  auto pipe_bp = plan::pipeline{};
   auto ok = f.apply(pipe_bp);
   TENZIR_ASSERT(ok);
   auto exec = exec::make_pipeline(std::move(pipe_bp), exec::pipeline_settings{},

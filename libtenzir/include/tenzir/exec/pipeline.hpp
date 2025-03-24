@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "tenzir/bp.hpp"
 #include "tenzir/exec/checkpoint_reader.hpp"
 #include "tenzir/exec/pipeline_settings.hpp"
+#include "tenzir/plan/pipeline.hpp"
 
 namespace tenzir::exec {
 
@@ -30,7 +30,7 @@ using pipeline_actor = caf::typed_actor<pipeline_actor_traits>;
 /// Create a new pipeline executor.
 ///
 /// If `checkpoint_reader` is set, then the pipeline will be restored.
-auto make_pipeline(bp::pipeline pipe, pipeline_settings settings,
+auto make_pipeline(plan::pipeline pipe, pipeline_settings settings,
                    std::optional<checkpoint_reader_actor> checkpoint_reader,
                    base_ctx ctx) -> pipeline_actor;
 

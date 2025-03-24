@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/bp.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/exec/pipeline.hpp>
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/plan/operator.hpp>
 #include <tenzir/substitute_ctx.hpp>
 
 #include <caf/actor_from_state.hpp>
@@ -84,7 +84,8 @@ private:
     }
   };
 
-  auto make_group(ast::constant::kind group) const -> failure_or<bp::pipeline> {
+  auto make_group(ast::constant::kind group) const
+    -> failure_or<plan::pipeline> {
     auto env = std::unordered_map<let_id, ast::constant::kind>{};
     env[id_] = std::move(group);
     auto copy = pipe_;
@@ -102,7 +103,7 @@ private:
   base_ctx ctx_;
 };
 
-class group_bp final : public bp::operator_base {
+class group_bp final : public plan::operator_base {
 public:
   group_bp() = default;
 
@@ -151,7 +152,7 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
     return std::make_unique<group_bp>(std::move(over_), std::move(pipe_), id_);
   }
@@ -187,7 +188,7 @@ public:
 };
 
 using group_ir_plugin = inspection_plugin<ir::operator_base, group_ir>;
-using group_exec_plugin = inspection_plugin<bp::operator_base, group_bp>;
+using group_exec_plugin = inspection_plugin<plan::operator_base, group_bp>;
 
 } // namespace
 

@@ -8,9 +8,9 @@
 
 #include "tenzir/ir.hpp"
 
-#include "tenzir/bp.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/finalize_ctx.hpp"
+#include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -39,11 +39,11 @@ auto make_where_ir(ast::expression filter) -> ir::operator_ptr {
 
 } // namespace
 
-class if_exec final : public bp::operator_base {
+class if_exec final : public plan::operator_base {
 public:
   if_exec() = default;
 
-  if_exec(ast::expression condition, bp::pipeline then_, bp::pipeline else_)
+  if_exec(ast::expression condition, plan::pipeline then_, plan::pipeline else_)
     : condition_{std::move(condition)},
       then_{std::move(then_)},
       else_{std::move(else_)} {
@@ -61,8 +61,8 @@ public:
 
 private:
   ast::expression condition_;
-  bp::pipeline then_;
-  bp::pipeline else_;
+  plan::pipeline then_;
+  plan::pipeline else_;
 };
 
 class if_ir final : public ir::operator_base {
@@ -101,9 +101,9 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     TRY(auto then_instance, std::move(then_).finalize(ctx));
-    auto else_instance = bp::pipeline{};
+    auto else_instance = plan::pipeline{};
     if (else_) {
       TRY(else_instance, std::move(else_->pipe).finalize(ctx));
     }
@@ -152,7 +152,7 @@ private:
   std::optional<else_t> else_;
 };
 
-class legacy_bp final : public bp::operator_base {
+class legacy_bp final : public plan::operator_base {
 public:
   legacy_bp() = default;
 
@@ -212,11 +212,11 @@ public:
     return {};
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
     auto op = as<operator_ptr>(std::move(state_));
     if (auto pipe = dynamic_cast<pipeline*>(op.get())) {
-      auto result = std::vector<bp::operator_ptr>{};
+      auto result = std::vector<plan::operator_ptr>{};
       for (auto& op : std::move(*pipe).unwrap()) {
         result.push_back(std::make_unique<legacy_bp>(std::move(op)));
       }
@@ -327,9 +327,9 @@ namespace {
 auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::operator_base, legacy_ir>{},
-    new inspection_plugin<bp::operator_base, legacy_bp>{},
+    new inspection_plugin<plan::operator_base, legacy_bp>{},
     new inspection_plugin<ir::operator_base, if_ir>{},
-    new inspection_plugin<bp::operator_base, if_exec>{},
+    new inspection_plugin<plan::operator_base, if_exec>{},
   };
   for (auto y : x) {
     auto ptr = plugin_ptr::make_builtin(y,
@@ -482,7 +482,7 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> {
+auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> {
   // TODO: Assert that we were instantiated, or instantiate ourselves?
   TENZIR_ASSERT(lets.empty());
   auto opt = std::move(*this).optimize(optimize_filter{}, event_order::ordered);
@@ -494,7 +494,7 @@ auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> {
                                      make_where_ir(expr));
   }
   *this = std::move(opt.replacement);
-  auto result = std::vector<bp::operator_ptr>{};
+  auto result = std::vector<plan::operator_ptr>{};
   for (auto& op : operators) {
     TRY(auto ops, std::move(*op).finalize(ctx));
     result.insert(result.end(), std::move_iterator{ops.begin()},

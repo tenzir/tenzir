@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/bp.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -19,6 +18,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plan/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -345,7 +345,7 @@ private:
 };
 using cron_plugin = scheduled_execution_plugin<cron_scheduler>;
 
-class every_exec final : public bp::operator_base {
+class every_exec final : public plan::operator_base {
 public:
   every_exec() = default;
 
@@ -364,7 +364,7 @@ public:
 
 private:
   // TODO: This needs to be part of the actor.
-  auto start_new(base_ctx ctx) const -> failure_or<bp::pipeline> {
+  auto start_new(base_ctx ctx) const -> failure_or<plan::pipeline> {
     auto copy = pipe_;
     TRY(copy.substitute(substitute_ctx{ctx, nullptr}, true));
     // TODO: Where is the type check?
@@ -375,7 +375,7 @@ private:
   ir::pipeline pipe_;
 };
 
-using every_exec_plugin = inspection_plugin<bp::operator_base, every_exec>;
+using every_exec_plugin = inspection_plugin<plan::operator_base, every_exec>;
 
 class every_ir final : public ir::operator_base {
 public:
@@ -389,7 +389,7 @@ public:
     return "every_ir";
   }
 
-  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
     // TODO: Test the instantiation of the subpipeline? But in general,
     // instantiation is done later by the actor.

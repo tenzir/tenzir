@@ -8,7 +8,6 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
-#include <tenzir/bp.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -26,6 +25,7 @@
 #include <tenzir/modules.hpp>
 #include <tenzir/null_bitmap.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/plan/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -774,7 +774,7 @@ private:
 };
 
 // TODO: Don't want to write this fully ourselves.
-class where_exec final : public bp::operator_base {
+class where_exec final : public plan::operator_base {
 public:
   where_exec() = default;
 
@@ -823,7 +823,7 @@ public:
 
   // TODO: Should this get the type of the input?
   // Or do we get it earlier? Or later?
-  auto finalize(finalize_ctx ctx) && -> failure_or<bp::pipeline> override {
+  auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
     return std::make_unique<where_exec>(std::move(predicate_));
   }
@@ -856,7 +856,7 @@ private:
 };
 
 TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::operator_base, where_ir>)
-TENZIR_REGISTER_PLUGIN(inspection_plugin<bp::operator_base, where_exec>)
+TENZIR_REGISTER_PLUGIN(inspection_plugin<plan::operator_base, where_exec>)
 
 class where_plugin final : public virtual operator_factory_plugin,
                            public virtual function_plugin,
