@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/bp.hpp"
+#include "tenzir/exec/pipeline_settings.hpp"
 
 namespace tenzir::exec {
 
@@ -30,16 +31,6 @@ struct checkpoint_reader_traits {
 };
 
 using checkpoint_reader_actor = caf::typed_actor<checkpoint_reader_traits>;
-
-struct pipeline_settings {
-  /// Must be greater than zero.
-  duration checkpoint_interval = std::chrono::seconds{10};
-
-  /// How many checkpoints may be in flight at a given time.
-  ///
-  /// When set to zero, checkpointing is disabled.
-  uint64_t checkpoints_in_flight = 1;
-};
 
 /// Create a new pipeline executor.
 ///
