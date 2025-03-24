@@ -8,8 +8,8 @@
 
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
+#include "tenzir/exec/operator.hpp"
 #include "tenzir/finalize_ctx.hpp"
-#include "tenzir/operator_actor.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/argument_parser.hpp>

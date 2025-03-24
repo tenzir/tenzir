@@ -9,7 +9,7 @@
 #pragma once
 
 #include "tenzir/base_ctx.hpp"
-#include "tenzir/operator_actor.hpp"
+#include "tenzir/exec/operator.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/uuid.hpp"
 

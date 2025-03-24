@@ -10,7 +10,7 @@
 
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
-#include "tenzir/operator_actor.hpp"
+#include "tenzir/exec/operator.hpp"
 
 #include <caf/actor_from_state.hpp>
 #include <caf/async/producer_adapter.hpp>
