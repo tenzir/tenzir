@@ -422,7 +422,6 @@ auto exec_restore(std::span<const std::byte> bp_chunk,
 
 auto exec2(std::string_view source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
-  TENZIR_UNUSED(sys);
   auto result = std::invoke([&]() -> failure_or<bool> {
     auto provider = session_provider::make(dh);
     auto ctx = provider.as_session();
