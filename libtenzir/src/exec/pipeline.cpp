@@ -47,24 +47,22 @@ private:
   uint64_t index_;
 };
 
-struct pipeline_executor_trait {
-  using signatures = detail::tl_concat_t<
-    //
-    pipeline_actor::signatures,
-    caf::type_list<
-      // Sent by all operators to let the executor know it's done.
-      auto(atom::done)->caf::result<void>,
-      // Sent by the first operator when it needs no more input (?).
-      auto(atom::stop)->caf::result<void>
-      //
-      >>;
+struct internal_pipeline_actor_traits {
+  using signatures = caf::type_list<
+    // Sent by all operators to let the executor know it's done.
+    auto(atom::done)->caf::result<void>,
+    // Sent by the first operator when it needs no more input (?).
+    auto(atom::stop)->caf::result<void>>
+    // Support the public interface of the pipeline actor.
+    ::append_from<pipeline_actor::signatures>;
 };
 
-using pipeline_executor_actor = caf::typed_actor<pipeline_executor_trait>;
+using internal_pipeline_actor
+  = caf::typed_actor<internal_pipeline_actor_traits>;
 
 class pipeline {
 public:
-  pipeline(pipeline_executor_actor::pointer self, bp::pipeline pipe,
+  pipeline(internal_pipeline_actor::pointer self, bp::pipeline pipe,
            pipeline_settings settings,
            std::optional<checkpoint_reader_actor> checkpoint_reader,
            base_ctx ctx)
@@ -75,7 +73,7 @@ public:
       settings_{std::move(settings)} {
   }
 
-  auto make_behavior() -> pipeline_executor_actor::behavior_type {
+  auto make_behavior() -> internal_pipeline_actor::behavior_type {
     return {
       [this](atom::start) -> caf::result<void> {
         return start();
@@ -346,7 +344,8 @@ private:
     spawn([this, rp]() mutable {
       auto [c, p] = caf::async::make_spsc_buffer_resource<message<void>>();
       auto producer = caf::async::make_producer_adapter(
-        std::move(p), self_, caf::make_action([] {}), caf::make_action([] {}));
+        std::move(p), self_, caf::make_action([] { /* on resume */ }),
+        caf::make_action([] { /* on cancel */ }));
       TENZIR_ASSERT(producer);
       producer_ = std::move(*producer);
       if (settings_.checkpoints_in_flight > 0) {
@@ -392,7 +391,7 @@ private:
     return rp;
   }
 
-  pipeline_executor_actor::pointer self_;
+  internal_pipeline_actor::pointer self_;
   bp::pipeline pipe_;
   std::optional<checkpoint_reader_actor> checkpoint_reader_;
   base_ctx ctx_;
