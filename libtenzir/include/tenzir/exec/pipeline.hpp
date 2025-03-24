@@ -23,8 +23,6 @@ struct pipeline_actor_traits {
 
 using pipeline_actor = caf::typed_actor<pipeline_actor_traits>;
 
-enum class restore { yes, no };
-
 struct checkpoint_reader_traits {
   using signatures
     = caf::type_list<auto(uuid id, uint64_t index)->caf::result<chunk_ptr>>;
