@@ -43,20 +43,20 @@ public:
   }
 };
 
-class head_bp final : public plan::operator_base {
+class head_plan final : public plan::operator_base {
 public:
-  explicit head_bp(int64_t count) : count_{count} {
+  explicit head_plan(int64_t count) : count_{count} {
   }
 
   auto name() const -> std::string override {
-    return "head_bp";
+    return "head_plan";
   }
 
   auto spawn(spawn_args args) const -> exec::operator_actor override {
     return exec::spawn_operator<head_exec>(std::move(args), count_);
   }
 
-  friend auto inspect(auto& f, head_bp& x) -> bool {
+  friend auto inspect(auto& f, head_plan& x) -> bool {
     return f.apply(x.count_);
   }
 
@@ -102,7 +102,7 @@ public:
 
   auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
-    return std::make_unique<head_bp>(as<int64_t>(count_));
+    return std::make_unique<head_plan>(as<int64_t>(count_));
   }
 
   friend auto inspect(auto& f, head_ir& x) -> bool {
@@ -111,151 +111,6 @@ public:
 
 private:
   variant<ast::expression, int64_t> count_;
-};
-
-// FIXME: Remove this. Just here for completeness right now.
-class manual_head_implementation {
-public:
-  manual_head_implementation(exec::operator_actor::pointer self,
-                             exec::checkpoint_receiver_actor checkpoint_receiver,
-                             exec::operator_shutdown_actor operator_shutdown,
-                             exec::operator_stop_actor operator_stop,
-                             base_ctx ctx, uint64_t count, uint64_t seen)
-    : self_{self},
-      checkpoint_receiver_{std::move(checkpoint_receiver)},
-      operator_shutdown_{std::move(operator_shutdown)},
-      operator_stop_{std::move(operator_stop)},
-      ctx_{ctx},
-      count_{count},
-      seen_{seen} {
-  }
-
-  auto start(exec::handshake hs) -> caf::result<exec::handshake_response> {
-    return match(
-      std::move(hs.input),
-      [&](exec::stream<void>) {
-        TENZIR_TODO();
-        return exec::handshake_response{};
-      },
-      [&](exec::stream<table_slice> s) {
-        auto output = run(self_->observe(std::move(s), 10, 30))
-                        .to_typed_stream("output-stream",
-                                         std::chrono::milliseconds{1}, 1);
-        return exec::handshake_response{std::move(output)};
-      });
-  }
-
-  auto run(exec::observable<table_slice> input)
-    -> exec::observable<table_slice> {
-    // TODO: Does this guarantee sequencing?
-    return input.concat_map(
-      [this](exec::message<table_slice> msg) -> exec::observable<table_slice> {
-        return match(
-          msg,
-          [&](table_slice slice) -> exec::observable<table_slice> {
-            // TODO: If this would be async, how do we ensure that we finish
-            // processing it before we serialize?
-            if (seen_ == count_) {
-              return self_->make_observable()
-                .empty<exec::message<table_slice>>()
-                .as_observable();
-            }
-            TENZIR_ASSERT(seen_ < count_);
-            auto left = detail::narrow<uint64_t>(count_ - seen_);
-            auto result = subslice(slice, 0, std::min(left, slice.rows()));
-            seen_ += result.rows();
-            auto output = std::vector<exec::message<table_slice>>{};
-            output.emplace_back(std::move(result));
-            if (seen_ == count_) {
-              // TODO: Do we want to wait until the diagnostic arrived? How does
-              // this interact with checkpointing?
-              // Maybe: We don't care right now.
-              // Alternative: If diagnostics are considered observable behavior
-              // that needs to be rolled back or awaited for…
-              diagnostic::warning("wow, we got so many events").emit(ctx_);
-              // The first time we reach this, we also emit `exhausted`.
-              output.emplace_back(exec::exhausted{});
-              // And we also signal the previous operator that we are done.
-            }
-            return self_->make_observable()
-              .from_container(std::move(output))
-              .as_observable();
-          },
-          [&](exec::checkpoint checkpoint) -> exec::observable<table_slice> {
-            // TODO: How do we ensure that we processed all previous messages?
-            // Async save... Does this need to block incoming messages? Yes!
-            auto buffer = std::vector<std::byte>{};
-            auto serializer = caf::binary_serializer{buffer};
-            // TODO: Just `seen_`?
-            auto ok = serializer.apply(seen_);
-            TENZIR_ASSERT(ok);
-            auto chunk = chunk::make(std::move(buffer));
-            return self_->mail(checkpoint, std::move(chunk))
-              .request(checkpoint_receiver_, caf::infinite)
-              .as_observable()
-              .map([checkpoint](caf::unit_t) -> exec::message<table_slice> {
-                return checkpoint;
-              })
-              .as_observable();
-          },
-          [&](exec::exhausted exhausted) -> exec::observable<table_slice> {
-            TENZIR_WARN("head received exhausted");
-            self_->mail(atom::done_v)
-              .request(operator_shutdown_, caf::infinite)
-              .then([] {});
-            self_->mail(atom::stop_v)
-              .request(operator_stop_, caf::infinite)
-              .then([] {});
-            return self_->make_observable()
-              .just(exec::message<table_slice>{exhausted})
-              .as_observable();
-          });
-      });
-  }
-
-  auto post_commit(exec::checkpoint checkpoint) -> caf::result<void> {
-    (void)checkpoint;
-    // Let's say we are kafka.
-    // auto map = std::unordered_map<exec::checkpoint, int64_t>{};
-    // auto it = map.find(checkpoint);
-    // // TODO: Are we guaranteed that we previously tried to checkpoint this?
-    // // TODO: Are we guaranteed that this gets called for every checkpoint?
-    // TENZIR_ASSERT(it != map.end());
-    // TENZIR_WARN("committing {}", it->second);
-    // map.erase(it);
-    return {};
-  }
-
-  auto stop() -> caf::result<void> {
-    // The subsequent operator doesn't want any new input... Since `head` doesn't
-    // create output out of thin air, we just tell our predecessor about it.
-    // TODO: Or do we also from now on drop all output?
-    TENZIR_TODO();
-  }
-
-  auto make_behavior() -> exec::operator_actor::behavior_type {
-    return {
-      [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
-        return start(std::move(hs));
-      },
-      [this](exec::checkpoint checkpoint) -> caf::result<void> {
-        return post_commit(checkpoint);
-      },
-      [this](atom::stop) -> caf::result<void> {
-        return stop();
-      },
-    };
-  }
-
-private:
-  exec::operator_actor::pointer self_;
-  exec::checkpoint_receiver_actor checkpoint_receiver_;
-  exec::operator_shutdown_actor operator_shutdown_;
-  exec::operator_stop_actor operator_stop_;
-  base_ctx ctx_; // <-- assume we need a way to emit diags
-
-  uint64_t count_; // <-- this should be immutable…
-  uint64_t seen_;  // <-- this should be mutable…
 };
 
 class plugin final : public virtual operator_parser_plugin,
