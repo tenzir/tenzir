@@ -1,6 +1,6 @@
 # type_id
 
-Retrieves the type of an expression.
+Retrieves the type id of an expression.
 
 ```tql
 type_id(x:any) -> string
@@ -8,7 +8,7 @@ type_id(x:any) -> string
 
 ## Description
 
-The `type_id` function returns the type of the given value `x`.
+The `type_id` function returns the type id of the given value `x`.
 
 ## Examples
 
@@ -21,3 +21,7 @@ from {x: type_id(1 + 3.2)}
 ```tql
 {x: "41615fdb30a38aaf"}
 ```
+
+## See also
+
+[`type_of`](type_of.md)
