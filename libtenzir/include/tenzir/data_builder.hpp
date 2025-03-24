@@ -83,23 +83,24 @@ struct enriched_dummy {};
 // dummies
 // clang-format off
 using field_type_list = detail::type_list<
-  caf::none_t,
-  bool,
-  int64_t,
-  uint64_t,
-  double,
-  duration,
-  time,
-  std::string,
-  pattern_dummy,
-  ip,
-  subnet,
-  enumeration,
-  node_list,
-  map_dummy,
-  node_record,
-  enriched_dummy,
-  blob
+  /* 0 */ caf::none_t,
+  /* 1 */ bool,
+  /* 2 */ int64_t,
+  /* 3 */ uint64_t,
+  /* 4 */ double,
+  /* 5 */ duration,
+  /* 6 */ time,
+  /* 7 */ std::string,
+  /* 8 */ pattern_dummy,
+  /* 9 */ ip,
+  /*10 */ subnet,
+  /*11 */ enumeration,
+  /*12 */ node_list,
+  /*13 */ map_dummy,
+  /*14 */ node_record,
+  /*15 */ enriched_dummy,
+  /*16 */ blob,
+  /*17 */ secret
 >;
 // clang-format on
 

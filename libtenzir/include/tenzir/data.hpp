@@ -21,6 +21,7 @@
 #include "tenzir/ip.hpp"
 #include "tenzir/merge_lists.hpp"
 #include "tenzir/pattern.hpp"
+#include "tenzir/secret.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/time.hpp"
 #include "tenzir/variant.hpp"
@@ -64,7 +65,7 @@ constexpr auto to_data_type() {
     return std::string{};
   } else if constexpr (detail::is_any_v<T, caf::none_t, int64_t, duration, time,
                                         pattern, ip, subnet, list, map, record,
-                                        blob>) {
+                                        blob, secret>) {
     return T{};
   } else {
     return invalid_data_type{};
@@ -109,7 +110,8 @@ public:
     list,
     map,
     record,
-    blob
+    blob,
+    secret
   >;
   // clang-format on
 
