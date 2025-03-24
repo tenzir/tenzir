@@ -16,9 +16,12 @@ namespace tenzir::exec {
 
 struct pipeline_actor_traits {
   using signatures = caf::type_list<
-    //
+    // Starts the pipeline, returning after the pipeline's startup sequence has
+    // completed. This handler requires the pipeline to be closed.
     auto(atom::start)->caf::result<void>,
-    //
+    // Starts the pipeline with an existing handshake. The handshake's type must
+    // match the pipeline's input type. The handler returns the handshake from
+    // the pipeline's last operator.
     auto(atom::start, handshake hs)->caf::result<handshake_response>>;
 };
 
