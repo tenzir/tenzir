@@ -828,8 +828,8 @@ public:
     return std::make_unique<where_exec>(std::move(predicate_));
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
     if (input.is_not<table_slice>()) {
       // TODO: Do not duplicate these messages across the codebase.
       diagnostic::error("operator expects events").primary(self_).emit(dh);

@@ -198,8 +198,8 @@ public:
     return std::make_unique<discard_bp>();
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler&) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler&) const
+    -> failure_or<std::optional<element_type_tag>> override {
     TENZIR_ASSERT(input == tag_v<table_slice>);
     return tag_v<void>;
   }

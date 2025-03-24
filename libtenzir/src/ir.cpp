@@ -112,8 +112,8 @@ public:
                                      std::move(else_instance));
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
     TRY(auto then_ty, then_.infer_type(input, dh));
     auto else_ty = std::optional{input};
     if (else_) {
@@ -225,8 +225,8 @@ public:
     return std::make_unique<legacy_bp>(std::move(op));
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
     auto op = try_as<operator_ptr>(state_);
     if (not op) {
       return std::nullopt;
@@ -246,7 +246,7 @@ public:
         .emit(dh);
       return failure::promise();
     }
-    return match(*legacy_output, [](auto x) -> operator_type2 {
+    return match(*legacy_output, [](auto x) -> element_type_tag {
       return x;
     });
   }
@@ -503,9 +503,9 @@ auto ir::pipeline::finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> {
   return std::move(result);
 }
 
-auto ir::pipeline::infer_type(operator_type2 input,
+auto ir::pipeline::infer_type(element_type_tag input,
                               diagnostic_handler& dh) const
-  -> failure_or<std::optional<operator_type2>> {
+  -> failure_or<std::optional<element_type_tag>> {
   for (auto& op : operators) {
     TRY(auto output, op->infer_type(input, dh));
     TRY(input, output);
@@ -570,9 +570,9 @@ auto ir::operator_base::move() && -> operator_ptr {
   return copy();
 }
 
-auto ir::operator_base::infer_type(operator_type2 input,
+auto ir::operator_base::infer_type(element_type_tag input,
                                    diagnostic_handler& dh) const
-  -> failure_or<std::optional<operator_type2>> {
+  -> failure_or<std::optional<element_type_tag>> {
   // TODO: Is this a good default to have? Should probably be pure virtual.
   (void)input, (void)dh;
   return std::nullopt;

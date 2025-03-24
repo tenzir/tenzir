@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/element_type.hpp"
 #include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -15,11 +16,6 @@
 #include <vector>
 
 namespace tenzir {
-
-/// The type of the input or output of an operator.
-struct operator_type2 : tag_variant<void, table_slice, chunk_ptr> {
-  using tag_variant::tag_variant;
-};
 
 namespace ir {
 
@@ -49,8 +45,8 @@ public:
   /// The operator is responsible to report any type mismatches. If the
   /// operator could potentially accept the given input type, but the output
   /// type is not known yet, then `std::nullopt` may be returned.
-  virtual auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>>;
+  virtual auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>>;
 
   /// Substitute variables from the context and potentially instantiate `this`.
   ///
@@ -177,8 +173,8 @@ struct pipeline {
   auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline>;
 
   /// @see operator_base
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>>;
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>>;
 
   /// @see operator_base
   auto

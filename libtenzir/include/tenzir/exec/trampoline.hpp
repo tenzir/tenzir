@@ -33,7 +33,7 @@ public:
 
   virtual auto disposed() const noexcept -> bool = 0;
 
-  virtual void do_dispose(bool from_external)  = 0;
+  virtual void do_dispose(bool from_external) = 0;
 };
 
 template <class Input, class Output>

@@ -92,12 +92,12 @@ public:
     return {};
   }
 
-  auto infer_type(operator_type2 input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<operator_type2>> override {
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override {
     // TODO!
     (void)dh;
     TENZIR_ASSERT(input.is<table_slice>());
-    return operator_type2{tag_v<table_slice>};
+    return element_type_tag{tag_v<table_slice>};
   }
 
   auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
