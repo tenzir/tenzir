@@ -127,6 +127,7 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 |:------ |:-------- |:------- |
 | `abfs`,`abfss` | [`load_azure_blob_storage`](load_azure_blob_storage.md) | `from "abfs://path/to/file.json"` |
 | `amqp` | [`load_amqp`](load_amqp.md) | `from "amqp://…` |
+| `elasticsearch` | [`from_opensearch`](from_opensearch.md) | `from "elasticsearch://1.2.3.4:9200` |
 | `file` | [`load_file`](load_file.md) | `from "file://path/to/file.json"` |
 | `fluent-bit` | [`from_fluent_bit`](from_fluent_bit.mdx) | `from "fluent-bit://elasticsearch"` |
 | `ftp`, `ftps` | [`load_ftp`](load_ftp.mdx) | `from "ftp://example.com/file.json"` |
@@ -135,6 +136,7 @@ load_tcp "tcp://0.0.0.0:12345", parallel=10 {
 | `http`, `https` | [`load_http`](load_http.mdx) | `from "http://example.com/file.json"` |
 | `inproc` | [`load_zmq`](load_zmq.md) | `from "inproc://127.0.0.1:56789" { read_json }` |
 | `kafka` | [`load_kafka`](load_kafka.md) | `from "kafka://topic" { read_json }` |
+| `opensearch` | [`from_opensearch`](from_opensearch.md) | `from "opensearch://1.2.3.4:9200` |
 | `s3` | [`load_s3`](load_s3.md) | `from "s3://bucket/file.json"` |
 | `sqs` | [`load_sqs`](load_sqs.md) | `from "sqs://my-queue" { read_json }` |
 | `tcp` | [`load_tcp`](load_tcp.mdx) | `from "tcp://127.0.0.1:13245" { read_json }` |

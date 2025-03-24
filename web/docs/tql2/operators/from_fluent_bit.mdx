@@ -109,12 +109,3 @@ Handle [Splunk](https://docs.fluentbit.io/manual/pipeline/inputs/splunk) HEC req
 ```tql
 from_fluent_bit "splunk", options={port: 8088}
 ```
-
-### ElasticSearch & OpenSearch
-
-Handle [ElasticSearch & OpenSearch](https://docs.fluentbit.io/manual/pipeline/inputs/elasticsearch)
-Bulk API requests or ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat):
-
-```tql
-from_fluent_bit "elasticsearch", options={port: 9200}
-```
