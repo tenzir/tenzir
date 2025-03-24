@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/bp.hpp"
+#include "tenzir/exec/checkpoint_reader.hpp"
 #include "tenzir/exec/pipeline_settings.hpp"
 
 namespace tenzir::exec {
@@ -22,13 +23,6 @@ struct pipeline_actor_traits {
 };
 
 using pipeline_actor = caf::typed_actor<pipeline_actor_traits>;
-
-struct checkpoint_reader_traits {
-  using signatures
-    = caf::type_list<auto(uuid id, uint64_t index)->caf::result<chunk_ptr>>;
-};
-
-using checkpoint_reader_actor = caf::typed_actor<checkpoint_reader_traits>;
 
 /// Create a new pipeline executor.
 ///
