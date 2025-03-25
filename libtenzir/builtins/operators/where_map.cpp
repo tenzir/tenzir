@@ -18,6 +18,7 @@
 #include <tenzir/detail/debug_writer.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/exec/operator_impl.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
@@ -687,113 +688,79 @@ public:
   }
 };
 
-class where_impl {
+class where_exec : public exec::operator_base<ast::expression> {
 public:
-  // For fresh start.
-  where_impl(exec::operator_actor::pointer self,
-             exec::checkpoint_receiver_actor checkpoint_receiver,
-             ast::expression expr, base_ctx ctx)
-    : self_{self},
-      checkpoint_receiver_{std::move(checkpoint_receiver)},
-      expr_{std::move(expr)},
-      ctx_{ctx} {
+  explicit where_exec(initializer init) : operator_base{std::move(init)} {
   }
 
-  // For restoring.
-  where_impl(exec::operator_actor::pointer self, base_ctx ctx)
-    : self_{self}, ctx_{ctx} {
+  void next(const table_slice& slice) override {
+    const auto& pred = state();
+    const auto filters = eval(pred, slice, ctx());
+    auto filter_offset = int64_t{0};
+    for (const auto& part : filters.parts()) {
+      const auto filter = part.as<bool_type>();
+      if (not filter) {
+        diagnostic::warning("expected `bool`, got `{}`", part.type.kind())
+          .primary(pred)
+          .emit(ctx());
+        filter_offset += part.length();
+        continue;
+      }
+      if (filter->array->true_count() == filter->length()) {
+        push(subslice(slice, filter_offset, filter_offset + filter->length()));
+        filter_offset += filter->length();
+        continue;
+      }
+      // TODO: Should this warn? For some reason the original TQL2
+      // implementation did not.
+      // if (filter->array->null_count() > 0) {
+      //   diagnostic::warning(…).emit(ctx());
+      // }
+      auto start = std::optional<int64_t>{};
+      for (int64_t i = 0; i < filter->length(); ++i) {
+        if (filter->array->IsValid(i) and filter->array->GetView(i)) {
+          if (not start) {
+            start.emplace(i);
+          }
+          continue;
+        }
+        if (start) {
+          push(subslice(slice, filter_offset + *start, filter_offset + i));
+          start.reset();
+        }
+      }
+      if (start) {
+        push(subslice(slice, filter_offset + *start,
+                      filter_offset + filter->length()));
+      }
+      filter_offset += filter->length();
+    }
+    ready();
   }
 
-  auto make_behavior() -> exec::operator_actor::behavior_type {
-    return {
-      [this](exec::handshake hs) -> caf::result<exec::handshake_response> {
-        return handshake(std::move(hs));
-      },
-      [](exec::checkpoint) -> caf::result<void> {
-        TENZIR_TODO();
-      },
-      [](atom::stop) -> caf::result<void> {
-        TENZIR_TODO();
-      },
-    };
+  auto should_stop() -> bool override {
+    return get_input_ended();
   }
-
-private:
-  auto handshake(exec::handshake hs) -> caf::result<exec::handshake_response> {
-    return match(
-      std::move(hs.input),
-      [](exec::stream<void>) -> exec::handshake_response {
-        TENZIR_TODO();
-      },
-      [&](exec::stream<table_slice> input) -> exec::handshake_response {
-        auto response = exec::handshake_response{};
-        response.output
-          = impl(self_->observe(std::move(input), 30, 10))
-              .to_typed_stream("where-stream", std::chrono::milliseconds{1}, 1);
-        return response;
-      });
-  }
-
-  auto impl(exec::observable<table_slice> input)
-    -> exec::observable<table_slice> {
-    return input.concat_map(
-      [this](exec::message<table_slice> msg) -> exec::observable<table_slice> {
-        return match(
-          std::move(msg),
-          [&](exec::checkpoint check) -> exec::observable<table_slice> {
-            // TODO: Save state.
-            return self_->mail(check, chunk_ptr{})
-              .request(checkpoint_receiver_, caf::infinite)
-              .as_observable()
-              .map([check](caf::unit_t) -> exec::message<table_slice> {
-                return exec::message<table_slice>{check};
-              })
-              .as_observable();
-          },
-          [&](exec::exhausted e) -> exec::observable<table_slice> {
-            return self_->make_observable()
-              .just(exec::message<table_slice>{e})
-              .as_observable();
-          },
-          [&](const table_slice& slice) -> exec::observable<table_slice> {
-            auto filtered = filter2(slice, expr_, ctx_, false);
-            return self_->make_observable()
-              .from_container(std::move(filtered))
-              .map([](table_slice slice) -> exec::message<table_slice> {
-                return slice;
-              })
-              .as_observable();
-          });
-      });
-  }
-
-  exec::operator_actor::pointer self_;
-  exec::checkpoint_receiver_actor checkpoint_receiver_;
-  ast::expression expr_;
-  base_ctx ctx_;
 };
 
 // TODO: Don't want to write this fully ourselves.
-class where_exec final : public plan::operator_base {
+class where_plan final : public plan::operator_base {
 public:
-  where_exec() = default;
+  where_plan() = default;
 
   auto name() const -> std::string override {
-    return "where_exec";
+    return "where_plan";
   }
 
-  explicit where_exec(ast::expression predicate)
+  explicit where_plan(ast::expression predicate)
     : predicate_{std::move(predicate)} {
   }
 
   auto spawn(spawn_args args) const -> exec::operator_actor override {
-    TENZIR_ASSERT(not args.restore or *args.restore == nullptr);
-    return args.sys.spawn(caf::actor_from_state<where_impl>,
-                          std::move(args.checkpoint_receiver), predicate_,
-                          args.ctx);
+    return exec::spawn_operator<where_exec>(std::move(args), predicate_);
   }
 
-  friend auto inspect(auto& f, where_exec& x) -> bool {
+  friend auto inspect(auto& f, where_plan& x) -> bool {
     return f.apply(x.predicate_);
   }
 
@@ -825,7 +792,7 @@ public:
   // Or do we get it earlier? Or later?
   auto finalize(finalize_ctx ctx) && -> failure_or<plan::pipeline> override {
     (void)ctx;
-    return std::make_unique<where_exec>(std::move(predicate_));
+    return std::make_unique<where_plan>(std::move(predicate_));
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -856,7 +823,7 @@ private:
 };
 
 TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::operator_base, where_ir>)
-TENZIR_REGISTER_PLUGIN(inspection_plugin<plan::operator_base, where_exec>)
+TENZIR_REGISTER_PLUGIN(inspection_plugin<plan::operator_base, where_plan>)
 
 class where_plugin final : public virtual operator_factory_plugin,
                            public virtual function_plugin,
