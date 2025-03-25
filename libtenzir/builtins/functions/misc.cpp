@@ -54,7 +54,7 @@ public:
 class type_of final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.type_of";
+    return "type_of";
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -66,7 +66,6 @@ public:
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> multi_series {
         TENZIR_UNUSED(ctx);
-        auto value = eval(expr);
         return map_series(eval(expr), [](auto&& x) {
           auto builder = series_builder{};
           auto definition = x.type.to_definition();
