@@ -161,8 +161,8 @@ but often resort to the method style when it is more idiomatic.
 | [`print_ndjson`](functions/print_ndjson.mdx) | Prints a record as NDJSON string              | `record.print_ndjson()` |
 | [`print_ssv`](functions/print_ssv.mdx)       | Prints a record as space separated values     | `record.print_ssv()`    |
 | [`print_tsv`](functions/print_tsv.mdx)       | Prints a record as tab separated values       | `record.print_tsv()`    |
-| [`print_yaml`](functions/print_yaml.md)      | Prints a value as a YAML document             | `record.print_yaml()`   |
 | [`print_xsv`](functions/print_xsv.md)        | Prints a record as delimited separated values | `record.print_tsv()`    |
+| [`print_yaml`](functions/print_yaml.md)      | Prints a value as a YAML document             | `record.print_yaml()`   |
 
 ## Time & Date
 
