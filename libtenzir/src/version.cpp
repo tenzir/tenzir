@@ -84,6 +84,9 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     "modules",
     // The node supports the TQL2 `from` and `to` operators.
     "tql2_from",
+    // Schema definitions use the new format that represents Tenzir's type
+    // system exactly.
+    "exact_schema",
   };
   if (auto fallback = false; get_or(cfg, "tenzir.tql2", fallback)) {
     // The experimental TQL2-only mode is enabled.

@@ -299,9 +299,10 @@ public:
 
   /// Converts the type into its type definition.
   /// @pre *this
-  [[nodiscard]] auto to_definition(std::optional<std::string> field_name = {},
-                                   offset parent_path = {}) const noexcept
-    -> record;
+  [[nodiscard]] auto to_definition() const noexcept -> record;
+  [[nodiscard]] auto
+  to_legacy_definition(std::optional<std::string> field_name = {},
+                       offset parent_path = {}) const noexcept -> record;
 
   /// Creates a type from an Arrow DataType, Field, or Schema.
   [[nodiscard]] static type from_arrow(const arrow::DataType& other) noexcept;

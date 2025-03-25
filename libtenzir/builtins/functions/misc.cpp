@@ -9,6 +9,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/detail/zip_iterator.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/process/environment.hpp>
@@ -46,6 +47,33 @@ public:
           }
         }
         return {string_type{}, finish(b)};
+      });
+  }
+};
+
+class type_of final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "type_of";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function("type_of")
+          .positional("x", expr, "any")
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> multi_series {
+        TENZIR_UNUSED(ctx);
+        return map_series(eval(expr), [](auto&& x) {
+          auto builder = series_builder{};
+          auto definition = x.type.to_definition();
+          for (auto i = int64_t{0}; i < x.length(); ++i) {
+            builder.data(definition);
+          }
+          return builder.finish_assert_one_array();
+        });
       });
   }
 };
@@ -443,6 +471,7 @@ public:
 } // namespace tenzir::plugins::misc
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_of)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::secret)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
