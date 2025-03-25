@@ -387,10 +387,20 @@ public:
   }
 
   /// Pushes data into Fluent Bit.
-  auto push(std::string_view data) -> bool {
+  auto push(std::string_view data) -> failure_or<void> {
     TENZIR_ASSERT(ctx_ != nullptr);
     TENZIR_ASSERT(ffd_ >= 0);
-    return flb_lib_push(ctx_, ffd_, data.data(), data.size()) != FLB_LIB_ERROR;
+    auto written = size_t{};
+    while (written != data.size()) {
+      auto ret = flb_lib_push(ctx_, ffd_, data.data() + written,
+                              data.size() - written);
+      if (ret == FLB_LIB_ERROR) {
+        return failure::promise();
+      }
+      TENZIR_ASSERT(ret >= 0);
+      written += ret;
+    }
+    return {};
   }
 
 private:
@@ -802,9 +812,9 @@ public:
       auto resolved_slice = resolve_enumerations(slice);
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto it = std::back_inserter(event);
       auto failed = false;
       for (const auto& row : values3(*array)) {
+        auto it = std::back_inserter(event);
         TENZIR_ASSERT(row);
         auto printer = json_printer{{
           .oneline = true,
@@ -813,7 +823,7 @@ public:
         TENZIR_ASSERT(ok);
         // Wrap JSON object in the 2-element JSON array that Fluent Bit expects.
         auto message = fmt::format("[{}, {}]", flb_time_now(), event);
-        if (not engine->push(message)) {
+        if (engine->push(message).is_error()) {
           failed = true;
         }
         event.clear();
