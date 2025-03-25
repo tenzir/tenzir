@@ -24,6 +24,8 @@ namespace {
 
 class checkpoint_receiver {
 public:
+  static constexpr auto name = "tenzir.exec.checkpoint-receiver";
+
   explicit checkpoint_receiver(checkpoint_receiver_actor::pointer self, uuid id,
                                uint64_t index)
     : self_{self}, id_{id}, index_{index} {
@@ -62,6 +64,8 @@ using internal_pipeline_actor
 
 class pipeline {
 public:
+  static constexpr auto name = "tenzir.exec.pipeline";
+
   pipeline(internal_pipeline_actor::pointer self, plan::pipeline pipe,
            pipeline_settings settings,
            std::optional<checkpoint_reader_actor> checkpoint_reader,
