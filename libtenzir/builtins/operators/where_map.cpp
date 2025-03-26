@@ -18,7 +18,7 @@
 #include <tenzir/detail/debug_writer.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/exec/operator_impl.hpp>
+#include <tenzir/exec/operator.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
@@ -756,7 +756,8 @@ public:
     : predicate_{std::move(predicate)} {
   }
 
-  auto spawn(spawn_args args) const -> exec::operator_actor override {
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
     return exec::spawn_operator<where_exec>(std::move(args), predicate_);
   }
 

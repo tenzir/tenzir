@@ -10,8 +10,9 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/exec/operator_impl.hpp>
+#include <tenzir/exec/operator.hpp>
 #include <tenzir/null_bitmap.hpp>
+#include <tenzir/plan/operator.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -744,7 +745,8 @@ public:
     return "head_bp";
   }
 
-  auto spawn(spawn_args args) const -> exec::operator_actor override {
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
     // TODO: Initial state.
     return exec::spawn_operator<deduplicate3>(std::move(args), {}, cfg_);
   }

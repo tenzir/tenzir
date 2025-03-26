@@ -115,7 +115,8 @@ public:
     return "group_bp";
   }
 
-  auto spawn(spawn_args args) const -> exec::operator_actor override {
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
     return args.sys.spawn(caf::actor_from_state<group>, over_, pipe_, id_,
                           args.ctx);
   }

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/plan/operator.hpp"
+#include "tenzir/uuid.hpp"
 
 namespace tenzir::plan {
 

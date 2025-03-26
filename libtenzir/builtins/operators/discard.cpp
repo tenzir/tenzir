@@ -18,6 +18,7 @@
 
 #include <caf/actor_from_state.hpp>
 #include <caf/binary_deserializer.hpp>
+#include <caf/scheduled_actor/flow.hpp>
 
 namespace tenzir::plugins::discard {
 
@@ -79,10 +80,10 @@ class discard_exec : public serializable_actor<discard_exec> {
 public:
   explicit discard_exec(exec::operator_actor::pointer self,
                         exec::checkpoint_receiver_actor checkpoint_receiver,
-                        exec::operator_shutdown_actor operator_shutdown)
+                        exec::shutdown_handler_actor shutdown_handler)
     : self_{self},
       checkpoint_receiver_{std::move(checkpoint_receiver)},
-      operator_shutdown_{std::move(operator_shutdown)} {
+      shutdown_handler_{std::move(shutdown_handler)} {
     // TODO: Does this make sense?
     deserialize(chunk_ptr{});
   }
@@ -111,7 +112,7 @@ public:
                   [&](exec::exhausted) -> exec::observable<void> {
                     TENZIR_WARN("got exhausted");
                     self_->mail(atom::done_v)
-                      .request(operator_shutdown_, caf::infinite)
+                      .request(shutdown_handler_, caf::infinite)
                       .then(
                         []() {
 
@@ -157,7 +158,7 @@ public:
 private:
   exec::operator_actor::pointer self_;
   exec::checkpoint_receiver_actor checkpoint_receiver_;
-  exec::operator_shutdown_actor operator_shutdown_;
+  exec::shutdown_handler_actor shutdown_handler_;
 };
 
 class discard_bp final : public plan::operator_base {
@@ -168,10 +169,12 @@ public:
     return "discard_bp";
   }
 
-  auto spawn(spawn_args args) const -> exec::operator_actor override {
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
+    // TODO: Rewrite this in terms of exec::spawn_operator
     return args.sys.spawn(caf::actor_from_state<discard_exec>,
                           std::move(args.checkpoint_receiver),
-                          std::move(args.operator_shutdown));
+                          std::move(args.shutdown_handler));
   }
 
   friend auto inspect(auto& f, discard_bp& x) -> bool {

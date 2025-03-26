@@ -171,11 +171,11 @@ public:
 class version_exec {
 public:
   explicit version_exec(exec::operator_actor::pointer self,
-                        exec::operator_shutdown_actor operator_shutdown,
-                        exec::operator_stop_actor operator_stop)
+                        exec::shutdown_handler_actor shutdown_handler,
+                        exec::stop_handler_actor stop_handler)
     : self_{self},
-      operator_shutdown_{std::move(operator_shutdown)},
-      operator_stop_{std::move(operator_stop)} {
+      shutdown_handler_{std::move(shutdown_handler)},
+      stop_handler_{std::move(stop_handler)} {
   }
 
   auto make_behavior() -> exec::operator_actor::behavior_type {
@@ -199,7 +199,7 @@ public:
                   self_
                     ->mail(atom::done_v)
                     // TODO: Timeout.
-                    .request(operator_shutdown_, std::chrono::seconds{1})
+                    .request(shutdown_handler_, std::chrono::seconds{1})
                     .then(
                       []() {
                         TENZIR_WARN("shutdown notified");
@@ -210,9 +210,9 @@ public:
                   out.reserve(2);
                   out.push_back(std::move(message));
                   out.emplace_back(exec::exhausted{});
-                  TENZIR_ASSERT(operator_stop_);
+                  TENZIR_ASSERT(stop_handler_);
                   self_->mail(atom::stop_v)
-                    .request(operator_stop_, caf::infinite)
+                    .request(stop_handler_, caf::infinite)
                     .then(
                       [] {
                         TENZIR_WARN("stop notified");
@@ -245,8 +245,8 @@ public:
 
 private:
   exec::operator_actor::pointer self_;
-  exec::operator_shutdown_actor operator_shutdown_;
-  exec::operator_stop_actor operator_stop_;
+  exec::shutdown_handler_actor shutdown_handler_;
+  exec::stop_handler_actor stop_handler_;
 };
 
 class version_bp final : public plan::operator_base {
@@ -257,10 +257,11 @@ public:
     return "version_bp";
   }
 
-  auto spawn(spawn_args args) const -> exec::operator_actor override {
-    return args.sys.spawn<caf::detached>(caf::actor_from_state<version_exec>,
-                                         args.operator_shutdown,
-                                         args.operator_stop);
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
+    // TODO: Rewrite this in terms of exec::spawn_operator
+    return args.sys.spawn(caf::actor_from_state<version_exec>,
+                          args.shutdown_handler, args.stop_handler);
   }
 
   friend auto inspect(auto& f, version_bp& x) -> bool {

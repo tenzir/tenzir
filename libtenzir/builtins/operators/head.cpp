@@ -8,7 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/compile_ctx.hpp>
-#include <tenzir/exec/operator_impl.hpp>
+#include <tenzir/exec/operator.hpp>
 #include <tenzir/exec/trampoline.hpp>
 #include <tenzir/finalize_ctx.hpp>
 #include <tenzir/ir.hpp>
@@ -52,7 +52,8 @@ public:
     return "head_plan";
   }
 
-  auto spawn(spawn_args args) const -> exec::operator_actor override {
+  auto spawn(plan::operator_spawn_args args) const
+    -> exec::operator_actor override {
     return exec::spawn_operator<head_exec>(std::move(args), count_);
   }
 

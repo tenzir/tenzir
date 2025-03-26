@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/plan/operator_spawn_args.hpp"
+
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -355,6 +357,10 @@ public:
 
   auto name() const -> std::string override {
     return "every_exec";
+  }
+
+  auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
+    TENZIR_TODO();
   }
 
   friend auto inspect(auto& f, every_exec& x) -> bool {

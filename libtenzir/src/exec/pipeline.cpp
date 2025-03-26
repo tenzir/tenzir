@@ -157,7 +157,7 @@ private:
                                      pipe_.id(), index);
     // TODO: Remote spawn.
     TENZIR_WARN("spawning {} operator", pipe_[index]->name());
-    auto previous = std::invoke([&]() -> operator_stop_actor {
+    auto previous = std::invoke([&]() -> stop_handler_actor {
       if (operators_.empty()) {
         // TODO: Do we even need this?
         return self_;
@@ -165,7 +165,7 @@ private:
         return operators_.back();
       }
     });
-    operators_.push_back(pipe_[index]->spawn(plan::operator_base::spawn_args{
+    operators_.push_back(pipe_[index]->spawn(plan::operator_spawn_args{
       self_->system(),
       ctx_,
       std::move(checkpointer),

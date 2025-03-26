@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include "tenzir/base_ctx.hpp"
-#include "tenzir/exec/operator.hpp"
+#include "tenzir/plan/operator_spawn_args.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/uuid.hpp"
 
 namespace tenzir::plan {
 
@@ -20,40 +18,12 @@ namespace tenzir::plan {
 /// Subclasses must register a serialization plugin with the same name.
 class operator_base {
 public:
-  struct spawn_args {
-    spawn_args(caf::actor_system& sys, base_ctx ctx,
-               exec::checkpoint_receiver_actor checkpoint_receiver,
-               exec::operator_shutdown_actor operator_shutdown,
-               exec::operator_stop_actor operator_stop,
-               std::optional<chunk_ptr> restore)
-      : sys{sys},
-        ctx{ctx},
-        checkpoint_receiver{std::move(checkpoint_receiver)},
-        operator_shutdown{std::move(operator_shutdown)},
-        operator_stop{std::move(operator_stop)},
-        restore{std::move(restore)} {
-    }
-
-    caf::actor_system& sys;
-    base_ctx ctx;
-    exec::checkpoint_receiver_actor checkpoint_receiver;
-    exec::operator_shutdown_actor operator_shutdown;
-    exec::operator_stop_actor operator_stop;
-
-    // nullopt => fresh start
-    // nullptr => no chunk sent for restore point
-    // otherwise => chunk contents sent for restore point
-    std::optional<chunk_ptr> restore;
-  };
-
   virtual ~operator_base() = default;
 
   virtual auto name() const -> std::string = 0;
 
-  virtual auto spawn(spawn_args args) const -> exec::operator_actor {
-    (void)args;
-    TENZIR_TODO();
-  }
+  virtual auto spawn(operator_spawn_args args) const -> exec::operator_actor
+    = 0;
 };
 
 using operator_ptr = std::unique_ptr<operator_base>;

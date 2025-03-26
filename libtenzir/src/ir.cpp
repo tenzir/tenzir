@@ -9,7 +9,9 @@
 #include "tenzir/ir.hpp"
 
 #include "tenzir/compile_ctx.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/finalize_ctx.hpp"
+#include "tenzir/plan/operator_spawn_args.hpp"
 #include "tenzir/plan/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -51,6 +53,10 @@ public:
 
   auto name() const -> std::string override {
     return "if_exec";
+  }
+
+  auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
+    TENZIR_TODO();
   }
 
   friend auto inspect(auto& f, if_exec& x) -> bool {
@@ -161,6 +167,10 @@ public:
 
   auto name() const -> std::string override {
     return "legacy_exec";
+  }
+
+  auto spawn(plan::operator_spawn_args) const -> exec::operator_actor override {
+    TENZIR_TODO();
   }
 
   friend auto inspect(auto& f, legacy_bp& x) -> bool {
