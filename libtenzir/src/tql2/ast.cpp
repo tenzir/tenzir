@@ -172,7 +172,8 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
     });
 }
 
-auto to_duration_comparable(const ast::expression& e) -> std::optional<operand> {
+auto to_duration_comparable(const ast::expression& e)
+  -> std::optional<operand> {
   if (auto field = to_field_extractor(e)) {
     return std::move(field).value();
   }
@@ -260,6 +261,8 @@ auto split_legacy_expression(const ast::expression& x)
           case ast::binary_op::sub:
           case ast::binary_op::mul:
           case ast::binary_op::div:
+          case ast::binary_op::if_:
+          case ast::binary_op::else_:
             return {};
           case ast::binary_op::eq:
             return relational_operator::equal;

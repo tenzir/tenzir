@@ -40,6 +40,8 @@ namespace {
     case and_:
     case or_:
     case in:
+    case if_:
+    case else_:
       return false;
   }
   TENZIR_UNREACHABLE();
@@ -64,6 +66,8 @@ namespace {
     case and_:
     case or_:
     case in:
+    case if_:
+    case else_:
       return std::nullopt;
   }
   TENZIR_UNREACHABLE();
@@ -86,6 +90,8 @@ namespace {
     case and_:
     case or_:
     case in:
+    case if_:
+    case else_:
       return false;
   }
   TENZIR_UNREACHABLE();
@@ -721,6 +727,105 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
     return result;
   });
 }
+
+auto eval_if(evaluator& self, const ast::binary_expr& x) -> multi_series {
+  auto right_offset = int64_t{0};
+  return map_series(self.eval(x.right), [&](series right) -> multi_series {
+    const auto length = right.length();
+    const auto right_begin = right_offset;
+    const auto right_end = right_begin + length;
+    right_offset += length;
+    const auto typed_right = right.as<bool_type>();
+    if (not typed_right) {
+      diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
+        .primary(x.right)
+        .emit(self.ctx());
+      return series::null(null_type{}, length);
+    }
+    if (typed_right->array->true_count() == length) {
+      return self.slice(right_begin, right_end).eval(x.left);
+    }
+    if (typed_right->array->null_count() > 0) {
+      diagnostic::warning("expected `bool`, but got `null`")
+        .primary(x.right)
+        .emit(self.ctx());
+    }
+    if (typed_right->array->true_count() == 0) {
+      return series::null(null_type{}, length);
+    }
+    const auto get_right = [&](int64_t i) -> bool {
+      return typed_right->array->IsValid(i) and typed_right->array->GetView(i);
+    };
+    auto result = multi_series{};
+    auto range_offset = int64_t{0};
+    auto range_current = get_right(0);
+    const auto append_until = [&](int64_t end) {
+      if (not range_current) {
+        result.append(series::null(null_type{}, end - range_offset));
+        return;
+      }
+      result.append(
+        self.slice(right_begin + range_offset, right_begin + end).eval(x.left));
+    };
+    for (auto i = int64_t{1}; i < length; ++i) {
+      if (range_current == get_right(i)) {
+        continue;
+      }
+      append_until(i);
+      range_offset = i;
+      range_current = not range_current;
+    }
+    if (range_offset != length) {
+      append_until(length);
+    }
+    TENZIR_ASSERT(result.length() == length);
+    return result;
+  });
+}
+
+auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
+  auto left_offset = int64_t{0};
+  return map_series(self.eval(x.left), [&](series left) -> multi_series {
+    const auto length = left.length();
+    const auto left_begin = left_offset;
+    const auto left_end = left_begin + length;
+    left_offset += length;
+    if (left.array->null_count() == 0) {
+      return left;
+    }
+    if (left.array->null_count() == length) {
+      return self.slice(left_begin, left_end).eval(x.right);
+    }
+    const auto get_left_valid = [&](int64_t i) -> bool {
+      return left.array->IsValid(i);
+    };
+    auto result = multi_series{};
+    auto range_offset = int64_t{0};
+    auto range_current = get_left_valid(0);
+    const auto append_until = [&](int64_t end) {
+      if (not range_current) {
+        result.append(
+          self.slice(left_begin + range_offset, left_begin + end).eval(x.right));
+        return;
+      }
+      result.append(left.slice(range_offset, end));
+    };
+    for (auto i = int64_t{1}; i < length; ++i) {
+      if (range_current == get_left_valid(i)) {
+        continue;
+      }
+      append_until(i);
+      range_offset = i;
+      range_current = not range_current;
+    }
+    if (range_offset != length) {
+      append_until(length);
+    }
+    TENZIR_ASSERT(result.length() == length);
+    return result;
+  });
+}
+
 } // namespace
 
 auto evaluator::eval(const ast::binary_expr& x) -> multi_series {
@@ -740,10 +845,16 @@ auto evaluator::eval(const ast::binary_expr& x) -> multi_series {
     X(leq);
     X(in);
 #undef X
+      // These four have special handling as they short-circuit the evaluation
+      // of either side of the expression.
     case ast::binary_op::and_:
       return eval_and_or<ast::binary_op::and_>(*this, x);
     case ast::binary_op::or_:
       return eval_and_or<ast::binary_op::or_>(*this, x);
+    case ast::binary_op::if_:
+      return eval_if(*this, x);
+    case ast::binary_op::else_:
+      return eval_else(*this, x);
   }
   TENZIR_UNREACHABLE();
 }

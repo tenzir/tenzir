@@ -32,9 +32,9 @@ auto precedence(unary_op x) -> int {
   switch (x) {
     case pos:
     case neg:
-      return 7;
+      return 9;
     case not_:
-      return 3;
+      return 5;
   };
   TENZIR_UNREACHABLE();
 }
@@ -44,10 +44,10 @@ auto precedence(binary_op x) -> int {
   switch (x) {
     case mul:
     case div:
-      return 6;
+      return 8;
     case add:
     case sub:
-      return 5;
+      return 7;
     case gt:
     case geq:
     case lt:
@@ -55,10 +55,14 @@ auto precedence(binary_op x) -> int {
     case eq:
     case neq:
     case in:
-      return 4;
+      return 6;
     case and_:
-      return 2;
+      return 4;
     case or_:
+      return 3;
+    case if_:
+      return 2;
+    case else_:
       return 1;
   }
   TENZIR_UNREACHABLE();
@@ -790,8 +794,8 @@ public:
     }
   }
 
-  auto parse_function_call(std::optional<ast::expression> subject,
-                           entity fn) -> function_call {
+  auto parse_function_call(std::optional<ast::expression> subject, entity fn)
+    -> function_call {
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
     auto args = std::vector<ast::expression>{};
@@ -854,6 +858,8 @@ public:
     X(and_, and_);
     X(or_, or_);
     X(in, in);
+    X(if_, if_);
+    X(else_, else_);
 #undef X
     return std::nullopt;
   }
