@@ -10,6 +10,7 @@
 #include "tenzir/finalize_ctx.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/substitute_ctx.hpp"
+#include "tenzir/view3.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/exec/pipeline.hpp>
@@ -127,6 +128,10 @@ public:
                   [&](const table_slice& slice) -> exec::observable<void> {
                     TENZIR_WARN("discard got table slice with {} rows",
                                 slice.rows());
+                    // FIXME: remove this again
+                    for (auto row : values3(slice)) {
+                      fmt::println("{}", row);
+                    }
                     return self_->make_observable()
                       .empty<exec::message<void>>()
                       .as_observable();
