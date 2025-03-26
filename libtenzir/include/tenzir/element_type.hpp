@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <tenzir/concepts.hpp>
 #include <tenzir/tag.hpp>
 
 namespace tenzir {
@@ -32,3 +31,17 @@ template <class T>
 concept element_type = detail::tl_contains_v<element_types, T>;
 
 } // namespace tenzir
+
+namespace fmt {
+
+template <>
+struct formatter<tenzir::element_type_tag> {
+  constexpr auto parse(format_parse_context ctx) {
+    return ctx.begin();
+  }
+
+  auto format(const tenzir::element_type_tag& type, format_context& ctx) const
+    -> format_context::iterator;
+};
+
+} // namespace fmt
