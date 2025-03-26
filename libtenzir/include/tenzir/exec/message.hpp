@@ -59,6 +59,16 @@ struct as_stream {
 };
 
 using stream_types = caf::detail::tl_map_t<element_types, as_stream>;
-using any_stream = detail::tl_apply_t<stream_types, variant>;
+
+struct any_stream : detail::tl_apply_t<stream_types, variant> {
+  using super = detail::tl_apply_t<stream_types, variant>;
+  using super::super;
+
+  auto to_element_type_tag() const -> element_type_tag {
+    return match([]<element_type T>(const stream<T>&) -> element_type_tag {
+      return tag_v<T>;
+    });
+  }
+};
 
 } // namespace tenzir::exec
