@@ -75,7 +75,7 @@ jobs:
             new_plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/main)
             git add contrib/tenzir-plugins
             sleep 5
-            nix/update-plugins.sh
+            GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
             git add nix/
             git commit -m "Bump submodule from $plugins_sha_short to $new_plugins_main_sha"
             git push -u origin main
