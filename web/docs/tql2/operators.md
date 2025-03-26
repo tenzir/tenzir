@@ -164,6 +164,7 @@ Operator | Description | Example
 [`write_parquet`](./operators/write_parquet.md) | Writes events as Parquet | `write_parquet`
 [`write_pcap`](./operators/write_pcap.md) | Writes events as PCAP | `write_pcap`
 [`write_ssv`](./operators/write_ssv.md) | Writes events as SSV | `write_ssv`
+[`write_syslog`](./operators/write_syslog.md) | Writes events as RFC 5424 Syslog messages | `write_syslog`
 [`write_tsv`](./operators/write_tsv.md) | Writes events as TSV | `write_tsv`
 [`write_tql`](./operators/write_tql.md) | Writes events as TQL objects | `write_tql`
 [`write_xsv`](./operators/write_xsv.md) | Writes events as XSV | `write_xsv`
