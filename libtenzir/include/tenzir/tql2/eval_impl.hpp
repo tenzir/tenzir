@@ -27,6 +27,22 @@ public:
       ctx_{ctx} {
   }
 
+  auto slice(int64_t begin, int64_t end) const -> evaluator {
+    auto result = *this;
+    if (begin == 0 and end == length_) {
+      return result;
+    }
+    const auto* input = result.get_input();
+    if (not input) {
+      TENZIR_ASSERT(begin == 0);
+      TENZIR_ASSERT(end == 1);
+      return result;
+    }
+    result.input_ = subslice(*input, begin, end);
+    result.length_ = end - begin;
+    return result;
+  }
+
   auto eval(const ast::expression& x) -> multi_series;
 
   auto eval(const ast::constant& x) -> multi_series;
@@ -81,11 +97,21 @@ public:
   }
 
   auto get_input() const -> const table_slice* {
-    return input_;
+    return input_.match(
+      [](const table_slice* input) {
+        return input;
+      },
+      [](const table_slice& input) {
+        return &input;
+      });
+  }
+
+  auto ctx() const -> session {
+    return ctx_;
   }
 
 private:
-  const table_slice* input_;
+  variant<const table_slice*, table_slice> input_;
   int64_t length_;
   session ctx_;
 };

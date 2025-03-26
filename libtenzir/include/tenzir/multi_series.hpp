@@ -102,6 +102,11 @@ public:
     parts_.push_back(std::move(s));
   }
 
+  auto append(multi_series s) -> void {
+    parts_.insert(parts_.end(), std::make_move_iterator(s.parts_.begin()),
+                  std::make_move_iterator(s.parts_.end()));
+  }
+
   // What to do on join conflict in `to_series`
   enum class to_series_strategy {
     // Fail the join
