@@ -117,6 +117,7 @@ stdenv.mkDerivation rec {
       "-DFLB_RELEASE=ON"
       "-DFLB_DEBUG=OFF"
       "-DFLB_PREFER_SYSTEM_LIBS=Yes"
+      "-DFLB_CORO_STACK_SIZE=24576"
     ]
     ++ lib.optionals stdenv.cc.isClang [
       # FLB_SECURITY causes bad linker options for Clang to be set.
