@@ -115,7 +115,7 @@ into a JSON object. On the command line, use the `tenzir` binary to pipe the
 `evtx_dump` output to a Tenzir pipeline using the `sigma` operator:
 
 ```bash
-evtx_dump -o jsonl file.evtx | tenzir --tql2 'read_json | sigma "rule.yaml"'
+evtx_dump -o jsonl file.evtx | tenzir 'read_json | sigma "rule.yaml"'
 ```
 
 ### Run a Sigma rule on historical data

@@ -630,14 +630,14 @@ EOF
 
 # bats test_tags=pipelines, deduplicate
 @test "Deduplicate operator" {
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate limit=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate e, limit=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate b, limit=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | batch 1 | deduplicate b, limit=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate b, limit=1, distance=1"
-  check tenzir --tql2 "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate {b: b, e: e}, limit=1"
+  check tenzir "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate limit=1"
+  check tenzir "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate e, limit=1"
+  check tenzir "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate b, limit=1"
+  check tenzir "from \"${INPUTSDIR}/json/all-types.json\" | batch 1 | deduplicate b, limit=1"
+  check tenzir "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate b, limit=1, distance=1"
+  check tenzir "from \"${INPUTSDIR}/json/all-types.json\" | deduplicate {b: b, e: e}, limit=1"
 
-  check tenzir --tql2 "deduplicate value, limit=2" <<EOF
+  check tenzir "deduplicate value, limit=2" <<EOF
 {"value": "192.168.1.1", "tag": 1}
 {"value": "192.168.1.2", "tag": 2}
 {"value": "192.168.1.3", "tag": 3}
@@ -649,7 +649,7 @@ EOF
 {"value": "192.168.1.1", "tag": 9}
 EOF
 
-  check tenzir --tql2 "deduplicate value, distance=3, limit=1" <<EOF
+  check tenzir "deduplicate value, distance=3, limit=1" <<EOF
 {"value": "192.168.1.1", "tag": 1}
 {"value": "192.168.1.2", "tag": 2}
 {"value": "192.168.1.3", "tag": 3}
@@ -661,14 +661,14 @@ EOF
 {"value": "192.168.1.1", "tag": 9}
 EOF
 
-  check tenzir --tql2 "deduplicate value, limit=1" <<EOF
+  check tenzir "deduplicate value, limit=1" <<EOF
 {"value": 123, "tag": 1}
 {"value": null, "tag": 2}
 {"value": 123, "tag": 3}
 {"tag": 4}
 EOF
 
-  check tenzir --tql2 "deduplicate foo.bar, limit=1" <<EOF
+  check tenzir "deduplicate foo.bar, limit=1" <<EOF
 {"foo": {"bar": 123}, "tag": 1}
 {"foo": {"bar": null}, "tag": 2}
 {"foo": 123, "tag": 3}
@@ -679,13 +679,13 @@ EOF
 {"foo": {"bar": 123}, "tag": 8}
 EOF
 
-  check tenzir --tql2 "deduplicate {a: a, b: b}, limit=1" <<EOF
+  check tenzir "deduplicate {a: a, b: b}, limit=1" <<EOF
 {"a": 1, "b": 2, "tag": 1}
 {"b": "reset", "tag": 2}
 {"b": 2, "a": 1, "tag": 3}
 EOF
 
-  check tenzir --tql2 "deduplicate limit=1" <<EOF
+  check tenzir "deduplicate limit=1" <<EOF
 {"a": 1, "b": 2}
 {"b": "reset"}
 {"b": 2, "a": 1}
@@ -732,7 +732,7 @@ EOF
 EOF
 
   # Test how we unroll records, including their various options for null fields.
-  check tenzir --tql2 -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 from {
   events: [
     {foo: 1, bar: {baz: 2, qux: 3}},
@@ -746,7 +746,7 @@ unroll events
 this = events
 unroll bar
 EOF
-  check tenzir --tql2 -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 from {
   events: [
     {foo: 1, bar: {baz: 2, qux: 3}},
@@ -762,7 +762,7 @@ unordered {
   unroll bar
 }
 EOF
-  check tenzir --tql2 -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 from {
   events: [
     {foo: 1, bar: 2, baz: 3},
@@ -773,7 +773,7 @@ unroll events
 this = events
 unroll this
 EOF
-  check tenzir --tql2 -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 from {
   events: [
     {foo: 1, bar: 2, baz: 3},
@@ -846,42 +846,42 @@ EOF
 }
 
 @test "legacy operator" {
-  check ! tenzir --tql2 --dump-pipeline 'legacy'
-  check tenzir --tql2 --dump-pipeline 'legacy ""'
-  check tenzir --tql2 --dump-pipeline 'legacy "from \"example.json.gz\" | write json"'
-  check ! tenzir --tql2 --dump-pipeline 'legacy "this_operator_does_not_exist"'
+  check ! tenzir --dump-pipeline 'legacy'
+  check tenzir --dump-pipeline 'legacy ""'
+  check tenzir --dump-pipeline 'legacy "from \"example.json.gz\" | write json"'
+  check ! tenzir --dump-pipeline 'legacy "this_operator_does_not_exist"'
 }
 
 @test "assert operator" {
-  check tenzir --strict --tql2 'from {x: 1}, {x: 2}, {x: 3} | assert x != 0'
-  check ! tenzir --strict --tql2 'from {x: 1}, {x: 2}, {x: 3} | assert x != 2'
+  check tenzir --strict 'from {x: 1}, {x: 2}, {x: 3} | assert x != 0'
+  check ! tenzir --strict 'from {x: 1}, {x: 2}, {x: 3} | assert x != 2'
 }
 
 @test "summarize an empty input" {
-  check tenzir --tql2 'from {} | head 0 | summarize count(), sum(foo)'
-  check tenzir --tql2 'from {} | head 0| summarize count(), sum(foo), bar'
+  check tenzir 'from {} | head 0 | summarize count(), sum(foo)'
+  check tenzir 'from {} | head 0| summarize count(), sum(foo), bar'
 }
 
 @test "map and where an empty list" {
-  check tenzir --tql2 'from {foo: []} | foo = foo.map(x, x + 1)'
-  check tenzir --tql2 'from {foo: []} | foo = foo.where(x, x > 3)'
+  check tenzir 'from {foo: []} | foo = foo.map(x, x + 1)'
+  check tenzir 'from {foo: []} | foo = foo.where(x, x > 3)'
 }
 
 @test "map and where a list of numbers" {
-  check tenzir --tql2 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.map(x, x + 1)'
-  check tenzir --tql2 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.where(x, x > 3)'
+  check tenzir 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.map(x, x + 1)'
+  check tenzir 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.where(x, x > 3)'
 }
 
 @test "map and where with records" {
-  check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.map(x, x.en)'
-  check tenzir --tql2 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.where(x, x.de == "eins")'
+  check tenzir 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.map(x, x.en)'
+  check tenzir 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.where(x, x.de == "eins")'
 }
 
 @test "zip" {
-  check tenzir --tql2 'from {foo: [1, 2, 3], bar: [4, 5, 6]} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: [1, 2, 3], bar: [4, 5]} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: [], bar: [4, 5]} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: [], bar: []} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: null, bar: [1]} | baz = zip(foo, bar)'
-  check tenzir --tql2 'from {foo: null, bar: null} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: [1, 2, 3], bar: [4, 5, 6]} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: [1, 2, 3], bar: [4, 5]} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: [], bar: [4, 5]} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: [], bar: []} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: null, bar: [1]} | baz = zip(foo, bar)'
+  check tenzir 'from {foo: null, bar: null} | baz = zip(foo, bar)'
 }

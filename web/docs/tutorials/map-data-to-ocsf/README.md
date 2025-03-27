@@ -81,7 +81,7 @@ into structured data using the
 [`read_zeek_tsv`](../../tql2/operators/read_zeek_tsv.md) operator:
 
 ```bash
-tenzir --tql2 'read_zeek_tsv' < conn.log
+tenzir 'read_zeek_tsv' < conn.log
 ```
 
 <details>
@@ -544,7 +544,7 @@ this = {...ocsf, unmapped: zeek}
 Let's run the pipeline:
 
 ```bash
-tenzir --tql2 -f conn-to-ocsf.tql < conn.log
+tenzir -f conn-to-ocsf.tql < conn.log
 ```
 
 You should get the following output:

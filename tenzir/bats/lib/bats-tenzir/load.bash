@@ -10,4 +10,3 @@ source "$(dirname "${BASH_SOURCE[0]}")/src/fixtures.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/src/import.bash"
 
 export TENZIR_ABORT_ON_PANIC=true
-export TENZIR_SILENCE_TQL1_DEPRECATION_NOTICE=true

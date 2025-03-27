@@ -24,6 +24,6 @@ teardown() {
 # bats test_tags=docker
 @test "send and receive messages" {
   command -v docker 2>/dev/null || skip "Docker is not available"
-  check tenzir "version | put foo=42 | repeat 2 | to sqs://tenzir"
-  check tenzir "from sqs://tenzir | select foo | head 2"
+  check tenzir 'from {foo: 42} | repeat 2 | to "sqs://tenzir"'
+  check tenzir 'from "sqs://tenzir" | select foo | head 2'
 }

@@ -1,6 +1,6 @@
-error: the file `./this-file-does-not-exist.json` does not exist
- --> <input>:1:15
+error: could not parse token
+ --> <input>:1:11
   |
-1 | every 1s from ./this-file-does-not-exist.json
-  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+1 | every 1s { from "./this-file-does-not-exist.json" }
+  |           ^^ 
   |
