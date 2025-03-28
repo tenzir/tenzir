@@ -1,0 +1,11 @@
+from {
+  "false_or_false": false or false,
+  "false_or_null": false or null,
+  "false_or_true": false or true,
+  "null_or_false": null or false,
+  "null_or_null": null or null,
+  "null_or_true": null or true,
+  "true_or_false": true or false,
+  "true_or_null": true or null,
+  "true_or_true": true or true,
+}

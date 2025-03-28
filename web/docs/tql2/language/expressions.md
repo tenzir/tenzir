@@ -70,6 +70,7 @@ append `.<name>` to an expression that returns a record.
 from { my_field: 42, top_level: { nested: 0 } }
 my_field = top_level.nested
 ```
+
 ```tql
 { my_field: 0, top_level: { nested: 0 } }
 ```
@@ -108,11 +109,11 @@ The numeric types `int64`, `uint64`, and `double` support all arithmetic
 operations. If the types of the left- and right-hand side differ, the return
 type will be the one capable of holding the most values.
 
-Operation | Result
-|:---|:---
-`int64` + `int64` | `int64`
-`int64` + `uint64` | `int64`
-`int64` + `double` | `double`
+| Operation          | Result   |
+| :----------------- | :------- |
+| `int64` + `int64`  | `int64`  |
+| `int64` + `uint64` | `int64`  |
+| `int64` + `double` | `double` |
 
 The same applies to the other arithmetic operators: `-`, `*`, and `/`.
 
@@ -124,15 +125,15 @@ produces `null`.
 
 The `time` and `duration` types support specific operations:
 
-Operation | Result
-|:---|:---
-`time + duration` | `time`
-`time - duration` | `time`
-`time - time` | `duration`
-`duration + duration` | `duration`
-`duration / duration` | `double`
-`duration * number` | `duration`
-`duration / number` | `duration`
+| Operation             | Result     |
+| :-------------------- | :--------- |
+| `time + duration`     | `time`     |
+| `time - duration`     | `time`     |
+| `time - time`         | `duration` |
+| `duration + duration` | `duration` |
+| `duration / duration` | `double`   |
+| `duration * number`   | `duration` |
+| `duration / number`   | `duration` |
 
 ### String Operations
 
@@ -141,6 +142,7 @@ Concatenate strings using the `+` operator:
 ```tql
 result = "Hello " + "World!"
 ```
+
 ```tql
 { result: "Hello World!" }
 ```
@@ -151,6 +153,7 @@ Check if a string contains a substring using `in`:
 a = "World" in "Hello World"
 b = "Planet" in "Hello World"
 ```
+
 ```tql
 { a: true, b: false }
 ```
@@ -182,9 +185,9 @@ where timestamp > now() - 1d and severity == "alert"
 
 Use the `in` operator to check if a value is within a list or range.
 
-* `T in list<T>` checks if a list contains a value.
-* `ip in subnet` checks if an IP is in a given subnet.
-* `subnet in subnet` checks if one subnet is a subset of another.
+- `T in list<T>` checks if a list contains a value.
+- `ip in subnet` checks if an IP is in a given subnet.
+- `subnet in subnet` checks if one subnet is a subset of another.
 
 To negate, use `not (Value in Range)` or `Value not in Range`.
 
@@ -199,6 +202,7 @@ element.
 let $my_list = ["Hello", "World"]
 result = my_list[0]
 ```
+
 ```tql
 { result: "Hello" }
 ```
@@ -212,6 +216,7 @@ spaces or depends on a runtime value, use an indexing expression:
 let $answers = { "the ultimate question": 42 }
 result = $answers["the ultimate question"]
 ```
+
 ```tql
 { result: 42 }
 ```
@@ -221,6 +226,7 @@ let $severity_to_level = { "ERROR": 1, "WARNING": 2, "INFO": 3 }
 from { severity: "ERROR" }
 level = $severity_to_level[severity]
 ```
+
 ```tql
 {
   severity: "ERROR",
@@ -252,6 +258,7 @@ unique, and later values overwrite earlier ones.
 ```tql title="Lifting nested fields"
 from { nested: { severity: 4, type: "source" } }
 ```
+
 ```tql
 {
   nested: { severity: 4, type: "source" },
@@ -293,18 +300,22 @@ let $pi = 3
 from { radius = 1 }
 area = radius * radius * pi
 ```
+
 ```tql
 { radius: 1, area: 3 }
 ```
 
-## `if` Expression
-
-:::note
-This functionality is not implemented yet.
-:::
+## `if` and `else` Expressions
 
 The `if` keyword can also be used in an expression context, e.g.,
-`if foo == 42 { "yes" } else { "no" }`.
+`"yes" if foo == 42 else "no"`.
+
+The `else` keyword may be omitted, returning `null` instead if the predicate is
+false, e.g., `"yes" if foo == 42`.
+
+The `else` keyword may also be used standalone to provide a fallback value,
+e.g., `foo else "fallback"` returns `"fallback"` if `foo == null`, and returns
+`foo` otherwise.
 
 ## `match` Expression
 
@@ -323,18 +334,20 @@ Expressions like `1 - 2 * 3 + 4` follow precedence and associativity rules. The
 expression evaluates as `(1 - (2 * 3)) + 4`. The following table lists
 precedence, ordered from highest to lowest.
 
-Expression          | Associativity
---------------------|--------------
-method call         |
-field access        |
-`[]`-indexing       |
-unary `+`, `-`      |
-`*`, `/`            | left
-binary `+`, `-`     | left
-`==`, `!=`, `>`, `<`, `>=`, `<=`, `in` | left (will be changed to none)
-`not`               |
-`and`               | left
-`or`                | left
+| Expression                             | Associativity                  |
+| -------------------------------------- | ------------------------------ |
+| method call                            |
+| field access                           |
+| `[]`-indexing                          |
+| unary `+`, `-`                         |
+| `*`, `/`                               | left                           |
+| binary `+`, `-`                        | left                           |
+| `==`, `!=`, `>`, `<`, `>=`, `<=`, `in` | left (will be changed to none) |
+| `not`                                  |
+| `and`                                  | left                           |
+| `or`                                   | left                           |
+| `if`                                   | right                          |
+| `else`                                 | left                           |
 
 ## Constant Expressions
 

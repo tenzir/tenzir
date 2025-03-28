@@ -425,13 +425,19 @@ auto evaluator::eval(const ast::expression& x) -> multi_series {
 }
 
 auto evaluator::input_or_throw(into_location location) -> const table_slice& {
-  if (not input_) {
-    diagnostic::error("expected a constant expression")
-      .primary(location)
-      .emit(ctx_);
-    throw failure::promise();
-  }
-  return *input_;
+  return input_.match(
+    [&](const table_slice* input) -> const table_slice& {
+      if (not input) {
+        diagnostic::error("expected a constant expression")
+          .primary(location)
+          .emit(ctx_);
+        throw failure::promise();
+      }
+      return *input;
+    },
+    [](const table_slice& input) -> const table_slice& {
+      return input;
+    });
 }
 
 namespace {

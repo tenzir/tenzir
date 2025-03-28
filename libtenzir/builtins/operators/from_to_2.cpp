@@ -40,11 +40,14 @@ public:
     return "tql2.from_events";
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto sp = session_provider::make(ctrl.diagnostics());
+  auto operator()() const -> generator<table_slice> {
+    // We suppress diagnostics here as we already evaluated the expression once
+    // as part of the `from` operator. This avoids `from {x: 3 * null}` emitting
+    // the same warning twice.
+    auto null_dh = null_diagnostic_handler{};
+    auto null_sp = session_provider::make(null_dh);
     const auto non_const_eval = [&](const ast::expression& expr) {
-      auto value = evaluator{nullptr, sp.as_session()}.eval(expr);
+      auto value = evaluator{nullptr, null_sp.as_session()}.eval(expr);
       TENZIR_ASSERT(value.length() == 1);
       TENZIR_ASSERT(value.parts().size() == 1);
       return value.part(0);

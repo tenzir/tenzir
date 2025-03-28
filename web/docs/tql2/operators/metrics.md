@@ -20,6 +20,7 @@ tenzir:
   retention:
     metrics: 7d
 ```
+
 :::
 
 ### `name: string (optional)`
@@ -394,6 +395,19 @@ TCP connection.
 
 ## Examples
 
+### Sort pipelines by total ingress in bytes
+
+```tql
+metrics "pipeline"
+summarize pipeline_id, ingress=sum(ingress.bytes if not ingress.internal)
+sort -ingress
+```
+
+```tql
+{pipeline_id: "demo-node/m57-suricata", ingress: 59327586}
+{pipeline_id: "demo-node/m57-zeek", ingress: 43291764}
+```
+
 ### Show the CPU usage over the last hour
 
 ```tql
@@ -434,7 +448,8 @@ metrics "operator"
 where timestamp > now() - 1week
 where source and not hidden
 timestamp = floor(timestamp, 1day)
-summarize timestamp, bytes=sum(output.approx_bytes)```
+summarize timestamp, bytes=sum(output.approx_bytes)
+```
 
 ```tql
 {timestamp: 2023-11-08T00:00:00.000000, bytes: 79927223}

@@ -349,7 +349,7 @@ struct unpack {
 };
 
 TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, geq, lt, leq, and_, or_,
-            in);
+            in, if_, else_);
 
 struct binary_expr {
   binary_expr() = default;

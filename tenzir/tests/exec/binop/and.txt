@@ -1,0 +1,11 @@
+{
+  false_and_false: false,
+  false_and_null: false,
+  false_and_true: false,
+  null_and_false: false,
+  null_and_null: null,
+  null_and_true: null,
+  true_and_false: false,
+  true_and_null: null,
+  true_and_true: true,
+}

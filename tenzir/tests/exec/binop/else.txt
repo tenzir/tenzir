@@ -1,0 +1,11 @@
+{
+  false_else_false: false,
+  false_else_null: false,
+  false_else_true: false,
+  null_else_false: false,
+  null_else_null: null,
+  null_else_true: true,
+  true_else_false: true,
+  true_else_null: true,
+  true_else_true: true,
+}
