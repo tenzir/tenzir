@@ -720,9 +720,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
       range_offset = i;
       range_current = not range_current;
     }
-    if (range_offset != length) {
-      append_until(length);
-    }
+    append_until(length);
     TENZIR_ASSERT(result.length() == length);
     return result;
   });
@@ -775,9 +773,7 @@ auto eval_if(evaluator& self, const ast::binary_expr& x) -> multi_series {
       range_offset = i;
       range_current = not range_current;
     }
-    if (range_offset != length) {
-      append_until(length);
-    }
+    append_until(length);
     TENZIR_ASSERT(result.length() == length);
     return result;
   });
@@ -818,9 +814,7 @@ auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
       range_offset = i;
       range_current = not range_current;
     }
-    if (range_offset != length) {
-      append_until(length);
-    }
+    append_until(length);
     TENZIR_ASSERT(result.length() == length);
     return result;
   });
