@@ -4,7 +4,13 @@
 
 # Options that concern Tenzir.
 tenzir:
-  # The host and port to listen at for node-to-node connections to in the form
+  # The token that is offered when connecting to the Tenzir Platform.
+  # It is used to identify the node and assign it to the correct workspace.
+  # This setting is ignored in the open-source edition of Tenzir, which does
+  # not contain the platform plugin.
+  token: tnz_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+  # The host and port to listen at for node-to-node connections in the form
   # `<host>:<port>`. Host or port may be emitted to use their defaults, which
   # are localhost and 5158, respectively. Set the port to zero to automatically
   # choose a port. Set to false to disable exposing an endpoint.
@@ -186,6 +192,15 @@ tenzir:
 
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
+
+  # The URL of the control endpoint when connecting to a self-hosted
+  # instance of the Tenzir Platform.
+  platform-control-endpoint: wss://ws.tenzir.app/production
+
+  # Whether to undermine the security of the TLS connection to the
+  # Tenzir Platform by disabling certificate validation.
+  # Setting this to `true` is strongly discouraged.
+  platform-skip-peer-verification: false
 
   # Control how operator's calculate demand from their upstream operator. Note
   # that this is an expert feature and should only be changed if you know what
