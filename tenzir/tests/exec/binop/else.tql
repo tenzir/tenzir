@@ -1,0 +1,11 @@
+from {
+  "true_else_true": false else false,
+  "false_else_null": false else null,
+  "false_else_true": false else true,
+  "null_else_false": null else false,
+  "null_else_null": null else null,
+  "null_else_true": null else true,
+  "true_else_false": true else false,
+  "true_else_null": true else null,
+  "true_else_true": true else true,
+}
