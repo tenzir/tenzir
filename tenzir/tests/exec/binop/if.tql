@@ -1,5 +1,5 @@
 from {
-  "true_if_true": false if false,
+  "false_if_false": false if false,
   "false_if_null": false if null,
   "false_if_true": false if true,
   "null_if_false": null if false,

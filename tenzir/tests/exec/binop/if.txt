@@ -1,5 +1,5 @@
 {
-  true_if_true: true,
+  false_if_false: null,
   false_if_null: null,
   false_if_true: false,
   null_if_false: null,
@@ -7,6 +7,7 @@
   null_if_true: null,
   true_if_false: null,
   true_if_null: null,
+  true_if_true: true,
 }
 warning: expected `bool`, but got `null`
  --> exec/binop/if.tql:3:29
