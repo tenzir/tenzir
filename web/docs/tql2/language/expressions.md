@@ -346,7 +346,7 @@ precedence, ordered from highest to lowest.
 | `not`                                  |
 | `and`                                  | left                           |
 | `or`                                   | left                           |
-| `if`                                   | left                           |
+| `if`                                   | right                          |
 | `else`                                 | left                           |
 
 ## Constant Expressions
