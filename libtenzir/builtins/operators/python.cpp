@@ -40,10 +40,10 @@
 
 #include <filesystem>
 
-namespace bp = boost::process;
-
 namespace tenzir::plugins::python {
 namespace {
+
+namespace bp = boost::process;
 
 /// Arrow InputStream API implementation over a file descriptor.
 class arrow_fd_wrapper : public ::arrow::io::InputStream {
@@ -491,8 +491,8 @@ class plugin final : public virtual operator_plugin<python_operator>,
 public:
   struct config config = {};
 
-  auto initialize(const record& plugin_config,
-                  const record& /*global_config*/) -> caf::error override {
+  auto initialize(const record& plugin_config, const record& /*global_config*/)
+    -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
     if (!create_virtualenv) {
