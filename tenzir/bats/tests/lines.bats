@@ -8,5 +8,5 @@ setup() {
 
 @test "parse null delimited events" {
   # This test ensures that we correctly identify the NULL byte as separator.
-  printf "1 2 3" | tr ' ' '\0' | check tenzir "read lines --null"
+  printf "1 2 3" | tr ' ' '\0' | check tenzir "read_lines split_at_null=true"
 }

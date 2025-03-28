@@ -45,7 +45,6 @@ def main():
         p = subprocess.Popen(
             [
                 "tenzir",
-                "--tql2",
                 "--color=always",
                 "-q",
                 "--implicit-events-sink=write_tql color=true | save_file \"/dev/stdout\"",

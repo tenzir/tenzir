@@ -50,9 +50,6 @@ tenzir:
     # minimum total cache capacity of 64MiB.
     #capacity: 1Gi
 
-  # Always use TQL2 for pipelines.
-  #tql2: false
-
   # A certificate file used as the default for operators accepting a `cacert`
   # option. This will default to an appropriate directory for the system. For
   # example:

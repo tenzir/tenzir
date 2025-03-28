@@ -1,6 +1,24 @@
-error: could not parse data
+warning: eval not implemented yet for: {begin: 6..7, inner: [invocation {op: {path: [`version` @ 8..15], ref: std::version/op}, args: []}], end: 16..17}
  --> <input>:1:7
   |
-1 | every version
-  |       ^ 
+1 | every { version }
+  |       ~~~~~~~~~~~ 
   |
+
+error: expected argument of type `duration`, but got `null`
+ --> <input>:1:7
+  |
+1 | every { version }
+  |       ^^^^^^^^^^^ 
+  |
+  = usage: every interval:duration { … }
+  = docs: https://docs.tenzir.com/tql2/operators/every
+
+error: expected additional positional argument `{ … }`
+ --> <input>:1:1
+  |
+1 | every { version }
+  | ^^^^^ 
+  |
+  = usage: every interval:duration { … }
+  = docs: https://docs.tenzir.com/tql2/operators/every

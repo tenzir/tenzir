@@ -5,7 +5,6 @@ setup() {
   bats_load_library bats-assert
   bats_load_library bats-tenzir
   export TENZIR_EXEC__DUMP_PIPELINE=true
-  export TENZIR_TQL2=true
 }
 
 @test "unknown udo" {

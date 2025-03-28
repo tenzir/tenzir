@@ -232,7 +232,6 @@ auto main(int argc, char** argv) -> int try {
       TENZIR_ERROR("could not load `tenzir.operators`: invalid record");
       return EXIT_FAILURE;
     }
-    auto force_tql2 = get_or(cfg, "tenzir.tql2", false);
     auto dh = make_diagnostic_printer(std::nullopt, color_diagnostics::yes,
                                       std::cerr);
     auto provider = session_provider::make(*dh);
@@ -246,20 +245,14 @@ auto main(int argc, char** argv) -> int try {
                      name);
         return EXIT_FAILURE;
       }
-      auto use_tql2 = force_tql2 or definition->starts_with("// tql2");
-      if (use_tql2) {
-        auto pipe = parse_pipeline_with_bad_diagnostics(*definition, ctx);
-        if (not pipe) {
-          TENZIR_ERROR("parsing of user-defined operator `{}` failed", name);
-          return EXIT_FAILURE;
-        }
-        TENZIR_ASSERT(not tql2_udos.contains(name));
-        tql2_udos[name] = std::move(*pipe);
-      } else {
-        aliases.emplace(std::move(name), *definition);
+      auto pipe = parse_pipeline_with_bad_diagnostics(*definition, ctx);
+      if (not pipe) {
+        TENZIR_ERROR("parsing of user-defined operator `{}` failed", name);
+        return EXIT_FAILURE;
       }
+      TENZIR_ASSERT(not tql2_udos.contains(name));
+      tql2_udos[name] = std::move(*pipe);
     }
-    tql::set_operator_aliases(std::move(aliases));
     // We parse user-defined operators in a loop; if in one iteration not a
     // single operator resolved, we know that the definition is invalid.
     // Note that this algorithm has a worst-case complexity of O(n^2), but that
