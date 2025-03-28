@@ -610,7 +610,6 @@ struct EvalBinOp<ast::binary_op::in, L, list_type> {
   }
 };
 
-// TODO rename to left/right
 template <ast::binary_op Op>
 auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
   TENZIR_ASSERT(x.op.inner == Op);
