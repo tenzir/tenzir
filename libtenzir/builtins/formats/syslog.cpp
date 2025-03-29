@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -731,6 +732,269 @@ private:
   multi_series_builder::options opts_;
 };
 
+auto make_root_field(std::string field) -> ast::root_field {
+  return ast::root_field{
+    ast::identifier{std::move(field), location::unknown},
+  };
+}
+
+struct printer_args final {
+  ast::expression facility{make_root_field("facility")};
+  ast::expression severity{make_root_field("severity")};
+  ast::expression version{make_root_field("version")};
+  ast::expression timestamp{make_root_field("timestamp")};
+  ast::expression hostname{make_root_field("hostname")};
+  ast::expression app_name{make_root_field("app_name")};
+  ast::expression process_id{make_root_field("process_id")};
+  ast::expression message_id{make_root_field("message_id")};
+  ast::expression structured_data{make_root_field("structured_data")};
+  ast::expression message{make_root_field("message")};
+  location op;
+
+  auto add_to(argument_parser2& p) -> void {
+    p.named_optional("facility", facility, "int");
+    p.named_optional("severity", severity, "int");
+    p.named_optional("version", version, "int");
+    p.named_optional("timestamp", timestamp, "time");
+    p.named_optional("hostname", hostname, "string");
+    p.named_optional("app_name", app_name, "string");
+    p.named_optional("process_id", process_id, "string");
+    p.named_optional("message_id", message_id, "string");
+    p.named_optional("structured_data", structured_data, "record");
+  }
+
+  auto loc(into_location loc) const -> location {
+    return loc ? loc : op;
+  }
+
+  friend auto inspect(auto& f, printer_args& x) -> bool {
+    return f.object(x).fields(
+      f.field("facility", x.facility), f.field("severity", x.severity),
+      f.field("version", x.version), f.field("timestamp", x.timestamp),
+      f.field("hostname", x.hostname), f.field("app_name", x.app_name),
+      f.field("process_id", x.process_id), f.field("message_id", x.message_id),
+      f.field("structured_data", x.structured_data));
+  }
+};
+
+class syslog_printer final : public crtp_operator<syslog_printer> {
+public:
+  syslog_printer() = default;
+
+  syslog_printer(printer_args args) : args_{std::move(args)} {
+  }
+
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto& dh = ctrl.diagnostics();
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      const auto ty = as<record_type>(slice.schema());
+      auto facility
+        = eval_as<uint64_type>("facility", args_.facility, slice, dh, [&]() {
+            diagnostic::warning("`facility` evaluated to `null`")
+              .primary(args_.loc(args_.facility))
+              .note("defaulting to `1`")
+              .emit(dh);
+            return 1;
+          });
+      auto severity
+        = eval_as<uint64_type>("severity", args_.severity, slice, dh, [&]() {
+            diagnostic::warning("`severity` evaluated to `null`")
+              .primary(args_.loc(args_.severity))
+              .note("defaulting to `6`")
+              .emit(dh);
+            return 6;
+          });
+      auto version
+        = eval_as<uint64_type>("version", args_.version, slice, dh, [&]() {
+            diagnostic::warning("`version` evaluated to `null`")
+              .primary(args_.loc(args_.severity))
+              .note("defaulting to `1`")
+              .emit(dh);
+            return 1;
+          });
+      auto timestamp
+        = eval_as<time_type>("timestamp", args_.timestamp, slice, dh);
+      auto hostname
+        = eval_as<string_type>("hostname", args_.hostname, slice, dh);
+      auto app_name
+        = eval_as<string_type>("app_name", args_.app_name, slice, dh);
+      auto process_id
+        = eval_as<string_type>("process_id", args_.process_id, slice, dh);
+      auto message_id
+        = eval_as<string_type>("message_id", args_.message_id, slice, dh);
+      auto structured_data = eval_as<record_type>(
+        "structured_data", args_.structured_data, slice, dh);
+      auto message = eval_as<string_type>("message", args_.message, slice, dh);
+      auto out = std::vector<char>{};
+      auto buffer = std::vector<char>{};
+      auto done = size_t{};
+      for (auto i = size_t{}; i < slice.rows(); ++i) {
+        auto result = std::invoke([&]() -> failure_or<void> {
+          TRY(auto f, facility.next().value());
+          TRY(auto s, severity.next().value());
+          TRY(auto v, version.next().value());
+          TRY(auto t, timestamp.next().value());
+          TRY(auto host, hostname.next().value());
+          TRY(auto app, app_name.next().value());
+          TRY(auto pid, process_id.next().value());
+          TRY(auto mid, message_id.next().value());
+          TRY(auto sd, structured_data.next().value());
+          TRY(auto msg, message.next().value());
+          TENZIR_ASSERT(f);
+          TENZIR_ASSERT(s);
+          auto it = std::back_inserter(buffer);
+          const auto format_n = [&](std::string_view name,
+                                    std::optional<std::string_view> str,
+                                    size_t count, const ast::expression& expr) {
+            if (not str or str->empty()) {
+              fmt::format_to(it, " -");
+              return;
+            }
+            if (str->size() > count) {
+              diagnostic::warning("`{}` must not be longer than {} characters",
+                                  name, count)
+                .primary(args_.loc(expr))
+                .emit(dh);
+            }
+            fmt::format_to(it, " {}", std::views::take(*str, count));
+          };
+          fmt::format_to(it, "<{}>{}", *f * 8 + *s, *v);
+          if (t) {
+            fmt::format_to(
+              it, " {:%FT%TZ}",
+              std::chrono::time_point_cast<std::chrono::microseconds>(*t));
+          } else {
+            fmt::format_to(it, " -");
+          }
+          // TODO: What to do with empty strings?
+          format_n("hostname", host, 255, args_.hostname);
+          format_n("app_name", app, 48, args_.app_name);
+          format_n("process_id", pid, 128, args_.process_id);
+          format_n("message_id", mid, 32, args_.message_id);
+          const auto format_val = [&](data_view v) {
+            match(
+              v,
+              [&](const concepts::integer auto& x) {
+                fmt::format_to(it, "\"{}\"", x);
+              },
+              [&](const std::string_view& x) {
+                *it = '"';
+                ++it;
+                for (const auto& c : x) {
+                  if (c == '\\' or c == '"' or c == ']') {
+                    *it = '\\';
+                    ++it;
+                  }
+                  *it = c;
+                  ++it;
+                }
+                *it = '"';
+                ++it;
+              },
+              [](const auto&) {
+                TENZIR_UNIMPLEMENTED();
+              });
+          };
+          if (sd and not sd->empty()) {
+            fmt::format_to(it, " ");
+            for (auto&& [name, val] : *sd) {
+              fmt::format_to(it, "[{}", name);
+              auto* params = try_as<view<record>>(val);
+              TENZIR_ASSERT(params);
+              for (auto&& [k, v] : *params) {
+                fmt::format_to(it, " {}=", k);
+                format_val(v);
+              }
+              fmt::format_to(it, "]");
+            }
+          } else {
+            fmt::format_to(it, " -");
+          }
+          if (msg) {
+            fmt::format_to(it, " {}", *msg);
+          }
+          buffer.push_back('\n');
+          return {};
+        });
+        if (result.is_error()) {
+          buffer.resize(done);
+        }
+      }
+      co_yield chunk::make(std::move(buffer));
+    }
+  }
+
+  template <typename T>
+  auto eval_as(std::string_view name, const ast::expression& expr,
+               const table_slice& slice, diagnostic_handler& dh,
+               auto&& make_default) const
+    -> generator<failure_or<std::optional<view<type_to_data_t<T>>>>> {
+    auto ms = std::invoke([&] {
+      if (expr.get_location()) {
+        return eval(expr, slice, dh);
+      }
+      auto dh = null_diagnostic_handler{};
+      return eval(expr, slice, dh);
+    });
+    for (auto&& s : ms.parts()) {
+      if (s.type.kind().template is<null_type>()) {
+        for (auto i = size_t{}; i < slice.rows(); ++i) {
+          co_yield make_default();
+        }
+        continue;
+      }
+      if (s.type.kind().template is<T>()) {
+        for (auto&& val : s.template values<T>()) {
+          if (val) {
+            co_yield std::move(val).value();
+          } else {
+            co_yield make_default();
+          }
+        }
+        continue;
+      }
+      diagnostic::warning("`{}` must be `{}`, got `{}`", name, T{},
+                          s.type.kind())
+        // .primary(args_.loc(expr))
+        .emit(dh);
+      for (auto i = size_t{}; i < slice.rows(); ++i) {
+        // co_yield make_default();
+        co_yield failure::promise();
+      }
+    }
+  }
+
+  template <typename T>
+  auto eval_as(std::string_view name, const ast::expression& expr,
+               const table_slice& slice, diagnostic_handler& dh) const
+    -> generator<failure_or<std::optional<view<type_to_data_t<T>>>>> {
+    return eval_as<T>(name, expr, slice, dh, []() {
+      return std::nullopt;
+    });
+  }
+
+  auto name() const -> std::string override {
+    return "syslog_printer";
+  }
+
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, syslog_printer& x) -> bool {
+    return f.object(x).fields(f.field("args", x.args_));
+  }
+
+private:
+  printer_args args_;
+};
+
 class plugin final : public virtual parser_plugin<syslog_parser> {
 public:
   auto parse_parser(parser_interface& p) const
@@ -835,9 +1099,26 @@ public:
   }
 };
 
+class write_syslog final : public operator_plugin2<syslog_printer> {
+  auto name() const -> std::string override {
+    return "write_syslog";
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = printer_args{};
+    args.op = inv.self.get_location();
+    auto p = argument_parser2::operator_(name());
+    args.add_to(p);
+    TRY(p.parse(inv, ctx));
+    return std::make_unique<syslog_printer>(std::move(args));
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::syslog
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::syslog::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::syslog::read_syslog)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::syslog::parse_syslog)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::syslog::write_syslog)
