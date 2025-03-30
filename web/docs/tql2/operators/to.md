@@ -106,7 +106,7 @@ Please see the respective operator pages for details on the URI's locator format
 
 #### Format
 
-The `from` operator can deduce the file format based on these file-endings:
+The `to` operator can deduce the file format based on these file-endings:
 
 | Format | File Endings | Operator  |
 |:------ |:------------ |:--------- |
@@ -122,7 +122,7 @@ The `from` operator can deduce the file format based on these file-endings:
 
 #### Compression
 
-The `from` operator can deduce the following compressions based on these
+The `to` operator can deduce the following compressions based on these
 file-endings:
 
 | Compression |    File Endings  |
