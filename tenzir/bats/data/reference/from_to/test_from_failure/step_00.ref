@@ -4,5 +4,5 @@ error: unsupported scheme `unknown`
 1 | from "unknown://example.org"
   |       ^^^^^^^ 
   |
-  = note: supported schemes for deduction: `file`, `ftp`, `ftps`, `http`, `https`, `tcp`, `udp`
+  = note: supported schemes for deduction: `elasticsearch`, `file`, `ftp`, `ftps`, `http`, `https`, `opensearch`, `tcp`, `udp`
   = docs: https://docs.tenzir.com/tql2/operators/from

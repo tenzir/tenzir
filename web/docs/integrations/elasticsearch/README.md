@@ -11,11 +11,16 @@ and attempts to maximally batch events for throughput, accumulating multiple
 events before shipping them within a single API call. You can control batching
 behavior with the `max_content_length` and `send_timeout` options.
 
+Tenzir can also present an Elasticsearch-compatible REST API via the
+[`from_opensearch`](../../tql2/operators/from_opensearch.md) operator.
+
 :::info Advanced Details
 For more details and possible configuration, see the documentation for the
-[`to_opensearch`](../../tql2/operators/to_opensearch.mdx) operator. When you use
-[`to`](../../tql2/operators/to.md) with the `elasticsearch://` URL scheme, the
-pipeline uses the `to_opensearch` operator under the hood.
+[`from_opensearch`](../../tql2/operators/from_opensearch.md) and
+[`to_opensearch`](../../tql2/operators/to_opensearch.mdx) operators. When you
+use [`to`](../../tql2/operators/to.md) with the `elasticsearch://` URL scheme,
+the pipeline uses the `to_opensearch` operator under the hood. Similarly,
+[`from`](../../tql2/operators/from.md) uses the `from_opensearch` operator.
 :::
 
 ## Examples

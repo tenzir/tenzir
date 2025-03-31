@@ -66,6 +66,7 @@ Operator | Description | Example
 :--------|:------------|:-------
 [`from`](./operators/from.md) | Reads events from an URI<br/>Creates events from records | `from "http://example.org/file.csv.gz"`<br/>`from {key: "value"}…` <!--at the top because its important-->
 [`from_fluent_bit`](./operators/from_fluent_bit.mdx) | Returns results from Fluent Bit | `from_fluent_bit "opentelemetry"`
+[`from_opensearch`](./operators/from_opensearch.md) | Accepts requests for OpenSearch Bulk API | `from_opensearch`
 [`from_velocira…`](./operators/from_velociraptor.md) | Returns results from a Velociraptor server | `from_velociraptor subscribe="Windows"`
 
 #### Bytes
