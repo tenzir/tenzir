@@ -39,6 +39,10 @@
 
 namespace tenzir {
 
+namespace {
+constexpr std::size_t structured_element_limit = 20'000;
+}
+
 data_builder::data_builder(data_parsing_function parser, diagnostic_handler* dh,
                            bool schema_only, bool parse_schema_fields_only)
   : dh_{dh},
@@ -403,7 +407,6 @@ auto node_record::try_field(std::string_view name) -> node_object* {
   if (not inserted) {
     return &data_[it->second].value;
   }
-  TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on record size reached.");
   return &data_.emplace_back(it->first).value;
 }
 
@@ -525,6 +528,7 @@ auto node_record::commit_to(tenzir::record_ref r, class data_builder& rb,
     v.commit_to(r.field(k), rb, nullptr, mark_dead);
   }
   if (mark_dead) {
+    prune();
     mark_this_dead();
   }
 }
@@ -560,7 +564,21 @@ auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
     v.commit_to(entry_it->second, rb, nullptr, mark_dead);
   }
   if (mark_dead) {
+    prune();
     mark_this_dead();
+  }
+}
+
+auto node_record::prune() -> void {
+  if (data_.size() > structured_element_limit) {
+    data_.resize(structured_element_limit);
+    data_.shrink_to_fit();
+    for (auto it = lookup_.begin(); it != lookup_.end(); ++it) {
+      const auto& [k, idx] = *it;
+      if (idx > structured_element_limit) {
+        it = lookup_.erase(it);
+      }
+    }
   }
 }
 
@@ -1140,10 +1158,9 @@ auto node_list::push_back_node() -> node_object* {
     ++first_dead_idx_;
     return &value;
   }
-  TENZIR_ASSERT(std::ranges::all_of(data_, [](const auto& o) {
+  TENZIR_ASSERT_EXPENSIVE(std::ranges::all_of(data_, [](const auto& o) {
     return o.state_ == state::alive;
   }));
-  TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on list size reached.");
   ++first_dead_idx_;
   return &data_.emplace_back();
 }
@@ -1362,16 +1379,20 @@ auto node_list::commit_to(builder_ref r, class data_builder& rb,
   for (auto& v : alive_elements()) {
     v.commit_to(r, rb, seed ? &field_seed : nullptr, mark_dead);
   }
-  TENZIR_ASSERT_EXPENSIVE(std::ranges::all_of(data_.begin() + first_dead_idx_,
-                                              data_.end(), [](const auto& o) {
-                                                return o.state_ == state::dead;
-                                              }));
+  TENZIR_ASSERT_EXPENSIVE(
+    not mark_dead
+    or std::ranges::all_of(data_.begin() + first_dead_idx_, data_.end(),
+                           [](const auto& o) {
+                             return o.state_ == state::dead;
+                           }));
   if (mark_dead) {
     type_index_ = type_index_empty;
     first_dead_idx_ = 0;
+    prune();
     mark_this_dead();
   }
 }
+
 auto node_list::commit_to(tenzir::list& l, class data_builder& rb,
                           const tenzir::list_type* seed,
                           bool mark_dead) -> void {
@@ -1380,19 +1401,29 @@ auto node_list::commit_to(tenzir::list& l, class data_builder& rb,
     auto& d = l.emplace_back();
     v.commit_to(d, rb, seed ? &field_seed : nullptr, mark_dead);
   }
-  TENZIR_ASSERT_EXPENSIVE(std::ranges::all_of(data_.begin() + first_dead_idx_,
-                                              data_.end(), [](const auto& o) {
-                                                return o.state_ == state::dead;
-                                              }));
+  TENZIR_ASSERT_EXPENSIVE(
+    not mark_dead
+    or std::ranges::all_of(data_.begin() + first_dead_idx_, data_.end(),
+                           [](const auto& o) {
+                             return o.state_ == state::dead;
+                           }));
   if (mark_dead) {
     type_index_ = type_index_empty;
     first_dead_idx_ = 0;
+    prune();
     mark_this_dead();
   }
 }
 
 auto node_list::alive_elements() -> std::span<node_object> {
   return {data_.begin(), data_.begin() + first_dead_idx_};
+}
+
+auto node_list::prune() -> void {
+  if (data_.size() > structured_element_limit) {
+    data_.resize(structured_element_limit);
+    data_.shrink_to_fit();
+  }
 }
 
 auto node_list::clear() -> void {
