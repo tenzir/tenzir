@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[8217],{1680:a=>{a.exports=JSON.parse('{"label":"rotation","permalink":"/archive/tags/rotation","allTagsPath":"/archive/tags","count":1}')}}]);
