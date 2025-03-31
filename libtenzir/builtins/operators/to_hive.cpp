@@ -195,6 +195,25 @@ auto extend_url_path(boost::urls::url url_view, std::string_view path)
   return fmt::to_string(url);
 }
 
+auto get_extension(std::string_view method_name) -> std::string {
+  if (method_name == "brotli") {
+    return "br";
+  }
+  if (method_name == "bz2") {
+    return "bz2";
+  }
+  if (method_name == "gzip") {
+    return "gz";
+  }
+  if (method_name == "lz4") {
+    return "lz4";
+  }
+  if (method_name == "zstd") {
+    return "zst";
+  }
+  return {};
+}
+
 class to_hive final : public crtp_operator<to_hive> {
 public:
   to_hive() = default;
@@ -286,10 +305,12 @@ public:
         auto chunk
           = flush_group.write.feed(subslice(slice, current_start, row));
         current_start = row;
-        flush_group.bytes_written += chunk->size();
-        TENZIR_TRACE("saving {} bytes", chunk->size());
-        flush_group.save.feed(std::move(chunk));
-        TENZIR_TRACE("saving done");
+        if (chunk) {
+          flush_group.bytes_written += chunk->size();
+          TENZIR_TRACE("saving {} bytes", chunk->size());
+          flush_group.save.feed(std::move(chunk));
+          TENZIR_TRACE("saving done");
+        }
         if (flush_group.bytes_written > args_.max_size) {
           TENZIR_TRACE("ending group because of size limit");
           flush_group.run_to_completion();
@@ -362,10 +383,12 @@ public:
     auto timeout = std::optional<located<duration>>{};
     auto max_size = std::optional<located<uint64_t>>{};
     auto format = located<std::string>{};
+    auto compression = std::optional<located<std::string>>{};
     TRY(argument_parser2::operator_(name())
           .positional("uri", uri)
           .named("partition_by", by_expr, "list<field>")
           .named("format", format)
+          .named("compression", compression)
           .named("timeout", timeout)
           .named("max_size", max_size)
           .parse(inv, ctx));
@@ -398,8 +421,11 @@ public:
       return failure::promise();
     }
     // TODO: `json` should be `ndjson` (probably not only here).
-    auto writer = pipeline::internal_parse(fmt::format(
-      "write {}", format.inner == "json" ? "json -c" : format.inner));
+    auto writer_definition
+      = fmt::format("write {}{}",
+                    format.inner == "json" ? "json -c" : format.inner,
+                    compression ? fmt::format(".{}", compression->inner) : "");
+    auto writer = pipeline::internal_parse(writer_definition);
     if (not writer) {
       // TODO: This could also be a different error (e.g., for `xsv`).
       diagnostic::error("invalid format `{}`", format.inner)
@@ -431,12 +457,16 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    // TODO: Maybe add compression for non-parquet data.
+    auto extension = format.inner;
+    if (compression) {
+      extension
+        = fmt::format("{}.{}", format.inner, get_extension(compression->inner));
+    }
     return std::make_unique<to_hive>(operator_args{
       .uri = fmt::to_string(*url_view),
       .by = std::move(by),
       // TODO: Not always right.
-      .extension = std::move(format.inner),
+      .extension = std::move(extension),
       .writer = std::move(*writer),
       .timeout = timeout ? timeout->inner : 5min,
       .max_size = max_size ? max_size->inner : 100_M,
