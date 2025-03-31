@@ -53,4 +53,8 @@ from {
   },
   message: null,
 }
+// TODO: Because of fmtlib/fmt#2207 and our Dockerfile using a really old
+// version of {fmt} we remove the timestamp here, as its rendering is
+// inconsistent between library versions. This needs a proper fix.
+timestamp = null
 write_syslog
