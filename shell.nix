@@ -12,6 +12,7 @@ in
           pkgs.ccache
           pkgs.clang-tools
           pkgs.cmake-format
+          pkgs.gdb
           pkgs.speeve
           pkgs.shfmt
           pkgs.poetry
