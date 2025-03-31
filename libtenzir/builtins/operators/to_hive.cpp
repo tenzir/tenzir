@@ -422,9 +422,12 @@ public:
     }
     // TODO: `json` should be `ndjson` (probably not only here).
     auto writer_definition
-      = fmt::format("write {}{}",
-                    format.inner == "json" ? "json -c" : format.inner,
-                    compression ? fmt::format(".{}", compression->inner) : "");
+      = fmt::format("write {}",
+                    format.inner == "json" ? "json -c" : format.inner);
+    if (compression) {
+      fmt::format_to(std::back_inserter(writer_definition), "| compress \"{}\"",
+                     compression->inner);
+    }
     auto writer = pipeline::internal_parse(writer_definition);
     if (not writer) {
       // TODO: This could also be a different error (e.g., for `xsv`).
