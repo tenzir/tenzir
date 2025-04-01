@@ -35,7 +35,6 @@ Checks: >
   -dummy-must-be-last-entry-without-trailing-comma
 WarningsAsErrors:      ''
 HeaderFilterRegex:     '/tenzir/'
-AnalyzeTemporaryDtors: false
 CheckOptions:
   - key:             readability-implicit-bool-conversion.AllowPointerConditions
     value:           true
