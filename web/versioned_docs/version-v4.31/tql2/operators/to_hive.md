@@ -40,6 +40,11 @@ The total file size after which a new file will be opened for the same partition
 group. Note that files will typically be slightly larger than this limit,
 because it opens a new file when only after it is exceeded. Defaults to `100M`.
 
+### `compression = string (optional)`
+
+Compress the output files with the given compression algorithm. See docs for the
+`compress` operator for supported compression algorithms.
+
 ## Examples
 
 ### Partition by a single field into local JSON files
