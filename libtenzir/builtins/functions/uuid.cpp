@@ -58,7 +58,7 @@ public:
     if (not opt) {
       diagnostic::error("unsupported UUID version: `{}`", version)
         .primary(*version_opt)
-        .hint("supported versions are `v1`, `v4`, `v6`, `v7`, `nil`.")
+        .hint("supported versions: `v1`, `v4`, `v6`, `v7`, `nil`")
         .emit(ctx);
       return failure::promise();
     }
