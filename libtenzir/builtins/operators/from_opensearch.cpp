@@ -36,7 +36,8 @@ namespace {
 namespace http = caf::net::http;
 namespace ssl = caf::net::ssl;
 
-auto split_at_newline(chunk_ptr chunk) -> std::vector<std::vector<std::byte>> {
+auto split_at_newline(const chunk_ptr& chunk)
+  -> std::vector<std::vector<std::byte>> {
   if (!chunk || chunk->size() == 0) {
     return {};
   }
@@ -88,8 +89,8 @@ struct opensearch_args {
     if (url.inner.empty()) {
       diagnostic::error("`url` must not be empty").primary(url).emit(dh);
     }
-    if (const auto col = url.inner.rfind(':'); col != url.inner.npos) {
-      const auto end = url.inner.data() + url.inner.size();
+    if (const auto col = url.inner.rfind(':'); col != std::string::npos) {
+      const auto* end = url.inner.data() + url.inner.size();
       const auto [ptr, err]
         = std::from_chars(url.inner.data() + col + 1, end, port);
       if (err != std::errc{}) {
@@ -179,9 +180,9 @@ auto decompress_payload(const http::request& r, diagnostic_handler& dh)
   auto read = size_t{};
   while (read != r.payload().size_bytes()) {
     const auto result = decompressor->Decompress(
-      r.payload().size_bytes() - read,
+      detail::narrow<long>(r.payload().size_bytes() - read),
       reinterpret_cast<const uint8_t*>(r.payload().data() + read),
-      out.capacity() - written, out.data() + written);
+      detail::narrow<long>(out.capacity() - written), out.data() + written);
     if (not result.ok()) {
       diagnostic::warning("failed to decompress: {}",
                           result.status().ToString())
@@ -219,7 +220,7 @@ auto decompress_payload(const http::request& r, diagnostic_handler& dh)
   return chunk::make(std::move(out));
 }
 
-auto handle_slice(bool& is_action, table_slice slice) -> table_slice {
+auto handle_slice(bool& is_action, const table_slice& slice) -> table_slice {
   if (slice.rows() == 0) {
     return {};
   }
@@ -306,7 +307,7 @@ public:
                 http::status::ok, "application/x-ndjson",
                 R"({"name":"hostname","cluster_name":"opensearch","cluster_uuid":"rTLctDY8SoqcaEkfmuyGFA","version":{"distribution":"opensearch","number":"8.17.0","build_flavor":"default","build_type":"tar","build_hash":"unknown","build_date":"2025-02-21T09:34:11Z","build_snapshot":false,"lucene_version":"9.12.1","minimum_wire_compatibility_version":"7.10.0","minimum_index_compatibility_version":"7.0.0"},"tagline":"Tenzir from_opensearch"})");
             })
-          .start([&](caf::async::consumer_resource<http::request> c) {
+          .start([&](const caf::async::consumer_resource<http::request>& c) {
             stream
               = c.observe_on(ptr)
                   .flat_map([keep_actions = args_.keep_actions,
@@ -314,11 +315,9 @@ public:
                               const http::request& r) mutable
                               -> std::optional<std::vector<table_slice>> {
                     if (r.header().path() != "/_bulk") {
-                      TENZIR_VERBOSE(
-                        "unhandled {} {}\n{}", to_string(r.header().method()),
-                        r.header().path(),
-                        std::string_view{(const char*)r.payload().data(),
-                                         r.payload().size()});
+                      TENZIR_VERBOSE("unhandled {} {}",
+                                     to_string(r.header().method()),
+                                     r.header().path());
                       if (r.header().method() == http::method::head) {
                         r.respond(http::status::ok, "", "");
                       } else {
@@ -329,20 +328,13 @@ public:
                     }
                     r.respond(
                       http::status::ok, "application/x-ndjson",
-                      R"({"errors":true,"items":[{"create":{"status":201,"result":"created"}}]})");
+                      R"({"errors":false,"items":[{"create":{"status":201,"result":"created"}}]})");
                     auto ptr = decompress_payload(r, dh);
                     if (not ptr) {
                       return std::nullopt;
                     }
                     auto parser
                       = json::ndjson_parser{"from_opensearch", dh, {}};
-                    auto slices = std::vector<table_slice>{};
-                    // get all events that are ready (timeout, batch size,
-                    // ordered mode constraints)
-                    for (auto&& slice :
-                         parser.builder.yield_ready_as_table_slice()) {
-                      slices.push_back(std::move(slice));
-                    }
                     for (const auto& chunk : split_at_newline(*ptr)) {
                       if (chunk.empty()) {
                         continue;
@@ -354,25 +346,15 @@ public:
                       };
                       parser.parse(view);
                     }
-                    if (parser.abort_requested) {
-                      return slices;
-                    }
-                    parser.validate_completion();
-                    if (parser.abort_requested) {
-                      return slices;
-                    }
-                    // Get all remaining events
+                    TENZIR_ASSERT(not parser.abort_requested);
                     auto result = parser.builder.finalize_as_table_slice();
                     if (keep_actions) {
-                      for (auto&& slice : result) {
-                        slices.push_back(std::move(slice));
-                      }
-                      return slices;
+                      return result;
                     }
+                    auto slices = std::vector<table_slice>{};
                     auto is_action = true;
-                    for (auto&& slice : result) {
-                      slices.push_back(
-                        handle_slice(is_action, std::move(slice)));
+                    for (const auto& slice : result) {
+                      slices.push_back(handle_slice(is_action, slice));
                     }
                     return slices;
                   })
@@ -406,7 +388,7 @@ public:
       // observe loop after yielding here, causing the vector's iterator to be
       // invalidated.
       for (auto i = size_t{}; i < slices.size(); ++i) {
-        co_yield std::move(slices[i]);
+        co_yield slices[i];
       }
       slices.clear();
     }
