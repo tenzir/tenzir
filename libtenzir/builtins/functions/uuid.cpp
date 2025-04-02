@@ -50,8 +50,7 @@ public:
     TRY(argument_parser2::function("uuid")
           .named("version", version_opt)
           .parse(inv, ctx));
-    using namespace std::string_literals;
-    auto version = "v4"s;
+    auto version = std::string{"v4"};
     if (version_opt) {
       version = version_opt->inner;
     }
