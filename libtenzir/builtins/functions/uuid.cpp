@@ -5,23 +5,18 @@
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
-
+//
 #include <tenzir/arrow_utils.hpp>
-#include <tenzir/concept/parseable/tenzir/si.hpp>
-#include <tenzir/detail/narrow.hpp>
-#include <tenzir/fbs/aggregation.hpp>
-#include <tenzir/flatbuffer.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
-#include <tenzir/uuid.hpp>
 
 #include <arrow/builder.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
-#include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 
