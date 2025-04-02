@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.5)
 include(GNUInstallDirs)
 
 project(tsl-robin-map VERSION 0.6.2)

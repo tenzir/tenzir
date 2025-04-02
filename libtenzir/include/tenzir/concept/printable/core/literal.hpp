@@ -16,23 +16,23 @@
 
 namespace tenzir::printer_literals {
 
-inline auto operator"" _P(char c) {
+inline auto operator""_P(char c) {
   return literal_printer{c};
 }
 
-inline auto operator"" _P(const char* str) {
+inline auto operator""_P(const char* str) {
   return literal_printer{std::string{str}};
 }
 
-inline auto operator"" _P(const char* str, size_t size) {
+inline auto operator""_P(const char* str, size_t size) {
   return literal_printer{{str, size}};
 }
 
-inline auto operator"" _P(unsigned long long int x) {
+inline auto operator""_P(unsigned long long int x) {
   return literal_printer{x};
 }
 
-inline auto operator"" _P(long double x) {
+inline auto operator""_P(long double x) {
   return literal_printer{x};
 }
 
