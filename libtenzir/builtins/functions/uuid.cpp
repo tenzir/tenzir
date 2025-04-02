@@ -85,20 +85,19 @@ public:
         break;
       }
     }
-    return function_use::make([gen = std::move(generator)](
-                                evaluator eval, session ctx) mutable -> series {
-      TENZIR_UNUSED(ctx);
-      auto b = arrow::StringBuilder{};
-      check(b.Reserve(eval.length()));
-      auto generate_and_append = [&](auto& concrete_generator) {
-        for (int64_t i = 0; i < eval.length(); ++i) {
-          auto u = concrete_generator();
-          check(b.Append(boost::uuids::to_string(u)));
-        }
-      };
-      std::visit(generate_and_append, gen);
-      return {string_type{}, finish(b)};
-    });
+    return function_use::make(
+      [gen = std::move(generator)](evaluator eval, session) mutable -> series {
+        auto b = arrow::StringBuilder{};
+        check(b.Reserve(eval.length()));
+        auto generate_and_append = [&](auto& concrete_generator) {
+          for (int64_t i = 0; i < eval.length(); ++i) {
+            auto u = concrete_generator();
+            check(b.Append(boost::uuids::to_string(u)));
+          }
+        };
+        std::visit(generate_and_append, gen);
+        return {string_type{}, finish(b)};
+      });
   }
 };
 
