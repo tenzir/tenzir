@@ -541,16 +541,16 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [subject = std::move(subject), field = std::move(field),
-       fallback = std::move(fallback)](evaluator eval,
-                                       session ctx) mutable -> multi_series {
+       fallback
+       = std::move(fallback)](evaluator eval, session ctx) -> multi_series {
         TENZIR_UNUSED(ctx);
         auto expr = ast::expression{
           ast::index_expr{
-            std::move(subject),
+            subject,
             location::unknown,
-            std::move(field),
+            field,
             location::unknown,
-            // We suppress warning iff there is a fallback value provided.
+            // We suppress warnings iff there is a fallback value provided.
             fallback.has_value(),
           },
         };
