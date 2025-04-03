@@ -466,6 +466,51 @@ public:
   }
 };
 
+class get final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "get";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject = ast::expression{};
+    auto field = ast::expression{};
+    auto fallback = std::optional<ast::expression>{};
+    TRY(argument_parser2::function(name())
+          .positional("x", subject, "record")
+          .positional("field", field, "string")
+          .positional("fallback", fallback, "any")
+          .parse(inv, ctx));
+    return function_use::make(
+      [subject = std::move(subject), field = std::move(field),
+       fallback = std::move(fallback)](evaluator eval,
+                                       session ctx) mutable -> multi_series {
+        TENZIR_UNUSED(ctx);
+        auto expr = ast::expression{
+          ast::index_expr{
+            std::move(subject),
+            location::unknown,
+            std::move(field),
+            location::unknown,
+            // We suppress warning iff there is a fallback value provided.
+            fallback.has_value(),
+          },
+        };
+        if (fallback) {
+          expr = ast::expression{
+            ast::binary_expr{
+              std::move(expr),
+              located{ast::binary_op::else_, location::unknown},
+              std::move(*fallback),
+            },
+          };
+        }
+        return eval(expr);
+      });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::misc
@@ -478,5 +523,6 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::network)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::merge)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::get)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{false})

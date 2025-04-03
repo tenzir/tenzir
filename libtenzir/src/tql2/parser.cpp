@@ -423,7 +423,12 @@ public:
     }
     auto expr = parse_primary_expression();
     while (true) {
-      if (auto dot = accept(tk::dot)) {
+      auto dot = accept(tk::dot_question_mark);
+      auto has_question_mark = static_cast<bool>(dot);
+      if (not has_question_mark) {
+        dot = accept(tk::dot);
+      }
+      if (dot) {
         auto name = expect(tk::identifier);
         if (peek(tk::lpar) or peek(tk::colon_colon)) {
           auto entity = parse_entity(name.as_identifier());
@@ -432,6 +437,7 @@ public:
           expr = field_access{
             std::move(expr),
             dot.location,
+            has_question_mark,
             name.as_identifier(),
           };
         }
@@ -461,6 +467,7 @@ public:
             lbracket.location,
             std::move(index),
             rbracket.location,
+            false,
           };
         }
         continue;

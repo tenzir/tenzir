@@ -26,6 +26,7 @@
       expr: field_access {
         left: root_field `actor` @ 41..46,
         dot: 46..47,
+        has_question_mark: false,
         name: `process` @ 47..54
       },
       has_this: false,
@@ -63,9 +64,11 @@
                       left: field_access {
                         left: root_field `src` @ 122..125,
                         dot: 125..126,
+                        has_question_mark: false,
                         name: `event_data` @ 126..136
                       },
                       dot: 136..137,
+                      has_question_mark: false,
                       name: `ParentImage` @ 137..148
                     }
                   ],
@@ -89,9 +92,11 @@
                       left: field_access {
                         left: root_field `src` @ 182..185,
                         dot: 185..186,
+                        has_question_mark: false,
                         name: `event_data` @ 186..196
                       },
                       dot: 196..197,
+                      has_question_mark: false,
                       name: `ParentImage` @ 197..208
                     }
                   ],
@@ -125,9 +130,11 @@
                 left: field_access {
                   left: root_field `src` @ 266..269,
                   dot: 269..270,
+                  has_question_mark: false,
                   name: `event_data` @ 270..280
                 },
                 dot: 280..281,
+                has_question_mark: false,
                 name: `ParentProcessId` @ 281..296
               }
             ],
@@ -151,18 +158,22 @@
         left: field_access {
           left: root_field `src` @ 306..309,
           dot: 309..310,
+          has_question_mark: false,
           name: `event_data` @ 310..320
         },
         dot: 320..321,
+        has_question_mark: false,
         name: `ParentImage` @ 321..332
       },
       field_access {
         left: field_access {
           left: root_field `src` @ 334..337,
           dot: 337..338,
+          has_question_mark: false,
           name: `event_data` @ 338..348
         },
         dot: 348..349,
+        has_question_mark: false,
         name: `ParentProcessId` @ 349..364
       }
     ]
@@ -172,6 +183,7 @@
       expr: field_access {
         left: root_field `actor` @ 365..370,
         dot: 370..371,
+        has_question_mark: false,
         name: `user` @ 371..375
       },
       has_this: false,
@@ -198,9 +210,11 @@
             left: field_access {
               left: root_field `src` @ 447..450,
               dot: 450..451,
+              has_question_mark: false,
               name: `user` @ 451..455
             },
             dot: 455..456,
+            has_question_mark: false,
             name: `domain` @ 456..462
           }
         },
@@ -210,9 +224,11 @@
             left: field_access {
               left: root_field `src` @ 472..475,
               dot: 475..476,
+              has_question_mark: false,
               name: `user` @ 476..480
             },
             dot: 480..481,
+            has_question_mark: false,
             name: `name` @ 481..485
           }
         },
@@ -222,9 +238,11 @@
             left: field_access {
               left: root_field `src` @ 494..497,
               dot: 497..498,
+              has_question_mark: false,
               name: `user` @ 498..502
             },
             dot: 502..503,
+            has_question_mark: false,
             name: `identifier` @ 503..513
           }
         }
@@ -244,27 +262,33 @@
         left: field_access {
           left: root_field `src` @ 522..525,
           dot: 525..526,
+          has_question_mark: false,
           name: `user` @ 526..530
         },
         dot: 530..531,
+        has_question_mark: false,
         name: `domain` @ 531..537
       },
       field_access {
         left: field_access {
           left: root_field `src` @ 539..542,
           dot: 542..543,
+          has_question_mark: false,
           name: `user` @ 543..547
         },
         dot: 547..548,
+        has_question_mark: false,
         name: `name` @ 548..552
       },
       field_access {
         left: field_access {
           left: root_field `src` @ 554..557,
           dot: 557..558,
+          has_question_mark: false,
           name: `user` @ 558..562
         },
         dot: 562..563,
+        has_question_mark: false,
         name: `identifier` @ 563..573
       }
     ]
@@ -356,6 +380,7 @@
           expr: field_access {
             left: root_field `src` @ 752..755,
             dot: 755..756,
+            has_question_mark: false,
             name: `computer_name` @ 756..769
           }
         },
@@ -403,6 +428,7 @@
       field_access {
         left: root_field `src` @ 888..891,
         dot: 891..892,
+        has_question_mark: false,
         name: `computer_name` @ 892..905
       }
     ]
@@ -436,9 +462,11 @@
             left: field_access {
               left: root_field `src` @ 980..983,
               dot: 983..984,
+              has_question_mark: false,
               name: `event_data` @ 984..994
             },
             dot: 994..995,
+            has_question_mark: false,
             name: `UtcTime` @ 995..1002
           }
         },
@@ -487,6 +515,7 @@
           expr: field_access {
             left: root_field `src` @ 1158..1161,
             dot: 1161..1162,
+            has_question_mark: false,
             name: `record_id` @ 1162..1171
           }
         },
@@ -510,14 +539,17 @@
         left: field_access {
           left: root_field `src` @ 1200..1203,
           dot: 1203..1204,
+          has_question_mark: false,
           name: `event_data` @ 1204..1214
         },
         dot: 1214..1215,
+        has_question_mark: false,
         name: `UtcTime` @ 1215..1222
       },
       field_access {
         left: root_field `src` @ 1224..1227,
         dot: 1227..1228,
+        has_question_mark: false,
         name: `record_id` @ 1228..1237
       }
     ]
@@ -540,9 +572,11 @@
             left: field_access {
               left: root_field `src` @ 1262..1265,
               dot: 1265..1266,
+              has_question_mark: false,
               name: `event_data` @ 1266..1276
             },
             dot: 1276..1277,
+            has_question_mark: false,
             name: `CommandLine` @ 1277..1288
           }
         },
@@ -557,9 +591,11 @@
                   left: field_access {
                     left: root_field `src` @ 1310..1313,
                     dot: 1313..1314,
+                    has_question_mark: false,
                     name: `event_data` @ 1314..1324
                   },
                   dot: 1324..1325,
+                  has_question_mark: false,
                   name: `Image` @ 1325..1330
                 }
               },
@@ -579,9 +615,11 @@
                       left: field_access {
                         left: root_field `src` @ 1369..1372,
                         dot: 1372..1373,
+                        has_question_mark: false,
                         name: `event_data` @ 1373..1383
                       },
                       dot: 1383..1384,
+                      has_question_mark: false,
                       name: `Image` @ 1384..1389
                     }
                   ],
@@ -605,9 +643,11 @@
                       left: field_access {
                         left: root_field `src` @ 1423..1426,
                         dot: 1426..1427,
+                        has_question_mark: false,
                         name: `event_data` @ 1427..1437
                       },
                       dot: 1437..1438,
+                      has_question_mark: false,
                       name: `Image` @ 1438..1443
                     }
                   ],
@@ -641,9 +681,11 @@
                 left: field_access {
                   left: root_field `src` @ 1501..1504,
                   dot: 1504..1505,
+                  has_question_mark: false,
                   name: `event_data` @ 1505..1515
                 },
                 dot: 1515..1516,
+                has_question_mark: false,
                 name: `ProcessId` @ 1516..1525
               }
             ],
@@ -667,27 +709,33 @@
         left: field_access {
           left: root_field `src` @ 1535..1538,
           dot: 1538..1539,
+          has_question_mark: false,
           name: `event_data` @ 1539..1549
         },
         dot: 1549..1550,
+        has_question_mark: false,
         name: `CommandLine` @ 1550..1561
       },
       field_access {
         left: field_access {
           left: root_field `src` @ 1563..1566,
           dot: 1566..1567,
+          has_question_mark: false,
           name: `event_data` @ 1567..1577
         },
         dot: 1577..1578,
+        has_question_mark: false,
         name: `Image` @ 1578..1583
       },
       field_access {
         left: field_access {
           left: root_field `src` @ 1585..1588,
           dot: 1588..1589,
+          has_question_mark: false,
           name: `event_data` @ 1589..1599
         },
         dot: 1599..1600,
+        has_question_mark: false,
         name: `ProcessId` @ 1600..1609
       }
     ]
@@ -773,6 +821,7 @@
                   field_access {
                     left: root_field `metadata` @ 1704..1712,
                     dot: 1712..1713,
+                    has_question_mark: false,
                     name: `original_time` @ 1713..1726
                   }
                 ],

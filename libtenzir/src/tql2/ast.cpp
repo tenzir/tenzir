@@ -49,6 +49,9 @@ auto simple_selector::try_from(ast::expression expr)
         return true;
       },
       [&](ast::field_access& e) -> variant<ast::expression*, bool> {
+        if (e.has_question_mark) {
+          return false;
+        }
         path.push_back(e.name);
         return &e.left;
       },
@@ -67,7 +70,7 @@ auto simple_selector::try_from(ast::expression expr)
         return false;
       });
     if (auto success = std::get_if<bool>(&sub_result)) {
-      if (not *success) {
+      if (not*success) {
         return {};
       }
       std::ranges::reverse(path);

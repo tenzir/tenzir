@@ -90,6 +90,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("=", equal)
     | X("|", pipe)
     | X("...", dot_dot_dot)
+    | X(".?", dot_question_mark)
     | X(".", dot)
     | X("(", lpar)
     | X(")", rpar)
@@ -188,30 +189,31 @@ auto describe(token_kind k) -> std::string_view {
     X(and_, "`and`");
     X(at, "@");
     X(bang_equal, "`!=`");
-    X(colon_colon, "`::`");
     X(colon, "`:`");
+    X(colon_colon, "`::`");
     X(comma, "`,`");
     X(datetime, "datetime");
     X(delim_comment, "`/*...*/`");
     X(dollar_ident, "dollar identifier");
-    X(dot_dot_dot, "`...`");
     X(dot, "`.`");
+    X(dot_dot_dot, "`...`");
+    X(dot_question_mark, "`.?`");
     X(else_, "`else`");
-    X(equal_equal, "`==`");
     X(equal, "`=`");
+    X(equal_equal, "`==`");
     X(error, "error");
     X(false_, "`false`");
     X(fat_arrow, "`=>`");
-    X(greater_equal, "`>=`");
     X(greater, "`>`");
+    X(greater_equal, "`>=`");
     X(identifier, "identifier");
     X(if_, "`if`");
     X(in, "`in`");
     X(ip, "ip");
     X(lbrace, "`{`");
     X(lbracket, "`[`");
-    X(less_equal, "`<=`");
     X(less, "`<`");
+    X(less_equal, "`<=`");
     X(let, "`let`");
     X(line_comment, "`// ...`");
     X(lpar, "`(`");

@@ -27,6 +27,7 @@
                 field_access {
                   left: dollar_var `$group` -> 2 @ 35..41,
                   dot: 41..42,
+                  has_question_mark: false,
                   name: `count` @ 42..47
                 }
               ]

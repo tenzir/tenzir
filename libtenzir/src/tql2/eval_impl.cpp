@@ -171,6 +171,12 @@ auto evaluator::eval(const ast::list& x) -> multi_series {
 auto evaluator::eval(const ast::field_access& x) -> multi_series {
   return map_series(eval(x.left), [&](series l) -> series {
     if (auto null = l.as<null_type>()) {
+      if (not x.suppress_warnings()) {
+        diagnostic::warning("tried to access field of `null`")
+          .primary(x.left)
+          .secondary(x.dot, "use the `.?` operator to suppress this warning")
+          .emit(ctx_);
+      }
       return std::move(*null);
     }
     auto rec_ty = try_as<record_type>(l.type);
@@ -185,21 +191,22 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
     for (auto [i, field] : detail::enumerate<int>(rec_ty->fields())) {
       if (field.name == x.name.name) {
         auto has_null = s.null_count() != 0;
-        if (has_null) {
-          // TODO: It's not 100% obvious that we want to have this warning, but
-          // we went with it for now. Note that this can create cascading
-          // warnings.
+        if (has_null and not x.suppress_warnings()) {
           diagnostic::warning("tried to access field of `null`")
             .primary(x.name)
+            .secondary(x.dot, "use the `.?` operator to suppress this warning")
             .emit(ctx_);
           return series{field.type, check(s.GetFlattenedField(i))};
         }
         return series{field.type, s.field(i)};
       }
     }
-    diagnostic::warning("record does not have this field")
-      .primary(x.name)
-      .emit(ctx_);
+    if (not x.suppress_warnings()) {
+      diagnostic::warning("record does not have this field")
+        .primary(x.name)
+        .secondary(x.dot, "use the `.?` operator to suppress this warning")
+        .emit(ctx_);
+    }
     return null();
   });
 }
@@ -240,27 +247,37 @@ auto evaluator::eval(const ast::root_field& x) -> multi_series {
 }
 
 auto evaluator::eval(const ast::index_expr& x) -> multi_series {
-  if (auto constant = try_as<ast::constant>(x.index)) {
-    if (auto string = try_as<std::string>(constant->value)) {
+  // We map `foo["bar"]` onto the implementation of `foo.bar`, as that has a
+  // faster implementation that is optimized for the accessed field name being a
+  // constant.
+  if (const auto* constant = try_as<ast::constant>(x.index)) {
+    if (const auto* string = try_as<std::string>(constant->value)) {
       return eval(ast::field_access{
         x.expr,
-        x.lbracket,
+        location::unknown,
+        x.suppress_warnings,
         ast::identifier{*string, constant->source},
       });
     }
   }
   return map_series(
     eval(x.expr), eval(x.index),
-    [&](series value, series index) -> multi_series {
+    [&](series value, const series& index) -> multi_series {
       TENZIR_ASSERT(value.length() == index.length());
       if (auto null = value.as<null_type>()) {
+        diagnostic::warning("tried to access field of `null`")
+          .primary(x.expr)
+          .emit(ctx_);
         return std::move(*null);
       }
       if (auto null = index.as<null_type>()) {
+        diagnostic::warning("cannot use `null` as index")
+          .primary(x.index)
+          .emit(ctx_);
         return std::move(*null);
       }
       if (auto str = index.as<string_type>()) {
-        auto ty = try_as<record_type>(value.type);
+        auto* ty = try_as<record_type>(value.type);
         if (not ty) {
           diagnostic::warning("cannot access field of non-record type")
             .primary(x.index)
@@ -294,7 +311,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
           }
           auto name = value_at(string_type{}, *str->array, i);
           if (auto it = field_map.find(name); it != field_map.end()) {
-            auto& field = it->second;
+            const auto& field = it->second;
             if (field.type.kind().is_not<null_type>()
                 and field.type != last_type) {
               if (last_type.kind().is_not<null_type>()) {
@@ -306,15 +323,17 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             b.data(v);
           } else {
             if (std::ranges::find(not_found, name) == not_found.end()) {
-              diagnostic::warning("record does not have field '{}'", name)
-                .primary(x.index)
-                .emit(ctx_);
+              if (not x.suppress_warnings) {
+                diagnostic::warning("record does not have field '{}'", name)
+                  .primary(x.index)
+                  .emit(ctx_);
+              }
               not_found.emplace_back(name);
             }
             b.null();
           }
         }
-        if (warn_null_record) {
+        if (warn_null_record and not x.suppress_warnings) {
           diagnostic::warning("tried to access field of `null`")
             .primary(x.expr)
             .emit(ctx_);
@@ -369,12 +388,12 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
           check(
             append_array_slice(*b, value_type, *list_values, value_index, 1));
         }
-        if (out_of_bounds) {
+        if (out_of_bounds and not x.suppress_warnings) {
           diagnostic::warning("list index out of bounds")
             .primary(x.index)
             .emit(ctx_);
         }
-        if (list_null) {
+        if (list_null and not x.suppress_warnings) {
           diagnostic::warning("cannot index into `null`")
             .primary(x.expr)
             .emit(ctx_);
