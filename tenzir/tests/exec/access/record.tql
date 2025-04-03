@@ -4,14 +4,17 @@ from (
   {xs: null},
   {xs: "foo"},
 )
-index_first = xs[0]
-get_first = xs.get(0)
-get_first_fallback = xs.get(0, -1)
-index_null = xs[null]
-get_null = xs.get(null)
-get_null_fallback = xs.get(null, -1)
-index_str = xs["foo"]
-get_str = xs.get("foo")
-get_str_fallback = xs.get("foo", -1)
-get_field = xs.foo
-get_field_lenient = xs.?foo
+select (
+  xs,
+  index_first = xs[0],
+  get_first = xs.get(0),
+  get_first_fallback = xs.get(0, -1),
+  index_null = xs[null],
+  get_null = xs.get(null),
+  get_null_fallback = xs.get(null, -1),
+  index_str = xs["foo"],
+  get_str = xs.get("foo"),
+  get_str_fallback = xs.get("foo", -1),
+  get_field = xs.foo,
+  get_field_lenient = xs.?foo,
+)
