@@ -1,0 +1,11 @@
+The `.?` operator is a new alternative to the `.` operator that allows field
+access without warnings when the field does not exist or the parent record is
+`null`. For example, both `foo.bar` and `foo.?bar` return `null` if `foo` is
+`null`, or if `bar` does not exist, but the latter does not warn about this.
+Functionally, `foo.?bar` is equivalent to `foo.bar if foo.has("bar")`.
+
+The `get` method on records or lists is an alternative to index expressions that
+allows for specifying a default value when the list index is out of bounds or
+the record field is missing. For example, `foo[bar]` is equivalent to
+`foo.get(bar)`, and `foo[bar] if foo.has(bar) else fallback` is equivalent to
+`foo.get(bar, fallback)`. This works for both records and lists.
