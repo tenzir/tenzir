@@ -16,63 +16,42 @@ namespace tenzir::plugins::config {
 
 namespace {
 
-class config_operator final : public crtp_operator<config_operator> {
+class plugin final : public virtual function_plugin {
 public:
-  config_operator() = default;
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto builder = series_builder{};
-    auto config = to<record>(content(ctrl.self().system().config()));
-    TENZIR_ASSERT(config);
-    config->erase("caf");
-    builder.data(make_view(*config));
-    co_yield builder.finish_assert_one_slice("tenzir.config");
-  }
-
   auto name() const -> std::string override {
     return "config";
   }
 
-  auto location() const -> operator_location override {
-    return operator_location::local;
+  auto initialize(const record& plugin_config, const record& global_config)
+    -> caf::error override {
+    TENZIR_UNUSED(plugin_config);
+    config_ = global_config;
+    // This one's very noisy and not particularly user-facing, so we hide it.
+    config_.erase("caf");
+    // This one really shouldn't be exposed.
+    if (auto* tenzir = get_if<record>(&config_, "tenzir")) {
+      tenzir->erase("secrets");
+    }
+    return {};
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)order;
-    (void)filter;
-    return do_not_optimize(*this);
+  auto make_function(function_plugin::invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    TRY(argument_parser2::function("config").parse(inv, ctx));
+    return function_use::make(
+      [this](evaluator eval, session ctx) -> multi_series {
+        TENZIR_UNUSED(eval, ctx);
+        auto builder = series_builder{};
+        const auto view = make_view(config_);
+        for (auto i = 0; i < eval.length(); ++i) {
+          builder.data(view);
+        }
+        return builder.finish_assert_one_array();
+      });
   }
 
-  auto internal() const -> bool override {
-    return true;
-  }
-
-  friend auto inspect(auto& f, config_operator& x) -> bool {
-    return f.object(x).fields();
-  }
-};
-
-class plugin final : public virtual operator_plugin<config_operator>,
-                     operator_factory_plugin {
-public:
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"config", "https://docs.tenzir.com/"
-                                            "operators/config"};
-    parser.parse(p);
-    return std::make_unique<config_operator>();
-  }
-
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("config").parse(inv, ctx).ignore();
-    return std::make_unique<config_operator>();
-  }
+private:
+  record config_;
 };
 
 } // namespace

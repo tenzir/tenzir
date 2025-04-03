@@ -30,3 +30,8 @@ from {x: secret("geheim")}
 ```tql
 {x: "1528F9F3-FAFA-45B4-BC3C-B755D0E0D9C2"}
 ```
+
+## See also
+
+[`config`](config.md),
+[`env`](env.md)

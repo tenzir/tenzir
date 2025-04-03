@@ -291,5 +291,6 @@ This is hidden because there is an issue with the timezone DB.
 
 | Function                        | Description                   | Example          |
 | :------------------------------ | :---------------------------- | :--------------- |
+| [`config`](functions/config.md) | Reads the configuration file  | `config()`       |
 | [`env`](functions/env.md)       | Reads an environment variable | `env("PATH")`    |
 | [`secret`](functions/secret.md) | Reads a secret from a store   | `secret("PATH")` |

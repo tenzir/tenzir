@@ -22,3 +22,8 @@ from {x: env("PATH")}
 ```tql
 {x: "/usr/local/bin:/usr/bin:/bin"}
 ```
+
+## See also
+
+[`config`](config.md),
+[`secret`](secret.md)
