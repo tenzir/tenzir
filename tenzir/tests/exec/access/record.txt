@@ -1,0 +1,256 @@
+{
+  xs: {
+    foo: 1,
+  },
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: 1,
+  get_str: 1,
+  get_str_fallback: 1,
+  get_field: 1,
+  get_field_lenient: 1,
+}
+{
+  xs: {},
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: null,
+  get_str: null,
+  get_str_fallback: -1,
+  get_field: null,
+  get_field_lenient: null,
+}
+{
+  xs: null,
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: null,
+  get_str: null,
+  get_str_fallback: -1,
+  get_field: null,
+  get_field_lenient: null,
+}
+{
+  xs: "foo",
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: null,
+  get_str: null,
+  get_str_fallback: -1,
+  get_field: null,
+  get_field_lenient: null,
+}
+warning: cannot index into `record` with `int64`
+ --> exec/access/record.tql:7:18
+  |
+7 | index_first = xs[0]
+  |                  ~ 
+  |
+
+warning: tried to access field of `null`
+ --> exec/access/record.tql:7:15
+  |
+7 | index_first = xs[0]
+  |               ~~ 
+  |
+
+warning: cannot index into `string` with `int64`
+ --> exec/access/record.tql:7:18
+  |
+7 | index_first = xs[0]
+  |                  ~ 
+  |
+
+warning: cannot index into `record` with `int64`
+ --> exec/access/record.tql:8:20
+  |
+8 | get_first = xs.get(0)
+  |                    ~ 
+  |
+
+warning: tried to access field of `null`
+ --> exec/access/record.tql:8:13
+  |
+8 | get_first = xs.get(0)
+  |             ~~ 
+  |
+
+warning: cannot index into `string` with `int64`
+ --> exec/access/record.tql:8:20
+  |
+8 | get_first = xs.get(0)
+  |                    ~ 
+  |
+
+warning: cannot index into `record` with `int64`
+ --> exec/access/record.tql:9:29
+  |
+9 | get_first_fallback = xs.get(0, -1)
+  |                             ~ 
+  |
+
+warning: tried to access field of `null`
+ --> exec/access/record.tql:9:22
+  |
+9 | get_first_fallback = xs.get(0, -1)
+  |                      ~~ 
+  |
+
+warning: cannot use `null` as index
+  --> exec/access/record.tql:10:17
+   |
+10 | index_null = xs[null]
+   |                 ~~~~ 
+   |
+
+warning: cannot use `null` as index
+  --> exec/access/record.tql:11:19
+   |
+11 | get_null = xs.get(null)
+   |                   ~~~~ 
+   |
+
+warning: cannot use `null` as index
+  --> exec/access/record.tql:12:28
+   |
+12 | get_null_fallback = xs.get(null, -1)
+   |                            ~~~~ 
+   |
+
+warning: record does not have this field
+  --> exec/access/record.tql:13:16
+   |
+13 | index_str = xs["foo"]
+   |                ~~~~~ 
+
+warning: record does not have this field
+  --> exec/access/record.tql:14:18
+   |
+14 | get_str = xs.get("foo")
+   |                  ~~~~~ 
+
+warning: record does not have this field
+  --> exec/access/record.tql:16:16
+   |
+16 | get_field = xs.foo
+   |                ~~~ 
+   ⋮
+16 | get_field = xs.foo
+   |               - use the `.?` operator to suppress this warning
+   |
+
+warning: tried to access field of `null`
+  --> exec/access/record.tql:10:14
+   |
+10 | index_null = xs[null]
+   |              ~~ 
+   |
+
+warning: cannot index into `string` with `int64`
+ --> exec/access/record.tql:9:29
+  |
+9 | get_first_fallback = xs.get(0, -1)
+  |                             ~ 
+  |
+
+warning: tried to access field of `null`
+  --> exec/access/record.tql:11:12
+   |
+11 | get_null = xs.get(null)
+   |            ~~ 
+   |
+
+warning: tried to access field of `null`
+  --> exec/access/record.tql:12:21
+   |
+12 | get_null_fallback = xs.get(null, -1)
+   |                     ~~ 
+   |
+
+warning: tried to access field of `null`
+  --> exec/access/record.tql:13:13
+   |
+13 | index_str = xs["foo"]
+   |             ~~ 
+
+warning: cannot access field of non-record type
+  --> exec/access/record.tql:13:16
+   |
+13 | index_str = xs["foo"]
+   |                ~~~~~ 
+   ⋮
+13 | index_str = xs["foo"]
+   |             -- type `string`
+   |
+
+warning: tried to access field of `null`
+  --> exec/access/record.tql:14:11
+   |
+14 | get_str = xs.get("foo")
+   |           ~~ 
+
+warning: cannot access field of non-record type
+  --> exec/access/record.tql:14:18
+   |
+14 | get_str = xs.get("foo")
+   |                  ~~~~~ 
+   ⋮
+14 | get_str = xs.get("foo")
+   |           -- type `string`
+   |
+
+warning: cannot access field of non-record type
+  --> exec/access/record.tql:15:27
+   |
+15 | get_str_fallback = xs.get("foo", -1)
+   |                           ~~~~~ 
+   ⋮
+15 | get_str_fallback = xs.get("foo", -1)
+   |                    -- type `string`
+   |
+
+warning: tried to access field of `null`
+  --> exec/access/record.tql:16:13
+   |
+16 | get_field = xs.foo
+   |             ~~ 
+   ⋮
+16 | get_field = xs.foo
+   |               - use the `.?` operator to suppress this warning
+   |
+
+warning: cannot access field of non-record type
+  --> exec/access/record.tql:16:16
+   |
+16 | get_field = xs.foo
+   |                ~~~ 
+   ⋮
+16 | get_field = xs.foo
+   |             -- type `string`
+   |
+
+warning: cannot access field of non-record type
+  --> exec/access/record.tql:17:25
+   |
+17 | get_field_lenient = xs.?foo
+   |                         ~~~ 
+   ⋮
+17 | get_field_lenient = xs.?foo
+   |                     -- type `string`
+   |
