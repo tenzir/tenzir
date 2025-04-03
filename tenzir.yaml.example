@@ -162,9 +162,6 @@ tenzir:
   # connector plugin.
   disable-plugins: []
 
-  # The unique ID of this node.
-  node-id: "node"
-
   # Forbid unsafe location overrides for pipelines with the 'local' and 'remote'
   # keywords, e.g., remotely reading from a file.
   no-location-overrides: false

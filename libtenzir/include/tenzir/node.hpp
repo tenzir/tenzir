@@ -34,12 +34,12 @@ struct node_state {
     -> const handler_and_endpoint&;
 
   /// The REST endpoint handlers for this node. Spawned on demand.
-  std::unordered_map<std::string, handler_and_endpoint> rest_handlers = {};
+  std::unordered_map<std::string, handler_and_endpoint> rest_handlers;
 
   // -- actor facade -----------------------------------------------------------
 
   /// The name of the NODE actor.
-  constexpr static inline auto name = "node";
+  constexpr static auto name = "node";
 
   /// A pointer to the NODE actor handle.
   node_actor::pointer self = {};
@@ -47,26 +47,26 @@ struct node_state {
   // -- member types -----------------------------------------------------------
 
   /// Stores the base directory for persistent state.
-  std::filesystem::path dir = {};
+  std::filesystem::path dir;
 
   /// The component registry.
   component_registry registry = {};
 
   /// The list of component plugin actors in the order that they were spawned.
-  std::vector<std::string> ordered_components = {};
+  std::vector<std::string> ordered_components;
 
   /// Components that are still alive for lifetime-tracking.
-  std::set<std::pair<caf::actor_addr, std::string>> alive_components = {};
+  std::set<std::pair<caf::actor_addr, std::string>> alive_components;
 
   /// Map from component actor address to name for better error messages. Never
   /// cleared.
-  std::unordered_map<caf::actor_addr, std::string> component_names = {};
+  std::unordered_map<caf::actor_addr, std::string> component_names;
 
   /// Counters for multi-instance components.
-  std::unordered_map<std::string, uint64_t> label_counters = {};
+  std::unordered_map<std::string, uint64_t> label_counters;
 
   /// Builder for API metrics.
-  std::unordered_map<std::string, series_builder> api_metrics_builders = {};
+  std::unordered_map<std::string, series_builder> api_metrics_builders;
 
   /// Startup timestamp.
   time start_time = time::clock::now();
@@ -76,14 +76,13 @@ struct node_state {
 
   /// Weak handles to remotely spawned and monitored exec ndoes for cleanup on
   /// node shutdown.
-  std::unordered_set<caf::actor_addr> monitored_exec_nodes = {};
+  std::unordered_set<caf::actor_addr> monitored_exec_nodes;
 };
 
 /// Spawns a node.
 /// @param self The actor handle
-/// @param name The unique name of the node.
 /// @param dir The directory where to store persistent state.
-node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
-                               std::string name, std::filesystem::path dir);
+node_actor::behavior_type
+node(node_actor::stateful_pointer<node_state> self, std::filesystem::path dir);
 
 } // namespace tenzir
