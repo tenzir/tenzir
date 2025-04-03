@@ -10,6 +10,7 @@
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/detail/zip_iterator.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/process/environment.hpp>
@@ -328,45 +329,101 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto needle = located<std::string>{};
+    auto needle = ast::expression{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "record")
-          .positional("field", needle)
+          .positional("field", needle, "string")
           .parse(inv, ctx));
-    return function_use::make(
-      [needle = std::move(needle),
-       expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = arrow::BooleanBuilder{};
-        check(b.Reserve(eval.length()));
-        for (auto value : eval(expr)) {
-          auto f = detail::overload{
-            [&](const arrow::NullArray& array) {
-              check(b.AppendNulls(array.length()));
-            },
-            [&](const arrow::StructArray& array) {
-              const auto names = array.struct_type()->fields()
-                                 | std::views::transform(&arrow::Field::name);
-              const auto result
-                = std::ranges::find(names, needle.inner) != std::end(names);
-              for (auto i = int64_t{0}; i < array.length(); i++) {
-                if (array.IsNull(i)) {
-                  check(b.AppendNull());
-                  continue;
+    auto const_dh = collecting_diagnostic_handler{};
+    auto const_sp = session_provider::make(const_dh);
+    if (auto const_needle = const_eval(needle, const_sp.as_session())) {
+      std::move(const_dh).forward_to(ctx);
+      auto* str = try_as<std::string>(*const_needle);
+      if (not str) {
+        diagnostic::error("expcted `string`, but got `{}`",
+                          type::infer(*const_needle).value_or(type{}).kind())
+          .primary(needle)
+          .emit(ctx);
+      }
+      return function_use::make(
+        [needle = located{std::move(*str), needle.get_location()},
+         expr = std::move(expr)](evaluator eval, session ctx) -> series {
+          auto b = arrow::BooleanBuilder{};
+          check(b.Reserve(eval.length()));
+          for (auto value : eval(expr)) {
+            auto f = detail::overload{
+              [&](const arrow::NullArray& array) {
+                check(b.AppendNulls(array.length()));
+              },
+              [&](const arrow::StructArray& array) {
+                const auto names = array.struct_type()->fields()
+                                   | std::views::transform(&arrow::Field::name);
+                const auto result
+                  = std::ranges::find(names, needle.inner) != std::end(names);
+                for (auto i = int64_t{0}; i < array.length(); i++) {
+                  if (array.IsNull(i)) {
+                    check(b.AppendNull());
+                    continue;
+                  }
+                  check(b.Append(result));
                 }
-                check(b.Append(result));
-              }
-            },
-            [&](const auto& array) {
-              diagnostic::warning("expected `record`, got `{}`",
-                                  value.type.kind())
-                .primary(expr)
-                .emit(ctx);
-              check(b.AppendNulls(array.length()));
-            }};
-          match(*value.array, f);
+              },
+              [&](const auto& array) {
+                diagnostic::warning("expected `record`, got `{}`",
+                                    value.type.kind())
+                  .primary(expr)
+                  .emit(ctx);
+                check(b.AppendNulls(array.length()));
+              }};
+            match(*value.array, f);
+          }
+          return series{bool_type{}, finish(b)};
+        });
+    }
+    return function_use::make([needle = std::move(needle), expr
+                                                           = std::move(expr)](
+                                evaluator eval, session ctx) -> multi_series {
+      TENZIR_UNUSED(ctx);
+      const auto expr_location = expr.get_location();
+      const auto needle_location = needle.get_location();
+      auto builder = arrow::BooleanBuilder{};
+      check(builder.Reserve(eval.length()));
+      for (auto split : split_multi_series(eval(expr), eval(needle))) {
+        const auto& expr = split[0];
+        const auto& needle = split[1];
+        const auto* expr_type = try_as<record_type>(expr.type);
+        if (not expr_type) {
+          if (not is<null_type>(expr.type)) {
+            diagnostic::warning("expected `record`, got `{}`", expr.type.kind())
+              .primary(expr_location)
+              .emit(ctx);
+          }
+          check(builder.AppendNulls(expr.length()));
+          continue;
         }
-        return series{bool_type{}, finish(b)};
-      });
+        const auto typed_needle = needle.as<string_type>();
+        if (not typed_needle) {
+          diagnostic::warning("expected `string`, got `{}`", needle.type.kind())
+            .primary(needle_location)
+            .emit(ctx);
+          check(builder.AppendNulls(expr.length()));
+          continue;
+        }
+        if (typed_needle->array->null_count() > 0) {
+          diagnostic::warning("expected `string`, got `null`")
+            .primary(needle_location)
+            .emit(ctx);
+        }
+        for (auto value : *typed_needle->array) {
+          if (not value) {
+            check(builder.AppendNull());
+            continue;
+          }
+          check(builder.Append(expr_type->has_field(*value)));
+        }
+      }
+      return series{bool_type{}, finish(builder)};
+    });
   }
 };
 
