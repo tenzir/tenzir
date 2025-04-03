@@ -158,13 +158,6 @@ warning: tried to access field of `null`
    |
 
 warning: tried to access field of `null`
-  --> exec/access/list.tql:11:24
-   |
-11 |   get_first_fallback = xs.get(0, -1),
-   |                        ~~ 
-   |
-
-warning: tried to access field of `null`
   --> exec/access/list.tql:12:16
    |
 12 |   index_null = xs[null],
@@ -176,13 +169,6 @@ warning: tried to access field of `null`
    |
 13 |   get_null = xs.get(null),
    |              ~~ 
-   |
-
-warning: tried to access field of `null`
-  --> exec/access/list.tql:14:23
-   |
-14 |   get_null_fallback = xs.get(null, -1),
-   |                       ~~ 
    |
 
 warning: tried to access field of `null`

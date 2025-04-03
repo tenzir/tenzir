@@ -351,7 +351,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
       if (auto number = index.as<int64_type>()) {
         auto list = value.as<list_type>();
         if (not list) {
-          if (not x.suppress_warnings) {
+          if (not is<null_type>(value.type) or not x.suppress_warnings) {
             diagnostic::warning("cannot index into `{}` with `{}`",
                                 value.type.kind(), index.type.kind())
               .primary(x.index)
