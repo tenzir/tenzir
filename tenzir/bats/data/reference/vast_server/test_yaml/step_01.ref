@@ -12,4 +12,5 @@ tenzir:
   plugins:
     []
   silence-tql1-deprecation-notice: true
+  tql2: true
 ...

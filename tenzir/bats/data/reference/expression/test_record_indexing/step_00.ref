@@ -11,6 +11,13 @@ warning: field `y` not found
   |                   ~ 
   |
 
+warning: cannot use `null` as index
+ --> <input>:1:19
+  |
+1 | read_json | z = x[y]
+  |                   ~ 
+  |
+
 warning: record does not have field 'x'
  --> <input>:1:19
   |
@@ -19,6 +26,13 @@ warning: record does not have field 'x'
   |
 
 warning: field `x` not found
+ --> <input>:1:17
+  |
+1 | read_json | z = x[y]
+  |                 ~ 
+  |
+
+warning: tried to access field of `null`
  --> <input>:1:17
   |
 1 | read_json | z = x[y]
