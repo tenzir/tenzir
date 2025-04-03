@@ -63,7 +63,7 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
     // values assigning to a `record` type.
     return consume_path(left, std::move(right));
   }
-  auto rec_ty = try_as<record_type>(input.type);
+  auto* rec_ty = try_as<record_type>(input.type);
   if (not rec_ty) {
     diagnostic::warning("implicit record for `{}` field overwrites `{}` value",
                         left[0].name, input.type.kind())
@@ -129,8 +129,9 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
 
 } // namespace
 
-auto assign(const ast::meta& left, series right, const table_slice& input,
-            diagnostic_handler& diag) -> std::vector<table_slice> {
+auto assign(const ast::meta& left, const series& right,
+            const table_slice& input, diagnostic_handler& diag)
+  -> std::vector<table_slice> {
   auto transform = [&input]<std::derived_from<arrow::Array> Array>(
                      const Array& array, auto&& f) {
     using ty = type_from_arrow_t<Array>;
@@ -168,7 +169,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       // This would help here, as we could set the name to `null` if we get a
       // non-string type or a null string. Instead, we keep the original schema
       // name in both cases for now.
-      auto array = dynamic_cast<arrow::StringArray*>(right.array.get());
+      auto* array = dynamic_cast<arrow::StringArray*>(right.array.get());
       if (not array) {
         diagnostic::warning("expected string but got {}", right.type.kind())
           .primary(left)
@@ -198,7 +199,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       // null. On an implementation level, the import time is not nullable, but
       // we use the default-constructed time as a marker for `null`. This is
       // translated back to `null` when it is read by the evaluator.
-      auto array = dynamic_cast<arrow::TimestampArray*>(right.array.get());
+      auto* array = dynamic_cast<arrow::TimestampArray*>(right.array.get());
       if (not array) {
         if (not right.type.kind().is<null_type>()) {
           diagnostic::warning("expected `time` but got `{}`", right.type.kind())
@@ -229,7 +230,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       // TODO: If this is set to null, we keep the original setting for now. We
       // could instead also set it to `false`, as `null` is also treated as
       // `false` in contexts such as `where` or `if`.
-      auto values = dynamic_cast<arrow::BooleanArray*>(right.array.get());
+      auto* values = dynamic_cast<arrow::BooleanArray*>(right.array.get());
       if (not values) {
         diagnostic::warning("expected bool but got {}", right.type.kind())
           .primary(left)
@@ -303,7 +304,7 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
   -> std::vector<table_slice> {
   return left.match(
     [&](const ast::meta& left) {
-      return assign(left, std::move(right), input, dh);
+      return assign(left, right, input, dh);
     },
     [&](const ast::simple_selector& left) {
       auto result = std::vector<table_slice>{};
@@ -328,7 +329,7 @@ auto set_operator::operator()(generator<table_slice> input,
     // side-effects from preceding assignments shall not be reflected when
     // calculating the value of the left-hand side.
     auto values = std::vector<multi_series>{};
-    for (auto& assignment : assignments_) {
+    for (const auto& assignment : assignments_) {
       values.push_back(eval(assignment.right, slice, ctrl.diagnostics()));
     }
     // After we know all the multi series values on the right, we can split the

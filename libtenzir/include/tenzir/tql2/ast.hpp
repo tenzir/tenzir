@@ -143,7 +143,7 @@ struct constant {
 
   friend auto inspect(auto& f, constant& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      if (auto t = try_as<time>(x.value)) {
+      if (auto* t = try_as<time>(x.value)) {
         // Time printing is not reliable across platforms otherwise.
         return dbg->fmt_value("time {} @ {:?}", data{*t}, x.source);
       }
