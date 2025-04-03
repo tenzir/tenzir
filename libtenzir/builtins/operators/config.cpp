@@ -31,6 +31,13 @@ public:
     // This one really shouldn't be exposed.
     if (auto* tenzir = get_if<record>(&config_, "tenzir")) {
       tenzir->erase("secrets");
+      tenzir->erase("token");
+    }
+    // And neither these ones.
+    if (auto* platform = get_if<record>(&config_, "plugins.platform")) {
+      platform->erase("token");
+      platform->erase("tenant-id");
+      platform->erase("api-key");
     }
     return {};
   }

@@ -12,10 +12,10 @@ The `config` function retrieves Tenzir's configuration, including values from
 various `tenzir.yaml` files, plugin-specific configuration files, environment
 variables, and command-line options.
 
-Note that the `tenzir.secrets` and `caf` sections are omitted from the returned
-record. The former to avoid leaking secrets, the latter as it only contains
-internal performance-related that are developer-facing and should not be relied
-upon within TQL.
+Note that the `tenzir.secrets`, `tenzir.token` and `caf` options are omitted
+from the returned record. The former to avoid leaking secrets, the latter as it
+only contains internal performance-related that are developer-facing and should
+not be relied upon within TQL.
 
 ## Examples
 
@@ -39,9 +39,9 @@ select flag = $flags.get(country, "unknown")
 ```
 
 ```tql
-{country: "🇩🇪"}
-{country: "🇺🇸"}
-{country: "unknown"}
+{flag: "🇩🇪"}
+{flag: "🇺🇸"}
+{flag: "unknown"}
 ```
 
 ## See also
