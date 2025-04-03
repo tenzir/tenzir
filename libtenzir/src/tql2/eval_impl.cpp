@@ -265,9 +265,11 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
     [&](series value, const series& index) -> multi_series {
       TENZIR_ASSERT(value.length() == index.length());
       if (auto null = value.as<null_type>()) {
-        diagnostic::warning("tried to access field of `null`")
-          .primary(x.expr)
-          .emit(ctx_);
+        if (not x.suppress_warnings) {
+          diagnostic::warning("tried to access field of `null`")
+            .primary(x.expr)
+            .emit(ctx_);
+        }
         return std::move(*null);
       }
       if (auto null = index.as<null_type>()) {
@@ -349,10 +351,12 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
       if (auto number = index.as<int64_type>()) {
         auto list = value.as<list_type>();
         if (not list) {
-          diagnostic::warning("cannot index into `{}` with `{}`",
-                              value.type.kind(), index.type.kind())
-            .primary(x.index)
-            .emit(ctx_);
+          if (not x.suppress_warnings) {
+            diagnostic::warning("cannot index into `{}` with `{}`",
+                                value.type.kind(), index.type.kind())
+              .primary(x.index)
+              .emit(ctx_);
+          }
           return null();
         }
         auto list_values = list->array->values();
