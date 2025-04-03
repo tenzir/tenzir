@@ -8,5 +8,6 @@
   "snowflake"
   "to_asl"
   "to_splunk"
+  "to_google_secops"
   "vast"
 ]

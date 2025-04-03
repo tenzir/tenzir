@@ -328,6 +328,7 @@ in {
         ps.platform
         ps.to_asl
         ps.to_splunk
+        ps.to_google_secops
         ps.vast
       ] ++ lib.optionals (!isStatic) [
         ps.snowflake
