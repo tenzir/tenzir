@@ -118,8 +118,7 @@ public:
       case simdjson::ondemand::json_type::string:
         return parse_string(val, builder);
       case simdjson::ondemand::json_type::array: {
-        const auto success = parse_array(val.get_array().value_unsafe(),
-                                         builder.list(), depth + 1);
+        const auto success = parse_array(val, builder.list(), depth + 1);
         return success ? result::success : result::failure_with_write;
       }
       case simdjson::ondemand::json_type::object: {
@@ -205,8 +204,13 @@ private:
     return result::success;
   }
 
-  [[nodiscard]] auto parse_array(auto&& arr, auto builder, size_t depth)
+  [[nodiscard]] auto parse_array(auto&& val, auto builder, size_t depth)
     -> bool {
+    auto arr = val.get_array();
+    if (arr.error()) {
+      report_parse_err(val, "an array");
+      return false;
+    }
     auto written_once = false;
     for (auto element : arr) {
       if (element.error()) {
