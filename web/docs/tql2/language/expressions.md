@@ -231,7 +231,7 @@ result = my_list[0]
 ```
 
 To suppress warnings when the list index is out of bounds, use the
-[`get`](../reference/functions/get.md) function with a fallback value:
+[`get`](../functions/get.md) function with a fallback value:
 
 ```tql
 let $my_list = ["Hello", "World"]
@@ -270,7 +270,7 @@ level = $severity_to_level[severity]
 ```
 
 To suppress warnings when the record field is missing, use the
-[`get`](../reference/functions/get.md) function with a fallback value:
+[`get`](../functions/get.md) function with a fallback value:
 
 ```tql
 from {foo: 1, bar: 2}
