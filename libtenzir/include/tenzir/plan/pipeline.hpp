@@ -8,36 +8,10 @@
 
 #pragma once
 
-#include <tenzir/plugin.hpp>
+#include "tenzir/plan/operator.hpp"
+#include "tenzir/uuid.hpp"
 
-namespace tenzir {
-
-// TODO: Figure out how this actually looks like.
-using operator_actor = int;
-
-} // namespace tenzir
-
-namespace tenzir::exec {
-
-/// Configured instance of an operator that is ready for execution.
-///
-/// Subclasses must register a serialization plugin with the same name.
-class operator_base {
-public:
-  virtual ~operator_base() = default;
-
-  virtual auto name() const -> std::string = 0;
-
-  virtual auto spawn(/*args*/) const -> operator_actor {
-    TENZIR_TODO();
-  }
-};
-
-using operator_ptr = std::unique_ptr<operator_base>;
-
-auto inspect(auto& f, operator_ptr& x) -> bool {
-  return plugin_inspect(f, x);
-}
+namespace tenzir::plan {
 
 /// An executable pipeline is just a sequence of executable operators.
 ///
@@ -67,12 +41,27 @@ public:
     return std::move(operators_);
   }
 
+  auto operator[](size_t index) -> operator_ptr& {
+    return operators_[index];
+  }
+
+  auto id() const -> uuid {
+    return id_;
+  }
+
+  auto size() const -> size_t {
+    return operators_.size();
+  }
+
   friend auto inspect(auto& f, pipeline& x) -> bool {
-    return f.apply(x.operators_);
+    // TODO: Tests?
+    return f.object(x).fields(f.field("id", x.id_),
+                              f.field("operators", x.operators_));
   }
 
 private:
+  uuid id_ = uuid::random();
   std::vector<operator_ptr> operators_;
 };
 
-}; // namespace tenzir::exec
+}; // namespace tenzir::plan
