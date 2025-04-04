@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[40239],{77694:e=>{e.exports=JSON.parse('{"permalink":"/releases/tags/parquet","page":1,"postsPerPage":100,"totalPages":1,"totalCount":1,"blogDescription":"Release Notes","blogTitle":"Releases"}')}}]);

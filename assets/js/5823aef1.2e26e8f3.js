@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[46776],{45719:e=>{e.exports=JSON.parse('{"label":"pipelines-as-code","permalink":"/releases/tags/pipelines-as-code","allTagsPath":"/releases/tags","count":1}')}}]);
