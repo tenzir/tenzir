@@ -9,8 +9,6 @@ get(x:record|list, index:number, [fallback:any]) -> any
 
 ## Description
 
-The `has` function returns `true` if the record contains the specified field and `false` otherwise.
-
 The `get` function returns the record field with the name `field` or the list
 element with the index `index`. If `fallback` is provided, the function
 gracefully returns the fallback value instead of emitting a warning and

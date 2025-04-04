@@ -8,7 +8,8 @@ has(x:record, field:string) -> bool
 
 ## Description
 
-The `has` function returns `true` if the record contains the specified field and `false` otherwise.
+The `has` function returns `true` if the record contains the specified field and
+`false` otherwise.
 
 ## Examples
 

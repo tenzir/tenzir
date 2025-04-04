@@ -340,7 +340,7 @@ public:
       std::move(const_dh).forward_to(ctx);
       auto* str = try_as<std::string>(*const_needle);
       if (not str) {
-        diagnostic::error("expcted `string`, but got `{}`",
+        diagnostic::error("expected `string`, but got `{}`",
                           type::infer(*const_needle).value_or(type{}).kind())
           .primary(needle)
           .emit(ctx);
@@ -535,8 +535,8 @@ public:
     auto field = ast::expression{};
     auto fallback = std::optional<ast::expression>{};
     TRY(argument_parser2::function(name())
-          .positional("x", subject, "record")
-          .positional("field", field, "string")
+          .positional("x", subject, "record|list")
+          .positional("field", field, "string|int")
           .positional("fallback", fallback, "any")
           .parse(inv, ctx));
     return function_use::make(
