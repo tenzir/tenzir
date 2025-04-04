@@ -482,6 +482,16 @@ RUN cmake -S contrib/tenzir-plugins/to_splunk -B build-to_splunk -G Ninja \
       DESTDIR=/plugin/to_splunk cmake --install build-to_splunk --strip --component Runtime && \
       rm -rf build-to_splunk
 
+FROM plugins-source AS to_google_secops-plugin
+
+COPY contrib/tenzir-plugins/to_google_secops ./contrib/tenzir-plugins/to_google_secops
+RUN cmake -S contrib/tenzir-plugins/to_google_secops -B build-to_google_secops -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-to_google_secops --parallel && \
+      cmake --build build-to_google_secops --target bats && \
+      DESTDIR=/plugin/to_google_secops cmake --install build-to_google_secops --strip --component Runtime && \
+      rm -rf build-to_google_secops
+
 FROM plugins-source AS vast-plugin
 
 COPY contrib/tenzir-plugins/vast ./contrib/tenzir-plugins/vast
@@ -504,6 +514,7 @@ COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 COPY --from=to_asl-plugin --chown=tenzir:tenzir /plugin/to_asl /
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
+COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 FROM tenzir-ce-arm64 AS tenzir-ce-amd64
