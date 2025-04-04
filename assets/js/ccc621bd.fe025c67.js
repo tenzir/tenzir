@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[97519],{19583:e=>{e.exports=JSON.parse('{"permalink":"/archive/tags/parquet","page":1,"postsPerPage":100,"totalPages":1,"totalCount":3,"blogDescription":"Blog","blogTitle":"Blog Archive"}')}}]);
