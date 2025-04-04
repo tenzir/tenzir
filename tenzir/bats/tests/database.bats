@@ -22,9 +22,9 @@ teardown() {
 }
 
 @test "import and export operators" {
-  check <"$INPUTSDIR/suricata/eve.json" tenzir 'read suricata | import'
+  check <"$INPUTSDIR/suricata/eve.json" tenzir 'read_suricata | import'
 
-  check tenzir 'export | summarize count=count(.)'
+  check tenzir 'export | summarize count=count()'
 }
 
 wait_for_file() {

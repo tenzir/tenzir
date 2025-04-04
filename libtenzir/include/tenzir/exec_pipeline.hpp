@@ -34,8 +34,6 @@ struct exec_config {
   bool dump_opt_ir = false;
   bool dump_finalized = false;
 
-  bool tql2 = false;
-  bool silence_tql1_deprecation_notice = false;
   bool strict = false;
 };
 
