@@ -4,7 +4,7 @@ Gets a field from a record or an element from a list
 
 ```tql
 get(x:record, field:string, [fallback:any]) -> any
-get(x:list, index:number, [fallback:any]) -> any
+get(x:record|list, index:number, [fallback:any]) -> any
 ```
 
 ## Description

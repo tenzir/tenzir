@@ -95,8 +95,8 @@ select foo = this.?foo
 {foo: null}
 ```
 
-To access a field with special characters in its name, use an [Index
-Expression](#indexingelement-access).
+To access a field with special characters in its name or based on its index, use
+an [Index Expression](#indexingelement-access).
 
 ## `this`
 
@@ -279,6 +279,18 @@ result = this.get("baz", "default")
 
 ```tql
 {result: "default"}
+```
+
+Both indexing expressions and the `get` function support numeric indices to
+access record fields:
+
+```tql title="Accessing a field by index"
+from {foo: "Hello", bar: "World"}
+select first_field = this[0]
+```
+
+```tql
+{first_field: "Hello"}
 ```
 
 ## Records

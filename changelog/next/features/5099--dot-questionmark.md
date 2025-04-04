@@ -10,6 +10,9 @@ the record field is missing. For example, `foo[bar]` is equivalent to
 `foo.get(bar)`, and `foo[bar] if foo.has(bar) else fallback` is equivalent to
 `foo.get(bar, fallback)`. This works for both records and lists.
 
+Indexing expressions on records now support numeric indices to access record
+fields. For example, `this[0]` returns the first field of the top-level record.
+
 The `has` method on records no longer requires the field name to be a constant.
 
 The `config` function replaces the previous `config` operator as a more flexible

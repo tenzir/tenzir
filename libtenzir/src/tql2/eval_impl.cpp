@@ -349,6 +349,64 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
         return multi_series{result};
       }
       if (auto number = index.as<int64_type>()) {
+        if (auto record = value.as<record_type>()) {
+          auto result = multi_series{};
+          auto warn_null_index = false;
+          auto warn_index_out_of_bounds = false;
+          auto last_field = std::optional<int64_t>{};
+          auto group_offset = int64_t{};
+          const auto add = [&](int64_t begin, int64_t end) {
+            if (begin == end) {
+              return;
+            }
+            if (not last_field) {
+              result.append(series::null(null_type{}, end - begin));
+              return;
+            }
+            if (*last_field < 0 or *last_field >= record->array->num_fields()) {
+              warn_index_out_of_bounds = true;
+              result.append(series::null(null_type{}, end - begin));
+              return;
+            }
+
+            result.append(series{
+              record->type.field(*last_field).type,
+              check(record->array->field(detail::narrow_cast<int>(*last_field))
+                      ->SliceSafe(begin, end - begin)),
+            });
+          };
+          for (auto i = int64_t{}; i < number->length(); ++i) {
+            if (number->array->IsNull(i)) {
+              if (not last_field) {
+                continue;
+              }
+              warn_null_index = true;
+              add(group_offset, i);
+              last_field.reset();
+              group_offset = i;
+              continue;
+            }
+            const auto field = number->array->GetView(i);
+            if (field == last_field) {
+              continue;
+            }
+            add(group_offset, i);
+            last_field = field;
+            group_offset = i;
+          }
+          add(group_offset, number->length());
+          if (warn_null_index and not x.suppress_warnings) {
+            diagnostic::warning("cannot use `null` as index")
+              .primary(x.index)
+              .emit(ctx_);
+          }
+          if (warn_index_out_of_bounds and not x.suppress_warnings) {
+            diagnostic::warning("index out of bounds")
+              .primary(x.index)
+              .emit(ctx_);
+          }
+          return result;
+        }
         auto list = value.as<list_type>();
         if (not list) {
           if (not is<null_type>(value.type) or not x.suppress_warnings) {

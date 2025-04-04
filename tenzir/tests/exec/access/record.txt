@@ -2,9 +2,9 @@
   xs: {
     foo: 1,
   },
-  index_first: null,
-  get_first: null,
-  get_first_fallback: -1,
+  index_first: 1,
+  get_first: 1,
+  get_first_fallback: 1,
   index_null: null,
   get_null: null,
   get_null_fallback: -1,
@@ -56,27 +56,6 @@
   get_field: null,
   get_field_lenient: null,
 }
-warning: cannot index into `record` with `int64`
- --> exec/access/record.tql:9:20
-  |
-9 |   index_first = xs[0],
-  |                    ~ 
-  |
-
-warning: cannot index into `record` with `int64`
-  --> exec/access/record.tql:10:22
-   |
-10 |   get_first = xs.get(0),
-   |                      ~ 
-   |
-
-warning: cannot index into `record` with `int64`
-  --> exec/access/record.tql:11:31
-   |
-11 |   get_first_fallback = xs.get(0, -1),
-   |                               ~ 
-   |
-
 warning: cannot use `null` as index
   --> exec/access/record.tql:12:19
    |
@@ -96,6 +75,20 @@ warning: cannot use `null` as index
    |
 14 |   get_null_fallback = xs.get(null, -1),
    |                              ~~~~ 
+   |
+
+warning: index out of bounds
+ --> exec/access/record.tql:9:20
+  |
+9 |   index_first = xs[0],
+  |                    ~ 
+  |
+
+warning: index out of bounds
+  --> exec/access/record.tql:10:22
+   |
+10 |   get_first = xs.get(0),
+   |                      ~ 
    |
 
 warning: record does not have this field
