@@ -8,20 +8,11 @@
 
 #include "tenzir/tql2/ast.hpp"
 
-#include "caf/binary_deserializer.hpp"
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/concept/convertible/data.hpp"
-#include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
-#include "tenzir/concept/parseable/tenzir/expression.hpp"
-#include "tenzir/concept/parseable/tenzir/pipeline.hpp"
-#include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/substitute_ctx.hpp"
-#include "tenzir/tql/basic.hpp"
-#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/try.hpp"
 
@@ -37,7 +28,7 @@ auto simple_selector::try_from(ast::expression expr)
   // Path is collect in reversed order (outside-in).
   auto has_this = false;
   auto path = std::vector<identifier>{};
-  auto current = static_cast<ast::expression*>(&expr);
+  auto* current = &expr;
   while (true) {
     auto sub_result = current->match(
       [&](ast::this_&) -> variant<ast::expression*, bool> {
@@ -49,15 +40,18 @@ auto simple_selector::try_from(ast::expression expr)
         return true;
       },
       [&](ast::field_access& e) -> variant<ast::expression*, bool> {
+        if (e.has_question_mark) {
+          return false;
+        }
         path.push_back(e.name);
         return &e.left;
       },
       [&](ast::index_expr& e) -> variant<ast::expression*, bool> {
-        auto constant = std::get_if<ast::constant>(&*e.index.kind);
+        auto* constant = std::get_if<ast::constant>(&*e.index.kind);
         if (not constant) {
           return false;
         }
-        if (auto name = std::get_if<std::string>(&constant->value)) {
+        if (auto* name = std::get_if<std::string>(&constant->value)) {
           path.emplace_back(*name, constant->source);
           return &e.expr;
         }
@@ -66,7 +60,7 @@ auto simple_selector::try_from(ast::expression expr)
       [](auto&) -> variant<ast::expression*, bool> {
         return false;
       });
-    if (auto success = std::get_if<bool>(&sub_result)) {
+    if (auto* success = std::get_if<bool>(&sub_result)) {
       if (not *success) {
         return {};
       }
@@ -187,15 +181,15 @@ auto to_duration_comparable(const ast::expression& e)
 auto fold_now(const ast::expression& l, const ast::binary_op& op,
               const ast::expression& r) -> std::optional<operand> {
   // TODO: Evaluate unary_expr to a constant duration
-  const auto constant = std::get_if<ast::constant>(r.kind.get());
+  auto* const constant = std::get_if<ast::constant>(r.kind.get());
   if (not constant) {
     return std::nullopt;
   }
-  const auto y = std::get_if<duration>(&constant->value);
+  auto* const y = std::get_if<duration>(&constant->value);
   if (not y) {
     return std::nullopt;
   }
-  const auto call = std::get_if<ast::function_call>(l.kind.get());
+  auto* const call = std::get_if<ast::function_call>(l.kind.get());
   if (not(call and call->fn.path[0].name == "now")) {
     return std::nullopt;
   }
@@ -223,7 +217,7 @@ auto optimize_now(const ast::expression& left, const relational_operator& rop,
   if (not field) {
     return std::nullopt;
   }
-  const auto bexpr = std::get_if<ast::binary_expr>(right.kind.get());
+  auto* const bexpr = std::get_if<ast::binary_expr>(right.kind.get());
   if (not bexpr) {
     return std::nullopt;
   }
@@ -245,7 +239,7 @@ auto optimize_now(const ast::expression& left, const relational_operator& rop,
 } // namespace
 
 auto is_true_literal(const ast::expression& y) -> bool {
-  if (auto constant = std::get_if<ast::constant>(&*y.kind)) {
+  if (auto* constant = std::get_if<ast::constant>(&*y.kind)) {
     return constant->as_data() == true;
   }
   return false;
@@ -449,7 +443,7 @@ public:
   }
 
   void visit(ast::expression& x) {
-    if (auto var = try_as<ast::dollar_var>(x)) {
+    if (auto* var = try_as<ast::dollar_var>(x)) {
       if (auto value = ctx_.get(var->let)) {
         x = ast::constant{std::move(*value), var->get_location()};
       } else {
@@ -460,7 +454,7 @@ public:
     }
   }
 
-  void visit(ast::dollar_var&) {
+  static void visit(ast::dollar_var&) {
     // This is handled by the `ast::expression` case above.
     TENZIR_UNREACHABLE();
   }

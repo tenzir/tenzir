@@ -25,12 +25,14 @@ Checks: >
   -misc-no-recursion,
   -modernize-use-nodiscard,
   -modernize-use-ranges,
+  -performance-enum-size,
   -readability-braces-around-statements,
   -readability-else-after-return,
   -readability-function-cognitive-complexity,
   -readability-identifier-length,
   -readability-magic-numbers,
   -readability-named-parameter,
+  -readability-redundant-inline-specifier,
   -readability-uppercase-literal-suffix,
   -dummy-must-be-last-entry-without-trailing-comma
 WarningsAsErrors:      ''

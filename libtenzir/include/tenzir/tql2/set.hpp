@@ -30,7 +30,7 @@ assign(const ast::simple_selector& left, series right, const table_slice& input,
        diagnostic_handler& dh, assign_position position = assign_position::back)
   -> table_slice;
 
-[[nodiscard]] auto assign(const ast::meta& left, series right,
+[[nodiscard]] auto assign(const ast::meta& left, const series& right,
                           const table_slice& input, diagnostic_handler& diag)
   -> std::vector<table_slice>;
 

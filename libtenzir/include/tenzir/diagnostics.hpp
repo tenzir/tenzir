@@ -387,6 +387,12 @@ public:
     return std::move(result);
   }
 
+  auto forward_to(diagnostic_handler& other) && -> void {
+    for (auto diag : std::move(result)) {
+      std::move(diag).modify().emit(other);
+    }
+  }
+
   auto to_error() && -> caf::error {
     return caf::make_error(ec::diagnostic, std::move(result));
   }

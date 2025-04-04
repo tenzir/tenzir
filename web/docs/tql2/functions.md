@@ -65,24 +65,26 @@ but often resort to the method style when it is more idiomatic.
 
 ## Record
 
-| Function                      | Description                         | Example               |
-| :---------------------------- | :---------------------------------- | :-------------------- |
-| [`has`](functions/has.md)     | Checks whether a record has a field | `record.has("field")` |
-| [`merge`](functions/merge.md) | Merges two records                  | `merge(foo, bar)`     |
-| [`sort`](functions/sort.md)   | Sorts a record by field names       | `xs.sort()`           |
+| Function                      | Description                         | Example                                    |
+| :---------------------------- | :---------------------------------- | :----------------------------------------- |
+| [`get`](functions/get.md)     | Accesses a field of a record        | `record.get("field with spaces", default)` |
+| [`has`](functions/has.md)     | Checks whether a record has a field | `record.has("field")`                      |
+| [`merge`](functions/merge.md) | Merges two records                  | `merge(foo, bar)`                          |
+| [`sort`](functions/sort.md)   | Sorts a record by field names       | `xs.sort()`                                |
 
 ## List
 
-| Function                                  | Description                                | Example               |
-| :---------------------------------------- | :----------------------------------------- | :-------------------- |
-| [`append`](functions/append.md)           | Inserts an element at the back of a list   | `xs.append(y)`        |
-| [`prepend`](functions/prepend.md)         | Inserts an element at the front of a list  | `xs.prepend(y)`       |
-| [`concatenate`](functions/concatenate.md) | Merges two lists                           | `concatenate(xs, ys)` |
-| [`length`](functions/length.md)           | Retrieves the length of a list             | `[1,2,3].length()`    |
-| [`map`](functions/map.md)                 | Maps each list element to an expression    | `xs.map(x, x + 3)`    |
-| [`sort`](functions/sort.md)               | Sorts a list by its values.                | `xs.sort()`           |
-| [`where`](functions/where.md)             | Filters list elements based on a predicate | `xs.where(x, x > 5)`  |
-| [`zip`](functions/zip.md)                 | Combines two lists into a list of pairs    | `zip(xs, ys)`         |
+| Function                                  | Description                                | Example                    |
+| :---------------------------------------- | :----------------------------------------- | :------------------------- |
+| [`append`](functions/append.md)           | Inserts an element at the back of a list   | `xs.append(y)`             |
+| [`prepend`](functions/prepend.md)         | Inserts an element at the front of a list  | `xs.prepend(y)`            |
+| [`concatenate`](functions/concatenate.md) | Merges two lists                           | `concatenate(xs, ys)`      |
+| [`get`](functions/get.md)                 | Accesses an element of a list              | `list.get(index, default)` |
+| [`length`](functions/length.md)           | Retrieves the length of a list             | `[1,2,3].length()`         |
+| [`map`](functions/map.md)                 | Maps each list element to an expression    | `xs.map(x, x + 3)`         |
+| [`sort`](functions/sort.md)               | Sorts a list by its values.                | `xs.sort()`                |
+| [`where`](functions/where.md)             | Filters list elements based on a predicate | `xs.where(x, x > 5)`       |
+| [`zip`](functions/zip.md)                 | Combines two lists into a list of pairs    | `zip(xs, ys)`              |
 
 ## Subnet
 
@@ -291,5 +293,6 @@ This is hidden because there is an issue with the timezone DB.
 
 | Function                        | Description                   | Example          |
 | :------------------------------ | :---------------------------- | :--------------- |
+| [`config`](functions/config.md) | Reads the configuration file  | `config()`       |
 | [`env`](functions/env.md)       | Reads an environment variable | `env("PATH")`    |
 | [`secret`](functions/secret.md) | Reads a secret from a store   | `secret("PATH")` |

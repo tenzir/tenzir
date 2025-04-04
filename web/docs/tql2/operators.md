@@ -194,7 +194,6 @@ Operator | Description | Example
 
 Operator | Description | Example
 :--------|:------------|:-------
-[`config`](./operators/config.md) | Returns the node's configuration | `config`
 [`diagnostics`](./operators/diagnostics.md) | Returns diagnostic events of managed pipelines | `diagnostics`
 [`openapi`](./operators/openapi.md) | Returns the OpenAPI specification | `openapi`
 [`metrics`](./operators/metrics.md) | Retrieves metrics events from a Tenzir node | `metrics "cpu"`

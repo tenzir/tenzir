@@ -1347,6 +1347,9 @@ public:
   [[nodiscard]] generator<offset>
   resolve_type_extractor(std::string_view type_extractor) const noexcept;
 
+  /// Checks whether a field name is contained in the record.
+  [[nodiscard]] bool has_field(std::string_view field) const noexcept;
+
   /// Computes the flattened field name at a given index.
   [[nodiscard]] std::string_view key(size_t index) const& noexcept;
   [[nodiscard]] std::string_view key(size_t index) && = delete;

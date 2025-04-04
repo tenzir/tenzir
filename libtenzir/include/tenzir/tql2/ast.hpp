@@ -143,7 +143,7 @@ struct constant {
 
   friend auto inspect(auto& f, constant& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      if (auto t = try_as<time>(x.value)) {
+      if (auto* t = try_as<time>(x.value)) {
         // Time printing is not reliable across platforms otherwise.
         return dbg->fmt_value("time {} @ {:?}", data{*t}, x.source);
       }
@@ -470,17 +470,27 @@ struct function_call {
 struct field_access {
   field_access() = default;
 
-  field_access(expression left, location dot, identifier name)
-    : left{std::move(left)}, dot{dot}, name{std::move(name)} {
+  field_access(expression left, location dot, bool has_question_mark,
+               identifier name)
+    : left{std::move(left)},
+      dot{dot},
+      has_question_mark{has_question_mark},
+      name{std::move(name)} {
   }
 
   expression left;
   location dot;
+  bool has_question_mark = false;
   identifier name;
 
   friend auto inspect(auto& f, field_access& x) -> bool {
     return f.object(x).fields(f.field("left", x.left), f.field("dot", x.dot),
+                              f.field("has_question_mark", x.has_question_mark),
                               f.field("name", x.name));
+  }
+
+  auto suppress_warnings() const -> bool {
+    return has_question_mark;
   }
 
   auto get_location() const -> location {
@@ -492,23 +502,25 @@ struct index_expr {
   index_expr() = default;
 
   index_expr(expression expr, location lbracket, expression index,
-             location rbracket)
+             location rbracket, bool suppress_warnings)
     : expr{std::move(expr)},
       lbracket{lbracket},
       index{std::move(index)},
-      rbracket{rbracket} {
+      rbracket{rbracket},
+      suppress_warnings{suppress_warnings} {
   }
 
   expression expr;
   location lbracket;
   expression index;
   location rbracket;
+  bool suppress_warnings = false;
 
   friend auto inspect(auto& f, index_expr& x) -> bool {
-    return f.object(x).fields(f.field("expr", x.expr),
-                              f.field("lbracket", x.lbracket),
-                              f.field("index", x.index),
-                              f.field("rbracket", x.rbracket));
+    return f.object(x).fields(
+      f.field("expr", x.expr), f.field("lbracket", x.lbracket),
+      f.field("index", x.index), f.field("rbracket", x.rbracket),
+      f.field("suppress_warnings", x.suppress_warnings));
   }
 
   auto get_location() const -> location {

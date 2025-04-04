@@ -67,13 +67,36 @@ Use a single identifier to refer to a top-level field. To access a nested field,
 append `.<name>` to an expression that returns a record.
 
 ```tql
-from { my_field: 42, top_level: { nested: 0 } }
+from {
+  my_field: 42,
+  top_level: {
+    nested: 0
+  }
+}
 my_field = top_level.nested
 ```
 
 ```tql
-{ my_field: 0, top_level: { nested: 0 } }
+{my_field: 0, top_level: {nested: 0}}
 ```
+
+To avoid a warning when the nested field does not exist, use `.?<name>`.
+
+```tql
+from (
+  {foo: 1},
+  {bar: 2},
+)
+select foo = this.?foo
+```
+
+```tql
+{foo: 1}
+{foo: null}
+```
+
+To access a field with special characters in its name or based on its index, use
+an [Index Expression](#indexingelement-access).
 
 ## `this`
 
@@ -204,7 +227,19 @@ result = my_list[0]
 ```
 
 ```tql
-{ result: "Hello" }
+{result: "Hello"}
+```
+
+To suppress warnings when the list index is out of bounds, use the
+[`get`](../functions/get.md) function with a fallback value:
+
+```tql
+let $my_list = ["Hello", "World"]
+result = get(my_list[2], "default")
+```
+
+```tql
+{result: "default"}
 ```
 
 ### Records
@@ -213,17 +248,17 @@ Access fields in a record using `record.fieldname`. If the field name contains
 spaces or depends on a runtime value, use an indexing expression:
 
 ```tql title="Accessing a fieldname with a space"
-let $answers = { "the ultimate question": 42 }
+let $answers = {"the ultimate question": 42}
 result = $answers["the ultimate question"]
 ```
 
 ```tql
-{ result: 42 }
+{result: 42}
 ```
 
 ```tql title="Accessing a field based on a runtime value"
-let $severity_to_level = { "ERROR": 1, "WARNING": 2, "INFO": 3 }
-from { severity: "ERROR" }
+let $severity_to_level = {"ERROR": 1, "WARNING": 2, "INFO": 3}
+from {severity: "ERROR"}
 level = $severity_to_level[severity]
 ```
 
@@ -232,6 +267,30 @@ level = $severity_to_level[severity]
   severity: "ERROR",
   level: 1
 }
+```
+
+To suppress warnings when the record field is missing, use the
+[`get`](../functions/get.md) function with a fallback value:
+
+```tql
+from {foo: 1, bar: 2}
+result = this.get("baz", "default")
+```
+
+```tql
+{result: "default"}
+```
+
+Both indexing expressions and the `get` function support numeric indices to
+access record fields:
+
+```tql title="Accessing a field by index"
+from {foo: "Hello", bar: "World"}
+select first_field = this[0]
+```
+
+```tql
+{first_field: "Hello"}
 ```
 
 ## Records
