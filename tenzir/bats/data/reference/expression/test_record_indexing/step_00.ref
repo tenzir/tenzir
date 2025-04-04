@@ -18,7 +18,7 @@ warning: cannot use `null` as index
   |                   ~ 
   |
 
-warning: record does not have field 'x'
+warning: record does not have field `x`
  --> <input>:1:19
   |
 1 | read_json | z = x[y]

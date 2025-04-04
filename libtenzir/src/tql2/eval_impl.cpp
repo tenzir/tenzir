@@ -326,7 +326,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
           } else {
             if (std::ranges::find(not_found, name) == not_found.end()) {
               if (not x.suppress_warnings) {
-                diagnostic::warning("record does not have field '{}'", name)
+                diagnostic::warning("record does not have field `{}`", name)
                   .primary(x.index)
                   .emit(ctx_);
               }
