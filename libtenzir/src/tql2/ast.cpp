@@ -61,7 +61,7 @@ auto simple_selector::try_from(ast::expression expr)
         return false;
       });
     if (auto* success = std::get_if<bool>(&sub_result)) {
-      if (not*success) {
+      if (not *success) {
         return {};
       }
       std::ranges::reverse(path);
