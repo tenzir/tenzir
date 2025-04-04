@@ -100,6 +100,20 @@ append_builder(const subnet_type&,
 }
 
 arrow::Status
+append_builder(const secret_type&,
+               type_to_arrow_builder_t<secret_type>& builder,
+               const view<type_to_data_t<secret_type>>& view) noexcept {
+  TRY(builder.Append());
+  TRY(builder.value_builder().Append(view.unsafe_get_value_be_careful()));
+  TRY(builder.name_builder().Append(view.name()));
+  TRY(builder.type_builder().Append(
+    static_cast<detail::secret_enum_underlying_type>(view.type())));
+  TRY(builder.encoding_builder().Append(
+    static_cast<detail::secret_enum_underlying_type>(view.encoding())));
+  return arrow::Status::OK();
+}
+
+arrow::Status
 append_builder(const enumeration_type&,
                type_to_arrow_builder_t<enumeration_type>& builder,
                const view<type_to_data_t<enumeration_type>>& view) noexcept {

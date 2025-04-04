@@ -298,6 +298,13 @@ class plugin : public virtual aggregation_function_plugin,
                                            "support type {}",
                                            type));
       },
+      [](const secret_type& type)
+        -> caf::expected<std::unique_ptr<aggregation_function>> {
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("sum aggregation function does not "
+                                           "support type {}",
+                                           type));
+      },
       []<complex_type Type>(const Type& type)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
         return caf::make_error(ec::invalid_configuration,
