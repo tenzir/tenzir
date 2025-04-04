@@ -8,14 +8,9 @@ and response to incidents.
 
 [operator-docs]: ../../../tql2/operators/to_google_secops.md
 
-The [`to_google_secops`][operator-docs] operator makes it possible to send events
-to Google SecOps using the[unstructured logs ingestion API]
-(https://cloud.google.com/chronicle/docs/reference/ingestion-api#unstructuredlogentries).
-
-## Configuration
-
-You need to configure appropriate credentials using Google's [Application
-Default Credentials](https://google.aip.dev/auth/4110).
+The [`to_google_secops`][operator-docs] operator makes it possible to send
+events to Google SecOps using the [unstructured logs ingestion
+API](https://cloud.google.com/chronicle/docs/reference/ingestion-api#unstructuredlogentries).
 
 ## Examples
 

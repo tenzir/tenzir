@@ -100,7 +100,7 @@ let $fallback = "unknown"
 from (
   {country_tag: "ger"},
   {country_tag: "ind"},
-  {country_tag: "ita }
+  {country_tag: "ita"}
 )
 country = $country_tag_to_name.get(country_tag, $fallback)
 ```

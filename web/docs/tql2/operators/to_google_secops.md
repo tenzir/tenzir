@@ -21,12 +21,12 @@ The customer UUID to use.
 ### `private_key = string`
 
 The private key to use for authentication. This corresponds to the `private_key`
-in the SecOps collector config, you can directly download.
+in the SecOps collector config.
 
 ### `client_email = string`
 
 The user email to use for authentication. This corresponds to the `client_email`
-in the SecOps collector config, you can directly download.
+in the SecOps collector config.
 
 ### `log_type = string`
 
