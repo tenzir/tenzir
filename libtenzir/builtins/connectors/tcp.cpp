@@ -343,7 +343,7 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                 return self->state().connection_rp.deliver(*fcntl_error);
               }
               self->state().socket.emplace(std::move(peer));
-              if (!certfile.empty()) {
+              if (not certfile.empty()) {
                 self->state().ssl_ctx.emplace(
                   boost::asio::ssl::context::tls_server);
                 self->state().ssl_ctx->use_certificate_chain_file(certfile);
@@ -856,9 +856,147 @@ public:
   }
 };
 
-class save_tcp final : public virtual operator_plugin2<saver_adapter<saver>> {
+class save_tcp_operator final : public crtp_operator<save_tcp_operator> {
+public:
+  save_tcp_operator() = default;
+
+  explicit save_tcp_operator(saver_args args) : args_{std::move(args)} {
+  }
+
   auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  operator()(generator<chunk_ptr> bytes, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    if (args_.tls.inner and args_.listen) {
+      // Verify that the files actually exist and are readable.
+      // Ideally we'd also like to verify that the files contain valid
+      // key material, but there's no straightforward API for this in
+      // OpenSSL.
+      TENZIR_ASSERT(args_.keyfile);
+      TENZIR_ASSERT(args_.certfile);
+      auto* keyfile = std::fopen(args_.keyfile->inner.c_str(), "r");
+      if (not keyfile) {
+        auto error = detail::describe_errno();
+        diagnostic::error("failed to open TLS keyfile")
+          .hint("{}", error)
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      std::fclose(keyfile);
+      auto* certfile = std::fopen(args_.certfile->inner.c_str(), "r");
+      if (not certfile) {
+        auto error = detail::describe_errno();
+        diagnostic::error("failed to open TLS certfile")
+          .hint("{}", error)
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      std::fclose(certfile);
+    }
+    auto tcp_metrics = ctrl.metrics({
+      "tenzir.metrics.tcp",
+      record_type{
+        {"handle", string_type{}},
+        {"reads", uint64_type{}},
+        {"writes", uint64_type{}},
+        {"bytes_read", uint64_type{}},
+        {"bytes_written", uint64_type{}},
+      },
+    });
+    auto tcp_bridge
+      = ctrl.self().spawn(make_tcp_bridge, std::move(tcp_metrics));
+    if (not args_.listen) {
+      auto cacert = args_.cacert.has_value()
+                      ? args_.cacert->inner
+                      : ssl_options::query_cacert_fallback(ctrl);
+      auto certfile
+        = args_.certfile.has_value() ? args_.certfile->inner : std::string{};
+      auto keyfile
+        = args_.keyfile.has_value() ? args_.keyfile->inner : std::string{};
+      ctrl.self()
+        .mail(atom::connect_v, args_.tls.inner, cacert, certfile, keyfile,
+              args_.skip_peer_verification.has_value(), args_.hostname,
+              args_.port)
+        .request(tcp_bridge, caf::infinite)
+        .then(
+          [&]() {
+            ctrl.set_waiting(false);
+          },
+          [&](const caf::error& err) {
+            diagnostic::error("tcp saver failed to connect")
+              .note("with error: {}", err)
+              .note("while connecting to {}:{}", args_.hostname, args_.port)
+              .emit(ctrl.diagnostics());
+          });
+      ctrl.set_waiting(true);
+      co_yield {};
+    } else {
+      ctrl.self()
+        .mail(atom::accept_v, args_.hostname, args_.port,
+              args_.certfile.value_or(located{std::string{}, location::unknown})
+                .inner,
+              args_.keyfile.value_or(located{std::string{}, location::unknown})
+                .inner)
+        .request(tcp_bridge, caf::infinite)
+        .then(
+          [&]() {
+            ctrl.set_waiting(false);
+          },
+          [&](const caf::error& err) {
+            diagnostic::error("failed to listen: {}", err)
+              .emit(ctrl.diagnostics());
+          });
+      ctrl.set_waiting(true);
+      co_yield {};
+    }
+    for (auto chunk : bytes) {
+      if (not chunk) {
+        co_yield {};
+        continue;
+      }
+      if (chunk->size() == 0) {
+        continue;
+      }
+      ctrl.self()
+        .mail(atom::write_v, std::move(chunk))
+        .request(tcp_bridge, caf::infinite)
+        .then(
+          [&]() {
+            ctrl.set_waiting(false);
+          },
+          [&](const caf::error& err) {
+            diagnostic::error("tcp connector encountered error: {}", err)
+              .emit(ctrl.diagnostics());
+          });
+      ctrl.set_waiting(true);
+      co_yield {};
+    }
+  }
+
+  auto name() const -> std::string override {
+    return "save_tcp";
+  }
+
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  friend auto inspect(auto& f, save_tcp_operator& x) -> bool {
+    return f.object(x).fields(f.field("args", x.args_));
+  }
+
+private:
+  saver_args args_;
+};
+
+class save_tcp final : public virtual operator_plugin2<save_tcp_operator> {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = saver_args{};
     args.tls = located{false, inv.self.get_location()};
     auto parser = argument_parser2::operator_(name());
@@ -880,7 +1018,7 @@ class save_tcp final : public virtual operator_plugin2<saver_adapter<saver>> {
     }
     args.hostname = std::string{split[0]};
     args.port = std::string{split[1]};
-    return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
+    return std::make_unique<save_tcp_operator>(std::move(args));
   }
 
   auto save_properties() const -> save_properties_t override {
