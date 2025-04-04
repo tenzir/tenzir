@@ -1,27 +1,32 @@
 # to_google_secops
 
-Sends unstructued events to a Google SecOps Chronicle instance.
+Sends unstructured events to a Google SecOps Chronicle instance.
 
 ```tql
-to_google_secops customer_id=string, config=string|record, log_type=string,
-                log_text=string, [region=string, timestamp=time,
-                labels=record, namespace=string]
+to_google_secops customer_id=string, private_key=string, client_email=string,
+                 log_type=string, log_text=string, [region=string,
+                 timestamp=time, labels=record, namespace=string]
 ```
 
 ## Description
 
 The `to_google_secops` operator makes it possible to ingest events via the
-[Google SecOps Chronicle unstructuredlogs ingestion
+[Google SecOps Chronicle unstructured logs ingestion
 API](https://cloud.google.com/chronicle/docs/reference/ingestion-api#unstructuredlogentries).
 
 ### `customer_id = string`
 
 The customer UUID to use.
 
-### `config = string | record`
+### `private_key = string`
 
-Path to the JSON collector config or a record with at least the keys
-`private_key` and `client_email`.
+The private key to use for authentication. This corresponds to the `private_key`
+in the SecOps collector config.
+
+### `client_email = string`
+
+The user email to use for authentication. This corresponds to the `client_email`
+in the SecOps collector config.
 
 ### `log_type = string`
 
@@ -56,5 +61,11 @@ Defaults to `tenzir`.
 
 ```tql
 from {log: "31-Mar-2025 01:35:02.187 client 0.0.0.0#4238: query: tenzir.com IN A + (255.255.255.255)"}
-to_google_secops customer_id="00000000-0000-0000-00000000000000000", config="../tenzir_ingestion.json", log_text=log, log_type="BIND_DNS", region="europe"
+to_google_secops \
+  customer_id="00000000-0000-0000-00000000000000000",
+  private_key=secret("my_secops_key"),
+  client_email="somebody@example.com",
+  log_text=log,
+  log_type="BIND_DNS",
+  region="europe"
 ```
