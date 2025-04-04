@@ -26,7 +26,8 @@ The [`to_google_secops`][operator-docs] operator makes it possible to send event
 from {log: "31-Mar-2025 01:35:02.187 client 0.0.0.0#4238: query: tenzir.com IN A + (255.255.255.255)"}
 to_google_secops \
   customer_id="00000000-0000-0000-00000000000000000",
-  config="../tenzir_ingestion.json",
+  private_key=secret("my_secops_key"),
+  client_email="somebody@example.com",
   log_text=log,
   log_type="BIND_DNS",
   region="europe"
