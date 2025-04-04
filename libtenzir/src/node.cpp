@@ -14,9 +14,6 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/catalog.hpp"
 #include "tenzir/concept/convertible/data.hpp"
-#include "tenzir/concept/parseable/tenzir/si.hpp"
-#include "tenzir/concept/parseable/tenzir/time.hpp"
-#include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/actor_metrics.hpp"
@@ -29,7 +26,6 @@
 #include "tenzir/index.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/node.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/shutdown.hpp"
@@ -133,33 +129,6 @@ auto register_component(node_actor::stateful_pointer<node_state> self,
       }
     });
   return caf::none;
-}
-
-} // namespace
-
-auto node_state::get_endpoint_handler(const http_request_description& desc)
-  -> const handler_and_endpoint& {
-  static const auto empty_response = handler_and_endpoint{};
-  auto it = rest_handlers.find(desc.canonical_path);
-  if (it != rest_handlers.end()) {
-    return it->second;
-  }
-  // Spawn handler on first usage
-  auto const* plugin = find_endpoint_plugin(desc);
-  if (!plugin) {
-    return empty_response;
-  }
-  // TODO: Monitor the spawned handler and restart if it goes down.
-  auto handler = plugin->handler(self->system(), self);
-  for (auto const& endpoint : plugin->rest_endpoints()) {
-    rest_handlers[endpoint.canonical_path()]
-      = std::make_pair(handler, endpoint);
-  }
-  auto result = rest_handlers.find(desc.canonical_path);
-  // If no canonical path matches, `find_endpoint_plugin()` should
-  // have already returned `nullptr`.
-  TENZIR_ASSERT(result != rest_handlers.end());
-  return result->second;
 }
 
 auto spawn_filesystem(node_actor::stateful_pointer<node_state> self)
@@ -357,7 +326,34 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   }
 }
 
-auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
+} // namespace
+
+auto node_state::get_endpoint_handler(const http_request_description& desc)
+  -> const handler_and_endpoint& {
+  static const auto empty_response = handler_and_endpoint{};
+  auto it = rest_handlers.find(desc.canonical_path);
+  if (it != rest_handlers.end()) {
+    return it->second;
+  }
+  // Spawn handler on first usage
+  auto const* plugin = find_endpoint_plugin(desc);
+  if (!plugin) {
+    return empty_response;
+  }
+  // TODO: Monitor the spawned handler and restart if it goes down.
+  auto handler = plugin->handler(self->system(), self);
+  for (auto const& endpoint : plugin->rest_endpoints()) {
+    rest_handlers[endpoint.canonical_path()]
+      = std::make_pair(handler, endpoint);
+  }
+  auto result = rest_handlers.find(desc.canonical_path);
+  // If no canonical path matches, `find_endpoint_plugin()` should
+  // have already returned `nullptr`.
+  TENZIR_ASSERT(result != rest_handlers.end());
+  return result->second;
+}
+
+auto node(node_actor::stateful_pointer<node_state> self,
           std::filesystem::path dir) -> node_actor::behavior_type {
   self->state().self = self;
   self->state().dir = std::move(dir);
@@ -490,9 +486,8 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         if (not handle) {
           failed.push_back(label);
           continue;
-        } else {
-          result.push_back(std::move(handle));
         }
+        result.push_back(std::move(handle));
       }
       if (not failed.empty()) {
         return diagnostic::error("node failed to retrieve components: {}",
