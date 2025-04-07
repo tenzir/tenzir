@@ -26,6 +26,7 @@
 #include "tenzir/tql2/resolve.hpp"
 
 #include <arrow/util/compression.h>
+#include <arrow/util/utf8.h>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/anon_mail.hpp>
@@ -54,6 +55,7 @@ auto is_server_from_app_path(std::string_view app_path) {
 
 auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
+  arrow::util::InitializeUTF8();
   // Set a signal handler for fatal conditions. Prints a backtrace if support
   // for that is enabled.
   if (SIG_ERR == std::signal(SIGSEGV, fatal_handler)) [[unlikely]] {
@@ -74,7 +76,7 @@ auto main(int argc, char** argv) -> int try {
     return EXIT_FAILURE;
   }
   auto loaded_plugin_paths = plugins::load({TENZIR_BUNDLED_PLUGINS}, cfg);
-  if (!loaded_plugin_paths) {
+  if (not loaded_plugin_paths) {
     fmt::print(stderr, "{}\n", loaded_plugin_paths.error());
     return EXIT_FAILURE;
   }
@@ -87,13 +89,13 @@ auto main(int argc, char** argv) -> int try {
   });
   // Application setup.
   auto [root, root_factory] = make_application(argv[0]);
-  if (!root) {
+  if (not root) {
     return EXIT_FAILURE;
   }
   // Parse the CLI.
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
-  if (!invocation) {
+  if (not invocation) {
     if (invocation.error()) {
       render_error(*root, invocation.error(), std::cerr);
       return EXIT_FAILURE;
@@ -110,10 +112,10 @@ auto main(int argc, char** argv) -> int try {
   const auto is_server = is_server_from_app_path(argv[0]);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
-  if (!log_context) {
+  if (not log_context) {
     return EXIT_FAILURE;
   }
-  if (!is_server) {
+  if (not is_server) {
     // Force the use of $TMPDIR as cache directory when running as a client.
     auto ec = std::error_code{};
     auto previous_value
@@ -132,7 +134,7 @@ auto main(int argc, char** argv) -> int try {
     }
   }
 #if TENZIR_POSIX
-  struct rlimit rlimit {};
+  struct rlimit rlimit{};
   if (::getrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
     TENZIR_ERROR("failed to get RLIMIT_NOFILE: {}", detail::describe_errno());
     return -errno;
@@ -173,7 +175,7 @@ auto main(int argc, char** argv) -> int try {
   {
     const auto default_compression_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
-    if (!default_compression_level.ok()) {
+    if (not default_compression_level.ok()) {
       TENZIR_ERROR("failed to configure Zstd codec for Apache Arrow: {}",
                    default_compression_level.status().ToString());
       return EXIT_FAILURE;
@@ -185,12 +187,12 @@ auto main(int argc, char** argv) -> int try {
       = arrow::util::Codec::MinimumCompressionLevel(arrow::Compression::ZSTD);
     auto max_level
       = arrow::util::Codec::MaximumCompressionLevel(arrow::Compression::ZSTD);
-    if (!min_level.ok()) {
+    if (not min_level.ok()) {
       TENZIR_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
                    min_level.status().ToString());
       return EXIT_FAILURE;
     }
-    if (!max_level.ok()) {
+    if (not max_level.ok()) {
       TENZIR_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
                    max_level.status().ToString());
       return EXIT_FAILURE;
@@ -204,7 +206,7 @@ auto main(int argc, char** argv) -> int try {
     }
     auto codec
       = arrow::util::Codec::Create(arrow::Compression::ZSTD, compression_level);
-    if (!codec.ok()) {
+    if (not codec.ok()) {
       TENZIR_ERROR("failed to create Zstd codec for Apache Arrow: {}",
                    codec.status().ToString());
       return EXIT_FAILURE;
@@ -228,7 +230,7 @@ auto main(int argc, char** argv) -> int try {
   if (auto const* settings
       = caf::get_if<caf::settings>(&cfg, "tenzir.operators")) {
     auto r = to<record>(*settings);
-    if (!r) {
+    if (not r) {
       TENZIR_ERROR("could not load `tenzir.operators`: invalid record");
       return EXIT_FAILURE;
     }
@@ -240,7 +242,7 @@ auto main(int argc, char** argv) -> int try {
     auto tql2_udos = std::unordered_map<std::string, ast::pipeline>{};
     for (auto&& [name, value] : *r) {
       auto* definition = try_as<std::string>(&value);
-      if (!definition) {
+      if (not definition) {
         TENZIR_ERROR("could not load `tenzir.operators`: alias `{}` does not "
                      "resolve to a string",
                      name);
@@ -336,7 +338,7 @@ auto main(int argc, char** argv) -> int try {
   // Put it into the actor registry so any actor can communicate with it.
   sys.registry().put("signal-reflector", reflector.get());
   auto run_error = caf::error{};
-  if (auto result = run(*invocation, sys, root_factory); !result) {
+  if (auto result = run(*invocation, sys, root_factory); not result) {
     run_error = std::move(result.error());
   } else {
     caf::message_handler{[&](caf::error& err) {

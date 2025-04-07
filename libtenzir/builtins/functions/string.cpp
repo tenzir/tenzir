@@ -6,13 +6,20 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/concept/printable/tenzir/json_printer_options.hpp"
+#include "tenzir/table_slice.hpp"
+
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <arrow/array/array_binary.h>
 #include <arrow/compute/api.h>
+#include <arrow/util/utf8.h>
 #include <re2/re2.h>
 
+#include <iterator>
 #include <string_view>
 
 namespace tenzir::plugins::string {
@@ -28,8 +35,8 @@ public:
     return starts_with_ ? "starts_with" : "ends_with";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
     TRY(argument_parser2::function(name())
@@ -84,8 +91,8 @@ public:
     return "match_regex";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
     TRY(argument_parser2::function(name())
@@ -145,8 +152,8 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
@@ -220,8 +227,8 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     // TODO: Use `result_arrow_ty` to derive type name.
     TRY(argument_parser2::function(name())
@@ -279,8 +286,8 @@ public:
     return regex_ ? "tql2.replace_regex" : "tql2.replace";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
     auto replacement = std::string{};
@@ -352,8 +359,8 @@ public:
     return "tql2.slice";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto begin = std::optional<located<int64_t>>{};
     auto end = std::optional<located<int64_t>>{};
@@ -419,8 +426,8 @@ public:
     return Deprecated ? "tql2.str" : "tql2.string";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     if constexpr (Deprecated) {
       diagnostic::warning("`str` has been renamed to `string`")
         .note("`str` alias will be removed and become a hard error in a future "
@@ -428,41 +435,67 @@ public:
         .primary(inv.call.get_location())
         .emit(ctx);
     }
-    auto subject_expr = ast::expression{};
+    auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
-          .positional("x", subject_expr, "any")
+          .positional("x", expr, "any")
           .parse(inv, ctx));
-    return function_use::make([subject_expr = std::move(subject_expr)](
-                                evaluator eval, session) -> series {
-      auto b = arrow::StringBuilder{};
-      check(b.Reserve(eval.length()));
-      for (auto& subject : eval(subject_expr)) {
-        for (auto&& value : subject.values()) {
-          if (is<caf::none_t>(value)) {
-            check(b.AppendNull());
-            continue;
-          }
-          const auto f = detail::overload{
-            [](std::string_view x) {
-              return std::string{x};
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        auto b = arrow::StringBuilder{};
+        check(b.Reserve(eval.length()));
+        auto invalid_blob = false;
+        const auto opts = json_printer_options{
+          .tql = true,
+          .oneline = true,
+          .trailing_commas = false,
+        };
+        const auto printer = json_printer{opts};
+        auto buffer = std::string{};
+        for (const auto& s : eval(expr)) {
+          const auto resolved = resolve_enumerations(s);
+          match(
+            resolved.type,
+            [&](const string_type&) {
+              check(append_array(b, string_type{},
+                                 as<arrow::StringArray>(*resolved.array)));
             },
-            [](int64_t x) {
-              return fmt::to_string(x);
-            },
-            [&](enumeration x) {
-              return std::string{as<enumeration_type>(subject.type).field(x)};
+            [&](const blob_type&) {
+              for (const auto& x : resolved.values<blob_type>()) {
+                if (not x) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                const auto* begin = reinterpret_cast<const uint8_t*>(x->data());
+                const auto size = detail::narrow<int64_t>(x->size());
+                if (arrow::util::ValidateUTF8(begin, size)) {
+                  check(b.Append(begin, size));
+                } else {
+                  invalid_blob = true;
+                  check(b.AppendNull());
+                }
+              }
             },
             [&](const auto&) {
-              // TODO: This should probably use the TQL printer, once it exists.
-              // Then we can also remove the special cases above.
-              return fmt::to_string(value);
-            },
-          };
-          check(b.Append(match(value, f)));
+              for (const auto& x : resolved.values()) {
+                if (is<caf::none_t>(x)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                auto it = std::back_inserter(buffer);
+                printer.print(it, x);
+                check(b.Append(buffer));
+                buffer.clear();
+              }
+            });
         }
-      }
-      return {string_type{}, finish(b)};
-    });
+        if (invalid_blob) {
+          diagnostic::warning(
+            "`string` expected `blob` to contain valid UTF-8 data")
+            .primary(expr)
+            .emit(ctx);
+        }
+        return {string_type{}, finish(b)};
+      });
   }
 };
 
@@ -476,8 +509,8 @@ public:
     return regex_ ? "tql2.split_regex" : "tql2.split";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
     auto reverse = std::optional<location>{};
@@ -548,8 +581,8 @@ public:
     return "tql2.join";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     // TODO: Technically, this could be an expression and not just a constant
     // string.
