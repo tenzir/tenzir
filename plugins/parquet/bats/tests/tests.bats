@@ -3,8 +3,8 @@ setup() {
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
-  export TENZIR_TQL2=false
   export TENZIR_EXEC__IMPLICIT_EVENTS_SINK='write_json | save_file "-"'
+  export TENZIR_LEGACY=true
 }
 
 @test "file roundtrip" {
@@ -54,9 +54,10 @@ setup() {
 }
 
 @test "empty records" {
-  check tenzir --tql2 'from {} | write_parquet | read_parquet'
-  check tenzir --tql2 'from {x: {}} | write_parquet | read_parquet'
-  check tenzir --tql2 'from {x: {y: {}}} | write_parquet | read_parquet'
-  check tenzir --tql2 'from {x: [{}]} | write_parquet | read_parquet'
-  check tenzir --tql2 'from {x: [[{}]]} | write_parquet | read_parquet'
+  export TENZIR_LEGACY=false
+  check tenzir 'from {} | write_parquet | read_parquet'
+  check tenzir 'from {x: {}} | write_parquet | read_parquet'
+  check tenzir 'from {x: {y: {}}} | write_parquet | read_parquet'
+  check tenzir 'from {x: [{}]} | write_parquet | read_parquet'
+  check tenzir 'from {x: [[{}]]} | write_parquet | read_parquet'
 }

@@ -1,4 +1,2 @@
-{"b":true,"e":"A"}
-{"b":false,"e":"B"}
-{"b":false,"e":"C"}
-{"b":false,"e":"D"}
+{"a":1,"b":2}
+{"b":"reset"}

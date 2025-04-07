@@ -11,6 +11,7 @@ setup() {
   export TENZIR_START__COMMANDS
   setup_node_with_plugins web
   wait_for_http
+  export TENZIR_LEGACY=true
 }
 
 teardown() {

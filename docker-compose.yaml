@@ -9,7 +9,6 @@ services:
       - TENZIR_PLATFORM_CONTROL_ENDPOINT=${TENZIR_PLATFORM_CONTROL_ENDPOINT:-}
       - TENZIR_TOKEN=${TENZIR_TOKEN:-}
       - TENZIR_ENDPOINT=tenzir-node:5158
-      - TENZIR_TQL2=true
     entrypoint:
       - tenzir-node
     volumes:

@@ -1,2 +1,8 @@
-{"b":true,"e":"A"}
-{"b":false,"e":"B"}
+{"a":1,"b":2,"tag":1}
+{"b":"reset","tag":2}
+warning: field `a` not found
+ --> <input>:1:17
+  |
+1 | deduplicate {a: a, b: b}, limit=1
+  |                 ~ 
+  |

@@ -2,7 +2,7 @@ name: Tenzir Installer
 on:
   workflow_dispatch:
   schedule:
-    - cron: "20 2 * * *" # everyday at 2:20
+    - cron: "20 2 * * *"  # every day at 2:20
 
 # IMPORTANT NOTE: The distros that are tested here were chosen to maximize test
 # coverage of the installer script. That doesn't imply that we commit to support

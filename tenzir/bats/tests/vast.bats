@@ -12,6 +12,7 @@ setup() {
   bats_load_library bats-tenzir
 
   setup_node_with_default_config
+  export TENZIR_LEGACY=true
 }
 
 teardown() {

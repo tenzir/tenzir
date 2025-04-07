@@ -81,7 +81,7 @@ into structured data using the
 [`read_zeek_tsv`](../../tql2/operators/read_zeek_tsv.md) operator:
 
 ```bash
-tenzir --tql2 'read_zeek_tsv' < conn.log
+tenzir 'read_zeek_tsv' < conn.log
 ```
 
 <details>
@@ -297,7 +297,7 @@ Let's unpack this:
    same time add a new field `unmapped` that contains everything that we didn't
    map. This is a safe approach, because if we forget to map a field, it simply
    lands in the bag of unmapped stuff and will show up there later.
-6. We give the event a new schema name so that we can easily filter by its shape
+4. We give the event a new schema name so that we can easily filter by its shape
    in further pipelines.
 
 Now that we know the general structure, let's get our hands dirty and go deep
@@ -544,7 +544,7 @@ this = {...ocsf, unmapped: zeek}
 Let's run the pipeline:
 
 ```bash
-tenzir --tql2 -f conn-to-ocsf.tql < conn.log
+tenzir -f conn-to-ocsf.tql < conn.log
 ```
 
 You should get the following output:
@@ -656,6 +656,7 @@ all OCSF Authentication events.
 :::tip Isn't this inefficient?
 You may think that copying the full feed of the `zeek` topic to every mapping
 pipeline is inefficient. The good news is that it is not, for two reasons:
+
 1. Data transfers between `publish` and `subscribe` use the same zero-copy
    mechanism that pipelines use internally for sharing of events.
 2. Pipelines of the form `subscribe ... | where <predicate>` push perform
