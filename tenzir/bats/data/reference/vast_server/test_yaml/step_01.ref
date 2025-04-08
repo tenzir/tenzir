@@ -9,8 +9,7 @@ tenzir:
   export:
     zeek:
       disable-timestamp-tags: true
+  legacy: false
   plugins:
     []
-  silence-tql1-deprecation-notice: true
-  tql2: true
 ...

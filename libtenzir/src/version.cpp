@@ -71,6 +71,7 @@ record retrieve_versions(const record& cfg) {
 }
 
 auto tenzir_features(const record& cfg) -> std::vector<std::string> {
+  TENZIR_UNUSED(cfg);
   // A list of features that are supported by this version of the node. This is
   // intended to support the rollout of potentially breaking new features, so
   // that downstream API consumers can adjust their behavior depending on the
@@ -87,11 +88,9 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     // Schema definitions use the new format that represents Tenzir's type
     // system exactly.
     "exact_schema",
+    // TQL2-only mode is enabled.
+    "tql2_only",
   };
-  if (auto fallback = false; get_or(cfg, "tenzir.tql2", fallback)) {
-    // The experimental TQL2-only mode is enabled.
-    result.emplace_back("tql2_only");
-  }
   return result;
 }
 

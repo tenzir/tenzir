@@ -96,10 +96,6 @@ const sidebars = {
       id: 'troubleshooting',
     },
     {
-      type: 'doc',
-      id: 'tql2-migration',
-    },
-    {
       type: 'html',
       value: '<br><b>Reference<b/>',
     },

@@ -12,6 +12,7 @@ setup() {
   bats_load_library bats-tenzir
 
   export_default_node_config
+  export TENZIR_LEGACY=true
 }
 
 # -- tests

@@ -9,6 +9,7 @@ setup() {
 
   export_default_node_config
   export TENZIR_PLUGINS="fluent-bit"
+  export TENZIR_LEGACY=true
 }
 
 @test "invalid fluent-bit plugin" {

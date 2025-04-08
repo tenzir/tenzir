@@ -70,24 +70,24 @@ the `re` modifier switches to a regular expression match. The table below shows
 what modifiers the `sigma` operator supports, where ✅ means implemented, 🚧 not
 yet implemented but possible, and ❌ not yet supported:
 
-|Modifier|Use|sigmac|Tenzir|
-|--------|---|:----:|:--:|
-|`contains`|perform a substring search with the value|✅|✅|
-|`startswith`|match the value as a prefix|✅|✅|
-|`endswith`|match the value as a suffix|✅|✅|
-|`base64`|encode the value with Base64|✅|✅
-|`base64offset`|encode value as all three possible Base64 variants|✅|✅
-|`utf16le`/`wide`|transform the value to UTF16 little endian|✅|🚧
-|`utf16be`|transform the value to UTF16 big endian|✅|🚧
-|`utf16`|transform the value to UTF16|✅|🚧
-|`re`|interpret the value as regular expression|✅|✅
-|`cidr`|interpret the value as a IP CIDR|❌|✅
-|`all`|changes the expression logic from OR to AND|✅|✅
-|`lt`|compare less than (`<`) the value|❌|✅
-|`lte`|compare less than or equal to (`<=`) the value|❌|✅
-|`gt`|compare greater than (`>`) the value|❌|✅
-|`gte`|compare greater than or equal to (`>=`) the value|❌|✅
-|`expand`|expand value to placeholder strings, e.g., `%something%`|❌|❌
+| Modifier         | Use                                                      | sigmac | Tenzir |
+| ---------------- | -------------------------------------------------------- | :----: | :----: |
+| `contains`       | perform a substring search with the value                |   ✅   |   ✅   |
+| `startswith`     | match the value as a prefix                              |   ✅   |   ✅   |
+| `endswith`       | match the value as a suffix                              |   ✅   |   ✅   |
+| `base64`         | encode the value with Base64                             |   ✅   |   ✅   |
+| `base64offset`   | encode value as all three possible Base64 variants       |   ✅   |   ✅   |
+| `utf16le`/`wide` | transform the value to UTF16 little endian               |   ✅   |   🚧   |
+| `utf16be`        | transform the value to UTF16 big endian                  |   ✅   |   🚧   |
+| `utf16`          | transform the value to UTF16                             |   ✅   |   🚧   |
+| `re`             | interpret the value as regular expression                |   ✅   |   ✅   |
+| `cidr`           | interpret the value as a IP CIDR                         |   ❌   |   ✅   |
+| `all`            | changes the expression logic from OR to AND              |   ✅   |   ✅   |
+| `lt`             | compare less than (`<`) the value                        |   ❌   |   ✅   |
+| `lte`            | compare less than or equal to (`<=`) the value           |   ❌   |   ✅   |
+| `gt`             | compare greater than (`>`) the value                     |   ❌   |   ✅   |
+| `gte`            | compare greater than or equal to (`>=`) the value        |   ❌   |   ✅   |
+| `expand`         | expand value to placeholder strings, e.g., `%something%` |   ❌   |   ❌   |
 
 ### `path: string`
 
@@ -115,7 +115,7 @@ into a JSON object. On the command line, use the `tenzir` binary to pipe the
 `evtx_dump` output to a Tenzir pipeline using the `sigma` operator:
 
 ```bash
-evtx_dump -o jsonl file.evtx | tenzir --tql2 'read_json | sigma "rule.yaml"'
+evtx_dump -o jsonl file.evtx | tenzir 'read_json | sigma "rule.yaml"'
 ```
 
 ### Run a Sigma rule on historical data

@@ -453,7 +453,6 @@ def main() -> None:
 
     queue = list(todo)
     queue.sort(key=lambda tup: tup[1], reverse=True)
-    os.environ["TENZIR_TQL2"] = "true"
     os.environ["TENZIR_EXEC__DUMP_DIAGNOSTICS"] = "true"
     try:
         version = get_version()

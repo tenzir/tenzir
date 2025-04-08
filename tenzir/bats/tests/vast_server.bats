@@ -11,6 +11,7 @@ setup() {
   bats_load_library bats-tenzir
 
   setup_node_with_default_config
+  export TENZIR_LEGACY=true
 }
 
 teardown() {
@@ -262,7 +263,7 @@ teardown() {
   TENZIR_EXAMPLE_YAML="$(dirname "$BATS_TEST_DIRNAME")/../../tenzir.yaml.example"
 
   check tenzir "from file ${TENZIR_EXAMPLE_YAML} read yaml | put plugins=tenzir.plugins, commands=tenzir.start.commands"
-  check tenzir --tql2 'from config() | drop tenzir.cacert, tenzir["cache-directory"], tenzir["state-directory"], tenzir.endpoint | write_yaml'
+  TENZIR_LEGACY=false check tenzir 'from config() | drop tenzir.cacert, tenzir["cache-directory"], tenzir["state-directory"], tenzir.endpoint | write_yaml'
   check tenzir "from file ${INPUTSDIR}/zeek/zeek.json read zeek-json | head 5 | write yaml"
   check tenzir 'plugins | where name == "yaml" | repeat 10 | write yaml | read yaml'
 }

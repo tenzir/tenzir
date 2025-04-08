@@ -4,6 +4,8 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
+
+  export TENZIR_LEGACY=true
 }
 
 wait_for_tcp() {

@@ -73,9 +73,6 @@ version was powerful, yet limited from a language perspective. After gaining
 hands-on experience and user feedback over the last year, we identified various
 angles for improvement that resulted TQL2—a full language revamp.
 
-Check out our [TQL migration guide](/next/tql2-migration) to learn about the
-technical details.
-
 ### Complete Redesign
 
 Finally, the app got a new coat of paint. We went from a playful, monochrome

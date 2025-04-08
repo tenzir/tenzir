@@ -11,6 +11,7 @@ setup() {
   bats_load_library bats-tenzir
 
   export TENZIR_PLUGINS="yara"
+  export TENZIR_LEGACY=true
 }
 
 @test "produce events for matching strings" {
