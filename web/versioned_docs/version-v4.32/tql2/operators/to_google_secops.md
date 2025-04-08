@@ -4,8 +4,9 @@ Sends unstructured events to a Google SecOps Chronicle instance.
 
 ```tql
 to_google_secops customer_id=string, private_key=string, client_email=string,
-                 log_type=string, log_text=string, [region=string,
-                 timestamp=time, labels=record, namespace=string]
+                log_type=string, log_text=string, [region=string,
+                timestamp=time, labels=record, namespace=string,
+                max_request_size=int, batch_timeout=duration]
 ```
 
 ## Description
@@ -56,6 +57,18 @@ Tenzir Node"}`.
 The namespace to use when ingesting.
 
 Defaults to `tenzir`.
+
+### `max_request_size = int (optional)`
+
+The maximum number of bytes in the request payload.
+
+Defaults to `1M`.
+
+### `batch_timeout = duration (optional)`
+
+The maximum duration to wait for new events before sending the request.
+
+Defaults to `5s`.
 
 ## Examples
 
