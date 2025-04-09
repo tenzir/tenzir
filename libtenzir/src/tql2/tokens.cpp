@@ -247,8 +247,6 @@ auto describe(token_kind k) -> std::string_view {
 }
 
 auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
-  // TODO: Refactor this.
-  arrow::util::InitializeUTF8();
   if (arrow::util::ValidateUTF8(content)) {
     return {};
   }
