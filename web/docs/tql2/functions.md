@@ -215,13 +215,19 @@ This is hidden because there is an issue with the timezone DB.
 
 -->
 
+## Generators
+
+| Function                                | Description                      | Example                       |
+| :-------------------------------------- | :------------------------------- | :---------------------------- |
+| [`random`](functions/random.md)         | Generates a random number        | `random()`                    |
+| [`uuid`](functions/uuid.md)             | Generates a UUID string          | `uuid(version="v7")`          |
+
 ## Math
 
 | Function                        | Description                | Example                        |
 | :------------------------------ | :------------------------- | :----------------------------- |
 | [`ceil`](functions/ceil.md)     | Takes the ceiling          | `ceil(4.2)`, `ceil(3.2s, 1m)`  |
 | [`floor`](functions/floor.md)   | Takes the floor            | `floor(4.2)`, `floor(32h, 1d)` |
-| [`random`](functions/random.md) | Generates a random number  | `random()`                     |
 | [`round`](functions/round.md)   | Rounds a value             | `round(4.2)`, `round(31m, 1h)` |
 | [`sqrt`](functions/sqrt.md)     | Calculates the square root | `sqrt(49)`                     |
 
