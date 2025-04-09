@@ -130,10 +130,11 @@ but often resort to the method style when it is more idiomatic.
 | [`split_regex`](functions/split_regex.md)     | Splits a string into substrings with a regex | `split_regex("a1b2c", r"\d")` |
 | [`join`](functions/join.md)                   | Joins a list of strings into a single string | `join(["a", "b", "c"], ",")`  |
 
-### File Paths
+### Filesystem
 
 | Function                                | Description                                    | Example                           |
 | :-------------------------------------- | :--------------------------------------------- | :-------------------------------- |
+| [`file_content`](functions/file_content.md)   | Reads a file's contents      | `file_content("/path/to/file")`  |
 | [`file_name`](functions/file_name.md)   | Extracts the file name from a file path        | `file_name("/path/to/log.json")`  |
 | [`parent_dir`](functions/parent_dir.md) | Extracts the parent directory from a file path | `parent_dir("/path/to/log.json")` |
 
