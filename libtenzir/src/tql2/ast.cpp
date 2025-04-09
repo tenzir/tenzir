@@ -190,7 +190,7 @@ auto fold_now(const ast::expression& l, const ast::binary_op& op,
     return std::nullopt;
   }
   auto* const call = std::get_if<ast::function_call>(l.kind.get());
-  if (not(call and call->fn.path[0].name == "now")) {
+  if (not (call and call->fn.path[0].name == "now")) {
     return std::nullopt;
   }
   if (op == ast::binary_op::add) {
@@ -359,6 +359,13 @@ auto split_legacy_expression(const ast::expression& x)
         auto split = split_legacy_expression(y.expr);
         // TODO: When exactly can we split this?
         if (is_true_literal(split.second)) {
+          // There's a bug in the parsing of TQL1 expressions that effectively
+          // forbids nested negations. Because we roundtrip TQL1 expressions as
+          // part of our predicate pushdown, we need to handle this case
+          // specially.
+          if (auto* neg_first = try_as<negation>(split.first)) {
+            return std::pair{expression{neg_first->expr()}, split.second};
+          }
           return std::pair{expression{negation{split.first}}, split.second};
         }
       }

@@ -334,10 +334,7 @@ public:
           .positional("x", expr, "record")
           .positional("field", needle, "string")
           .parse(inv, ctx));
-    auto const_dh = collecting_diagnostic_handler{};
-    auto const_sp = session_provider::make(const_dh);
-    if (auto const_needle = const_eval(needle, const_sp.as_session())) {
-      std::move(const_dh).forward_to(ctx);
+    if (auto const_needle = try_const_eval(needle, ctx)) {
       auto* str = try_as<std::string>(*const_needle);
       if (not str) {
         diagnostic::error("expected `string`, but got `{}`",
