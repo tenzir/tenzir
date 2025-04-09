@@ -15,13 +15,13 @@
 
 #include <filesystem>
 
-namespace tenzir::plugins::file_content {
+namespace tenzir::plugins::file_contents {
 
 namespace {
 
-struct file_content final : public function_plugin {
+struct file_contents final : public function_plugin {
   auto name() const -> std::string override {
-    return "file_content";
+    return "file_contents";
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -103,6 +103,6 @@ struct file_content final : public function_plugin {
 
 } // namespace
 
-} // namespace tenzir::plugins::file_content
+} // namespace tenzir::plugins::file_contents
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::file_content::file_content)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::file_contents::file_contents)

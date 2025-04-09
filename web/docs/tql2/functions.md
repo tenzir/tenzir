@@ -134,7 +134,7 @@ but often resort to the method style when it is more idiomatic.
 
 | Function                                | Description                                    | Example                           |
 | :-------------------------------------- | :--------------------------------------------- | :-------------------------------- |
-| [`file_content`](functions/file_content.md)   | Reads a file's contents      | `file_content("/path/to/file")`  |
+| [`file_contents`](functions/file_contents.md)   | Reads a file's contents      | `file_contents("/path/to/file")`  |
 | [`file_name`](functions/file_name.md)   | Extracts the file name from a file path        | `file_name("/path/to/log.json")`  |
 | [`parent_dir`](functions/parent_dir.md) | Extracts the parent directory from a file path | `parent_dir("/path/to/log.json")` |
 
