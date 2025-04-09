@@ -7,7 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/collect.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/pipeline_executor.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -15,6 +17,8 @@
 
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <caf/exit_reason.hpp>
 
 namespace tenzir::plugins::if_ {
 
@@ -46,13 +50,59 @@ auto mask_slice(const table_slice& slice, const arrow::BooleanArray& array,
   return concatenate(collect(array_select(slice, array, target, offset)));
 }
 
-class if_operator final : public crtp_operator<if_operator> {
+TENZIR_ENUM(bridge_location, left, right);
+
+template <bridge_location Location, class Element>
+class if_bridge_operator final
+  : public crtp_operator<if_bridge_operator<Location, Element>> {
+public:
+  if_bridge_operator() = default;
+
+  auto name() const -> std::string override {
+    return fmt::format("internal-if-bridge-{}-{}", Location,
+                       operator_type_name(tag_v<Element>));
+  }
+
+  auto operator()(operator_control_plane& ctrl) const -> generator<Element>
+    requires(Location == bridge_location::left)
+  {
+    TENZIR_UNUSED(ctrl);
+    TENZIR_TODO();
+  }
+
+  auto operator()(generator<Element> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate>
+    requires(Location == bridge_location::right)
+  {
+    TENZIR_UNUSED(input, ctrl);
+    TENZIR_TODO();
+  }
+
+  auto location() const -> operator_location override {
+    // Local here means local to the `if` operator's nested executor.
+    return operator_location::local;
+  }
+
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    // Branching necessarily throws off the event order, so we can allow the
+    // nested pipelines to do ordering optimizations.
+    return optimize_result{std::nullopt, event_order::unordered, this->copy()};
+  }
+
+  friend auto inspect(auto& f, if_bridge_operator& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class if_operator final : public operator_base {
 public:
   if_operator() = default;
 
   if_operator(ast::expression condition, pipeline then,
               std::optional<pipeline> else_, operator_location location)
-    : condition_{std::move(condition)},
+    : predicate_{std::move(condition)},
       then_{std::move(then)},
       else_{std::move(else_)},
       location_{location} {
@@ -66,133 +116,114 @@ public:
     return location_;
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(const expression& filter, event_order order) const
     -> optimize_result override {
     TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
+    // Branching necessarily throws off the event order, so we can allow the
+    // nested pipelines to do ordering optimizations.
+    // TODO: We could push up a disjunction of the two filters.
+    return optimize_result{std::nullopt, event_order::unordered, this->copy()};
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    // TODO: All of this is quite bad! Needs to be rewritten.
-    auto transpose_gen = [](operator_output gen)
-      -> generator<variant<table_slice, chunk_ptr, std::monostate>> {
-      return std::visit(
-        []<class T>(generator<T> gen)
-          -> generator<variant<table_slice, chunk_ptr, std::monostate>> {
-          for (auto&& x : gen) {
-            co_yield std::move(x);
+  auto infer_type_impl(operator_type input) const
+    -> caf::expected<operator_type> override {
+    if (input.is_not<table_slice>()) {
+      return diagnostic::error("`if` does not accept `{}` as input",
+                               operator_type_name(input))
+        .to_error();
+    }
+    TRY(auto then_type, then_.infer_type(input));
+    if (not else_) {
+      if (then_type.is<void>()) {
+        return tag_v<table_slice>;
+      }
+      return then_type;
+    }
+    TRY(auto else_type, else_->infer_type(input));
+    if (then_type.is<void>()) {
+      return else_type;
+    }
+    if (else_type.is<void>()) {
+      return then_type;
+    }
+    if (then_type == else_type) {
+      return then_type;
+    }
+    return diagnostic::error(
+             "`if … else` requires its branches to have matching return types")
+      .note("if-branch returns `{}`", operator_type_name(then_type))
+      .note("else-branch returns `{}`", operator_type_name(else_type))
+      .to_error();
+  }
+
+  auto instantiate(operator_input input, operator_control_plane& ctrl) const
+    -> caf::expected<operator_output> override {
+    // We verified already that the input must be events.
+    auto typed_input = as<generator<table_slice>>(std::move(input));
+    // TODO: Spawn an actor that handles metrics from the nested pipelines.
+    const auto then_type = check(then_.infer_type(tag_v<table_slice>));
+    if (not else_) {
+      if (then_type.is<void>()) {
+        // Pass matching events into the then-pipeline, and yield other events
+        // immediately.
+        return [](generator<table_slice> input, operator_control_plane& ctrl,
+                  pipeline pipe) -> generator<table_slice> {
+          pipe.prepend(
+            std::make_unique<
+              if_bridge_operator<bridge_location::left, table_slice>>());
+          auto exec = ctrl.self().spawn(pipeline_executor, std::move(pipe),
+                                        receiver_actor<diagnostic>{},
+                                        metrics_receiver_actor{}, ctrl.node(),
+                                        ctrl.has_terminal(), ctrl.is_hidden());
+          ctrl.self().monitor(exec, [&](const caf::error& err) {
+            // FIXME: do we care about this? probably already emitted it
+            TENZIR_UNUSED(err);
+            ctrl.set_waiting(false);
+          });
+          for (auto events : input) {
+            // TODO: filter events
           }
-        },
-        std::move(gen));
-    };
-    // We use empty optional to signal exhaustion.
-    auto then_input = std::optional<table_slice>{table_slice{}};
-    auto else_input = std::optional<table_slice>{table_slice{}};
-    auto make_input
-      = [](std::optional<table_slice>& input) -> generator<table_slice> {
-      while (input.has_value()) {
-        co_yield std::exchange(*input, table_slice{});
-      }
-    };
-    auto then_result = then_.instantiate(make_input(then_input), ctrl);
-    if (not then_result) {
-      diagnostic::error(then_result.error()).emit(ctrl.diagnostics());
-      co_return;
-    }
-    auto then_gen = transpose_gen(std::move(*then_result));
-    auto else_gen = generator<table_slice>{};
-    if (else_) {
-      auto else_result = else_->instantiate(make_input(else_input), ctrl);
-      if (not else_result) {
-        diagnostic::error(else_result.error()).emit(ctrl.diagnostics());
-        co_return;
-      }
-      // TODO: Do not force `else` output to be table slice.
-      auto* else_gen_ptr = std::get_if<generator<table_slice>>(&*else_result);
-      if (not else_gen_ptr) {
-        // TODO: Wrong location. Also, we want to lift this limitation.
-        diagnostic::error("expected `else` branch to yield events")
-          .primary(condition_)
-          .note("this limitation will be removed eventually")
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      else_gen = std::move(*else_gen_ptr);
-    } else {
-      else_gen = make_input(else_input);
-    }
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        // TODO: Probably need to advance here as well.
-        co_yield {};
-        continue;
-      }
-      auto yielded = false;
-      auto masks = eval(condition_, slice, ctrl.diagnostics());
-      auto offset = int64_t{0};
-      for (auto& mask : masks.parts()) {
-        // TODO: Null array should also work.
-        auto* array = try_as<arrow::BooleanArray>(&*mask.array);
-        if (not array) {
-          diagnostic::warning("condition must be `bool`, not `{}`",
-                              mask.type.kind())
-            .primary(condition_)
-            .emit(ctrl.diagnostics());
+          // Lastly, wait for the nested pipeline to finish.
+          ctrl.self().send_exit(exec, caf::exit_reason::user_shutdown);
+          ctrl.set_waiting(true);
           co_yield {};
-          offset += mask.array->length();
-          continue;
-        }
-        TENZIR_ASSERT(array);
-        then_input = mask_slice(slice, *array, true, offset);
-        while (then_input->rows() > 0) {
-          if (auto next = then_gen.next()) {
-            if (auto* output = std::get_if<table_slice>(&*next)) {
-              co_yield std::move(*output);
-              yielded = true;
-            }
-            // TODO: Other outputs are just dropped.
-          } else {
-            break;
-          }
-        }
-        else_input = mask_slice(slice, *array, false, offset);
-        while (else_input->rows() > 0) {
-          if (auto next = else_gen.next()) {
-            co_yield std::move(*next);
-            yielded = true;
-          } else {
-            break;
-          }
-        }
-        offset += array->length();
+        }(std::move(typed_input), ctrl, then_);
       }
-      if (not yielded) {
-        co_yield {};
-      }
+      // Pass matching events into the then-pipeline, yielding its results, and
+      // yield other events immediately.
+      TENZIR_TODO();
     }
-    then_input.reset();
-    else_input.reset();
-    while (auto next = then_gen.next()) {
-      if (auto* output = std::get_if<table_slice>(&*next)) {
-        co_yield std::move(*output);
-      }
+    const auto else_type = check(else_->infer_type(tag_v<table_slice>));
+    if (then_type.is<void>() and else_type.is<void>()) {
+      // Pass matching events into the then-pipeline, and other events into the
+      // else-pipeline.
+      TENZIR_TODO();
     }
-    while (auto next = else_gen.next()) {
-      co_yield std::move(*next);
+    if (then_type.is<void>()) {
+      // Pass matching events into the then-pipeline, and other events into the
+      // else-pipeline, yielding its results.
+      TENZIR_TODO();
     }
+    if (else_type.is<void>()) {
+      // Pass matching events into the then-pipeline, yielding its results, and
+      // other events into the else-pipeline.
+      TENZIR_TODO();
+    }
+    TENZIR_ASSERT(then_type == else_type);
+    // Pass matching events into the then-pipeline, yielding its results, and
+    // other events into the else-pipeline, yielding its results as well.
+    TENZIR_TODO();
   }
 
   friend auto inspect(auto& f, if_operator& x) -> bool {
-    return f.object(x).fields(f.field("condition", x.condition_),
+    return f.object(x).fields(f.field("prediacte", x.predicate_),
                               f.field("then", x.then_),
                               f.field("else", x.else_),
                               f.field("location", x.location_));
   }
 
 private:
-  ast::expression condition_;
+  ast::expression predicate_;
   pipeline then_;
   std::optional<pipeline> else_;
   operator_location location_ = {};
@@ -326,8 +357,18 @@ public:
   }
 };
 
+using left_bridge_events_plugin = operator_inspection_plugin<
+  if_bridge_operator<bridge_location::left, table_slice>>;
+using right_bridge_bytes_plugin = operator_inspection_plugin<
+  if_bridge_operator<bridge_location::right, chunk_ptr>>;
+using right_bridge_events_plugin = operator_inspection_plugin<
+  if_bridge_operator<bridge_location::right, table_slice>>;
+
 } // namespace
 
 } // namespace tenzir::plugins::if_
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::if_::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::if_::left_bridge_events_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::if_::right_bridge_bytes_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::if_::right_bridge_events_plugin)
