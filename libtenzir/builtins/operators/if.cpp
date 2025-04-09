@@ -110,7 +110,7 @@ public:
         co_return;
       }
       // TODO: Do not force `else` output to be table slice.
-      auto else_gen_ptr = std::get_if<generator<table_slice>>(&*else_result);
+      auto* else_gen_ptr = std::get_if<generator<table_slice>>(&*else_result);
       if (not else_gen_ptr) {
         // TODO: Wrong location. Also, we want to lift this limitation.
         diagnostic::error("expected `else` branch to yield events")
@@ -134,7 +134,7 @@ public:
       auto offset = int64_t{0};
       for (auto& mask : masks.parts()) {
         // TODO: Null array should also work.
-        auto array = try_as<arrow::BooleanArray>(&*mask.array);
+        auto* array = try_as<arrow::BooleanArray>(&*mask.array);
         if (not array) {
           diagnostic::warning("condition must be `bool`, not `{}`",
                               mask.type.kind())
@@ -148,7 +148,7 @@ public:
         then_input = mask_slice(slice, *array, true, offset);
         while (then_input->rows() > 0) {
           if (auto next = then_gen.next()) {
-            if (auto output = std::get_if<table_slice>(&*next)) {
+            if (auto* output = std::get_if<table_slice>(&*next)) {
               co_yield std::move(*output);
               yielded = true;
             }
@@ -175,7 +175,7 @@ public:
     then_input.reset();
     else_input.reset();
     while (auto next = then_gen.next()) {
-      if (auto output = std::get_if<table_slice>(&*next)) {
+      if (auto* output = std::get_if<table_slice>(&*next)) {
         co_yield std::move(*output);
       }
     }
@@ -195,7 +195,7 @@ private:
   ast::expression condition_;
   pipeline then_;
   std::optional<pipeline> else_;
-  operator_location location_;
+  operator_location location_ = {};
 };
 
 class plugin final : public virtual operator_plugin2<if_operator> {
@@ -206,18 +206,89 @@ public:
     // are dispatched through the pipeline compilation function. But we still
     // need to use the plugin interface to implement it.
     TENZIR_ASSERT(inv.args.size() == 2 || inv.args.size() == 3);
-    auto condition = std::move(inv.args[0]);
-    auto then = compile(
-      std::get<ast::pipeline_expr>(std::move(*inv.args[1].kind)).inner, ctx);
+    const auto has_else = inv.args.size() == 3;
+    auto pred_expr = std::move(inv.args[0]);
+    const auto make_pipeline = [&](size_t idx) {
+      TENZIR_ASSERT(idx < inv.args.size());
+      return compile(
+        as<ast::pipeline_expr>(std::move(*inv.args[idx].kind)).inner, ctx);
+    };
+    const auto is_discard = [&](size_t idx) {
+      TENZIR_ASSERT(idx < inv.args.size());
+      const auto& body = as<ast::pipeline_expr>(*inv.args[idx].kind).inner.body;
+      if (body.size() != 1) {
+        return false;
+      }
+      const auto* invocation = try_as<ast::invocation>(body.front());
+      if (not invocation) {
+        return false;
+      }
+      return invocation->args.empty() and invocation->op.path.size() == 1
+             and invocation->op.path.front().name == "discard";
+    };
+    // Optimization: If the condition is a constant, we evaluate it and return
+    // the appropriate branch only.
+    if (auto pred = try_const_eval(pred_expr, ctx)) {
+      const auto* typed_pred = try_as<bool>(*pred);
+      if (not typed_pred) {
+        diagnostic::error("expected `bool`, but got `{}`",
+                          type::infer(*pred).value_or(type{}).kind())
+          .primary(pred_expr)
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (*typed_pred) {
+        TRY(auto then, make_pipeline(1));
+        return std::make_unique<pipeline>(std::move(then));
+      }
+      if (has_else) {
+        TRY(auto else_, make_pipeline(2));
+        return std::make_unique<pipeline>(std::move(else_));
+      }
+      return std::make_unique<pipeline>();
+    }
+    // Optimization: If either of the branches is just `discard`, then we can
+    // flatten the pipeline with `where`. We empirically noticed that users
+    // wrote such pipelines frequently, and the flattened pipeline is a lot more
+    // efficient due to predicate pushdown we have implemented for `where`.
+    const auto then_is_discard = is_discard(1);
+    const auto else_is_discard = has_else and is_discard(2);
+    if (then_is_discard or else_is_discard) {
+      const auto* where_op
+        = plugins::find<operator_factory_plugin>("tql2.where");
+      TENZIR_ASSERT(where_op);
+      if (then_is_discard) {
+        pred_expr = ast::unary_expr{
+          located{ast::unary_op::not_, location::unknown},
+          std::move(pred_expr),
+        };
+        TRY(auto where,
+            where_op->make({.self = inv.self, .args = {std::move(pred_expr)}},
+                           ctx));
+        if (has_else) {
+          TRY(auto result, make_pipeline(2));
+          result.prepend(std::move(where));
+          return std::make_unique<pipeline>(std::move(result));
+        }
+        return where;
+      }
+      TENZIR_ASSERT(has_else);
+      TRY(auto where,
+          where_op->make({.self = inv.self, .args = {std::move(pred_expr)}},
+                         ctx));
+      TRY(auto result, make_pipeline(1));
+      result.prepend(std::move(where));
+      return std::make_unique<pipeline>(std::move(result));
+    }
+    auto then = make_pipeline(1);
     auto else_ = failure_or<pipeline>{};
-    if (inv.args.size() == 3) {
-      else_ = compile(
-        std::get<ast::pipeline_expr>(std::move(*inv.args[2].kind)).inner, ctx);
+    if (has_else) {
+      else_ = make_pipeline(2);
     }
     // TODO: Improve this code (or better: get rid of this limitation).
     auto location = operator_location::anywhere;
     if (then) {
-      for (auto& op : then->operators()) {
+      for (const auto& op : then->operators()) {
         auto op_location = op->location();
         if (location == operator_location::anywhere) {
           location = op_location;
@@ -233,7 +304,7 @@ public:
       }
     }
     if (else_) {
-      for (auto& op : else_->operators()) {
+      for (const auto& op : else_->operators()) {
         auto op_location = op->location();
         if (location == operator_location::anywhere) {
           location = op_location;
@@ -250,7 +321,7 @@ public:
     }
     TRY(then);
     TRY(else_);
-    return std::make_unique<if_operator>(std::move(condition), std::move(*then),
+    return std::make_unique<if_operator>(std::move(pred_expr), std::move(*then),
                                          std::move(*else_), location);
   }
 };

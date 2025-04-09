@@ -1,0 +1,6 @@
+from {}
+if foo == 1 {
+  discard
+} else {
+  set foo = 2
+}
