@@ -1,0 +1,24 @@
+[
+  tql2.from_events [
+    record {
+      begin: 5..6,
+      items: [
+        
+      ],
+      end: 6..7
+    }
+  ],
+  tql2.set [
+    {
+      left: simple_selector {
+        expr: root_field `foo` @ 40..43,
+        has_this: false,
+        path: [
+          `foo` @ 40..43
+        ]
+      },
+      equals: 44..45,
+      right: constant int64 2 @ 46..47
+    }
+  ]
+]

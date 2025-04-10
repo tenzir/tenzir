@@ -26,6 +26,11 @@ auto eval(const ast::simple_selector& expr, const table_slice& input,
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   -> failure_or<data>;
 
+/// Tries to evaluate an expression to a constant value. Emits diagnostics only
+/// if the evaluation succeeded.
+auto try_const_eval(const ast::expression& expr, diagnostic_handler& dh)
+  -> std::optional<data>;
+
 struct resolve_error {
   struct field_not_found {};
   struct field_of_non_record {
