@@ -120,7 +120,8 @@ public:
                   continue;
                 }
                 const auto v = array.Value(i);
-                auto matches = re2::RE2::PartialMatch(v, *regex);
+                auto matches
+                  = re2::RE2::PartialMatch({v.data(), v.size()}, *regex);
                 check(b.Append(matches));
               }
               return series{bool_type{}, finish(b)};

@@ -45,14 +45,14 @@ bool pattern::match(std::string_view str) const {
   if (!regex_) {
     return false;
   }
-  return re2::RE2::FullMatch(str, *regex_);
+  return re2::RE2::FullMatch({str.data(), str.size()}, *regex_);
 }
 
 bool pattern::search(std::string_view str) const {
   if (!regex_) {
     return false;
   }
-  return re2::RE2::PartialMatch(str, *regex_);
+  return re2::RE2::PartialMatch({str.data(), str.size()}, *regex_);
 }
 
 const std::string& pattern::string() const {

@@ -13,6 +13,7 @@ apt-get -y --no-install-recommends install \
   build-essential \
   ca-certificates \
   checkinstall \
+  ccache \
   cmake \
   git \
   libcurl4-openssl-dev \
