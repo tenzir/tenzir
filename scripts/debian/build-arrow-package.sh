@@ -14,13 +14,14 @@ apt-get install --no-install-recommends -y \
   build-essential \
   ca-certificates \
   checkinstall \
+  ccache \
   cmake \
   curl \
   dh-make \
   flex \
-  libboost1.81-dev \
-  libboost-filesystem1.81-dev \
-  libboost-system1.81-dev \
+  libboost-dev \
+  libboost-filesystem-dev \
+  libboost-system-dev \
   libcurl4-openssl-dev \
   libminizip-dev \
   libsasl2-dev \
@@ -72,5 +73,5 @@ checkinstall \
   --pkgversion="${ARROW_VERSION}" \
   --pkgrelease="TENZIR" \
   --pkgname=arrow \
-  --requires="libc6,libboost-filesystem1.81.0,libboost-system1.81.0,libcurl4,libgcc1,libssl3,libstdc++6,libxml2,zlib1g" \
+  --requires="libc6,libboost-filesystem-dev,libboost-system-dev,libcurl4,libgcc1,libssl3,libstdc++6,libxml2,zlib1g" \
   cmake --install build --strip

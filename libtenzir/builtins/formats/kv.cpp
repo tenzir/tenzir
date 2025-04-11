@@ -41,8 +41,9 @@ public:
   splitter& operator=(splitter&&) = default;
 
   explicit splitter(located<std::string_view> pattern) {
-    auto regex = std::make_unique<re2::RE2>(pattern.inner,
-                                            re2::RE2::CannedOptions::Quiet);
+    auto regex = std::make_unique<re2::RE2>(
+      re2::StringPiece{pattern.inner.data(), pattern.inner.size()},
+      re2::RE2::CannedOptions::Quiet);
     if (not regex->ok()) {
       diagnostic::error("could not parse regex: {}", regex->error())
         .primary(pattern.source)
@@ -79,8 +80,8 @@ public:
     auto group = re2::StringPiece{};
     auto start_offset = 0;
     while (true) {
-      if (not re2::RE2::PartialMatch(input.substr(start_offset), *regex_,
-                                     &group)) {
+      const auto ss = input.substr(start_offset);
+      if (not re2::RE2::PartialMatch({ss.data(), ss.size()}, *regex_, &group)) {
         return {input, {}};
       }
       auto head = std::string_view{input.data(), group.data()};
