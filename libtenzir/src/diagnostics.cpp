@@ -209,8 +209,8 @@ auto make_diagnostic_printer(std::optional<location_origin> origin,
   return std::make_unique<diagnostic_printer>(std::move(origin), color, stream);
 }
 
-auto diagnostic::builder(enum severity s, caf::error err)
-  -> diagnostic_builder {
+auto diagnostic::builder(enum severity s, caf::error err,
+                         std::source_location location) -> diagnostic_builder {
   if (err.category() == caf::type_id_v<tenzir::ec>
       && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
     auto ctx = err.context();
@@ -239,13 +239,17 @@ auto diagnostic::builder(enum severity s, caf::error err)
     }
   }
   if (not eligible) {
-    return builder(s, "{}", err);
+    return builder(s, "{}", err)
+      .note("source: {}:{}", location.file_name(), location.line());
   }
-  auto b = builder(s, "{}", *as_string(err.context().size() - 1));
-  for (auto i = err.context().size() - 1; i > 0; --i) {
-    b = std::move(b).note("{}", *as_string(i - 1));
-  }
-  return b;
+  return builder(s, "{}", *as_string(err.context().size() - 1))
+    .compose([&](auto b) {
+      for (auto i = err.context().size() - 1; i > 0; --i) {
+        b = std::move(b).note("{}", *as_string(i - 1));
+      }
+      return b;
+    })
+    .note("source: {}:{}", location.file_name(), location.line());
 }
 
 void diagnostic_builder::emit(const shared_diagnostic_handler& diag) && {
