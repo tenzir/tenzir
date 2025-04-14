@@ -51,7 +51,9 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       ->* [] { return tk::subnet; }
     | ignore(ip)
       ->* [] { return tk::ip; }
-    | ignore(+digit >> '-' >> +digit >> '-' >> +digit >> *(alnum | ':' | '+' | '-'))
+    | ignore(+digit >> '-' >> +digit >> '-' >> +digit
+        >> *(alnum | ':' | '+' | '-') >> ~('.' >> +digit)
+        >> ~('Z' | (('+' | '-') >> +digit)))
       ->* [] { return tk::datetime; }
     | ignore(digit >> *digit_us >> -('.' >> digit >> *digit_us) >> -identifier)
       ->* [] { return tk::scalar; }
