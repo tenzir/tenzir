@@ -1,0 +1,15 @@
+--- a/dev/restinio/expected.hpp	2025-04-14 18:11:49.701660144 +0200
++++ b/dev/restinio/patched_expected.hpp	2025-04-14 18:14:51.490355294 +0200
+@@ -21,8 +21,9 @@
+ 	template< typename T, typename E >
+ 	using expected_t = nonstd::expected<T, E>;
+
+-//FIXME: is this symbol actually present in expected-lite?
+-//	using nonstd::make_expected;
+-	using nonstd::make_unexpected;
++  template<typename U>
++  auto make_unexpected( U&& u) {
++    return std::unexpected(std::forward<U>(u));
++  }
+
+ } /* namespace restinio */
