@@ -22,7 +22,9 @@ to_splunk "https://1.2.3.4:8088", hec_token="TOKEN", tls_no_verify=true
 ```
 
 Replace `1.2.3.4` with the IP address of your Splunk host and `TOKEN` with your
-HEC token.
+HEC token. Note that if you're using the below co-deployment Docker Compose
+example, the hostname of the Splunk instance will be `splunk`, as Docker Compose
+uses services names as hostnames.
 
 For more details, see the documentation for the
 [`to_splunk`](../../tql2/operators/to_splunk.mdx) operator.
