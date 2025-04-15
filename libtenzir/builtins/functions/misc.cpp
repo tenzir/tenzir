@@ -172,8 +172,8 @@ public:
     -> caf::error override {
     TENZIR_UNUSED(plugin_config);
     TENZIR_UNUSED(global_config);
-    for (const auto& entry : boost::process::v2::environment::current()) {
-      env_.emplace(entry.key().string(), entry.value().string());
+    for (const auto& entry : boost::this_process::environment()) {
+      env_.emplace(entry.get_name(), entry.to_string());
     }
     return {};
   }
