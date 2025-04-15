@@ -56,8 +56,7 @@ struct load_balancer_state {
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> writes;
   bool finished = false;
   uint64_t operator_index{};
-  uint64_t next_metrics_id = 0;
-  detail::stable_map<std::pair<uint64_t, uint64_t>, uint64_t> metrics_id_map;
+  detail::stable_map<std::pair<uint64_t, uuid>, uuid> metrics_id_map;
 
   auto write(table_slice events) -> caf::result<void> {
     TENZIR_ASSERT(events.rows() > 0);
@@ -230,21 +229,19 @@ auto make_load_balancer(
     [self](atom::read) -> caf::result<table_slice> {
       return self->state().read();
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](uint64_t op_index, uuid metrics_id,
            type& schema) -> caf::result<void> {
       auto id = get_or_compute(self->state().metrics_id_map,
-                               std::pair{op_index, metric_index}, [&] {
-                                 auto id = self->state().next_metrics_id;
-                                 self->state().next_metrics_id += 1;
-                                 return id;
+                               std::pair{op_index, metrics_id}, [&] {
+                                 return uuid::random();
                                });
       return self->mail(self->state().operator_index, id, schema)
         .delegate(self->state().metrics);
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](uint64_t op_index, uuid metrics_id,
            record& metric) -> caf::result<void> {
       auto id
-        = self->state().metrics_id_map.find(std::pair{op_index, metric_index});
+        = self->state().metrics_id_map.find(std::pair{op_index, metrics_id});
       TENZIR_ASSERT(id != self->state().metrics_id_map.end());
       return self
         ->mail(self->state().operator_index, id->second, std::move(metric))

@@ -451,8 +451,10 @@ public:
       if (not trivia_before_next() && peek(tk::lbracket)) {
         auto lbracket = expect(tk::lbracket);
         if (auto rbracket = accept(tk::rbracket)) {
-          expr = unpack{std::move(expr),
-                        lbracket.location.combine(rbracket.location)};
+          expr = ast::unpack{
+            std::move(expr),
+            lbracket.location.combine(rbracket.location),
+          };
         } else {
           auto index = parse_expression();
           if (auto comma = accept(tk::comma)) {

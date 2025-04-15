@@ -24,6 +24,8 @@
 #include <caf/scheduled_actor/flow.hpp>
 #include <caf/typed_response_promise.hpp>
 
+#include <queue>
+
 namespace tenzir::plugins::if_ {
 
 namespace {
@@ -226,12 +228,12 @@ public:
       [this](diagnostic diag) {
         return handle_diagnostic(std::move(diag));
       },
-      [this](uint64_t nested_operator_index, uint64_t nested_metrics_id,
+      [this](uint64_t nested_operator_index, uuid nested_metrics_id,
              type schema) {
         return register_metrics(nested_operator_index, nested_metrics_id,
                                 std::move(schema));
       },
-      [this](uint64_t nested_operator_index, uint64_t nested_metrics_id,
+      [this](uint64_t nested_operator_index, uuid nested_metrics_id,
              record metrics) {
         return handle_metrics(nested_operator_index, nested_metrics_id,
                               std::move(metrics));
@@ -274,7 +276,8 @@ private:
         return;
       }
       TENZIR_ASSERT(running_branches_ > 0);
-      if (--running_branches_ == 0) {
+      --running_branches_;
+      if (running_branches_ == 0) {
         // We insert an empty batch as a sentinel value to signal that the
         // operator may shut down.
         if (pull_rp_.pending()) {
@@ -440,22 +443,18 @@ private:
     return {};
   }
 
-  auto register_metrics(uint64_t nested_operator_index,
-                        uint64_t nested_metrics_id, type schema)
-    -> caf::result<void> {
+  auto register_metrics(uint64_t nested_operator_index, uuid nested_metrics_id,
+                        type schema) -> caf::result<void> {
     auto& id = registered_metrics[nested_operator_index][nested_metrics_id];
-    TENZIR_ASSERT(id == 0);
-    id = ++next_metrics_id;
+    id = uuid::random();
     return self_->mail(operator_index_, id, std::move(schema))
       .delegate(metrics_receiver_);
   }
 
-  auto handle_metrics(uint64_t nested_operator_index,
-                      uint64_t nested_metrics_id, record metrics)
-    -> caf::result<void> {
+  auto handle_metrics(uint64_t nested_operator_index, uuid nested_metrics_id,
+                      record metrics) -> caf::result<void> {
     const auto& id
       = registered_metrics[nested_operator_index][nested_metrics_id];
-    TENZIR_ASSERT(id != 0);
     return self_->mail(operator_index_, id, std::move(metrics))
       .delegate(metrics_receiver_);
   }
@@ -467,9 +466,7 @@ private:
   metrics_receiver_actor metrics_receiver_;
 
   uint64_t operator_index_ = 0;
-  uint64_t next_metrics_id = 0;
-  detail::flat_map<uint64_t, detail::flat_map<uint64_t, uint64_t>>
-    registered_metrics;
+  detail::flat_map<uint64_t, detail::flat_map<uuid, uuid>> registered_metrics;
 
   size_t running_branches_ = 0;
   ast::expression predicate_expr_;

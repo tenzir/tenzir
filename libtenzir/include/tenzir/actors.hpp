@@ -321,9 +321,9 @@ using exec_node_actor = caf::typed_actor<exec_node_actor_traits>;
 /// The interface of the METRICS RECEIVER actor.
 using metrics_receiver_actor = typed_actor_fwd<
   // Register a custom metric type for the metrics of an operator.
-  auto(uint64_t op_index, uint64_t metric_index, type)->caf::result<void>,
+  auto(uint64_t op_index, uuid metrics_id, type)->caf::result<void>,
   // Receive custom metrics of an operator.
-  auto(uint64_t op_index, uint64_t metric_index, record)->caf::result<void>,
+  auto(uint64_t op_index, uuid metrics_id, record)->caf::result<void>,
   // Receive the standard execution node metrics.
   auto(operator_metric)->caf::result<void>>::unwrap;
 
