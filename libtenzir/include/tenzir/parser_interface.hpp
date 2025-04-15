@@ -10,6 +10,7 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/tql/expression.hpp"
 
 namespace tenzir {

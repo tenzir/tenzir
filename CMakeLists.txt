@@ -217,7 +217,7 @@ install(
   COMPONENT Development)
 
 # Require standard C++26.
-target_compile_features(libtenzir_internal INTERFACE cxx_std_26)
+target_compile_features(libtenzir_internal INTERFACE cxx_std_23)
 
 # Enable coroutines for GCC < 11.
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
@@ -792,7 +792,7 @@ else ()
     # add_subdirectory libtenzir/aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
     # can be removed once CAF cmake changes to use set(CMAKE_CXX_STANDARD) instead of it's own check
     set(ORIGINAL_CXX_STANDARD ${CMAKE_CXX_STANDARD})
-    set(CMAKE_CXX_STANDARD 26)
+    set(CMAKE_CXX_STANDARD 23)
     if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.25")
       add_subdirectory(libtenzir/aux/caf SYSTEM)
     else ()

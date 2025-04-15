@@ -13,6 +13,7 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <boost/process/v2/environment.hpp>
 #if __has_include(<boost/process/v1/environment.hpp>)
 #  include <boost/process/v1/environment.hpp>
 #else
@@ -171,8 +172,8 @@ public:
     -> caf::error override {
     TENZIR_UNUSED(plugin_config);
     TENZIR_UNUSED(global_config);
-    for (const auto& entry : boost::this_process::environment()) {
-      env_.emplace(entry.get_name(), entry.to_string());
+    for (const auto& entry : boost::process::v2::environment::current()) {
+      env_.emplace(entry.key().string(), entry.value().string());
     }
     return {};
   }
