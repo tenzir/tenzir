@@ -15,10 +15,23 @@
 
 namespace tenzir {
 
+/// Creates a record that maps `path` to `value`.
+///
+/// # Examples
+//
+/// ["foo", "bar"] -> {"foo": {"bar": value}}
+/// [] -> value
+[[nodiscard]] auto
+consume_path(std::span<const ast::identifier> path, series value) -> series;
+
 enum class assign_position {
   front,
   back,
 };
+
+[[nodiscard]] auto
+assign(std::span<const ast::identifier> left, series right, series input,
+       diagnostic_handler& dh, assign_position position) -> series;
 
 [[nodiscard]] auto
 assign(const ast::selector& left, series right, const table_slice& input,
