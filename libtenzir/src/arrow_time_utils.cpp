@@ -14,8 +14,6 @@ namespace tenzir {
 auto make_round_temporal_options(const duration time_resolution) noexcept
   -> arrow::compute::RoundTemporalOptions {
   using namespace std::chrono;
-  using year_period = std::ratio_multiply<days::period, std::ratio<365>>;
-  using month_period = std::ratio_multiply<year_period, std::ratio<1, 12>>;
 #define TRY_CAST_EXACTLY(ratio, arrow_unit)                                    \
   do {                                                                         \
     if (auto cast_resolution                                                   \
@@ -29,8 +27,8 @@ auto make_round_temporal_options(const duration time_resolution) noexcept
       };                                                                       \
     }                                                                          \
   } while (false)
-  TRY_CAST_EXACTLY(year_period, YEAR);
-  TRY_CAST_EXACTLY(month_period, MONTH);
+  TRY_CAST_EXACTLY(years::period, YEAR);
+  TRY_CAST_EXACTLY(months::period, MONTH);
   TRY_CAST_EXACTLY(weeks::period, WEEK);
   TRY_CAST_EXACTLY(days::period, DAY);
   TRY_CAST_EXACTLY(hours::period, HOUR);
@@ -64,8 +62,8 @@ auto make_round_temporal_options(const duration time_resolution) noexcept
   TRY_CAST_APPROXIMATELY(hours::period, HOUR);
   TRY_CAST_APPROXIMATELY(days::period, DAY);
   TRY_CAST_APPROXIMATELY(weeks::period, WEEK);
-  TRY_CAST_APPROXIMATELY(month_period, MONTH);
-  TRY_CAST_APPROXIMATELY(year_period, YEAR);
+  TRY_CAST_APPROXIMATELY(months::period, MONTH);
+  TRY_CAST_APPROXIMATELY(years::period, YEAR);
 #undef TRY_CAST_APPROXIMATELY
   TENZIR_UNREACHABLE();
 }
