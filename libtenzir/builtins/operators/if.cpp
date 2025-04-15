@@ -6,12 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/actors.hpp>
-#include <tenzir/collect.hpp>
-#include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/multi_series.hpp>
-#include <tenzir/operator_control_plane.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
@@ -28,37 +24,37 @@
 #include <caf/scheduled_actor/flow.hpp>
 #include <caf/typed_response_promise.hpp>
 
-#include <source_location>
-#include <utility>
-
 namespace tenzir::plugins::if_ {
 
 namespace {
 
-auto split_at_predicate(const table_slice& slice,
-                        const arrow::BooleanArray& pred)
+/// Splits a batch of events into two based on an array of bools. Treats null as
+/// false. The first element of the returned pair are the values for which the
+/// predicate returned true, and the second element are the other values.
+auto split_at_predicate(const table_slice& events,
+                        const arrow::BooleanArray& predicate)
   -> std::pair<table_slice, table_slice> {
-  TENZIR_ASSERT(slice.rows() > 0);
-  TENZIR_ASSERT(pred.length() == detail::narrow<int64_t>(slice.rows()));
+  TENZIR_ASSERT(events.rows() > 0);
+  TENZIR_ASSERT(predicate.length() == detail::narrow<int64_t>(events.rows()));
   auto lhs = std::vector<table_slice>{};
   auto rhs = std::vector<table_slice>{};
   const auto pred_at = [&](int64_t i) {
-    return pred.IsValid(i) and pred.GetView(i);
+    return predicate.IsValid(i) and predicate.GetView(i);
   };
   auto range_offset = int64_t{0};
   auto range_value = pred_at(0);
   const auto append = [&](int64_t i) {
     auto& result = (range_value ? lhs : rhs);
-    result.push_back(subslice(slice, range_offset, i));
+    result.push_back(subslice(events, range_offset, i));
     range_offset = i;
     range_value = not range_value;
   };
-  for (auto i = range_offset + 1; i < pred.length(); ++i) {
+  for (auto i = range_offset + 1; i < predicate.length(); ++i) {
     if (range_value != pred_at(i)) {
       append(i);
     }
   }
-  append(pred.length());
+  append(predicate.length());
   return {
     concatenate(std::move(lhs)),
     concatenate(std::move(rhs)),
@@ -83,6 +79,7 @@ struct branch_actor_traits {
 
 using branch_actor = caf::typed_actor<branch_actor_traits>;
 
+/// The source operator used within branches of the `if` statement.
 class branch_source_operator final
   : public crtp_operator<branch_source_operator> {
 public:
@@ -138,6 +135,8 @@ private:
   bool predicate_ = false;
 };
 
+/// The sink operator used within branches of the `if` statement if the branch
+/// had no sink of its own.
 class branch_sink_operator final : public crtp_operator<branch_sink_operator> {
 public:
   branch_sink_operator() = default;
@@ -190,6 +189,7 @@ private:
   branch_actor branch_;
 };
 
+/// An actor managing the nested pipelines of an `if` statement.
 class branch {
 public:
   branch(branch_actor::pointer self, node_actor node,
@@ -208,50 +208,20 @@ public:
   }
 
   auto make_behavior() -> branch_actor::behavior_type {
-    self_->set_exception_handler(
-      [this](const std::exception_ptr& exception) -> caf::error {
-        try {
-          std::rethrow_exception(exception);
-        } catch (diagnostic& diag) {
-          return std::move(diag).to_error();
-        } catch (panic_exception& panic) {
-          auto diagnostic = to_diagnostic(panic);
-          if (node_) {
-            auto buffer = std::stringstream{};
-            buffer << "internal error in if-statement\n";
-            auto printer = make_diagnostic_printer(
-              std::nullopt, color_diagnostics::no, buffer);
-            printer->emit(diagnostic);
-            auto string = std::move(buffer).str();
-            if (not string.empty() and string.back() == '\n') {
-              string.pop_back();
-            }
-            TENZIR_ERROR(string);
-          }
-          return std::move(diagnostic).to_error();
-        } catch (const std::exception& err) {
-          return diagnostic::error("{}", err.what())
-            .note("unhandled exception in if-statement")
-            .to_error();
-        } catch (...) {
-          return diagnostic::error("unhandled exception in if-statement")
-            .to_error();
-        }
-      });
     start_branch(then_branch_);
     start_branch(else_branch_);
     return {
       [this](atom::push, const table_slice& input) {
-        return push(input);
+        return handle_input(input);
       },
       [this](atom::internal, atom::pull, bool predicate) {
-        return internal_pull(predicate);
+        return forward_to_branch(predicate);
       },
       [this](atom::internal, atom::push, table_slice output) {
-        return internal_push(std::move(output));
+        return handle_output(std::move(output));
       },
       [this](atom::pull) {
-        return pull();
+        return forward_to_parent_pipeline();
       },
       [this](diagnostic diag) {
         return handle_diagnostic(std::move(diag));
@@ -291,7 +261,8 @@ private:
       TENZIR_ASSERT(pipe->inner.is_closed());
     }
     auto handle
-      = self_->spawn(pipeline_executor, std::move(pipe->inner),
+      = self_->spawn(pipeline_executor,
+                     std::move(pipe->inner).optimize_if_closed(),
                      receiver_actor<diagnostic>{self_},
                      metrics_receiver_actor{self_}, node_, false, false);
     ++running_branches_;
@@ -366,7 +337,7 @@ private:
     outputs_.push(std::move(output));
   }
 
-  auto push(const table_slice& input) -> caf::result<void> {
+  auto handle_input(const table_slice& input) -> caf::result<void> {
     TENZIR_ASSERT(not push_rp_.pending());
     if (input.rows() == 0) {
       const auto eoi = [](caf::typed_response_promise<table_slice>& rp,
@@ -400,6 +371,11 @@ private:
         push_else(sliced_input);
         continue;
       }
+      if (typed_predicate->array->null_count() > 0) {
+        diagnostic::warning("expected `bool`, but got `null`")
+          .primary(predicate_expr_)
+          .emit(dh_);
+      }
       auto [lhs, rhs]
         = split_at_predicate(sliced_input, *typed_predicate->array);
       TENZIR_ASSERT(lhs.rows() + rhs.rows() == sliced_input.rows());
@@ -420,7 +396,7 @@ private:
     return push_rp_;
   }
 
-  auto internal_pull(bool predicate) -> caf::result<table_slice> {
+  auto forward_to_branch(bool predicate) -> caf::result<table_slice> {
     auto& rp = predicate ? internal_pull_then_rp_ : internal_pull_else_rp_;
     auto& inputs = predicate ? then_inputs_ : else_inputs_;
     TENZIR_ASSERT(not rp.pending());
@@ -433,7 +409,7 @@ private:
     return input;
   }
 
-  auto internal_push(table_slice output) -> caf::result<void> {
+  auto handle_output(table_slice output) -> caf::result<void> {
     TENZIR_ASSERT(output.rows() > 0);
     if (pull_rp_.pending()) {
       TENZIR_ASSERT(outputs_.empty());
@@ -448,7 +424,7 @@ private:
     return internal_push_rp_;
   }
 
-  auto pull() -> caf::result<table_slice> {
+  auto forward_to_parent_pipeline() -> caf::result<table_slice> {
     TENZIR_ASSERT(not pull_rp_.pending());
     if (outputs_.empty()) {
       pull_rp_ = self_->make_response_promise<table_slice>();
@@ -512,6 +488,7 @@ private:
   caf::typed_response_promise<table_slice> pull_rp_;
 };
 
+/// The left half of the `if` operator.
 class internal_if_operator final : public crtp_operator<internal_if_operator> {
 public:
   internal_if_operator() = default;
@@ -527,7 +504,7 @@ public:
     -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     // Branching necessarily throws off the event order, so we can allow the
-    // nested pipelines to do ordering optimizations.
+    // ested pipelines to do ordering optimizations.
     // TODO: We could push up a disjunction of the two filters.
     return optimize_result{std::nullopt, event_order::unordered, this->copy()};
   }
@@ -584,6 +561,7 @@ private:
   uuid id_ = {};
 };
 
+/// The right half of the `if` operator.
 class internal_endif_operator final
   : public crtp_operator<internal_endif_operator> {
 public:
@@ -839,6 +817,8 @@ public:
   }
 };
 
+using branch_source_plugin = operator_inspection_plugin<branch_source_operator>;
+using branch_sink_plugin = operator_inspection_plugin<branch_sink_operator>;
 using internal_if_plugin = operator_inspection_plugin<internal_if_operator>;
 using internal_endif_plugin
   = operator_inspection_plugin<internal_endif_operator>;
@@ -848,5 +828,7 @@ using internal_endif_plugin
 } // namespace tenzir::plugins::if_
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::if_::if_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::if_::branch_source_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::if_::branch_sink_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::if_::internal_if_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::if_::internal_endif_plugin)
