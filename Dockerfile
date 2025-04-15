@@ -561,7 +561,7 @@ RUN --mount=target=/ccache,type=cache \
 
 # -- tenzir-ce -------------------------------------------------------------------
 
-FROM tenzir-de AS tenzir-ce-arm64
+FROM tenzir-de AS tenzir-ce
 
 COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-analytics /
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
@@ -575,11 +575,7 @@ COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
-FROM tenzir-ce-arm64 AS tenzir-ce-amd64
-
 USER tenzir:tenzir
-
-FROM tenzir-ce-${TARGETARCH} AS tenzir-ce
 
 # -- tenzir-node-ce ------------------------------------------------------------
 

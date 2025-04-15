@@ -63,7 +63,13 @@ apt-get -y --no-install-recommends install \
     wget \
     yara
 
-codename="$(lsb_release --codename --short)"
+# yarn
+mkdir -p /etc/apt/keyrings
+wget -O /etc/apt/keyrings/nodesource.asc https://dl.yarnpkg.com/debian/pubkey.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://dl.yarnpkg.com/debian/ stable main nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
+apt-get update
+apt-get -y install yarn
+
 
 # Poetry
 export POETRY_HOME=/opt/poetry
