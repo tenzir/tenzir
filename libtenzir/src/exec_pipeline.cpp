@@ -267,10 +267,10 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
             dh.emit(std::move(d));
           }
         },
-        [&](uint64_t, uint64_t, type&) {
+        [&](uint64_t, uuid, type&) {
           // Don't register types here.
         },
-        [&](uint64_t op_index, uint64_t, record& r) {
+        [&](uint64_t op_index, uuid, record& r) {
           if (cfg.dump_metrics) {
             if (op_index >= custom_metrics.size()) {
               custom_metrics.resize(op_index + 1);
