@@ -41,6 +41,9 @@ void add_root_opts(command& cmd) {
     "disable user and system configuration, schema and plugin "
     "directories lookup and static and dynamic plugin "
     "autoloading (this may only be used on the command line)");
+  cmd.options.add<bool>("?tenzir", "tql2",
+                        "enable TQL2-only mode (deprecated; this option is "
+                        "always enabled)");
   cmd.options.add<bool>(
     "?tenzir", "no-location-overrides",
     "forbid unsafe location overrides for pipelines with the "
@@ -199,7 +202,7 @@ make_application(std::string_view path) {
   // Add additional commands from plugins.
   for (const auto* plugin : plugins::get<command_plugin>()) {
     auto [cmd, cmd_factory] = plugin->make_command();
-    if (!cmd || cmd_factory.empty()) {
+    if (! cmd || cmd_factory.empty()) {
       continue;
     }
     root->add_subcommand(std::move(cmd));
@@ -214,7 +217,7 @@ make_application(std::string_view path) {
 
 void render_error(const command& root, const caf::error& err,
                   std::ostream& os) {
-  if (!err || err == ec::silent) {
+  if (! err || err == ec::silent) {
     // The user most likely killed the process via CTRL+C, print nothing.
     return;
   }
@@ -236,7 +239,7 @@ void render_error(const command& root, const caf::error& err,
           }
         } else {
           TENZIR_ASSERT(
-            !"User visible error contexts must consist of strings!");
+            ! "User visible error contexts must consist of strings!");
         }
         break;
       }
