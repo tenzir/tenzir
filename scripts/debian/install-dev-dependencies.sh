@@ -65,27 +65,6 @@ apt-get -y --no-install-recommends install \
 
 codename="$(lsb_release --codename --short)"
 
-# # Arrow ADBC
-# wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-${codename}.deb"
-# apt-get -y --no-install-recommends install ./"apache-arrow-apt-source-latest-${codename}.deb"
-# apt-get update
-# # The apt download sometimes fails with a 403. We employ a similar workaround as
-# # arrow itself: https://github.com/apache/arrow/pull/36836.
-# if [ "$(uname -m)" == "x86_64" ]; then
-#   apt-get -y --no-install-recommends install -o 'Acquire::Retries=3' \
-#     libadbc-driver-snowflake-dev=16-1 \
-#     libadbc-driver-manager-dev=16-1
-# fi
-# rm ./"apache-arrow-apt-source-latest-${codename}.deb"
-
-# # Node 18.x and Yarn
-# NODE_MAJOR=18
-# mkdir -p /etc/apt/keyrings
-# wget -O /etc/apt/keyrings/nodesource.asc https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
-# echo "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-# apt-get update
-# apt-get -y install yarn
-
 # Poetry
 export POETRY_HOME=/opt/poetry
 curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2

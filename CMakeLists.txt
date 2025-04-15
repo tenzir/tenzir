@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.31...4.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
 
 # -- project setup -------------------------------------------------------------
 
@@ -191,7 +191,7 @@ endif ()
 if (NOT TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   install(
     CODE "\
-    cmake_minimum_required(VERSION 3.31...4.0 FATAL_ERROR)
+    cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
     get_filename_component(build_time_prefix
       \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
     get_filename_component(install_time_prefix
@@ -523,7 +523,7 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
   include(CodeCoverage)
   mark_as_advanced(CODE_COVERAGE)
   install(CODE "\
-    cmake_minimum_required(VERSION 3.31...4.0 FATAL_ERROR)
+    cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
     message(FATAL_ERROR \"Builds with code coverage must not be installed.\")")
 endif ()
 
@@ -899,7 +899,7 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
   file(
     WRITE "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
     "\
-    cmake_minimum_required(VERSION 3.31...4.0 FATAL_ERROR)
+    cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
     file(REMOVE_RECURSE \"${CMAKE_CURRENT_BINARY_DIR}/python\")
     file(
       COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"

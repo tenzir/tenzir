@@ -569,16 +569,13 @@ COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
+COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
 COPY --from=to_asl-plugin --chown=tenzir:tenzir /plugin/to_asl /
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 FROM tenzir-ce-arm64 AS tenzir-ce-amd64
-
-USER root:root
-
-# COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
 
 USER tenzir:tenzir
 
