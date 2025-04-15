@@ -141,7 +141,7 @@ template <class Parser, class GeneratorValue>
                              tenzir::json::parser_base>
 auto parser_loop(generator<GeneratorValue> json_chunk_generator,
                  Parser parser_impl) -> generator<table_slice> {
-  for (auto chunk : json_chunk_generator) {
+  for (const auto& chunk : json_chunk_generator) {
     // get all events that are ready (timeout, batch size, ordered mode
     // constraints)
     for (auto& slice : parser_impl.builder.yield_ready_as_table_slice()) {
@@ -592,7 +592,7 @@ class json_printer final : public plugin_printer {
 public:
   json_printer() = default;
 
-  explicit json_printer(printer_args args) : args_{std::move(args)} {
+  explicit json_printer(printer_args args) : args_{args} {
   }
 
   auto name() const -> std::string override {
@@ -661,12 +661,16 @@ public:
       co_yield std::move(chunk);
     }
 
-    virtual auto finish() -> generator<chunk_ptr> override {
+    auto finish() -> generator<chunk_ptr> override {
       if (not arrays_of_objects_) {
         co_return;
       }
-      TENZIR_ASSERT(array_open_written_);
-      co_yield chunk::make(std::vector<char>(1, ']'), make_meta());
+      if (not array_open_written_) {
+        // For empty arrays, yield the entire empty array at once
+        co_yield chunk::copy(std::string_view{"[]"}, make_meta());
+        co_return;
+      }
+      co_yield chunk::copy(std::string_view{"]"}, make_meta());
     }
 
   private:
@@ -824,7 +828,7 @@ public:
     parser.add("--omit-empty-lists", args.omit_empty_lists);
     parser.add("--arrays-of-objects", args.arrays_of_objects);
     parser.parse(p);
-    return std::make_unique<json_printer>(std::move(args));
+    return std::make_unique<json_printer>(args);
   }
 };
 
@@ -1010,6 +1014,7 @@ public:
         inputs_cv.notify_one();
       }
       {
+        // NOLINTNEXTLINE(misc-coroutine-hostile-raii)
         auto output_lock = std::scoped_lock{outputs_mut};
         if (not ordered_) {
           for (auto& [_, chunks] : outputs) {
@@ -1047,6 +1052,7 @@ public:
     // Only the sentinel should remain
     TENZIR_ASSERT(inputs.size() == 1);
     TENZIR_ASSERT(inputs.front().index == input_index);
+    // NOLINTNEXTLINE(misc-coroutine-hostile-raii)
     auto output_lock = std::scoped_lock{outputs_mut};
     if (not ordered_) {
       for (auto& [_, chunks] : outputs) {

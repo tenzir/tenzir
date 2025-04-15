@@ -14,6 +14,7 @@ Checks: >
   -cppcoreguidelines-avoid-non-const-global-variables,
   -cppcoreguidelines-avoid-reference-coroutine-parameters,
   -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-pro-type-bounds-pointer-arithmetic,
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-pro-type-static-cast-downcast,
   -cppcoreguidelines-pro-type-union-access,
