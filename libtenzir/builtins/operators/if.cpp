@@ -634,6 +634,22 @@ public:
     TENZIR_ASSERT(output->rows() == 0);
   }
 
+  auto location() const -> operator_location override {
+    // We pass in `ctrl.node()` to the branch actor, so if any of the nested
+    // operators have a remote location, then we probably want to run the
+    // `internal-endif` operator remotely as well.
+    const auto requires_node = [](const auto& ops) {
+      return std::ranges::find(ops, operator_location::remote,
+                               &operator_base::location)
+             != ops.end();
+    };
+    const auto should_be_remote
+      = requires_node(then_pipe_.inner.operators())
+        or (else_pipe_ and requires_node(else_pipe_->inner.operators()));
+    return should_be_remote ? operator_location::remote
+                            : operator_location::anywhere;
+  }
+
   friend auto inspect(auto& f, internal_endif_operator& x) -> bool {
     return f.object(x).fields(f.field("id", x.id_),
                               f.field("predicate", x.predicate_),
