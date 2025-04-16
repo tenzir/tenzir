@@ -292,9 +292,9 @@ private:
       if (running_branches_ == 0) {
         // We insert an empty batch as a sentinel value to signal that the
         // operator may shut down.
-        if (pull_rp_.pending()) {
+        if (to_endif_rp_.pending()) {
           TENZIR_ASSERT(outputs_.empty());
-          pull_rp_.deliver(table_slice{});
+          to_endif_rp_.deliver(table_slice{});
           return;
         }
         outputs_.emplace();
@@ -320,9 +320,9 @@ private:
 
   auto push_then(table_slice input) -> void {
     TENZIR_ASSERT(input.rows() > 0);
-    if (internal_pull_then_rp_.pending()) {
+    if (to_then_branch_rp_.pending()) {
       TENZIR_ASSERT(then_inputs_.empty());
-      internal_pull_then_rp_.deliver(std::move(input));
+      to_then_branch_rp_.deliver(std::move(input));
       return;
     }
     then_inputs_.push(std::move(input));
@@ -334,9 +334,9 @@ private:
       push_output(std::move(input));
       return;
     }
-    if (internal_pull_else_rp_.pending()) {
+    if (to_else_branch_rp_.pending()) {
       TENZIR_ASSERT(else_inputs_.empty());
-      internal_pull_else_rp_.deliver(std::move(input));
+      to_else_branch_rp_.deliver(std::move(input));
       return;
     }
     else_inputs_.push(std::move(input));
@@ -344,9 +344,9 @@ private:
 
   auto push_output(table_slice output) -> void {
     TENZIR_ASSERT(output.rows() > 0);
-    if (pull_rp_.pending()) {
+    if (to_endif_rp_.pending()) {
       TENZIR_ASSERT(outputs_.empty());
-      pull_rp_.deliver(std::move(output));
+      to_endif_rp_.deliver(std::move(output));
       return;
     }
     outputs_.push(std::move(output));
@@ -358,7 +358,7 @@ private:
   }
 
   auto handle_input(const table_slice& input) -> caf::result<void> {
-    TENZIR_ASSERT(not push_rp_.pending());
+    TENZIR_ASSERT(not from_if_rp_.pending());
     if (input.rows() == 0) {
       const auto eoi = [](caf::typed_response_promise<table_slice>& rp,
                           std::queue<table_slice>& inputs) {
@@ -369,9 +369,9 @@ private:
         }
         inputs.emplace();
       };
-      eoi(internal_pull_then_rp_, then_inputs_);
+      eoi(to_then_branch_rp_, then_inputs_);
       if (else_branch_) {
-        eoi(internal_pull_else_rp_, else_inputs_);
+        eoi(to_else_branch_rp_, else_inputs_);
       }
       return {};
     }
@@ -409,12 +409,12 @@ private:
     if (can_push_more()) {
       return {};
     }
-    push_rp_ = self_->make_response_promise<void>();
-    return push_rp_;
+    from_if_rp_ = self_->make_response_promise<void>();
+    return from_if_rp_;
   }
 
   auto forward_to_branch(bool predicate) -> caf::result<table_slice> {
-    auto& pull_rp = predicate ? internal_pull_then_rp_ : internal_pull_else_rp_;
+    auto& pull_rp = predicate ? to_then_branch_rp_ : to_else_branch_rp_;
     auto& inputs = predicate ? then_inputs_ : else_inputs_;
     TENZIR_ASSERT(not pull_rp.pending());
     if (inputs.empty()) {
@@ -423,46 +423,46 @@ private:
     }
     auto input = std::move(inputs.front());
     inputs.pop();
-    if (push_rp_.pending() and can_push_more()) {
-      push_rp_.deliver();
+    if (from_if_rp_.pending() and can_push_more()) {
+      from_if_rp_.deliver();
     }
     return input;
   }
 
   auto handle_output(bool predicate, table_slice output) -> caf::result<void> {
     TENZIR_ASSERT(output.rows() > 0);
-    if (pull_rp_.pending()) {
+    if (to_endif_rp_.pending()) {
       TENZIR_ASSERT(outputs_.empty());
-      pull_rp_.deliver(std::move(output));
+      to_endif_rp_.deliver(std::move(output));
       return {};
     }
     outputs_.push(std::move(output));
     if (outputs_.size() < max_queued + 1) {
       return {};
     }
-    auto& push_rp = predicate ? internal_push_then_rp_ : internal_push_else_rp_;
+    auto& push_rp = predicate ? from_then_branch_rp_ : from_else_branch_rp_;
     TENZIR_ASSERT(not push_rp.pending());
     push_rp = self_->make_response_promise<void>();
     return push_rp;
   }
 
   auto forward_to_parent_pipeline() -> caf::result<table_slice> {
-    TENZIR_ASSERT(not pull_rp_.pending());
+    TENZIR_ASSERT(not to_endif_rp_.pending());
     if (outputs_.empty()) {
-      pull_rp_ = self_->make_response_promise<table_slice>();
-      return pull_rp_;
+      to_endif_rp_ = self_->make_response_promise<table_slice>();
+      return to_endif_rp_;
     }
     auto output = std::move(outputs_.front());
     outputs_.pop();
     if (outputs_.size() < max_queued) {
-      if (internal_push_then_rp_.pending()) {
-        internal_push_then_rp_.deliver();
+      if (from_then_branch_rp_.pending()) {
+        from_then_branch_rp_.deliver();
       }
-      if (internal_push_else_rp_.pending()) {
-        internal_push_else_rp_.deliver();
+      if (from_else_branch_rp_.pending()) {
+        from_else_branch_rp_.deliver();
       }
-      if (not else_branch_ and push_rp_.pending() and can_push_more()) {
-        push_rp_.deliver();
+      if (not else_branch_ and from_if_rp_.pending() and can_push_more()) {
+        from_if_rp_.deliver();
       }
     }
     return output;
@@ -508,12 +508,12 @@ private:
   std::queue<table_slice> else_inputs_;
   std::queue<table_slice> outputs_;
 
-  caf::typed_response_promise<void> push_rp_;
-  caf::typed_response_promise<table_slice> internal_pull_then_rp_;
-  caf::typed_response_promise<table_slice> internal_pull_else_rp_;
-  caf::typed_response_promise<void> internal_push_then_rp_;
-  caf::typed_response_promise<void> internal_push_else_rp_;
-  caf::typed_response_promise<table_slice> pull_rp_;
+  caf::typed_response_promise<void> from_if_rp_;
+  caf::typed_response_promise<table_slice> to_then_branch_rp_;
+  caf::typed_response_promise<table_slice> to_else_branch_rp_;
+  caf::typed_response_promise<void> from_then_branch_rp_;
+  caf::typed_response_promise<void> from_else_branch_rp_;
+  caf::typed_response_promise<table_slice> to_endif_rp_;
 };
 
 /// The left half of the `if` operator.
