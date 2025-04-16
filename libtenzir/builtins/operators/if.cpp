@@ -87,8 +87,9 @@ class branch_source_operator final
 public:
   branch_source_operator() = default;
 
-  branch_source_operator(branch_actor branch, bool predicate)
-    : branch_{std::move(branch)}, predicate_{predicate} {
+  branch_source_operator(branch_actor branch, bool predicate,
+                         tenzir::location source)
+    : branch_{std::move(branch)}, predicate_{predicate}, source_{source} {
   }
 
   auto name() const -> std::string override {
@@ -120,6 +121,7 @@ public:
           [&](caf::error err) {
             diagnostic::error(std::move(err))
               .note("failed to pull events into branch")
+              .primary(source_)
               .emit(ctrl.diagnostics());
           });
       ctrl.set_waiting(true);
@@ -129,12 +131,14 @@ public:
 
   friend auto inspect(auto& f, branch_source_operator& x) -> bool {
     return f.object(x).fields(f.field("branch", x.branch_),
-                              f.field("predicate", x.predicate_));
+                              f.field("predicate", x.predicate_),
+                              f.field("source", x.source_));
   }
 
 private:
   branch_actor branch_;
   bool predicate_ = false;
+  tenzir::location source_;
 };
 
 /// The sink operator used within branches of the `if` statement if the branch
@@ -143,8 +147,8 @@ class branch_sink_operator final : public crtp_operator<branch_sink_operator> {
 public:
   branch_sink_operator() = default;
 
-  explicit branch_sink_operator(branch_actor branch)
-    : branch_{std::move(branch)} {
+  explicit branch_sink_operator(branch_actor branch, tenzir::location source)
+    : branch_{std::move(branch)}, source_{source} {
   }
 
   auto name() const -> std::string override {
@@ -177,6 +181,7 @@ public:
           [&](caf::error err) {
             diagnostic::error(std::move(err))
               .note("failed to push events from branch")
+              .primary(source_)
               .emit(ctrl.diagnostics());
           });
       co_yield {};
@@ -184,11 +189,13 @@ public:
   }
 
   friend auto inspect(auto& f, branch_sink_operator& x) -> bool {
-    return f.object(x).fields(f.field("branch", x.branch_));
+    return f.object(x).fields(f.field("branch", x.branch_),
+                              f.field("source", x.source_));
   }
 
 private:
   branch_actor branch_;
+  tenzir::location source_;
 };
 
 /// An actor managing the nested pipelines of an `if` statement.
@@ -255,11 +262,11 @@ private:
     if (not pipe) {
       return {};
     }
-    pipe->inner.prepend(
-      std::make_unique<branch_source_operator>(branch_actor{self_}, predicate));
+    pipe->inner.prepend(std::make_unique<branch_source_operator>(
+      branch_actor{self_}, predicate, pipe->source));
     if (not pipe->inner.is_closed()) {
-      pipe->inner.append(
-        std::make_unique<branch_sink_operator>(branch_actor{self_}));
+      pipe->inner.append(std::make_unique<branch_sink_operator>(
+        branch_actor{self_}, pipe->source));
       TENZIR_ASSERT(pipe->inner.is_closed());
     }
     auto handle
