@@ -461,7 +461,7 @@ private:
       if (from_else_branch_rp_.pending()) {
         from_else_branch_rp_.deliver();
       }
-      if (not else_branch_ and from_if_rp_.pending() and can_push_more()) {
+      if (from_if_rp_.pending() and can_push_more()) {
         from_if_rp_.deliver();
       }
     }
