@@ -70,7 +70,8 @@ struct branch_actor_traits {
     // Pull evaluated events into the branch pipelines.
     auto(atom::internal, atom::pull, bool predicate)->caf::result<table_slice>,
     // Push events from the branch pipelines into the parent.
-    auto(atom::internal, atom::push, table_slice output)->caf::result<void>,
+    auto(atom::internal, atom::push, bool predicate, table_slice output)
+      ->caf::result<void>,
     // Get resulting events from the branch pipelines into the parent pipeline.
     auto(atom::pull)->caf::result<table_slice>>
     // Support the diagnostic receiver interface for the branch pipelines.
@@ -147,8 +148,9 @@ class branch_sink_operator final : public crtp_operator<branch_sink_operator> {
 public:
   branch_sink_operator() = default;
 
-  explicit branch_sink_operator(branch_actor branch, tenzir::location source)
-    : branch_{std::move(branch)}, source_{source} {
+  explicit branch_sink_operator(branch_actor branch, bool predicate,
+                                tenzir::location source)
+    : branch_{std::move(branch)}, predicate_{predicate}, source_{source} {
   }
 
   auto name() const -> std::string override {
@@ -172,7 +174,7 @@ public:
         continue;
       }
       ctrl.self()
-        .mail(atom::internal_v, atom::push_v, std::move(events))
+        .mail(atom::internal_v, atom::push_v, predicate_, std::move(events))
         .request(branch_, caf::infinite)
         .then(
           [&]() {
@@ -184,17 +186,20 @@ public:
               .primary(source_)
               .emit(ctrl.diagnostics());
           });
+      ctrl.set_waiting(true);
       co_yield {};
     }
   }
 
   friend auto inspect(auto& f, branch_sink_operator& x) -> bool {
     return f.object(x).fields(f.field("branch", x.branch_),
+                              f.field("predicate", x.predicate_),
                               f.field("source", x.source_));
   }
 
 private:
   branch_actor branch_;
+  bool predicate_ = false;
   tenzir::location source_;
 };
 
@@ -226,8 +231,8 @@ public:
       [this](atom::internal, atom::pull, bool predicate) {
         return forward_to_branch(predicate);
       },
-      [this](atom::internal, atom::push, table_slice output) {
-        return handle_output(std::move(output));
+      [this](atom::internal, atom::push, bool predicate, table_slice output) {
+        return handle_output(predicate, std::move(output));
       },
       [this](atom::pull) {
         return forward_to_parent_pipeline();
@@ -266,7 +271,7 @@ private:
       branch_actor{self_}, predicate, pipe->source));
     if (not pipe->inner.is_closed()) {
       pipe->inner.append(std::make_unique<branch_sink_operator>(
-        branch_actor{self_}, pipe->source));
+        branch_actor{self_}, predicate, pipe->source));
       TENZIR_ASSERT(pipe->inner.is_closed());
     }
     auto handle
@@ -346,6 +351,11 @@ private:
     }
     outputs_.push(std::move(output));
   }
+  auto can_push_more() const -> bool {
+    return then_inputs_.size() < max_queued
+           and (else_branch_ ? else_inputs_.size() : outputs_.size())
+                 < max_queued;
+  }
 
   auto handle_input(const table_slice& input) -> caf::result<void> {
     TENZIR_ASSERT(not push_rp_.pending());
@@ -396,10 +406,7 @@ private:
         push_else(std::move(rhs));
       }
     }
-    const auto can_push_more
-      = then_inputs_.size() < max_queued
-        and (else_branch_ ? else_inputs_.size() : outputs_.size()) < max_queued;
-    if (can_push_more) {
+    if (can_push_more()) {
       return {};
     }
     push_rp_ = self_->make_response_promise<void>();
@@ -407,19 +414,22 @@ private:
   }
 
   auto forward_to_branch(bool predicate) -> caf::result<table_slice> {
-    auto& rp = predicate ? internal_pull_then_rp_ : internal_pull_else_rp_;
+    auto& pull_rp = predicate ? internal_pull_then_rp_ : internal_pull_else_rp_;
     auto& inputs = predicate ? then_inputs_ : else_inputs_;
-    TENZIR_ASSERT(not rp.pending());
+    TENZIR_ASSERT(not pull_rp.pending());
     if (inputs.empty()) {
-      rp = self_->make_response_promise<table_slice>();
-      return rp;
+      pull_rp = self_->make_response_promise<table_slice>();
+      return pull_rp;
     }
     auto input = std::move(inputs.front());
     inputs.pop();
+    if (push_rp_.pending() and can_push_more()) {
+      push_rp_.deliver();
+    }
     return input;
   }
 
-  auto handle_output(table_slice output) -> caf::result<void> {
+  auto handle_output(bool predicate, table_slice output) -> caf::result<void> {
     TENZIR_ASSERT(output.rows() > 0);
     if (pull_rp_.pending()) {
       TENZIR_ASSERT(outputs_.empty());
@@ -427,11 +437,13 @@ private:
       return {};
     }
     outputs_.push(std::move(output));
-    if (outputs_.size() < max_queued) {
+    if (outputs_.size() < max_queued + 1) {
       return {};
     }
-    internal_push_rp_ = self_->make_response_promise<void>();
-    return internal_push_rp_;
+    auto& push_rp = predicate ? internal_push_then_rp_ : internal_push_else_rp_;
+    TENZIR_ASSERT(not push_rp.pending());
+    push_rp = self_->make_response_promise<void>();
+    return push_rp;
   }
 
   auto forward_to_parent_pipeline() -> caf::result<table_slice> {
@@ -442,6 +454,17 @@ private:
     }
     auto output = std::move(outputs_.front());
     outputs_.pop();
+    if (outputs_.size() < max_queued) {
+      if (internal_push_then_rp_.pending()) {
+        internal_push_then_rp_.deliver();
+      }
+      if (internal_push_else_rp_.pending()) {
+        internal_push_else_rp_.deliver();
+      }
+      if (not else_branch_ and push_rp_.pending() and can_push_more()) {
+        push_rp_.deliver();
+      }
+    }
     return output;
   }
 
@@ -488,7 +511,8 @@ private:
   caf::typed_response_promise<void> push_rp_;
   caf::typed_response_promise<table_slice> internal_pull_then_rp_;
   caf::typed_response_promise<table_slice> internal_pull_else_rp_;
-  caf::typed_response_promise<void> internal_push_rp_;
+  caf::typed_response_promise<void> internal_push_then_rp_;
+  caf::typed_response_promise<void> internal_push_else_rp_;
   caf::typed_response_promise<table_slice> pull_rp_;
 };
 
