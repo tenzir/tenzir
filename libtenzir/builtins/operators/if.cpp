@@ -24,11 +24,34 @@
 #include <caf/scheduled_actor/flow.hpp>
 #include <caf/typed_response_promise.hpp>
 
-#include <queue>
+#include <deque>
 
 namespace tenzir::plugins::if_ {
 
 namespace {
+
+/// Rebatches a set of batches of events while keeping the input order.
+auto rebatch_events(std::deque<table_slice> events) -> std::deque<table_slice> {
+  if (events.size() < 2) {
+    return events;
+  }
+  auto result = std::deque<table_slice>{};
+  auto start = events.begin();
+  auto rows = start->rows();
+  const auto end = events.end();
+  for (auto it = std::next(start); it < end; ++it) {
+    rows += it->rows();
+    if (it->schema() == start->schema()
+        and rows < defaults::import::table_slice_size) {
+      continue;
+    }
+    result.push_back(concatenate({start, it}));
+    start = it;
+    rows = start->rows();
+  }
+  result.push_back(concatenate({start, end}));
+  return result;
+}
 
 /// Splits a batch of events into two based on an array of bools. Treats null as
 /// false. The first element of the returned pair are the values for which the
@@ -297,7 +320,7 @@ private:
           to_endif_rp_.deliver(table_slice{});
           return;
         }
-        outputs_.emplace();
+        outputs_.emplace_back();
       }
     });
     return located{std::move(handle), pipe->source};
@@ -325,7 +348,7 @@ private:
       to_then_branch_rp_.deliver(std::move(input));
       return;
     }
-    then_inputs_.push(std::move(input));
+    then_inputs_.push_back(std::move(input));
   }
 
   auto push_else(table_slice input) -> void {
@@ -339,7 +362,7 @@ private:
       to_else_branch_rp_.deliver(std::move(input));
       return;
     }
-    else_inputs_.push(std::move(input));
+    else_inputs_.push_back(std::move(input));
   }
 
   auto push_output(table_slice output) -> void {
@@ -349,7 +372,7 @@ private:
       to_endif_rp_.deliver(std::move(output));
       return;
     }
-    outputs_.push(std::move(output));
+    outputs_.push_back(std::move(output));
   }
   auto can_push_more() const -> bool {
     return then_inputs_.size() < max_queued
@@ -361,13 +384,13 @@ private:
     TENZIR_ASSERT(not from_if_rp_.pending());
     if (input.rows() == 0) {
       const auto eoi = [](caf::typed_response_promise<table_slice>& rp,
-                          std::queue<table_slice>& inputs) {
+                          std::deque<table_slice>& inputs) {
         if (rp.pending()) {
           TENZIR_ASSERT(inputs.empty());
           rp.deliver(table_slice{});
           return;
         }
-        inputs.emplace();
+        inputs.emplace_back();
       };
       eoi(to_then_branch_rp_, then_inputs_);
       if (else_branch_) {
@@ -421,8 +444,9 @@ private:
       pull_rp = self_->make_response_promise<table_slice>();
       return pull_rp;
     }
+    inputs = rebatch_events(std::move(inputs));
     auto input = std::move(inputs.front());
-    inputs.pop();
+    inputs.pop_front();
     if (from_if_rp_.pending() and can_push_more()) {
       from_if_rp_.deliver();
     }
@@ -436,7 +460,7 @@ private:
       to_endif_rp_.deliver(std::move(output));
       return {};
     }
-    outputs_.push(std::move(output));
+    outputs_.push_back(std::move(output));
     if (outputs_.size() < max_queued + 1) {
       return {};
     }
@@ -452,9 +476,9 @@ private:
       to_endif_rp_ = self_->make_response_promise<table_slice>();
       return to_endif_rp_;
     }
-    // TODO: We could rebatch the outputs here.
+    outputs_ = rebatch_events(std::move(outputs_));
     auto output = std::move(outputs_.front());
-    outputs_.pop();
+    outputs_.pop_front();
     if (outputs_.size() < max_queued) {
       if (from_then_branch_rp_.pending()) {
         from_then_branch_rp_.deliver();
@@ -505,9 +529,9 @@ private:
   std::optional<located<pipeline_executor_actor>> else_branch_;
 
   static constexpr size_t max_queued = 10;
-  std::queue<table_slice> then_inputs_;
-  std::queue<table_slice> else_inputs_;
-  std::queue<table_slice> outputs_;
+  std::deque<table_slice> then_inputs_;
+  std::deque<table_slice> else_inputs_;
+  std::deque<table_slice> outputs_;
 
   caf::typed_response_promise<void> from_if_rp_;
   caf::typed_response_promise<table_slice> to_then_branch_rp_;
