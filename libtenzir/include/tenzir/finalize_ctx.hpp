@@ -12,7 +12,7 @@
 
 namespace tenzir {
 
-/// Context when transforming the IR to `exec::operator_ptr`.
+/// Context when transforming the IR to `plan::operator_ptr`.
 class finalize_ctx {
 public:
   // TODO: Right now, this is just the base context. If we know that we don't

@@ -28,10 +28,10 @@
 #include <queue>
 #include <thread>
 
-namespace bp = boost::process;
-
 namespace tenzir::plugins::shell {
 namespace {
+
+namespace bp = boost::process;
 
 using namespace tenzir::binary_byte_literals;
 
@@ -110,9 +110,10 @@ public:
     TENZIR_TRACE("writing {} bytes to child's stdin", buffer.size());
     const auto* data = reinterpret_cast<const char*>(buffer.data());
     auto size = detail::narrow_cast<std::streamsize>(buffer.size());
-    if (not stdin_.write(data, size))
+    if (not stdin_.write(data, size)) {
       return caf::make_error(ec::unspecified,
                              "failed to write into child's stdin");
+    }
     return caf::none;
   }
 
