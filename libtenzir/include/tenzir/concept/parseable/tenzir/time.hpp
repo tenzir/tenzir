@@ -69,22 +69,18 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
       {"hour", cast(hours(1))},
       {"hrs", cast(hours(1))},
       {"h", cast(hours(1))},
-      {"days", cast(hours(24))},
-      {"day", cast(hours(24))},
-      {"d", cast(hours(24))},
-      {"weeks", cast(hours(24 * 7))},
-      {"week", cast(hours(24 * 7))},
-      {"w", cast(hours(24 * 7))},
-      // This is 365.2425 days divided by 12, which is the average length of a
-      // month in the Gregorian calendar.
-      {"months", cast(seconds(2629746))},
-      {"month", cast(seconds(2629746))},
-      {"mo", cast(seconds(2629746))},
-      // This is 365.2425 days, which is the average length of a year in the
-      // Gregorian calendar.
-      {"years", cast(seconds(31556952))},
-      {"year", cast(seconds(31556952))},
-      {"y", cast(seconds(31556952))},
+      {"days", cast(days(1))},
+      {"day", cast(days(1))},
+      {"d", cast(days(1))},
+      {"weeks", cast(weeks(1))},
+      {"week", cast(weeks(1))},
+      {"w", cast(weeks(1))},
+      {"months", cast(months(1))},
+      {"month", cast(months(1))},
+      {"mo", cast(months(1))},
+      {"years", cast(years(1))},
+      {"year", cast(years(1))},
+      {"y", cast(years(1))},
     };
     static const auto unit
       = (+parsers::alpha)
