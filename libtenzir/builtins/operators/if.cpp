@@ -452,6 +452,7 @@ private:
       to_endif_rp_ = self_->make_response_promise<table_slice>();
       return to_endif_rp_;
     }
+    // TODO: We could rebatch the outputs here.
     auto output = std::move(outputs_.front());
     outputs_.pop();
     if (outputs_.size() < max_queued) {
