@@ -106,16 +106,16 @@ Each record in the `actors` list has the following schema:
 
 Contains information about the `buffer` operator's internal buffer.
 
-| Field         | Type     | Description                                                   |
-| :------------ | :------- | :------------------------------------------------------------ |
-| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from. |
-| `run`         | `uint64` | The number of the run, starting at 1 for the first run.       |
-| `hidden`      | `bool`   | True if the pipeline is running for the explorer.             |
-| `timestamp`   | `time`   | The time at which this metric was recorded.                   |
-| `operator_id` | `uint64` | The ID of the `buffer` operator in the pipeline.              |
-| `used`        | `uint64` | The number of events stored in the buffer.                    |
-| `free`        | `uint64` | The remaining capacity of the buffer.                         |
-| `dropped`     | `uint64` | The number of events dropped by the buffer.                   |
+| Field         | Type     | Description                                                                                |
+| :------------ | :------- | :----------------------------------------------------------------------------------------- |
+| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from.                              |
+| `run`         | `uint64` | The number of the run, starting at 1 for the first run.                                    |
+| `hidden`      | `bool`   | Indicates whether the corresponding pipeline is hidden from the list of managed pipelines. |
+| `timestamp`   | `time`   | The time at which this metric was recorded.                                                |
+| `operator_id` | `uint64` | The ID of the `buffer` operator in the pipeline.                                           |
+| `used`        | `uint64` | The number of events stored in the buffer.                                                 |
+| `free`        | `uint64` | The remaining capacity of the buffer.                                                      |
+| `dropped`     | `uint64` | The number of events dropped by the buffer.                                                |
 
 ### `tenzir.metrics.cpu`
 
@@ -144,16 +144,16 @@ Contains a measurement of disk space usage.
 
 Contains a measurement of the `enrich` operator, emitted once every second.
 
-| Field         | Type     | Description                                                                          |
-| :------------ | :------- | :----------------------------------------------------------------------------------- |
-| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from.                        |
-| `run`         | `uint64` | The number of the run, starting at 1 for the first run.                              |
-| `hidden`      | `bool`   | True if the pipeline is running for the explorer.                                    |
-| `timestamp`   | `time`   | The time at which this metric was recorded.                                          |
-| `operator_id` | `uint64` | The ID of the `enrich` operator in the pipeline.                                     |
-| `context`     | `string` | The name of the context the associated operator is using.                            |
-| `events`      | `uint64` | The amount of input events that entered the `enrich` operator since the last metric. |
-| `hits`        | `uint64` | The amount of successfully enriched events since the last metric.                    |
+| Field         | Type     | Description                                                                                |
+| :------------ | :------- | :----------------------------------------------------------------------------------------- |
+| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from.                              |
+| `run`         | `uint64` | The number of the run, starting at 1 for the first run.                                    |
+| `hidden`      | `bool`   | Indicates whether the corresponding pipeline is hidden from the list of managed pipelines. |
+| `timestamp`   | `time`   | The time at which this metric was recorded.                                                |
+| `operator_id` | `uint64` | The ID of the `enrich` operator in the pipeline.                                           |
+| `context`     | `string` | The name of the context the associated operator is using.                                  |
+| `events`      | `uint64` | The amount of input events that entered the `enrich` operator since the last metric.       |
+| `hits`        | `uint64` | The amount of successfully enriched events since the last metric.                          |
 
 ### `tenzir.metrics.export`
 
@@ -161,17 +161,17 @@ Contains a measurement of the `export` operator, emitted once every second per
 schema. Note that internal events like metrics or diagnostics do not emit
 metrics themselves.
 
-| Field           | Type     | Description                                                   |
-| :-------------- | :------- | :------------------------------------------------------------ |
-| `pipeline_id`   | `string` | The ID of the pipeline where the associated operator is from. |
-| `run`           | `uint64` | The number of the run, starting at 1 for the first run.       |
-| `hidden`        | `bool`   | True if the pipeline is running for the explorer.             |
-| `timestamp`     | `time`   | The time at which this metric was recorded.                   |
-| `operator_id`   | `uint64` | The ID of the `export` operator in the pipeline.              |
-| `schema`        | `string` | The schema name of the batch.                                 |
-| `schema_id`     | `string` | The schema ID of the batch.                                   |
-| `events`        | `uint64` | The amount of events that were imported.                      |
-| `queued_events` | `uint64` | The total amount of events that are enqueued in the export.   |
+| Field           | Type     | Description                                                                                |
+| :-------------- | :------- | :----------------------------------------------------------------------------------------- |
+| `pipeline_id`   | `string` | The ID of the pipeline where the associated operator is from.                              |
+| `run`           | `uint64` | The number of the run, starting at 1 for the first run.                                    |
+| `hidden`        | `bool`   | Indicates whether the corresponding pipeline is hidden from the list of managed pipelines. |
+| `timestamp`     | `time`   | The time at which this metric was recorded.                                                |
+| `operator_id`   | `uint64` | The ID of the `export` operator in the pipeline.                                           |
+| `schema`        | `string` | The schema name of the batch.                                                              |
+| `schema_id`     | `string` | The schema ID of the batch.                                                                |
+| `events`        | `uint64` | The amount of events that were imported.                                                   |
+| `queued_events` | `uint64` | The total amount of events that are enqueued in the export.                                |
 
 ### `tenzir.metrics.import`
 
@@ -179,16 +179,16 @@ Contains a measurement the `import` operator, emitted once every second per
 schema. Note that internal events like metrics or diagnostics do not emit
 metrics themselves.
 
-| Field         | Type     | Description                                                   |
-| :------------ | :------- | :------------------------------------------------------------ |
-| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from. |
-| `run`         | `uint64` | The number of the run, starting at 1 for the first run.       |
-| `hidden`      | `bool`   | True if the pipeline is running for the explorer.             |
-| `timestamp`   | `time`   | The time at which this metric was recorded.                   |
-| `operator_id` | `uint64` | The ID of the `import` operator in the pipeline.              |
-| `schema`      | `string` | The schema name of the batch.                                 |
-| `schema_id`   | `string` | The schema ID of the batch.                                   |
-| `events`      | `uint64` | The amount of events that were imported.                      |
+| Field         | Type     | Description                                                                                |
+| :------------ | :------- | :----------------------------------------------------------------------------------------- |
+| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from.                              |
+| `run`         | `uint64` | The number of the run, starting at 1 for the first run.                                    |
+| `hidden`      | `bool`   | Indicates whether the corresponding pipeline is hidden from the list of managed pipelines. |
+| `timestamp`   | `time`   | The time at which this metric was recorded.                                                |
+| `operator_id` | `uint64` | The ID of the `import` operator in the pipeline.                                           |
+| `schema`      | `string` | The schema name of the batch.                                                              |
+| `schema_id`   | `string` | The schema ID of the batch.                                                                |
+| `events`      | `uint64` | The amount of events that were imported.                                                   |
 
 ### `tenzir.metrics.ingest`
 
@@ -210,7 +210,7 @@ Contains a measurement of the `lookup` operator, emitted once every second.
 | :---------------- | :------- | :------------------------------------------------------------------------------------------------- |
 | `pipeline_id`     | `string` | The ID of the pipeline where the associated operator is from.                                      |
 | `run`             | `uint64` | The number of the run, starting at 1 for the first run.                                            |
-| `hidden`          | `bool`   | True if the pipeline is running for the explorer.                                                  |
+| `hidden`          | `bool`   | Indicates whether the corresponding pipeline is hidden from the list of managed pipelines.         |
 | `timestamp`       | `time`   | The time at which this metric was recorded.                                                        |
 | `operator_id`     | `uint64` | The ID of the `lookup` operator in the pipeline.                                                   |
 | `context`         | `string` | The name of the context the associated operator is using.                                          |
@@ -257,25 +257,25 @@ metrics for understanding the overall performance of a pipeline, and were too
 expensive to collect and store.
 :::
 
-| Field                 | Type       | Description                                                                     |
-| :-------------------- | :--------- | :------------------------------------------------------------------------------ |
-| `pipeline_id`         | `string`   | The ID of the pipeline where the associated operator is from.                   |
-| `run`                 | `uint64`   | The number of the run, starting at 1 for the first run.                         |
-| `hidden`              | `bool`     | True if the pipeline is running for the explorer.                               |
-| `timestamp`           | `time`     | The time when this event was emitted (immediately after the collection period). |
-| `operator_id`         | `uint64`   | The ID of the operator inside the pipeline referenced above.                    |
-| `source`              | `bool`     | True if this is the first operator in the pipeline.                             |
-| `transformation`      | `bool`     | True if this is neither the first nor the last operator.                        |
-| `sink`                | `bool`     | True if this is the last operator in the pipeline.                              |
-| `internal`            | `bool`     | True if the data flow is considered to internal to Tenzir.                      |
-| `duration`            | `duration` | The timespan over which this data was collected.                                |
-| `starting_duration`   | `duration` | The time spent to start the operator.                                           |
-| `processing_duration` | `duration` | The time spent processing the data.                                             |
-| `scheduled_duration`  | `duration` | The time that the operator was scheduled.                                       |
-| `running_duration`    | `duration` | The time that the operator was running.                                         |
-| `paused_duration`     | `duration` | The time that the operator was paused.                                          |
-| `input`               | `record`   | Measurement of the incoming data stream.                                        |
-| `output`              | `record`   | Measurement of the outgoing data stream.                                        |
+| Field                 | Type       | Description                                                                                |
+| :-------------------- | :--------- | :----------------------------------------------------------------------------------------- |
+| `pipeline_id`         | `string`   | The ID of the pipeline where the associated operator is from.                              |
+| `run`                 | `uint64`   | The number of the run, starting at 1 for the first run.                                    |
+| `hidden`              | `bool`     | Indicates whether the corresponding pipeline is hidden from the list of managed pipelines. |
+| `timestamp`           | `time`     | The time when this event was emitted (immediately after the collection period).            |
+| `operator_id`         | `uint64`   | The ID of the operator inside the pipeline referenced above.                               |
+| `source`              | `bool`     | True if this is the first operator in the pipeline.                                        |
+| `transformation`      | `bool`     | True if this is neither the first nor the last operator.                                   |
+| `sink`                | `bool`     | True if this is the last operator in the pipeline.                                         |
+| `internal`            | `bool`     | True if the data flow is considered to internal to Tenzir.                                 |
+| `duration`            | `duration` | The timespan over which this data was collected.                                           |
+| `starting_duration`   | `duration` | The time spent to start the operator.                                                      |
+| `processing_duration` | `duration` | The time spent processing the data.                                                        |
+| `scheduled_duration`  | `duration` | The time that the operator was scheduled.                                                  |
+| `running_duration`    | `duration` | The time that the operator was running.                                                    |
+| `paused_duration`     | `duration` | The time that the operator was paused.                                                     |
+| `input`               | `record`   | Measurement of the incoming data stream.                                                   |
+| `output`              | `record`   | Measurement of the outgoing data stream.                                                   |
 
 The records `input` and `output` have the following schema:
 
@@ -335,17 +335,17 @@ Contains a measurement of the amount of memory used by the `tenzir-node` process
 Contains a measurement of the `publish` operator, emitted once every second per
 schema.
 
-| Field         | Type     | Description                                                   |
-| :------------ | :------- | :------------------------------------------------------------ |
-| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from. |
-| `run`         | `uint64` | The number of the run, starting at 1 for the first run.       |
-| `hidden`      | `bool`   | True if the pipeline is running for the explorer.             |
-| `timestamp`   | `time`   | The time at which this metric was recorded.                   |
-| `operator_id` | `uint64` | The ID of the `publish` operator in the pipeline.             |
-| `topic`       | `string` | The topic name.                                               |
-| `schema`      | `string` | The schema name of the batch.                                 |
-| `schema_id`   | `string` | The schema ID of the batch.                                   |
-| `events`      | `uint64` | The amount of events that were published to the `topic`.      |
+| Field         | Type     | Description                                                                                |
+| :------------ | :------- | :----------------------------------------------------------------------------------------- |
+| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from.                              |
+| `run`         | `uint64` | The number of the run, starting at 1 for the first run.                                    |
+| `hidden`      | `bool`   | Indicates whether the corresponding pipeline is hidden from the list of managed pipelines. |
+| `timestamp`   | `time`   | The time at which this metric was recorded.                                                |
+| `operator_id` | `uint64` | The ID of the `publish` operator in the pipeline.                                          |
+| `topic`       | `string` | The topic name.                                                                            |
+| `schema`      | `string` | The schema name of the batch.                                                              |
+| `schema_id`   | `string` | The schema ID of the batch.                                                                |
+| `events`      | `uint64` | The amount of events that were published to the `topic`.                                   |
 
 ### `tenzir.metrics.rebuild`
 
@@ -363,35 +363,35 @@ second.
 Contains a measurement of the `subscribe` operator, emitted once every second
 per schema.
 
-| Field         | Type     | Description                                                   |
-| :------------ | :------- | :------------------------------------------------------------ |
-| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from. |
-| `run`         | `uint64` | The number of the run, starting at 1 for the first run.       |
-| `hidden`      | `bool`   | True if the pipeline is running for the explorer.             |
-| `timestamp`   | `time`   | The time at which this metric was recorded.                   |
-| `operator_id` | `uint64` | The ID of the `subscribe` operator in the pipeline.           |
-| `topic`       | `string` | The topic name.                                               |
-| `schema`      | `string` | The schema name of the batch.                                 |
-| `schema_id`   | `string` | The schema ID of the batch.                                   |
-| `events`      | `uint64` | The amount of events that were retrieved from the `topic`.    |
+| Field         | Type     | Description                                                                                |
+| :------------ | :------- | :----------------------------------------------------------------------------------------- |
+| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from.                              |
+| `run`         | `uint64` | The number of the run, starting at 1 for the first run.                                    |
+| `hidden`      | `bool`   | Indicates whether the corresponding pipeline is hidden from the list of managed pipelines. |
+| `timestamp`   | `time`   | The time at which this metric was recorded.                                                |
+| `operator_id` | `uint64` | The ID of the `subscribe` operator in the pipeline.                                        |
+| `topic`       | `string` | The topic name.                                                                            |
+| `schema`      | `string` | The schema name of the batch.                                                              |
+| `schema_id`   | `string` | The schema ID of the batch.                                                                |
+| `events`      | `uint64` | The amount of events that were retrieved from the `topic`.                                 |
 
 ### `tenzir.metrics.tcp`
 
 Contains measurements about the number of read calls and the received bytes per
 TCP connection.
 
-| Field           | Type     | Description                                                   |
-| :-------------- | :------- | :------------------------------------------------------------ |
-| `pipeline_id`   | `string` | The ID of the pipeline where the associated operator is from. |
-| `run`           | `uint64` | The number of the run, starting at 1 for the first run.       |
-| `hidden`        | `bool`   | True if the pipeline is running for the explorer.             |
-| `timestamp`     | `time`   | The time at which this metric was recorded.                   |
-| `operator_id`   | `uint64` | The ID of the `publish` operator in the pipeline.             |
-| `native`        | `string` | The native handle of the connection (unix: file descriptor).  |
-| `reads`         | `uint64` | The number of attempted reads since the last metric.          |
-| `writes`        | `uint64` | The number of attempted writes since the last metric.         |
-| `bytes_read`    | `uint64` | The number of bytes received since the last metrics.          |
-| `bytes_written` | `uint64` | The number of bytes written since the last metrics.           |
+| Field           | Type     | Description                                                                                |
+| :-------------- | :------- | :----------------------------------------------------------------------------------------- |
+| `pipeline_id`   | `string` | The ID of the pipeline where the associated operator is from.                              |
+| `run`           | `uint64` | The number of the run, starting at 1 for the first run.                                    |
+| `hidden`        | `bool`   | Indicates whether the corresponding pipeline is hidden from the list of managed pipelines. |
+| `timestamp`     | `time`   | The time at which this metric was recorded.                                                |
+| `operator_id`   | `uint64` | The ID of the `publish` operator in the pipeline.                                          |
+| `native`        | `string` | The native handle of the connection (unix: file descriptor).                               |
+| `reads`         | `uint64` | The number of attempted reads since the last metric.                                       |
+| `writes`        | `uint64` | The number of attempted writes since the last metric.                                      |
+| `bytes_read`    | `uint64` | The number of bytes received since the last metrics.                                       |
+| `bytes_written` | `uint64` | The number of bytes written since the last metrics.                                        |
 
 ## Examples
 
