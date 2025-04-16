@@ -219,6 +219,12 @@ class AstRunner(TqlRunner):
     def run(self, test: str, update: bool) -> bool:
         return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt")
 
+class OldIrRunner(TqlRunner):
+    def __init__(self):
+        super().__init__(prefix="oldir")
+
+    def run(self, test: str, update: bool) -> bool:
+        return run_simple_test(test, update=update, args=("--dump-pipeline",), ext="txt")
 
 class IrRunner(TqlRunner):
     def __init__(self):
@@ -368,6 +374,7 @@ RUNNERS = [
     AstRunner(),
     ExecRunner(),
     CustomFixture(),
+    OldIrRunner(),
     IrRunner(),
     InstantiationRunner(),
     OptRunner(),

@@ -104,7 +104,6 @@ public:
     return metric_handler{
       metrics_receiver_,
       operator_index_,
-      metric_index++,
       t,
     };
   }
@@ -134,7 +133,6 @@ private:
   shared_diagnostic_handler diagnostics_;
   metrics_receiver_actor metrics_receiver_;
   uint64_t operator_index_ = {};
-  uint64_t metric_index = 0;
   bool no_location_overrides_;
   bool has_terminal_;
   bool is_hidden_;

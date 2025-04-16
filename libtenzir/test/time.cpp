@@ -73,13 +73,17 @@ TEST(positive durations) {
   check_duration("42day", days(42));
   check_duration("42d", days(42));
   MESSAGE("weeks");
-  check_duration("1 weeks", 168h);
-  check_duration("1week", 168h);
-  check_duration("1w", 168h);
+  check_duration("1 weeks", weeks(1));
+  check_duration("1week", weeks(1));
+  check_duration("1w", weeks(1));
+  MESSAGE("months");
+  check_duration("1 months", months(1));
+  check_duration("1month", months(1));
+  check_duration("1mo", months(1));
   MESSAGE("years");
-  check_duration("1 years", 8760h);
-  check_duration("1year", 8760h);
-  check_duration("1y", 8760h);
+  check_duration("1 years", years(1));
+  check_duration("1year", years(1));
+  check_duration("1y", years(1));
 }
 
 TEST(negative durations) {

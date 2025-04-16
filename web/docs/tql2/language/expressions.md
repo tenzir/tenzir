@@ -41,8 +41,8 @@ Numeric scalars can have magnitude suffixes:
 
 ### Duration Literals
 
-Use unit suffixes like `ns`, `us`, `ms`, `s`, `min`, `h`, `d`, `w`, or `y` to
-create duration scalars.
+Use unit suffixes like `ns`, `us`, `ms`, `s`, `min`, `h`, `d`, `w`, `mo`, or `y`
+to create duration scalars.
 
 ### Date Literals
 

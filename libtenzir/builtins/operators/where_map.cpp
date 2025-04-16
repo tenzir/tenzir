@@ -183,6 +183,11 @@ public:
           offset += array->length();
           continue;
         }
+        if (array->null_count() > 0) {
+          diagnostic::warning("expected `bool`, got `null`")
+            .primary(expr_)
+            .emit(ctrl.diagnostics());
+        }
         if (warn_) {
           diagnostic::warning("assertion failure")
             .primary(expr_)

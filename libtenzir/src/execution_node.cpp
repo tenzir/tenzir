@@ -167,7 +167,6 @@ struct exec_node_control_plane final : public operator_control_plane {
     return metric_handler{
       metrics_receiver_,
       operator_index_,
-      metric_index++,
       t,
     };
   }
@@ -201,7 +200,6 @@ struct exec_node_control_plane final : public operator_control_plane {
     = {};
   metrics_receiver_actor metrics_receiver_ = {};
   uint64_t operator_index_ = {};
-  uint64_t metric_index = {};
   bool has_terminal_ = {};
   bool is_hidden_ = {};
 };
@@ -969,7 +967,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
   TENZIR_ASSERT(node != nullptr
-                or not(op->location() == operator_location::remote));
+                or not (op->location() == operator_location::remote));
   TENZIR_ASSERT(diagnostics_handler != nullptr);
   TENZIR_ASSERT(metrics_receiver != nullptr);
   auto output_type = op->infer_type(input_type);

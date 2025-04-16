@@ -274,10 +274,9 @@ struct connection_manager_state {
   load_tcp_args args = {};
   shared_diagnostic_handler diagnostics = {};
   metrics_receiver_actor metrics_receiver = {};
-  detail::stable_map<uint64_t, detail::stable_map<uint64_t, uint64_t>>
-    metrics_id_map = {};
-  static constexpr auto tcp_metrics_id = uint64_t{0};
-  uint64_t next_metrics_id = tcp_metrics_id + 1;
+  detail::stable_map<uint64_t, detail::stable_map<uuid, uuid>> metrics_id_map
+    = {};
+  inline static const uuid tcp_metrics_id = uuid::random();
   uint64_t operator_id = {};
 
   // Everything required for the I/O worker.
@@ -791,18 +790,16 @@ auto make_connection_manager(
     [self](atom::read) -> caf::result<Elements> {
       return self->state().read_elements();
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](uint64_t op_index, uuid metrics_id,
            type& schema) -> caf::result<void> {
-      auto& id = self->state().metrics_id_map[op_index][metric_index];
-      if (id == 0) {
-        id = self->state().next_metrics_id++;
-      }
+      auto& id = self->state().metrics_id_map[op_index][metrics_id];
+      id = uuid::random();
       return self->mail(self->state().operator_id, id, std::move(schema))
         .delegate(self->state().metrics_receiver);
     },
-    [self](uint64_t op_index, uint64_t metric_index,
+    [self](uint64_t op_index, uuid metrics_id,
            record& metric) -> caf::result<void> {
-      const auto& id = self->state().metrics_id_map[op_index][metric_index];
+      const auto& id = self->state().metrics_id_map[op_index][metrics_id];
       return self->mail(self->state().operator_id, id, std::move(metric))
         .delegate(self->state().metrics_receiver);
     },

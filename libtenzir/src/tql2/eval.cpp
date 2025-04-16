@@ -97,4 +97,15 @@ auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   }
 }
 
+auto try_const_eval(const ast::expression& expr, diagnostic_handler& dh)
+  -> std::optional<data> {
+  auto const_dh = collecting_diagnostic_handler{};
+  auto const_sp = session_provider::make(const_dh);
+  if (auto result = const_eval(expr, const_dh)) {
+    std::move(const_dh).forward_to(dh);
+    return std::move(*result);
+  }
+  return {};
+}
+
 } // namespace tenzir

@@ -136,19 +136,25 @@ struct [[nodiscard]] diagnostic {
   builder(enum severity s, fmt::format_string<Ts...> str, Ts&&... xs)
     -> diagnostic_builder;
 
-  static auto builder(enum severity s, caf::error err) -> diagnostic_builder;
+  static auto builder(enum severity s, caf::error err,
+                      std::source_location location
+                      = std::source_location::current()) -> diagnostic_builder;
 
   template <class... Ts>
   static auto error(fmt::format_string<Ts...> str, Ts&&... xs)
     -> diagnostic_builder;
 
-  static auto error(caf::error err) -> diagnostic_builder;
+  static auto error(caf::error err, std::source_location location
+                                    = std::source_location::current())
+    -> diagnostic_builder;
 
   template <class... Ts>
   static auto warning(fmt::format_string<Ts...> str, Ts&&... xs)
     -> diagnostic_builder;
 
-  static auto warning(caf::error err) -> diagnostic_builder;
+  static auto warning(caf::error err, std::source_location location
+                                      = std::source_location::current())
+    -> diagnostic_builder;
 
   auto modify() && -> diagnostic_builder;
 
@@ -349,11 +355,13 @@ auto diagnostic::error(fmt::format_string<Ts...> str, Ts&&... xs)
   return builder(severity::error, std::move(str), std::forward<Ts>(xs)...);
 }
 
-inline auto diagnostic::error(caf::error err) -> diagnostic_builder {
+inline auto diagnostic::error(caf::error err, std::source_location location)
+  -> diagnostic_builder {
   if (not err) {
-    return error("logic error: cannot create an error without error code");
+    return error("logic error: cannot create an error without error code")
+      .note("file: {}:{}", location.file_name(), location.line());
   }
-  return builder(severity::error, std::move(err));
+  return builder(severity::error, std::move(err), location);
 }
 
 template <class... Ts>
@@ -362,8 +370,9 @@ auto diagnostic::warning(fmt::format_string<Ts...> str, Ts&&... xs)
   return builder(severity::warning, std::move(str), std::forward<Ts>(xs)...);
 }
 
-inline auto diagnostic::warning(caf::error err) -> diagnostic_builder {
-  return builder(severity::warning, std::move(err));
+inline auto diagnostic::warning(caf::error err, std::source_location location)
+  -> diagnostic_builder {
+  return builder(severity::warning, std::move(err), location);
 }
 
 inline auto diagnostic::modify() && -> diagnostic_builder {

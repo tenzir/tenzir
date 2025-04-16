@@ -1,0 +1,35 @@
+[
+  tql2.from_events [
+    record {
+      begin: 5..6,
+      items: [
+        
+      ],
+      end: 6..7
+    }
+  ],
+  where_assert_operator {
+    expression: unary_expr {
+      op: "not_" @ 0..0,
+      expr: binary_expr {
+        left: root_field `foo` @ 11..14,
+        op: "eq" @ 15..17,
+        right: constant int64 1 @ 18..19
+      }
+    },
+    warn: false
+  },
+  tql2.set [
+    {
+      left: simple_selector {
+        expr: root_field `foo` @ 47..50,
+        has_this: false,
+        path: [
+          `foo` @ 47..50
+        ]
+      },
+      equals: 51..52,
+      right: constant int64 2 @ 53..54
+    }
+  ]
+]

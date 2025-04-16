@@ -14,13 +14,9 @@
 namespace tenzir {
 
 metric_handler::metric_handler(metrics_receiver_actor receiver,
-                               uint64_t operator_index, uint64_t metric_index,
-                               const type& metric_type)
-  : receiver_{std::move(receiver)},
-    op_index_{operator_index},
-    metric_index_{metric_index} {
-  caf::anon_mail(op_index_, metric_index_,
-                 type{metric_type, {{"internal", ""}}})
+                               uint64_t operator_index, const type& metric_type)
+  : receiver_{std::move(receiver)}, op_index_{operator_index} {
+  caf::anon_mail(op_index_, metrics_id_, type{metric_type, {{"internal", ""}}})
     .send(receiver_);
 }
 
@@ -28,7 +24,7 @@ auto metric_handler::emit(record&& r) -> void {
   // Explicitly create a data-from-time cast here to support macOS builds.
   r.emplace("timestamp", time{time::clock::now()});
   r.emplace("operator_id", op_index_);
-  caf::anon_mail(op_index_, metric_index_, std::move(r)).send(receiver_);
+  caf::anon_mail(op_index_, metrics_id_, std::move(r)).send(receiver_);
 }
 
 } // namespace tenzir
