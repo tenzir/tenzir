@@ -5,20 +5,33 @@ Receives HTTP/1.1 requests.
 ## Synopsis
 
 ```tql
-from_http url:string, [responses=record, max_request_size=int, tls=bool,
-          certfile=string, keyfile=string, password=string]
+from_http url:string, [server=bool, responses=record, max_request_size=int,
+                       tls=bool, certfile=string, keyfile=string,
+                       password=string]
 ```
 
 ## Description
 
-The `from_http` operator spins up an HTTP/1.1 server on a given address and
-forwards received requests as events.
+The `from_http` operator issues HTTP requests or spins up an HTTP/1.1 server on
+a given address and forwards received requests as events.
 
 ### `url: string`
 
-URL to listen on.
+URL to listen on or to connect to.
 
 Must have the form `host[:port]`.
+
+### `server = bool (optional)`
+
+Whether to spin up an HTTP server or act as an HTTP client.
+
+Defaults to `false`, i.e., the HTTP client.
+
+:::warning Currently in Development
+Support for HTTP clients is not yet implemented. To get data into a pipeline
+with an HTTP client, use the [`load_http`](load_http.mdx) operator instead.
+`load_http` will eventually be deprecated and removed in favor of `from_http`.
+:::
 
 ### `responses = record (optional)`
 
@@ -66,7 +79,7 @@ Password for keyfile.
 Spin up a server with:
 
 ```tql
-from_http "0.0.0.0:8080"
+from_http "0.0.0.0:8080", server=true
 body = body.string().parse_json()
 ```
 

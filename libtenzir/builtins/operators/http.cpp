@@ -34,6 +34,7 @@ namespace ssl = caf::net::ssl;
 
 struct http_args {
   located<std::string> url;
+  std::optional<located<bool>> server;
   std::optional<located<record>> responses;
   located<bool> tls{false, location::unknown};
   std::optional<located<std::string>> keyfile;
@@ -45,6 +46,7 @@ struct http_args {
 
   auto add_to(argument_parser2& p) {
     p.positional("url", url);
+    p.named("server", server);
     p.named("responses", responses);
     p.named("tls", tls);
     p.named("certfile", certfile);
@@ -80,6 +82,18 @@ struct http_args {
       return failure::promise();
     }
     url.inner.resize(col);
+    if (not server) {
+      diagnostic::error("HTTP client is not yet implement")
+        .note("pass `server=true` to start an HTTP server")
+        .emit(dh);
+      return failure::promise();
+    }
+    if (not server->inner) {
+      diagnostic::error("HTTP client is not yet implement")
+        .primary(*server, "set to `true` to start an HTTP server")
+        .emit(dh);
+      return failure::promise();
+    }
     if (max_request_size.inner == 0) {
       diagnostic::error("request size must not be zero")
         .primary(max_request_size)
