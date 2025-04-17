@@ -27,14 +27,6 @@
 
 namespace tenzir {
 
-namespace {
-
-/// Creates a record that maps `path` to `value`.
-///
-/// # Examples
-//
-/// ["foo", "bar"] -> {"foo": {"bar": value}}
-/// [] -> value
 auto consume_path(std::span<const ast::identifier> path, series value)
   -> series {
   if (path.empty()) {
@@ -126,8 +118,6 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
   // new_type.assign_metadata(input.type);
   return series{std::move(new_type), std::move(new_array)};
 }
-
-} // namespace
 
 auto assign(const ast::meta& left, const series& right,
             const table_slice& input, diagnostic_handler& diag)
