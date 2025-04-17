@@ -283,4 +283,7 @@ inline constexpr auto metrics_interval = std::chrono::seconds{1};
 inline constexpr auto packaged_pipeline_restart_on_error
   = std::chrono::minutes{1};
 
+/// Secret Lookup Timeout
+inline constexpr auto secret_lookup_timeout = std::chrono::seconds{5};
+
 } // namespace tenzir::defaults
