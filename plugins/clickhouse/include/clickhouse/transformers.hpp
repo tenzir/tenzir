@@ -19,6 +19,10 @@
 
 namespace tenzir::plugins::clickhouse {
 
+/// Used to represent a column name/selector. This is oftentimes modified with
+/// push/pop during usage
+using path_type = std::vector<std::string_view>;
+
 using dropmask_type = std::vector<char>;
 using dropmask_ref = std::span<char>;
 using dropmask_cref = std::span<const char>;
@@ -56,11 +60,11 @@ struct transformer {
   /// shall be dropped from the output, as they they contain null values for
   /// non-nullable columns in ClickHouse.
   /// This function is not `const`, as the array version holds state that is
-  /// created in `update_dropmask` and used in `create_columns`.
+  /// created in `update_dropmask` and used in `create_column`.
   [[nodiscard]] virtual auto
-  update_dropmask(const tenzir::type& type, const arrow::Array& array,
-                  dropmask_ref dropmask, tenzir::diagnostic_handler& dh) -> drop
-                                                                            = 0;
+  update_dropmask(path_type& path, const tenzir::type& type,
+                  const arrow::Array& array, dropmask_ref dropmask,
+                  tenzir::diagnostic_handler& dh) -> drop = 0;
 
   /// Creates a column of nulls. This is used if an output column is nullable,
   /// but not present in the input.
@@ -69,11 +73,11 @@ struct transformer {
 
   /// Transforms an Arrow Array to a ClickHouse's Column API type, so that they
   /// can be used with the `::clickhouse::Client::Insert` function.
+  /// @pre `update_dropmask` must have been called on the array
   [[nodiscard]] virtual auto
-  create_column(const tenzir::type& type, const arrow::Array& array,
-                dropmask_cref dropmask,
-                tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef
-                                                         = 0;
+  create_column(path_type& path, const tenzir::type& type,
+                const arrow::Array& array, dropmask_cref dropmask,
+                tenzir::diagnostic_handler& dh) -> ::clickhouse::ColumnRef = 0;
 
   virtual ~transformer() = default;
 };
@@ -83,21 +87,23 @@ struct transformer_record : transformer {
     = detail::stable_map<std::string, std::unique_ptr<transformer>>;
   schema_transformations transformations;
   std::vector<char> found_column;
+  const arrow::Array* my_array = nullptr;
 
   transformer_record() : transformer{"UNUSED", true} {};
   transformer_record(std::string clickhouse_typename,
                      schema_transformations transformations);
 
-  virtual auto update_dropmask(const tenzir::type& type,
+  virtual auto update_dropmask(path_type& path, const tenzir::type& type,
                                const arrow::Array& array, dropmask_ref dropmask,
                                tenzir::diagnostic_handler& dh) -> drop override;
 
   virtual auto
   create_null_column(size_t n) const -> ::clickhouse::ColumnRef override;
 
-  virtual auto create_column(
-    const tenzir::type& type, const arrow::Array& array, dropmask_cref dropmask,
-    tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef override;
+  virtual auto create_column(path_type& path, const tenzir::type& type,
+                             const arrow::Array& array, dropmask_cref dropmask,
+                             tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override;
 
   struct find_result {
     transformer* trafo;
@@ -108,17 +114,17 @@ struct transformer_record : transformer {
 
 auto remove_non_significant_whitespace(std::string_view str) -> std::string;
 
-auto type_to_clickhouse_typename(tenzir::type t, bool nullable) -> std::string;
+auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
+                                 diagnostic_handler& dh)
+  -> failure_or<std::string>;
 
-auto plain_clickhouse_tuple_elements(const record_type& record,
+auto plain_clickhouse_tuple_elements(path_type& path, const record_type& record,
+                                     diagnostic_handler& dh,
                                      std::string_view primary
-                                     = "") -> std::string;
+                                     = "") -> failure_or<std::string>;
 
-auto make_functions_from_clickhouse(const std::string_view clickhouse_typename,
-                                    diagnostic_handler&)
-  -> std::unique_ptr<transformer>;
-
-auto emit_unsupported_type_diagnostic(std::string_view clickhouse_typename,
-                                      diagnostic_handler& dh) -> void;
+auto make_functions_from_clickhouse(
+  path_type& path, const std::string_view clickhouse_typename,
+  diagnostic_handler&) -> std::unique_ptr<transformer>;
 
 } // namespace tenzir::plugins::clickhouse
