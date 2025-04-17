@@ -1,0 +1,9 @@
+{
+  line: "<123>foo=bar",
+}
+{
+  line: "<456>foo=baz x=y",
+}
+{
+  line: "<999>x=z\n",
+}

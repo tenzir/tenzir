@@ -1,0 +1,5 @@
+from {
+  line: "<123>foo=bar <456>foo=baz x=y <999>x=z"
+}
+write_lines
+read_lines split_at_regex=" (?=<)"
