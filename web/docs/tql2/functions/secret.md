@@ -3,28 +3,35 @@
 Use the value of a secret.
 
 ```tql
-secret(name:string) -> string
+secret(name:string) -> secret
 ```
 
 ## Description
 
 The `secret` function retrieves the value associated with the key `name`.
 
-The secret is first looked up in the node's config file, If it is not found there, a request is made to the Tenzir
-Platform. Should the platform also not be able to find the secret, an error is
-raised.
+The secret is first looked up in the node's config file, If it is not found there,
+a request is made to the Tenzir Platform.
+Should the platform also not be able to find the secret, an error is raised.
 
 ### `name: string`
 
 The name of the secret to use.
 
-### Tenzir Node configuration secrets
+## Lookup Order
+
+Secrets are looked up in the following order:
+
+1. The environment of the currently running process
+2. The configuration of the currently running process
+3. The environment of the Tenzir Node process
+4. The configuration of the Tenzir Node process
+5. The Tenzir Platform secret store for the Workspace the Tenzir Node is running in
+
+### Tenzir configuration secrets
 
 Secrets can be specified in the `tenzir.yaml` config file, under the path
 `tenzir.secrets`.
-
-We do not recommend doing this, as it is ultimately a plain-text file stored on
-the node, which may be accessible to users of the node.
 
 ```yaml
 tenzir:

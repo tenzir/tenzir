@@ -11,6 +11,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/connect_to_node.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/scope_guard.hpp"
@@ -214,80 +215,96 @@ struct exec_node_control_plane final : public operator_control_plane {
 
   virtual auto
   resolve_secrets_must_yield(std::vector<secret_request> requests) -> void {
-    auto fan = detail::make_fanout_counter(
-      requests.size(),
-      [this]() {
-        set_waiting(false);
-      },
-      [this](caf::error e) {
-        diagnostic::error(std::move(e)).emit(diagnostics());
-      });
-    auto node = this->node();
+    auto non_local_secrets = std::vector<secret_request>{};
     for (auto& r : requests) {
       const auto name = r.s.name();
       if (r.s.source_type() == secret_source_type::literal) {
         r.out = resolved_secret_value{std::string{name}};
-        fan->receive_success();
         continue;
       }
       const auto& cfg = content(state.self->system().config());
       const auto key = fmt::format("tenzir.secrets.{}", name);
       const auto value = caf::get_if(&cfg, key);
-      if (value) {
-        auto value_string = caf::get_as<std::string>(*value);
-        if (not value_string) {
-          fan->receive_error(diagnostic::error("secret is not a string")
-                               .primary(r.loc)
-                               .to_error());
-          continue;
-        }
-        fan->receive_success();
-        r.out = resolved_secret_value{std::move(*value_string)};
+      if (not value) {
+        non_local_secrets.push_back(std::move(r));
         continue;
       }
-      if (not node) {
-        fan->receive_error(diagnostic::error("unknown secret")
-                             .primary(r.loc, "`{}`", name)
-                             .to_error());
-        continue;
+      auto value_string = caf::get_as<std::string>(*value);
+      if (not value_string) {
+        diagnostic::error("secret is not a string")
+          .primary(r.loc)
+          .emit(diagnostics());
+        return;
       }
-      set_waiting(true);
-      auto key_pair = ecc::generate_keypair();
-      TENZIR_ASSERT(key_pair);
-      auto public_key = key_pair->public_key;
-      /// TODO: Better Value? Configurable?
-      constexpr static auto timeout = std::chrono::seconds{5};
-      state.self->mail(atom::resolve_v, std::move(name), std::move(public_key))
-        .request(node, timeout)
-        .then(
-          [this, fan, keys = *key_pair, loc = r.loc,
-           &out = r.out](secret_resolution_result res) {
-            match(
-              res,
-              [&](const encrypted_secret_value& v) {
-                auto decrypted = ecc::decrypt(v.value, keys);
-                if (not decrypted) {
-                  fan->receive_error(
-                    diagnostic::error("failed to decrypt secret")
-                      .primary(loc, fmt::to_string(decrypted.error()))
-                      .to_error());
-                  return;
-                }
-                out = resolved_secret_value{*decrypted};
-                fan->receive_success();
-              },
-              [&](const secret_resolution_error& e) {
-                fan->receive_error(
-                  diagnostic::error("could not get secret value")
-                    .primary(loc, e.message)
-                    .to_error());
-              });
-          },
-          [this, fan, loc = r.loc](caf::error e) {
-            fan->receive_error(
-              diagnostic::error(std::move(e)).primary(loc).to_error());
-          });
+      r.out = resolved_secret_value{std::move(*value_string)};
     }
+    if (non_local_secrets.empty()) {
+      return;
+    }
+    auto callback = [this, non_local_secrets = std::move(non_local_secrets)](
+                      caf::expected<node_actor> maybe_actor) {
+      if (not maybe_actor) {
+        diagnostic::error("unkown secret")
+          .primary(non_local_secrets.front().loc,
+                   "secret `{}` could not be found locally",
+                   non_local_secrets.front().s.name())
+          .note("you are running in a client process, but no Tenzir Node was "
+                "available")
+          .emit(diagnostics());
+      }
+      auto fan = detail::make_fanout_counter(
+        non_local_secrets.size(),
+        [this]() {
+          set_waiting(false);
+        },
+        [this](caf::error e) {
+          diagnostic::error(std::move(e)).emit(diagnostics());
+        });
+      for (auto& r : non_local_secrets) {
+        auto key_pair = ecc::generate_keypair();
+        TENZIR_ASSERT(key_pair);
+        auto public_key = key_pair->public_key;
+        state.self->mail(atom::resolve_v, r.s.name(), std::move(public_key))
+          .request(*maybe_actor, defaults::secret_lookup_timeout)
+          .then(
+            [fan, keys = *key_pair, r](secret_resolution_result res) {
+              match(
+                res,
+                [&](const encrypted_secret_value& v) {
+                  auto decrypted = ecc::decrypt(v.value, keys);
+                  if (not decrypted) {
+                    fan->receive_error(
+                      diagnostic::error("failed to decrypt secret")
+                        .primary(r.loc)
+                        .note("secret `{}` failed: {}", r.s.name(),
+                              decrypted.error())
+                        .to_error());
+                    return;
+                  }
+                  r.out = resolved_secret_value{*decrypted};
+                  fan->receive_success();
+                },
+                [&](const secret_resolution_error& e) {
+                  fan->receive_error(
+                    diagnostic::error("could not get secret value")
+                      .primary(r.loc)
+                      .note("secret `{}` failed: {}", r.s.name(), e.message)
+                      .to_error());
+                });
+            },
+            [fan, loc = r.loc](caf::error e) {
+              fan->receive_error(
+                diagnostic::error(std::move(e)).primary(loc).to_error());
+            });
+      }
+    };
+    set_waiting(true);
+    auto node = this->node();
+    if (node) {
+      callback(node);
+      return;
+    }
+    connect_to_node(state.self, std::move(callback));
   }
 
   exec_node_state<Input, Output>& state;

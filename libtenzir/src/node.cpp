@@ -636,9 +636,6 @@ auto node(node_actor::stateful_pointer<node_state> self,
     },
     [self](atom::resolve, std::string name,
            std::string public_key) -> caf::result<secret_resolution_result> {
-      // TODO timeout
-      // TODO check node config
-
       const auto& cfg = content(self->system().config());
       const auto key = fmt::format("tenzir.secrets.{}", name);
       const auto value = caf::get_if(&cfg, key);
