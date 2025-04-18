@@ -15,7 +15,7 @@ services:
       - tenzir-lib:/var/lib/tenzir/
       - tenzir-log:/var/log/tenzir/
     healthcheck:
-      test: tenzir --connection-timeout=30s --connection-retry-delay=1s 'api /ping'
+      test: tenzir --connection-timeout=30s --connection-retry-delay=1s 'api "/ping"'
       interval: 30s
       retries: 1
 
