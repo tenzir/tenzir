@@ -119,6 +119,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("not", not_)
     | X("null", null)
     | X("or", or_)
+    | X("move", move)
     | X("this", this_)
     | X("true", true_)
 #undef X
@@ -222,6 +223,7 @@ auto describe(token_kind k) -> std::string_view {
     X(match, "`match`");
     X(meta, "`meta`");
     X(minus, "`-`");
+    X(move, "`move`");
     X(newline, "newline");
     X(not_, "`not`");
     X(null, "`null`");

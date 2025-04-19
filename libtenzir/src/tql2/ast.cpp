@@ -23,11 +23,11 @@
 
 namespace tenzir::ast {
 
-auto simple_selector::try_from(ast::expression expr)
-  -> std::optional<simple_selector> {
+auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
   // Path is collect in reversed order (outside-in).
   auto has_this = false;
-  auto path = std::vector<identifier>{};
+  auto path = std::vector<field_path::segment>{};
+  auto qmarks = std::vector<bool>{};
   auto* current = &expr;
   while (true) {
     auto sub_result = current->match(
@@ -36,14 +36,11 @@ auto simple_selector::try_from(ast::expression expr)
         return true;
       },
       [&](ast::root_field& x) -> variant<ast::expression*, bool> {
-        path.push_back(x.ident);
+        path.emplace_back(x.ident, false);
         return true;
       },
       [&](ast::field_access& e) -> variant<ast::expression*, bool> {
-        if (e.has_question_mark) {
-          return false;
-        }
-        path.push_back(e.name);
+        path.emplace_back(e.name, e.has_question_mark);
         return &e.left;
       },
       [&](ast::index_expr& e) -> variant<ast::expression*, bool> {
@@ -52,7 +49,7 @@ auto simple_selector::try_from(ast::expression expr)
           return false;
         }
         if (auto* name = std::get_if<std::string>(&constant->value)) {
-          path.emplace_back(*name, constant->source);
+          path.emplace_back(ast::identifier{*name, constant->source}, false);
           return &e.expr;
         }
         return false;
@@ -65,7 +62,11 @@ auto simple_selector::try_from(ast::expression expr)
         return {};
       }
       std::ranges::reverse(path);
-      return simple_selector{std::move(expr), has_this, std::move(path)};
+      return field_path{
+        std::move(expr),
+        has_this,
+        std::move(path),
+      };
     }
     current = std::get<ast::expression*>(sub_result);
   }
@@ -77,7 +78,7 @@ auto selector::try_from(ast::expression expr) -> std::optional<selector> {
       return selector{x};
     },
     [&](auto&) -> std::optional<selector> {
-      return simple_selector::try_from(std::move(expr));
+      return field_path::try_from(std::move(expr));
     });
 }
 

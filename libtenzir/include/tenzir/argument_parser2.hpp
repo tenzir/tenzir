@@ -29,7 +29,7 @@ using argument_parser_data_types
 using argument_parser_full_types
   = detail::tl_concat_t<argument_parser_data_types,
                         detail::type_list<located<pipeline>, ast::expression,
-                                          ast::simple_selector, located<data>>>;
+                                          ast::field_path, located<data>>>;
 
 using argument_parser_bare_types
   = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,

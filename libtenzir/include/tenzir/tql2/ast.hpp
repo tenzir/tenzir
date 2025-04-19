@@ -253,16 +253,33 @@ struct expression {
   auto is_deterministic(const registry& reg) const -> bool;
 };
 
-/// A "simple selector" has a path that contains only constant field names.
+/// A field path is a list of constant field names.
 ///
-/// This can contain expressions like `foo`, `foo.bar` and `this.foo["bar"]`. It
-/// does not allow `foo[some_expr()]`, `foo[0]`, etc. These selectors will be
-/// added at a later point in time.
-class simple_selector {
+/// This can contain expressions like `foo`, `foo.?bar` and `this.foo["bar"]`.
+/// It does not allow `foo[some_expr()]`, `foo[0]`, etc. These field paths will
+/// be added at a later point in time.
+class field_path {
 public:
-  simple_selector() = default;
+  struct segment {
+    identifier id;
+    bool has_question_mark;
 
-  static auto try_from(ast::expression expr) -> std::optional<simple_selector>;
+    friend auto operator==(const segment& lhs, const segment& rhs) -> bool
+      = default;
+
+    friend auto operator<=>(const segment& lhs, const segment& rhs)
+      -> std::weak_ordering
+      = default;
+
+    friend auto inspect(auto& f, segment& x) -> bool {
+      return f.object(x).fields(
+        f.field("id", x.id), f.field("has_question_mark", x.has_question_mark));
+    }
+  };
+
+  field_path() = default;
+
+  static auto try_from(ast::expression expr) -> std::optional<field_path>;
 
   auto get_location() const -> location {
     return expr_.get_location();
@@ -272,7 +289,7 @@ public:
     return has_this_;
   }
 
-  auto path() const -> std::span<const identifier> {
+  auto path() const -> std::span<const segment> {
     return path_;
   }
 
@@ -284,23 +301,21 @@ public:
     return std::move(expr_);
   }
 
-  friend auto operator<=>(const simple_selector& lhs,
-                          const simple_selector& rhs) -> std::weak_ordering {
+  friend auto operator<=>(const field_path& lhs, const field_path& rhs)
+    -> std::weak_ordering {
     return lhs.path_ <=> rhs.path_;
   }
 
-  friend auto operator==(const simple_selector& lhs, const simple_selector& rhs)
-    -> bool {
+  friend auto operator==(const field_path& lhs, const field_path& rhs) -> bool {
     return lhs.path_ == rhs.path_;
   }
 
 private:
-  simple_selector(ast::expression expr, bool has_this,
-                  std::vector<identifier> path)
+  field_path(ast::expression expr, bool has_this, std::vector<segment> path)
     : expr_{std::move(expr)}, has_this_{has_this}, path_{std::move(path)} {
   }
 
-  friend auto inspect(auto& f, simple_selector& x) -> bool {
+  friend auto inspect(auto& f, field_path& x) -> bool {
     return f.object(x).fields(f.field("expr", x.expr_),
                               f.field("has_this", x.has_this_),
                               f.field("path", x.path_));
@@ -308,7 +323,7 @@ private:
 
   ast::expression expr_;
   bool has_this_{};
-  std::vector<identifier> path_;
+  std::vector<segment> path_;
 };
 
 /// A selector is something that can be assigned.
@@ -316,7 +331,7 @@ private:
 /// Note that this is not an actual `expression`. Instead, expressions can be
 /// converted to `selector` on-demand. Currently, this is limited to meta
 /// selectors (e.g., `@tag`) and simple selectors (see `simple_selector`).
-struct selector : variant<meta, simple_selector> {
+struct selector : variant<meta, field_path> {
   using variant::variant;
 
   static auto try_from(ast::expression expr) -> std::optional<selector>;
@@ -372,7 +387,7 @@ struct binary_expr {
   }
 };
 
-TENZIR_ENUM(unary_op, pos, neg, not_);
+TENZIR_ENUM(unary_op, pos, neg, not_, move);
 
 struct unary_expr {
   unary_expr() = default;
@@ -925,7 +940,7 @@ protected:
     match(x);
   }
 
-  void enter(ast::simple_selector& x) {
+  void enter(ast::field_path& x) {
     // TODO: What should we do here?
     TENZIR_UNUSED(x);
   }

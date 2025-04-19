@@ -30,6 +30,8 @@ using namespace ast;
 auto precedence(unary_op x) -> int {
   using enum unary_op;
   switch (x) {
+    case move:
+      return 10;
     case pos:
     case neg:
       return 9;
@@ -237,6 +239,14 @@ public:
       auto entity = parse_entity();
       return parse_invocation(std::move(entity));
     }
+    // This is a hack: `move` is both a unary expression operator and a
+    // pipeliine operator. In order to support both, we need to special-case the
+    // pipeline operator parsing, as the tokenizer returns `tk::move` instead of
+    // `tk::identifier`.
+    if (silent_peek(tk::move)) {
+      auto entity = parse_entity(expect(tk::move).as_identifier());
+      return parse_invocation(std::move(entity));
+    }
     auto unary_expr = parse_unary_expression();
     if (auto call = std::get_if<ast::function_call>(&*unary_expr.kind)) {
       // TODO: We patch a top-level function call to be an operator invocation
@@ -275,7 +285,7 @@ public:
       };
     }
     // TODO: Improve this.
-    auto simple_sel = std::get_if<simple_selector>(&left);
+    auto simple_sel = std::get_if<field_path>(&left);
     auto root = simple_sel
                   ? std::get_if<ast::root_field>(&*simple_sel->inner().kind)
                   : nullptr;
@@ -843,6 +853,7 @@ public:
   if (peek(tk::x)) {                                                           \
     return unary_op::y;                                                        \
   }
+    X(move, move);
     X(not_, not_);
     X(minus, neg);
 #undef X

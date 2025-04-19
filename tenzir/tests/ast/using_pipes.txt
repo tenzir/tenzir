@@ -11,11 +11,14 @@
     ]
   },
   assignment {
-    left: simple_selector {
+    left: field_path {
       expr: root_field `foo` @ 9..12,
       has_this: false,
       path: [
-        `foo` @ 9..12
+        {
+          id: `foo` @ 9..12,
+          has_question_mark: false
+        }
       ]
     },
     equals: 13..14,
@@ -30,11 +33,14 @@
     },
     args: [
       assignment {
-        left: simple_selector {
+        left: field_path {
           expr: root_field `bar` @ 24..27,
           has_this: false,
           path: [
-            `bar` @ 24..27
+            {
+              id: `bar` @ 24..27,
+              has_question_mark: false
+            }
           ]
         },
         equals: 28..29,
@@ -52,11 +58,14 @@
     args: [
       root_field `bar` @ 39..42,
       assignment {
-        left: simple_selector {
+        left: field_path {
           expr: root_field `baz` @ 44..47,
           has_this: false,
           path: [
-            `baz` @ 44..47
+            {
+              id: `baz` @ 44..47,
+              has_question_mark: false
+            }
           ]
         },
         equals: 47..48,

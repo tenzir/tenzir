@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "tenzir/multi_series.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -21,17 +20,17 @@ namespace tenzir {
 //
 /// ["foo", "bar"] -> {"foo": {"bar": value}}
 /// [] -> value
-[[nodiscard]] auto
-consume_path(std::span<const ast::identifier> path, series value) -> series;
+[[nodiscard]] auto consume_path(std::span<const ast::field_path::segment> path,
+                                series value) -> series;
 
 enum class assign_position {
   front,
   back,
 };
 
-[[nodiscard]] auto
-assign(std::span<const ast::identifier> left, series right, series input,
-       diagnostic_handler& dh, assign_position position) -> series;
+[[nodiscard]] auto assign(std::span<const ast::field_path::segment> left,
+                          series right, series input, diagnostic_handler& dh,
+                          assign_position position) -> series;
 
 [[nodiscard]] auto
 assign(const ast::selector& left, series right, const table_slice& input,
@@ -39,13 +38,20 @@ assign(const ast::selector& left, series right, const table_slice& input,
   -> std::vector<table_slice>;
 
 [[nodiscard]] auto
-assign(const ast::simple_selector& left, series right, const table_slice& input,
+assign(const ast::field_path& left, series right, const table_slice& input,
        diagnostic_handler& dh, assign_position position = assign_position::back)
   -> table_slice;
 
 [[nodiscard]] auto assign(const ast::meta& left, const series& right,
                           const table_slice& input, diagnostic_handler& diag)
   -> std::vector<table_slice>;
+
+[[nodiscard]] auto resolve_move_keyword(ast::assignment assignment)
+  -> std::pair<ast::assignment, std::vector<ast::field_path>>;
+
+[[nodiscard]] auto
+drop(const table_slice& slice, const std::vector<ast::field_path>& fields,
+     diagnostic_handler& dh) -> table_slice;
 
 class set_operator final : public crtp_operator<set_operator> {
 public:
@@ -58,6 +64,12 @@ public:
 
   explicit set_operator(std::vector<ast::assignment> assignments)
     : assignments_{std::move(assignments)} {
+    for (auto& assignment : assignments_) {
+      auto [pruned_assignment, moved_fields]
+        = resolve_move_keyword(std::move(assignment));
+      assignment = std::move(pruned_assignment);
+      std::ranges::move(moved_fields, std::back_inserter(moved_fields_));
+    }
   }
 
   auto name() const -> std::string override {
@@ -74,11 +86,13 @@ public:
   }
 
   friend auto inspect(auto& f, set_operator& x) -> bool {
-    return f.apply(x.assignments_);
+    return f.object(x).fields(f.field("assignments", x.assignments_),
+                              f.field("moved_fields", x.moved_fields_));
   }
 
 private:
   std::vector<ast::assignment> assignments_;
+  std::vector<ast::field_path> moved_fields_;
 };
 
 } // namespace tenzir

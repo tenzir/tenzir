@@ -88,7 +88,7 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
 
   auto make(operator_factory_plugin::invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto selector = ast::simple_selector{};
+    auto selector = ast::field_path{};
     const auto loc = inv.self.get_location();
     TRY(argument_parser2::operator_(name())
           .positional("x", selector)
@@ -100,8 +100,7 @@ class top_rare_plugin final : public virtual operator_parser_plugin,
     TENZIR_ASSERT(sort);
     auto ident = ast::identifier{"count", loc};
     auto call = ast::function_call{ast::entity{{ident}}, {}, loc, false};
-    auto out
-      = ast::simple_selector::try_from(ast::root_field{std::move(ident)});
+    auto out = ast::field_path::try_from(ast::root_field{std::move(ident)});
     TENZIR_ASSERT(out);
     auto summarize_args = ast::assignment{out.value(), loc, call};
     TENZIR_ASSERT(resolve_entities(summarize_args.right, ctx));

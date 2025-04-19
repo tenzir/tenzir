@@ -9,6 +9,7 @@
 #include "tenzir/tql2/eval.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
@@ -26,41 +27,47 @@
 
 namespace tenzir {
 
-auto resolve(const ast::simple_selector& sel, const table_slice& slice)
+auto resolve(const ast::field_path& sel, const table_slice& slice)
   -> variant<series, resolve_error> {
   TRY(auto offset, resolve(sel, slice.schema()));
   auto [ty, array] = offset.get(slice);
   return series{ty, array};
 }
 
-auto resolve(const ast::simple_selector& sel, type ty)
+auto resolve(const ast::field_path& sel, type ty)
   -> variant<offset, resolve_error> {
-  // TODO: Write this properly.
-  auto sel_index = size_t{0};
   auto result = offset{};
-  auto&& path = sel.path();
+  const auto& path = sel.path();
   result.reserve(path.size());
-  while (sel_index < path.size()) {
-    auto rty = try_as<record_type>(ty);
+  for (const auto& segment : path) {
+    const auto* rty = try_as<record_type>(ty);
     if (not rty) {
-      return resolve_error{path[sel_index],
-                           resolve_error::field_of_non_record{ty}};
+      return resolve_error{
+        segment.id,
+        resolve_error::field_of_non_record{ty},
+      };
     }
     auto found = false;
-    auto field_index = size_t{0};
-    for (auto&& field : rty->fields()) {
-      if (field.name == path[sel_index].name) {
-        ty = field.type;
+    for (const auto& [idx, field] : detail::enumerate(rty->fields())) {
+      if (field.name == segment.id.name) {
         found = true;
-        sel_index += 1;
+        result.push_back(idx);
+        ty = field.type;
         break;
       }
-      ++field_index;
     }
     if (not found) {
-      return resolve_error{path[sel_index], resolve_error::field_not_found{}};
+      if (segment.has_question_mark) {
+        return resolve_error{
+          segment.id,
+          resolve_error::field_not_found_no_error{},
+        };
+      }
+      return resolve_error{
+        segment.id,
+        resolve_error::field_not_found{},
+      };
     }
-    result.push_back(field_index);
   }
   return result;
 }
@@ -74,7 +81,7 @@ auto eval(const ast::expression& expr, const table_slice& input,
   return result;
 }
 
-auto eval(const ast::simple_selector& expr, const table_slice& input,
+auto eval(const ast::field_path& expr, const table_slice& input,
           diagnostic_handler& dh) -> series {
   auto result = eval(expr.inner(), input, dh);
   TENZIR_ASSERT(result.length() == detail::narrow<int64_t>(input.rows()));

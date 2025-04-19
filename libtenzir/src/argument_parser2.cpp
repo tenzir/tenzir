@@ -135,8 +135,8 @@ auto argument_parser2::parse(const ast::entity& self,
       [&](setter<ast::expression>& set) {
         set(expr);
       },
-      [&](setter<ast::simple_selector>& set) {
-        auto sel = ast::simple_selector::try_from(expr);
+      [&](setter<ast::field_path>& set) {
+        auto sel = ast::field_path::try_from(expr);
         if (not sel) {
           emit(diagnostic::error("expected a selector").primary(expr));
           return;
@@ -162,12 +162,13 @@ auto argument_parser2::parse(const ast::entity& self,
   for (; arg != args.end(); ++arg) {
     arg->match(
       [&](ast::assignment assignment) {
-        auto sel = std::get_if<ast::simple_selector>(&assignment.left);
-        if (not sel || sel->has_this() || sel->path().size() != 1) {
+        auto* sel = std::get_if<ast::field_path>(&assignment.left);
+        if (not sel or sel->has_this() or sel->path().size() != 1
+            or sel->path()[0].has_question_mark) {
           emit(diagnostic::error("invalid name").primary(assignment.left));
           return;
         }
-        auto& name = sel->path()[0].name;
+        const auto& name = sel->path()[0].id.name;
         auto it = std::ranges::find(named_, name, &named_t::name);
         if (it == named_.end()) {
           auto filtered = std::views::filter(named_, [](auto&& x) {
@@ -240,8 +241,8 @@ auto argument_parser2::parse(const ast::entity& self,
           [&](setter<ast::expression>& set) {
             set(expr);
           },
-          [&](setter<ast::simple_selector>& set) {
-            auto sel = ast::simple_selector::try_from(expr);
+          [&](setter<ast::field_path>& set) {
+            auto sel = ast::field_path::try_from(expr);
             if (not sel) {
               emit(diagnostic::error("expected a selector").primary(expr));
               return;
@@ -322,7 +323,7 @@ auto argument_parser2::usage() const -> std::string {
         // customizable instead.
         return "any";
       },
-      [](const setter<ast::simple_selector>&) -> std::string {
+      [](const setter<ast::field_path>&) -> std::string {
         // TODO: `field` is not 100% accurate, but we use it in the docs.
         return "field";
       },

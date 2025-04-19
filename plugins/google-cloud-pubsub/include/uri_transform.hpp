@@ -32,7 +32,7 @@ inline auto make_uri_transform(std::string_view argument_name) {
     }
     auto make = [](std::string name, std::string text,
                    location loc) -> ast::assignment {
-      auto sel = ast::simple_selector::try_from(ast::root_field{
+      auto sel = ast::field_path::try_from(ast::root_field{
         ast::identifier{std::move(name), location::unknown},
       });
       TENZIR_ASSERT(sel);

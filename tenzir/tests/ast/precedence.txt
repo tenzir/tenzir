@@ -1,10 +1,13 @@
 [
   assignment {
-    left: simple_selector {
+    left: field_path {
       expr: root_field `foo` @ 0..3,
       has_this: false,
       path: [
-        `foo` @ 0..3
+        {
+          id: `foo` @ 0..3,
+          has_question_mark: false
+        }
       ]
     },
     equals: 4..5,

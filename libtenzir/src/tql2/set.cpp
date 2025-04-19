@@ -27,15 +27,15 @@
 
 namespace tenzir {
 
-auto consume_path(std::span<const ast::identifier> path, series value)
+auto consume_path(std::span<const ast::field_path::segment> path, series value)
   -> series {
   if (path.empty()) {
     return value;
   }
   value = consume_path(path.subspan(1), std::move(value));
   auto new_type
-    = type{record_type{record_type::field_view{path[0].name, value.type}}};
-  auto new_array = make_struct_array(value.length(), nullptr, {path[0].name},
+    = type{record_type{record_type::field_view{path[0].id.name, value.type}}};
+  auto new_array = make_struct_array(value.length(), nullptr, {path[0].id.name},
                                      {value.array}, as<record_type>(new_type));
   return series{
     std::move(new_type),
@@ -43,8 +43,9 @@ auto consume_path(std::span<const ast::identifier> path, series value)
   };
 }
 
-auto assign(std::span<const ast::identifier> left, series right, series input,
-            diagnostic_handler& dh, assign_position position) -> series {
+auto assign(std::span<const ast::field_path::segment> left, series right,
+            series input, diagnostic_handler& dh, assign_position position)
+  -> series {
   TENZIR_ASSERT(right.length() == input.length());
   if (left.empty()) {
     return right;
@@ -58,8 +59,8 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
   auto* rec_ty = try_as<record_type>(input.type);
   if (not rec_ty) {
     diagnostic::warning("implicit record for `{}` field overwrites `{}` value",
-                        left[0].name, input.type.kind())
-      .primary(left[0])
+                        left[0].id.name, input.type.kind())
+      .primary(left[0].id)
       .hint("if this is intentional, drop the parent field before")
       .emit(dh);
     return consume_path(left, std::move(right));
@@ -79,7 +80,7 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
   });
   auto index = std::optional<size_t>{};
   for (auto [i, field] : detail::enumerate(new_ty_fields)) {
-    if (field.name == left[0].name) {
+    if (field.name == left[0].id.name) {
       index = i;
       break;
     }
@@ -95,12 +96,13 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
     auto inner = consume_path(left.subspan(1), std::move(right));
     switch (position) {
       case tenzir::assign_position::front: {
-        new_ty_fields.emplace(new_ty_fields.begin(), left[0].name, inner.type);
+        new_ty_fields.emplace(new_ty_fields.begin(), left[0].id.name,
+                              inner.type);
         new_field_arrays.emplace(new_field_arrays.begin(), inner.array);
         break;
       }
       case tenzir::assign_position::back: {
-        new_ty_fields.emplace_back(left[0].name, inner.type);
+        new_ty_fields.emplace_back(left[0].id.name, inner.type);
         new_field_arrays.push_back(inner.array);
         break;
       }
@@ -263,9 +265,8 @@ auto assign(const ast::meta& left, const series& right,
   TENZIR_UNREACHABLE();
 }
 
-auto assign(const ast::simple_selector& left, series right,
-            const table_slice& input, diagnostic_handler& dh,
-            assign_position position) -> table_slice {
+auto assign(const ast::field_path& left, series right, const table_slice& input,
+            diagnostic_handler& dh, assign_position position) -> table_slice {
   auto result
     = assign(left.path(), std::move(right), series{input}, dh, position);
   auto* rec_ty = try_as<record_type>(result.type);
@@ -296,11 +297,128 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
     [&](const ast::meta& left) {
       return assign(left, right, input, dh);
     },
-    [&](const ast::simple_selector& left) {
+    [&](const ast::field_path& left) {
       auto result = std::vector<table_slice>{};
       result.push_back(assign(left, std::move(right), input, dh, position));
       return result;
     });
+}
+
+auto resolve_move_keyword(ast::assignment assignment)
+  -> std::pair<ast::assignment, std::vector<ast::field_path>> {
+  auto out = std::vector<ast::field_path>{};
+  auto recurse = [&](const auto& recurse, ast::expression& expr,
+                     std::vector<ast::field_path>& out) -> void {
+    match(
+      expr,
+      [&](ast::unary_expr& x) {
+        recurse(recurse, x.expr, out);
+        if (x.op.inner == ast::unary_op::move) {
+          if (auto field = ast::field_path::try_from(x.expr)) {
+            out.push_back(std::move(*field));
+            expr = std::move(x.expr);
+          }
+        }
+      },
+      [&](ast::record& x) {
+        for (auto& item : x.items) {
+          match(
+            item,
+            [&](ast::spread& x) {
+              recurse(recurse, x.expr, out);
+            },
+            [&](ast::record::field& x) {
+              recurse(recurse, x.expr, out);
+            });
+        }
+      },
+      [&](ast::list& x) {
+        for (auto& item : x.items) {
+          match(
+            item,
+            [&](ast::spread& x) {
+              recurse(recurse, x.expr, out);
+            },
+            [&](ast::expression& x) {
+              recurse(recurse, x, out);
+            });
+        }
+      },
+      [](ast::constant&) {}, [](ast::pipeline_expr&) {},
+      [](ast::root_field&) {}, [](ast::this_&) {}, [](ast::meta&) {},
+      [](ast::dollar_var&) {},
+      [&](ast::assignment& x) {
+        recurse(recurse, x.right, out);
+      },
+      [&](ast::unpack& x) {
+        recurse(recurse, x.expr, out);
+      },
+      [](ast::underscore&) {},
+      [&](ast::function_call& x) {
+        // TODO: The `move` and `where` functions abuse the expresions they
+        // take as arguments as a poor-mans lambda expression. We don't recurse
+        // further when we encounter them here, but that's at best a stopgap.
+        // Ideally, there'd be proper lambda support in the language itself.
+        if (x.fn.path.size() == 1) {
+          const auto& name = x.fn.path.front().name;
+          if (name == "move" or name == "where") {
+            return;
+          }
+        }
+        for (auto& arg : x.args) {
+          recurse(recurse, arg, out);
+        }
+      },
+      [&](ast::binary_expr& x) {
+        recurse(recurse, x.left, out);
+        recurse(recurse, x.right, out);
+      },
+      [&](ast::index_expr& x) {
+        recurse(recurse, x.expr, out);
+        recurse(recurse, x.index, out);
+      },
+      [&](ast::field_access& x) {
+        recurse(recurse, x.left, out);
+      });
+  };
+  recurse(recurse, assignment.right, out);
+  return {std::move(assignment), std::move(out)};
+}
+
+auto drop(const table_slice& slice, const std::vector<ast::field_path>& fields,
+          diagnostic_handler& dh) -> table_slice {
+  constexpr auto drop = [](auto&&...) {
+    return indexed_transformation::result_type{};
+  };
+  auto offsets = std::unordered_set<offset>{};
+  for (const auto& field : fields) {
+    match(
+      resolve(field, slice.schema()),
+      [&](const offset& of) {
+        offsets.insert(of);
+      },
+      [&](const resolve_error& err) {
+        match(
+          err.reason,
+          [&](const resolve_error::field_not_found&) {
+            diagnostic::warning("field `{}` not found", err.ident.name)
+              .primary(err.ident)
+              .emit(dh);
+          },
+          [&](const resolve_error::field_not_found_no_error&) {},
+          [&](const resolve_error::field_of_non_record& reason) {
+            diagnostic::warning("type `{}` has no field `{}`",
+                                reason.type.kind(), err.ident.name)
+              .primary(err.ident)
+              .emit(dh);
+          });
+      });
+  }
+  auto ts = std::vector<indexed_transformation>{};
+  for (const auto& of : offsets) {
+    ts.emplace_back(of, drop);
+  }
+  return transform_columns(slice, ts);
 }
 
 auto set_operator::operator()(generator<table_slice> input,
@@ -322,6 +440,7 @@ auto set_operator::operator()(generator<table_slice> input,
     for (const auto& assignment : assignments_) {
       values.push_back(eval(assignment.right, slice, ctrl.diagnostics()));
     }
+    slice = drop(slice, moved_fields_, ctrl.diagnostics());
     // After we know all the multi series values on the right, we can split the
     // input table slice and perform the actual assignment.
     auto begin = int64_t{0};

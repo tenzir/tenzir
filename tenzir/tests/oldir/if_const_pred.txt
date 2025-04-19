@@ -8,17 +8,25 @@
       end: 6..7
     }
   ],
-  tql2.set [
-    {
-      left: simple_selector {
-        expr: root_field `foo` @ 20..23,
-        has_this: false,
-        path: [
-          `foo` @ 20..23
-        ]
-      },
-      equals: 24..25,
-      right: constant int64 1 @ 26..27
-    }
-  ]
+  tql2.set {
+    assignments: [
+      {
+        left: field_path {
+          expr: root_field `foo` @ 20..23,
+          has_this: false,
+          path: [
+            {
+              id: `foo` @ 20..23,
+              has_question_mark: false
+            }
+          ]
+        },
+        equals: 24..25,
+        right: constant int64 1 @ 26..27
+      }
+    ],
+    moved_fields: [
+      
+    ]
+  }
 ]

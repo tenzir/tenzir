@@ -248,7 +248,7 @@ private:
 
 struct arguments {
   ast::expression field;
-  ast::simple_selector capture;
+  ast::field_path capture;
   ast::expression expr;
 };
 

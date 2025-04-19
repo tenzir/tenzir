@@ -38,11 +38,14 @@
         },
         args: [
           assignment {
-            left: simple_selector {
+            left: field_path {
               expr: root_field `f` @ 25..26,
               has_this: false,
               path: [
-                `f` @ 25..26
+                {
+                  id: `f` @ 25..26,
+                  has_question_mark: false
+                }
               ]
             },
             equals: 26..27,

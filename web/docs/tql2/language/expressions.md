@@ -104,6 +104,31 @@ Use the `this` keyword to reference the entire top-level event. For example,
 `from {x: 1, y: 2} | z = this` produces `{x: 1, y: 2, z: {x: 1, y: 2}}`. You can
 also use `this` to overwrite the entire event, as in `this = {a: x, y: b}`.
 
+## Moving Fields
+
+Use the `move` operator to move fields:
+
+```tql
+from {foo: 1, bar: 2}
+move x=foo, y=bar
+```
+
+```tql
+{x: 1, y: 2}
+```
+
+The `move` keyword is a more flexible alternative that works anywhere in
+assignments when prefixing a field with it:
+
+```tql
+from {foo: 1, bar: 2}
+qux = move bar + 2
+```
+
+```tql
+{foo: 1, qux: 4}
+```
+
 ## Metadata
 
 Events carry both data and metadata. Access metadata fields using the `@`
@@ -398,6 +423,7 @@ precedence, ordered from highest to lowest.
 | method call                            |
 | field access                           |
 | `[]`-indexing                          |
+| `move`                                 |
 | unary `+`, `-`                         |
 | `*`, `/`                               | left                           |
 | binary `+`, `-`                        | left                           |
