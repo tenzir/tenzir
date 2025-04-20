@@ -1,0 +1,1 @@
+from {x: bit_xor(5, 3)}
