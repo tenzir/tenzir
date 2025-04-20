@@ -56,11 +56,6 @@ drop(const table_slice& slice, const std::vector<ast::field_path>& fields,
 class set_operator final : public crtp_operator<set_operator> {
 public:
   set_operator() = default;
-  ~set_operator() override = default;
-  set_operator(const set_operator&) = delete;
-  set_operator(set_operator&&) = delete;
-  auto operator=(const set_operator&) -> set_operator& = delete;
-  auto operator=(set_operator&&) -> set_operator& = delete;
 
   explicit set_operator(std::vector<ast::assignment> assignments)
     : assignments_{std::move(assignments)} {
@@ -79,20 +74,24 @@ public:
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<table_slice>;
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(const expression& filter, event_order order) const
     -> optimize_result override {
-    TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
+    TENZIR_UNUSED(filter);
+    auto replacement = std::make_unique<set_operator>(*this);
+    replacement->order_ = order;
+    return optimize_result{std::nullopt, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, set_operator& x) -> bool {
     return f.object(x).fields(f.field("assignments", x.assignments_),
-                              f.field("moved_fields", x.moved_fields_));
+                              f.field("moved_fields", x.moved_fields_),
+                              f.field("order", x.order_));
   }
 
 private:
   std::vector<ast::assignment> assignments_;
   std::vector<ast::field_path> moved_fields_;
+  event_order order_ = event_order::ordered;
 };
 
 } // namespace tenzir

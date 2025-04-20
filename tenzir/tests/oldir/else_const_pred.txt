@@ -27,6 +27,7 @@
     ],
     moved_fields: [
       
-    ]
+    ],
+    order: "ordered"
   }
 ]

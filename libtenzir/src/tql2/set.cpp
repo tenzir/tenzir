@@ -27,6 +27,33 @@
 
 namespace tenzir {
 
+namespace {
+
+auto rebatch_events(std::vector<table_slice> events)
+  -> std::vector<table_slice> {
+  if (events.size() < 2) {
+    return events;
+  }
+  auto result = std::vector<table_slice>{};
+  auto start = events.begin();
+  auto rows = start->rows();
+  const auto end = events.end();
+  for (auto it = std::next(start); it < end; ++it) {
+    rows += it->rows();
+    if (it->schema() == start->schema()
+        and rows < defaults::import::table_slice_size) {
+      continue;
+    }
+    result.push_back(concatenate({start, it}));
+    start = it;
+    rows = start->rows();
+  }
+  result.push_back(concatenate({start, end}));
+  return result;
+}
+
+} // namespace
+
 auto consume_path(std::span<const ast::field_path::segment> path, series value)
   -> series {
   if (path.empty()) {
@@ -444,6 +471,7 @@ auto set_operator::operator()(generator<table_slice> input,
     // After we know all the multi series values on the right, we can split the
     // input table slice and perform the actual assignment.
     auto begin = int64_t{0};
+    auto results = std::vector<table_slice>{};
     for (auto values_slice : split_multi_series(values)) {
       TENZIR_ASSERT(not values_slice.empty());
       auto end = begin + values_slice[0].length();
@@ -468,9 +496,20 @@ auto set_operator::operator()(generator<table_slice> input,
         std::swap(state, new_state);
         new_state.clear();
       }
-      for (auto& output : state) {
-        co_yield std::move(output);
-      }
+      std::ranges::move(state, std::back_inserter(results));
+    }
+    // TODO: Consider adding a property to function plugins that let's them
+    // indicate whether they want their outputs to be strictly ordered. If any
+    // of the called functions has this requirement, then we should not be
+    // making this optimization. This will become relevant in the future once we
+    // allow functions to be stateful.
+    if (order_ != event_order::ordered) {
+      std::ranges::stable_sort(results, std::ranges::less{},
+                               &table_slice::schema);
+      results = rebatch_events(std::move(results));
+    }
+    for (auto& result : results) {
+      co_yield std::move(result);
     }
   }
 }
