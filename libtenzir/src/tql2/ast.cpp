@@ -36,7 +36,7 @@ auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
         return true;
       },
       [&](ast::root_field& x) -> variant<ast::expression*, bool> {
-        path.emplace_back(x.ident, false);
+        path.emplace_back(x.id, x.has_question_mark);
         return true;
       },
       [&](ast::field_access& e) -> variant<ast::expression*, bool> {
@@ -49,7 +49,8 @@ auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
           return false;
         }
         if (auto* name = std::get_if<std::string>(&constant->value)) {
-          path.emplace_back(ast::identifier{*name, constant->source}, false);
+          path.emplace_back(ast::identifier{*name, constant->source},
+                            e.has_question_mark);
           return &e.expr;
         }
         return false;
@@ -116,10 +117,10 @@ auto to_field_extractor(const ast::expression& x)
   auto p = (parsers::alpha | '_') >> *(parsers::alnum | '_');
   return x.match(
     [&](const ast::root_field& x) -> std::optional<field_extractor> {
-      if (not p(x.ident.name)) {
+      if (not p(x.id.name)) {
         return std::nullopt;
       }
-      return x.ident.name;
+      return x.id.name;
     },
     [&](const ast::field_access& x) -> std::optional<field_extractor> {
       if (not p(x.name.name)) {

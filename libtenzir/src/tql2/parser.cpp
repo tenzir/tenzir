@@ -290,7 +290,7 @@ public:
                   ? std::get_if<ast::root_field>(&*simple_sel->inner().kind)
                   : nullptr;
     if (root) {
-      auto entity = parse_entity(std::move(root->ident));
+      auto entity = parse_entity(std::move(root->id));
       return parse_invocation(std::move(entity));
     }
     diagnostic::error("{}", "expected `=` after selector")
@@ -435,7 +435,12 @@ public:
     while (true) {
       auto dot = accept(tk::dot_question_mark);
       auto has_question_mark = static_cast<bool>(dot);
-      if (not has_question_mark) {
+      if (has_question_mark) {
+        diagnostic::warning(
+          "leading `.?` is deprecated; use a trailing `?` instead")
+          .primary(dot)
+          .emit(diag_);
+      } else {
         dot = accept(tk::dot);
       }
       if (dot) {
@@ -444,6 +449,8 @@ public:
           auto entity = parse_entity(name.as_identifier());
           expr = parse_function_call(std::move(expr), std::move(entity));
         } else {
+          has_question_mark
+            = static_cast<bool>(accept(tk::question_mark)) or has_question_mark;
           expr = field_access{
             std::move(expr),
             dot.location,
@@ -474,12 +481,11 @@ public:
               .throw_();
           }
           rbracket = expect(tk::rbracket);
+          const auto has_question_mark
+            = static_cast<bool>(accept(tk::question_mark));
           expr = index_expr{
-            std::move(expr),
-            lbracket.location,
-            std::move(index),
-            rbracket.location,
-            false,
+            std::move(expr),   lbracket.location, std::move(index),
+            rbracket.location, has_question_mark,
           };
         }
         continue;
@@ -564,7 +570,11 @@ public:
         .primary(next_location())
         .throw_();
     }
-    return ast::root_field{std::move(entity.path[0])};
+    auto question_mark = accept(tk::question_mark);
+    return ast::root_field{
+      .id = std::move(entity.path[0]),
+      .has_question_mark = static_cast<bool>(question_mark),
+    };
   }
 
   auto parse_record_or_pipeline_expr() -> ast::expression {

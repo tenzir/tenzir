@@ -8,12 +8,12 @@ warning: field `x` not found
  --> <input>:1:17
   |
 1 | read_json | z = x.otherwise(y)
-  |                 ~ 
+  |                 ~ use `?` to suppress this warning
   |
 
 warning: field `y` not found
  --> <input>:1:29
   |
 1 | read_json | z = x.otherwise(y)
-  |                             ~ 
+  |                             ~ use `?` to suppress this warning
   |

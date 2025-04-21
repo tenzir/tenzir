@@ -429,7 +429,7 @@ auto drop(const table_slice& slice, const std::vector<ast::field_path>& fields,
           err.reason,
           [&](const resolve_error::field_not_found&) {
             diagnostic::warning("field `{}` not found", err.ident.name)
-              .primary(err.ident)
+              .primary(err.ident, "use `?` to suppress this warning")
               .emit(dh);
           },
           [&](const resolve_error::field_not_found_no_error&) {},

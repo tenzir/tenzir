@@ -72,7 +72,7 @@ public:
   }
 
   void emit_not_found(const ast::dollar_var& var) {
-    diagnostic::error("variable `{}` was not declared", var.ident.name)
+    diagnostic::error("variable `{}` was not declared", var.id.name)
       .primary(var)
       .emit(ctx_);
     failure_ = failure::promise();

@@ -4,5 +4,5 @@ warning: field `a` not found
  --> <input>:1:17
   |
 1 | deduplicate {a: a, b: b}, limit=1
-  |                 ~ 
+  |                 ~ use `?` to suppress this warning
   |

@@ -8,7 +8,10 @@
   ],
   operators: [
     group_ir {
-      over: root_field `count` @ 20..25,
+      over: root_field {
+        id: `count` @ 20..25,
+        has_question_mark: false
+      },
       pipe: {
         lets: [
           

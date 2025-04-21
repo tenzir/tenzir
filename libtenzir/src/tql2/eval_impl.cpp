@@ -173,8 +173,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
     if (auto null = l.as<null_type>()) {
       if (not x.suppress_warnings()) {
         diagnostic::warning("tried to access field of `null`")
-          .primary(x.left)
-          .secondary(x.dot, "use the `.?` operator to suppress this warning")
+          .primary(x.name, "use `?` to suppress this warning")
           .emit(ctx_);
       }
       return std::move(*null);
@@ -193,8 +192,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
         auto has_null = s.null_count() != 0;
         if (has_null and not x.suppress_warnings()) {
           diagnostic::warning("tried to access field of `null`")
-            .primary(x.name)
-            .secondary(x.dot, "use the `.?` operator to suppress this warning")
+            .primary(x.name, "use `?` to suppress this warning")
             .emit(ctx_);
           return series{field.type, check(s.GetFlattenedField(i))};
         }
@@ -203,8 +201,7 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
     }
     if (not x.suppress_warnings()) {
       diagnostic::warning("record does not have this field")
-        .primary(x.name)
-        .secondary(x.dot, "use the `.?` operator to suppress this warning")
+        .primary(x.name, "use `?` to suppress this warning")
         .emit(ctx_);
     }
     return null();
@@ -232,17 +229,19 @@ auto evaluator::eval(const ast::this_& x) -> multi_series {
 }
 
 auto evaluator::eval(const ast::root_field& x) -> multi_series {
-  auto& input = input_or_throw(x);
-  auto& rec_ty = as<record_type>(input.schema());
+  const auto& input = input_or_throw(x);
+  const auto& rec_ty = as<record_type>(input.schema());
   for (auto [i, field] : detail::enumerate<int>(rec_ty.fields())) {
-    if (field.name == x.ident.name) {
+    if (field.name == x.id.name) {
       // TODO: Is this correct?
       return series{field.type, to_record_batch(input)->column(i)};
     }
   }
-  diagnostic::warning("field `{}` not found", x.ident.name)
-    .primary(x.ident)
-    .emit(ctx_);
+  if (not x.has_question_mark) {
+    diagnostic::warning("field `{}` not found", x.id.name)
+      .primary(x.id, "use `?` to suppress this warning")
+      .emit(ctx_);
+  }
   return null();
 }
 
@@ -255,7 +254,7 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
       return eval(ast::field_access{
         x.expr,
         location::unknown,
-        x.suppress_warnings,
+        x.has_question_mark,
         ast::identifier{*string, constant->source},
       });
     }
@@ -263,27 +262,36 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
   return map_series(
     eval(x.expr), eval(x.index),
     [&](series value, const series& index) -> multi_series {
+      const auto add_suppress_hint = [&](auto dh) {
+        if (x.rbracket != location::unknown) {
+          dh = std::move(dh).hint("use `[…]?` to suppress this warning");
+        }
+        return dh;
+      };
       TENZIR_ASSERT(value.length() == index.length());
       if (auto null = value.as<null_type>()) {
-        if (not x.suppress_warnings) {
+        if (not x.has_question_mark) {
           diagnostic::warning("tried to access field of `null`")
-            .primary(x.expr)
+            .primary(x.expr, "is null")
+            .compose(add_suppress_hint)
             .emit(ctx_);
         }
         return std::move(*null);
       }
       if (auto null = index.as<null_type>()) {
-        diagnostic::warning("cannot use `null` as index")
-          .primary(x.index)
-          .emit(ctx_);
+        if (not x.has_question_mark) {
+          diagnostic::warning("cannot use `null` as index")
+            .primary(x.index, "is null")
+            .compose(add_suppress_hint)
+            .emit(ctx_);
+        }
         return std::move(*null);
       }
       if (auto str = index.as<string_type>()) {
         auto* ty = try_as<record_type>(value.type);
         if (not ty) {
           diagnostic::warning("cannot access field of non-record type")
-            .primary(x.index)
-            .secondary(x.expr, "type `{}`", value.type.kind())
+            .primary(x.expr, "has type `{}`", value.type.kind())
             .emit(ctx_);
           return null();
         }
@@ -325,9 +333,10 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             b.data(v);
           } else {
             if (std::ranges::find(not_found, name) == not_found.end()) {
-              if (not x.suppress_warnings) {
+              if (not x.has_question_mark) {
                 diagnostic::warning("record does not have field `{}`", name)
-                  .primary(x.index)
+                  .primary(x.index, "does not exist")
+                  .compose(add_suppress_hint)
                   .emit(ctx_);
               }
               not_found.emplace_back(name);
@@ -335,14 +344,16 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             b.null();
           }
         }
-        if (warn_null_record and not x.suppress_warnings) {
+        if (warn_null_record and not x.has_question_mark) {
           diagnostic::warning("tried to access field of `null`")
             .primary(x.expr)
+            .compose(add_suppress_hint)
             .emit(ctx_);
         }
-        if (warn_null_index) {
+        if (warn_null_index and not x.has_question_mark) {
           diagnostic::warning("cannot use `null` as index")
-            .primary(x.index)
+            .primary(x.index, "is null")
+            .compose(add_suppress_hint)
             .emit(ctx_);
         }
         result.push_back(b.finish_assert_one_array());
@@ -395,24 +406,26 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
             group_offset = i;
           }
           add(group_offset, number->length());
-          if (warn_null_index and not x.suppress_warnings) {
+          if (warn_null_index and not x.has_question_mark) {
             diagnostic::warning("cannot use `null` as index")
-              .primary(x.index)
+              .primary(x.index, "is null")
+              .compose(add_suppress_hint)
               .emit(ctx_);
           }
-          if (warn_index_out_of_bounds and not x.suppress_warnings) {
+          if (warn_index_out_of_bounds and not x.has_question_mark) {
             diagnostic::warning("index out of bounds")
-              .primary(x.index)
+              .primary(x.index, "is out of bounds")
+              .compose(add_suppress_hint)
               .emit(ctx_);
           }
           return result;
         }
         auto list = value.as<list_type>();
         if (not list) {
-          if (not is<null_type>(value.type) or not x.suppress_warnings) {
-            diagnostic::warning("cannot index into `{}` with `{}`",
-                                value.type.kind(), index.type.kind())
-              .primary(x.index)
+          if (not is<null_type>(value.type) or not x.has_question_mark) {
+            diagnostic::warning("expected `record` or `list`")
+              .primary(x.expr, "has type `{}`", value.type.kind())
+              .compose(add_suppress_hint)
               .emit(ctx_);
           }
           return null();
@@ -450,19 +463,22 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
           check(
             append_array_slice(*b, value_type, *list_values, value_index, 1));
         }
-        if (out_of_bounds and not x.suppress_warnings) {
+        if (out_of_bounds and not x.has_question_mark) {
           diagnostic::warning("list index out of bounds")
-            .primary(x.index)
+            .primary(x.index, "is out of bounds")
+            .compose(add_suppress_hint)
             .emit(ctx_);
         }
-        if (list_null and not x.suppress_warnings) {
+        if (list_null and not x.has_question_mark) {
           diagnostic::warning("cannot index into `null`")
-            .primary(x.expr)
+            .primary(x.expr, "is null")
+            .compose(add_suppress_hint)
             .emit(ctx_);
         }
-        if (number_null) {
+        if (number_null and not x.has_question_mark) {
           diagnostic::warning("cannot use `null` as index")
-            .primary(x.index)
+            .primary(x.index, "is null")
+            .compose(add_suppress_hint)
             .emit(ctx_);
         }
         return series{value_type, finish(*b)};
