@@ -10,35 +10,16 @@ secret(name:string) -> secret
 
 The `secret` function retrieves the value associated with the key `name`.
 
-The secret is first looked up in the node's config file, If it is not found there,
-a request is made to the Tenzir Platform.
+The secret is first looked up locally in the environment or configuration. If it
+is not found there, ultimately a request is made to the Tenzir Platform.
 Should the platform also not be able to find the secret, an error is raised.
+
+See the [Explanation page for secrets](../../../docs/secrets/README.md) for more
+details.
 
 ### `name: string`
 
 The name of the secret to use.
-
-## Lookup Order
-
-Secrets are looked up in the following order:
-
-1. The environment of the currently running process
-2. The configuration of the currently running process
-3. The environment of the Tenzir Node process
-4. The configuration of the Tenzir Node process
-5. The Tenzir Platform secret store for the Workspace the Tenzir Node is running in
-
-### Tenzir configuration secrets
-
-Secrets can be specified in the `tenzir.yaml` config file, under the path
-`tenzir.secrets`.
-
-```yaml
-tenzir:
-  secrets:
-    # Add your secrets there.
-    geheim: 1528F9F3-FAFA-45B4-BC3C-B755D0E0D9C2
-```
 
 ## Examples
 
