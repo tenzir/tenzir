@@ -1,0 +1,1 @@
+from {x: bit_not(5)}
