@@ -8,18 +8,19 @@ FROM $TENZIR_CONTAINER_REGISTRY/tenzir/tenzir:$TENZIR_VERSION
 USER root
 RUN apt-get update && \
     apt install -y \
+        build-essential \
         curl \
-        python3 && \
+        python3-dev && \
         rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /home/tenzir && chown tenzir:tenzir /home/tenzir
 USER tenzir:tenzir
 ENV POETRY_HOME=$PREFIX
-RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
+RUN curl -sSL https://install.python-poetry.org | python3 - --version 2.1.2
 
 WORKDIR /tenzir/python/
 # Layer the Poetry install to optimize the dev experience.
-COPY --chown=tenzir:tenzir \ 
+COPY --chown=tenzir:tenzir \
     ./tenzir/bats/data/ \
     /tenzir/tenzir/bats/data/
 COPY --chown=tenzir:tenzir \

@@ -7,6 +7,7 @@ brew install --overwrite \
     apache-arrow \
     aws-sdk-cpp \
     bash \
+    bats \
     boost \
     ccache \
     coreutils \

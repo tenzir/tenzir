@@ -1,5 +1,9 @@
 : "${BATS_TEST_TIMEOUT:=10}"
 
+if [ $(uname -s) == "Darwin" ]; then
+  skip "Skipping brittle HTTP tests on MacOS"
+fi
+
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert

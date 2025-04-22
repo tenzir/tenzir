@@ -732,8 +732,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.9"]
+        python-version: ["3.10"]
         os: [ubuntu-latest]
+        poetry-version: ["2.1.2"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -745,7 +746,7 @@ jobs:
       - name: Setup Poetry image
         uses: abatilo/actions-poetry@v4.0.0
         with:
-          poetry-version: 1.8.2
+          poetry-version: ${{ matrix.poetry-version }}
       - name: Run poetry install
         working-directory: python
         run: |
@@ -772,19 +773,24 @@ jobs:
       - configure
     if: ${{ needs.configure.outputs.run-python-package == 'true' }}
     name: Python Package
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        python-version: ["3.10"]
+        os: ["ubuntu-latest"]
+        poetry-version: ["2.1.2"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.9
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: ${{ matrix.python-version }}
       - name: Setup Poetry image
         uses: abatilo/actions-poetry@v4.0.0
         with:
-          poetry-version: 1.8.2
+          poetry-version: ${{ matrix.poetry-version }}
       - name: Configure PyPI
         working-directory: python
         run: |

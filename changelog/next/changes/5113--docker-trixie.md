@@ -1,2 +1,2 @@
-We have upgraded our Docker baseimage from `debian:bookwork-slim` to
-`debian:trixie-slim`.
+The `tenzir/tenzir` and `tenzir/tenzir-node` Docker images now use
+`debian:trixie-slim` instead of `debian:bookworm-slim` as a base image.
