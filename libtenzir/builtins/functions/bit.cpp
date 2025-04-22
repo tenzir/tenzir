@@ -31,7 +31,7 @@ public:
     auto run(evaluator eval, session ctx) -> multi_series override {
       return map_series(eval(expr), [&](const series& values) -> multi_series {
         if (is<null_type>(values.type)) {
-          return series::null(null_type{}, values.length());
+          return series::null(int64_type{}, values.length());
         }
         if (not is<int64_type>(values.type)
             and not is<uint64_type>(values.type)) {
@@ -39,7 +39,7 @@ public:
                               values.type.kind())
             .primary(expr)
             .emit(ctx);
-          return series::null(null_type{}, values.length());
+          return series::null(int64_type{}, values.length());
         }
         auto result
           = check(compute_fn->Execute({values.array}, nullptr, nullptr));
@@ -85,11 +85,10 @@ public:
     auto run(evaluator eval, session ctx) -> multi_series override {
       return map_series(
         eval(lhs), eval(rhs),
-        [&](const series& lhs_values,
-            const series& rhs_values) -> multi_series {
+        [&](const series& lhs_values, series rhs_values) -> multi_series {
           if (is<null_type>(lhs_values.type)
               or is<null_type>(rhs_values.type)) {
-            return series::null(null_type{}, lhs_values.length());
+            return series::null(int64_type{}, lhs_values.length());
           }
           if (not is<int64_type>(lhs_values.type)
               and not is<uint64_type>(lhs_values.type)) {
@@ -97,7 +96,7 @@ public:
                                 lhs_values.type.kind())
               .primary(lhs)
               .emit(ctx);
-            return series::null(null_type{}, lhs_values.length());
+            return series::null(int64_type{}, lhs_values.length());
           }
           if (not is<int64_type>(rhs_values.type)
               and not is<uint64_type>(rhs_values.type)) {
@@ -105,7 +104,47 @@ public:
                                 rhs_values.type.kind())
               .primary(rhs)
               .emit(ctx);
-            return series::null(null_type{}, lhs_values.length());
+            return series::null(int64_type{}, lhs_values.length());
+          }
+          if (validate_rhs) {
+            match(
+              *rhs_values.array,
+              [&]<concepts::one_of<arrow::Int64Array, arrow::UInt64Array> T>(
+                const T& array) {
+                auto validity_builder = arrow::TypedBufferBuilder<bool>{};
+                check(validity_builder.Reserve(array.length()));
+                auto warn = false;
+                auto null_count = int64_t{};
+                const auto max = is<int64_type>(lhs_values.type) ? 62 : 63;
+                for (const auto& value : array) {
+                  if (not value) {
+                    validity_builder.UnsafeAppend(false);
+                    ++null_count;
+                    continue;
+                  }
+                  if (std::cmp_less(*value, 0)
+                      or std::cmp_greater(*value, max)) {
+                    validity_builder.UnsafeAppend(false);
+                    ++null_count;
+                    warn = true;
+                    continue;
+                  }
+                  validity_builder.UnsafeAppend(true);
+                }
+                if (warn) {
+                  diagnostic::warning("out of range")
+                    .primary(rhs, "must be in range [0, {}]", max)
+                    .emit(ctx);
+                }
+                TENZIR_ASSERT(array.data()->buffers.size() == 2);
+                rhs_values.type = type{uint64_type{}};
+                rhs_values.array = std::make_shared<arrow::UInt64Array>(
+                  array.length(), array.data()->buffers[1],
+                  check(validity_builder.Finish()), null_count, array.offset());
+              },
+              [&](const auto&) {
+                TENZIR_UNREACHABLE();
+              });
           }
           auto result = check(compute_fn->Execute(
             {lhs_values.array, rhs_values.array}, nullptr, nullptr));
@@ -127,6 +166,7 @@ public:
 
     ast::expression lhs;
     ast::expression rhs;
+    bool validate_rhs = false;
     std::shared_ptr<arrow::compute::Function> compute_fn;
   };
 
@@ -135,6 +175,7 @@ public:
     auto result = std::make_unique<impl>();
     result->compute_fn
       = check(arrow::compute::GetFunctionRegistry()->GetFunction(compute_fn_));
+    result->validate_rhs = compute_fn_.starts_with("shift");
     auto parser = argument_parser2::function(name());
     parser.positional("lhs", result->lhs, "int");
     parser.positional("rhs", result->rhs, "int");
