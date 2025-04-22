@@ -20,8 +20,8 @@
 
 namespace tenzir::detail {
 
-struct preserved_fds : boost::process::detail::handler,
-                       boost::process::detail::uses_handles {
+struct preserved_fds : boost::process::v1::detail::handler,
+                       boost::process::v1::detail::uses_handles {
   std::vector<int> fds;
   preserved_fds(std::vector<int> pfds);
 

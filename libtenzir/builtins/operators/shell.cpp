@@ -22,13 +22,33 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
-#include <boost/process.hpp>
+
+#if __has_include(<boost/process/v1/child.hpp>)
+#  include <boost/process/v1/args.hpp>
+#  include <boost/process/v1/async.hpp>
+#  include <boost/process/v1/async_system.hpp>
+#  include <boost/process/v1/child.hpp>
+#  include <boost/process/v1/cmd.hpp>
+#  include <boost/process/v1/env.hpp>
+#  include <boost/process/v1/environment.hpp>
+#  include <boost/process/v1/error.hpp>
+#  include <boost/process/v1/exe.hpp>
+#  include <boost/process/v1/group.hpp>
+#  include <boost/process/v1/handles.hpp>
+#  include <boost/process/v1/io.hpp>
+#  include <boost/process/v1/pipe.hpp>
+#  include <boost/process/v1/search_path.hpp>
+#  include <boost/process/v1/shell.hpp>
+#  include <boost/process/v1/spawn.hpp>
+#  include <boost/process/v1/start_dir.hpp>
+#  include <boost/process/v1/system.hpp>
+#else
+#  include <boost/process.hpp>
+#endif
 
 #include <mutex>
-#include <queue>
-#include <thread>
 
-namespace bp = boost::process;
+namespace bp = boost::process::v1;
 
 namespace tenzir::plugins::shell {
 namespace {
@@ -96,7 +116,7 @@ public:
   }
 
   auto read(std::span<std::byte> buffer) -> caf::expected<size_t> {
-    TENZIR_ASSERT(!buffer.empty());
+    TENZIR_ASSERT(! buffer.empty());
     TENZIR_TRACE("trying to read {} bytes", buffer.size());
     auto* data = reinterpret_cast<char*>(buffer.data());
     auto size = detail::narrow<int>(buffer.size());
@@ -106,13 +126,14 @@ public:
   }
 
   auto write(std::span<const std::byte> buffer) -> caf::error {
-    TENZIR_ASSERT(!buffer.empty());
+    TENZIR_ASSERT(! buffer.empty());
     TENZIR_TRACE("writing {} bytes to child's stdin", buffer.size());
     const auto* data = reinterpret_cast<const char*>(buffer.data());
     auto size = detail::narrow_cast<std::streamsize>(buffer.size());
-    if (not stdin_.write(data, size))
+    if (not stdin_.write(data, size)) {
       return caf::make_error(ec::unspecified,
                              "failed to write into child's stdin");
+    }
     return caf::none;
   }
 
@@ -148,7 +169,7 @@ public:
 
 private:
   explicit child(std::string command) : command_{std::move(command)} {
-    TENZIR_ASSERT(!command_.empty());
+    TENZIR_ASSERT(! command_.empty());
   }
 
   std::string command_;
@@ -167,7 +188,7 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto mode = ctrl.has_terminal() ? stdin_mode::inherit : stdin_mode::none;
     auto child = child::make(command_, mode);
-    if (!child) {
+    if (! child) {
       diagnostic::error(child.error())
         .note("failed to spawn child process")
         .emit(ctrl.diagnostics());
@@ -205,7 +226,7 @@ public:
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     // TODO: Handle exceptions from `boost::process`.
     auto child = child::make(command_, stdin_mode::pipe);
-    if (!child) {
+    if (! child) {
       diagnostic::error(child.error())
         .note("failed to spawn child process")
         .emit(ctrl.diagnostics());

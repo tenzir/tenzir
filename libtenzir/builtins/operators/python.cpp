@@ -34,13 +34,35 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/asio.hpp>
 #include <boost/interprocess/sync/named_semaphore.hpp>
-#include <boost/process.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/settings.hpp>
 
 #include <filesystem>
 
-namespace bp = boost::process;
+#if __has_include(<boost/process/v1/child.hpp>)
+#  include <boost/process/v1/args.hpp>
+#  include <boost/process/v1/async.hpp>
+#  include <boost/process/v1/async_system.hpp>
+#  include <boost/process/v1/child.hpp>
+#  include <boost/process/v1/cmd.hpp>
+#  include <boost/process/v1/env.hpp>
+#  include <boost/process/v1/environment.hpp>
+#  include <boost/process/v1/error.hpp>
+#  include <boost/process/v1/exe.hpp>
+#  include <boost/process/v1/group.hpp>
+#  include <boost/process/v1/handles.hpp>
+#  include <boost/process/v1/io.hpp>
+#  include <boost/process/v1/pipe.hpp>
+#  include <boost/process/v1/search_path.hpp>
+#  include <boost/process/v1/shell.hpp>
+#  include <boost/process/v1/spawn.hpp>
+#  include <boost/process/v1/start_dir.hpp>
+#  include <boost/process/v1/system.hpp>
+#else
+#  include <boost/process.hpp>
+#endif
+
+namespace bp = boost::process::v1;
 
 namespace tenzir::plugins::python {
 namespace {
@@ -70,7 +92,7 @@ public:
 
   auto Read(int64_t nbytes, void* out) -> ::arrow::Result<int64_t> override {
     auto bytes_read = detail::read(fd_, out, nbytes);
-    if (!bytes_read) {
+    if (! bytes_read) {
       return ::arrow::Status::IOError(fmt::to_string(bytes_read.error()));
     }
     auto sbytes = detail::narrow_cast<int64_t>(*bytes_read);
@@ -163,7 +185,7 @@ public:
                         version::major, version::minor, version::patch)};
       }
       auto venv_base_dir = std::optional<std::filesystem::path>{};
-      if (!config_.create_venvs) {
+      if (! config_.create_venvs) {
         venv_base_dir = std::nullopt;
       } else if (const auto* cache_dir
                  = get_if<std::string>(&ctrl.self().home_system().config(),
@@ -199,7 +221,7 @@ public:
             return inline_code;
           }},
         code_);
-      if (!maybe_code) {
+      if (! maybe_code) {
         diagnostic::error(maybe_code.error())
           .note("failed to obtain code")
           .emit(ctrl.diagnostics());
@@ -244,7 +266,7 @@ public:
                           *maybe_venv, ec);
               return;
             }
-            if (!exists) {
+            if (! exists) {
               return;
             }
             std::filesystem::remove_all(*maybe_venv, ec);
@@ -293,14 +315,14 @@ public:
         };
         // `split` creates an empty token in case the input was entirely
         // empty, but we don't want that so we need an extra guard.
-        if (!implicit_requirements.empty()) {
+        if (! implicit_requirements.empty()) {
           auto implicit_requirements_vec
             = detail::split_escaped(implicit_requirements, " ", "\\");
           pip_invocation.insert(pip_invocation.end(),
                                 implicit_requirements_vec.begin(),
                                 implicit_requirements_vec.end());
         }
-        if (!requirements_.empty()) {
+        if (! requirements_.empty()) {
           auto requirements_vec = detail::split(requirements_, " ");
           pip_invocation.insert(pip_invocation.end(), requirements_vec.begin(),
                                 requirements_vec.end());
@@ -362,14 +384,14 @@ public:
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
       errpipe.pipe().assign_sink(-1);
-      if (!child.running()) {
+      if (! child.running()) {
         auto python_error = drain_pipe(errpipe);
         diagnostic::error("{}", python_error)
           .note("python process exited with error")
           .throw_();
       }
       for (auto&& slice : input) {
-        if (!child.running()) {
+        if (! child.running()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
@@ -385,14 +407,14 @@ public:
         auto writer = arrow::ipc::MakeStreamWriter(
                         stream, slice.schema().to_arrow_schema())
                         .ValueOrDie();
-        if (!writer->WriteRecordBatch(*batch).ok()) {
+        if (! writer->WriteRecordBatch(*batch).ok()) {
           diagnostic::error("failed to convert input batch to Arrow format")
             .note(
               "failed to write in conversion from input batch to Arrow format")
             .emit(ctrl.diagnostics());
           co_return;
         }
-        if (auto status = writer->Close(); !status.ok()) {
+        if (auto status = writer->Close(); ! status.ok()) {
           diagnostic::error("{}", status.message())
             .note("failed to close writer in conversion from input batch to "
                   "Arrow format")
@@ -400,7 +422,7 @@ public:
           co_return;
         }
         auto result = stream->Finish();
-        if (!result.status().ok()) {
+        if (! result.status().ok()) {
           diagnostic::error("{}", result.status().message())
             .note(
               "failed to flush in conversion from input batch to Arrow format")
@@ -411,7 +433,7 @@ public:
                      detail::narrow<int>((*result)->size()));
         auto file = arrow_fd_wrapper{std_out.native_source()};
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
-        if (!reader.status().ok()) {
+        if (! reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
@@ -419,7 +441,7 @@ public:
           co_return;
         }
         auto result_batch = (*reader)->ReadNext();
-        if (!result_batch.status().ok()) {
+        if (! result_batch.status().ok()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
@@ -429,7 +451,7 @@ public:
         // The writer on the other side writes an invalid record batch as
         // end-of-stream marker; we have to read it now to remove it from
         // the pipe.
-        if (auto result = (*reader)->ReadNext(); !result.ok()) {
+        if (auto result = (*reader)->ReadNext(); ! result.ok()) {
           diagnostic::error("{}", result.status().message())
             .note("failed to read closing bytes")
             .emit(ctrl.diagnostics());
@@ -491,11 +513,11 @@ class plugin final : public virtual operator_plugin<python_operator>,
 public:
   struct config config = {};
 
-  auto initialize(const record& plugin_config,
-                  const record& /*global_config*/) -> caf::error override {
+  auto initialize(const record& plugin_config, const record& /*global_config*/)
+    -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
-    if (!create_virtualenv) {
+    if (! create_virtualenv) {
       return create_virtualenv.error();
     }
     config.create_venvs = *create_virtualenv;
@@ -522,7 +544,7 @@ public:
     parser.add("-f,--file", filename, "<filename>");
     parser.add(command, "<command>");
     parser.parse(p);
-    if (!filename && !command) {
+    if (! filename && ! command) {
       diagnostic::error("must have either the `--file` argument or inline code")
         .throw_();
     }
