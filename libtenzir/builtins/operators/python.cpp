@@ -40,6 +40,7 @@
 #include <filesystem>
 
 #if __has_include(<boost/process/v1/child.hpp>)
+
 #  include <boost/process/v1/args.hpp>
 #  include <boost/process/v1/async.hpp>
 #  include <boost/process/v1/async_system.hpp>
@@ -58,11 +59,16 @@
 #  include <boost/process/v1/spawn.hpp>
 #  include <boost/process/v1/start_dir.hpp>
 #  include <boost/process/v1/system.hpp>
-#else
-#  include <boost/process.hpp>
-#endif
 
 namespace bp = boost::process::v1;
+
+#else
+
+#  include <boost/process.hpp>
+
+namespace bp = boost::process;
+
+#endif
 
 namespace tenzir::plugins::python {
 namespace {

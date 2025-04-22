@@ -24,6 +24,7 @@
 #include <boost/asio.hpp>
 
 #if __has_include(<boost/process/v1/child.hpp>)
+
 #  include <boost/process/v1/args.hpp>
 #  include <boost/process/v1/async.hpp>
 #  include <boost/process/v1/async_system.hpp>
@@ -42,13 +43,20 @@
 #  include <boost/process/v1/spawn.hpp>
 #  include <boost/process/v1/start_dir.hpp>
 #  include <boost/process/v1/system.hpp>
+
+namespace bp = boost::process::v1;
+
 #else
+
 #  include <boost/process.hpp>
+
+namespace bp = boost::process;
+
 #endif
 
 #include <mutex>
-
-namespace bp = boost::process::v1;
+#include <queue>
+#include <thread>
 
 namespace tenzir::plugins::shell {
 namespace {
