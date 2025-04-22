@@ -176,6 +176,10 @@ const sidebars = {
       id: 'packages',
     },
     {
+      type: 'doc',
+      id: 'secrets/README',
+    },
+    {
       type: 'category',
       label: 'Use Cases',
       link: {
