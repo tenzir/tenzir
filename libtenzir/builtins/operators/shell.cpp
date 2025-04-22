@@ -154,15 +154,14 @@ public:
     auto ec = std::error_code{};
     child_.wait(ec);
     if (ec) {
-      return caf::make_error(ec::unspecified,
-                             fmt::format("waiting for child process failed: {}",
-                                         ec));
+      return diagnostic::error("{}", ec.message())
+        .note("failed to wait for child process")
+        .to_error();
     }
     auto code = child_.exit_code();
     if (code != 0) {
-      return caf::make_error(
-        ec::unspecified,
-        fmt::format("child process exited with exit-code {}", code));
+      return diagnostic::error("child process exited with exit-code {}", code)
+        .to_error();
     }
     return {};
   }
