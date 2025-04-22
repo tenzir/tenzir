@@ -39,6 +39,8 @@ transformer_record::transformer_record(std::string clickhouse_typename,
                                        schema_transformations transformations)
   : transformer{std::move(clickhouse_typename), true},
     transformations{std::move(transformations)} {
+  // We initialized `clickhouse_nullable` with true, but now we need to check if
+  // actually all columns are nullable. If they are not, the record isnt nullable
   for (const auto& [_, t] : transformations) {
     if (not t->clickhouse_nullable) {
       clickhouse_nullable = false;
@@ -48,21 +50,29 @@ transformer_record::transformer_record(std::string clickhouse_typename,
   found_column.resize(this->transformations.size());
 }
 
+auto emit_unknown_column_warning(const path_type& path,
+                                 diagnostic_handler& dh) {
+  diagnostic::warning("`{}` does not exist in ClickHouse table",
+                      fmt::join(path, "."))
+    .note("column will be dropped")
+    .emit(dh);
+}
+
+auto emit_missing_column_warning(const path_type& path,
+                                 diagnostic_handler& dh) {
+  diagnostic::warning("required column missing in input, event will be dropped")
+    .note("column `{}` is missing", fmt::join(path, "."))
+    .emit(dh);
+}
+
 auto transformer_record::update_dropmask(
-  const tenzir::type& type, const arrow::Array& array, dropmask_ref dropmask,
-  tenzir::diagnostic_handler& dh) -> drop {
+  path_type& path, const tenzir::type& type, const arrow::Array& array,
+  dropmask_ref dropmask, tenzir::diagnostic_handler& dh) -> drop {
   if (clickhouse_nullable) {
     return drop::none;
   }
-  if (not array.null_bitmap()) {
-    return drop::none;
-  }
-  if (array.null_count() == 0) {
-    return drop::none;
-  }
-  if (array.null_count() == array.length()) {
-    return drop::all;
-  }
+  my_array = &array;
+  std::fill(found_column.begin(), found_column.end(), false);
   /// Update the dropmask based of the record itself. If we are here, we know
   /// that we cannot null every subcolumn, so a "top level" null requires us
   /// to drop the event.
@@ -76,32 +86,35 @@ auto transformer_record::update_dropmask(
   auto updated = drop::none;
   /// Update the dropmasks from all nested columns
   for (auto [k, t, arr] : columns_of(rt, struct_array)) {
+    path.push_back(k);
     const auto [trafo, out_idx] = transfrom_and_index_for(k);
     if (not trafo) {
-      diagnostic::warning(
-        "nested column `{}` does not exist in ClickHouse table", k)
-        .note("column will be dropped")
-        .emit(dh);
+      emit_unknown_column_warning(path, dh);
+      path.pop_back();
       continue;
     }
     found_column[out_idx] = true;
-    updated = updated | trafo->update_dropmask(t, arr, dropmask, dh);
+    updated = updated | trafo->update_dropmask(path, t, arr, dropmask, dh);
+    path.pop_back();
     if (updated == drop::all) {
       return drop::all;
     }
   }
+  if (clickhouse_nullable) {
+    return updated;
+  }
   /// Detect missing columns
   for (const auto& [i, kvp] : detail::enumerate(transformations)) {
+    const auto& [k, t] = kvp;
     if (found_column[i]) {
       continue;
     }
-    if (kvp.second->clickhouse_nullable) {
+    if (t->clickhouse_nullable) {
       continue;
     }
-    diagnostic::warning(
-      "required column missing in input, event will be dropped")
-      .note("column `{}` is missing", kvp.first)
-      .emit(dh);
+    path.push_back(k);
+    emit_missing_column_warning(path, dh);
+    path.pop_back();
     std::ranges::fill(dropmask, true);
     updated = drop::all;
     break;
@@ -126,19 +139,48 @@ auto transformer_record::create_null_column(size_t n) const
 }
 
 auto transformer_record::create_column(
-  const tenzir::type& type, const arrow::Array& array, dropmask_cref dropmask,
-  tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef {
+  path_type& path, const tenzir::type& type, const arrow::Array& array,
+  dropmask_cref dropmask,
+  tenzir::diagnostic_handler& dh) -> ::clickhouse::ColumnRef {
   auto columns = std::vector<ColumnRef>(transformations.size());
   const auto& rt = as<record_type>(type);
   const auto& struct_array = as<arrow::StructArray>(array);
+  // If `update_dropmask` was not called
+  const bool did_update_dropmask = my_array == &array;
+  if (not did_update_dropmask) {
+    std::fill(found_column.begin(), found_column.end(), false);
+  }
   for (auto [k, t, arr] : columns_of(rt, struct_array)) {
     const auto [trafo, out_idx] = transfrom_and_index_for(k);
+    path.push_back(k);
     if (not trafo) {
+      emit_unknown_column_warning(path, dh);
+      path.pop_back();
       continue;
     }
-    auto this_column = trafo->create_column(t, arr, dropmask, dh);
-    TENZIR_ASSERT(this_column);
+    auto this_column = trafo->create_column(path, t, arr, dropmask, dh);
+    path.pop_back();
+    if (this_column == nullptr) {
+      return nullptr;
+    }
     columns[out_idx] = std::move(this_column);
+    found_column[out_idx] = true;
+  }
+  // Check for required columns
+  if (not did_update_dropmask) {
+    for (const auto& [i, kvp] : detail::enumerate(transformations)) {
+      const auto& [k, t] = kvp;
+      if (found_column[i]) {
+        continue;
+      }
+      if (t->clickhouse_nullable) {
+        continue;
+      }
+      path.push_back(k);
+      emit_missing_column_warning(path, dh);
+      path.pop_back();
+      return nullptr;
+    }
   }
   return std::make_shared<ColumnTuple>(std::move(columns));
 }
@@ -308,9 +350,10 @@ struct transformer_from_trait : transformer {
     : transformer{traits::clickhouse_typename(Nullable), Nullable} {
   }
 
-  virtual auto update_dropmask(const tenzir::type&, const arrow::Array& array,
-                               dropmask_ref dropmask,
+  virtual auto update_dropmask(path_type& path, const tenzir::type&,
+                               const arrow::Array& array, dropmask_ref dropmask,
                                tenzir::diagnostic_handler&) -> drop override {
+    TENZIR_UNUSED(path);
     if constexpr (Nullable) {
       return drop::none;
     }
@@ -342,9 +385,10 @@ struct transformer_from_trait : transformer {
     return nullptr;
   }
 
-  virtual auto create_column(
-    const tenzir::type& type, const arrow::Array& array, dropmask_cref dropmask,
-    tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef override {
+  virtual auto create_column(path_type& path, const tenzir::type& type,
+                             const arrow::Array& array, dropmask_cref dropmask,
+                             tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override {
     const auto f = detail::overload{
       [&](const null_type&) -> std::shared_ptr<Column> {
         if constexpr (Nullable) {
@@ -358,7 +402,8 @@ struct transformer_from_trait : transformer {
       },
       [&]<typename U>(const U&) -> std::shared_ptr<Column> {
         // error case. Potentially do more conversions?
-        diagnostic::warning("incompatible data")
+        diagnostic::warning("incompatible data for column `{}",
+                            fmt::join(path, "."))
           .note("expected `{}`, got `{}`\n", tenzir::type_kind{tag_v<T>},
                 tenzir::type_kind{tag_v<U>})
           .emit(dh);
@@ -399,6 +444,63 @@ auto make_transformer_impl(bool nullable) -> std::unique_ptr<transformer> {
   }
 }
 
+struct transformer_blob : transformer {
+  transformer_blob() : transformer("Array(UInt8)", true) {
+  }
+  virtual auto
+  update_dropmask(path_type& path, const tenzir::type& type,
+                  const arrow::Array& array, dropmask_ref dropmask,
+                  tenzir::diagnostic_handler& dh) -> drop override {
+    TENZIR_UNUSED(path, type, array, dropmask, dh);
+    return drop::none;
+  }
+
+  virtual auto
+  create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    auto clickhouse_columns = std::make_shared<ColumnUInt8>();
+    auto clickhouse_offsets = std::make_shared<ColumnUInt64>();
+    auto& offsets = clickhouse_offsets->GetWritableData();
+    offsets.resize(n, 0);
+    return std::make_shared<ColumnArray>(std::move(clickhouse_columns),
+                                         std::move(clickhouse_offsets));
+  }
+
+  virtual auto create_column(path_type& path, const tenzir::type& type,
+                             const arrow::Array& array, dropmask_cref dropmask,
+                             tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override {
+    if (not type.kind().is<blob_type>()) {
+      diagnostic::warning("unexpected type in column `{}`",
+                          fmt::join(path, "."))
+        .note("expected `blob`, got `{}`", type.kind())
+        .emit(dh);
+      return nullptr;
+    }
+    auto clickhouse_columns = std::make_shared<ColumnUInt8>();
+    auto& data = clickhouse_columns->GetWritableData();
+    auto clickhouse_offsets = std::make_shared<ColumnUInt64>();
+    auto& offsets = clickhouse_offsets->GetWritableData();
+    auto last_offset = uint64_t{0};
+    auto& cast_array = as<type_to_arrow_array_t<blob_type>>(array);
+    for (auto [i, v] : detail::enumerate(cast_array)) {
+      if (dropmask[i]) {
+        continue;
+      }
+      if (not v) {
+        offsets.push_back(last_offset);
+        continue;
+      }
+      last_offset += v->size();
+      auto old_data_size = data.size();
+      data.resize(old_data_size + v->size());
+      std::copy(v->begin(), v->end(), data.begin() + old_data_size);
+      offsets.push_back(last_offset);
+    }
+    return std::make_shared<ColumnArray>(std::move(clickhouse_columns),
+                                         std::move(clickhouse_offsets));
+  }
+};
+
 struct transformer_array : transformer {
   std::unique_ptr<transformer> data_transform;
   dropmask_type my_mask;
@@ -411,73 +513,64 @@ struct transformer_array : transformer {
       data_transform{std::move(data_transform)} {
   }
 
+  auto apply_dropmask_to_my_mask(const arrow::Array& array,
+                                 dropmask_cref dropmask) -> void {
+    my_mask.clear();
+    my_mask.resize(array.length(), false);
+    my_value_array = &array;
+    const auto& list_array = as<arrow::ListArray>(array);
+    const auto* offsets = list_array.raw_value_offsets();
+    for (int64_t i = 0; i < array.length(); ++i) {
+      if (not dropmask[i]) {
+        continue;
+      }
+      const auto start = offsets[i];
+      const auto end = offsets[i + 1];
+      for (int64_t j = start; j < end; ++j) {
+        my_mask[j] = true;
+      }
+    }
+  }
+
   virtual auto
-  update_dropmask(const tenzir::type& type, const arrow::Array& array,
-                  dropmask_ref dropmask,
+  update_dropmask(path_type& path, const tenzir::type& type,
+                  const arrow::Array& array, dropmask_ref dropmask,
                   tenzir::diagnostic_handler& dh) -> drop override {
     const auto value_type = as<list_type>(type).value_type();
     const auto& list_array = as<arrow::ListArray>(array);
     const auto& value_array = *list_array.values();
-    const auto& offsets
-      = static_cast<arrow::Int32Array&>(*list_array.offsets());
-    my_mask.clear();
-    my_mask.resize(value_array.length(), false);
-    my_value_array = &value_array;
-    // These "early returns MUST happen after we updated `my_mask`"
+    apply_dropmask_to_my_mask(array, dropmask);
+    /// These "early returns MUST happen after we updated `my_mask`"
     if (clickhouse_nullable) {
       return drop::none;
     }
-    if (not array.null_bitmap()) {
-      return drop::none;
-    }
-    if (array.null_count() == 0) {
-      return drop::none;
-    }
-    if (array.null_count() == array.length()) {
-      return drop::all;
-    }
-    auto updated
-      = data_transform->update_dropmask(value_type, value_array, my_mask, dh);
+    path.push_back("[]");
+    auto updated = data_transform->update_dropmask(path, value_type,
+                                                   value_array, my_mask, dh);
+    path.pop_back();
     if (updated == drop::none) {
       return drop::none;
     }
-    auto all_null = true;
+    if (updated == drop::all) {
+      return drop::all;
+    }
+    auto all_should_be_dropped = true;
+    const auto* offsets = list_array.raw_value_offsets();
     for (int64_t i = 0; i < array.length(); ++i) {
       if (array.IsNull(i)) {
         dropmask[i] = true;
         updated = drop::some;
         continue;
       }
-      const auto start = offsets.Value(i);
-      const auto end = offsets.Value(i + 1);
-      auto event_has_null = false;
-      for (int64_t j = start; j < end; ++j) {
-        event_has_null |= my_mask[j];
-      }
-      dropmask[i] |= event_has_null;
-      all_null &= event_has_null;
-      if (event_has_null) {
+      const auto begin = my_mask.begin() + offsets[i];
+      const auto end = my_mask.begin() + offsets[i + 1];
+      dropmask[i] |= std::any_of(begin, end, std::identity{});
+      if (dropmask[i]) {
         updated = drop::some;
       }
+      all_should_be_dropped &= dropmask[i];
     }
-    return all_null ? drop::all : updated;
-  }
-
-  static auto
-  make_offsets(const arrow::Int32Array& input) -> std::shared_ptr<ColumnUInt64> {
-    auto res = std::make_shared<ColumnUInt64>();
-    auto& output = res->GetWritableData();
-    output.resize(input.length() - 1);
-    // arrow offsets are [ start1 , end1/start2, ... ]
-    // clickhouse offsets are [end1, end2, ...]
-    // See e.g. `::clickhouse::ColumnArray::GetSize`
-    for (int64_t i = 0; i < input.length() - 1; ++i) {
-      auto start = input.GetView(i);
-      auto end = input.GetView(i + 1);
-      auto size = end - start;
-      output[i] = start + size;
-    }
-    return res;
+    return all_should_be_dropped ? drop::all : updated;
   }
 
   virtual auto
@@ -499,65 +592,108 @@ struct transformer_array : transformer {
                                          std::move(column_offsets));
   }
 
-  virtual auto create_column(
-    const tenzir::type& type, const arrow::Array& array, dropmask_cref dropmask,
-    tenzir::diagnostic_handler& dh) const -> ::clickhouse::ColumnRef override {
-    TENZIR_UNUSED(dropmask);
+  /// Translates Arrow Array offsets to ClickHouse Array offsets
+  /// arrow offsets are [ start1 , past1/start2, ... ]
+  /// clickhouse offsets are [end1, end2, ...]
+  /// See e.g. `::clickhouse::ColumnArray::GetSize`
+  static auto
+  make_offsets(const arrow::ListArray& list_array,
+               dropmask_cref dropmask) -> std::shared_ptr<ColumnUInt64> {
+    const auto arr = list_array.raw_value_offsets();
+    const auto size = list_array.length();
+    auto res = std::make_shared<ColumnUInt64>();
+    auto& output = res->GetWritableData();
+    output.resize(size);
+    auto actual_size = size_t{0};
+    for (int64_t i = 0; i < size; ++i) {
+      if (dropmask[i]) {
+        continue;
+      }
+      ++actual_size;
+      output[i] = arr[i + 1];
+    }
+    output.resize(actual_size);
+    return res;
+  }
+
+  virtual auto create_column(path_type& path, const tenzir::type& type,
+                             const arrow::Array& array, dropmask_cref dropmask,
+                             tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override {
     const auto value_type = as<list_type>(type).value_type();
     const auto& list_array = as<arrow::ListArray>(array);
     const auto& value_array = *list_array.values();
-    const auto& offsets
-      = static_cast<arrow::Int32Array&>(*list_array.offsets());
-    TENZIR_ASSERT(my_value_array == &value_array);
-    TENZIR_ASSERT(my_mask.size() == static_cast<size_t>(value_array.length()),
-                  fmt::format("{} == {}", my_mask.size(),
-                              value_array.length()));
-    auto clickhouse_columns
-      = data_transform->create_column(value_type, value_array, my_mask, dh);
-    auto clickhouse_offsets = make_offsets(offsets);
+    // Either this is fully nullable, or update_dropmask must have been called.
+    TENZIR_ASSERT(clickhouse_nullable or my_value_array == &value_array);
+    // If this is fully nullable, we need to adapt the internal dropmask here.
+    if (clickhouse_nullable) {
+      apply_dropmask_to_my_mask(array, dropmask);
+    }
+    path.push_back("[]");
+    auto clickhouse_columns = data_transform->create_column(
+      path, value_type, value_array, my_mask, dh);
+    path.pop_back();
+    if (not clickhouse_columns) {
+      return nullptr;
+    }
+    auto clickhouse_offsets = make_offsets(list_array, dropmask);
     return std::make_shared<ColumnArray>(std::move(clickhouse_columns),
                                          std::move(clickhouse_offsets));
   }
 };
 
-auto make_record_functions_from_clickhouse(std::string_view clickhouse_typename,
-                                           diagnostic_handler& dh)
-  -> std::unique_ptr<transformer> {
-  clickhouse_typename.remove_prefix("Tuple("sv.size());
-  clickhouse_typename.remove_suffix(1);
+auto make_record_functions_from_clickhouse(
+  path_type& path, std::string_view clickhouse_typename,
+  diagnostic_handler& dh) -> std::unique_ptr<transformer> {
+  TENZIR_ASSERT(clickhouse_typename.starts_with("Tuple("));
+  TENZIR_ASSERT(clickhouse_typename.ends_with(")"));
+  auto tuple_elements = clickhouse_typename;
+  tuple_elements.remove_prefix("Tuple("sv.size());
+  tuple_elements.remove_suffix(1);
+  auto transformations = transformer_record::schema_transformations{};
+  if (tuple_elements.empty()) {
+    diagnostic::error("ClickHouse column `{}` is an empty record, which is not "
+                      "supported",
+                      fmt::join(path, "."))
+      .emit(dh);
+    return nullptr;
+  }
   auto fields = std::vector<std::pair<std::string_view, std::string_view>>{};
-  auto open = 0;
-  size_t last = 0;
-  for (size_t i = 0; i < clickhouse_typename.size(); ++i) {
-    const auto c = clickhouse_typename[i];
+  auto open_count = 0;
+  size_t part_start_index = 0;
+  const auto add_field = [&](size_t start, size_t size) {
+    const auto part = detail::trim(tuple_elements.substr(start, size));
+    const auto split = part.find(' ');
+    const auto name = part.substr(0, split);
+    const auto type = part.substr(split + 1);
+    fields.emplace_back(name, type);
+  };
+  for (size_t i = 0; i < tuple_elements.size(); ++i) {
+    const auto c = tuple_elements[i];
     if (c == ')') {
-      --open;
+      TENZIR_ASSERT(open_count > 0);
+      --open_count;
       continue;
     }
     if (c == '(') {
-      ++open;
+      ++open_count;
       continue;
     }
-    if (c == ',' and open == 0) {
-      auto part = detail::trim(clickhouse_typename.substr(last, i));
-      auto split = part.find(' ');
-      fields.emplace_back(part.substr(0, split), part.substr(split + 1));
-      last = i + 1;
+    if (c == ',' and open_count == 0) {
+      add_field(part_start_index, i - part_start_index);
+      part_start_index = i + 1;
       continue;
     }
   }
-  auto part = detail::trim(clickhouse_typename.substr(last));
-  auto split = part.find(' ');
-  fields.emplace_back(part.substr(0, split), part.substr(split + 1));
-
-  auto transformations = transformer_record::schema_transformations{};
-
+  add_field(part_start_index, clickhouse_typename.npos);
   for (const auto& [k, t] : fields) {
     if (not validate_identifier(k)) {
       emit_invalid_identifier("nested column name", k, location::unknown, dh);
       return nullptr;
     }
-    auto functions = make_functions_from_clickhouse(t, dh);
+    path.push_back(k);
+    auto functions = make_functions_from_clickhouse(path, t, dh);
+    path.pop_back();
     if (not functions) {
       return nullptr;
     }
@@ -569,13 +705,18 @@ auto make_record_functions_from_clickhouse(std::string_view clickhouse_typename,
                                               std::move(transformations));
 }
 
-auto make_array_functions_from_clickhouse(std::string_view clickhouse_typename,
-                                          diagnostic_handler& dh)
-  -> std::unique_ptr<transformer> {
+auto make_array_functions_from_clickhouse(
+  path_type& path, std::string_view clickhouse_typename,
+  diagnostic_handler& dh) -> std::unique_ptr<transformer> {
+  TENZIR_ASSERT(clickhouse_typename.starts_with("Array("));
+  TENZIR_ASSERT(clickhouse_typename.ends_with(")"));
   auto value_typename = clickhouse_typename;
   value_typename.remove_prefix("Array("sv.size());
   value_typename.remove_suffix(1);
-  auto data_transform = make_functions_from_clickhouse(value_typename, dh);
+  path.push_back("[]");
+  auto data_transform
+    = make_functions_from_clickhouse(path, value_typename, dh);
+  path.pop_back();
   if (not data_transform) {
     return nullptr;
   }
@@ -585,50 +726,71 @@ auto make_array_functions_from_clickhouse(std::string_view clickhouse_typename,
 
 } // namespace
 
-auto type_to_clickhouse_typename(tenzir::type t, bool nullable) -> std::string {
+auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
+                                 diagnostic_handler& dh)
+  -> failure_or<std::string> {
   const auto f = detail::overload{
-    [&]<typename T>(const T&)
+    [nullable]<typename T>(const T&) -> failure_or<std::string>
       requires requires {
         tenzir_to_clickhouse_trait<T>::clickhouse_typename(true);
       }
     {
       return tenzir_to_clickhouse_trait<T>::clickhouse_typename(nullable);
     },
-    [](const record_type& r) {
-      auto tup = plain_clickhouse_tuple_elements(r);
-      if (tup.empty()) {
-        return std::string{};
+    [&dh, &path](const record_type& r) -> failure_or<std::string> {
+      TRY(auto tup, plain_clickhouse_tuple_elements(path, r, dh));
+      if (tup == "()") {
+        diagnostic::error("column `{}` is an empty record, which is not "
+                          "supported",
+                          fmt::join(path, "."))
+          .note("empty `Tuple`s cannot be send to ClickHouse")
+          .emit(dh);
+        return failure::promise();
       }
       return "Tuple" + tup;
     },
-    [&](const list_type& l) {
-      auto vt = type_to_clickhouse_typename(l.value_type(), nullable);
-      if (vt.empty()) {
-        return std::string{};
-      }
+    [&dh, nullable, &path](const list_type& l) -> failure_or<std::string> {
+      TRY(auto vt,
+          type_to_clickhouse_typename(path, l.value_type(), nullable, dh));
+      TENZIR_ASSERT(not vt.empty());
       return "Array(" + vt + ")";
     },
-    [](const auto& t) {
-      TENZIR_TRACE("unsupported type `{}`", t);
-      return std::string{};
+    [&dh, path](const null_type&) -> failure_or<std::string> {
+      diagnostic::error("column `{}` has type `null`", fmt::join(path, "."))
+        .note("untyped nulls are not supported when creating a table")
+        .hint("cast all columns to their intended type beforehand:\n"
+              "`column_that_should_be_int = int(column_that_should_be_int)`")
+        .emit(dh);
+      return failure::promise();
     },
-  };
+    [](const map_type&) -> failure_or<std::string> {
+      TENZIR_UNREACHABLE();
+    },
+    [](const enumeration_type&) -> failure_or<std::string> {
+      TENZIR_UNREACHABLE();
+    },
+    [](const blob_type&) -> failure_or<std::string> {
+      return "Array(UInt8)";
+    },
+    };
   return match(t, f);
 }
 
-auto plain_clickhouse_tuple_elements(const record_type& record,
-                                     std::string_view primary) -> std::string {
+auto plain_clickhouse_tuple_elements(
+  path_type& path, const record_type& record, diagnostic_handler& dh,
+  std::string_view primary) -> failure_or<std::string> {
   auto res = std::string{"("};
   auto first = true;
   for (auto [k, t] : record.fields()) {
+    const auto is_primary = k == primary;
+    path.push_back(k);
+    TRY(auto nested, type_to_clickhouse_typename(path, t, not is_primary, dh));
+    path.pop_back();
+    TENZIR_ASSERT(not nested.empty());
     if (not first) {
       res += ", ";
     } else {
       first = false;
-    }
-    auto nested = type_to_clickhouse_typename(t, k != primary);
-    if (nested.empty()) {
-      return {};
     }
     fmt::format_to(std::back_inserter(res), "{} {}", k, nested);
   }
@@ -636,9 +798,30 @@ auto plain_clickhouse_tuple_elements(const record_type& record,
   return res;
 }
 
-auto make_functions_from_clickhouse(const std::string_view clickhouse_typename,
-                                    diagnostic_handler& dh)
-  -> std::unique_ptr<transformer> {
+auto emit_unsupported_clickhouse_type_diagnostic(
+  path_type& path, std::string_view clickhouse_typename,
+  diagnostic_handler& dh) -> void {
+  auto diag = diagnostic::error("ClickHouse column `{}` has unsupported "
+                                "ClickHouse type `{}`",
+                                fmt::join(path, "."), clickhouse_typename);
+  // A few helpful suggestions for the types that we do support
+  if (clickhouse_typename.starts_with("Date")) {
+    diag = std::move(diag).note("use `DateTime64(8)` instead");
+  } else if (clickhouse_typename.starts_with("UInt")) {
+    diag = std::move(diag).note("use `UInt64` instead");
+  } else if (clickhouse_typename.starts_with("Int")) {
+    diag = std::move(diag).note("use `Int64` instead");
+  } else if (clickhouse_typename.starts_with("Float")) {
+    diag = std::move(diag).note("use `Float64` instead");
+  } else if (clickhouse_typename == "IPv4") {
+    diag = std::move(diag).note("use `IPv6` instead");
+  }
+  std::move(diag).emit(dh);
+}
+
+auto make_functions_from_clickhouse(
+  path_type& path, const std::string_view clickhouse_typename,
+  diagnostic_handler& dh) -> std::unique_ptr<transformer> {
   // Array(T)
   const bool is_nullable = clickhouse_typename.starts_with("Nullable(");
   TENZIR_ASSERT(not is_nullable or clickhouse_typename.ends_with(')'));
@@ -662,33 +845,17 @@ auto make_functions_from_clickhouse(const std::string_view clickhouse_typename,
   X(ip_type);
   X(subnet_type);
 #undef X
+  if (clickhouse_typename == "Array(UInt8)") {
+    return std::make_unique<transformer_blob>();
+  }
   if (clickhouse_typename.starts_with("Tuple(")) {
-    return make_record_functions_from_clickhouse(clickhouse_typename, dh);
+    return make_record_functions_from_clickhouse(path, clickhouse_typename, dh);
   }
   if (clickhouse_typename.starts_with("Array(")) {
-    return make_array_functions_from_clickhouse(clickhouse_typename, dh);
+    return make_array_functions_from_clickhouse(path, clickhouse_typename, dh);
   }
-  emit_unsupported_type_diagnostic(clickhouse_typename, dh);
+  emit_unsupported_clickhouse_type_diagnostic(path, clickhouse_typename, dh);
   return nullptr;
-}
-
-auto emit_unsupported_type_diagnostic(std::string_view clickhouse_typename,
-                                      diagnostic_handler& dh) -> void {
-  auto diag = diagnostic::error("unsupported ClickHouse type `{}`",
-                                clickhouse_typename);
-  // A few helpful suggestions for the types that we do support
-  if (clickhouse_typename.starts_with("Date")) {
-    diag = std::move(diag).note("use `DateTime64(8)` instead");
-  } else if (clickhouse_typename.starts_with("UInt")) {
-    diag = std::move(diag).note("use `UInt64` instead");
-  } else if (clickhouse_typename.starts_with("Int")) {
-    diag = std::move(diag).note("use `Int64` instead");
-  } else if (clickhouse_typename.starts_with("Float")) {
-    diag = std::move(diag).note("use `Float64` instead");
-  } else if (clickhouse_typename == "IPv4") {
-    diag = std::move(diag).note("use `IPv6` instead");
-  }
-  std::move(diag).emit(dh);
 }
 
 } // namespace tenzir::plugins::clickhouse
