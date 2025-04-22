@@ -1959,9 +1959,6 @@ secret_type::builder_type::builder_type(arrow::MemoryPool* pool)
         /*source_type:*/
         std::make_shared<
           typename secret_type::builder_type::arrow_enum_builder_type>(),
-        /*value_type:*/
-        std::make_shared<
-          typename secret_type::builder_type::arrow_enum_builder_type>(),
         /*encoding:*/
         std::make_shared<
           typename secret_type::builder_type::arrow_enum_builder_type>(),

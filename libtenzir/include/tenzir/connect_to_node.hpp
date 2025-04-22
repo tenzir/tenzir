@@ -43,16 +43,19 @@ auto connect_to_node(caf::scoped_actor& self) -> caf::expected<node_actor>;
 
 template <class... Sigs>
 void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
-                     std::function<void(caf::expected<node_actor>)> callback) {
+                     std::function<void(caf::expected<node_actor>)> callback,
+                     std::optional<duration> timeout = std::nullopt) {
   // Fetch values from config.
   const auto& opts = content(self->system().config());
   auto node_endpoint = detail::get_node_endpoint(opts);
   if (!node_endpoint) {
     return callback(std::move(node_endpoint.error()));
   }
-  auto timeout = detail::node_connection_timeout(opts);
+  if (not timeout) {
+    timeout = detail::node_connection_timeout(opts);
+  }
   auto connector = self->spawn(tenzir::connector, detail::get_retry_delay(opts),
-                               detail::get_deadline(timeout));
+                               detail::get_deadline(*timeout));
   self
     ->mail(atom::connect_v,
            connect_request{node_endpoint->port->number(), node_endpoint->host})
@@ -62,7 +65,7 @@ void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
         // We must keep the connector alive until after this request is completed.
         (void)connector;
         self->mail(atom::get_v, atom::version_v)
-          .request(node, timeout)
+          .request(node, *timeout)
           .then(
             [self, callback,
              node = std::move(node)](record& remote_version) mutable {

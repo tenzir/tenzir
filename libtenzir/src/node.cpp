@@ -656,8 +656,20 @@ auto node(node_actor::stateful_pointer<node_state> self,
       }
       auto typed_store = caf::actor_cast<secret_store_actor>(store);
       TENZIR_ASSERT(typed_store);
-      return self->mail(atom::resolve_v, std::move(name), std::move(public_key))
-        .delegate(typed_store);
+      auto rp = self->make_response_promise<secret_resolution_result>();
+      // We apparently cannot `delegate` here, since this may be across process
+      // boundaries if the request came from the client process. Most likely a
+      // bug in CAF
+      self->mail(atom::resolve_v, std::move(name), std::move(public_key))
+        .request(typed_store, defaults::secret_lookup_timeout)
+        .then(
+          [rp = rp](secret_resolution_result r) mutable {
+            rp.deliver(std::move(r));
+          },
+          [rp = rp](caf::error e) mutable {
+            rp.deliver(std::move(e));
+          });
+      return rp;
     },
   };
 }

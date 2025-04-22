@@ -180,7 +180,7 @@ auto value_at([[maybe_unused]] const Type& type,
       = static_cast<const arrow::UInt8Array&>(*arr.field(1)).GetView(row);
     return {network, length};
   } else if constexpr (std::is_same_v<Type, secret_type>) {
-    TENZIR_ASSERT_EXPENSIVE(arr.num_fields() == 4);
+    TENZIR_ASSERT_EXPENSIVE(arr.num_fields() == 3);
     auto name = as<arrow::StringArray>(*arr.field(0)).GetView(row);
     auto source_type
       = static_cast<typename secret_type::builder_type::arrow_enum_array_type&>(
@@ -321,7 +321,7 @@ auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
   if (arr.IsNull(row)) {
     return caf::none;
   }
-  auto f = [&]<concrete_type Type>(const Type& type) noexcept -> data_view {
+  auto f = [&]<concrete_type Type>(const Type& type) -> data_view {
     return value_at(type, arr, row);
   };
   return match(type, f);
