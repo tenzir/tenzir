@@ -1487,7 +1487,7 @@ public:
   make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
-/// An extension type for Arrow representing corresponding to the subnet type.
+/// An extension type for Arrow representing corresponding to the secret type.
 struct secret_type::arrow_type : arrow::ExtensionType {
   /// A unique identifier for this extension type.
   static constexpr auto name = "tenzir.secret";
@@ -1495,7 +1495,7 @@ struct secret_type::arrow_type : arrow::ExtensionType {
   /// Register this extension type.
   static void register_extension() noexcept;
 
-  /// Create an arrow type representation of a Tenzir pattern type.
+  /// Create an arrow type representation of a Tenzir secret type.
   arrow_type() noexcept;
 
   /// Unique name to identify the extension type.
@@ -1518,7 +1518,7 @@ struct secret_type::arrow_type : arrow::ExtensionType {
   Deserialize(std::shared_ptr<arrow::DataType> storage_type,
               const std::string& serialized) const override;
 
-  /// Create serialized representation of subnet.
+  /// Create serialized representation of secret.
   /// @return the serialized representation.
   std::string Serialize() const override;
 };

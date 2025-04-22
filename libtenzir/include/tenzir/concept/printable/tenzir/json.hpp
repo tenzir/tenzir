@@ -153,7 +153,8 @@ struct json_printer : printer_base<json_printer> {
       if (options_.tql) {
         return x.print_to(out_);
       }
-      out_ = fmt::format_to(out_, "\"{}\"", x);
+      const auto str = fmt::format("{}", x);
+      out_ = fmt::format_to(out_, "{}", json_string_fmt_wrapper{str});
       return true;
     }
 

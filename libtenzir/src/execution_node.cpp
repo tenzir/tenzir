@@ -304,7 +304,8 @@ struct exec_node_control_plane final : public operator_control_plane {
       callback(node);
       return;
     }
-    connect_to_node(state.self, std::move(callback));
+    connect_to_node(state.self, std::move(callback),
+                    defaults::secret_lookup_timeout);
   }
 
   exec_node_state<Input, Output>& state;
