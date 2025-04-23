@@ -132,11 +132,11 @@ but often resort to the method style when it is more idiomatic.
 
 ### Filesystem
 
-| Function                                | Description                                    | Example                           |
-| :-------------------------------------- | :--------------------------------------------- | :-------------------------------- |
-| [`file_contents`](functions/file_contents.md)   | Reads a file's contents      | `file_contents("/path/to/file")`  |
-| [`file_name`](functions/file_name.md)   | Extracts the file name from a file path        | `file_name("/path/to/log.json")`  |
-| [`parent_dir`](functions/parent_dir.md) | Extracts the parent directory from a file path | `parent_dir("/path/to/log.json")` |
+| Function                                      | Description                                    | Example                           |
+| :-------------------------------------------- | :--------------------------------------------- | :-------------------------------- |
+| [`file_contents`](functions/file_contents.md) | Reads a file's contents                        | `file_contents("/path/to/file")`  |
+| [`file_name`](functions/file_name.md)         | Extracts the file name from a file path        | `file_name("/path/to/log.json")`  |
+| [`parent_dir`](functions/parent_dir.md)       | Extracts the parent directory from a file path | `parent_dir("/path/to/log.json")` |
 
 ## Parsing
 
@@ -246,6 +246,17 @@ This is hidden because there is an issue with the timezone DB.
 | [`hash_sha384`](functions/hash_sha384.md) | Computes a SHA384 hash digest | `hash_sha384("foo")` |
 | [`hash_sha512`](functions/hash_sha512.md) | Computes a SHA512 hash digest | `hash_sha512("foo")` |
 | [`hash_xxh3`](functions/hash_xxh3.md)     | Computes a XXH3 hash digest   | `hash_xxh3("foo")`   |
+
+## Bit Operations
+
+| Function                                  | Description                                | Example                 |
+| :---------------------------------------- | :----------------------------------------- | :---------------------- |
+| [`bit_and`](functions/bit_and.md)         | Computes the bit-wise AND of its arguments | `bit_and(lhs, rhs)`     |
+| [`bit_not`](functions/bit_not.md)         | Computes the bit-wise NOT of its argument  | `bit_not(x)`            |
+| [`bit_or`](functions/bit_or.md)           | Computes the bit-wise OR of its arguments  | `bit_or(lhs, rhs)`      |
+| [`bit_xor`](functions/bit_xor.md)         | Computes the bit-wise XOR of its arguments | `bit_xor(lhs, rhs)`     |
+| [`shift_left`](functions/shift_left.md)   | Performs a bit-wise left shift             | `shift_left(lhs, rhs)`  |
+| [`shift_right`](functions/shift_right.md) | Performs a bit-wise right shift            | `shift_right(lhs, rhs)` |
 
 ## Encoding
 

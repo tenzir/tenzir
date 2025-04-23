@@ -37,7 +37,7 @@ emit_invalid_identifier(std::string_view name, std::string_view value,
                         location loc, diagnostic_handler& dh) {
   diagnostic::error("invalid {} `{}`", name, value)
     .primary(loc)
-    .hint("`{}` must either be a quoted string, or match the regular "
+    .hint("{} must either be a quoted string, or match the regular "
           "expression `{}`",
           name, validation_expr)
     .emit(dh);

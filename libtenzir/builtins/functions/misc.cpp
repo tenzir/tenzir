@@ -13,7 +13,11 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <boost/process/environment.hpp>
+#if __has_include(<boost/process/v1/environment.hpp>)
+#  include <boost/process/v1/environment.hpp>
+#else
+#  include <boost/process/environment.hpp>
+#endif
 
 #include <ranges>
 
@@ -179,6 +183,30 @@ public:
     TRY(argument_parser2::function("env")
           .positional("key", expr, "string")
           .parse(inv, ctx));
+    if (auto key = try_const_eval(expr, ctx)) {
+      auto value = std::optional<std::string>{};
+      const auto* typed_key = try_as<std::string>(*key);
+      if (not typed_key) {
+        diagnostic::warning("expected `string`, got `{}`",
+                            type::infer(key).value_or(type{}).kind())
+          .primary(expr)
+          .emit(ctx);
+      } else if (auto it = env_.find(*typed_key); it != env_.end()) {
+        value = it->second;
+      }
+      return function_use::make(
+        [value = std::move(value)](evaluator eval, session ctx) -> series {
+          TENZIR_UNUSED(ctx);
+          if (not value) {
+            return series::null(string_type{}, eval.length());
+          }
+          return {
+            string_type{},
+            check(arrow::MakeArrayFromScalar(arrow::StringScalar{*value},
+                                             eval.length())),
+          };
+        });
+    }
     return function_use::make(
       [this, expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto b = arrow::StringBuilder{};

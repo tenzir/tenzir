@@ -399,7 +399,7 @@ public:
       co_yield {};
       co_return;
     }
-    auto ynames = std::map<std::string, bool>{};
+    auto ynames = detail::stable_map<std::string, bool>{};
     auto b = series_builder{};
     const auto make_yname = [&](std::string_view group, std::string_view y) {
       if (not args_.group) {
@@ -696,7 +696,7 @@ public:
 
   auto make_attributes(
     const std::string& xpath, std::deque<std::string>& ynums,
-    std::map<std::string, bool>& ynames,
+    detail::stable_map<std::string, bool>& ynames,
     const detail::stable_map<std::string_view, std::string>& limits) const
     -> std::vector<type::attribute_view> {
     auto attrs = std::vector<type::attribute_view>{
