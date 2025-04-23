@@ -24,7 +24,7 @@ namespace tenzir {
 TENZIR_ENUM(secret_source_type, literal, managed, uninitialized);
 /// @brief which encode/decode operations were done on the value in the pipeline
 /// `This is important for both persistence and the actual value computation.
-TENZIR_ENUM(secret_encoding, none, encoded, decoded);
+TENZIR_ENUM(secret_encoding, none, was_decoded);
 
 class secret;
 class secret_view;

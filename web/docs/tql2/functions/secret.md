@@ -10,8 +10,10 @@ secret(name:string) -> secret
 
 The `secret` function retrieves the value associated with the key `name`.
 
-The secret is first looked up locally in the environment or configuration. If it
-is not found there, ultimately a request is made to the Tenzir Platform.
+The secret is first looked up locally in the environment or configuration of the
+Tenzir Node. A `tenzir` client process can use secrets only if it has a Tenzir
+Node to connect to.
+If the secret is not found in the Node, a request is made to the Tenzir Platform.
 Should the platform also not be able to find the secret, an error is raised.
 
 See the [Explanation page for secrets](../../../docs/secrets/README.md) for more

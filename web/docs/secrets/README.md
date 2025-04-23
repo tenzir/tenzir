@@ -31,23 +31,17 @@ The [`secret`](../tql2/functions/secret.md) function retrieves a secret.
 
 Secrets are looked up in the following order:
 
-1. The environment of the currently running process ¹
-2. The configuration of the currently running process ¹
-3. The environment of the Tenzir Node process ²
-4. The configuration of the Tenzir Node process ²
-5. The Tenzir Platform secret store for the Workspace the Tenzir Node is running in ² ³
+1. The environment of the Tenzir Node process
+2. The configuration of the Tenzir Node process
+3. The Tenzir Platform secret store for the Workspace the Tenzir Node is running in
 
-¹⁾ Steps 1 & 2 apply to the `tenzir` client process only. If a pipeline is executed
-directly in a Tenzir Node, they are equivalent to steps 3 & 4.
+A secrets actual value is only looked up when it is required by the operator
+accepting a secret. If the value is looked up over any network connection, it is
+additionally encrypted using ECIES with a one-time, per secret key.
+The value stays encrypted through the entire transfer until the final usage site.
 
-²⁾ Steps 3-5 require a Tenzir Node to connect to.
-
-³⁾ Step 5 requires a secret store to be configured in the Tenzir Platform.
-
-A secrets actual value is only looked up when it is required by the operator. If
-the value is looked up over any network connection, it is additionally encrypted
-using ECIES with a one-time, per secret key. The value stays encrypted through
-the entire transfer until the final usage site.
+A `tenzir` client process can use the `secret` function only if it has a Tenzir
+Node to connect to.
 
 ## Tenzir configuration secrets
 

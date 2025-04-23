@@ -642,7 +642,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
       if (value) {
         auto value_string = caf::get_as<std::string>(*value);
         if (not value_string) {
-          return secret_resolution_error{"secret is not a string", true};
+          return secret_resolution_error{"config secret is not a string"};
         }
         auto encrypted = ecc::encrypt(*value_string, public_key);
         if (not encrypted) {
@@ -650,18 +650,18 @@ auto node(node_actor::stateful_pointer<node_state> self,
         }
         return encrypted_secret_value{*encrypted};
       }
-      auto store = self->system().registry().get("tenzir.platform");
+      auto store
+        = self->system().registry().get<secret_store_actor>("tenzir.platform");
       if (not store) {
-        return secret_resolution_error{"no secret store", true};
+        return secret_resolution_error{
+          "secret does not exist locally and no secret is store available"};
       }
-      auto typed_store = caf::actor_cast<secret_store_actor>(store);
-      TENZIR_ASSERT(typed_store);
       auto rp = self->make_response_promise<secret_resolution_result>();
       // We apparently cannot `delegate` here, since this may be across process
-      // boundaries if the request came from the client process. Most likely a
-      // bug in CAF
+      // boundaries if the request came from the client process.
+      // https://github.com/actor-framework/actor-framework/issues/2056
       self->mail(atom::resolve_v, std::move(name), std::move(public_key))
-        .request(typed_store, defaults::secret_lookup_timeout)
+        .request(store, defaults::secret_lookup_timeout)
         .then(
           [rp = rp](secret_resolution_result r) mutable {
             rp.deliver(std::move(r));
