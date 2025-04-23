@@ -759,7 +759,7 @@ auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
       TENZIR_ASSERT(not vt.empty());
       return "Array(" + vt + ")";
     },
-    [&dh, path](const null_type&) -> failure_or<std::string> {
+    [&dh, &path](const null_type&) -> failure_or<std::string> {
       diagnostic::error("column `{}` has type `null`", fmt::join(path, "."))
         .note("untyped nulls are not supported when creating a table")
         .hint("cast all columns to their intended type beforehand:\n"
@@ -775,6 +775,12 @@ auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
     },
     [](const blob_type&) -> failure_or<std::string> {
       return "Array(UInt8)";
+    },
+    [&dh, &path](const secret_type&) -> failure_or<std::string> {
+      diagnostic::error("column `{}` has type `secret`", fmt::join(path, "."))
+        .note("secrets cannot be send to ClickHouse")
+        .emit(dh);
+      return failure::promise();
     },
     };
   return match(t, f);
