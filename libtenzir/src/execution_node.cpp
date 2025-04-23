@@ -9,10 +9,10 @@
 #include "tenzir/execution_node.hpp"
 
 #include "tenzir/actors.hpp"
-#include "tenzir/arrow_utils.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/connect_to_node.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/weak_handle.hpp"
@@ -22,7 +22,6 @@
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/secret_resolution.hpp"
-#include "tenzir/secret_store.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -213,30 +212,29 @@ struct exec_node_control_plane final : public operator_control_plane {
     }
   }
 
-  virtual auto
-  resolve_secrets_must_yield(std::vector<secret_request> requests) -> void {
+  virtual auto resolve_secrets_must_yield(std::vector<secret_request> requests)
+    -> void override {
     auto non_local_secrets = std::vector<secret_request>{};
     for (auto& r : requests) {
       const auto name = r.s.name();
       if (r.s.source_type() == secret_source_type::literal) {
-        r.out = resolved_secret_value{std::string{name}};
+        if (r.s.encoding() == secret_encoding::was_decoded) {
+          auto decoded
+            = detail::base64::try_decode<ecc::cleansing_vector<std::byte>>(
+              r.s.name());
+          if (not decoded) {
+            diagnostic::error("failed to base64 decode secret")
+              .primary(r.loc)
+              .emit(diagnostics());
+            continue;
+          }
+          r.out = resolved_secret_value{std::move(*decoded)};
+          continue;
+        }
+        r.out = resolved_secret_value{ecc::cleansing_string{name}};
         continue;
       }
-      const auto& cfg = content(state.self->system().config());
-      const auto key = fmt::format("tenzir.secrets.{}", name);
-      const auto value = caf::get_if(&cfg, key);
-      if (not value) {
-        non_local_secrets.push_back(std::move(r));
-        continue;
-      }
-      auto value_string = caf::get_as<std::string>(*value);
-      if (not value_string) {
-        diagnostic::error("secret is not a string")
-          .primary(r.loc)
-          .emit(diagnostics());
-        return;
-      }
-      r.out = resolved_secret_value{std::move(*value_string)};
+      non_local_secrets.push_back(std::move(r));
     }
     if (non_local_secrets.empty()) {
       return;
@@ -244,21 +242,23 @@ struct exec_node_control_plane final : public operator_control_plane {
     auto callback = [this, non_local_secrets = std::move(non_local_secrets)](
                       caf::expected<node_actor> maybe_actor) {
       if (not maybe_actor) {
-        diagnostic::error("unkown secret")
-          .primary(non_local_secrets.front().loc,
-                   "secret `{}` could not be found locally",
-                   non_local_secrets.front().s.name())
-          .note("you are running in a client process, but no Tenzir Node was "
-                "available")
+        diagnostic::error("no Tenzir Node to resolve secrets")
+          .primary(non_local_secrets.front().loc)
           .emit(diagnostics());
+        return;
       }
-      auto fan = detail::make_fanout_counter(
+      // FIXME: Is this actually threadsafe the way we use it? The counter
+      // itself certainly is not.
+      auto fan = detail::make_fanout_counter_with_error<diagnostic>(
         non_local_secrets.size(),
         [this]() {
           set_waiting(false);
         },
-        [this](caf::error e) {
-          diagnostic::error(std::move(e)).emit(diagnostics());
+        [this](std::span<diagnostic> diags) {
+          for (auto& d : diags) {
+            diagnostics().emit(std::move(d));
+          }
+          set_waiting(false);
         });
       for (auto& r : non_local_secrets) {
         auto key_pair = ecc::generate_keypair();
@@ -278,23 +278,37 @@ struct exec_node_control_plane final : public operator_control_plane {
                         .primary(r.loc)
                         .note("secret `{}` failed: {}", r.s.name(),
                               decrypted.error())
-                        .to_error());
+                        .done());
                     return;
                   }
-                  r.out = resolved_secret_value{*decrypted};
+                  if (r.s.encoding() == secret_encoding::none) {
+                    r.out = resolved_secret_value{std::move(*decrypted)};
+                    fan->receive_success();
+                  }
+                  auto decoded = detail::base64::try_decode<
+                    ecc::cleansing_vector<std::byte>>(*decrypted);
+                  if (not decoded) {
+                    fan->receive_error(
+                      diagnostic::error("failed to base64 decode secret")
+                        .primary(r.loc)
+                        .done());
+                    return;
+                  }
+                  r.out = resolved_secret_value{std::move(*decoded)};
                   fan->receive_success();
+                  return;
                 },
                 [&](const secret_resolution_error& e) {
                   fan->receive_error(
                     diagnostic::error("could not get secret value")
                       .primary(r.loc)
                       .note("secret `{}` failed: {}", r.s.name(), e.message)
-                      .to_error());
+                      .done());
                 });
             },
             [fan, loc = r.loc](caf::error e) {
               fan->receive_error(
-                diagnostic::error(std::move(e)).primary(loc).to_error());
+                diagnostic::error(std::move(e)).primary(loc).done());
             });
       }
     };
@@ -304,8 +318,7 @@ struct exec_node_control_plane final : public operator_control_plane {
       callback(node);
       return;
     }
-    connect_to_node(state.self, std::move(callback),
-                    defaults::secret_lookup_timeout);
+    connect_to_node(state.self, std::move(callback));
   }
 
   exec_node_state<Input, Output>& state;

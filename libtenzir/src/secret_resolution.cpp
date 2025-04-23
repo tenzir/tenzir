@@ -12,14 +12,12 @@
 
 namespace tenzir {
 
-encrypted_secret_value::~encrypted_secret_value() {
-  OPENSSL_cleanse(value.data(), value.size());
-}
-
 auto resolved_secret_value::clear() -> void {
-  OPENSSL_cleanse(value_.data(), value_.size());
-  value_.clear();
-  value_.shrink_to_fit();
+  match(value_, [](auto& value) {
+    ecc::cleanse_memory(value.data(), value.size());
+    value.clear();
+    value.shrink_to_fit();
+  });
 }
 
 } // namespace tenzir

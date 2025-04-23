@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/view3.hpp"
 
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -65,8 +66,33 @@ class plugin final : public function_plugin {
             }
             return series{Type{}, finish(*b)};
           },
+          [&](const type_to_arrow_array_t<secret_type>& array) -> series
+            requires(Mode == mode::decode)
+          {
+            auto b = type_to_arrow_builder_t<secret_type>{};
+            check(b.Reserve(array.length()));
+            for (auto s : values3(array)) {
+              if (not s) {
+                check(b.AppendNull());
+                continue;
+              }
+              if (s->encoding() == secret_encoding::was_decoded) {
+                diagnostic::warning(
+                  "cannot base64 decode secret more than once")
+                  .primary(expr)
+                  .emit(ctx);
+                check(b.AppendNull());
+                continue;
+              }
+              check(append_builder(secret_type{}, b,
+                                   secret_view{s->name(), s->source_type(),
+                                               secret_encoding::was_decoded}));
+            }
+            return series{secret_type{}, finish(b)};
+          },
           [&](const auto&) -> series {
-            diagnostic::warning("expected `blob` or `string`, got `{}`",
+            diagnostic::warning("expected `blob` or `string`, got "
+                                "`{}`",
                                 value.type.kind())
               .primary(expr)
               .emit(ctx);
