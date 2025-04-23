@@ -103,6 +103,7 @@ Tenzir comes with a wide range of built-in pipeline operators.
 | [`to_clickhouse`](./operators/to_clickhouse.mdx)             | Sends events to a ClickHouse Table               | `to_clickhouse table="my_table"`                                              |
 | [`to_fluent_bit`](./operators/to_fluent_bit.mdx)             | Sends events to Fluent Bit                       | `to_fluent_bit "elasticsearch" …`                                             |
 | [`to_google_secops`](./operators/to_google_secops.md)        | Sends events to Google SecOps                    | `to_google_secops …`                                                          |
+| [`to_google_cloud_logging`](./operators/to_google_cloud_logging.md) | Sends events to Google Cloud Logging      | `to_google_cloud_logging …`                                                   |
 | [`to_hive`](./operators/to_hive.md)                          | Writes events using hive partitioning            | `to_hive "s3://…", partition_by=[x]`                                          |
 | [`to_opensearch`](./operators/to_opensearch.mdx)             | Sends incoming events to the OpenSearch Bulk API | `to_opensearch 'localhost:9200", …`                                           |
 | [`to_snowflake`](./operators/to_snowflake.md)                | Sends incoming events to a Snowflake database    | `to_snowflake account_identifier="…`                                          |
