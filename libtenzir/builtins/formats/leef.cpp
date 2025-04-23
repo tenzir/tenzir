@@ -6,7 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/view3.hpp"
+
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -382,9 +385,6 @@ public:
                                expr = std::move(expr)](auto eval, session ctx) {
       return map_series(eval(expr), [&](series arg) {
         auto f = detail::overload{
-          [&](const arrow::NullArray&) -> multi_series {
-            return arg;
-          },
           [&](const arrow::StringArray& arg) -> multi_series {
             auto builder = multi_series_builder{
               msb_ops,
@@ -410,6 +410,8 @@ public:
                                 arg.type.kind())
               .primary(call)
               .emit(ctx);
+            /// TODO: We actually know the type it would produce here, sans the
+            /// attributes
             return series::null(null_type{}, arg.length());
           },
         };
@@ -419,9 +421,164 @@ public:
   }
 };
 
+auto make_root_field(std::string field) -> ast::root_field {
+  return ast::root_field{
+    ast::identifier{std::move(field), location::unknown},
+  };
+}
+
+struct printer_args final {
+  ast::expression attributes{make_root_field("attributes")};
+  ast::expression vendor{make_root_field("vendor")};
+  ast::expression product_name{make_root_field("product_name")};
+  ast::expression product_version{make_root_field("product_version")};
+  ast::expression event_class_id{make_root_field("event_class_id")};
+  located<std::string> delimiter = located{"\t", location::unknown};
+  location op;
+
+  auto add_to(argument_parser2& p) -> void {
+    p.positional("attributes", attributes, "record");
+    p.named("delimiter", delimiter, "string");
+    p.named("vendor", vendor, "string");
+    p.named("product_name", product_name, "string");
+    p.named("product_version", product_version, "string");
+    p.named_optional("event_class_id", event_class_id, "string");
+  }
+
+  auto loc(into_location loc) const -> location {
+    return loc ? loc : op;
+  }
+
+  friend auto inspect(auto& f, printer_args& x) -> bool {
+    return f.object(x).fields(f.field("attributes", x.attributes),
+                              f.field("vendor", x.vendor),
+                              f.field("product_name", x.product_name),
+                              f.field("product_version", x.product_version),
+                              f.field("event_class_id", x.event_class_id),
+                              f.field("delimiter", x.delimiter),
+                              f.field("op", x.op));
+  }
+};
+
+class print_leef final : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "print_leef";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto parser = argument_parser2::function(name());
+    auto args = printer_args{};
+    args.op = inv.call.get_location();
+    TRY(parser.parse(inv, ctx));
+    if (args.delimiter.inner.size() != 1) {
+      diagnostic::error("custom LEEF delimiter must be a single character")
+        .primary(args.delimiter, "got `{}`", args.delimiter.inner)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (args.delimiter.inner == "|") {
+      diagnostic::error("custom LEEF delimiter must not be `|`")
+        .primary(args.delimiter)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make(
+      [args = std::move(args)](auto eval, session ctx) -> multi_series {
+        auto arr = std::array{
+          eval(args.vendor),          eval(args.product_name),
+          eval(args.product_version), eval(args.event_class_id),
+          eval(args.attributes),
+        };
+        return map_series(
+          arr, [&args, &ctx](const std::span<series> x) -> multi_series {
+            TENZIR_ASSERT(x.size() == 5);
+            const auto& vendor = x[0];
+            const auto& product_name = x[1];
+            const auto& product_version = x[2];
+            const auto& event_class_id = x[3];
+            const auto& attributes = x[4];
+            TENZIR_ASSERT(vendor.length() == product_name.length());
+            TENZIR_ASSERT(vendor.length() == product_version.length());
+            TENZIR_ASSERT(vendor.length() == event_class_id.length());
+            TENZIR_ASSERT(vendor.length() == attributes.length());
+            bool ok = true;
+#define TYPE_CHECK(NAME, TYPE)                                                 \
+  if (not NAME.type.kind().template is<TYPE>()) {                              \
+    ok = false;                                                                \
+    diagnostic::warning(#NAME " must be `{}`", type_kind{tag_v<TYPE>})         \
+      .primary(args.loc(args.NAME), "got `{}`", NAME.type.kind())              \
+      .emit(ctx);                                                              \
+  }
+            TYPE_CHECK(vendor, string_type)
+            TYPE_CHECK(product_name, string_type)
+            TYPE_CHECK(product_version, string_type)
+            TYPE_CHECK(event_class_id, string_type)
+            TYPE_CHECK(attributes, record_type)
+#undef TYPE_CHECK
+            if (not ok) {
+              return series::null(string_type{}, vendor.length());
+            }
+            auto builder = type_to_arrow_builder_t<string_type>{};
+            auto str = std::string{};
+            auto vendor_gen
+              = values3(as<type_to_arrow_array_t<string_type>>(*vendor.array));
+            auto product_name_gen = values3(
+              as<type_to_arrow_array_t<string_type>>(*product_name.array));
+            auto product_version_gen = values3(
+              as<type_to_arrow_array_t<string_type>>(*product_version.array));
+            auto event_class_id_gen = values3(
+              as<type_to_arrow_array_t<string_type>>(*event_class_id.array));
+            auto attributes_gen = values3(
+              as<type_to_arrow_array_t<record_type>>(*attributes.array));
+            while (true) {
+              auto vendor = vendor_gen.next();
+              auto product_name = product_name_gen.next();
+              auto product_version = product_version_gen.next();
+              auto event_class_id = event_class_id_gen.next();
+              auto attributes = attributes_gen.next();
+              if (not vendor) {
+                TENZIR_ASSERT(product_name_gen.exhausted());
+                TENZIR_ASSERT(product_version_gen.exhausted());
+                TENZIR_ASSERT(event_class_id_gen.exhausted());
+                TENZIR_ASSERT(attributes_gen.exhausted());
+                break;
+              }
+              str = "LEEF:";
+              if (args.delimiter.inner == "\t") {
+                str.append("1.0");
+              } else {
+                str.append("2.0");
+              }
+              str += '|';
+              const auto append_field = [&str](const auto& field) {
+                if (field) {
+                  str.append((*field)->begin(), (*field)->end());
+                }
+                str += '|';
+              };
+              append_field(product_name);
+              append_field(product_version);
+              append_field(event_class_id);
+              if (args.delimiter.inner != "\t") {
+                str.append(args.delimiter.inner);
+                str += '|';
+              }
+              /// FIXME: attributes
+              check(builder.Append(str));
+            }
+            return series{string_type{}, check(builder.Finish())};
+          });
+      });
+  }
+}; // namespace
+
 } // namespace
 } // namespace tenzir::plugins::leef
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::leef_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::read_leef)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::parse_leef)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::print_leef)
