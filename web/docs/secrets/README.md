@@ -103,7 +103,50 @@ Be aware that the `tenzir.secrets` section is hidden from the
 
 ### Platform Secrets
 
+The Tenzir Platform stores a separate set of secrets for every workspace.
+These secrets are accessible to all Tenzir Nodes connected to that workspace.
 
-:::danger UNFINISHED
-<!-- TODO: @platform-squad -->
+Secrets can be added, updated or deleted from a workspace using either the
+`tenzir-platform` CLI or the web interface. Read more details in the [CLI
+reference](../platform-cli.md#Manage Secrets).
+
+For example, to add a new secret `geheim`, use the following command:
+
+```bash
+tenzir-platform secret add geheim --value=1528F9F3-FAFA-45B4-BC3C-B755D0E0D9C2
+```
+
+To manage secrets from the web interface, go to the `Workspace Settings` screen
+by clicking on the gear icon in the workspace selector.
+
+![Secrets UI](./screenshot.png)
+
+#### External Secret Stores
+
+:::note Sovereign Edition Recommended
+The ability to use an external secret store is most useful for Sovereign Edition
+customers running a self-hosted instance of the platform.
 :::
+
+Instead of using its internal secret store, the Tenzir Platform can be
+configured to provide access to the secrets stored in an external secrets store
+instead. This access is read-only, writing to or deleting from an external
+secrets store is currently not supported.
+
+External secret stores can only be configured using the `tenzir-platform` CLI.
+To configure an external secret store, use the `secret store add` subcommand.
+
+```bash
+tenzir-platform secret store add aws --region='eu-west-1' --assumed-role-arn='arn:aws:iam::1234567890:role/tenzir-platform-secrets-access' --prefix=tenzir/
+```
+
+At the moment, only AWS Secrets Manager is supported as external secrets store.
+
+In order to provide access the external secrets to the nodes, the Tenzir Platform
+must be given the necessary permissions to read secret values from the external store.
+In the example above, this means that the Tenzir Platform must be able to assume
+the specified role, and the role must have permissions to read secrets under the
+prefix `tenzir/` from the Secrets Manager instance in the account of the
+assumed role.
+
+See the [CLI reference](../platform-cli.md#Manage Secret Stores) for more details.
