@@ -30,6 +30,10 @@
 
 namespace tenzir::ecc {
 
+void cleanse_memory(void* start, size_t size) {
+  OPENSSL_cleanse(start, size);
+}
+
 // Helper macro to declare an OpenSSL object together with its
 // associated destructor function.
 #define DECLARE(decl, init, dtor)                                              \
@@ -64,11 +68,6 @@ namespace tenzir::ecc {
   if ((expr) == nullptr) {                                                     \
     return caf::make_error(ec::system_error, #expr);                           \
   }
-
-string_keypair::~string_keypair() {
-  OPENSSL_cleanse(public_key.data(), public_key.size());
-  OPENSSL_cleanse(private_key.data(), private_key.size());
-}
 
 // All functions in here operate on the secp256k1 group and it's
 // associated group; there is no API flexibility on this by design.
@@ -146,8 +145,8 @@ auto generate_keypair() -> caf::expected<string_keypair> {
 // A simplified interface to the OpenSSL implementation of HKDF that expands
 // the given input `key` (which must be a high-entropy string) into 32 bytes
 // of uniform random data.
-static auto
-hkdf(std::string_view key) -> caf::expected<std::array<unsigned char, 32>> {
+static auto hkdf(std::string_view key)
+  -> caf::expected<std::array<unsigned char, 32>> {
   DECLARE(kdf, EVP_KDF_fetch(nullptr, "hkdf", nullptr), EVP_KDF_free);
   DECLARE(kctx, EVP_KDF_CTX_new(kdf), EVP_KDF_CTX_free);
   constexpr auto digest = std::string_view{"sha256"};
@@ -165,8 +164,8 @@ hkdf(std::string_view key) -> caf::expected<std::array<unsigned char, 32>> {
 }
 
 // Encrypt text using the given public_key using ECIES.
-auto encrypt(std::string_view plaintext,
-             const std::string_view public_key) -> caf::expected<std::string> {
+auto encrypt(std::string_view plaintext, const std::string_view public_key)
+  -> caf::expected<std::string> {
   // Create a new ephemeral keypair.
   DECLARE(ephemeral_private, BN_new(), BN_clear_free);
   BN_rand(ephemeral_private, private_key_bits, BN_RAND_TOP_ANY,
@@ -236,8 +235,8 @@ auto encrypt(std::string_view plaintext,
   return detail::base64::encode(combined_bytes);
 }
 
-auto decrypt(std::string_view base64_ciphertext,
-             const string_keypair& keypair) -> caf::expected<std::string> {
+auto decrypt(std::string_view base64_ciphertext, const string_keypair& keypair)
+  -> caf::expected<cleansing_string> {
   // ciphertext  =   ephemeral_key   | nonce (iv) | tag  | cipherdata
   // bytes                 65        |   16       |  16  |   ..rest
   //
@@ -281,7 +280,8 @@ auto decrypt(std::string_view base64_ciphertext,
   auto bytes = public_bytes + shared_bytes;
   TRY(auto shared_secret, hkdf(bytes));
   // Perform AES decryption.
-  auto plaintext = std::vector<unsigned char>(base64_ciphertext.size(), '\0');
+  auto plaintext = cleansing_string{};
+  plaintext.resize(base64_ciphertext.size(), '\0');
   auto len = static_cast<int>(plaintext.size());
   // NB: It's not clear why we need to set up encryption here, but
   // decryption fails without the call.
@@ -291,16 +291,19 @@ auto decrypt(std::string_view base64_ciphertext,
     EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_GCM_SET_IVLEN, 16, nullptr));
   CHECK_EQ_1(EVP_DecryptInit_ex(cipher_ctx, nullptr, nullptr,
                                 shared_secret.data(), nonce.data()));
-  CHECK_EQ_1(EVP_DecryptUpdate(cipher_ctx, plaintext.data(), &len,
-                               cipher.data(), cipher.size()));
+  CHECK_EQ_1(EVP_DecryptUpdate(
+    cipher_ctx, reinterpret_cast<unsigned char*>(plaintext.data()), &len,
+    cipher.data(), cipher.size()));
   auto total_len = len;
   CHECK_EQ_1(EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_AEAD_SET_TAG, tag.size(),
                                  tag.data()));
   // Finalize the decryption session. This checks the AEAD tag matches.
-  CHECK_EQ_1(EVP_DecryptFinal_ex(cipher_ctx, (plaintext.data() + len), &len));
+  CHECK_EQ_1(EVP_DecryptFinal_ex(
+    cipher_ctx, reinterpret_cast<unsigned char*>(plaintext.data() + len),
+    &len));
   total_len += len;
   plaintext.resize(total_len);
-  return std::string{plaintext.begin(), plaintext.end()};
+  return plaintext;
 }
 
 } // namespace tenzir::ecc
