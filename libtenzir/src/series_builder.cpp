@@ -668,7 +668,19 @@ public:
     check(offsets_.Finish(&offsets));
     auto result_offsets = std::static_pointer_cast<arrow::Int32Array>(
       offsets->SliceSafe(0, count + 1).ValueOrDie());
+    // The last offset must always be non-null. However, if we finish this
+    // builder partially, it can happen that we wrote a null. This is a rare
+    // edge case, and thus we just take the performance hit here of
+    // reconstructing the offset array. Note that the underlying value is set
+    // correctly even if we write a null.
     auto ending_offset = result_offsets->Value(count);
+    if (result_offsets->IsNull(count)) {
+      check(offsets_.Reserve(result_offsets->length()));
+      check(offsets_.AppendArraySlice(*result_offsets->data(), 0,
+                                      result_offsets->length() - 1));
+      check(offsets_.Append(ending_offset));
+      check(offsets_.Finish(&result_offsets));
+    }
     TENZIR_TRACE("ending offset of list is {} out of {}", ending_offset,
                  elements_.length());
     if (count == old_length) {
