@@ -8,6 +8,7 @@
 
 #include "tenzir/offset.hpp"
 
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -50,7 +51,7 @@ auto offset::get(const table_slice& slice) const noexcept
   if (empty()) {
     return {
       slice.schema(),
-      to_record_batch(slice)->ToStructArray().ValueOrDie(),
+      check(to_record_batch(slice)->ToStructArray()),
     };
   }
   return {
@@ -61,7 +62,7 @@ auto offset::get(const table_slice& slice) const noexcept
 
 auto offset::get(const arrow::RecordBatch& batch) const noexcept
   -> std::shared_ptr<arrow::Array> {
-  return get(*batch.ToStructArray().ValueOrDie());
+  return get(*check(batch.ToStructArray()));
 }
 
 auto offset::get(const arrow::StructArray& struct_array) const noexcept
@@ -74,8 +75,7 @@ auto offset::get(const arrow::StructArray& struct_array) const noexcept
          const arrow::StructArray& array) -> std::shared_ptr<arrow::Array> {
     TENZIR_ASSERT(not index.empty());
     auto field
-      = array.GetFlattenedField(detail::narrow_cast<int>(index.front()))
-          .ValueOrDie();
+      = check(array.GetFlattenedField(detail::narrow_cast<int>(index.front())));
     index = index.subspan(1);
     if (index.empty()) {
       return field;

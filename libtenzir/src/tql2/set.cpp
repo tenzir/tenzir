@@ -75,7 +75,7 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
     if (array.null_count() == 0) {
       return array.fields();
     }
-    return array.Flatten().ValueOrDie();
+    return check(array.Flatten());
   });
   auto index = std::optional<size_t>{};
   for (auto [i, field] : detail::enumerate(new_ty_fields)) {

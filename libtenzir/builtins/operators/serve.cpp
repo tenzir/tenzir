@@ -749,8 +749,7 @@ struct serve_handler_state {
       seen_types.insert(slice.schema());
       auto resolved_slice = resolve_enumerations(slice);
       auto type = as<record_type>(resolved_slice.schema());
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto array = check(to_record_batch(resolved_slice)->ToStructArray());
       for (const auto& row : values(type, *array)) {
         if (first) {
           out_iter = fmt::format_to(out_iter, "{{");

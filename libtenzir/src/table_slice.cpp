@@ -60,15 +60,14 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
 #endif // TENZIR_ENABLE_ASSERTIONS
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
   if (serialize == table_slice::serialize::yes) {
-    auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
-    auto stream_writer
-      = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema())
-          .ValueOrDie();
+    auto ipc_ostream = check(arrow::io::BufferOutputStream::Create());
+    auto stream_writer = check(
+      arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema()));
     auto status = stream_writer->WriteRecordBatch(*record_batch);
     if (!status.ok()) {
       TENZIR_ERROR("failed to write record batch: {}", status.ToString());
     }
-    auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
+    auto arrow_ipc_buffer = check(ipc_ostream->Finish());
     fbs_ipc_buffer = builder.CreateVector(arrow_ipc_buffer->data(),
                                           arrow_ipc_buffer->size());
   }
@@ -506,17 +505,16 @@ table_slice concatenate(std::vector<table_slice> slices) {
   for (const auto& slice : slices) {
     auto batch = to_record_batch(slice);
     auto status = append_array(*builder, as<record_type>(schema),
-                               *batch->ToStructArray().ValueOrDie());
+                               *check(batch->ToStructArray()));
     TENZIR_ASSERT(status.ok());
   }
   const auto rows = builder->length();
   if (rows == 0) {
     return {};
   }
-  const auto array = builder->Finish().ValueOrDie();
-  auto batch = arrow::RecordBatch::Make(
-    std::move(arrow_schema), rows,
-    as<type_to_arrow_array_t<record_type>>(*array).fields());
+  const auto array = finish(*builder);
+  auto batch
+    = arrow::RecordBatch::Make(std::move(arrow_schema), rows, array->fields());
   auto result = table_slice{batch, schema};
   result.offset(slices[0].offset());
   result.import_time(slices[0].import_time());
@@ -896,7 +894,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
         = null_type::make_arrow_builder(arrow::default_memory_pool());
       const auto append_result = builder->AppendNulls(batch->num_rows());
       TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
-      array = builder->Finish().ValueOrDie();
+      array = finish(*builder);
       return;
     }
     match(inferred_type, [&]<concrete_type Type>(const Type& inferred_type) {
@@ -907,7 +905,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
           inferred_type, *builder, make_view(as<type_to_data_t<Type>>(value)));
         TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
       }
-      array = builder->Finish().ValueOrDie();
+      array = finish(*builder);
     });
   };
   // Helper function that binds an existing array.
@@ -969,7 +967,7 @@ auto combine_offsets(
       auto append_result = builder.Append(next.Value(*index));
       TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
     }
-    result = builder.Finish().ValueOrDie();
+    result = check(builder.Finish());
   }
   return result;
 }
@@ -1014,8 +1012,8 @@ auto flatten_list(std::string_view separator, std::string_view name_prefix,
             fmt::format("{}{}", name_prefix, field.name),
             field.type,
           },
-          arrow::ListArray::FromArrays(*combined_offsets, *list_array->values())
-            .ValueOrDie(),
+          check(arrow::ListArray::FromArrays(*combined_offsets,
+                                             *list_array->values())),
         });
       }
       return result;
@@ -1097,7 +1095,7 @@ auto make_flatten_transformation(
               fmt::format("{}{}", name_prefix, field.name),
               type{list_type{field.type}},
             },
-            arrow::ListArray::FromArrays(*combined_offsets, *array).ValueOrDie(),
+            check(arrow::ListArray::FromArrays(*combined_offsets, *array)),
           },
         };
       },
@@ -1202,7 +1200,7 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   if (as<record_type>(slice.schema()).num_fields() == 0) {
     return {std::move(slice), {}};
   }
-  const auto& array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+  const auto& array = check(to_record_batch(slice)->ToStructArray());
   const auto& [schema, transformed, renamed]
     = flatten(slice.schema(), array, separator);
   if (!schema) {

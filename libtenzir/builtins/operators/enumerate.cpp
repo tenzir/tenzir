@@ -71,7 +71,7 @@ public:
       }
       offset += n;
       // Replace first column with a pair of (RID, first).
-      auto rid_array = builder->Finish().ValueOrDie();
+      auto rid_array = finish(*builder);
       return {
         {{field_, rid_type}, rid_array},
         {field, array},

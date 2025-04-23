@@ -20,7 +20,7 @@ auto cast(table_slice from_slice, const type& to_schema) noexcept
   if (from_slice.schema() == to_schema)
     return from_slice;
   const auto from_batch = to_record_batch(from_slice);
-  const auto from_struct_array = from_batch->ToStructArray().ValueOrDie();
+  const auto from_struct_array = check(from_batch->ToStructArray());
   const auto to_struct_array
     = detail::cast_helper<record_type, record_type>::cast(
       as<record_type>(from_slice.schema()), from_struct_array,

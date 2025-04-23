@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -156,25 +157,25 @@ public:
       return {};
     }
     auto batch = to_record_batch(slice);
-    auto array = std::static_pointer_cast<arrow::Array>(
-      batch->ToStructArray().ValueOrDie());
+    auto array
+      = std::static_pointer_cast<arrow::Array>(check(batch->ToStructArray()));
     auto& [indices, new_type] = *state;
     for (auto index : indices) {
       TENZIR_ASSERT(array);
       if (index == unnest_idx) {
         auto list_array = dynamic_cast<arrow::ListArray*>(array.get());
         TENZIR_ASSERT(list_array);
-        array = list_array->Flatten().ValueOrDie();
+        array = check(list_array->Flatten());
       } else {
         auto struct_array = dynamic_cast<arrow::StructArray*>(array.get());
         TENZIR_ASSERT(struct_array);
-        array = struct_array->GetFlattenedField(detail::narrow<int>(index))
-                  .ValueOrDie();
+        array
+          = check(struct_array->GetFlattenedField(detail::narrow<int>(index)));
       }
     }
     auto record = std::dynamic_pointer_cast<arrow::StructArray>(array);
     TENZIR_ASSERT(record);
-    auto fields = record->Flatten().ValueOrDie();
+    auto fields = check(record->Flatten());
     auto result
       = table_slice{arrow::RecordBatch::Make(new_type.to_arrow_schema(),
                                              array->length(), fields),

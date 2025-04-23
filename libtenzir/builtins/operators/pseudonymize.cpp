@@ -74,7 +74,7 @@ public:
         }
         TENZIR_ASSERT(append_status.ok(), append_status.ToString().c_str());
       }
-      auto new_array = builder->Finish().ValueOrDie();
+      auto new_array = finish(*builder);
       return {
         {field, new_array},
       };
