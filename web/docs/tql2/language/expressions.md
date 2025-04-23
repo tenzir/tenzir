@@ -80,14 +80,14 @@ my_field = top_level.nested
 {my_field: 0, top_level: {nested: 0}}
 ```
 
-To avoid a warning when the nested field does not exist, use `.?<name>`.
+To avoid a warning when the nested field does not exist, use `<name>?`.
 
 ```tql
 from (
   {foo: 1},
   {bar: 2},
 )
-select foo = this.?foo
+select foo = foo?
 ```
 
 ```tql
@@ -294,20 +294,18 @@ level = $severity_to_level[severity]
 }
 ```
 
-To suppress warnings when the record field is missing, use the
-[`get`](../functions/get.md) function with a fallback value:
+To suppress warnings when the record field is missing, use the `?` operator:
 
 ```tql
 from {foo: 1, bar: 2}
-result = this.get("baz", "default")
+result = baz?
 ```
 
 ```tql
-{result: "default"}
+{result: null}
 ```
 
-Both indexing expressions and the `get` function support numeric indices to
-access record fields:
+Indexing expressions support numeric indices to access record fields:
 
 ```tql title="Accessing a field by index"
 from {foo: "Hello", bar: "World"}

@@ -12,7 +12,10 @@
   },
   assignment {
     left: field_path {
-      expr: root_field `foo` @ 7..10,
+      expr: root_field {
+        id: `foo` @ 7..10,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
         {
@@ -34,7 +37,10 @@
     args: [
       assignment {
         left: field_path {
-          expr: root_field `bar` @ 20..23,
+          expr: root_field {
+            id: `bar` @ 20..23,
+            has_question_mark: false
+          },
           has_this: false,
           path: [
             {
@@ -56,10 +62,16 @@
       ref: unresolved
     },
     args: [
-      root_field `bar` @ 33..36,
+      root_field {
+        id: `bar` @ 33..36,
+        has_question_mark: false
+      },
       assignment {
         left: field_path {
-          expr: root_field `baz` @ 38..41,
+          expr: root_field {
+            id: `baz` @ 38..41,
+            has_question_mark: false
+          },
           has_this: false,
           path: [
             {
@@ -69,9 +81,15 @@
           ]
         },
         equals: 41..42,
-        right: root_field `qux` @ 42..45
+        right: root_field {
+          id: `qux` @ 42..45,
+          has_question_mark: false
+        }
       },
-      root_field `quux` @ 47..51
+      root_field {
+        id: `quux` @ 47..51,
+        has_question_mark: false
+      }
     ]
   },
   invocation {

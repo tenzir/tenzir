@@ -94,6 +94,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("...", dot_dot_dot)
     | X(".?", dot_question_mark)
     | X(".", dot)
+    | X("?", question_mark)
     | X("(", lpar)
     | X(")", rpar)
     | X("{", lbrace)
@@ -230,6 +231,7 @@ auto describe(token_kind k) -> std::string_view {
     X(or_, "`or`");
     X(pipe, "`|`");
     X(plus, "`+`");
+    X(question_mark, "`?`");
     X(raw_string, "raw string");
     X(rbrace, "`}`");
     X(rbracket, "`]`");

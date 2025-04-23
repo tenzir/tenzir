@@ -34,7 +34,10 @@
            where_ir {
              self: 150..155,
              predicate: binary_expr {
-               left: root_field `time` @ 156..160,
+               left: root_field {
+                 id: `time` @ 156..160,
+                 has_question_mark: false
+               },
                op: "lt" @ 161..162,
                right: dollar_var `$ts` -> 1 @ 163..166
              }

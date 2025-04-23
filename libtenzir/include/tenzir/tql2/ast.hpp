@@ -98,28 +98,27 @@ struct underscore : location {
 struct dollar_var {
   dollar_var() = default;
 
-  explicit dollar_var(identifier ident) : ident{std::move(ident)} {
+  explicit dollar_var(identifier id) : id{std::move(id)} {
   }
 
   auto name_without_dollar() const -> std::string_view {
-    TENZIR_ASSERT(ident.name.starts_with("$"));
-    return std::string_view{ident.name}.substr(1);
+    TENZIR_ASSERT(id.name.starts_with("$"));
+    return std::string_view{id.name}.substr(1);
   }
 
   auto get_location() const -> tenzir::location {
-    return ident.location;
+    return id.location;
   }
 
   friend auto inspect(auto& f, dollar_var& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->fmt_value("`{}`", x.ident.name)
-             && dbg->append(" -> {:?}", x.let)
-             && dbg->append(" @ {:?}", x.ident.location);
+      return dbg->fmt_value("`{}`", x.id.name) && dbg->append(" -> {:?}", x.let)
+             && dbg->append(" @ {:?}", x.id.location);
     }
-    return f.object(x).fields(f.field("ident", x.ident), f.field("let", x.let));
+    return f.object(x).fields(f.field("id", x.id), f.field("let", x.let));
   }
 
-  identifier ident;
+  identifier id;
   let_id let;
 };
 
@@ -178,14 +177,16 @@ struct this_ {
 };
 
 struct root_field {
-  identifier ident;
+  identifier id;
+  bool has_question_mark = false;
 
   auto get_location() const -> location {
-    return ident.location;
+    return id.location;
   }
 
   friend auto inspect(auto& f, root_field& x) -> bool {
-    return f.apply(x.ident);
+    return f.object(x).fields(
+      f.field("id", x.id), f.field("has_question_mark", x.has_question_mark));
   }
 };
 
@@ -517,25 +518,25 @@ struct index_expr {
   index_expr() = default;
 
   index_expr(expression expr, location lbracket, expression index,
-             location rbracket, bool suppress_warnings)
+             location rbracket, bool has_question_mark)
     : expr{std::move(expr)},
       lbracket{lbracket},
       index{std::move(index)},
       rbracket{rbracket},
-      suppress_warnings{suppress_warnings} {
+      has_question_mark{has_question_mark} {
   }
 
   expression expr;
   location lbracket;
   expression index;
   location rbracket;
-  bool suppress_warnings = false;
+  bool has_question_mark = false;
 
   friend auto inspect(auto& f, index_expr& x) -> bool {
     return f.object(x).fields(
       f.field("expr", x.expr), f.field("lbracket", x.lbracket),
       f.field("index", x.index), f.field("rbracket", x.rbracket),
-      f.field("suppress_warnings", x.suppress_warnings));
+      f.field("has_question_mark", x.has_question_mark));
   }
 
   auto get_location() const -> location {
@@ -946,7 +947,7 @@ protected:
   }
 
   void enter(ast::root_field& x) {
-    go(x.ident);
+    go(x.id);
   }
 
   void enter(ast::this_& x) {

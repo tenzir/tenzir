@@ -47,14 +47,20 @@
              self: 53..58,
              predicate: binary_expr {
                left: binary_expr {
-                 left: root_field `foo` @ 59..62,
+                 left: root_field {
+                   id: `foo` @ 59..62,
+                   has_question_mark: false
+                 },
                  op: "eq" @ 63..65,
 -                right: dollar_var `$foo` -> 1 @ 66..70
 +                right: constant int64 1 @ 66..70
                },
                op: "and_" @ 71..74,
                right: binary_expr {
-                 left: root_field `bar` @ 75..78,
+                 left: root_field {
+                   id: `bar` @ 75..78,
+                   has_question_mark: false
+                 },
                  op: "eq" @ 79..81,
 -                right: dollar_var `$bar` -> 2 @ 82..86
 +                right: constant int64 2 @ 82..86
@@ -79,14 +85,20 @@
                self: 113..118,
                predicate: binary_expr {
                  left: binary_expr {
-                   left: root_field `foo` @ 119..122,
+                   left: root_field {
+                     id: `foo` @ 119..122,
+                     has_question_mark: false
+                   },
                    op: "eq" @ 123..125,
 -                  right: dollar_var `$foo` -> 1 @ 126..130
 +                  right: constant int64 1 @ 126..130
                  },
                  op: "and_" @ 131..134,
                  right: binary_expr {
-                   left: root_field `bar` @ 135..138,
+                   left: root_field {
+                     id: `bar` @ 135..138,
+                     has_question_mark: false
+                   },
                    op: "eq" @ 139..141,
 -                  right: dollar_var `$bar` -> 3 @ 142..146
 +                  right: constant int64 3 @ 142..146

@@ -7,10 +7,22 @@
       ref: unresolved
     },
     args: [
-      root_field `b` @ 2..3,
-      root_field `c` @ 7..8,
-      root_field `d` @ 12..13,
-      root_field `e` @ 15..16
+      root_field {
+        id: `b` @ 2..3,
+        has_question_mark: false
+      },
+      root_field {
+        id: `c` @ 7..8,
+        has_question_mark: false
+      },
+      root_field {
+        id: `d` @ 12..13,
+        has_question_mark: false
+      },
+      root_field {
+        id: `e` @ 15..16,
+        has_question_mark: false
+      }
     ]
   },
   invocation {
@@ -21,7 +33,10 @@
       ref: unresolved
     },
     args: [
-      root_field `g` @ 19..20
+      root_field {
+        id: `g` @ 19..20,
+        has_question_mark: false
+      }
     ]
   },
   invocation {
@@ -32,9 +47,18 @@
       ref: unresolved
     },
     args: [
-      root_field `i` @ 27..28,
-      root_field `j` @ 32..33,
-      root_field `k` @ 38..39
+      root_field {
+        id: `i` @ 27..28,
+        has_question_mark: false
+      },
+      root_field {
+        id: `j` @ 32..33,
+        has_question_mark: false
+      },
+      root_field {
+        id: `k` @ 38..39,
+        has_question_mark: false
+      }
     ]
   },
   invocation {
@@ -46,9 +70,15 @@
     },
     args: [
       binary_expr {
-        left: root_field `m` @ 42..43,
+        left: root_field {
+          id: `m` @ 42..43,
+          has_question_mark: false
+        },
         op: "add" @ 44..45,
-        right: root_field `n` @ 48..49
+        right: root_field {
+          id: `n` @ 48..49,
+          has_question_mark: false
+        }
       }
     ]
   }

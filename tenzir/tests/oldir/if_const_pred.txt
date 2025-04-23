@@ -12,7 +12,10 @@
     assignments: [
       {
         left: field_path {
-          expr: root_field `foo` @ 20..23,
+          expr: root_field {
+            id: `foo` @ 20..23,
+            has_question_mark: false
+          },
           has_this: false,
           path: [
             {
