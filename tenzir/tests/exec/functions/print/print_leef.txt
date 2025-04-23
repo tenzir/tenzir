@@ -1,0 +1,14 @@
+{
+  r1: "LEEF:1.0|Tenzir|Tenzir Node|VERSION|unspecified|a=42\tb=Hello",
+  r2: "LEEF:1.0|Tenzir|Tenzir Node|VERSION2|good",
+  r3: "LEEF:1.0|Tenzir|Tenzir Node|VERSION2|critical|",
+  r4: "LEEF:1.0||Tenzir Node|VERSION2|critical",
+  r5: "LEEF:1.0||Tenzir Node|VERSION2|critical",
+  r6: "LEEF:1.0|Tenzir|Tenzir Node|VERSION2|critical|a.b=nested\tb=top",
+}
+warning: `attributes` was `null`
+ --> exec/functions/print/print_leef.tql:6:6
+  |
+6 | r3 = null.print_leef()
+  |      ~~~~ 
+  |
