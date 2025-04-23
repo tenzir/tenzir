@@ -253,9 +253,9 @@ struct binding {
       if (column) {
         auto array = column->offset.get(batch);
         if (config.time_resolution && is<time_type>(column->type)) {
-          array = arrow::compute::FloorTemporal(
-                    array, make_round_temporal_options(*config.time_resolution))
-                    .ValueOrDie()
+          array = check(arrow::compute::FloorTemporal(
+                          array,
+                          make_round_temporal_options(*config.time_resolution)))
                     .make_array();
         }
         result.emplace_back(std::move(array));

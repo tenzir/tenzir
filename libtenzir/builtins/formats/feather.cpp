@@ -55,7 +55,7 @@ std::shared_ptr<arrow::RecordBatch>
 unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb) {
   auto event_col = rb->GetColumnByName("event");
   auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
-  auto event_rb = arrow::RecordBatch::FromStructArray(event_col).ValueOrDie();
+  auto event_rb = check(arrow::RecordBatch::FromStructArray(event_col));
   return event_rb->ReplaceSchemaMetadata(schema_metadata);
 }
 
@@ -68,7 +68,7 @@ auto make_import_time_col(const time& import_time, int64_t rows) {
     auto status = builder->Append(v);
     TENZIR_ASSERT(status.ok());
   }
-  return builder->Finish().ValueOrDie();
+  return finish(*builder);
 }
 
 /// Wrap a record batch into an event envelope containing the event data
@@ -77,7 +77,7 @@ auto make_import_time_col(const time& import_time, int64_t rows) {
 auto wrap_record_batch(const table_slice& slice)
   -> std::shared_ptr<arrow::RecordBatch> {
   auto rb = to_record_batch(slice);
-  auto event_array = rb->ToStructArray().ValueOrDie();
+  auto event_array = check(rb->ToStructArray());
   auto time_col = make_import_time_col(slice.import_time(), rb->num_rows());
   auto schema = arrow::schema(
     {arrow::field("import_time", time_type::to_arrow_type()),
@@ -123,7 +123,7 @@ auto decode_ipc_stream(chunk_ptr chunk)
         next.Wait();
       }
       TENZIR_ASSERT(next.is_finished());
-      auto result = next.MoveResult().ValueOrDie();
+      auto result = check(next.MoveResult());
       if (arrow::IsIterationEnd(result)) {
         co_return;
       }
@@ -240,7 +240,7 @@ public:
     if (!table.ok()) {
       return caf::make_error(ec::system_error, table.status().ToString());
     }
-    auto output_stream = arrow::io::BufferOutputStream::Create().ValueOrDie();
+    auto output_stream = check(arrow::io::BufferOutputStream::Create());
     auto write_properties = arrow::ipc::feather::WriteProperties::Defaults();
     // TODO: Set write_properties.chunksize to the expected batch size
     write_properties.compression = arrow::Compression::ZSTD;

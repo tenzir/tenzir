@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
@@ -409,10 +410,9 @@ public:
         }
         auto original_schema_name = slice.schema().name();
         auto batch = to_record_batch(slice);
-        auto stream = arrow::io::BufferOutputStream::Create().ValueOrDie();
-        auto writer = arrow::ipc::MakeStreamWriter(
-                        stream, slice.schema().to_arrow_schema())
-                        .ValueOrDie();
+        auto stream = check(arrow::io::BufferOutputStream::Create());
+        auto writer = check(arrow::ipc::MakeStreamWriter(
+          stream, slice.schema().to_arrow_schema()));
         if (! writer->WriteRecordBatch(*batch).ok()) {
           diagnostic::error("failed to convert input batch to Arrow format")
             .note(

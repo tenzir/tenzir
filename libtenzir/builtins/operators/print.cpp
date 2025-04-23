@@ -10,6 +10,7 @@
 
 #include "tenzir/argument_parser.hpp"
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/generator.hpp"
@@ -115,7 +116,7 @@ public:
         };
         auto rb = arrow::RecordBatch::Make(
           field.type.to_arrow_schema(), array->length(),
-          static_cast<const arrow::StructArray&>(*array).Flatten().ValueOrDie());
+          check(static_cast<const arrow::StructArray&>(*array).Flatten()));
         auto slice = table_slice{rb, field.type};
         auto builder = series_builder{type{string_type{}}};
         for (size_t i = 0; i < slice.rows(); i++) {

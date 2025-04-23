@@ -103,7 +103,7 @@ auto assign(std::span<const ast::field_path::segment> left, series right,
     if (array.null_count() == 0) {
       return array.fields();
     }
-    return array.Flatten().ValueOrDie();
+    return check(array.Flatten());
   });
   auto index = std::optional<size_t>{};
   for (auto [i, field] : detail::enumerate(new_ty_fields)) {

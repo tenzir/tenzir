@@ -350,7 +350,7 @@ transform_columns(type schema,
           = as<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
-          .arrays = nested_array.Flatten().ValueOrDie(),
+          .arrays = check(nested_array.Flatten()),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :
@@ -388,7 +388,7 @@ transform_columns(type schema,
   const auto sentinel = transformations.end();
   auto layer = unpacked_layer{
     .fields = {},
-    .arrays = struct_array->Flatten().ValueOrDie(),
+    .arrays = check(struct_array->Flatten()),
   };
   const auto num_columns
     = detail::narrow_cast<size_t>(struct_array->num_fields());
@@ -424,7 +424,7 @@ transform_columns(type schema,
     // function does not really allow this, as it can change the behavior for
     // nulls.
     new_struct_array
-      = arrow::StructArray::Make(layer.arrays, arrow_fields).ValueOrDie();
+      = check(arrow::StructArray::Make(layer.arrays, arrow_fields));
   }
 #if TENZIR_ENABLE_ASSERTIONS
   auto validate_status = new_struct_array->Validate();
@@ -449,7 +449,7 @@ transform_columns(const table_slice& slice,
     return slice;
   }
   auto input_batch = to_record_batch(slice);
-  auto input_struct_array = input_batch->ToStructArray().ValueOrDie();
+  auto input_struct_array = check(input_batch->ToStructArray());
   auto [output_schema, output_struct_array] = transform_columns(
     slice.schema(), input_struct_array, std::move(transformations));
   if (!output_schema) {
@@ -519,7 +519,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
           = as<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
-          .arrays = nested_array.Flatten().ValueOrDie(),
+          .arrays = check(nested_array.Flatten()),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :

@@ -126,7 +126,7 @@ public:
     // at the start, and uses std::upper_bound to find the entry in the cache
     // using the offset table.
     const auto chunked_key
-      = arrow::ChunkedArray::Make(std::move(sort_keys_)).ValueOrDie();
+      = check(arrow::ChunkedArray::Make(std::move(sort_keys_)));
     const auto indices
       = arrow::compute::SortIndices(*chunked_key, sort_options_);
     if (not indices.ok()) {

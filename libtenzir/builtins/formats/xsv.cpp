@@ -772,8 +772,7 @@ public:
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
         auto slice_type = as<record_type>(input_schema);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        auto array = check(to_record_batch(resolved_slice)->ToStructArray());
         for (const auto& row : values3(*array)) {
           TENZIR_ASSERT(row);
           if (first && not args.no_header) {

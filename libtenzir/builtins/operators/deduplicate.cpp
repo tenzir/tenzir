@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/null_bitmap.hpp>
@@ -159,7 +160,7 @@ public:
         co_yield table_slice{projected_batch, projected_type};
         continue;
       }
-      auto elements = projected_batch->ToStructArray().ValueOrDie();
+      auto elements = check(projected_batch->ToStructArray());
       TENZIR_ASSERT(elements);
       for (auto&& new_slice :
            deduplicate(matches, row_number, slice, projected_type, *elements)) {
@@ -444,7 +445,7 @@ auto deduplicate_operator::cached_projection::make(
         }
         using field_type = struct record_type::field;
         result.emplace_back(field_type{missing_field, type{null_type{}}},
-                            builder->Finish().ValueOrDie());
+                            finish(*builder));
       }
       return result;
     };
