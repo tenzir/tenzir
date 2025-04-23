@@ -810,8 +810,7 @@ public:
       }
       // Print table slice as JSON.
       auto resolved_slice = resolve_enumerations(slice);
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto array = check(to_record_batch(resolved_slice)->ToStructArray());
       auto failed = false;
       for (const auto& row : values3(*array)) {
         auto it = std::back_inserter(event);

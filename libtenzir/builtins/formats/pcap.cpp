@@ -9,6 +9,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/byteswap.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
@@ -308,7 +309,7 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
   }
   auto result = file_header{};
   const auto& input_record = as<record_type>(slice.schema());
-  auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+  auto array = check(to_record_batch(slice)->ToStructArray());
   auto xs = values(input_record, *array);
   auto begin = xs.begin();
   if (begin == xs.end() || *begin == std::nullopt) {
@@ -495,8 +496,7 @@ public:
         const auto& input_record = as<record_type>(slice.schema());
         if (slice.schema().name() == "pcap.packet") {
           auto resolved_slice = resolve_enumerations(slice);
-          auto array
-            = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+          auto array = check(to_record_batch(resolved_slice)->ToStructArray());
           for (const auto& row : values(input_record, *array)) {
             TENZIR_ASSERT(row);
             if (auto diag = process_packet_row(*row)) {

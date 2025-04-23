@@ -695,13 +695,11 @@ TEST(cast int64_t array to a string builder) {
   status = int_builder->Append(2);
   status = int_builder->AppendNull();
   status = int_builder->Append(3);
-  auto array
-    = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(
-      int_builder->Finish().ValueOrDie());
+  auto array = tenzir::finish(*int_builder);
   auto out = tenzir::cast_to_builder(tenzir::int64_type{}, *array,
                                      tenzir::string_type{});
   REQUIRE(out);
-  auto arr = (*out)->Finish().ValueOrDie();
+  auto arr = tenzir::check((*out)->Finish());
   auto vals = tenzir::values(tenzir::type{tenzir::string_type{}}, *arr);
   std::vector<tenzir::data_view> views;
   for (const auto& val : vals) {
@@ -720,7 +718,7 @@ TEST(casting builder with no compatible types results in an error) {
   auto status = int_builder->Append(1);
   auto array
     = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(
-      int_builder->Finish().ValueOrDie());
+      tenzir::check(int_builder->Finish()));
   auto out = tenzir::cast_to_builder(tenzir::int64_type{}, *array,
                                      tenzir::list_type{tenzir::string_type{}});
   CHECK(not out);
@@ -735,11 +733,11 @@ TEST(
   status = int_builder->Append(3);
   auto array
     = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(
-      int_builder->Finish().ValueOrDie());
+      tenzir::check(int_builder->Finish()));
   auto out = tenzir::cast_to_builder(tenzir::int64_type{}, *array,
                                      tenzir::uint64_type{});
   REQUIRE(out);
-  auto arr = (*out)->Finish().ValueOrDie();
+  auto arr = tenzir::check((*out)->Finish());
   auto vals = tenzir::values(tenzir::type{tenzir::uint64_type{}}, *arr);
   std::vector<tenzir::data_view> views;
   for (const auto& val : vals) {
@@ -757,7 +755,7 @@ TEST(casting int64_t array to uint64_t builder fails due to negative value) {
   auto status = int_builder->Append(-1);
   auto array
     = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(
-      int_builder->Finish().ValueOrDie());
+      tenzir::check(int_builder->Finish()));
   auto out = tenzir::cast_to_builder(tenzir::int64_type{}, *array,
                                      tenzir::uint64_type{});
   CHECK(not out);

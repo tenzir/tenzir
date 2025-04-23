@@ -9,6 +9,7 @@
 #include "tenzir/defaults.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/series_builder.hpp>
@@ -191,8 +192,7 @@ public:
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
         const auto& input_type = as<record_type>(input_schema);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        auto array = check(to_record_batch(resolved_slice)->ToStructArray());
         for (const auto& row : values(input_type, *array)) {
           TENZIR_ASSERT(row);
           const auto ok = printer.print_values(out_iter, *row);

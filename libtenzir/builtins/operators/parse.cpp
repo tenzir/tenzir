@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
@@ -107,8 +108,7 @@ public:
         co_return;
       }
       TENZIR_ASSERT(total == string_array->length());
-      const auto children
-        = batch->ToStructArray().ValueOrDie()->Flatten().ValueOrDie();
+      const auto children = check(check(batch->ToStructArray())->Flatten());
       auto next = int64_t{0};
       for (auto& [result_ty, result] : results) {
         auto sub = subslice(slice, next, next + result->length());

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/offset.hpp"
 #include "tenzir/type.hpp"
 
@@ -33,13 +34,13 @@ struct basic_series {
   explicit basic_series(const table_slice& slice)
     requires(std::same_as<Type, type>)
     : type{slice.schema()},
-      array{to_record_batch(slice)->ToStructArray().ValueOrDie()} {
+      array{check(to_record_batch(slice)->ToStructArray())} {
   }
 
   explicit basic_series(const table_slice& slice)
     requires(std::same_as<Type, record_type>)
     : type{as<record_type>(slice.schema())},
-      array{to_record_batch(slice)->ToStructArray().ValueOrDie()} {
+      array{check(to_record_batch(slice)->ToStructArray())} {
   }
 
   basic_series(table_slice slice, offset idx)
@@ -86,7 +87,7 @@ struct basic_series {
     (void)b->AppendNulls(length);
     return {std::move(ty),
             std::static_pointer_cast<type_to_arrow_array_t<Other>>(
-              b->Finish().ValueOrDie())};
+              check(b->Finish()))};
   }
 
   template <class Inspector>

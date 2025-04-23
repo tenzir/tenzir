@@ -823,8 +823,7 @@ public:
       auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
       auto input_schema = resolved_slice.schema();
       auto input_type = as<record_type>(input_schema);
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto array = check(to_record_batch(resolved_slice)->ToStructArray());
       auto first = true;
       auto is_first_schema = not * last_schema;
       auto did_schema_change = *last_schema != input_schema;

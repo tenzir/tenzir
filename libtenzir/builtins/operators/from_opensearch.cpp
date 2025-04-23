@@ -174,8 +174,7 @@ auto decompress_payload(const http::request& r, diagnostic_handler& dh)
   const auto codec = arrow::util::Codec::Create(
     compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
   TENZIR_ASSERT(codec.ok());
-  const auto decompressor
-    = codec.ValueUnsafe()->MakeDecompressor().ValueOrDie();
+  const auto decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
   auto written = size_t{};
   auto read = size_t{};
   while (read != r.payload().size_bytes()) {

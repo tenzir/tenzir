@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/type.hpp"
@@ -53,13 +54,13 @@ template <class Builder, class T = typename Builder::value_type>
 std::shared_ptr<arrow::Array> make_arrow_array(std::vector<T> xs) {
   Builder b{};
   CHECK(b.AppendValues(xs).ok());
-  return b.Finish().ValueOrDie();
+  return check(b.Finish());
 }
 
 std::shared_ptr<arrow::Array> make_ip_array() {
   arrow::FixedSizeBinaryBuilder b{arrow::fixed_size_binary(16)};
   return std::make_shared<ip_type::array_type>(
-    std::make_shared<ip_type::arrow_type>(), b.Finish().ValueOrDie());
+    std::make_shared<ip_type::arrow_type>(), check(b.Finish()));
 }
 
 // Returns a visitor that checks whether the expected concrete types are the

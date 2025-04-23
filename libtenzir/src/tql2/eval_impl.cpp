@@ -227,8 +227,7 @@ auto evaluator::eval(const ast::function_call& x) -> multi_series {
 
 auto evaluator::eval(const ast::this_& x) -> multi_series {
   auto& input = input_or_throw(x);
-  return series{input.schema(),
-                to_record_batch(input)->ToStructArray().ValueOrDie()};
+  return series{input.schema(), check(to_record_batch(input)->ToStructArray())};
 }
 
 auto evaluator::eval(const ast::root_field& x) -> multi_series {

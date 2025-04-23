@@ -266,10 +266,9 @@ struct cast_helper<list_type, list_type> {
     const auto offsets = from_array->offsets();
     const auto cast_values = cast_helper<type, type>::cast(
       from_type.value_type(), from_array->values(), to_type.value_type());
-    return type_to_arrow_array_t<list_type>::FromArrays(
-             *offsets, *cast_values, arrow::default_memory_pool(),
-             from_array->null_bitmap(), from_array->null_count())
-      .ValueOrDie();
+    return check(type_to_arrow_array_t<list_type>::FromArrays(
+      *offsets, *cast_values, arrow::default_memory_pool(),
+      from_array->null_bitmap(), from_array->null_count()));
   }
 
   template <class InputType>
@@ -395,10 +394,8 @@ struct cast_helper<record_type, record_type> {
         const auto index = from_type.resolve_key(key);
         if (!index) {
           // The field does not exist, so we insert a bunch of nulls.
-          children.push_back(
-            arrow::MakeArrayOfNull(to_field.type.to_arrow_type(),
-                                   from_array->length())
-              .ValueOrDie());
+          children.push_back(check(arrow::MakeArrayOfNull(
+            to_field.type.to_arrow_type(), from_array->length())));
           continue;
         }
         // The field exists, so we can insert the casted column.
@@ -406,8 +403,7 @@ struct cast_helper<record_type, record_type> {
           from_type.field(*index).type, index->get(*from_array),
           to_field.type));
       }
-      return type_to_arrow_array_t<record_type>::Make(children, fields)
-        .ValueOrDie();
+      return check(type_to_arrow_array_t<record_type>::Make(children, fields));
     };
     return impl(impl, to_type, "");
   }

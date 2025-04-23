@@ -269,8 +269,7 @@ public:
         }
         auto input_type = as<record_type>(slice.schema());
         auto resolved_slice = resolve_enumerations(slice);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        auto array = check(to_record_batch(resolved_slice)->ToStructArray());
         auto out = std::make_unique<YAML::Emitter>();
         out->SetOutputCharset(YAML::EscapeNonAscii); // restrict to ASCII output
         out->SetNullFormat(YAML::LowerNull);

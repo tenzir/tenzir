@@ -107,7 +107,7 @@ public:
             config_.out,
             string_type{},
           },
-          hashes_builder->Finish().ValueOrDie(),
+          finish(*hashes_builder),
         },
       };
     };
