@@ -49,15 +49,6 @@ struct identifier {
     return location;
   }
 
-  friend auto operator<=>(const identifier& lhs, const identifier& rhs)
-    -> std::strong_ordering {
-    return lhs.name <=> rhs.name;
-  }
-
-  friend auto operator==(const identifier& lhs, const identifier& rhs) -> bool {
-    return lhs.name == rhs.name;
-  }
-
   friend auto inspect(auto& f, identifier& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
       return dbg->fmt_value("`{}`", x.name)
@@ -265,13 +256,6 @@ public:
     identifier id;
     bool has_question_mark;
 
-    friend auto operator==(const segment& lhs, const segment& rhs) -> bool
-      = default;
-
-    friend auto operator<=>(const segment& lhs, const segment& rhs)
-      -> std::weak_ordering
-      = default;
-
     friend auto inspect(auto& f, segment& x) -> bool {
       return f.object(x).fields(
         f.field("id", x.id), f.field("has_question_mark", x.has_question_mark));
@@ -300,15 +284,6 @@ public:
 
   auto unwrap() && -> ast::expression {
     return std::move(expr_);
-  }
-
-  friend auto operator<=>(const field_path& lhs, const field_path& rhs)
-    -> std::weak_ordering {
-    return lhs.path_ <=> rhs.path_;
-  }
-
-  friend auto operator==(const field_path& lhs, const field_path& rhs) -> bool {
-    return lhs.path_ == rhs.path_;
   }
 
 private:

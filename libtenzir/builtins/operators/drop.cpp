@@ -179,7 +179,7 @@ public:
         co_yield {};
         continue;
       }
-      co_yield tenzir::drop(slice, selectors_, ctrl.diagnostics());
+      co_yield tenzir::drop(slice, selectors_, ctrl.diagnostics(), true);
     }
   }
 
@@ -220,38 +220,6 @@ public:
           .emit(ctx.dh());
       }
     }
-    std::ranges::sort(selectors);
-    auto dropped_children = std::vector<ast::field_path>{};
-    for (auto it = selectors.begin(); it != selectors.end(); ++it) {
-      const auto parent
-        = std::ranges::find_if(selectors.begin(), it, [&](const auto& x) {
-            const auto [mismatch, _]
-              = std::ranges::mismatch(x.path(), it->path());
-            return mismatch == x.path().end();
-          });
-      if (parent != it) {
-        if (*parent == *it) {
-          diagnostic::warning("ignoring duplicate field")
-            .primary(*it)
-            .primary(*parent)
-            .emit(ctx.dh());
-        } else {
-          diagnostic::warning("ignoring field within dropped record")
-            .primary(*it, "ignoring this field")
-            .secondary(*parent, "because it is already dropped here")
-            .emit(ctx.dh());
-          dropped_children.push_back(*it);
-        }
-      }
-    }
-    // Remove all the duplicates found.
-    selectors.erase(std::unique(selectors.begin(), selectors.end()),
-                    selectors.end());
-    // Then remove all the children of dropped fields.
-    std::erase_if(selectors, [&](const auto& selector) {
-      return std::ranges::find(dropped_children, selector)
-             != dropped_children.end();
-    });
     return std::make_unique<drop_operator2>(std::move(selectors));
   }
 };

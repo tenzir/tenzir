@@ -39,7 +39,7 @@ struct move_operator final : public crtp_operator<move_operator> {
       for (const auto& field : rhs_) {
         rhs_values.push_back(eval(field, slice, ctrl.diagnostics()));
       }
-      slice = drop(slice, rhs_, ctrl.diagnostics());
+      slice = drop(slice, rhs_, ctrl.diagnostics(), false);
       for (const auto& [field, value] : detail::zip_equal(lhs_, rhs_values)) {
         slice = assign(field, value, slice, ctrl.diagnostics());
       }

@@ -51,7 +51,7 @@ assign(const ast::field_path& left, series right, const table_slice& input,
 
 [[nodiscard]] auto
 drop(const table_slice& slice, std::span<const ast::field_path> fields,
-     diagnostic_handler& dh) -> table_slice;
+     diagnostic_handler& dh, bool warn_for_duplicates) -> table_slice;
 
 class set_operator final : public crtp_operator<set_operator> {
 public:

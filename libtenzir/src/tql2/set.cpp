@@ -381,16 +381,54 @@ auto resolve_move_keyword(ast::assignment assignment)
 }
 
 auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
-          diagnostic_handler& dh) -> table_slice {
+          diagnostic_handler& dh, bool warn_for_duplicates) -> table_slice {
   constexpr auto drop = [](auto&&...) {
     return indexed_transformation::result_type{};
   };
-  auto offsets = std::unordered_set<offset>{};
+  auto offsets = std::vector<located<offset>>{};
   for (const auto& field : fields) {
     match(
       resolve(field, slice.schema()),
-      [&](const offset& of) {
-        offsets.insert(of);
+      [&](const offset& resolved) {
+        if (offsets.empty()) {
+          offsets.emplace_back(resolved, into_location{field});
+          return;
+        }
+        for (auto& offset : offsets) {
+          const auto [l, r] = std::ranges::mismatch(offset.inner, resolved);
+          const auto offset_exhausted = l == offset.inner.end();
+          const auto resolved_exhausted = r == resolved.end();
+          if (offset_exhausted and resolved_exhausted) {
+            if (warn_for_duplicates) {
+              diagnostic::warning("fields may only be dropped once")
+                .primary(offset)
+                .primary(field)
+                .emit(dh);
+            }
+            return;
+          }
+          if (offset_exhausted) {
+            if (warn_for_duplicates) {
+              diagnostic::warning("ignoring dropped field within record")
+                .primary(field, "ignoring this field")
+                .secondary(offset, "because it is already dropped here")
+                .emit(dh);
+            }
+            return;
+          }
+          if (resolved_exhausted) {
+            if (warn_for_duplicates) {
+              diagnostic::warning(
+                "ignoring dropped field within dropped record")
+                .primary(offset, "ignoring this field")
+                .secondary(field, "because it is already dropped here")
+                .emit(dh);
+            }
+            offset = located{resolved, into_location{field}};
+            return;
+          }
+        }
+        offsets.emplace_back(resolved, into_location{field});
       },
       [&](const resolve_error& err) {
         match(
@@ -412,7 +450,7 @@ auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
   }
   auto ts = std::vector<indexed_transformation>{};
   for (const auto& of : offsets) {
-    ts.emplace_back(of, drop);
+    ts.emplace_back(of.inner, drop);
   }
   return transform_columns(slice, ts);
 }
@@ -436,7 +474,7 @@ auto set_operator::operator()(generator<table_slice> input,
     for (const auto& assignment : assignments_) {
       values.push_back(eval(assignment.right, slice, ctrl.diagnostics()));
     }
-    slice = drop(slice, moved_fields_, ctrl.diagnostics());
+    slice = drop(slice, moved_fields_, ctrl.diagnostics(), false);
     // After we know all the multi series values on the right, we can split the
     // input table slice and perform the actual assignment.
     auto begin = int64_t{0};
