@@ -50,7 +50,7 @@ assign(const ast::field_path& left, series right, const table_slice& input,
   -> std::pair<ast::assignment, std::vector<ast::field_path>>;
 
 [[nodiscard]] auto
-drop(const table_slice& slice, const std::vector<ast::field_path>& fields,
+drop(const table_slice& slice, std::span<const ast::field_path> fields,
      diagnostic_handler& dh) -> table_slice;
 
 class set_operator final : public crtp_operator<set_operator> {

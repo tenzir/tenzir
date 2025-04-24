@@ -412,7 +412,7 @@ auto resolve_move_keyword(ast::assignment assignment)
   return {std::move(assignment), std::move(out)};
 }
 
-auto drop(const table_slice& slice, const std::vector<ast::field_path>& fields,
+auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
           diagnostic_handler& dh) -> table_slice {
   constexpr auto drop = [](auto&&...) {
     return indexed_transformation::result_type{};
