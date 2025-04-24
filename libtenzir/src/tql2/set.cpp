@@ -390,6 +390,10 @@ auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
     match(
       resolve(field, slice.schema()),
       [&](const offset& resolved) {
+        if (resolved.empty()) {
+          diagnostic::warning("cannot drop `this`").primary(field).emit(dh);
+          return;
+        }
         if (offsets.empty()) {
           offsets.emplace_back(resolved, into_location{field});
           return;
