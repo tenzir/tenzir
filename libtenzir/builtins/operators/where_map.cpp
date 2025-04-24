@@ -366,11 +366,11 @@ struct where_result_part {
   int64_t event_count = 0;
 
   auto physical_size() const -> size_t {
-    if (slices.empty()) {
-      return 0;
+    auto sum = size_t{0};
+    for (auto& slice : slices) {
+      sum += slice.size();
     }
-    TENZIR_ASSERT(slices.size() == 1);
-    return slices.front().size();
+    return sum;
   }
 
   auto add_null() -> void {
@@ -600,7 +600,8 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
           remaining_length -= take_from_current;
           TENZIR_ASSERT(take_from_current > 0);
           merging_part.slices.emplace_back(
-            current_part_index, current_part_offset, take_from_current);
+            current_part_index, current_part_offset,
+            current_part_offset + take_from_current);
           current_part_offset += take_from_current;
           TENZIR_ASSERT(current_part_offset <= current_part_length());
           if (current_part_offset == current_part_length()) {
