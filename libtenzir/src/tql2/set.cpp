@@ -382,8 +382,8 @@ auto resolve_move_keyword(ast::assignment assignment)
       },
       [](ast::underscore&) {},
       [&](ast::function_call& x) {
-        // TODO: The `map` and `where` functions abuse the expresions they
-        // take as arguments as a poor-mans lambda expression. We don't recurse
+        // TODO: The `map` and `where` functions abuse the expressions they take
+        // as arguments as a poor-mans lambda expression. We don't recurse
         // further when we encounter them here, but that's at best a stopgap.
         // Ideally, there'd be proper lambda support in the language itself.
         if (x.fn.path.size() == 1) {

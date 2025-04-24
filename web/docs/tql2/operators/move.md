@@ -6,7 +6,7 @@ move to=from, …
 
 ## Description
 
-Moves the from the field `from` to the field `to`.
+Moves from the field `from` to the field `to`.
 
 ### `to: field`
 

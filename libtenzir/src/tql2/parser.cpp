@@ -240,7 +240,7 @@ public:
       return parse_invocation(std::move(entity));
     }
     // This is a hack: `move` is both a unary expression operator and a
-    // pipeliine operator. In order to support both, we need to special-case the
+    // pipeline operator. In order to support both, we need to special-case the
     // pipeline operator parsing, as the tokenizer returns `tk::move` instead of
     // `tk::identifier`.
     if (silent_peek(tk::move)) {
