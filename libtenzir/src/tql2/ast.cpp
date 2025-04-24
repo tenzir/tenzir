@@ -27,7 +27,6 @@ auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
   // Path is collect in reversed order (outside-in).
   auto has_this = false;
   auto path = std::vector<field_path::segment>{};
-  auto qmarks = std::vector<bool>{};
   auto* current = &expr;
   while (true) {
     auto sub_result = current->match(
@@ -192,7 +191,7 @@ auto fold_now(const ast::expression& l, const ast::binary_op& op,
     return std::nullopt;
   }
   auto* const call = std::get_if<ast::function_call>(l.kind.get());
-  if (not (call and call->fn.path[0].name == "now")) {
+  if (not(call and call->fn.path[0].name == "now")) {
     return std::nullopt;
   }
   if (op == ast::binary_op::add) {
