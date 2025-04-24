@@ -173,7 +173,8 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
     if (auto null = l.as<null_type>()) {
       if (not x.suppress_warnings()) {
         diagnostic::warning("tried to access field of `null`")
-          .primary(x.name, "use `?` to suppress this warning")
+          .primary(x.name)
+          .hint("append `?` to suppress this warning")
           .emit(ctx_);
       }
       return std::move(*null);
@@ -192,7 +193,8 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
         auto has_null = s.null_count() != 0;
         if (has_null and not x.suppress_warnings()) {
           diagnostic::warning("tried to access field of `null`")
-            .primary(x.name, "use `?` to suppress this warning")
+            .primary(x.name)
+            .hint("append `?` to suppress this warning")
             .emit(ctx_);
           return series{field.type, check(s.GetFlattenedField(i))};
         }
@@ -201,7 +203,8 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
     }
     if (not x.suppress_warnings()) {
       diagnostic::warning("record does not have this field")
-        .primary(x.name, "use `?` to suppress this warning")
+        .primary(x.name)
+        .hint("append `?` to suppress this warning")
         .emit(ctx_);
     }
     return null();
@@ -238,7 +241,8 @@ auto evaluator::eval(const ast::root_field& x) -> multi_series {
   }
   if (not x.has_question_mark) {
     diagnostic::warning("field `{}` not found", x.id.name)
-      .primary(x.id, "use `?` to suppress this warning")
+      .primary(x.id)
+      .hint("append `?` to suppress this warning")
       .emit(ctx_);
   }
   return null();
@@ -261,11 +265,13 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
   return map_series(
     eval(x.expr), eval(x.index),
     [&](series value, const series& index) -> multi_series {
-      const auto add_suppress_hint = [&](auto dh) {
-        if (x.rbracket != location::unknown) {
-          dh = std::move(dh).hint("use `[…]?` to suppress this warning");
-        }
-        return dh;
+      const auto add_suppress_hint = [&](auto diag) {
+        // The `get` function internally creates an `ast::index_expr` and
+        // evaluates it. We change the warning when it is used.
+        return std::move(diag).hint(
+          x.rbracket != location::unknown
+            ? "use `[…]?` to suppress this warning"
+            : "provide a fallback value to suppress this warning");
       };
       TENZIR_ASSERT(value.length() == index.length());
       if (auto null = value.as<null_type>()) {
@@ -290,7 +296,8 @@ auto evaluator::eval(const ast::index_expr& x) -> multi_series {
         auto* ty = try_as<record_type>(value.type);
         if (not ty) {
           diagnostic::warning("cannot access field of non-record type")
-            .primary(x.expr, "has type `{}`", value.type.kind())
+            .primary(x.index)
+            .secondary(x.expr, "has type `{}`", value.type.kind())
             .emit(ctx_);
           return null();
         }

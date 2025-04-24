@@ -397,7 +397,8 @@ auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
           err.reason,
           [&](const resolve_error::field_not_found&) {
             diagnostic::warning("field `{}` not found", err.ident.name)
-              .primary(err.ident, "use `?` to suppress this warning")
+              .primary(err.ident)
+              .hint("append `?` to suppress this warning")
               .emit(dh);
           },
           [&](const resolve_error::field_not_found_no_error&) {},

@@ -77,6 +77,7 @@ warning: cannot use `null` as index
 13 |   get_null = xs.get(null),
    |                     ~~~~ is null
    |
+   = hint: provide a fallback value to suppress this warning
 
 warning: index out of bounds
  --> exec/access/record.tql:9:20
@@ -92,27 +93,31 @@ warning: index out of bounds
 10 |   get_first = xs.get(0),
    |                      ~ is out of bounds
    |
+   = hint: provide a fallback value to suppress this warning
 
 warning: record does not have this field
   --> exec/access/record.tql:15:18
    |
 15 |   index_str = xs["foo"],
-   |                  ~~~~~ use `?` to suppress this warning
+   |                  ~~~~~ 
    |
+   = hint: append `?` to suppress this warning
 
 warning: record does not have this field
   --> exec/access/record.tql:16:20
    |
 16 |   get_str = xs.get("foo"),
-   |                    ~~~~~ use `?` to suppress this warning
+   |                    ~~~~~ 
    |
+   = hint: append `?` to suppress this warning
 
 warning: record does not have this field
   --> exec/access/record.tql:18:18
    |
 18 |   get_field = xs.foo,
-   |                  ~~~ use `?` to suppress this warning
+   |                  ~~~ 
    |
+   = hint: append `?` to suppress this warning
 
 warning: tried to access field of `null`
  --> exec/access/record.tql:9:17
@@ -128,6 +133,7 @@ warning: tried to access field of `null`
 10 |   get_first = xs.get(0),
    |               ~~ is null
    |
+   = hint: provide a fallback value to suppress this warning
 
 warning: tried to access field of `null`
   --> exec/access/record.tql:12:16
@@ -143,27 +149,31 @@ warning: tried to access field of `null`
 13 |   get_null = xs.get(null),
    |              ~~ is null
    |
+   = hint: provide a fallback value to suppress this warning
 
 warning: tried to access field of `null`
   --> exec/access/record.tql:15:18
    |
 15 |   index_str = xs["foo"],
-   |                  ~~~~~ use `?` to suppress this warning
+   |                  ~~~~~ 
    |
+   = hint: append `?` to suppress this warning
 
 warning: tried to access field of `null`
   --> exec/access/record.tql:16:20
    |
 16 |   get_str = xs.get("foo"),
-   |                    ~~~~~ use `?` to suppress this warning
+   |                    ~~~~~ 
    |
+   = hint: append `?` to suppress this warning
 
 warning: tried to access field of `null`
   --> exec/access/record.tql:18:18
    |
 18 |   get_field = xs.foo,
-   |                  ~~~ use `?` to suppress this warning
+   |                  ~~~ 
    |
+   = hint: append `?` to suppress this warning
 
 warning: expected `record` or `list`
  --> exec/access/record.tql:9:17
@@ -179,6 +189,7 @@ warning: expected `record` or `list`
 10 |   get_first = xs.get(0),
    |               ~~ has type `string`
    |
+   = hint: provide a fallback value to suppress this warning
 
 warning: expected `record` or `list`
   --> exec/access/record.tql:11:24
@@ -186,6 +197,7 @@ warning: expected `record` or `list`
 11 |   get_first_fallback = xs.get(0, -1),
    |                        ~~ has type `string`
    |
+   = hint: provide a fallback value to suppress this warning
 
 warning: cannot access field of non-record type
   --> exec/access/record.tql:15:18
