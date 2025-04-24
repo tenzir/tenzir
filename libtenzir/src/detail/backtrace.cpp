@@ -12,6 +12,10 @@
 
 #include <fmt/format.h>
 
+#include <regex>
+
+using namespace std::string_view_literals;
+
 namespace tenzir::detail {
 
 namespace {
@@ -27,27 +31,49 @@ auto simplify_name(std::string name) -> std::string {
       name += "::make_behavior";
     }
   }
-  name = detail::replace_all(name, "std::__1::", "std::");
-  name = detail::replace_all(name, "(anonymous namespace)", "(anon)");
-  for (auto it = name.begin(); it != name.end(); ++it) {
-    if (*it != '<') {
-      continue;
-    }
-    auto start = it;
-    while (true) {
-      ++it;
-      if (it == name.end()) {
-        return name;
-      }
-      if (*it != '>') {
-        continue;
-      }
-      auto end = it;
-      auto start_pos = start - name.begin();
-      name = name.replace(start, end, "<...");
-      it = name.begin() + start_pos + 1;
-      break;
-    }
+  constexpr static auto replacements = std::array{
+    // transform make_behaviour calls to only include the final/called functor
+    std::pair{
+      R"(make_behavior\(\)::.*::make_behavior\(\)::(.*))",
+      "make_behavior<...>::$1",
+    },
+    // replace internal name for `std::string`
+    std::pair{
+      R"(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)",
+      "std::string",
+    },
+    // remove `std::allocator` from vector
+    std::pair{
+      R"(std::vector<(.+),\s*std::allocator<.+>\s*>)",
+      "std::vector<$1>",
+    },
+    // cut type argument of `std::allocator`
+    std::pair{
+      R"(std::allocator<.+>)",
+      "std::allocator<...>",
+    },
+    // remove internal std namespaces
+    std::pair{
+      "std::__cxx11::",
+      "std::",
+    },
+    std::pair{
+      "std::__1::",
+      "std::",
+    },
+    // shorten anonymous namespaces
+    std::pair{
+      R"(\(anonymous namespace\))",
+      "(anon)",
+    },
+    /// integer sequence parameter packs: `0ul, 1ul, ...`
+    std::pair{
+      R"((\d+ul(, )?)+)",
+      "...",
+    }};
+  for (auto [original, replacement] : replacements) {
+    const auto re = std::regex(original);
+    name = std::regex_replace(name, re, replacement);
   }
   return name;
 }
@@ -56,7 +82,7 @@ auto simplify_name(std::string name) -> std::string {
 
 auto format_frame(const boost::stacktrace::frame& frame) -> std::string {
   auto file_name = frame.source_file();
-  if (file_name.empty()) {
+  if (true) {
     auto function_name = simplify_name(frame.name());
     return fmt::format("{} @ {}", function_name, frame.address());
   } else {

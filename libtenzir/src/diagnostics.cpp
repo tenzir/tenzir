@@ -282,9 +282,8 @@ auto diagnostic_deduplicator::hasher::operator()(const seen_t& x) const
 auto to_diagnostic(const panic_exception& e) -> diagnostic {
   auto note = std::string{
     "this is a bug, we would appreciate a report - thank you!\n"
-    "=> "
-    "https://github.com/orgs/tenzir/discussions/new?category=bug-reports\n\n",
-  };
+    "=> https://github.com/orgs/tenzir/discussions/new?category=bug-reports\n"
+    "Please include the below information in your report:\n\n"};
   fmt::format_to(std::back_inserter(note), "version: v{}\n",
                  tenzir::version::version);
   fmt::format_to(std::back_inserter(note), "source: {}:{}\n\n",
