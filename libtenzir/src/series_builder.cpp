@@ -673,7 +673,6 @@ public:
     // correctly even if we write a null.
     auto ending_offset = result_offsets->Value(count);
     if (result_offsets->IsNull(count)) {
-      TENZIR_WARN("YO");
       check(offsets_.Reserve(result_offsets->length()));
       check(offsets_.AppendArraySlice(*result_offsets->data(), 0,
                                       result_offsets->length() - 1));

@@ -67,7 +67,7 @@ but often resort to the method style when it is more idiomatic.
 
 | Function                      | Description                         | Example                                    |
 | :---------------------------- | :---------------------------------- | :----------------------------------------- |
-| [`get`](functions/get.md)     | Accesses a field of a record        | `record.get("field with spaces", default)` |
+| [`get`](functions/get.md)     | Accesses a field of a record        | `record.get("field", default)`             |
 | [`has`](functions/has.md)     | Checks whether a record has a field | `record.has("field")`                      |
 | [`merge`](functions/merge.md) | Merges two records                  | `merge(foo, bar)`                          |
 | [`sort`](functions/sort.md)   | Sorts a record by field names       | `xs.sort()`                                |
@@ -146,10 +146,10 @@ but often resort to the method style when it is more idiomatic.
 | [`parse_csv`](functions/parse_csv.mdx)       | Parses a string as CSV                   | `string.parse_csv(header=["a","b"])`               |
 | [`parse_grok`](functions/parse_grok.mdx)     | Parses a string following a grok pattern | `string.parse_grok("%{IP:client} …")`              |
 | [`parse_json`](functions/parse_json.mdx)     | Parses a string as a JSON value          | `string.parse_json()`                              |
-| [`parse_kv`](functions/parse_kv.mdx)         | Parses a string as Key-Value paris       | `string.parse_kv()`                                |
+| [`parse_kv`](functions/parse_kv.mdx)         | Parses a string as key-value pairs       | `string.parse_kv()`                                |
 | [`parse_leef`](functions/parse_leef.mdx)     | Parses a string as a LEEF message        | `string.parse_leef()`                              |
 | [`parse_ssv`](functions/parse_ssv.mdx)       | Parses a string as SSV                   | `string.parse_ssv(header=["a","b"])`               |
-| [`parse_syslog`](functions/parse_syslog.mdx) | Parses a string as a Syslog message      | `string.parse_syslog()`                            |
+| [`parse_syslog`](functions/parse_syslog.mdx) | Parses a string as a syslog message      | `string.parse_syslog()`                            |
 | [`parse_tsv`](functions/parse_tsv.mdx)       | Parses a string as TSV                   | `string.parse_tsv(header=["a","b"])`               |
 | [`parse_xsv`](functions/parse_xsv.mdx)       | Parses a string as XSV                   | `string.parse_xsv(",", ";", "", header=["a","b"])` |
 | [`parse_yaml`](functions/parse_yaml.mdx)     | Parses a string as YAML                  | `string.parse_yaml()`                              |
@@ -279,7 +279,7 @@ This is hidden because there is an issue with the timezone DB.
 | Function                          | Description                                    | Example            |
 | :-------------------------------- | :--------------------------------------------- | :----------------- |
 | [`type_id`](functions/type_id.md) | Retrieves the type id of an expression         | `type_id(1 + 3.2)` |
-| [`type_of`](functions/type_id.md) | Retrieves the type definition of an expression | `type_id(this)`    |
+| [`type_of`](functions/type_of.md) | Retrieves the type definition of an expression | `type_of(this)`    |
 
 ### Conversion
 
@@ -307,4 +307,4 @@ This is hidden because there is an issue with the timezone DB.
 | :------------------------------ | :---------------------------- | :--------------- |
 | [`config`](functions/config.md) | Reads the configuration file  | `config()`       |
 | [`env`](functions/env.md)       | Reads an environment variable | `env("PATH")`    |
-| [`secret`](functions/secret.md) | Reads a secret from a store   | `secret("PATH")` |
+| [`secret`](functions/secret.md) | Reads a secret from a store   | `secret("KEY")`  |
