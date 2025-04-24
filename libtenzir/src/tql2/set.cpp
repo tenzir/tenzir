@@ -331,85 +331,53 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
     });
 }
 
+namespace {
+
+struct move_resolver final : ast::visitor<move_resolver> {
+  std::vector<ast::field_path> out;
+
+  auto visit(ast::assignment& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::expression& x) -> void {
+    if (auto* unary = try_as<ast::unary_expr>(x)) {
+      if (unary->op.inner == ast::unary_op::move) {
+        if (auto field = ast::field_path::try_from(unary->expr)) {
+          out.push_back(std::move(*field));
+          x = std::move(unary->expr);
+        }
+      }
+    }
+    enter(x);
+  }
+
+  auto visit(ast::function_call& x) -> void {
+    // TODO: The `map` and `where` functions abuse the expressions they take
+    // as arguments as a poor-mans lambda expression. We don't recurse
+    // further when we encounter them here, but that's at best a stopgap.
+    // Ideally, there'd be proper lambda support in the language itself.
+    if (x.fn.path.size() == 1) {
+      const auto& name = x.fn.path.front().name;
+      if (name == "map" or name == "where") {
+        return;
+      }
+    }
+    enter(x);
+  }
+
+  auto visit(auto& x) -> void {
+    enter(x);
+  }
+};
+
+} // namespace
+
 auto resolve_move_keyword(ast::assignment assignment)
   -> std::pair<ast::assignment, std::vector<ast::field_path>> {
-  auto out = std::vector<ast::field_path>{};
-  auto recurse = [&](const auto& recurse, ast::expression& expr,
-                     std::vector<ast::field_path>& out) -> void {
-    match(
-      expr,
-      [&](ast::unary_expr& x) {
-        recurse(recurse, x.expr, out);
-        if (x.op.inner == ast::unary_op::move) {
-          if (auto field = ast::field_path::try_from(x.expr)) {
-            out.push_back(std::move(*field));
-            expr = std::move(x.expr);
-          }
-        }
-      },
-      [&](ast::record& x) {
-        for (auto& item : x.items) {
-          match(
-            item,
-            [&](ast::spread& x) {
-              recurse(recurse, x.expr, out);
-            },
-            [&](ast::record::field& x) {
-              recurse(recurse, x.expr, out);
-            });
-        }
-      },
-      [&](ast::list& x) {
-        for (auto& item : x.items) {
-          match(
-            item,
-            [&](ast::spread& x) {
-              recurse(recurse, x.expr, out);
-            },
-            [&](ast::expression& x) {
-              recurse(recurse, x, out);
-            });
-        }
-      },
-      [](ast::constant&) {}, [](ast::pipeline_expr&) {},
-      [](ast::root_field&) {}, [](ast::this_&) {}, [](ast::meta&) {},
-      [](ast::dollar_var&) {},
-      [&](ast::assignment& x) {
-        recurse(recurse, x.right, out);
-      },
-      [&](ast::unpack& x) {
-        recurse(recurse, x.expr, out);
-      },
-      [](ast::underscore&) {},
-      [&](ast::function_call& x) {
-        // TODO: The `map` and `where` functions abuse the expressions they take
-        // as arguments as a poor-mans lambda expression. We don't recurse
-        // further when we encounter them here, but that's at best a stopgap.
-        // Ideally, there'd be proper lambda support in the language itself.
-        if (x.fn.path.size() == 1) {
-          const auto& name = x.fn.path.front().name;
-          if (name == "map" or name == "where") {
-            return;
-          }
-        }
-        for (auto& arg : x.args) {
-          recurse(recurse, arg, out);
-        }
-      },
-      [&](ast::binary_expr& x) {
-        recurse(recurse, x.left, out);
-        recurse(recurse, x.right, out);
-      },
-      [&](ast::index_expr& x) {
-        recurse(recurse, x.expr, out);
-        recurse(recurse, x.index, out);
-      },
-      [&](ast::field_access& x) {
-        recurse(recurse, x.left, out);
-      });
-  };
-  recurse(recurse, assignment.right, out);
-  return {std::move(assignment), std::move(out)};
+  auto f = move_resolver{};
+  f.visit(assignment);
+  return {std::move(assignment), std::move(f.out)};
 }
 
 auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
