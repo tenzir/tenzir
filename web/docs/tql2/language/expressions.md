@@ -106,19 +106,7 @@ also use `this` to overwrite the entire event, as in `this = {a: x, y: b}`.
 
 ## Moving Fields
 
-Use the `move` operator to move fields:
-
-```tql
-from {foo: 1, bar: 2}
-move x=foo, y=bar
-```
-
-```tql
-{x: 1, y: 2}
-```
-
-The `move` keyword is a more flexible alternative that works anywhere in
-assignments when prefixing a field with it:
+Use `move` keyword before a field to move fields as part of an assigment:
 
 ```tql
 from {foo: 1, bar: 2}
@@ -128,6 +116,26 @@ qux = move bar + 2
 ```tql
 {foo: 1, qux: 4}
 ```
+
+Notice how the field `bar` does not exist anymore in the output.
+
+:::tip Bulk-move fields with the `move` operator
+
+When moving many fields, the `move` operator is a convenient alternative:
+
+```tql
+x = move foo
+y = move bar
+z = move baz
+```
+
+Can also just be spelled as:
+
+```
+move x=foo, y=bar, z=baz
+```
+
+:::
 
 ## Metadata
 
