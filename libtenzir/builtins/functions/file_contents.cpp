@@ -12,6 +12,7 @@
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/localfs.h>
 #include <arrow/filesystem/type_fwd.h>
+#include <arrow/util/utf8.h>
 
 #include <filesystem>
 
@@ -27,8 +28,10 @@ struct file_contents final : public function_plugin {
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto path = located<std::string>{};
+    auto binary = std::optional<location>{};
     TRY(argument_parser2::function(name())
           .positional("path", path)
+          .named("binary", binary)
           .parse(inv, ctx));
     if (path.inner.empty()) {
       diagnostic::error("`path` must not be empty").primary(path).emit(ctx);
@@ -67,7 +70,8 @@ struct file_contents final : public function_plugin {
     if (size > 10'000'000) {
       diagnostic::error("file `{}` is bigger than 10MB", path.inner)
         .primary(path)
-        .note("`file()` does not allow reading big files as a safety check")
+        .note("`file_contents()` does not allow reading big files as a safety "
+              "check")
         .emit(ctx);
       return failure::promise();
     }
@@ -82,7 +86,7 @@ struct file_contents final : public function_plugin {
     auto content = blob{};
     content.resize(size);
     const auto result
-      = ifs.ValueUnsafe()->Read(size, reinterpret_cast<char*>(content.data()));
+      = ifs.ValueUnsafe()->Read(size, reinterpret_cast<void*>(content.data()));
     if (not result.ok()) {
       diagnostic::error("could not read input file stream for `{}`: {}",
                         path.inner, result.status().message())
@@ -90,14 +94,32 @@ struct file_contents final : public function_plugin {
         .emit(ctx);
       return failure::promise();
     }
-    return function_use::make(
-      [content = std::move(content)](evaluator eval, session) -> series {
+    const auto valid_utf8 = arrow::util::ValidateUTF8(
+      reinterpret_cast<const uint8_t*>(content.data()), size);
+    if (not binary and not valid_utf8) {
+      diagnostic::error("file '{}' holds invalid UTF-8", path.inner)
+        .primary(path)
+        .hint("use `binary=true` to read contents as a `blob`")
+        .emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make([content = std::move(content),
+                               binary](evaluator eval, session) -> series {
+      if (binary) {
         auto b = series_builder{type{blob_type{}}};
         for (auto i = int64_t{0}; i < eval.length(); ++i) {
           b.data(content);
         }
         return b.finish_assert_one_array();
-      });
+      }
+      auto b = series_builder{type{string_type{}}};
+      const auto view = std::string_view{
+        reinterpret_cast<const char*>(content.data()), content.size()};
+      for (auto i = int64_t{0}; i < eval.length(); ++i) {
+        b.data(view);
+      }
+      return b.finish_assert_one_array();
+    });
   }
 };
 
