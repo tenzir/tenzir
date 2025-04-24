@@ -260,7 +260,8 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
           .hint("field: `{}`", std::string{replacement_field})
           .throw_();
       }
-      auto elems = detail::split(replacement_field_inner, ":");
+      auto elems = detail::split(
+        {replacement_field_inner.data(), replacement_field_inner.size()}, ":");
       TENZIR_ASSERT(not elems.empty());
       if (elems.size() > 3) {
         diagnostic::error("invalid replacement field")

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25...4.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
 
 project(
   yara

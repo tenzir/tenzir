@@ -13,6 +13,7 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <boost/process/v2/environment.hpp>
 #if __has_include(<boost/process/v1/environment.hpp>)
 #  include <boost/process/v1/environment.hpp>
 #else

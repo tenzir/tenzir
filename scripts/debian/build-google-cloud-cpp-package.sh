@@ -13,9 +13,12 @@ apt-get install --no-install-recommends -y \
   build-essential \
   ca-certificates \
   checkinstall \
+  ccache \
   cmake \
   curl \
   git \
+  g++-14 \
+  gcc-14 \
   libc-ares-dev \
   libcurl4-openssl-dev \
   libgrpc++-dev \

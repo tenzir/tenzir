@@ -15,15 +15,15 @@ apt-get -y --no-install-recommends install \
     cppzmq-dev \
     curl \
     flatbuffers-compiler-dev \
-    g++-12 \
-    gcc-12 \
+    g++-14 \
+    gcc-14 \
     git-core \
     gnupg2 gnupg-agent\
     jq \
-    libboost1.81-dev \
-    libboost-filesystem1.81-dev \
-    libboost-url1.81-dev \
-    libboost-stacktrace1.81-dev \
+    libboost-dev \
+    libboost-filesystem-dev \
+    libboost-url-dev \
+    libboost-stacktrace-dev \
     libflatbuffers-dev \
     libfmt-dev \
     libgrpc-dev \
@@ -60,32 +60,16 @@ apt-get -y --no-install-recommends install \
     python3-venv \
     robin-map-dev \
     socat \
-    software-properties-common \
     wget \
     yara
 
-codename="$(lsb_release --codename --short)"
-
-# Arrow ADBC
-wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-${codename}.deb"
-apt-get -y --no-install-recommends install ./"apache-arrow-apt-source-latest-${codename}.deb"
-apt-get update
-# The apt download sometimes fails with a 403. We employ a similar workaround as
-# arrow itself: https://github.com/apache/arrow/pull/36836.
-if [ "$(uname -m)" == "x86_64" ]; then
-  apt-get -y --no-install-recommends install -o 'Acquire::Retries=3' \
-    libadbc-driver-snowflake-dev=16-1 \
-    libadbc-driver-manager-dev=16-1
-fi
-rm ./"apache-arrow-apt-source-latest-${codename}.deb"
-
-# Node 18.x and Yarn
-NODE_MAJOR=18
+# yarn
 mkdir -p /etc/apt/keyrings
-wget -O /etc/apt/keyrings/nodesource.asc https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
-echo "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
+wget -O /etc/apt/keyrings/nodesource.asc https://dl.yarnpkg.com/debian/pubkey.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://dl.yarnpkg.com/debian/ stable main nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
 apt-get update
 apt-get -y install yarn
+
 
 # Poetry
 export POETRY_HOME=/opt/poetry

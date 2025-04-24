@@ -300,13 +300,11 @@ public:
                  "DIST_FROM_IDEAL_BUCKET_LIMIT must be <= std::numeric_limits<distance_type>::max() - 1.");
     
 private:
-    using storage = typename std::aligned_storage<sizeof(value_type), alignof(value_type)>::type;
-    
     static const distance_type EMPTY_MARKER_DIST_FROM_IDEAL_BUCKET = -1;
     
     distance_type m_dist_from_ideal_bucket;
     bool m_last_bucket;
-    storage m_value;
+    alignas(value_type) std::byte m_value[sizeof(value_type)];
 };
 
 

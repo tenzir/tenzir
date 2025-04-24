@@ -45,6 +45,7 @@ if (NOT tsl-robin-map_FOUND)
   string(APPEND TENZIR_EXTRA_TARGETS_FILES
          "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
   add_dependencies(robin_map tsl-robin-map-targets-link)
+  TenzirSystemizeTarget(robin_map)
 endif ()
 
 # -- flatbuffers ---------------------------------------------------------------
@@ -229,6 +230,7 @@ dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
 
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(yaml-cpp 0.6.2 REQUIRED)")
 if (yaml-cpp_VERSION VERSION_GREATER_EQUAL 0.8)
   target_link_libraries(libtenzir PRIVATE yaml-cpp::yaml-cpp)
   target_link_libraries(libtenzir_builtins PRIVATE yaml-cpp::yaml-cpp)
@@ -345,12 +347,12 @@ if (NOT simdjson_FOUND)
   TenzirSystemizeTarget(simdjson)
   add_dependencies(simdjson simdjson-targets-link)
   dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
-                     "Dependencies")
-endif ()
-target_link_libraries(libtenzir PUBLIC simdjson::simdjson)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
+  "Dependencies")
+  endif ()
+  target_link_libraries(libtenzir PUBLIC simdjson::simdjson)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
 
-# Link against robin-map.
+  # Link against robin-map.
 target_link_libraries(libtenzir PUBLIC tsl::robin_map)
 # This is broken for the bundled robin-map, so we special-case it above.
 # dependency_summary("robin-map" tsl::robin_map "Dependencies")

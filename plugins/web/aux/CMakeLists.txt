@@ -35,7 +35,9 @@ add_custom_command(
     "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio"
   # Apply a patch to the restinio library that makes some changes.
   COMMAND "${PATCH_EXECUTABLE}" -p2 -i
-          "${CMAKE_CURRENT_LIST_DIR}/restinio.patch")
+          "${CMAKE_CURRENT_LIST_DIR}/restinio.patch"
+  COMMAND "${PATCH_EXECUTABLE}" -p2 -i
+          "${CMAKE_CURRENT_LIST_DIR}/expected.patch")
 
 add_custom_target(patch-restinio ALL DEPENDS ${restinio_sources_patched})
 

@@ -12,32 +12,14 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/overload.hpp"
 
+#include <utility>
 #include <variant>
 
 namespace tenzir {
 
-/// A backport of C++23's `forward_like`.
-template <class T, class U>
-constexpr auto forward_like(U&& x) noexcept -> auto&& {
-  constexpr bool is_adding_const = std::is_const_v<std::remove_reference_t<T>>;
-  if constexpr (std::is_lvalue_reference_v<T&&>) {
-    if constexpr (is_adding_const) {
-      return std::as_const(x);
-    } else {
-      return static_cast<U&>(x);
-    }
-  } else {
-    if constexpr (is_adding_const) {
-      return std::move(std::as_const(x));
-    } else {
-      return std::move(x);
-    }
-  }
-}
-
 /// The return type of `std::forward_like<T>(u)`.
 template <class T, class U>
-using forward_like_t = decltype(forward_like<T>(std::declval<U>()));
+using forward_like_t = decltype(std::forward_like<T>(std::declval<U>()));
 
 /// The opposite of `std::as_const`, removing `const` qualifiers.
 template <class T>
@@ -169,7 +151,7 @@ constexpr auto variant_get(V&& v) -> decltype(auto) {
     std::is_reference_v<
       decltype(variant_traits<std::remove_cvref_t<V>>::template get<I>(v))>);
   // We call `as_mutable` here because `forward_like` never removes `const`.
-  return forward_like<V>(
+  return std::forward_like<V>(
     as_mutable(variant_traits<std::remove_cvref_t<V>>::template get<I>(v)));
 }
 

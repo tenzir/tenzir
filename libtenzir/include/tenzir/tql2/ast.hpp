@@ -16,6 +16,7 @@
 #include "tenzir/let_id.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_path.hpp"
+#include "tenzir/variant.hpp"
 
 #include <caf/detail/is_one_of.hpp>
 
@@ -211,18 +212,7 @@ struct expression {
   std::unique_ptr<expression_kind> kind;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, expression& x) -> bool {
-    if constexpr (Inspector::is_loading) {
-      x.kind = std::make_unique<expression_kind>();
-    } else {
-      if (auto dbg = as_debug_writer(f);
-          dbg && not detail::make_dependent<Inspector>(x.kind)) {
-        return dbg->fmt_value("<invalid>");
-      }
-      TENZIR_ASSERT(x.kind);
-    }
-    return f.apply(*detail::make_dependent<Inspector>(x.kind));
-  }
+  friend auto inspect(Inspector& f, expression& x) -> bool;
 
   template <class Result = void, class... Fs>
   auto match(Fs&&... fs) & -> decltype(auto);
@@ -976,6 +966,20 @@ private:
     return static_cast<Self&>(*this);
   }
 };
+
+template <class Inspector>
+auto inspect(Inspector& f, expression& x) -> bool {
+  if constexpr (Inspector::is_loading) {
+    x.kind = std::make_unique<expression_kind>();
+  } else {
+    if (auto dbg = as_debug_writer(f);
+        dbg && not detail::make_dependent<Inspector>(x.kind)) {
+      return dbg->fmt_value("<invalid>");
+    }
+    TENZIR_ASSERT(x.kind);
+  }
+  return f.apply(*detail::make_dependent<Inspector>(x.kind));
+}
 
 } // namespace tenzir::ast
 
