@@ -1,12 +1,12 @@
 # move
 
 ```tql
-move to=from, ...
+move to=from, …
 ```
 
 ## Description
 
-Moves the values
+Moves from the field `from` to the field `to`.
 
 ### `to: field`
 

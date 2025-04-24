@@ -80,14 +80,14 @@ my_field = top_level.nested
 {my_field: 0, top_level: {nested: 0}}
 ```
 
-To avoid a warning when the nested field does not exist, use `.?<name>`.
+To avoid a warning when the nested field does not exist, use `<name>?`.
 
 ```tql
 from (
   {foo: 1},
   {bar: 2},
 )
-select foo = this.?foo
+select foo = foo?
 ```
 
 ```tql
@@ -103,6 +103,39 @@ an [Index Expression](#indexingelement-access).
 Use the `this` keyword to reference the entire top-level event. For example,
 `from {x: 1, y: 2} | z = this` produces `{x: 1, y: 2, z: {x: 1, y: 2}}`. You can
 also use `this` to overwrite the entire event, as in `this = {a: x, y: b}`.
+
+## Moving Fields
+
+Use `move` keyword before a field to move fields as part of an assigment:
+
+```tql
+from {foo: 1, bar: 2}
+qux = move bar + 2
+```
+
+```tql
+{foo: 1, qux: 4}
+```
+
+Notice how the field `bar` does not exist anymore in the output.
+
+:::tip Bulk-move fields with the `move` operator
+
+When moving many fields, the `move` operator is a convenient alternative:
+
+```tql
+x = move foo
+y = move bar
+z = move baz
+```
+
+Can also just be spelled as:
+
+```
+move x=foo, y=bar, z=baz
+```
+
+:::
 
 ## Metadata
 
@@ -269,20 +302,18 @@ level = $severity_to_level[severity]
 }
 ```
 
-To suppress warnings when the record field is missing, use the
-[`get`](../functions/get.md) function with a fallback value:
+To suppress warnings when the record field is missing, use the `?` operator:
 
 ```tql
 from {foo: 1, bar: 2}
-result = this.get("baz", "default")
+result = baz?
 ```
 
 ```tql
-{result: "default"}
+{result: null}
 ```
 
-Both indexing expressions and the `get` function support numeric indices to
-access record fields:
+Indexing expressions support numeric indices to access record fields:
 
 ```tql title="Accessing a field by index"
 from {foo: "Hello", bar: "World"}
@@ -398,6 +429,7 @@ precedence, ordered from highest to lowest.
 | method call                            |
 | field access                           |
 | `[]`-indexing                          |
+| `move`                                 |
 | unary `+`, `-`                         |
 | `*`, `/`                               | left                           |
 | binary `+`, `-`                        | left                           |

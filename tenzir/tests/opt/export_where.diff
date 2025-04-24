@@ -44,7 +44,10 @@
 -    where_ir {
 -      self: 22..27,
 -      predicate: binary_expr {
--        left: root_field `foo` @ 28..31,
+-        left: root_field {
+-          id: `foo` @ 28..31,
+-          has_question_mark: false
+-        },
 -        op: "eq" @ 32..34,
 -        right: constant int64 42 @ 35..39
 -      }

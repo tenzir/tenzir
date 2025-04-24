@@ -1,38 +1,59 @@
 [
   assignment {
-    left: simple_selector {
-      expr: root_field `activity_name` @ 0..13,
+    left: field_path {
+      expr: root_field {
+        id: `activity_name` @ 0..13,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `activity_name` @ 0..13
+        {
+          id: `activity_name` @ 0..13,
+          has_question_mark: false
+        }
       ]
     },
     equals: 14..15,
     right: constant string "Launch" @ 16..24
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `activity_id` @ 25..36,
+    left: field_path {
+      expr: root_field {
+        id: `activity_id` @ 25..36,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `activity_id` @ 25..36
+        {
+          id: `activity_id` @ 25..36,
+          has_question_mark: false
+        }
       ]
     },
     equals: 37..38,
     right: constant int64 1 @ 39..40
   },
   assignment {
-    left: simple_selector {
+    left: field_path {
       expr: field_access {
-        left: root_field `actor` @ 41..46,
+        left: root_field {
+          id: `actor` @ 41..46,
+          has_question_mark: false
+        },
         dot: 46..47,
         has_question_mark: false,
         name: `process` @ 47..54
       },
       has_this: false,
       path: [
-        `actor` @ 41..46,
-        `process` @ 47..54
+        {
+          id: `actor` @ 41..46,
+          has_question_mark: false
+        },
+        {
+          id: `process` @ 47..54,
+          has_question_mark: false
+        }
       ]
     },
     equals: 55..56,
@@ -46,7 +67,10 @@
             items: [
               field {
                 name: `path` @ 73..77,
-                expr: root_field `path` @ 79..83
+                expr: root_field {
+                  id: `path` @ 79..83,
+                  has_question_mark: false
+                }
               },
               field {
                 name: `parent_folder` @ 89..102,
@@ -62,7 +86,10 @@
                   args: [
                     field_access {
                       left: field_access {
-                        left: root_field `src` @ 122..125,
+                        left: root_field {
+                          id: `src` @ 122..125,
+                          has_question_mark: false
+                        },
                         dot: 125..126,
                         has_question_mark: false,
                         name: `event_data` @ 126..136
@@ -90,7 +117,10 @@
                   args: [
                     field_access {
                       left: field_access {
-                        left: root_field `src` @ 182..185,
+                        left: root_field {
+                          id: `src` @ 182..185,
+                          has_question_mark: false
+                        },
                         dot: 185..186,
                         has_question_mark: false,
                         name: `event_data` @ 186..196
@@ -128,7 +158,10 @@
             args: [
               field_access {
                 left: field_access {
-                  left: root_field `src` @ 266..269,
+                  left: root_field {
+                    id: `src` @ 266..269,
+                    has_question_mark: false
+                  },
                   dot: 269..270,
                   has_question_mark: false,
                   name: `event_data` @ 270..280
@@ -156,7 +189,10 @@
     args: [
       field_access {
         left: field_access {
-          left: root_field `src` @ 306..309,
+          left: root_field {
+            id: `src` @ 306..309,
+            has_question_mark: false
+          },
           dot: 309..310,
           has_question_mark: false,
           name: `event_data` @ 310..320
@@ -167,7 +203,10 @@
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 334..337,
+          left: root_field {
+            id: `src` @ 334..337,
+            has_question_mark: false
+          },
           dot: 337..338,
           has_question_mark: false,
           name: `event_data` @ 338..348
@@ -179,17 +218,26 @@
     ]
   },
   assignment {
-    left: simple_selector {
+    left: field_path {
       expr: field_access {
-        left: root_field `actor` @ 365..370,
+        left: root_field {
+          id: `actor` @ 365..370,
+          has_question_mark: false
+        },
         dot: 370..371,
         has_question_mark: false,
         name: `user` @ 371..375
       },
       has_this: false,
       path: [
-        `actor` @ 365..370,
-        `user` @ 371..375
+        {
+          id: `actor` @ 365..370,
+          has_question_mark: false
+        },
+        {
+          id: `user` @ 371..375,
+          has_question_mark: false
+        }
       ]
     },
     equals: 376..377,
@@ -208,7 +256,10 @@
           name: `domain` @ 439..445,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 447..450,
+              left: root_field {
+                id: `src` @ 447..450,
+                has_question_mark: false
+              },
               dot: 450..451,
               has_question_mark: false,
               name: `user` @ 451..455
@@ -222,7 +273,10 @@
           name: `name` @ 466..470,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 472..475,
+              left: root_field {
+                id: `src` @ 472..475,
+                has_question_mark: false
+              },
               dot: 475..476,
               has_question_mark: false,
               name: `user` @ 476..480
@@ -236,7 +290,10 @@
           name: `uid` @ 489..492,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 494..497,
+              left: root_field {
+                id: `src` @ 494..497,
+                has_question_mark: false
+              },
               dot: 497..498,
               has_question_mark: false,
               name: `user` @ 498..502
@@ -260,7 +317,10 @@
     args: [
       field_access {
         left: field_access {
-          left: root_field `src` @ 522..525,
+          left: root_field {
+            id: `src` @ 522..525,
+            has_question_mark: false
+          },
           dot: 525..526,
           has_question_mark: false,
           name: `user` @ 526..530
@@ -271,7 +331,10 @@
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 539..542,
+          left: root_field {
+            id: `src` @ 539..542,
+            has_question_mark: false
+          },
           dot: 542..543,
           has_question_mark: false,
           name: `user` @ 543..547
@@ -282,7 +345,10 @@
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 554..557,
+          left: root_field {
+            id: `src` @ 554..557,
+            has_question_mark: false
+          },
           dot: 557..558,
           has_question_mark: false,
           name: `user` @ 558..562
@@ -294,22 +360,34 @@
     ]
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `category_name` @ 574..587,
+    left: field_path {
+      expr: root_field {
+        id: `category_name` @ 574..587,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `category_name` @ 574..587
+        {
+          id: `category_name` @ 574..587,
+          has_question_mark: false
+        }
       ]
     },
     equals: 588..589,
     right: constant string "System Activity" @ 590..607
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `category_uid` @ 608..620,
+    left: field_path {
+      expr: root_field {
+        id: `category_uid` @ 608..620,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `category_uid` @ 608..620
+        {
+          id: `category_uid` @ 608..620,
+          has_question_mark: false
+        }
       ]
     },
     equals: 621..622,
@@ -322,29 +400,44 @@
         ref: unresolved
       },
       args: [
-        root_field `category_name` @ 642..655
+        root_field {
+          id: `category_name` @ 642..655,
+          has_question_mark: false
+        }
       ],
       rpar: 655..656,
       method: false
     }
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `class_name` @ 657..667,
+    left: field_path {
+      expr: root_field {
+        id: `class_name` @ 657..667,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `class_name` @ 657..667
+        {
+          id: `class_name` @ 657..667,
+          has_question_mark: false
+        }
       ]
     },
     equals: 668..669,
     right: constant string "Process Activity" @ 670..688
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `class_uid` @ 689..698,
+    left: field_path {
+      expr: root_field {
+        id: `class_uid` @ 689..698,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `class_uid` @ 689..698
+        {
+          id: `class_uid` @ 689..698,
+          has_question_mark: false
+        }
       ]
     },
     equals: 699..700,
@@ -357,18 +450,27 @@
         ref: unresolved
       },
       args: [
-        root_field `class_name` @ 717..727
+        root_field {
+          id: `class_name` @ 717..727,
+          has_question_mark: false
+        }
       ],
       rpar: 727..728,
       method: false
     }
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `device` @ 729..735,
+    left: field_path {
+      expr: root_field {
+        id: `device` @ 729..735,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `device` @ 729..735
+        {
+          id: `device` @ 729..735,
+          has_question_mark: false
+        }
       ]
     },
     equals: 736..737,
@@ -378,7 +480,10 @@
         field {
           name: `hostname` @ 742..750,
           expr: field_access {
-            left: root_field `src` @ 752..755,
+            left: root_field {
+              id: `src` @ 752..755,
+              has_question_mark: false
+            },
             dot: 755..756,
             has_question_mark: false,
             name: `computer_name` @ 756..769
@@ -426,7 +531,10 @@
     },
     args: [
       field_access {
-        left: root_field `src` @ 888..891,
+        left: root_field {
+          id: `src` @ 888..891,
+          has_question_mark: false
+        },
         dot: 891..892,
         has_question_mark: false,
         name: `computer_name` @ 892..905
@@ -434,22 +542,34 @@
     ]
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `message` @ 906..913,
+    left: field_path {
+      expr: root_field {
+        id: `message` @ 906..913,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `message` @ 906..913
+        {
+          id: `message` @ 906..913,
+          has_question_mark: false
+        }
       ]
     },
     equals: 914..915,
     right: constant string "A new process has been created." @ 916..949
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `metadata` @ 950..958,
+    left: field_path {
+      expr: root_field {
+        id: `metadata` @ 950..958,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `metadata` @ 950..958
+        {
+          id: `metadata` @ 950..958,
+          has_question_mark: false
+        }
       ]
     },
     equals: 959..960,
@@ -460,7 +580,10 @@
           name: `original_time` @ 965..978,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 980..983,
+              left: root_field {
+                id: `src` @ 980..983,
+                has_question_mark: false
+              },
               dot: 983..984,
               has_question_mark: false,
               name: `event_data` @ 984..994
@@ -513,7 +636,10 @@
         field {
           name: `uid` @ 1153..1156,
           expr: field_access {
-            left: root_field `src` @ 1158..1161,
+            left: root_field {
+              id: `src` @ 1158..1161,
+              has_question_mark: false
+            },
             dot: 1161..1162,
             has_question_mark: false,
             name: `record_id` @ 1162..1171
@@ -537,7 +663,10 @@
     args: [
       field_access {
         left: field_access {
-          left: root_field `src` @ 1200..1203,
+          left: root_field {
+            id: `src` @ 1200..1203,
+            has_question_mark: false
+          },
           dot: 1203..1204,
           has_question_mark: false,
           name: `event_data` @ 1204..1214
@@ -547,7 +676,10 @@
         name: `UtcTime` @ 1215..1222
       },
       field_access {
-        left: root_field `src` @ 1224..1227,
+        left: root_field {
+          id: `src` @ 1224..1227,
+          has_question_mark: false
+        },
         dot: 1227..1228,
         has_question_mark: false,
         name: `record_id` @ 1228..1237
@@ -555,11 +687,17 @@
     ]
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `process` @ 1238..1245,
+    left: field_path {
+      expr: root_field {
+        id: `process` @ 1238..1245,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `process` @ 1238..1245
+        {
+          id: `process` @ 1238..1245,
+          has_question_mark: false
+        }
       ]
     },
     equals: 1246..1247,
@@ -570,7 +708,10 @@
           name: `cmd_line` @ 1252..1260,
           expr: field_access {
             left: field_access {
-              left: root_field `src` @ 1262..1265,
+              left: root_field {
+                id: `src` @ 1262..1265,
+                has_question_mark: false
+              },
               dot: 1265..1266,
               has_question_mark: false,
               name: `event_data` @ 1266..1276
@@ -589,7 +730,10 @@
                 name: `path` @ 1304..1308,
                 expr: field_access {
                   left: field_access {
-                    left: root_field `src` @ 1310..1313,
+                    left: root_field {
+                      id: `src` @ 1310..1313,
+                      has_question_mark: false
+                    },
                     dot: 1313..1314,
                     has_question_mark: false,
                     name: `event_data` @ 1314..1324
@@ -613,7 +757,10 @@
                   args: [
                     field_access {
                       left: field_access {
-                        left: root_field `src` @ 1369..1372,
+                        left: root_field {
+                          id: `src` @ 1369..1372,
+                          has_question_mark: false
+                        },
                         dot: 1372..1373,
                         has_question_mark: false,
                         name: `event_data` @ 1373..1383
@@ -641,7 +788,10 @@
                   args: [
                     field_access {
                       left: field_access {
-                        left: root_field `src` @ 1423..1426,
+                        left: root_field {
+                          id: `src` @ 1423..1426,
+                          has_question_mark: false
+                        },
                         dot: 1426..1427,
                         has_question_mark: false,
                         name: `event_data` @ 1427..1437
@@ -679,7 +829,10 @@
             args: [
               field_access {
                 left: field_access {
-                  left: root_field `src` @ 1501..1504,
+                  left: root_field {
+                    id: `src` @ 1501..1504,
+                    has_question_mark: false
+                  },
                   dot: 1504..1505,
                   has_question_mark: false,
                   name: `event_data` @ 1505..1515
@@ -707,7 +860,10 @@
     args: [
       field_access {
         left: field_access {
-          left: root_field `src` @ 1535..1538,
+          left: root_field {
+            id: `src` @ 1535..1538,
+            has_question_mark: false
+          },
           dot: 1538..1539,
           has_question_mark: false,
           name: `event_data` @ 1539..1549
@@ -718,7 +874,10 @@
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 1563..1566,
+          left: root_field {
+            id: `src` @ 1563..1566,
+            has_question_mark: false
+          },
           dot: 1566..1567,
           has_question_mark: false,
           name: `event_data` @ 1567..1577
@@ -729,7 +888,10 @@
       },
       field_access {
         left: field_access {
-          left: root_field `src` @ 1585..1588,
+          left: root_field {
+            id: `src` @ 1585..1588,
+            has_question_mark: false
+          },
           dot: 1588..1589,
           has_question_mark: false,
           name: `event_data` @ 1589..1599
@@ -741,55 +903,85 @@
     ]
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `severity` @ 1610..1618,
+    left: field_path {
+      expr: root_field {
+        id: `severity` @ 1610..1618,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `severity` @ 1610..1618
+        {
+          id: `severity` @ 1610..1618,
+          has_question_mark: false
+        }
       ]
     },
     equals: 1619..1620,
     right: constant string "Informational" @ 1621..1636
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `severity_id` @ 1637..1648,
+    left: field_path {
+      expr: root_field {
+        id: `severity_id` @ 1637..1648,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `severity_id` @ 1637..1648
+        {
+          id: `severity_id` @ 1637..1648,
+          has_question_mark: false
+        }
       ]
     },
     equals: 1649..1650,
     right: constant int64 1 @ 1651..1652
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `status` @ 1653..1659,
+    left: field_path {
+      expr: root_field {
+        id: `status` @ 1653..1659,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `status` @ 1653..1659
+        {
+          id: `status` @ 1653..1659,
+          has_question_mark: false
+        }
       ]
     },
     equals: 1660..1661,
     right: constant string "Success" @ 1662..1671
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `status_id` @ 1672..1681,
+    left: field_path {
+      expr: root_field {
+        id: `status_id` @ 1672..1681,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `status_id` @ 1672..1681
+        {
+          id: `status_id` @ 1672..1681,
+          has_question_mark: false
+        }
       ]
     },
     equals: 1682..1683,
     right: constant int64 1 @ 1684..1685
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `time` @ 1686..1690,
+    left: field_path {
+      expr: root_field {
+        id: `time` @ 1686..1690,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `time` @ 1686..1690
+        {
+          id: `time` @ 1686..1690,
+          has_question_mark: false
+        }
       ]
     },
     equals: 1691..1692,
@@ -819,7 +1011,10 @@
                 },
                 args: [
                   field_access {
-                    left: root_field `metadata` @ 1704..1712,
+                    left: root_field {
+                      id: `metadata` @ 1704..1712,
+                      has_question_mark: false
+                    },
                     dot: 1712..1713,
                     has_question_mark: false,
                     name: `original_time` @ 1713..1726
@@ -841,37 +1036,58 @@
     }
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `type_name` @ 1748..1757,
+    left: field_path {
+      expr: root_field {
+        id: `type_name` @ 1748..1757,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `type_name` @ 1748..1757
+        {
+          id: `type_name` @ 1748..1757,
+          has_question_mark: false
+        }
       ]
     },
     equals: 1758..1759,
     right: constant string "Process Activity: Launch" @ 1760..1786
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `type_uid` @ 1787..1795,
+    left: field_path {
+      expr: root_field {
+        id: `type_uid` @ 1787..1795,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `type_uid` @ 1787..1795
+        {
+          id: `type_uid` @ 1787..1795,
+          has_question_mark: false
+        }
       ]
     },
     equals: 1796..1797,
     right: constant int64 100701 @ 1798..1804
   },
   assignment {
-    left: simple_selector {
-      expr: root_field `unmapped` @ 1805..1813,
+    left: field_path {
+      expr: root_field {
+        id: `unmapped` @ 1805..1813,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `unmapped` @ 1805..1813
+        {
+          id: `unmapped` @ 1805..1813,
+          has_question_mark: false
+        }
       ]
     },
     equals: 1814..1815,
-    right: root_field `src` @ 1816..1819
+    right: root_field {
+      id: `src` @ 1816..1819,
+      has_question_mark: false
+    }
   },
   invocation {
     op: {
@@ -881,7 +1097,10 @@
       ref: unresolved
     },
     args: [
-      root_field `src` @ 1825..1828
+      root_field {
+        id: `src` @ 1825..1828,
+        has_question_mark: false
+      }
     ]
   }
 ]

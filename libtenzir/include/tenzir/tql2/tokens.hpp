@@ -22,13 +22,13 @@ TENZIR_ENUM(
   // identifiers
   identifier, dollar_ident,
   // keywords
-  this_, if_, else_, match, not_, and_, or_, underscore, let, in, meta,
+  this_, if_, else_, match, not_, and_, or_, move, underscore, let, in, meta,
   reserved_keyword,
   // literals
   scalar, true_, false_, null, raw_string, string, ip, subnet, datetime,
   // punctuation
-  dot, dot_question_mark, plus, minus, slash, star, equal_equal, bang_equal,
-  less, less_equal, greater, greater_equal, at, equal, comma, colon,
+  dot, dot_question_mark, question_mark, plus, minus, slash, star, equal_equal,
+  bang_equal, less, less_equal, greater, greater_equal, at, equal, comma, colon,
   single_quote, fat_arrow, pipe, dot_dot_dot, colon_colon,
   // parenthesis
   lpar, rpar, lbrace, rbrace, lbracket, rbracket,

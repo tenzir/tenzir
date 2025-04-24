@@ -151,6 +151,20 @@ auto evaluator::eval(const ast::unary_expr& x) -> multi_series {
     X(neg);
     X(not_);
 #undef X
+    case move: {
+      if (ast::field_path::try_from(x.expr)) {
+        diagnostic::warning("move is not supported here")
+          .primary(x.op, "has no effect")
+          .hint("move only works on fields within assignments")
+          .emit(ctx_);
+      } else {
+        diagnostic::warning("move has no effect")
+          .primary(x.expr, "is not a field")
+          .hint("move only works on fields within assignments")
+          .emit(ctx_);
+      }
+      return eval(x.expr);
+    }
   }
   TENZIR_UNREACHABLE();
 }

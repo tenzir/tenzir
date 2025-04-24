@@ -51,7 +51,7 @@ struct xlimit {
 
 struct chart_args {
   chart_type ty;
-  ast::simple_selector x;
+  ast::field_path x;
   call_map y;
   std::optional<ast::expression> group;
   std::optional<xlimit> x_min;
@@ -309,10 +309,10 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto gnames = std::unordered_set<std::string>{};
-    auto xpath = args_.x.path()[0].name;
+    auto xpath = args_.x.path()[0].id.name;
     for (auto i = size_t{1}; i < args_.x.path().size(); ++i) {
       xpath += ".";
-      xpath += args_.x.path()[i].name;
+      xpath += args_.x.path()[i].id.name;
     }
     auto& dh = ctrl.diagnostics();
     auto sp = session_provider::make(dh);
@@ -955,11 +955,14 @@ class chart_plugin : public virtual operator_factory_plugin {
           return failure::promise();
         }
         const auto yname = std::invoke([&]() -> std::string {
-          if (auto ss = ast::simple_selector::try_from(y)) {
+          if (auto ss = ast::field_path::try_from(y)) {
             return fmt::format(
-              "{}", fmt::join(std::views::transform(ss->path(),
-                                                    &ast::identifier::name),
-                              "."));
+              "{}",
+              fmt::join(
+                ss->path()
+                  | std::ranges::views::transform(&ast::field_path::segment::id)
+                  | std::ranges::views::transform(&ast::identifier::name),
+                "."));
           }
           if (args.ty == chart_type::pie) {
             return "value";

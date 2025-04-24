@@ -12,24 +12,39 @@
     expression: unary_expr {
       op: "not_" @ 0..0,
       expr: binary_expr {
-        left: root_field `foo` @ 11..14,
+        left: root_field {
+          id: `foo` @ 11..14,
+          has_question_mark: false
+        },
         op: "eq" @ 15..17,
         right: constant int64 1 @ 18..19
       }
     },
     warn: false
   },
-  tql2.set [
-    {
-      left: simple_selector {
-        expr: root_field `foo` @ 47..50,
-        has_this: false,
-        path: [
-          `foo` @ 47..50
-        ]
-      },
-      equals: 51..52,
-      right: constant int64 2 @ 53..54
-    }
-  ]
+  tql2.set {
+    assignments: [
+      {
+        left: field_path {
+          expr: root_field {
+            id: `foo` @ 47..50,
+            has_question_mark: false
+          },
+          has_this: false,
+          path: [
+            {
+              id: `foo` @ 47..50,
+              has_question_mark: false
+            }
+          ]
+        },
+        equals: 51..52,
+        right: constant int64 2 @ 53..54
+      }
+    ],
+    moved_fields: [
+      
+    ],
+    order: "ordered"
+  }
 ]

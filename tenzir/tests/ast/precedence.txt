@@ -1,10 +1,16 @@
 [
   assignment {
-    left: simple_selector {
-      expr: root_field `foo` @ 0..3,
+    left: field_path {
+      expr: root_field {
+        id: `foo` @ 0..3,
+        has_question_mark: false
+      },
       has_this: false,
       path: [
-        `foo` @ 0..3
+        {
+          id: `foo` @ 0..3,
+          has_question_mark: false
+        }
       ]
     },
     equals: 4..5,
@@ -47,7 +53,10 @@
         left: binary_expr {
           left: unary_expr {
             op: "neg" @ 43..44,
-            expr: root_field `foo` @ 44..47
+            expr: root_field {
+              id: `foo` @ 44..47,
+              has_question_mark: false
+            }
           },
           op: "add" @ 48..49,
           right: unary_expr {
@@ -57,7 +66,10 @@
         },
         op: "and_" @ 56..59,
         right: binary_expr {
-          left: root_field `bar` @ 60..63,
+          left: root_field {
+            id: `bar` @ 60..63,
+            has_question_mark: false
+          },
           op: "eq" @ 64..66,
           right: constant int64 42 @ 67..69
         }

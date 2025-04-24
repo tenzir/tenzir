@@ -138,10 +138,12 @@ auto transformer_record::create_null_column(size_t n) const
   return std::make_shared<ColumnTuple>(std::move(columns));
 }
 
-auto transformer_record::create_column(
-  path_type& path, const tenzir::type& type, const arrow::Array& array,
-  dropmask_cref dropmask,
-  tenzir::diagnostic_handler& dh) -> ::clickhouse::ColumnRef {
+auto transformer_record::create_column(path_type& path,
+                                       const tenzir::type& type,
+                                       const arrow::Array& array,
+                                       dropmask_cref dropmask,
+                                       tenzir::diagnostic_handler& dh)
+  -> ::clickhouse::ColumnRef {
   auto columns = std::vector<ColumnRef>(transformations.size());
   const auto& rt = as<record_type>(type);
   const auto& struct_array = as<arrow::StructArray>(array);
@@ -447,16 +449,16 @@ auto make_transformer_impl(bool nullable) -> std::unique_ptr<transformer> {
 struct transformer_blob : transformer {
   transformer_blob() : transformer("Array(UInt8)", true) {
   }
-  virtual auto
-  update_dropmask(path_type& path, const tenzir::type& type,
-                  const arrow::Array& array, dropmask_ref dropmask,
-                  tenzir::diagnostic_handler& dh) -> drop override {
+  virtual auto update_dropmask(path_type& path, const tenzir::type& type,
+                               const arrow::Array& array, dropmask_ref dropmask,
+                               tenzir::diagnostic_handler& dh)
+    -> drop override {
     TENZIR_UNUSED(path, type, array, dropmask, dh);
     return drop::none;
   }
 
-  virtual auto
-  create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+  virtual auto create_null_column(size_t n) const
+    -> ::clickhouse::ColumnRef override {
     auto clickhouse_columns = std::make_shared<ColumnUInt8>();
     auto clickhouse_offsets = std::make_shared<ColumnUInt64>();
     auto& offsets = clickhouse_offsets->GetWritableData();
@@ -532,10 +534,10 @@ struct transformer_array : transformer {
     }
   }
 
-  virtual auto
-  update_dropmask(path_type& path, const tenzir::type& type,
-                  const arrow::Array& array, dropmask_ref dropmask,
-                  tenzir::diagnostic_handler& dh) -> drop override {
+  virtual auto update_dropmask(path_type& path, const tenzir::type& type,
+                               const arrow::Array& array, dropmask_ref dropmask,
+                               tenzir::diagnostic_handler& dh)
+    -> drop override {
     const auto value_type = as<list_type>(type).value_type();
     const auto& list_array = as<arrow::ListArray>(array);
     const auto& value_array = *list_array.values();
@@ -597,8 +599,8 @@ struct transformer_array : transformer {
   /// clickhouse offsets are [end1, end2, ...]
   /// See e.g. `::clickhouse::ColumnArray::GetSize`
   static auto
-  make_offsets(const arrow::ListArray& list_array,
-               dropmask_cref dropmask) -> std::shared_ptr<ColumnUInt64> {
+  make_offsets(const arrow::ListArray& list_array, dropmask_cref dropmask)
+    -> std::shared_ptr<ColumnUInt64> {
     const auto arr = list_array.raw_value_offsets();
     const auto size = list_array.length();
     auto res = std::make_shared<ColumnUInt64>();
@@ -642,9 +644,10 @@ struct transformer_array : transformer {
   }
 };
 
-auto make_record_functions_from_clickhouse(
-  path_type& path, std::string_view clickhouse_typename,
-  diagnostic_handler& dh) -> std::unique_ptr<transformer> {
+auto make_record_functions_from_clickhouse(path_type& path,
+                                           std::string_view clickhouse_typename,
+                                           diagnostic_handler& dh)
+  -> std::unique_ptr<transformer> {
   TENZIR_ASSERT(clickhouse_typename.starts_with("Tuple("));
   TENZIR_ASSERT(clickhouse_typename.ends_with(")"));
   auto tuple_elements = clickhouse_typename;
@@ -705,9 +708,10 @@ auto make_record_functions_from_clickhouse(
                                               std::move(transformations));
 }
 
-auto make_array_functions_from_clickhouse(
-  path_type& path, std::string_view clickhouse_typename,
-  diagnostic_handler& dh) -> std::unique_ptr<transformer> {
+auto make_array_functions_from_clickhouse(path_type& path,
+                                          std::string_view clickhouse_typename,
+                                          diagnostic_handler& dh)
+  -> std::unique_ptr<transformer> {
   TENZIR_ASSERT(clickhouse_typename.starts_with("Array("));
   TENZIR_ASSERT(clickhouse_typename.ends_with(")"));
   auto value_typename = clickhouse_typename;
@@ -776,9 +780,10 @@ auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
   return match(t, f);
 }
 
-auto plain_clickhouse_tuple_elements(
-  path_type& path, const record_type& record, diagnostic_handler& dh,
-  std::string_view primary) -> failure_or<std::string> {
+auto plain_clickhouse_tuple_elements(path_type& path, const record_type& record,
+                                     diagnostic_handler& dh,
+                                     std::string_view primary)
+  -> failure_or<std::string> {
   auto res = std::string{"("};
   auto first = true;
   for (auto [k, t] : record.fields()) {
@@ -799,8 +804,8 @@ auto plain_clickhouse_tuple_elements(
 }
 
 auto emit_unsupported_clickhouse_type_diagnostic(
-  path_type& path, std::string_view clickhouse_typename,
-  diagnostic_handler& dh) -> void {
+  path_type& path, std::string_view clickhouse_typename, diagnostic_handler& dh)
+  -> void {
   auto diag = diagnostic::error("ClickHouse column `{}` has unsupported "
                                 "ClickHouse type `{}`",
                                 fmt::join(path, "."), clickhouse_typename);
@@ -819,9 +824,10 @@ auto emit_unsupported_clickhouse_type_diagnostic(
   std::move(diag).emit(dh);
 }
 
-auto make_functions_from_clickhouse(
-  path_type& path, const std::string_view clickhouse_typename,
-  diagnostic_handler& dh) -> std::unique_ptr<transformer> {
+auto make_functions_from_clickhouse(path_type& path,
+                                    const std::string_view clickhouse_typename,
+                                    diagnostic_handler& dh)
+  -> std::unique_ptr<transformer> {
   // Array(T)
   const bool is_nullable = clickhouse_typename.starts_with("Nullable(");
   TENZIR_ASSERT(not is_nullable or clickhouse_typename.ends_with(')'));

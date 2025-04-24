@@ -23,11 +23,10 @@
 
 namespace tenzir::ast {
 
-auto simple_selector::try_from(ast::expression expr)
-  -> std::optional<simple_selector> {
+auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
   // Path is collect in reversed order (outside-in).
   auto has_this = false;
-  auto path = std::vector<identifier>{};
+  auto path = std::vector<field_path::segment>{};
   auto* current = &expr;
   while (true) {
     auto sub_result = current->match(
@@ -36,14 +35,11 @@ auto simple_selector::try_from(ast::expression expr)
         return true;
       },
       [&](ast::root_field& x) -> variant<ast::expression*, bool> {
-        path.push_back(x.ident);
+        path.emplace_back(x.id, x.has_question_mark);
         return true;
       },
       [&](ast::field_access& e) -> variant<ast::expression*, bool> {
-        if (e.has_question_mark) {
-          return false;
-        }
-        path.push_back(e.name);
+        path.emplace_back(e.name, e.has_question_mark);
         return &e.left;
       },
       [&](ast::index_expr& e) -> variant<ast::expression*, bool> {
@@ -52,7 +48,8 @@ auto simple_selector::try_from(ast::expression expr)
           return false;
         }
         if (auto* name = std::get_if<std::string>(&constant->value)) {
-          path.emplace_back(*name, constant->source);
+          path.emplace_back(ast::identifier{*name, constant->source},
+                            e.has_question_mark);
           return &e.expr;
         }
         return false;
@@ -65,7 +62,11 @@ auto simple_selector::try_from(ast::expression expr)
         return {};
       }
       std::ranges::reverse(path);
-      return simple_selector{std::move(expr), has_this, std::move(path)};
+      return field_path{
+        std::move(expr),
+        has_this,
+        std::move(path),
+      };
     }
     current = std::get<ast::expression*>(sub_result);
   }
@@ -77,7 +78,7 @@ auto selector::try_from(ast::expression expr) -> std::optional<selector> {
       return selector{x};
     },
     [&](auto&) -> std::optional<selector> {
-      return simple_selector::try_from(std::move(expr));
+      return field_path::try_from(std::move(expr));
     });
 }
 
@@ -115,10 +116,10 @@ auto to_field_extractor(const ast::expression& x)
   auto p = (parsers::alpha | '_') >> *(parsers::alnum | '_');
   return x.match(
     [&](const ast::root_field& x) -> std::optional<field_extractor> {
-      if (not p(x.ident.name)) {
+      if (not p(x.id.name)) {
         return std::nullopt;
       }
-      return x.ident.name;
+      return x.id.name;
     },
     [&](const ast::field_access& x) -> std::optional<field_extractor> {
       if (not p(x.name.name)) {
@@ -190,7 +191,7 @@ auto fold_now(const ast::expression& l, const ast::binary_op& op,
     return std::nullopt;
   }
   auto* const call = std::get_if<ast::function_call>(l.kind.get());
-  if (not (call and call->fn.path[0].name == "now")) {
+  if (not(call and call->fn.path[0].name == "now")) {
     return std::nullopt;
   }
   if (op == ast::binary_op::add) {

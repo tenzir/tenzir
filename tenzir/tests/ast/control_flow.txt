@@ -13,7 +13,10 @@
   if_stmt {
     if_kw: 2..4,
     condition: binary_expr {
-      left: root_field `b` @ 5..6,
+      left: root_field {
+        id: `b` @ 5..6,
+        has_question_mark: false
+      },
       op: "eq" @ 7..9,
       right: constant int64 42 @ 10..12
     },
@@ -26,7 +29,10 @@
           ref: unresolved
         },
         args: [
-          root_field `d` @ 19..20
+          root_field {
+            id: `d` @ 19..20,
+            has_question_mark: false
+          }
         ]
       },
       invocation {
@@ -38,15 +44,24 @@
         },
         args: [
           assignment {
-            left: simple_selector {
-              expr: root_field `f` @ 25..26,
+            left: field_path {
+              expr: root_field {
+                id: `f` @ 25..26,
+                has_question_mark: false
+              },
               has_this: false,
               path: [
-                `f` @ 25..26
+                {
+                  id: `f` @ 25..26,
+                  has_question_mark: false
+                }
               ]
             },
             equals: 26..27,
-            right: root_field `g` @ 27..28
+            right: root_field {
+              id: `g` @ 27..28,
+              has_question_mark: false
+            }
           }
         ]
       }
@@ -65,7 +80,10 @@
   },
   if_stmt {
     if_kw: 33..35,
-    condition: root_field `i` @ 36..37,
+    condition: root_field {
+      id: `i` @ 36..37,
+      has_question_mark: false
+    },
     then: [
       
     ],
@@ -89,7 +107,10 @@
   },
   match_stmt {
     begin: 51..56,
-    expr: root_field `k` @ 57..58,
+    expr: root_field {
+      id: `k` @ 57..58,
+      has_question_mark: false
+    },
     arms: [
       
     ],
@@ -97,7 +118,10 @@
   },
   match_stmt {
     begin: 62..67,
-    expr: root_field `k` @ 68..69,
+    expr: root_field {
+      id: `k` @ 68..69,
+      has_question_mark: false
+    },
     arms: [
       {
         filter: [
@@ -122,7 +146,10 @@
   },
   match_stmt {
     begin: 91..96,
-    expr: root_field `k` @ 97..98,
+    expr: root_field {
+      id: `k` @ 97..98,
+      has_question_mark: false
+    },
     arms: [
       {
         filter: [
@@ -155,7 +182,10 @@
               ref: unresolved
             },
             args: [
-              root_field `bar` @ 144..147
+              root_field {
+                id: `bar` @ 144..147,
+                has_question_mark: false
+              }
             ]
           },
           invocation {
@@ -166,7 +196,10 @@
               ref: unresolved
             },
             args: [
-              root_field `bar` @ 156..159
+              root_field {
+                id: `bar` @ 156..159,
+                has_question_mark: false
+              }
             ]
           }
         ]

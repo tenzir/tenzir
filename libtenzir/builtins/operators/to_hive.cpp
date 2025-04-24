@@ -34,7 +34,7 @@ struct operator_args {
   }
 
   std::string uri;
-  std::vector<ast::simple_selector> by;
+  std::vector<ast::field_path> by;
   std::string extension;
   pipeline writer;
   duration timeout{};
@@ -161,15 +161,15 @@ struct group_t {
 
 // TODO: No need to recompute.
 // TODO: This name might not be the best.
-auto selector_to_name(const ast::simple_selector& sel) -> std::string {
-  auto path = sel.path() | std::views::transform(&ast::identifier::name);
+auto selector_to_name(const ast::field_path& sel) -> std::string {
+  auto path = sel.path() | std::views::transform(&ast::field_path::segment::id)
+              | std::views::transform(&ast::identifier::name);
   return fmt::to_string(fmt::join(path, "."));
 }
 
 // TODO: Un-copy-paste this?
 auto remove_columns(const table_slice& slice,
-                    std::span<const ast::simple_selector> selectors)
-  -> table_slice {
+                    std::span<const ast::field_path> selectors) -> table_slice {
   auto transformations = std::vector<indexed_transformation>{};
   for (auto& sel : selectors) {
     auto resolved = resolve(sel, slice.schema());
@@ -399,7 +399,7 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    auto by = std::vector<ast::simple_selector>{};
+    auto by = std::vector<ast::field_path>{};
     by.reserve(by_list->items.size());
     for (auto& item : by_list->items) {
       auto expr = std::get_if<ast::expression>(&item);
@@ -409,7 +409,7 @@ public:
           .emit(ctx);
         return failure::promise();
       }
-      auto sel = ast::simple_selector::try_from(*expr);
+      auto sel = ast::field_path::try_from(*expr);
       if (not sel) {
         diagnostic::error("expected a selector").primary(item).emit(ctx);
         return failure::promise();
@@ -421,9 +421,8 @@ public:
       return failure::promise();
     }
     // TODO: `json` should be `ndjson` (probably not only here).
-    auto writer_definition
-      = fmt::format("write {}",
-                    format.inner == "json" ? "json -c" : format.inner);
+    auto writer_definition = fmt::format(
+      "write {}", format.inner == "json" ? "json -c" : format.inner);
     if (compression) {
       fmt::format_to(std::back_inserter(writer_definition), "| compress \"{}\"",
                      compression->inner);

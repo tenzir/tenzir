@@ -10,6 +10,7 @@ warning: field `x` not found
 1 | read_json | z = x.otherwise(y)
   |                 ~ 
   |
+  = hint: append `?` to suppress this warning
 
 warning: field `y` not found
  --> <input>:1:29
@@ -17,3 +18,4 @@ warning: field `y` not found
 1 | read_json | z = x.otherwise(y)
   |                             ~ 
   |
+  = hint: append `?` to suppress this warning

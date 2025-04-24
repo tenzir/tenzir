@@ -49,15 +49,6 @@ struct identifier {
     return location;
   }
 
-  friend auto operator<=>(const identifier& lhs, const identifier& rhs)
-    -> std::strong_ordering {
-    return lhs.name <=> rhs.name;
-  }
-
-  friend auto operator==(const identifier& lhs, const identifier& rhs) -> bool {
-    return lhs.name == rhs.name;
-  }
-
   friend auto inspect(auto& f, identifier& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
       return dbg->fmt_value("`{}`", x.name)
@@ -98,28 +89,27 @@ struct underscore : location {
 struct dollar_var {
   dollar_var() = default;
 
-  explicit dollar_var(identifier ident) : ident{std::move(ident)} {
+  explicit dollar_var(identifier id) : id{std::move(id)} {
   }
 
   auto name_without_dollar() const -> std::string_view {
-    TENZIR_ASSERT(ident.name.starts_with("$"));
-    return std::string_view{ident.name}.substr(1);
+    TENZIR_ASSERT(id.name.starts_with("$"));
+    return std::string_view{id.name}.substr(1);
   }
 
   auto get_location() const -> tenzir::location {
-    return ident.location;
+    return id.location;
   }
 
   friend auto inspect(auto& f, dollar_var& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->fmt_value("`{}`", x.ident.name)
-             && dbg->append(" -> {:?}", x.let)
-             && dbg->append(" @ {:?}", x.ident.location);
+      return dbg->fmt_value("`{}`", x.id.name) && dbg->append(" -> {:?}", x.let)
+             && dbg->append(" @ {:?}", x.id.location);
     }
-    return f.object(x).fields(f.field("ident", x.ident), f.field("let", x.let));
+    return f.object(x).fields(f.field("id", x.id), f.field("let", x.let));
   }
 
-  identifier ident;
+  identifier id;
   let_id let;
 };
 
@@ -178,14 +168,16 @@ struct this_ {
 };
 
 struct root_field {
-  identifier ident;
+  identifier id;
+  bool has_question_mark = false;
 
   auto get_location() const -> location {
-    return ident.location;
+    return id.location;
   }
 
   friend auto inspect(auto& f, root_field& x) -> bool {
-    return f.apply(x.ident);
+    return f.object(x).fields(
+      f.field("id", x.id), f.field("has_question_mark", x.has_question_mark));
   }
 };
 
@@ -253,16 +245,26 @@ struct expression {
   auto is_deterministic(const registry& reg) const -> bool;
 };
 
-/// A "simple selector" has a path that contains only constant field names.
+/// A field path is a list of constant field names.
 ///
-/// This can contain expressions like `foo`, `foo.bar` and `this.foo["bar"]`. It
-/// does not allow `foo[some_expr()]`, `foo[0]`, etc. These selectors will be
-/// added at a later point in time.
-class simple_selector {
+/// This can contain expressions like `foo`, `foo.?bar` and `this.foo["bar"]`.
+/// It does not allow `foo[some_expr()]`, `foo[0]`, etc. These field paths will
+/// be added at a later point in time.
+class field_path {
 public:
-  simple_selector() = default;
+  struct segment {
+    identifier id;
+    bool has_question_mark;
 
-  static auto try_from(ast::expression expr) -> std::optional<simple_selector>;
+    friend auto inspect(auto& f, segment& x) -> bool {
+      return f.object(x).fields(
+        f.field("id", x.id), f.field("has_question_mark", x.has_question_mark));
+    }
+  };
+
+  field_path() = default;
+
+  static auto try_from(ast::expression expr) -> std::optional<field_path>;
 
   auto get_location() const -> location {
     return expr_.get_location();
@@ -272,7 +274,7 @@ public:
     return has_this_;
   }
 
-  auto path() const -> std::span<const identifier> {
+  auto path() const -> std::span<const segment> {
     return path_;
   }
 
@@ -284,23 +286,12 @@ public:
     return std::move(expr_);
   }
 
-  friend auto operator<=>(const simple_selector& lhs,
-                          const simple_selector& rhs) -> std::weak_ordering {
-    return lhs.path_ <=> rhs.path_;
-  }
-
-  friend auto operator==(const simple_selector& lhs, const simple_selector& rhs)
-    -> bool {
-    return lhs.path_ == rhs.path_;
-  }
-
 private:
-  simple_selector(ast::expression expr, bool has_this,
-                  std::vector<identifier> path)
+  field_path(ast::expression expr, bool has_this, std::vector<segment> path)
     : expr_{std::move(expr)}, has_this_{has_this}, path_{std::move(path)} {
   }
 
-  friend auto inspect(auto& f, simple_selector& x) -> bool {
+  friend auto inspect(auto& f, field_path& x) -> bool {
     return f.object(x).fields(f.field("expr", x.expr_),
                               f.field("has_this", x.has_this_),
                               f.field("path", x.path_));
@@ -308,7 +299,7 @@ private:
 
   ast::expression expr_;
   bool has_this_{};
-  std::vector<identifier> path_;
+  std::vector<segment> path_;
 };
 
 /// A selector is something that can be assigned.
@@ -316,7 +307,7 @@ private:
 /// Note that this is not an actual `expression`. Instead, expressions can be
 /// converted to `selector` on-demand. Currently, this is limited to meta
 /// selectors (e.g., `@tag`) and simple selectors (see `simple_selector`).
-struct selector : variant<meta, simple_selector> {
+struct selector : variant<meta, field_path> {
   using variant::variant;
 
   static auto try_from(ast::expression expr) -> std::optional<selector>;
@@ -372,7 +363,7 @@ struct binary_expr {
   }
 };
 
-TENZIR_ENUM(unary_op, pos, neg, not_);
+TENZIR_ENUM(unary_op, pos, neg, not_, move);
 
 struct unary_expr {
   unary_expr() = default;
@@ -502,25 +493,25 @@ struct index_expr {
   index_expr() = default;
 
   index_expr(expression expr, location lbracket, expression index,
-             location rbracket, bool suppress_warnings)
+             location rbracket, bool has_question_mark)
     : expr{std::move(expr)},
       lbracket{lbracket},
       index{std::move(index)},
       rbracket{rbracket},
-      suppress_warnings{suppress_warnings} {
+      has_question_mark{has_question_mark} {
   }
 
   expression expr;
   location lbracket;
   expression index;
   location rbracket;
-  bool suppress_warnings = false;
+  bool has_question_mark = false;
 
   friend auto inspect(auto& f, index_expr& x) -> bool {
     return f.object(x).fields(
       f.field("expr", x.expr), f.field("lbracket", x.lbracket),
       f.field("index", x.index), f.field("rbracket", x.rbracket),
-      f.field("suppress_warnings", x.suppress_warnings));
+      f.field("has_question_mark", x.has_question_mark));
   }
 
   auto get_location() const -> location {
@@ -925,13 +916,13 @@ protected:
     match(x);
   }
 
-  void enter(ast::simple_selector& x) {
+  void enter(ast::field_path& x) {
     // TODO: What should we do here?
     TENZIR_UNUSED(x);
   }
 
   void enter(ast::root_field& x) {
-    go(x.ident);
+    go(x.id);
   }
 
   void enter(ast::this_& x) {

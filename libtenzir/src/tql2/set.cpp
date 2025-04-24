@@ -27,15 +27,42 @@
 
 namespace tenzir {
 
-auto consume_path(std::span<const ast::identifier> path, series value)
+namespace {
+
+auto rebatch_events(std::vector<table_slice> events)
+  -> std::vector<table_slice> {
+  if (events.size() < 2) {
+    return events;
+  }
+  auto result = std::vector<table_slice>{};
+  auto start = events.begin();
+  auto rows = start->rows();
+  const auto end = events.end();
+  for (auto it = std::next(start); it < end; ++it) {
+    rows += it->rows();
+    if (it->schema() == start->schema()
+        and rows < defaults::import::table_slice_size) {
+      continue;
+    }
+    result.push_back(concatenate({start, it}));
+    start = it;
+    rows = start->rows();
+  }
+  result.push_back(concatenate({start, end}));
+  return result;
+}
+
+} // namespace
+
+auto consume_path(std::span<const ast::field_path::segment> path, series value)
   -> series {
   if (path.empty()) {
     return value;
   }
   value = consume_path(path.subspan(1), std::move(value));
   auto new_type
-    = type{record_type{record_type::field_view{path[0].name, value.type}}};
-  auto new_array = make_struct_array(value.length(), nullptr, {path[0].name},
+    = type{record_type{record_type::field_view{path[0].id.name, value.type}}};
+  auto new_array = make_struct_array(value.length(), nullptr, {path[0].id.name},
                                      {value.array}, as<record_type>(new_type));
   return series{
     std::move(new_type),
@@ -43,8 +70,9 @@ auto consume_path(std::span<const ast::identifier> path, series value)
   };
 }
 
-auto assign(std::span<const ast::identifier> left, series right, series input,
-            diagnostic_handler& dh, assign_position position) -> series {
+auto assign(std::span<const ast::field_path::segment> left, series right,
+            series input, diagnostic_handler& dh, assign_position position)
+  -> series {
   TENZIR_ASSERT(right.length() == input.length());
   if (left.empty()) {
     return right;
@@ -58,8 +86,8 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
   auto* rec_ty = try_as<record_type>(input.type);
   if (not rec_ty) {
     diagnostic::warning("implicit record for `{}` field overwrites `{}` value",
-                        left[0].name, input.type.kind())
-      .primary(left[0])
+                        left[0].id.name, input.type.kind())
+      .primary(left[0].id)
       .hint("if this is intentional, drop the parent field before")
       .emit(dh);
     return consume_path(left, std::move(right));
@@ -79,7 +107,7 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
   });
   auto index = std::optional<size_t>{};
   for (auto [i, field] : detail::enumerate(new_ty_fields)) {
-    if (field.name == left[0].name) {
+    if (field.name == left[0].id.name) {
       index = i;
       break;
     }
@@ -95,12 +123,13 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
     auto inner = consume_path(left.subspan(1), std::move(right));
     switch (position) {
       case tenzir::assign_position::front: {
-        new_ty_fields.emplace(new_ty_fields.begin(), left[0].name, inner.type);
+        new_ty_fields.emplace(new_ty_fields.begin(), left[0].id.name,
+                              inner.type);
         new_field_arrays.emplace(new_field_arrays.begin(), inner.array);
         break;
       }
       case tenzir::assign_position::back: {
-        new_ty_fields.emplace_back(left[0].name, inner.type);
+        new_ty_fields.emplace_back(left[0].id.name, inner.type);
         new_field_arrays.push_back(inner.array);
         break;
       }
@@ -263,9 +292,8 @@ auto assign(const ast::meta& left, const series& right,
   TENZIR_UNREACHABLE();
 }
 
-auto assign(const ast::simple_selector& left, series right,
-            const table_slice& input, diagnostic_handler& dh,
-            assign_position position) -> table_slice {
+auto assign(const ast::field_path& left, series right, const table_slice& input,
+            diagnostic_handler& dh, assign_position position) -> table_slice {
   auto result
     = assign(left.path(), std::move(right), series{input}, dh, position);
   auto* rec_ty = try_as<record_type>(result.type);
@@ -296,11 +324,135 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
     [&](const ast::meta& left) {
       return assign(left, right, input, dh);
     },
-    [&](const ast::simple_selector& left) {
+    [&](const ast::field_path& left) {
       auto result = std::vector<table_slice>{};
       result.push_back(assign(left, std::move(right), input, dh, position));
       return result;
     });
+}
+
+namespace {
+
+struct move_resolver final : ast::visitor<move_resolver> {
+  std::vector<ast::field_path> out;
+
+  auto visit(ast::assignment& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::expression& x) -> void {
+    if (auto* unary = try_as<ast::unary_expr>(x)) {
+      if (unary->op.inner == ast::unary_op::move) {
+        if (auto field = ast::field_path::try_from(unary->expr)) {
+          out.push_back(std::move(*field));
+          x = std::move(unary->expr);
+        }
+      }
+    }
+    enter(x);
+  }
+
+  auto visit(ast::function_call& x) -> void {
+    // TODO: The `map` and `where` functions abuse the expressions they take
+    // as arguments as a poor-mans lambda expression. We don't recurse
+    // further when we encounter them here, but that's at best a stopgap.
+    // Ideally, there'd be proper lambda support in the language itself.
+    if (x.fn.path.size() == 1) {
+      const auto& name = x.fn.path.front().name;
+      if (name == "map" or name == "where") {
+        return;
+      }
+    }
+    enter(x);
+  }
+
+  auto visit(auto& x) -> void {
+    enter(x);
+  }
+};
+
+} // namespace
+
+auto resolve_move_keyword(ast::assignment assignment)
+  -> std::pair<ast::assignment, std::vector<ast::field_path>> {
+  auto f = move_resolver{};
+  f.visit(assignment);
+  return {std::move(assignment), std::move(f.out)};
+}
+
+auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
+          diagnostic_handler& dh, bool warn_for_duplicates) -> table_slice {
+  constexpr auto drop = [](auto&&...) {
+    return indexed_transformation::result_type{};
+  };
+  auto offsets = std::vector<located<offset>>{};
+  for (const auto& field : fields) {
+    match(
+      resolve(field, slice.schema()),
+      [&](const offset& resolved) {
+        if (offsets.empty()) {
+          offsets.emplace_back(resolved, into_location{field});
+          return;
+        }
+        for (auto& offset : offsets) {
+          const auto [l, r] = std::ranges::mismatch(offset.inner, resolved);
+          const auto offset_exhausted = l == offset.inner.end();
+          const auto resolved_exhausted = r == resolved.end();
+          if (offset_exhausted and resolved_exhausted) {
+            if (warn_for_duplicates) {
+              diagnostic::warning("fields may only be dropped once")
+                .primary(offset)
+                .primary(field)
+                .emit(dh);
+            }
+            return;
+          }
+          if (offset_exhausted) {
+            if (warn_for_duplicates) {
+              diagnostic::warning("ignoring dropped field within record")
+                .primary(field, "ignoring this field")
+                .secondary(offset, "because it is already dropped here")
+                .emit(dh);
+            }
+            return;
+          }
+          if (resolved_exhausted) {
+            if (warn_for_duplicates) {
+              diagnostic::warning(
+                "ignoring dropped field within dropped record")
+                .primary(offset, "ignoring this field")
+                .secondary(field, "because it is already dropped here")
+                .emit(dh);
+            }
+            offset = located{resolved, into_location{field}};
+            return;
+          }
+        }
+        offsets.emplace_back(resolved, into_location{field});
+      },
+      [&](const resolve_error& err) {
+        match(
+          err.reason,
+          [&](const resolve_error::field_not_found&) {
+            diagnostic::warning("field `{}` not found", err.ident.name)
+              .primary(err.ident)
+              .hint("append `?` to suppress this warning")
+              .emit(dh);
+          },
+          [&](const resolve_error::field_not_found_no_error&) {},
+          [&](const resolve_error::field_of_non_record& reason) {
+            diagnostic::warning("type `{}` has no field `{}`",
+                                reason.type.kind(), err.ident.name)
+              .primary(err.ident)
+              .emit(dh);
+          });
+      });
+  }
+  auto ts = std::vector<indexed_transformation>{};
+  for (const auto& of : offsets) {
+    ts.emplace_back(of.inner, drop);
+  }
+  return transform_columns(slice, ts);
 }
 
 auto set_operator::operator()(generator<table_slice> input,
@@ -322,9 +474,11 @@ auto set_operator::operator()(generator<table_slice> input,
     for (const auto& assignment : assignments_) {
       values.push_back(eval(assignment.right, slice, ctrl.diagnostics()));
     }
+    slice = drop(slice, moved_fields_, ctrl.diagnostics(), false);
     // After we know all the multi series values on the right, we can split the
     // input table slice and perform the actual assignment.
     auto begin = int64_t{0};
+    auto results = std::vector<table_slice>{};
     for (auto values_slice : split_multi_series(values)) {
       TENZIR_ASSERT(not values_slice.empty());
       auto end = begin + values_slice[0].length();
@@ -349,9 +503,20 @@ auto set_operator::operator()(generator<table_slice> input,
         std::swap(state, new_state);
         new_state.clear();
       }
-      for (auto& output : state) {
-        co_yield std::move(output);
-      }
+      std::ranges::move(state, std::back_inserter(results));
+    }
+    // TODO: Consider adding a property to function plugins that let's them
+    // indicate whether they want their outputs to be strictly ordered. If any
+    // of the called functions has this requirement, then we should not be
+    // making this optimization. This will become relevant in the future once we
+    // allow functions to be stateful.
+    if (order_ != event_order::ordered) {
+      std::ranges::stable_sort(results, std::ranges::less{},
+                               &table_slice::schema);
+      results = rebatch_events(std::move(results));
+    }
+    for (auto& result : results) {
+      co_yield std::move(result);
     }
   }
 }

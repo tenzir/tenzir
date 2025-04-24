@@ -6,3 +6,4 @@ warning: field `value` not found
 1 | deduplicate value, limit=1
   |             ~~~~~ 
   |
+  = hint: append `?` to suppress this warning

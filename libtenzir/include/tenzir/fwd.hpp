@@ -433,7 +433,7 @@ struct unary_expr;
 struct underscore;
 struct unpack;
 
-class simple_selector;
+class field_path;
 
 using statement
   = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;

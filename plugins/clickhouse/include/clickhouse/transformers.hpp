@@ -64,7 +64,8 @@ struct transformer {
   [[nodiscard]] virtual auto
   update_dropmask(path_type& path, const tenzir::type& type,
                   const arrow::Array& array, dropmask_ref dropmask,
-                  tenzir::diagnostic_handler& dh) -> drop = 0;
+                  tenzir::diagnostic_handler& dh) -> drop
+    = 0;
 
   /// Creates a column of nulls. This is used if an output column is nullable,
   /// but not present in the input.
@@ -77,7 +78,8 @@ struct transformer {
   [[nodiscard]] virtual auto
   create_column(path_type& path, const tenzir::type& type,
                 const arrow::Array& array, dropmask_cref dropmask,
-                tenzir::diagnostic_handler& dh) -> ::clickhouse::ColumnRef = 0;
+                tenzir::diagnostic_handler& dh) -> ::clickhouse::ColumnRef
+    = 0;
 
   virtual ~transformer() = default;
 };
@@ -120,11 +122,12 @@ auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
 
 auto plain_clickhouse_tuple_elements(path_type& path, const record_type& record,
                                      diagnostic_handler& dh,
-                                     std::string_view primary
-                                     = "") -> failure_or<std::string>;
+                                     std::string_view primary = "")
+  -> failure_or<std::string>;
 
-auto make_functions_from_clickhouse(
-  path_type& path, const std::string_view clickhouse_typename,
-  diagnostic_handler&) -> std::unique_ptr<transformer>;
+auto make_functions_from_clickhouse(path_type& path,
+                                    const std::string_view clickhouse_typename,
+                                    diagnostic_handler&)
+  -> std::unique_ptr<transformer>;
 
 } // namespace tenzir::plugins::clickhouse

@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/plugin.hpp"
@@ -22,57 +21,29 @@ namespace {
 struct move_operator final : public crtp_operator<move_operator> {
   move_operator() = default;
 
-  move_operator(std::vector<ast::simple_selector> lhs,
-                std::vector<ast::simple_selector> rhs)
+  move_operator(std::vector<ast::field_path> lhs,
+                std::vector<ast::field_path> rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto& dh = ctrl.diagnostics();
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      constexpr auto drop = [](auto&&...) {
-        return indexed_transformation::result_type{};
-      };
-      auto rights = std::vector<series>{};
-      auto offsets = std::unordered_set<offset>{};
-      for (const auto& r : rhs_) {
-        match(
-          resolve(r, slice.schema()),
-          [&](const offset& of) {
-            auto [ty, ptr] = of.get(slice);
-            rights.emplace_back(std::move(ty), std::move(ptr));
-            offsets.insert(of);
-          },
-          [&](const resolve_error& err) {
-            match(
-              err.reason,
-              [&](const resolve_error::field_not_found&) {
-                diagnostic::warning("field `{}` not found", err.ident.name)
-                  .primary(err.ident)
-                  .emit(dh);
-                rights.emplace_back(series::null(
-                  null_type{}, detail::narrow<int64_t>(slice.rows())));
-              },
-              [](const resolve_error::field_of_non_record&) {
-                TENZIR_UNREACHABLE();
-              });
-          });
+      auto rhs_values = std::vector<series>{};
+      rhs_values.reserve(rhs_.size());
+      for (const auto& field : rhs_) {
+        rhs_values.push_back(eval(field, slice, ctrl.diagnostics()));
       }
-      auto ts = std::vector<indexed_transformation>{};
-      for (const auto& of : offsets) {
-        ts.emplace_back(of, drop);
+      slice = drop(slice, rhs_, ctrl.diagnostics(), false);
+      for (const auto& [field, value] : detail::zip_equal(lhs_, rhs_values)) {
+        slice = assign(field, value, slice, ctrl.diagnostics());
       }
-      slice = transform_columns(slice, ts);
-      for (const auto& [l, r] : detail::zip_equal(lhs_, rights)) {
-        slice = assign(l, r, slice, dh);
-      }
-      co_yield slice;
+      co_yield std::move(slice);
     }
   }
 
@@ -89,8 +60,8 @@ struct move_operator final : public crtp_operator<move_operator> {
     return f.object(x).fields(f.field("lhs", x.lhs_), f.field("rhs", x.rhs_));
   }
 
-  std::vector<ast::simple_selector> lhs_;
-  std::vector<ast::simple_selector> rhs_;
+  std::vector<ast::field_path> lhs_;
+  std::vector<ast::field_path> rhs_;
 };
 
 struct move_plugin final : public operator_plugin2<move_operator> {
@@ -109,8 +80,8 @@ struct move_plugin final : public operator_plugin2<move_operator> {
         .emit(ctx);
       return failure::promise();
     }
-    auto lhs = std::vector<ast::simple_selector>{};
-    auto rhs = std::vector<ast::simple_selector>{};
+    auto lhs = std::vector<ast::field_path>{};
+    auto rhs = std::vector<ast::field_path>{};
     for (auto&& arg : inv.args) {
       auto* const assignment = try_as<ast::assignment>(arg);
       if (not assignment) {
@@ -120,8 +91,8 @@ struct move_plugin final : public operator_plugin2<move_operator> {
           .emit(ctx);
         return failure::promise();
       }
-      auto* const left = try_as<ast::simple_selector>(assignment->left);
-      auto right = ast::simple_selector::try_from(assignment->right);
+      auto* const left = try_as<ast::field_path>(assignment->left);
+      auto right = ast::field_path::try_from(assignment->right);
       if (not left or not right) {
         diagnostic::error("can only move fields")
           .primary(*assignment)

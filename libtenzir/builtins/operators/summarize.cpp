@@ -224,7 +224,7 @@ struct binding {
         // column to `std::nullopt`, because we will have to differentiate the
         // error and the missing case later on.
         auto instantiation = aggr.function->make_aggregation_function(type);
-        if (!instantiation) {
+        if (! instantiation) {
           diagnostic::warning(
             "cannot instantiate `{}` with `{}` for schema `{}`: {}",
             aggr.function->name(), type, schema.name(), instantiation.error())
@@ -324,7 +324,7 @@ public:
           reusable_key_view[col] = value_at(bound.group_by_columns[col]->type,
                                             **group_by_arrays[col], row);
         } else {
-          TENZIR_ASSERT(!group_by_arrays[col].has_value());
+          TENZIR_ASSERT(! group_by_arrays[col].has_value());
           reusable_key_view[col] = caf::none;
         }
       }
@@ -333,7 +333,7 @@ public:
         // Check that the group-by values also have matching types.
         for (auto [existing, other] :
              detail::zip_equal(bucket.group_by_types, bound.group_by_columns)) {
-          if (!other) {
+          if (! other) {
             // If this group-by column does not exist in the input schema, we
             // already warned and can ignore it.
             continue;
@@ -382,7 +382,7 @@ public:
           if (aggr.is_dead()) {
             continue;
           }
-          if (!column) {
+          if (! column) {
             // We already warned that this column does not exist. Since we
             // assume `null` values for it, and also assume that `nulls` don't
             // change the function value, we ignore it.
@@ -458,11 +458,11 @@ public:
       bucket.updated_at = std::chrono::steady_clock::now();
       for (auto [aggr, input] :
            detail::zip_equal(bucket.aggregations, aggregation_arrays)) {
-        if (!input) {
+        if (! input) {
           // If the input column does not exist, we have nothing to do.
           continue;
         }
-        if (!aggr.is_active()) {
+        if (! aggr.is_active()) {
           // If the aggregation is dead, we have nothing to do. If it is
           // empty, we know that the aggregation column does not exist in
           // this schema, and thus have nothing to do as well. The only
@@ -580,7 +580,7 @@ public:
         const auto& group = it->first;
         const auto& bucket = it->second;
         auto status = builder->Append();
-        if (!status.ok()) {
+        if (! status.ok()) {
           co_yield caf::make_error(ec::system_error,
                                    fmt::format("failed to append row: {}",
                                                status.ToString()));
@@ -592,7 +592,7 @@ public:
           auto ty = as<record_type>(output_schema).field(i).type;
           status = append_builder(ty, *builder->field_builder(col),
                                   make_data_view(group[i]));
-          if (!status.ok()) {
+          if (! status.ok()) {
             co_yield caf::make_error(
               ec::system_error, fmt::format("failed to append group value: {}",
                                             status.ToString()));
@@ -606,7 +606,7 @@ public:
             auto& func = bucket->aggregations[i].get_active();
             auto output_type = func->output_type();
             auto value = std::move(*func).finish();
-            if (!value) {
+            if (! value) {
               // TODO: We could warn instead and insert `null`.
               co_yield std::move(value.error());
               co_return;
@@ -616,7 +616,7 @@ public:
           } else {
             status = builder->field_builder(col)->AppendNull();
           }
-          if (!status.ok()) {
+          if (! status.ok()) {
             co_yield caf::make_error(ec::system_error,
                                      fmt::format("failed to append aggregation "
                                                  "value: {}",
@@ -626,7 +626,7 @@ public:
         }
       }
       auto array = builder->Finish();
-      if (!array.ok()) {
+      if (! array.ok()) {
         co_yield caf::make_error(ec::system_error,
                                  fmt::format("failed to finish builder: {}",
                                              array.status().ToString()));
@@ -678,7 +678,7 @@ private:
     }
 
     auto is_dead() const -> bool {
-      return !state_.has_value();
+      return ! state_.has_value();
     }
 
     auto is_active() const -> bool {
@@ -686,7 +686,7 @@ private:
     }
 
     auto is_empty() const -> bool {
-      return state_ && !*state_;
+      return state_ && ! *state_;
     }
 
     void set_active(T x) {
@@ -845,7 +845,7 @@ public:
                std::vector<std::string>, std::optional<tenzir::duration>,
                std::optional<tenzir::duration>, std::optional<tenzir::duration>>
       parsed_aggregations{};
-    if (!p(f, l, parsed_aggregations)) {
+    if (! p(f, l, parsed_aggregations)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -870,7 +870,7 @@ public:
       }
       auto const* function
         = plugins::find<aggregation_function_plugin>(function_name);
-      if (!function) {
+      if (! function) {
         return {
           std::string_view{f, l},
           caf::make_error(ec::syntax_error, fmt::format("invalid "
@@ -905,7 +905,7 @@ public:
 };
 
 struct aggregate_t {
-  std::optional<ast::simple_selector> dest;
+  std::optional<ast::field_path> dest;
   ast::function_call call;
 
   friend auto inspect(auto& f, aggregate_t& x) -> bool {
@@ -914,8 +914,8 @@ struct aggregate_t {
 };
 
 struct group_t {
-  std::optional<ast::simple_selector> dest;
-  ast::simple_selector expr;
+  std::optional<ast::field_path> dest;
+  ast::field_path expr;
 
   friend auto inspect(auto& f, group_t& x) -> bool {
     return f.object(x).fields(f.field("dest", x.dest), f.field("expr", x.expr));
@@ -1005,29 +1005,28 @@ public:
   }
 
   auto finish() -> std::vector<table_slice> {
-    auto emplace
-      = [](record& root, const ast::simple_selector& sel, data value) {
-          if (sel.path().empty()) {
-            // TODO
-            if (auto rec = try_as<record>(&value)) {
-              root = std::move(*rec);
-            }
-            return;
+    auto emplace = [](record& root, const ast::field_path& sel, data value) {
+      if (sel.path().empty()) {
+        // TODO
+        if (auto rec = try_as<record>(&value)) {
+          root = std::move(*rec);
+        }
+        return;
+      }
+      auto current = &root;
+      for (auto& segment : sel.path()) {
+        auto& val = (*current)[segment.id.name];
+        if (&segment == &sel.path().back()) {
+          val = std::move(value);
+        } else {
+          current = try_as<record>(&val);
+          if (not current) {
+            val = record{};
+            current = &as<record>(val);
           }
-          auto current = &root;
-          for (auto& segment : sel.path()) {
-            auto& val = (*current)[segment.name];
-            if (&segment == &sel.path().back()) {
-              val = std::move(value);
-            } else {
-              current = try_as<record>(&val);
-              if (not current) {
-                val = record{};
-                current = &as<record>(val);
-              }
-            }
-          }
-        };
+        }
+      }
+    };
     const auto finish_group = [&](const auto& key, const auto& group) {
       auto result = record{};
       for (auto index : cfg_.indices) {
@@ -1046,7 +1045,7 @@ public:
               if (call.args.size() > 1) {
                 return "...";
               }
-              auto sel = ast::simple_selector::try_from(call.args[0]);
+              auto sel = ast::field_path::try_from(call.args[0]);
               if (not sel) {
                 return "...";
               }
@@ -1059,7 +1058,7 @@ public:
                 if (not arg.empty()) {
                   arg += '.';
                 }
-                arg += segment.name;
+                arg += segment.id.name;
               }
               return arg;
             });
@@ -1147,7 +1146,7 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto cfg = config{};
-    auto add_aggregate = [&](std::optional<ast::simple_selector> dest,
+    auto add_aggregate = [&](std::optional<ast::field_path> dest,
                              ast::function_call call) {
       // TODO: Improve this and try to forward function handle directly.
       auto fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
@@ -1167,19 +1166,19 @@ public:
         cfg.aggregates.emplace_back(std::move(dest), std::move(call));
       }
     };
-    auto add_group = [&](std::optional<ast::simple_selector> dest,
-                         ast::simple_selector expr) {
-      auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
-      cfg.indices.push_back(index);
-      cfg.groups.emplace_back(std::move(dest), std::move(expr));
-    };
+    auto add_group
+      = [&](std::optional<ast::field_path> dest, ast::field_path expr) {
+          auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
+          cfg.indices.push_back(index);
+          cfg.groups.emplace_back(std::move(dest), std::move(expr));
+        };
     for (auto& arg : inv.args) {
       arg.match(
         [&](ast::function_call& arg) {
           add_aggregate(std::nullopt, std::move(arg));
         },
         [&](ast::assignment& arg) {
-          auto left = std::get_if<ast::simple_selector>(&arg.left);
+          auto left = std::get_if<ast::field_path>(&arg.left);
           if (not left) {
             // TODO
             diagnostic::error("expected data selector, not meta")
@@ -1192,7 +1191,7 @@ public:
               add_aggregate(std::move(*left), std::move(right));
             },
             [&](auto&) {
-              auto right = ast::simple_selector::try_from(arg.right);
+              auto right = ast::field_path::try_from(arg.right);
               if (right) {
                 add_group(std::move(*left), std::move(*right));
               } else {
@@ -1204,7 +1203,7 @@ public:
             });
         },
         [&](auto&) {
-          auto selector = ast::simple_selector::try_from(arg);
+          auto selector = ast::field_path::try_from(arg);
           if (selector) {
             add_group(std::nullopt, std::move(*selector));
           } else {

@@ -15,10 +15,8 @@ warning: record does not have this field
   |
 1 | deduplicate foo.bar, limit=1
   |                 ~~~ 
-  ⋮
-1 | deduplicate foo.bar, limit=1
-  |                - use the `.?` operator to suppress this warning
   |
+  = hint: append `?` to suppress this warning
 
 warning: field `foo` not found
  --> <input>:1:13
@@ -26,13 +24,12 @@ warning: field `foo` not found
 1 | deduplicate foo.bar, limit=1
   |             ~~~ 
   |
+  = hint: append `?` to suppress this warning
 
 warning: tried to access field of `null`
- --> <input>:1:13
+ --> <input>:1:17
   |
 1 | deduplicate foo.bar, limit=1
-  |             ~~~ 
-  ⋮
-1 | deduplicate foo.bar, limit=1
-  |                - use the `.?` operator to suppress this warning
+  |                 ~~~ 
   |
+  = hint: append `?` to suppress this warning

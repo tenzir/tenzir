@@ -20,7 +20,7 @@ auto eval(const ast::expression& expr, const table_slice& input,
           diagnostic_handler& dh) -> multi_series;
 
 // A simple selector always yields a single type.
-auto eval(const ast::simple_selector& expr, const table_slice& input,
+auto eval(const ast::field_path& expr, const table_slice& input,
           diagnostic_handler& dh) -> series;
 
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
@@ -33,11 +33,13 @@ auto try_const_eval(const ast::expression& expr, diagnostic_handler& dh)
 
 struct resolve_error {
   struct field_not_found {};
+  struct field_not_found_no_error {};
   struct field_of_non_record {
     tenzir::type type;
   };
 
-  using reason_t = variant<field_not_found, field_of_non_record>;
+  using reason_t
+    = variant<field_not_found, field_not_found_no_error, field_of_non_record>;
 
   resolve_error(ast::identifier ident, reason_t reason)
     : ident{std::move(ident)}, reason{std::move(reason)} {
@@ -47,10 +49,10 @@ struct resolve_error {
   reason_t reason;
 };
 
-auto resolve(const ast::simple_selector& sel, const table_slice& slice)
+auto resolve(const ast::field_path& sel, const table_slice& slice)
   -> variant<series, resolve_error>;
 
-auto resolve(const ast::simple_selector& sel, type ty)
+auto resolve(const ast::field_path& sel, type ty)
   -> variant<offset, resolve_error>;
 
 } // namespace tenzir

@@ -30,6 +30,8 @@ using namespace ast;
 auto precedence(unary_op x) -> int {
   using enum unary_op;
   switch (x) {
+    case move:
+      return 10;
     case pos:
     case neg:
       return 9;
@@ -237,6 +239,14 @@ public:
       auto entity = parse_entity();
       return parse_invocation(std::move(entity));
     }
+    // This is a hack: `move` is both a unary expression operator and a
+    // pipeline operator. In order to support both, we need to special-case the
+    // pipeline operator parsing, as the tokenizer returns `tk::move` instead of
+    // `tk::identifier`.
+    if (silent_peek(tk::move)) {
+      auto entity = parse_entity(expect(tk::move).as_identifier());
+      return parse_invocation(std::move(entity));
+    }
     auto unary_expr = parse_unary_expression();
     if (auto call = std::get_if<ast::function_call>(&*unary_expr.kind)) {
       // TODO: We patch a top-level function call to be an operator invocation
@@ -275,12 +285,12 @@ public:
       };
     }
     // TODO: Improve this.
-    auto simple_sel = std::get_if<simple_selector>(&left);
+    auto simple_sel = std::get_if<field_path>(&left);
     auto root = simple_sel
                   ? std::get_if<ast::root_field>(&*simple_sel->inner().kind)
                   : nullptr;
     if (root) {
-      auto entity = parse_entity(std::move(root->ident));
+      auto entity = parse_entity(std::move(root->id));
       return parse_invocation(std::move(entity));
     }
     diagnostic::error("{}", "expected `=` after selector")
@@ -425,7 +435,12 @@ public:
     while (true) {
       auto dot = accept(tk::dot_question_mark);
       auto has_question_mark = static_cast<bool>(dot);
-      if (not has_question_mark) {
+      if (has_question_mark) {
+        diagnostic::warning(
+          "leading `.?` is deprecated; use a trailing `?` instead")
+          .primary(dot)
+          .emit(diag_);
+      } else {
         dot = accept(tk::dot);
       }
       if (dot) {
@@ -434,6 +449,8 @@ public:
           auto entity = parse_entity(name.as_identifier());
           expr = parse_function_call(std::move(expr), std::move(entity));
         } else {
+          has_question_mark
+            = static_cast<bool>(accept(tk::question_mark)) or has_question_mark;
           expr = field_access{
             std::move(expr),
             dot.location,
@@ -464,12 +481,11 @@ public:
               .throw_();
           }
           rbracket = expect(tk::rbracket);
+          const auto has_question_mark
+            = static_cast<bool>(accept(tk::question_mark));
           expr = index_expr{
-            std::move(expr),
-            lbracket.location,
-            std::move(index),
-            rbracket.location,
-            false,
+            std::move(expr),   lbracket.location, std::move(index),
+            rbracket.location, has_question_mark,
           };
         }
         continue;
@@ -554,7 +570,11 @@ public:
         .primary(next_location())
         .throw_();
     }
-    return ast::root_field{std::move(entity.path[0])};
+    auto question_mark = accept(tk::question_mark);
+    return ast::root_field{
+      .id = std::move(entity.path[0]),
+      .has_question_mark = static_cast<bool>(question_mark),
+    };
   }
 
   auto parse_record_or_pipeline_expr() -> ast::expression {
@@ -843,6 +863,7 @@ public:
   if (peek(tk::x)) {                                                           \
     return unary_op::y;                                                        \
   }
+    X(move, move);
     X(not_, not_);
     X(minus, neg);
 #undef X
