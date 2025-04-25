@@ -3,18 +3,15 @@
 Sends events to [Google Cloud Logging](https://cloud.google.com/logging).
 
 ```tql
-to_google_cloud_logging resource=string, name=string, payload=string,
-      [service_credentials=string, severity=string, timestamp=time,
-      batch_timeout=duration, max_batch_size=int]
+to_google_cloud_logging name=string, resource_type=string,
+        [resource_labels=record, payload=string, service_credentials=string,
+        severity=string, timestamp=time, batch_timeout=duration,
+        max_batch_size=int]
 ```
 
 ## Description
 
 Sends events to [Google Cloud Logging](https://cloud.google.com/logging).
-
-### `resource = string`
-
-The type of the [monitored resource](https://cloud.google.com/logging/docs/reference/v2/rest/v2/MonitoredResource).
 
 ### `name = string`
 
@@ -35,9 +32,23 @@ folders/[FOLDER_ID]/logs/[LOG_ID]
 following characters: upper and lower case alphanumeric characters,
 forward-slash, underscore, hyphen, and period.
 
-### `payload = string`
+### `resource_type = string`
 
-The log entry payload.
+The type of the [monitored resource](https://cloud.google.com/logging/docs/reference/v2/rest/v2/MonitoredResource).
+All available types with their associated labels are listed
+[here](https://cloud.google.com/logging/docs/api/v2/resource-list).
+
+### `resource_labels = record (optional)`
+
+Record of associated labels for the resource. Values of the record must be of
+type `string`.
+All available types with their associated labels are listed
+[here](https://cloud.google.com/logging/docs/api/v2/resource-list).
+
+### `payload = string (optional)`
+
+The log entry payload. If unspecified, the incoming event is serialised as JSON
+and sent.
 
 ### `service_credentials = string (optional)`
 
@@ -67,11 +78,17 @@ Defaults to `1k`.
 
 ## Example
 
+## Send logs, authenticating automatically via ADC
+
+```tql
+from {content: "Log content", timestamp: now()}
+to_google_cloud_logging name="projects/PROJECT_ID/logs/LOG_ID", resource_type="global"
+```
+
 ## Send logs using a service account
 
 ```tql
-to_google_cloud_logging payload=log_text, 
-      name="projects/PROJECT_ID/logs/LOG_ID", 
-      resource=resource,
-      service_credentials=file_contents("/path/to/credentials.json")
+from {content: "Log content", timestamp: now(), resource: "global"}
+to_google_cloud_logging name="projects/PROJECT_ID/logs/LOG_ID", 
+      resource_type=resource, service_credentials=file_contents("/path/to/credentials.json")
 ```
