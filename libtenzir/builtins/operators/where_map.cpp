@@ -319,7 +319,7 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
           continue;
         }
         if (predicate->array->true_count() == predicate->length()) {
-          result.push_back(field.slice(offset, values.length()));
+          result.push_back(field.slice(offset, offset + values.length()));
           continue;
         }
         auto predicate_gen = predicate->values();
