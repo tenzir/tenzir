@@ -10,7 +10,7 @@ comments: true
 [Tenzir Node v5.1][github-release] adds more flexible ways to access and move
 fields, bitwise functions, and a native integration with Google Cloud Logging.
 
-![Tenzir Node v5.1](tenzir-node-v5.1.png)
+![Tenzir Node v5.1](tenzir-node-v5.1.svg)
 
 [github-release]: https://github.com/tenzir/tenzir/releases/tag/v5.1.0
 
@@ -143,7 +143,7 @@ from {
   timestamp: now(),
   resource: "global",
 }
-to_google_cloud_logging name="projects/PROJECT_ID/logs/LOG_ID", 
+to_google_cloud_logging name="projects/PROJECT_ID/logs/LOG_ID",
   resource_type=resource,
   service_credentials=file_contents("/path/to/credentials.json")
 ```
