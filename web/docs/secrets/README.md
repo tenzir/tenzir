@@ -1,38 +1,73 @@
 # Secrets
 
-Secrets can be used in two ways:
+Secrets are accepted by operators for parameters that may be sensitive,
+such as authentication tokens, passwords or even URLs.
 
-* By providing a plain `string` to an operator that expects a secret.
-* By obtaining a secret from a secret store, using the [`secret`](../tql2/functions/secret.md) function
+There is two ways to pass an argument to a parameter that expects a secret:
 
- <!-- TODO: make decision about how to document arguments. If we dont document which can be secrets, we may want to express this here. -->
+- By providing a plain `string` (Ad-hod secret):
+
+  ```tql
+  to_splunk "localhost", hec_token="my-plaintext-token"
+  ```
+
+- By using the [`secret`](../tql2/functions/secret.md) function (Manged secret):
+
+  ```tql
+  to_splunk "localhost", hec_token=secret("splunk-hec-token")
+  ```
+
+  This will fetch the value of the secret named `splunk-hec-token`.
+
+<!-- TODO: Do we want this? -->
+
+Operators generally do not document that they accept a secret, but will accept
+secrets where appropriate.
+
+## The `secret` type
+
+Secrets are a special type in Tenzir's type system. They practically none of
+operations you can perform on other values in Tenzir and can effectively only be
+passed to operators.
+
+This means that you _cannot_ do operations like `secret("my-secret") + "added text"`.
+
+:::info Secrets are UTF-8
+All secrets are UTF-8 unless you use the `decode_base64` function.
+:::
+
+The only operation you can perform on a secret is to `decode_base64` it, which
+can be done at most once on a secret:
 
 ```tql
-
+secret("my-secret").decode_base64()
 ```
-
 
 ## Ad-hoc Secrets
 
 Ad-hoc secrets are secrets that are created from a `string` directly within TQL.
 This happens when you provide a `string` to an operator that expects a `secret`.
 
-Providing plain string values can be useful when developing pipelines.
-<!-- TODO: Do we want to make some arguments, such as `url`s secrets? If so, we may want to mention this here. -->
+Providing plain string values can be useful when developing pipelines, if you do
+not want to add the secret to the configuration or a secret store.
+
+<!-- TODO: Do we want this? -->
+
+It is also useful for arguments that are not a secret for all users, such as URLs.
 
 It is important to understand that secrets created from plain `string`s do not
-enjoy the same security as secrets obtained from secret store. Their value is
-directly available in the TQL pipeline definition and the compiled and executed
-representation. As such, it may be persisted on the node.
+enjoy the same security as managed secrets. Their value is directly available in
+the TQL pipeline definition, as well as the compiled and executed representation.
+As such, it may be persisted on the node.
 
-## Secret Lookup
+## Managed Secrets
 
-The [`secret`](../tql2/functions/secret.md) function retrieves a secret.
+The [`secret`](../tql2/functions/secret.md) function retrieves a managed secret.
 
 Secrets are looked up in the following order:
 
-1. The environment of the Tenzir Node process
-2. The configuration of the Tenzir Node process
+1. The environment of the Tenzir Node
+2. The configuration of the Tenzir Node
 3. The Tenzir Platform secret store for the Workspace the Tenzir Node is running in
 
 A secrets actual value is only looked up when it is required by the operator
@@ -43,7 +78,7 @@ The value stays encrypted through the entire transfer until the final usage site
 A `tenzir` client process can use the `secret` function only if it has a Tenzir
 Node to connect to.
 
-## Tenzir configuration secrets
+### Tenzir Configuration Secrets
 
 Secrets can be specified in the `tenzir.yaml` config file, under the path
 `tenzir.secrets`.
@@ -55,6 +90,20 @@ tenzir:
     geheim: 1528F9F3-FAFA-45B4-BC3C-B755D0E0D9C2
 ```
 
-Because Tenzir's configuration options can also be set as environment variables,
-this means that secret can also be defined in the environment. The above secret
-could also be defined as `TENZIR_SECRETS__GEHEIM`
+Since Tenzir's configuration options can also be set as environment variables,
+this means that secrets can also be defined in the environment. The above secret
+could also be defined via the environment variable `TENZIR_SECRETS__GEHEIM`.
+An environment variable takes precedence over an equivalent key in the
+configuration file.
+
+See the [configuration reference](../configuration.md) for more details.
+
+Be aware that the `tenzir.secrets` section is hidden from the
+[`config()`](../tql2/functions/config.md) function.
+
+### Platform Secrets
+
+
+:::danger UNFINISHED
+<!-- TODO: @platform-squad -->
+:::

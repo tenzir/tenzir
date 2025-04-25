@@ -58,7 +58,9 @@ struct basic_series {
   basic_series(class type type,
                std::shared_ptr<type_to_arrow_array_t<class type>> array)
     : type{std::move(type)}, array{std::move(array)} {
-    TENZIR_ASSERT_EXPENSIVE(not this->array or this->type.to_arrow_type()->id() == this->array->type_id());
+    TENZIR_ASSERT_EXPENSIVE(not this->array
+                            or this->type.to_arrow_type()->id()
+                                 == this->array->type_id());
   }
 
   // TODO: std::get_if, etc.

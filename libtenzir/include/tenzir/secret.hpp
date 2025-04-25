@@ -82,12 +82,14 @@ public:
   }
 
   template <typename T1, typename T2>
-  friend auto operator<=>(const secret_common<T1>& lhs,
-                          const secret_common<T2>& rhs) -> std::strong_ordering;
+  friend auto
+  operator<=>(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
+    -> std::strong_ordering;
 
   template <typename T1, typename T2>
-  friend auto operator==(const secret_common<T1>& lhs,
-                         const secret_common<T2>& rhs) -> bool;
+  friend auto
+  operator==(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
+    -> bool;
 
   inline friend auto inspect(auto& f, secret_common& x) -> bool {
     return f.object(x).fields(f.field("name", x.name_),
@@ -118,15 +120,15 @@ auto to_string(const secret_common<StringType>& v) {
 }
 
 template <typename T1, typename T2>
-auto operator<=>(const secret_common<T1>& lhs,
-                 const secret_common<T2>& rhs) -> std::strong_ordering {
+auto operator<=>(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
+  -> std::strong_ordering {
   return std::tie(lhs.name_, lhs.source_type_, lhs.encoding_)
          <=> std::tie(rhs.name_, rhs.source_type_, rhs.encoding_);
 }
 
 template <typename T1, typename T2>
-auto operator==(const secret_common<T1>& lhs,
-                const secret_common<T2>& rhs) -> bool {
+auto operator==(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
+  -> bool {
   return (lhs <=> rhs) == std::strong_ordering::equal;
 }
 

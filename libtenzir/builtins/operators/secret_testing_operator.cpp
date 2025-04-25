@@ -23,8 +23,7 @@ public:
     : secret_{std::move(s)}, expected_{std::move(expected)} {
   }
 
-  auto
-  operator()(generator<table_slice>, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice>, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     co_yield {};
     auto result = resolved_secret_value{};

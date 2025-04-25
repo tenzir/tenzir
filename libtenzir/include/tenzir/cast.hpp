@@ -1074,8 +1074,8 @@ struct cast_helper<string_type, ToType> {
                            fmt::format("unable to convert {} into a blob", in));
   }
 
-  static auto
-  from_str(std::string_view in, const secret_type&) -> caf::expected<secret> {
+  static auto from_str(std::string_view in, const secret_type&)
+    -> caf::expected<secret> {
     return secret{std::string{in}};
   }
 
@@ -1140,8 +1140,8 @@ struct cast_helper<FromType, duration_type> {
 
 template <>
 struct cast_helper<secret_type, secret_type> {
-  static auto can_cast(const secret_type&,
-                       const secret_type&) noexcept -> caf::expected<void> {
+  static auto can_cast(const secret_type&, const secret_type&) noexcept
+    -> caf::expected<void> {
     return {};
   }
 

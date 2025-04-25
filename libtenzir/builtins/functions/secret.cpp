@@ -23,8 +23,8 @@ public:
     return "secret::from_string";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("secret::from_string")
           .positional("value", expr, "string")
@@ -69,8 +69,8 @@ public:
     return "secret::_lookup";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("secret")
           .positional("name", expr, "string")
@@ -113,8 +113,8 @@ public:
     return "tql2.secret";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto name = std::string{};
     TRY(argument_parser2::function("secret")
           .positional("name", name)

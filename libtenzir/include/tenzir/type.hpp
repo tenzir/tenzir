@@ -2010,8 +2010,8 @@ struct formatter<T> {
   }
 
   template <class FormatContext>
-  auto format(const tenzir::secret_type&,
-              FormatContext& ctx) const -> decltype(ctx.out()) {
+  auto format(const tenzir::secret_type&, FormatContext& ctx) const
+    -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "secret");
   }
 };
