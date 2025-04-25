@@ -82,7 +82,7 @@ struct module_def {
   auto operator=(const module_def&) -> module_def& = delete;
   auto operator=(module_def&&) noexcept -> module_def& = default;
 
-  detail::heterogeneous_string_hashmap<entity_set> defs;
+  std::unordered_map<std::string, entity_set> defs;
 };
 
 /// The definition of an entity. Modules are not included here because they are
