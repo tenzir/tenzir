@@ -188,18 +188,22 @@ auto evaluator::eval(const ast::field_access& x) -> multi_series {
       return null();
     }
     auto& s = as<arrow::StructArray>(*l.array);
-    for (auto [i, field] : detail::enumerate<int>(rec_ty->fields())) {
-      if (field.name == x.name.name) {
-        auto has_null = s.null_count() != 0;
-        if (has_null and not x.suppress_warnings()) {
-          diagnostic::warning("tried to access field of `null`")
-            .primary(x.name)
-            .hint("append `?` to suppress this warning")
-            .emit(ctx_);
-          return series{field.type, check(s.GetFlattenedField(i))};
-        }
-        return series{field.type, s.field(i)};
+    if (auto idx = rec_ty->resolve_field(x.name.name)) {
+      const auto has_null = s.null_count() != 0;
+      if (has_null and not x.suppress_warnings()) {
+        diagnostic::warning("tried to access field of `null`")
+          .primary(x.name)
+          .hint("append `?` to suppress this warning")
+          .emit(ctx_);
+        return series{
+          rec_ty->field(*idx).type,
+          check(s.GetFlattenedField(detail::narrow<int>(*idx))),
+        };
       }
+      return series{
+        rec_ty->field(*idx).type,
+        s.field(detail::narrow<int>(*idx)),
+      };
     }
     if (not x.suppress_warnings()) {
       diagnostic::warning("record does not have this field")
@@ -233,11 +237,11 @@ auto evaluator::eval(const ast::this_& x) -> multi_series {
 auto evaluator::eval(const ast::root_field& x) -> multi_series {
   const auto& input = input_or_throw(x);
   const auto& rec_ty = as<record_type>(input.schema());
-  for (auto [i, field] : detail::enumerate<int>(rec_ty.fields())) {
-    if (field.name == x.id.name) {
-      // TODO: Is this correct?
-      return series{field.type, to_record_batch(input)->column(i)};
-    }
+  if (auto idx = rec_ty.resolve_field(x.id.name)) {
+    return series{
+      rec_ty.field(*idx).type,
+      to_record_batch(input)->column(detail::narrow<int>(*idx)),
+    };
   }
   if (not x.has_question_mark) {
     diagnostic::warning("field `{}` not found", x.id.name)

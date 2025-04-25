@@ -3144,15 +3144,22 @@ generator<offset> record_type::resolve_type_extractor(
   }
 }
 
-bool record_type::has_field(std::string_view field) const noexcept {
+std::optional<size_t>
+record_type::resolve_field(std::string_view field) const noexcept {
   const auto* record = table().type_as_record_type();
   TENZIR_ASSERT(record);
+  size_t index = 0;
   for (const auto* rf : *record->fields()) {
     if (rf->name()->string_view() == field) {
-      return true;
+      return index;
     }
+    ++index;
   }
-  return false;
+  return {};
+}
+
+bool record_type::has_field(std::string_view field) const noexcept {
+  return resolve_field(field).has_value();
 }
 
 std::string_view record_type::key(size_t index) const& noexcept {
