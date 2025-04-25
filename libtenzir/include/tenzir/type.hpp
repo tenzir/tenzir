@@ -1347,6 +1347,10 @@ public:
   [[nodiscard]] generator<offset>
   resolve_type_extractor(std::string_view type_extractor) const noexcept;
 
+  /// Resolved a field name.
+  [[nodiscard]] std::optional<size_t>
+  resolve_field(std::string_view field) const noexcept;
+
   /// Checks whether a field name is contained in the record.
   [[nodiscard]] bool has_field(std::string_view field) const noexcept;
 

@@ -47,27 +47,21 @@ auto resolve(const ast::field_path& sel, type ty)
         resolve_error::field_of_non_record{ty},
       };
     }
-    auto found = false;
-    for (const auto& [idx, field] : detail::enumerate(rty->fields())) {
-      if (field.name == segment.id.name) {
-        found = true;
-        result.push_back(idx);
-        ty = field.type;
-        break;
-      }
+    if (auto idx = rty->resolve_field(segment.id.name)) {
+      result.push_back(*idx);
+      ty = rty->field(*idx).type;
+      continue;
     }
-    if (not found) {
-      if (segment.has_question_mark) {
-        return resolve_error{
-          segment.id,
-          resolve_error::field_not_found_no_error{},
-        };
-      }
+    if (segment.has_question_mark) {
       return resolve_error{
         segment.id,
-        resolve_error::field_not_found{},
+        resolve_error::field_not_found_no_error{},
       };
     }
+    return resolve_error{
+      segment.id,
+      resolve_error::field_not_found{},
+    };
   }
   return result;
 }
