@@ -41,15 +41,10 @@ template <std::derived_from<arrow::ArrayBuilder> T>
 finish(T& x, std::source_location location = std::source_location::current()) {
   auto array = check(x.Finish(), location);
   using concrete_array_type = type_to_arrow_array_t<type_from_arrow_t<T>>;
-  auto cast = std::dynamic_pointer_cast<concrete_array_type>(std::move(array));
-  TENZIR_ASSERT(cast,
-                "failed to cast from `{}` (`{}`, #{}) to `{}` (`{}`, #{})",
-                boost::core::demangle(typeid(*array).name()),
-                typeid(*array).name(), typeid(*array).hash_code(),
-                boost::core::demangle(typeid(concrete_array_type).name()),
-                typeid(concrete_array_type).name(),
-                typeid(concrete_array_type).hash_code());
-  return cast;
+  /// Using a `dynamic_pointer_cast` here sometimes fails on using MacOS llvm.
+  /// A `static_cast` is save here, because we statically know the concrete type
+  /// from the builder.
+  return std::static_pointer_cast<concrete_array_type>(array);
 }
 
 // -- column builder helpers --------------------------------------------------

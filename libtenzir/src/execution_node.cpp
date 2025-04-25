@@ -1098,7 +1098,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
   TENZIR_ASSERT(node != nullptr
-                or not(op->location() == operator_location::remote));
+                or not (op->location() == operator_location::remote));
   TENZIR_ASSERT(diagnostics_handler != nullptr);
   TENZIR_ASSERT(metrics_receiver != nullptr);
   auto output_type = op->infer_type(input_type);
