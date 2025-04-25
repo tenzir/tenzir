@@ -25,10 +25,10 @@ billingAccounts/[BILLING_ACCOUNT_ID]/logs/[LOG_ID]
 folders/[FOLDER_ID]/logs/[LOG_ID]
 ```
 
-[LOG_ID] must be URL-encoded within `name`. Example:
+`[LOG_ID]` must be URL-encoded within `name`. Example:
 "organizations/1234567890/logs/cloudresourcemanager.googleapis.com%2Factivity".
 
-[LOG_ID] must be less than 512 characters long and can only include the
+`[LOG_ID]` must be less than 512 characters long and can only include the
 following characters: upper and lower case alphanumeric characters,
 forward-slash, underscore, hyphen, and period.
 
@@ -81,14 +81,23 @@ Defaults to `1k`.
 ## Send logs, authenticating automatically via ADC
 
 ```tql
-from {content: "Log content", timestamp: now()}
-to_google_cloud_logging name="projects/PROJECT_ID/logs/LOG_ID", resource_type="global"
+from {
+  content: "log message",
+  timestamp: now(),
+}
+to_google_cloud_logging name="projects/PROJECT_ID/logs/LOG_ID",
+  resource_type="global"
 ```
 
 ## Send logs using a service account
 
 ```tql
-from {content: "Log content", timestamp: now(), resource: "global"}
+from {
+  content: "totally not a made up log",
+  timestamp: now(),
+  resource: "global",
+}
 to_google_cloud_logging name="projects/PROJECT_ID/logs/LOG_ID", 
-      resource_type=resource, service_credentials=file_contents("/path/to/credentials.json")
+  resource_type=resource,
+  service_credentials=file_contents("/path/to/credentials.json")
 ```
