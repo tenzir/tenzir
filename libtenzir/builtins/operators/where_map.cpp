@@ -402,11 +402,10 @@ struct where_result_part {
     }
     check(offset_builder.Append(
       offset_builder.GetValue(offset_builder.length() - 1) + n));
-    if (slices.empty()) {
+    if (slices.empty() or current_part_index != slices.back().part) {
       slices.emplace_back(current_part_index, 0, n);
       return;
     }
-    TENZIR_ASSERT(current_part_index == slices.back().part);
     slices.back().slice_end += n;
   }
 };
