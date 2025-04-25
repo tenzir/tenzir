@@ -73,8 +73,9 @@ struct operator_control_plane {
   /// after the request has been fulfilled.
   /// Users MUST `co_yield {}` after a call to `resolve_secret_must_yield`, but
   /// are guaranteed that resolution is completed once the operator resumes.
-  virtual auto
-  resolve_secrets_must_yield(std::vector<secret_request> requests) -> void = 0;
+  virtual auto resolve_secrets_must_yield(std::vector<secret_request> requests)
+    -> void
+    = 0;
 
   auto resolve_secret_must_yield(const located<secret>& s,
                                  resolved_secret_value& out) -> void {

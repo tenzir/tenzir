@@ -2022,7 +2022,7 @@ secret_type::arrow_type::Deserialize(
   if (serialized != name) {
     return arrow::Status::Invalid("type identifier does not match");
   }
-  if (!storage_type->Equals(storage_type_)) {
+  if (! storage_type->Equals(storage_type_)) {
     return arrow::Status::Invalid("storage type does not match");
   }
   return std::make_shared<arrow_type>();

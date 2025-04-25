@@ -21,7 +21,7 @@ details.
 
 ### `name: string`
 
-The name of the secret to use.
+The name of the secret to use. This must be a constant.
 
 ## Examples
 
