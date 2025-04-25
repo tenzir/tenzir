@@ -14,6 +14,7 @@
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/split_nulls.hpp>
+#include <tenzir/split_at_regex.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -27,12 +28,14 @@ namespace {
 struct parser_args {
   std::optional<location> skip_empty;
   std::optional<location> null;
+  std::optional<located<std::string>> split_at_regex;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
     return f.object(x)
       .pretty_name("parser_args")
-      .fields(f.field("skip_empty", x.skip_empty), f.field("null", x.null));
+      .fields(f.field("skip_empty", x.skip_empty), f.field("null", x.null),
+              f.field("split_at_regex", x.split_at_regex));
   }
 };
 
@@ -51,7 +54,8 @@ public:
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
     auto make = [](auto& ctrl, generator<chunk_ptr> input, bool skip_empty,
-                   bool nulls) -> generator<table_slice> {
+                   bool nulls, std::optional<located<std::string>> split_at_regex)
+      -> generator<table_slice> {
       TENZIR_UNUSED(ctrl);
       auto builder = series_builder{type{
         "tenzir.line",
@@ -60,7 +64,17 @@ public:
         },
       }};
       auto last_finish = std::chrono::steady_clock::now();
-      auto cutter = nulls ? split_nulls : to_lines;
+      auto cutter
+        = [&]() -> std::function<generator<std::optional<std::string_view>>(
+                  generator<chunk_ptr>)> {
+        if (nulls) {
+          return split_nulls;
+        }
+        if (split_at_regex) {
+          return tenzir::split_at_regex(split_at_regex->inner);
+        }
+        return to_lines;
+      }();
       for (auto line : cutter(std::move(input))) {
         if (not line) {
           co_yield {};
@@ -83,7 +97,8 @@ public:
         co_yield builder.finish_assert_one_slice();
       }
     };
-    return make(ctrl, std::move(input), !!args_.skip_empty, !!args_.null);
+    return make(ctrl, std::move(input), ! ! args_.skip_empty, ! ! args_.null,
+                args_.split_at_regex);
   }
 
   friend auto inspect(auto& f, lines_parser& x) -> bool {
@@ -262,8 +277,17 @@ class read_lines final
     argument_parser2::operator_(name())
       .named("skip_empty", args.skip_empty)
       .named("split_at_null", args.null)
+      .named("split_at_regex", args.split_at_regex)
       .parse(inv, ctx)
       .ignore();
+    if (args.split_at_regex && args.null) {
+      diagnostic::error(
+        "cannot use `split_at_regex` and `split_at_null` at the same time")
+        .primary(*args.split_at_regex)
+        .primary(*args.null)
+        .emit(ctx);
+      return failure::promise();
+    }
     return std::make_unique<parser_adapter<lines_parser>>(
       lines_parser{std::move(args)});
   }

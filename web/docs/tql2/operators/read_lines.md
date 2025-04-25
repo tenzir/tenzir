@@ -3,7 +3,7 @@
 Parses an incoming bytes stream into events.
 
 ```tql
-read_lines [skip_empty=bool, split_at_null=bool]
+read_lines [skip_empty=bool, split_at_null=bool, split_at_regex=string]
 ```
 
 ## Description
@@ -25,6 +25,11 @@ Ignores empty lines in the input.
 
 Use null byte (`\0`) as the delimiter instead of newline characters.
 
+### `split_at_regex = string (optional)`
+
+Use the specified regex as the delimiter instead of newline characters.
+The regex flavor is Perl compatible and documented [here](https://www.boost.org/doc/libs/1_88_0/libs/regex/doc/html/boost_regex/syntax/perl_syntax.html).
+
 ## Examples
 
 ### Reads lines from a file
@@ -33,4 +38,12 @@ Use null byte (`\0`) as the delimiter instead of newline characters.
 load_file "events.log"
 read_lines
 is_error = line.starts_with("error:")
+```
+
+### Split Syslog-like events without newline terminators from a TCP input
+
+```tql
+load_tcp "0.0.0.0:514"
+read_lines split_at_regex="(?=<[0-9]+>)"
+this = line.parse_syslog()
 ```
