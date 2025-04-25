@@ -119,6 +119,24 @@ static auto bytes_to_hex(const ByteBuffer& b) -> std::string {
   return result;
 }
 
+auto string_keypair::from_private_key(std::string&& private_key)
+  -> caf::expected<string_keypair> {
+  TRY(auto group, get_group());
+  DECLARE(secret_number, BN_new(), BN_clear_free);
+  // We can't use a string_view as the argument, because we can't be sure
+  // it is null-terminated, which is expected by OpenSSL here.
+  CHECK_N_0(BN_hex2bn(&secret_number, private_key.c_str()));
+  DECLARE(bignum_ctx, BN_CTX_new(), BN_CTX_free);
+  DECLARE(public_point, EC_POINT_new(group), EC_POINT_free);
+  CHECK_EQ_1(EC_POINT_mul(group, public_point, secret_number, nullptr, nullptr,
+                          bignum_ctx));
+  auto public_key_bytes = point_to_bytes(public_point);
+  return string_keypair{
+    .private_key = std::move(private_key),
+    .public_key = bytes_to_hex(public_key_bytes),
+  };
+}
+
 auto generate_keypair() -> caf::expected<string_keypair> {
   auto result = string_keypair{};
   // Generate keypair.
