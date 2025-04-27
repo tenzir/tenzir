@@ -517,9 +517,8 @@ auto set_operator::operator()(generator<table_slice> input,
     if (order_ != event_order::ordered) {
       std::ranges::stable_sort(results, std::ranges::less{},
                                &table_slice::schema);
-      results = rebatch_events(std::move(results));
     }
-    for (auto& result : results) {
+    for (auto& result : rebatch_events(std::move(results))) {
       co_yield std::move(result);
     }
   }
