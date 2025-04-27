@@ -353,13 +353,16 @@ struct move_resolver final : ast::visitor<move_resolver> {
   }
 
   auto visit(ast::function_call& x) -> void {
-    // TODO: The `map` and `where` functions abuse the expressions they take
-    // as arguments as a poor-mans lambda expression. We don't recurse
-    // further when we encounter them here, but that's at best a stopgap.
+    // TODO: The `map` and `where` functions abuse the expressions they take as
+    // arguments as a poor-mans lambda expression. We only recurse on their
+    // first argument when we encounter them here, but that's at best a stopgap.
     // Ideally, there'd be proper lambda support in the language itself.
     if (x.fn.path.size() == 1) {
       const auto& name = x.fn.path.front().name;
       if (name == "map" or name == "where") {
+        if (not x.args.empty()) {
+          enter(x.args.front());
+        }
         return;
       }
     }
