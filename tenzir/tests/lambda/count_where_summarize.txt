@@ -1,0 +1,4 @@
+{
+  num_strings: 2,
+  num_ints: 3,
+}

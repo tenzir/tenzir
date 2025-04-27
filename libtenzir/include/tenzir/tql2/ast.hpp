@@ -185,8 +185,8 @@ struct root_field {
 using expression_kinds
   = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
                       constant, field_access, index_expr, binary_expr,
-                      unary_expr, function_call, underscore, unpack, assignment,
-                      dollar_var>;
+                      unary_expr, function_call, lambda_expr, underscore,
+                      unpack, assignment, dollar_var>;
 
 using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
@@ -371,6 +371,58 @@ struct unary_expr {
 
   auto get_location() const -> location {
     return op.source.combine(expr);
+  }
+};
+
+struct lambda_expr {
+  lambda_expr() = default;
+
+  lambda_expr(identifier left, location arrow, expression right)
+    : left{std::move(left)}, arrow{arrow}, right{std::move(right)} {
+  }
+
+  identifier left;
+  location arrow;
+  expression right;
+
+  friend auto inspect(auto& f, lambda_expr& x) -> bool {
+    return f.object(x).fields(f.field("left", x.left),
+                              f.field("arrow", x.arrow),
+                              f.field("right", x.right));
+  }
+
+  auto left_as_field_path() const -> field_path {
+    return check(field_path::try_from(root_field{
+      .id = left,
+      .has_question_mark = false,
+    }));
+  }
+
+  auto right_or_null() const {
+    return ast::binary_expr{
+      right,
+      located{ast::binary_op::if_, location::unknown},
+      ast::binary_expr{
+        left_as_field_path().inner(),
+        located{ast::binary_op::neq, location::unknown},
+        ast::constant{caf::none, location::unknown},
+      },
+    };
+  }
+
+  // Modifies the lambda to avoid evaluating rows where the subject is null,
+  // turning the expression `y` into `y if x != null [else <fallback>]`.
+  template <class T>
+  auto right_or(located<T> fallback) const -> expression {
+    return ast::binary_expr{
+      right_or_null(),
+      located{ast::binary_op::else_, location::unknown},
+      ast::constant{fallback.inner, fallback.source},
+    };
+  }
+
+  auto get_location() const -> location {
+    return left.get_location().combine(right);
   }
 };
 
@@ -844,6 +896,11 @@ protected:
   void enter(function_call& x) {
     go(x.fn);
     go(x.args);
+  }
+
+  void enter(lambda_expr& x) {
+    go(x.left);
+    go(x.right);
   }
 
   void enter(pipeline_expr& x) {

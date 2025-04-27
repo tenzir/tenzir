@@ -425,6 +425,7 @@ struct identifier;
 struct if_stmt;
 struct index_expr;
 struct invocation;
+struct lambda_expr;
 struct let_stmt;
 struct list;
 struct match_stmt;
