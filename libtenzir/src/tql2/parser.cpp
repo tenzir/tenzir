@@ -376,6 +376,16 @@ public:
           continue;
         }
       }
+      if (auto arrow = accept(tk::fat_arrow)) {
+        auto* left = try_as<ast::root_field>(expr);
+        if (not left or left->has_question_mark) {
+          diagnostic::error("expected identifier").primary(expr).throw_();
+        }
+        auto right = parse_expression();
+        expr
+          = lambda_expr{std::move(left->id), arrow.location, std::move(right)};
+        continue;
+      }
       auto negate = std::optional<location>{};
       if (silent_peek(tk::not_) and silent_peek_n(tk::in, 1)
           and precedence(binary_op::in) >= min_prec) {
