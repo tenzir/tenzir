@@ -134,7 +134,7 @@ public:
     parser.add(expr, "<expr>");
     parser.parse(p);
     auto normalized_and_validated = normalize_and_validate(expr.inner);
-    if (!normalized_and_validated) {
+    if (! normalized_and_validated) {
       diagnostic::error("invalid expression")
         .primary(expr.source)
         .docs("https://tenzir.com/language/expressions")
@@ -248,18 +248,54 @@ private:
 
 struct arguments {
   ast::expression field;
-  ast::field_path capture;
-  ast::expression expr;
+  ast::lambda_expr lambda;
+
+  static auto parse(const std::string& name,
+                    const function_plugin::invocation& inv, session ctx)
+    -> failure_or<arguments> {
+    auto dh = collecting_diagnostic_handler{};
+    auto sp = session_provider::make(dh);
+    auto args = arguments{};
+    if (argument_parser2::function(name)
+          .positional("list", args.field, "list")
+          .positional("lambda", args.lambda, "lambda")
+          .parse(inv, sp.as_session())) {
+      std::move(dh).forward_to(ctx);
+      return args;
+    }
+    auto diags = std::exchange(dh, {}).collect();
+    auto expr = ast::expression{};
+    if (argument_parser2::function(name)
+          .positional("list", args.field, "list")
+          .positional("x", expr, "any")
+          .positional("expr", args.lambda.right, "any")
+          .parse(inv, sp.as_session())) {
+      diagnostic::warning("deprecated; please use a lambda expression instead")
+        .primary(expr.get_location().combine(args.lambda.right))
+        .hint("instead of `x, y`, provide `x => y`")
+        .emit(ctx);
+      std::move(dh).forward_to(ctx);
+      auto* field = try_as<ast::root_field>(expr);
+      if (not field or field->has_question_mark) {
+        diagnostic::error("expected identifier").primary(expr).emit(ctx);
+        return failure::promise();
+      }
+      return args;
+    }
+    for (auto& diag : diags) {
+      ctx.dh().emit(std::move(diag));
+    }
+    return args;
+  }
 };
 
 auto make_where_function(function_plugin::invocation inv, session ctx)
   -> failure_or<function_ptr> {
-  auto args = arguments{};
-  TRY(argument_parser2::function("where")
-        .positional("list", args.field, "list")
-        .positional("capture", args.capture)
-        .positional("expression", args.expr, "any")
-        .parse(inv, ctx));
+  TRY(auto args, arguments::parse("where", inv, ctx));
+  // TODO: The implementation of `map` predates lambdas, so right now it handles
+  // nulls in the input list by itself. The implementation would probably be
+  // simpler if it used this:
+  // args.lambda.right = args.lambda.right_or(located{false, location::unknown});
   return function_use::make([args = std::move(args)](
                               function_plugin::evaluator eval, session ctx) {
     return map_series(eval(args.field), [&](series field) -> multi_series {
@@ -284,16 +320,7 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
       if (list_values.length() == 0) {
         return field;
       }
-      // TODO: The name here is somewhat arbitrary. It could be accessed if
-      // `@name` where to be used inside the inner expression.
-      const auto empty_type = type{"where", record_type{}};
-      auto slice = table_slice{
-        arrow::RecordBatch::Make(empty_type.to_arrow_schema(),
-                                 list_values.length(), arrow::ArrayVector{}),
-        empty_type,
-      };
-      slice = assign(args.capture, list_values, slice, ctx);
-      auto ms = tenzir::eval(args.expr, slice, ctx);
+      auto ms = tenzir::eval(args.lambda, list_values, ctx);
       TENZIR_ASSERT(not ms.parts().empty());
       auto result = std::vector<series>{};
       auto offset = int64_t{0};
@@ -313,7 +340,7 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
         if (not predicate) {
           diagnostic::warning("expected `bool`, but got `{}`",
                               values.type.kind())
-            .primary(args.expr)
+            .primary(args.lambda.right)
             .emit(ctx);
           result.push_back(series::null(field.type, field.length()));
           continue;
@@ -412,12 +439,11 @@ struct where_result_part {
 
 auto make_map_function(function_plugin::invocation inv, session ctx)
   -> failure_or<function_ptr> {
-  auto args = arguments{};
-  TRY(argument_parser2::function("map")
-        .positional("list", args.field, "list")
-        .positional("capture", args.capture)
-        .positional("expression", args.expr, "any")
-        .parse(inv, ctx));
+  TRY(auto args, arguments::parse("map", inv, ctx));
+  // TODO: The implementation of `map` predates lambdas, so right now it handles
+  // nulls in the input list by itself. The implementation would probably be
+  // simpler if it used this:
+  // args.lambda.right = args.lambda.right_or_null();
   return function_use::make([args = std::move(args)](
                               function_plugin::evaluator eval, session ctx) {
     return map_series(eval(args.field), [&](series field) -> multi_series {
@@ -442,16 +468,7 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
       if (list_values.length() == 0) {
         return field;
       }
-      // TODO: The name here is somewhat arbitrary. It could be accessed if
-      // `@name` where to be used inside the inner expression.
-      const auto empty_type = type{"map", record_type{}};
-      auto slice = table_slice{
-        arrow::RecordBatch::Make(empty_type.to_arrow_schema(),
-                                 list_values.length(), arrow::ArrayVector{}),
-        empty_type,
-      };
-      slice = assign(args.capture, list_values, slice, ctx);
-      auto ms = tenzir::eval(args.expr, slice, ctx);
+      auto ms = tenzir::eval(args.lambda, list_values, ctx);
       TENZIR_ASSERT(not ms.parts().empty());
       // If there were no conflicts in the result, we are in the happy case
       // Here we just need to take that slice and re-join it with the offsets
@@ -658,8 +675,8 @@ auto make_map_function(function_plugin::invocation inv, session ctx)
                                merged_series.type.kind());
           }
           diagnostic::warning(
-            "`expr` must evaluate to compatible types within the same list")
-            .primary(args.expr, primary)
+            "lambda must evaluate to compatible types within the same list")
+            .primary(args.lambda.right, primary)
             .note(note)
             .emit(ctx);
         }
