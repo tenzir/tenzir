@@ -5,13 +5,13 @@ such as authentication tokens, passwords or even URLs.
 
 There is two ways to pass an argument to a parameter that expects a secret:
 
-- By providing a plain `string` (Ad-hod secret):
+- By providing a plain `string` ([Ad-hod Secret](#ad-hoc-secrets)):
 
   ```tql
   to_splunk "localhost", hec_token="my-plaintext-token"
   ```
 
-- By using the [`secret`](../tql2/functions/secret.md) function (Manged secret):
+- By using the [`secret`](../tql2/functions/secret.md) function ([Manged Secret](#managed-secrets)):
 
   ```tql
   to_splunk "localhost", hec_token=secret("splunk-hec-token")
@@ -30,7 +30,7 @@ Secrets are a special type in Tenzir's type system. They practically none of
 operations you can perform on other values in Tenzir and can effectively only be
 passed to operators.
 
-This means that you _cannot_ do operations like `secret("my-secret") + "added text"`.
+This means that you can **not** do operations like `secret("my-secret") + "added text"`.
 
 :::info Secrets are UTF-8
 All secrets are UTF-8 unless you use the `decode_base64` function.
@@ -108,7 +108,7 @@ These secrets are accessible to all Tenzir Nodes connected to that workspace.
 
 Secrets can be added, updated or deleted from a workspace using either the
 `tenzir-platform` CLI or the web interface. Read more details in the [CLI
-reference](../platform-cli.md#Manage Secrets).
+reference](../platform-cli.md#manage-secrets).
 
 For example, to add a new secret `geheim`, use the following command:
 
@@ -149,4 +149,4 @@ the specified role, and the role must have permissions to read secrets under the
 prefix `tenzir/` from the Secrets Manager instance in the account of the
 assumed role.
 
-See the [CLI reference](../platform-cli.md#Manage Secret Stores) for more details.
+See the [CLI reference](../platform-cli.md#manage-external-secret-stores) for more details.
