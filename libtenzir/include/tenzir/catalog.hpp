@@ -16,12 +16,14 @@
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/query_context.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <queue>
 #include <vector>
 
 namespace tenzir {
@@ -63,8 +65,7 @@ public:
   constexpr static auto name = "catalog";
 
   /// Creates the catalog from a set of partition synopses.
-  auto initialize(
-    std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>> ps)
+  auto initialize(std::vector<partition_synopsis_pair> partitions)
     -> caf::result<atom::ok>;
 
   /// Add a new partition synopsis.
@@ -100,7 +101,12 @@ public:
   // See also ae9dbed.
   std::unordered_map<tenzir::type,
                      detail::flat_map<uuid, partition_synopsis_ptr>>
-    synopses_per_type = {};
+    synopses_per_type;
+
+  bool accept_queries = false;
+  std::queue<
+    std::pair<caf::typed_response_promise<catalog_lookup_result>, query_context>>
+    delayed_queries;
 
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;
