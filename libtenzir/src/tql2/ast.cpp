@@ -141,6 +141,17 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
     [](const ast::constant& x) {
       return x.as_data();
     },
+    [](const ast::list& x) -> std::optional<operand> {
+      auto l = list{};
+      for (const auto& item : x.items) {
+        const auto* i = try_as<ast::expression>(item);
+        if (not i or not is<ast::constant>(*i)) {
+          return std::nullopt;
+        }
+        l.push_back(as<ast::constant>(*i).as_data());
+      }
+      return l;
+    },
     [](const ast::meta& x) -> meta_extractor {
       switch (x.kind) {
         case ast::meta::name:
@@ -191,7 +202,7 @@ auto fold_now(const ast::expression& l, const ast::binary_op& op,
     return std::nullopt;
   }
   auto* const call = std::get_if<ast::function_call>(l.kind.get());
-  if (not(call and call->fn.path[0].name == "now")) {
+  if (not call or call->fn.path[0].name != "now") {
     return std::nullopt;
   }
   if (op == ast::binary_op::add) {
