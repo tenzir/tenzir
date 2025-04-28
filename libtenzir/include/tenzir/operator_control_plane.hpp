@@ -65,6 +65,14 @@ struct operator_control_plane {
     secret_view s;
     resolved_secret_value& out;
     location loc = location::unknown;
+
+    secret_request(secret_view s, resolved_secret_value& out, location loc)
+      : s{s}, out{out}, loc{loc} {
+    }
+
+    secret_request(const located<secret> s, resolved_secret_value& out)
+      : s{s.inner}, out{out}, loc{s.source} {
+    }
   };
   /// Resolves multiple secrets. The implementation in the
   /// `exec_node_control_plane` will first check the config and then try and
@@ -79,7 +87,7 @@ struct operator_control_plane {
 
   auto resolve_secret_must_yield(const located<secret>& s,
                                  resolved_secret_value& out) -> void {
-    return resolve_secrets_must_yield({{s.inner, out, s.source}});
+    return resolve_secrets_must_yield({{s, out}});
   }
 
   /// Suspend or resume the operator's runloop. A suspended operator will not
