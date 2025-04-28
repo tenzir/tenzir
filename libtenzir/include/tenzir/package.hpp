@@ -164,6 +164,7 @@ struct package final {
   std::optional<std::string> description = {};
   std::optional<std::string> package_icon = {};
   std::optional<std::string> author_icon = {};
+  std::vector<std::string> categories = {};
 
   package_inputs_map inputs;
   package_pipelines_map pipelines;
@@ -187,7 +188,8 @@ struct package final {
       f.field("id", x.id), f.field("name", x.name), f.field("author", x.author),
       f.field("description", x.description),
       f.field("package_icon", x.package_icon),
-      f.field("author_icon", x.author_icon), f.field("inputs", x.inputs),
+      f.field("author_icon", x.author_icon),
+      f.field("categories", x.categories), f.field("inputs", x.inputs),
       f.field("pipelines", x.pipelines), f.field("contexts", x.contexts),
       f.field("examples", x.examples), f.field("config", x.config));
   }

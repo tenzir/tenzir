@@ -25,7 +25,7 @@ namespace tenzir {
     /* Convert back to yaml because we don't have access to the raw input      \
        here, and that has the highest chance of round-tripping correctly. */   \
     auto maybe_string = to_yaml(materialize(value));                           \
-    if (!maybe_string)                                                         \
+    if (! maybe_string)                                                        \
       return diagnostic::error("failed to convert " #name " to string")        \
         .note("due to error: {}", maybe_string.error())                        \
         .to_error();                                                           \
@@ -146,7 +146,7 @@ namespace tenzir {
       /* Convert back to yaml because we don't have access to the raw input    \
          here, and that has the highest chance of round-tripping correctly. */ \
       auto maybe_string = to_yaml(materialize(value));                         \
-      if (!maybe_string)                                                       \
+      if (! maybe_string)                                                      \
         return diagnostic::error("failed to convert " #name " to string")      \
           .note("due to error: {}", maybe_string.error())                      \
           .to_error();                                                         \
@@ -212,6 +212,30 @@ namespace tenzir {
 
 #define TRY_ASSIGN_LIST_TO_RESULT(name, inner_type)                            \
   TRY_ASSIGN_LIST(name, inner_type, result.name)
+
+#define TRY_ASSIGN_VECTOR_OF_STRING(name)                                      \
+  if (key == #name) {                                                          \
+    const auto* null = try_as<caf::none_t>(&value);                            \
+    if (null) {                                                                \
+      continue;                                                                \
+    }                                                                          \
+    const auto* lst = try_as<view<list>>(&value);                              \
+    if (not lst) {                                                             \
+      return diagnostic::error(#name " must be a list")                        \
+        .note("invalid package definition")                                    \
+        .to_error();                                                           \
+    }                                                                          \
+    for (const auto& elem : *lst) {                                            \
+      const auto* str = try_as<std::string_view>(elem);                        \
+      if (not str) {                                                           \
+        return diagnostic::error(#name " must be a list of strings")           \
+          .note("invalid package definition")                                  \
+          .to_error();                                                         \
+      }                                                                        \
+      result.name.push_back(std::string{*str});                                \
+    }                                                                          \
+    continue;                                                                  \
+  }
 
 auto package_input::parse(const view<record>& data)
   -> caf::expected<package_input> {
@@ -280,7 +304,7 @@ auto package_pipeline::parse(const view<record>& data)
       auto value_copy = materialize(value);
       if (const auto* as_string = try_as<std::string_view>(&value)) {
         auto inner_value = from_yaml(*as_string);
-        if (!inner_value) {
+        if (! inner_value) {
           return diagnostic::error("failed to parse `restart-on-error` field")
             .note("error {}", inner_value.error())
             .to_error();
@@ -360,6 +384,7 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(package_icon);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(author_icon);
+    TRY_ASSIGN_VECTOR_OF_STRING(categories);
     TRY_ASSIGN_MAP_TO_RESULT(inputs, package_input);
     TRY_ASSIGN_MAP_TO_RESULT(pipelines, package_pipeline);
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
@@ -372,8 +397,8 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   }
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
-  if (!legacy_snippets.empty()) {
-    if (!result.examples.empty()) {
+  if (not legacy_snippets.empty()) {
+    if (not result.examples.empty()) {
       return diagnostic::error("found both `snippets` and `examples`")
         .note("the `snippets` key is deprecated, use `examples` instead")
         .to_error();
@@ -382,7 +407,7 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   }
   if (result.config) {
     for (auto& [name, _] : result.config->inputs) {
-      if (!result.inputs.contains(name)) {
+      if (not result.inputs.contains(name)) {
         return diagnostic::error("undeclared input value")
           .note("input {} is not part of package {}", name, result.id)
           .to_error();
@@ -415,7 +440,7 @@ auto package_config::to_record() const -> record {
   if (version) {
     result["version"] = *version;
   }
-  if (!metadata.empty()) {
+  if (not metadata.empty()) {
     result["metadata"] = metadata;
   }
   return result;
@@ -474,6 +499,12 @@ auto package::to_record() const -> record {
   info_record["description"] = description;
   info_record["author_icon"] = author_icon;
   info_record["package_icon"] = package_icon;
+  auto cats = list{};
+  cats.reserve(categories.size());
+  for (const auto& cat : categories) {
+    cats.emplace_back(cat);
+  }
+  info_record["categories"] = std::move(cats);
   if (config) {
     info_record["config"] = config->to_record();
   }
