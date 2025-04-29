@@ -131,7 +131,7 @@ contexts:
       venenatis. Curabitur aliquet semper sem, et tincidunt metus cursus at.
       Nulla dapibus nibh vel faucibus commodo. Sed euismod eu sapien ut dictum.
       Phasellus tincidunt venenatis semper.
-      
+
     # Arguments for creating the context, depending on the type. Refer to the
     # documentation of the individual context types to see the arguments they
     # require. Note that changes to these arguments do not apply to any
@@ -207,7 +207,13 @@ config:
   overrides:
     pipelines:
       example-pipeline:
-        disabled: true
+        name: Overridden name
+        disable: true
+  # Disable all pipelines and contexts in the package.
+  disabled: true
+  # Disable all pipelines and contexts in the package if the env variable holds
+  # the value `true`.
+  disabled-env: DISABLE_MY_PACKAGE
   # Opaque extra data that is ignored by the node.
   metadata:
     ansible:
