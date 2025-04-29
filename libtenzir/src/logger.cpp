@@ -107,7 +107,7 @@ namespace detail {
 
 bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
                   const caf::settings& cfg_file) try {
-  if (tenzir::detail::logger()->name() != "/dev/null") {
+  if (is_spdlog_setup()) {
     TENZIR_ERROR("Log already up");
     return false;
   }
@@ -299,6 +299,10 @@ std::shared_ptr<spdlog::logger>& logger() {
     = spdlog::async_factory::template create<spdlog::sinks::null_sink_mt>(
       "/dev/null");
   return tenzir_logger;
+}
+
+auto is_spdlog_setup() noexcept -> bool {
+  return logger()->name() != "/dev/null";
 }
 
 } // namespace detail

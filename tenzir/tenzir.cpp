@@ -356,7 +356,7 @@ auto main(int argc, char** argv) -> int try {
 } catch (tenzir::panic_exception& e) {
   auto diagnostic = to_diagnostic(e);
   const auto is_server = is_server_from_app_path(argv[0]);
-  if (not is_server) {
+  if (not is_server or not tenzir::detail::is_spdlog_setup()) {
     auto dh = make_diagnostic_printer(
       std::nullopt, tenzir::color_diagnostics::yes, std::cerr);
     dh->emit(std::move(diagnostic));

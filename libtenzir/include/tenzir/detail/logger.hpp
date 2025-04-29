@@ -37,6 +37,9 @@ void shutdown_spdlog() noexcept;
 /// Get a spdlog::logger handel
 std::shared_ptr<spdlog::logger>& logger();
 
+/// Checks if spdlog is already setup by checking `logger()->name()`
+auto is_spdlog_setup() noexcept -> bool;
+
 template <class T>
 auto pretty_type_name(const T&) {
   return caf::detail::pretty_type_name(typeid(std::remove_pointer_t<T>));
