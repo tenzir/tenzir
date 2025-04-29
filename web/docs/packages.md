@@ -108,6 +108,9 @@ pipelines:
     restart-on-error: 1 minute
     # Disables the pipeline.
     disabled: false
+    # Optional: Set an env variable that when it contains `true` disables this
+    # pipeline. This option overrides the `disabled` option:
+    disabled-env: DISABLE_CONTEXT_UPDATE_PIPELINE
     # Unstoppable pipelines will run automatically and indefinitely.
     # They cannot be paused or stopped manually.
     # If they do complete, they will end up in a failed state.
@@ -131,7 +134,7 @@ contexts:
       venenatis. Curabitur aliquet semper sem, et tincidunt metus cursus at.
       Nulla dapibus nibh vel faucibus commodo. Sed euismod eu sapien ut dictum.
       Phasellus tincidunt venenatis semper.
-      
+
     # Arguments for creating the context, depending on the type. Refer to the
     # documentation of the individual context types to see the arguments they
     # require. Note that changes to these arguments do not apply to any
@@ -139,6 +142,9 @@ contexts:
     args: {}
     # Disables the context.
     disabled: false
+    # Optional: Set an env variable that when it contains `true` disables this
+    # context. This option overrides the `disabled` option:
+    disabled-env: DISABLE_CONTEXT_UPDATE_PIPELINE
 ```
 
 ### Examples
@@ -207,7 +213,13 @@ config:
   overrides:
     pipelines:
       example-pipeline:
-        disabled: true
+        name: Overridden name
+        disable: true
+  # Disable all pipelines and contexts in the package.
+  disabled: true
+  # Disable all pipelines and contexts in the package if the env variable holds
+  # the value `true`.
+  disabled-env: DISABLE_MY_PACKAGE
   # Opaque extra data that is ignored by the node.
   metadata:
     ansible:

@@ -5,8 +5,10 @@
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 
-#include "tenzir/package.hpp"
-
+#include <tenzir/concept/parseable/core.hpp>
+#include <tenzir/concept/parseable/numeric/bool.hpp>
+#include <tenzir/detail/env.hpp>
+#include <tenzir/package.hpp>
 #include <tenzir/type.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
@@ -25,16 +27,17 @@ namespace tenzir {
     /* Convert back to yaml because we don't have access to the raw input      \
        here, and that has the highest chance of round-tripping correctly. */   \
     auto maybe_string = to_yaml(materialize(value));                           \
-    if (! maybe_string)                                                        \
+    if (not maybe_string) {                                                    \
       return diagnostic::error("failed to convert " #name " to string")        \
         .note("due to error: {}", maybe_string.error())                        \
         .to_error();                                                           \
+    }                                                                          \
     result.field = *maybe_string;                                              \
     continue;                                                                  \
   }
 
-#define TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)                             \
-  if (key == #name) {                                                          \
+#define TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT_2(name, name_key)                 \
+  if (key == std::string_view{name_key}) {                                     \
     const auto* null = try_as<caf::none_t>(&value);                            \
     if (null) {                                                                \
       result.name = std::nullopt;                                              \
@@ -49,6 +52,9 @@ namespace tenzir {
     result.name = std::string{*id};                                            \
     continue;                                                                  \
   }
+
+#define TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)                             \
+  TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT_2(name, #name)
 
 #define TRY_ASSIGN_STRING_TO_RESULT(name)                                      \
   if (key == #name) {                                                          \
@@ -146,10 +152,11 @@ namespace tenzir {
       /* Convert back to yaml because we don't have access to the raw input    \
          here, and that has the highest chance of round-tripping correctly. */ \
       auto maybe_string = to_yaml(materialize(value));                         \
-      if (! maybe_string)                                                      \
+      if (not maybe_string) {                                                  \
         return diagnostic::error("failed to convert " #name " to string")      \
           .note("due to error: {}", maybe_string.error())                      \
           .to_error();                                                         \
+      }                                                                        \
       result.name[std::string{key}] = *maybe_string;                           \
     }                                                                          \
     continue;                                                                  \
@@ -279,9 +286,22 @@ auto package_config::parse(const view<record>& data)
     TRY_ASSIGN_STRINGMAP_CONVERSION_TO_RESULT(inputs);
     TRY_ASSIGN_RECORD_TO_RESULT(overrides);
     TRY_ASSIGN_RECORD_TO_RESULT(metadata);
+    TRY_ASSIGN_BOOL_TO_RESULT(disabled);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT_2(disabled_env, "disabled-env");
     TENZIR_WARN("ignoring unknown key `{}` in `config` entry in package "
                 "definition",
                 key);
+  }
+  if (result.disabled_env) {
+    if (auto opt = detail::getenv(*result.disabled_env)) {
+      auto p = parsers::boolean | parsers::zero_one;
+      if (not p(*opt, result.disabled)) {
+        return diagnostic::error("expected `true` or `false`, but got `{}`",
+                                 *opt)
+          .note("for env variable `{}`", *result.disabled_env)
+          .to_error();
+      }
+    }
   }
   return result;
 }
@@ -290,11 +310,12 @@ auto package_pipeline::parse(const view<record>& data)
   -> caf::expected<package_pipeline> {
   auto result = package_pipeline{};
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(definition)
-    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)
-    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
-    TRY_ASSIGN_BOOL_TO_RESULT(disabled)
-    TRY_ASSIGN_BOOL_TO_RESULT(unstoppable)
+    TRY_ASSIGN_STRING_TO_RESULT(definition);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
+    TRY_ASSIGN_BOOL_TO_RESULT(disabled);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT_2(disabled_env, "disabled-env");
+    TRY_ASSIGN_BOOL_TO_RESULT(unstoppable);
     if (key == "restart-on-error") {
       if (is<caf::none_t>(value)) {
         continue;
@@ -304,7 +325,7 @@ auto package_pipeline::parse(const view<record>& data)
       auto value_copy = materialize(value);
       if (const auto* as_string = try_as<std::string_view>(&value)) {
         auto inner_value = from_yaml(*as_string);
-        if (! inner_value) {
+        if (not inner_value) {
           return diagnostic::error("failed to parse `restart-on-error` field")
             .note("error {}", inner_value.error())
             .to_error();
@@ -344,6 +365,17 @@ auto package_pipeline::parse(const view<record>& data)
                 "definition",
                 key);
   }
+  if (result.disabled_env) {
+    if (auto opt = detail::getenv(*result.disabled_env)) {
+      auto p = parsers::boolean | parsers::zero_one;
+      if (not p(*opt, result.disabled)) {
+        return diagnostic::error("expected `true` or `false`, but got `{}`",
+                                 *opt)
+          .note("for env variable `{}`", *result.disabled_env)
+          .to_error();
+      }
+    }
+  }
   REQUIRED_FIELD(definition)
   return result;
 }
@@ -354,10 +386,22 @@ auto package_context::parse(const view<record>& data)
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(type);
     TRY_ASSIGN_BOOL_TO_RESULT(disabled);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT_2(disabled_env, "disabled-env");
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_STRINGMAP_TO_RESULT(arguments);
   }
   REQUIRED_FIELD(type)
+  if (result.disabled_env) {
+    if (auto opt = detail::getenv(*result.disabled_env)) {
+      auto p = parsers::boolean | parsers::zero_one;
+      if (not p(*opt, result.disabled)) {
+        return diagnostic::error("expected `true` or `false`, but got `{}`",
+                                 *opt)
+          .note("for env variable `{}`", *result.disabled_env)
+          .to_error();
+      }
+    }
+  }
   return result;
 }
 
@@ -413,6 +457,14 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
           .to_error();
       }
     }
+    if (result.config->disabled) {
+      for (auto& [_, pipeline] : result.pipelines) {
+        pipeline.disabled = true;
+      }
+      for (auto& [_, context] : result.contexts) {
+        context.disabled = true;
+      }
+    }
   }
   return result;
 }
@@ -433,6 +485,8 @@ auto package_config::to_record() const -> record {
   auto result = record{
     {"inputs", std::move(inputs_map)},
     {"overrides", overrides},
+    {"disabled", disabled},
+    {"disabled-env", disabled_env},
   };
   if (source) {
     result["source"] = source->to_record();
@@ -463,10 +517,13 @@ auto package_context::to_record() const -> record {
   for (auto const& [key, value] : arguments) {
     arguments_record[key] = value;
   }
-  return record{{"type", type},
-                {"description", description},
-                {"arguments", arguments_record},
-                {"disabled", disabled}};
+  return record{
+    {"type", type},
+    {"description", description},
+    {"arguments", arguments_record},
+    {"disabled", disabled},
+    {"disabled-env", disabled_env},
+  };
 }
 
 auto package_example::to_record() const -> record {
@@ -483,6 +540,7 @@ auto package_pipeline::to_record() const -> record {
     {"description", description},
     {"definition", definition},
     {"disabled", disabled},
+    {"disabled-env", disabled_env},
     {"unstoppable", unstoppable},
   };
   if (restart_on_error) {
