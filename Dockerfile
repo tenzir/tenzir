@@ -548,6 +548,18 @@ RUN --mount=target=/ccache,type=cache \
     DESTDIR=/plugin/to_google_secops cmake --install build-to_google_secops --strip --component Runtime && \
     rm -rf build-to_google_secops
 
+FROM plugins-source AS to_google_cloud_logging-plugin
+
+COPY contrib/tenzir-plugins/to_google_cloud_logging ./contrib/tenzir-plugins/to_google_cloud_logging
+RUN --mount=target=/ccache,type=cache \
+    cmake -S contrib/tenzir-plugins/to_google_cloud_logging -B build-to_google_cloud_logging -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
+    cmake --build build-to_google_cloud_logging --parallel && \
+    cmake --build build-to_google_cloud_logging --target bats && \
+    DESTDIR=/plugin/to_google_cloud_logging cmake --install build-to_google_cloud_logging --strip --component Runtime && \
+    rm -rf build-to_google_cloud_logging
+
 FROM plugins-source AS vast-plugin
 
 COPY contrib/tenzir-plugins/vast ./contrib/tenzir-plugins/vast
@@ -573,6 +585,7 @@ COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
 COPY --from=to_asl-plugin --chown=tenzir:tenzir /plugin/to_asl /
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
+COPY --from=to_google_cloud_logging-plugin --chown=tenzir:tenzir /plugin/to_google_cloud_logging /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 USER tenzir:tenzir

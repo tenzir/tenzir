@@ -329,6 +329,7 @@ in {
         ps.to_asl
         ps.to_splunk
         ps.to_google_secops
+        ps.to_google_cloud_logging
         ps.vast
       ] ++ lib.optionals (!isStatic) [
         ps.snowflake
