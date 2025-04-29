@@ -9827,9 +9827,9 @@ vfile@^6.0.0:
     vfile-message "^4.0.0"
 
 vscode-tql@^1.0.0:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/vscode-tql/-/vscode-tql-1.0.0.tgz#cc4ce4be4b63c8f9d9a8ab60523240db147843de"
-  integrity sha512-ottmcc79dJYZao/zgjKF85AXMdEkb2l3B7JafZge7gj424KihhJR7RAWrH4Lzq3goemSZDuUrczS27YJ6gIXeA==
+  version "1.0.3"
+  resolved "https://registry.yarnpkg.com/vscode-tql/-/vscode-tql-1.0.3.tgz#52ff5f82e75993779a35b42ed82798bceca4398c"
+  integrity sha512-gSm6u4SZuV057o5MDB7sGSwKwIDmNRBaQTPqrqy+z51jls6CAw6WJxhjP0uqunT5RpHZZl3BtXYIVFABfxnykw==
 
 wait-on@^6.0.1:
   version "6.0.1"
