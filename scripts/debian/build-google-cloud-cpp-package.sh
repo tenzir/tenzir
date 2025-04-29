@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-: "${GOOGLE_CLOUD_CPP_TAG=v2.30.0}"
+: "${GOOGLE_CLOUD_CPP_TAG=v2.36.0}"
 : "${GOOGLE_CLOUD_CPP_VERSION=$(printf '%s' "$GOOGLE_CLOUD_CPP_TAG" | sed 's@[^0-9]*\(.*\)@\1@')}"
 
 CMAKE_INSTALL_PREFIX=/usr/local
