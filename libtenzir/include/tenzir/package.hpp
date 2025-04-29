@@ -45,6 +45,9 @@ struct package_config final {
   record metadata = {};  // opaque extra data that can be set at install time
   record overrides = {}; // overrides for fields in the package definition
 
+  bool disabled = {};
+  std::optional<std::string> disabled_env = {};
+
   auto to_record() const -> record;
 
   static auto parse(const view<record>& data) -> caf::expected<package_config>;
@@ -54,7 +57,9 @@ struct package_config final {
       .pretty_name("package_config")
       .fields(f.field("source", x.source), f.field("inputs", x.inputs),
               f.field("version", x.version), f.field("metadata", x.metadata),
-              f.field("overrides", x.overrides));
+              f.field("overrides", x.overrides),
+              f.field("disabled", x.disabled),
+              f.field("disabled-env", x.disabled_env));
   }
 };
 
@@ -81,6 +86,7 @@ struct package_pipeline final {
   std::optional<std::string> description = {};
   std::string definition = {}; // required to be non-empty
   bool disabled = false;
+  std::optional<std::string> disabled_env = {};
   std::optional<duration> restart_on_error = {};
   bool unstoppable = false;
 
@@ -95,6 +101,7 @@ struct package_pipeline final {
       .fields(f.field("name", x.name), f.field("description", x.description),
               f.field("definition", x.definition),
               f.field("disabled", x.disabled),
+              f.field("disabled-env", x.disabled_env),
               f.field("restart-on-error", x.restart_on_error),
               f.field("unstoppable", x.unstoppable));
   }
@@ -106,6 +113,7 @@ struct package_context final {
   std::optional<std::string> description = {};
   context_parameter_map arguments = {};
   bool disabled = false;
+  std::optional<std::string> disabled_env = {};
 
   auto to_record() const -> record;
 
@@ -116,7 +124,8 @@ struct package_context final {
       .pretty_name("package_context")
       .fields(f.field("type", x.type), f.field("description", x.description),
               f.field("arguments", x.arguments),
-              f.field("disabled", x.disabled));
+              f.field("disabled", x.disabled),
+              f.field("disabled-env", x.disabled_env));
   }
 };
 
