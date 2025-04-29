@@ -20,6 +20,8 @@
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/uuid.hpp"
 
+#include <caf/mail_cache.hpp>
+#include <caf/response_type.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -55,6 +57,42 @@ struct catalog_lookup_result {
       .pretty_name("tenzir.catalog_lookup_result")
       .fields(f.field("candidate-infos", x.candidate_infos));
   }
+};
+
+class request_cache {
+public:
+  template <class... Signatures, class... Args>
+  auto
+  stash(caf::typed_event_based_actor<Signatures...>* self, Args&&... args) {
+    using handle_type = caf::typed_actor<Signatures...>;
+    using response_type = caf::response_type_t<typename handle_type::signatures,
+                                               std::remove_cvref_t<Args>...>;
+    return [&]<class... Ts>(caf::type_list<Ts...>) {
+      auto rp = self->template make_response_promise<Ts...>();
+      stash_.emplace(
+        [self, rp,
+         args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+          TENZIR_ASSERT(rp.pending());
+          std::apply(
+            [&](auto&&... args) {
+              rp.delegate(handle_type{self},
+                          std::forward<decltype(args)>(args)...);
+            },
+            std::move(args));
+        });
+      return rp;
+    }.template operator()(response_type{});
+  }
+
+  auto unstash() {
+    while (not stash_.empty()) {
+      stash_.front()();
+      stash_.pop();
+    }
+  }
+
+private:
+  std::queue<std::function<void()>> stash_;
 };
 
 /// The state of the CATALOG actor.
@@ -103,10 +141,7 @@ public:
                      detail::flat_map<uuid, partition_synopsis_ptr>>
     synopses_per_type;
 
-  bool accept_queries = false;
-  std::queue<
-    std::pair<caf::typed_response_promise<catalog_lookup_result>, query_context>>
-    delayed_queries;
+  std::optional<request_cache> cache;
 
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;

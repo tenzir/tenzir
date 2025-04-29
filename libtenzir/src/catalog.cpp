@@ -54,7 +54,6 @@ auto catalog_lookup_result::empty() const noexcept -> bool {
 
 auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
   -> caf::result<atom::ok> {
-  TENZIR_ASSERT(not accept_queries);
   auto unsupported_partitions = std::vector<uuid>{};
   for (const auto& [uuid, synopsis] : partitions) {
     auto supported = version::support_for_partition_version(synopsis->version);
@@ -89,13 +88,9 @@ auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
       = decltype(synopses_per_type)::value_type::second_type::make_unsafe(
         std::move(flat_data));
   }
-  accept_queries = true;
-  while (not delayed_queries.empty()) {
-    auto& [rp, query] = delayed_queries.front();
-    rp.delegate(static_cast<catalog_actor>(self), atom::candidates_v,
-                std::move(query));
-    delayed_queries.pop();
-  }
+  TENZIR_ASSERT(cache);
+  cache->unstash();
+  cache.reset();
   return atom::ok_v;
 }
 
@@ -491,14 +486,24 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
   }
   self->state().self = self;
   self->state().taxonomies.concepts = modules::concepts();
+  self->state().cache.emplace();
   return {
-    [self](atom::start, std::vector<partition_synopsis_pair>& partitions) {
+    [self](atom::start, std::vector<partition_synopsis_pair>& partitions)
+      -> caf::result<atom::ok> {
       return self->state().initialize(std::move(partitions));
     },
-    [self](atom::merge, std::vector<partition_synopsis_pair>& partitions) {
+    [self](atom::merge, std::vector<partition_synopsis_pair>& partitions)
+      -> caf::result<atom::ok> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::merge_v,
+                                          std::move(partitions));
+      }
       return self->state().merge(std::move(partitions));
     },
-    [self](atom::get) -> std::vector<partition_synopsis_pair> {
+    [self](atom::get) -> caf::result<std::vector<partition_synopsis_pair>> {
+      // if (self->state().mail_cache) {
+      //   return self->state().stash<std::vector<partition_synopsis_pair>>();
+      // }
       std::vector<partition_synopsis_pair> result;
       result.reserve(self->state().synopses_per_type.size());
       for (const auto& [type, id_synopsis_map] :
@@ -511,6 +516,9 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
     },
     [self](atom::get, const expression& filter)
       -> caf::result<std::vector<partition_synopsis_pair>> {
+      // if (self->state().mail_cache) {
+      //   return self->state().stash<std::vector<partition_synopsis_pair>>();
+      // }
       auto result = std::vector<partition_synopsis_pair>{};
       const auto candidates = self->state().lookup(filter);
       if (not candidates) {
@@ -532,12 +540,20 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
       }
       return result;
     },
-    [self](atom::erase, uuid partition) {
+    [self](atom::erase, uuid partition) -> caf::result<atom::ok> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::erase_v, partition);
+      }
       self->state().erase(partition);
       return atom::ok_v;
     },
     [self](atom::replace, const std::vector<uuid>& old_uuids,
-           std::vector<partition_synopsis_pair>& new_synopses) {
+           std::vector<partition_synopsis_pair>& new_synopses)
+      -> caf::result<atom::ok> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::replace_v, old_uuids,
+                                          std::move(new_synopses));
+      }
       for (auto const& uuid : old_uuids) {
         self->state().erase(uuid);
       }
@@ -545,17 +561,16 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
     },
     [self](atom::candidates, tenzir::query_context query_context)
       -> caf::result<catalog_lookup_result> {
-      TENZIR_TRACE("{} {}", *self, TENZIR_ARG(query_context));
-      if (not self->state().accept_queries) {
-        return self->state()
-          .delayed_queries
-          .emplace(self->make_response_promise<catalog_lookup_result>(),
-                   std::move(query_context))
-          .first;
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::candidates_v,
+                                          std::move(query_context));
       }
       return self->state().lookup(std::move(query_context.expr));
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::get_v, uuid);
+      }
       for (const auto& [type, synopses] : self->state().synopses_per_type) {
         if (auto it = synopses.find(uuid); it != synopses.end()) {
           return partition_info{uuid, *it->second};
