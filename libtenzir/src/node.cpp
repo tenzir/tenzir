@@ -64,7 +64,7 @@ auto find_endpoint_plugin(const http_request_description& desc)
   -> const rest_endpoint_plugin* {
   for (auto const& plugin : plugins::get()) {
     auto const* rest_plugin = plugin.as<rest_endpoint_plugin>();
-    if (!rest_plugin) {
+    if (not rest_plugin) {
       continue;
     }
     for (const auto& endpoint : rest_plugin->rest_endpoints()) {
@@ -80,8 +80,8 @@ auto find_endpoint_plugin(const http_request_description& desc)
 auto register_component(node_actor::stateful_pointer<node_state> self,
                         const caf::actor& component, std::string_view type,
                         std::string_view label = {}) -> caf::error {
-  if (!self->state().registry.add(component, std::string{type},
-                                  std::string{label})) {
+  if (not self->state().registry.add(component, std::string{type},
+                                     std::string{label})) {
     auto msg // separate variable for clang-format only
       = fmt::format("{} failed to add component to registry: {}", *self,
                     label.empty() ? type : label);
@@ -118,7 +118,7 @@ auto register_component(node_actor::stateful_pointer<node_state> self,
                                  | std::ranges::views::values,
                                ", "));
       self->system().registry().erase(source.id());
-      if (!self->state().tearing_down) {
+      if (not self->state().tearing_down) {
         auto component = self->state().registry.remove(source);
         // Terminate if a singleton dies.
         if (is_core_component(component->type)) {
@@ -212,20 +212,20 @@ auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
       &settings, "tenzir.start.disk-budget-check-binary");
     const auto hiwater
       = detail::get_bytesize(settings, "tenzir.start.disk-budget-high", 0);
-    if (!hiwater) {
+    if (not hiwater) {
       diagnostic::error(hiwater.error())
         .note("failed to parse `tenzir.start.disk-budget-high`")
         .throw_();
     }
     auto lowater
       = detail::get_bytesize(settings, "tenzir.start.disk-budget-low", 0);
-    if (!lowater) {
+    if (not lowater) {
       diagnostic::error(lowater.error())
         .note("failed to parse `tenzir.start.disk-budget-low`")
         .throw_();
     }
     // Set low == high as the default value.
-    if (not*lowater) {
+    if (not *lowater) {
       *lowater = *hiwater;
     }
     const auto step_size
@@ -311,7 +311,7 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   for (const auto* plugin : sequenced_components) {
     auto name = plugin->component_name();
     auto handle = plugin->make_component(self);
-    if (!handle) {
+    if (not handle) {
       diagnostic::error("{} failed to create the {} component", *self, name)
         .throw_();
     }
@@ -337,7 +337,7 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   }
   // Spawn handler on first usage
   auto const* plugin = find_endpoint_plugin(desc);
-  if (!plugin) {
+  if (not plugin) {
     return empty_response;
   }
   // TODO: Monitor the spawned handler and restart if it goes down.
@@ -394,7 +394,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
       TENZIR_DEBUG("{} proxying request with id {} to {} with {}", *self,
                    request_id, desc.canonical_path, desc.json_body);
       auto [handler, endpoint] = self->state().get_endpoint_handler(desc);
-      if (!handler) {
+      if (not handler) {
         auto canonical_paths = std::unordered_set<std::string>{};
         for (const auto& plugin : plugins::get<rest_endpoint_plugin>()) {
           for (const auto& endpoint : plugin->rest_endpoints()) {
@@ -413,12 +413,12 @@ auto node(node_actor::stateful_pointer<node_state> self,
           caf::make_error(ec::logic_error, "failed to spawn endpoint handler"));
       }
       auto unparsed_params = http_parameter_map::from_json(desc.json_body);
-      if (!unparsed_params) {
+      if (not unparsed_params) {
         return rest_response::make_error(400, "invalid json",
                                          unparsed_params.error());
       }
       auto params = parse_endpoint_parameters(endpoint, *unparsed_params);
-      if (!params) {
+      if (not params) {
         return rest_response::make_error(400, "invalid parameters",
                                          params.error());
       }
@@ -560,7 +560,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
       }
       TENZIR_DEBUG("{} got EXIT from {}: {}", *self, source_name, msg.reason);
       const auto node_shutdown_reason
-        = msg.reason == caf::exit_reason::user_shutdown
+        = not msg.reason or msg.reason == caf::exit_reason::user_shutdown
               or msg.reason == ec::silent
             ? msg.reason
             : diagnostic::error(msg.reason)
@@ -578,6 +578,15 @@ auto node(node_actor::stateful_pointer<node_state> self,
       // Core components are terminated in a second stage, we remove them from
       // the registry upfront and deal with them later.
       std::vector<caf::actor> core_shutdown_handles;
+      // Always shut down the pipeline manager first. This is a must, as
+      // otherwise the shutdown of other components can cause dependent
+      // pipelines to either complete, stop, or fail, and if the pipeline
+      // manager hasn't yet noticed that it's supposed to shutdown it may still
+      // want to persist its state afterwards, causing the pipelines to be in
+      // the wrong state after restarting.
+      if (auto pm = registry.remove("pipeline-manager")) {
+        core_shutdown_handles.push_back(std::move(pm->actor));
+      }
       for (const auto& name :
            self->state().ordered_components | std::ranges::views::reverse) {
         if (auto comp = registry.remove(name)) {
