@@ -186,11 +186,11 @@ caf::error extract_partition_synopsis(
   const std::filesystem::path& partition_synopsis_path) {
   // Use blocking operations here since this is part of the startup.
   auto chunk = chunk::mmap(partition_path);
-  if (!chunk) {
+  if (not chunk) {
     return std::move(chunk.error());
   }
   auto maybe_partition = partition_chunk::get_flatbuffer(*chunk);
-  if (!maybe_partition) {
+  if (not maybe_partition) {
     return caf::make_error(
       ec::format_error, fmt::format("malformed partition at {}: {}",
                                     partition_path, maybe_partition.error()));
@@ -212,7 +212,7 @@ caf::error extract_partition_synopsis(
   }
   flatbuffers::FlatBufferBuilder builder;
   auto ps_offset = pack(builder, ps);
-  if (!ps_offset) {
+  if (not ps_offset) {
     return ps_offset.error();
   }
   fbs::PartitionSynopsisBuilder ps_builder(builder);
@@ -367,9 +367,15 @@ caf::error index_state::load_from_disk() {
   // called once during startup, when no other actors exist yet.
   std::error_code err{};
   auto const file_exists = std::filesystem::exists(dir, err);
-  if (!file_exists) {
+  if (not file_exists) {
     TENZIR_VERBOSE("{} found no prior state, starting with a clean slate",
                    *self);
+    self->mail(atom::start_v, std::vector<partition_synopsis_pair>{})
+      .request(catalog, caf::infinite)
+      .then([](atom::ok) {},
+            [this](caf::error err) {
+              self->quit(std::move(err));
+            });
     return caf::none;
   }
   // Start by finishing up any in-progress transforms.
@@ -389,7 +395,7 @@ caf::error index_state::load_from_disk() {
           continue;
         }
         auto chunk = tenzir::chunk::mmap(entry.path());
-        if (!chunk) {
+        if (not chunk) {
           TENZIR_WARN("{} failed to mmap chunk at {}: {}", *self, entry.path(),
                       chunk.error());
           continue;
@@ -397,7 +403,7 @@ caf::error index_state::load_from_disk() {
         auto maybe_flatbuffer
           = tenzir::flatbuffer<tenzir::fbs::PartitionTransform>::make(
             std::move(*chunk));
-        if (!maybe_flatbuffer) {
+        if (not maybe_flatbuffer) {
           TENZIR_WARN("{} failed to open transform {}: {}", *self, entry.path(),
                       err.message());
           continue;
@@ -477,16 +483,15 @@ caf::error index_state::load_from_disk() {
                                        "{}: {}",
                                        dir, err.message()));
   }
-  auto partitions = std::vector<uuid>{};
-  auto oversized_partitions = std::vector<uuid>{};
+  auto partition_ids = std::vector<uuid>{};
+  auto oversized_partition_ids = std::vector<uuid>{};
   auto synopsis_files = std::vector<uuid>{};
-  auto synopses
-    = std::make_shared<std::unordered_map<uuid, partition_synopsis_ptr>>();
+  auto synopses = std::vector<partition_synopsis_pair>{};
   for (const auto& entry : dir_iter) {
     const auto stem = entry.path().stem();
     tenzir::uuid partition_uuid{};
     // Ignore files that don't use UUID for the filename.
-    if (!parsers::uuid(stem.string(), partition_uuid)) {
+    if (not parsers::uuid(stem.string(), partition_uuid)) {
       continue;
     }
     auto ext = entry.path().extension();
@@ -499,24 +504,24 @@ caf::error index_state::load_from_disk() {
         auto store_path
           = dir / ".." / "archive" / fmt::format("{:u}.store", partition_uuid);
         if (std::filesystem::exists(store_path, err)) {
-          oversized_partitions.push_back(partition_uuid);
+          oversized_partition_ids.push_back(partition_uuid);
         } else {
           TENZIR_WARN("{} did not find a store file for the oversized "
                       "partition {} and won't attempt to recover the data",
                       *self, partition_uuid);
         }
       } else {
-        partitions.push_back(partition_uuid);
+        partition_ids.push_back(partition_uuid);
       }
     } else if (ext == std::filesystem::path{".mdx"}) {
       synopsis_files.push_back(partition_uuid);
     }
   }
-  std::sort(partitions.begin(), partitions.end());
+  std::sort(partition_ids.begin(), partition_ids.end());
   std::sort(synopsis_files.begin(), synopsis_files.end());
   auto orphans = std::vector<uuid>{};
   std::set_difference(synopsis_files.begin(), synopsis_files.end(),
-                      partitions.begin(), partitions.end(),
+                      partition_ids.begin(), partition_ids.end(),
                       std::back_inserter(orphans));
   // Do a bit of housekeeping. MDX files without matching partitions shouldn't
   // be there in the first place.
@@ -529,13 +534,13 @@ caf::error index_state::load_from_disk() {
   const auto store_map = [&] {
     auto result = std::map<uuid, std::filesystem::path>{};
     auto store_path = dir / ".." / "archive";
-    if (!std::filesystem::is_directory(store_path, err)) {
+    if (not std::filesystem::is_directory(store_path, err)) {
       return result;
     }
     for (auto const& store_file :
          std::filesystem::directory_iterator{store_path}) {
       tenzir::uuid store_uuid{};
-      if (!parsers::uuid(store_file.path().stem().string(), store_uuid)) {
+      if (not parsers::uuid(store_file.path().stem().string(), store_uuid)) {
         continue;
       }
       result.emplace(store_uuid, store_file.path());
@@ -543,15 +548,15 @@ caf::error index_state::load_from_disk() {
     return result;
   }();
   // Now try to load the partitions - with a progress indicator.
-  for (size_t idx = 0; idx < partitions.size(); ++idx) {
-    auto partition_uuid = partitions[idx];
+  for (size_t idx = 0; idx < partition_ids.size(); ++idx) {
+    auto partition_uuid = partition_ids[idx];
     auto error = [&]() -> caf::error {
       auto part_path = partition_path(partition_uuid);
       TENZIR_TRACE("{} unpacks partition {} ({}/{})", *self, partition_uuid,
-                   idx, partitions.size());
+                   idx, partition_ids.size());
       // Generate external partition synopsis file if it doesn't exist.
       auto synopsis_path = partition_synopsis_path(partition_uuid);
-      if (!exists(synopsis_path)) {
+      if (not exists(synopsis_path)) {
         if (auto error = extract_partition_synopsis(part_path, synopsis_path)) {
           return error;
         }
@@ -622,7 +627,7 @@ caf::error index_state::load_from_disk() {
         }
       }
       persisted_partitions.emplace(partition_uuid);
-      synopses->emplace(partition_uuid, std::move(ps));
+      synopses.emplace_back(partition_uuid, std::move(ps));
       return caf::none;
     }();
     if (error) {
@@ -630,28 +635,26 @@ caf::error index_state::load_from_disk() {
                      partition_uuid, error);
     }
   }
-  //  Recommend the user to run 'tenzir-ctl rebuild' if any partition syopses
-  //  are outdated. We need to nudge them a bit so we can drop support for older
-  //  partition versions more freely.
-  const auto num_outdated = std::count_if(
-    synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
-      return id_and_synopsis.second->version
-             < version::current_partition_version;
-    });
+  // Recommend the user to run 'tenzir-ctl rebuild' if any partition syopses
+  // are outdated. We need to nudge them a bit so we can drop support for older
+  // partition versions more freely.
+  const auto num_outdated = std::ranges::count_if(synopses, [](const auto& x) {
+    return x.synopsis->version < version::current_partition_version;
+  });
   if (num_outdated > 0) {
     TENZIR_WARN("{} detected {}/{} outdated partitions; consider running "
                 "'tenzir-ctl "
                 "rebuild' to upgrade existing partitions in the background",
-                *self, num_outdated, synopses->size());
+                *self, num_outdated, synopses.size());
   }
   // We collect all synopses to send them in bulk, since the `await` interface
   // doesn't lend itself to a huge number of awaited messages: Only the tip of
   // the current awaited list is considered, leading to an O(n**2) worst-case
   // behavior if the responses arrive in the same order to how they were sent.
   TENZIR_DEBUG("{} requesting bulk merge of {} partitions", *self,
-               synopses->size());
+               synopses.size());
   this->accept_queries = false;
-  self->mail(atom::merge_v, std::exchange(synopses, {}))
+  self->mail(atom::start_v, std::move(synopses))
     .request(catalog, caf::infinite)
     .then(
       [this](atom::ok) {
@@ -668,7 +671,6 @@ caf::error index_state::load_from_disk() {
                      err);
         self->send_exit(self, std::move(err));
       });
-
   return caf::none;
 }
 
@@ -676,7 +678,7 @@ caf::error index_state::load_from_disk() {
 void index_state::flush_to_disk() {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto index = pack(builder, *this);
-  if (!index) {
+  if (not index) {
     TENZIR_WARN("{} failed to pack index: {}", *self, index.error());
     return;
   }
@@ -699,7 +701,7 @@ void index_state::handle_slice(table_slice x) {
   auto active_partition = active_partitions.find(schema);
   if (active_partition == active_partitions.end()) {
     auto part = create_active_partition(schema);
-    if (!part) {
+    if (not part) {
       self->quit(caf::make_error(ec::logic_error,
                                  fmt::format("{} failed to create active "
                                              "partition: {}",
@@ -715,7 +717,7 @@ void index_state::handle_slice(table_slice x) {
     decommission_active_partition(schema, {});
     flush_to_disk();
     auto part = create_active_partition(schema);
-    if (!part) {
+    if (not part) {
       self->quit(caf::make_error(ec::logic_error,
                                  fmt::format("{} failed to create active "
                                              "partition: {}",
@@ -786,7 +788,7 @@ void index_state::decommission_active_partition(
   const auto actor = std::exchange(active_partition->second.actor, {});
   const auto type = active_partition->first;
   // Move the active partition to the list of unpersisted partitions.
-  TENZIR_ASSERT_EXPENSIVE(!unpersisted.contains(id));
+  TENZIR_ASSERT_EXPENSIVE(not unpersisted.contains(id));
   unpersisted[id] = {type, actor};
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
@@ -891,14 +893,14 @@ void index_state::add_partition_creation_listener(
 // -- query handling ---------------------------------------------------------
 
 auto index_state::schedule_lookups() -> size_t {
-  if (!pending_queries.has_work()) {
+  if (not pending_queries.has_work()) {
     return 0u;
   }
   const size_t previous_partition_lookups = running_partition_lookups;
   while (running_partition_lookups < max_concurrent_partition_lookups) {
     // 1. Get the partition with the highest accumulated priority.
     auto next = pending_queries.next();
-    if (!next) {
+    if (not next) {
       TENZIR_TRACE("{} did not find a partition to query", *self);
       break;
     }
@@ -937,7 +939,7 @@ auto index_state::schedule_lookups() -> size_t {
           break;
         }
       }
-      if (!part) {
+      if (not part) {
         if (auto it = unpersisted.find(partition_id); it != unpersisted.end()) {
           part = it->second.second;
         } else if (auto it = persisted_partitions.find(partition_id);
@@ -945,14 +947,14 @@ auto index_state::schedule_lookups() -> size_t {
           part = inmem_partitions.get_or_load(partition_id);
         }
       }
-      if (!part) {
+      if (not part) {
         TENZIR_WARN("{} failed to load partition {} that was part of a query",
                     *self, partition_id);
       }
       return part;
     };
     auto partition_actor = acquire(next->partition);
-    if (!partition_actor) {
+    if (not partition_actor) {
       // We need to mark failed partitions as completed to avoid clients going
       // out of sync.
       immediate_completion(*next);
@@ -1092,7 +1094,7 @@ index(index_actor::stateful_pointer<index_state> self,
     = max_concurrent_partition_lookups;
   self->state().store_actor_plugin
     = plugins::find<store_actor_plugin>(store_backend);
-  if (!self->state().store_actor_plugin) {
+  if (not self->state().store_actor_plugin) {
     auto error = caf::make_error(ec::invalid_configuration,
                                  fmt::format("could not find "
                                              "store plugin '{}'",
@@ -1174,7 +1176,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // Query handling
       auto sender = self->current_sender();
       // Sanity check.
-      if (!sender) {
+      if (not sender) {
         TENZIR_WARN("{} ignores an anonymous query", *self);
         return caf::sec::invalid_argument;
       }
@@ -1186,7 +1188,7 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       // If we're not yet ready to start, we delay the query until further
       // notice.
-      if (!self->state().accept_queries) {
+      if (not self->state().accept_queries) {
         TENZIR_VERBOSE("{} delays query {} because it is still starting up",
                        *self, query_context);
         auto rp = self->make_response_promise<query_cursor>();
@@ -1211,7 +1213,7 @@ index(index_actor::stateful_pointer<index_state> self,
           auto it = self->state().monitored_queries.find(source);
           TENZIR_ASSERT(it != self->state().monitored_queries.end());
           const auto& [_, ids] = *it;
-          if (!ids.empty()) {
+          if (not ids.empty()) {
             // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing
             // views as lvalues is disallowed" when not formating the join view
             // separately.
@@ -1345,10 +1347,10 @@ index(index_actor::stateful_pointer<index_state> self,
       auto rp = self->make_response_promise<atom::done>();
       auto path = self->state().partition_path(partition_id);
       auto synopsis_path = self->state().partition_synopsis_path(partition_id);
-      if (!self->state().persisted_partitions.contains(partition_id)) {
+      if (not self->state().persisted_partitions.contains(partition_id)) {
         std::error_code err{};
         const auto file_exists = std::filesystem::exists(path, err);
-        if (!file_exists) {
+        if (not file_exists) {
           rp.deliver(caf::make_error(
             ec::logic_error, fmt::format("unknown partition for path {}: {}",
                                          path, err.message())));
@@ -1425,7 +1427,8 @@ index(index_actor::stateful_pointer<index_state> self,
                                *self, partition_id);
                   using flatbuffers::uoffset_t;
                   using flatbuffers::soffset_t;
-                  if (!chunk || chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
+                  if (not chunk
+                      or chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
                     erase_dense_index_file();
                     rp.deliver(caf::make_error( //
                       ec::filesystem_error,
@@ -1682,7 +1685,7 @@ index(index_actor::stateful_pointer<index_state> self,
                       // Delete input partitions if necessary.
                       [=, apsv = std::move(apsv)](atom::done) mutable {
                         if (keep == keep_original_partition::yes) {
-                          if (!apsv.empty()) {
+                          if (not apsv.empty()) {
                             self->mail(atom::merge_v, apsv)
                               .request(self->state().catalog, caf::infinite)
                               .then(

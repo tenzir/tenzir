@@ -3,6 +3,7 @@ Checks: >
   *,
   -abseil-*,
   -altera-*,
+  -boost-*,
   -bugprone-lambda-function-name,
   -bugprone-easily-swappable-parameters,
   -bugprone-switch-missing-default-case,

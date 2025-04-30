@@ -35,6 +35,7 @@
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
 
+#include <ranges>
 #include <string_view>
 
 namespace tenzir {
@@ -51,47 +52,45 @@ auto catalog_lookup_result::empty() const noexcept -> bool {
   return candidate_infos.empty();
 }
 
-auto catalog_state::initialize(
-  std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>> ps)
+auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
   -> caf::result<atom::ok> {
   auto unsupported_partitions = std::vector<uuid>{};
-  for (const auto& [uuid, synopsis] : *ps) {
+  for (const auto& [uuid, synopsis] : partitions) {
     auto supported = version::support_for_partition_version(synopsis->version);
     if (supported.end_of_life) {
       unsupported_partitions.push_back(uuid);
     }
   }
-  if (!unsupported_partitions.empty()) {
+  if (not unsupported_partitions.empty()) {
     return caf::make_error(
       ec::version_error,
       fmt::format("{} cannot load unsupported partitions; please run "
-                  "'tenzir "
-                  "rebuild' with at least {} to rebuild the following "
-                  "partitions, or delete them from the database directory: "
-                  "{}",
+                  "'tenzir-ctl rebuild' with at least {} to rebuild the "
+                  "following partitions, or delete them from the database "
+                  "directory: {}",
                   *self,
                   version::support_for_partition_version(
                     version::current_partition_version)
                     .introduced,
                   fmt::join(unsupported_partitions, ", ")));
   }
-  auto flat_data_map = std::unordered_map<
-    tenzir::type, std::vector<std::pair<uuid, partition_synopsis_ptr>>>{};
-  for (auto& [uuid, synopsis] : *ps) {
+  using flat_data_list = std::vector<std::pair<uuid, partition_synopsis_ptr>>;
+  auto flat_data_map = std::unordered_map<tenzir::type, flat_data_list>{};
+  for (auto& [uuid, synopsis] : partitions) {
     TENZIR_ASSERT(synopsis->get_reference_count() == 1ull);
     update_unprunable_fields(*synopsis);
     flat_data_map[synopsis->schema].emplace_back(uuid, std::move(synopsis));
   }
   for (auto& [type, flat_data] : flat_data_map) {
-    std::sort(flat_data.begin(), flat_data.end(),
-              [](const std::pair<uuid, partition_synopsis_ptr>& lhs,
-                 const std::pair<uuid, partition_synopsis_ptr>& rhs) {
-                return lhs.first < rhs.first;
-              });
+    std::ranges::sort(flat_data, std::ranges::less{},
+                      &flat_data_list::value_type::first);
     synopses_per_type[type]
       = decltype(synopses_per_type)::value_type::second_type::make_unsafe(
         std::move(flat_data));
   }
+  TENZIR_ASSERT(cache);
+  cache->unstash();
+  cache.reset();
   return atom::ok_v;
 }
 
@@ -172,7 +171,7 @@ auto catalog_state::lookup(expression expr) const
 auto catalog_state::lookup_impl(const expression& expr,
                                 const type& schema) const
   -> catalog_lookup_result::candidate_info {
-  TENZIR_ASSERT(!is<caf::none_t>(expr));
+  TENZIR_ASSERT(not is<caf::none_t>(expr));
   auto synopsis_map_per_type_it = synopses_per_type.find(schema);
   TENZIR_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
   const auto& partition_synopses = synopsis_map_per_type_it->second;
@@ -184,8 +183,8 @@ auto catalog_state::lookup_impl(const expression& expr,
   // no separate sorting step is required.
   auto memoized_partitions = catalog_lookup_result::candidate_info{};
   auto all_partitions = [&] {
-    if (!memoized_partitions.partition_infos.empty()
-        || partition_synopses.empty()) {
+    if (not memoized_partitions.partition_infos.empty()
+        or partition_synopses.empty()) {
       return memoized_partitions;
     }
     for (const auto& [partition_id, synopsis] : partition_synopses) {
@@ -195,10 +194,10 @@ auto catalog_state::lookup_impl(const expression& expr,
   };
   auto f = detail::overload{
     [&](const conjunction& x) -> catalog_lookup_result::candidate_info {
-      TENZIR_ASSERT(!x.empty());
+      TENZIR_ASSERT(not x.empty());
       auto i = x.begin();
       auto result = lookup_impl(*i, schema);
-      if (!result.partition_infos.empty()) {
+      if (not result.partition_infos.empty()) {
         for (++i; i != x.end(); ++i) {
           // TODO: A conjunction means that we can restrict the lookup to the
           // remaining candidates. This could be achived by passing the `result`
@@ -265,7 +264,7 @@ auto catalog_state::lookup_impl(const expression& expr,
               // fields that don't have their own synopsis.
               if (syn) {
                 auto opt = syn->lookup(x.op, make_view(rhs));
-                if (!opt || *opt) {
+                if (not opt or *opt) {
                   TENZIR_TRACE("{} selects {} at predicate {}",
                                detail::pretty_type_name(this), part_id, x);
                   result.partition_infos.emplace_back(part_id, *part_syn);
@@ -276,7 +275,7 @@ auto catalog_state::lookup_impl(const expression& expr,
               } else if (auto it = part_syn->type_synopses_.find(cleaned_type);
                          it != part_syn->type_synopses_.end() && it->second) {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
-                if (!opt || *opt) {
+                if (not opt or *opt) {
                   TENZIR_TRACE("{} selects {} at predicate {}",
                                detail::pretty_type_name(this), part_id, x);
                   result.partition_infos.emplace_back(part_id, *part_syn);
@@ -349,7 +348,7 @@ auto catalog_state::lookup_impl(const expression& expr,
                   part_syn->max_import_time,
                 };
                 auto add = ts.lookup(x.op, as<tenzir::time>(d));
-                if (!add || *add) {
+                if (not add or *add) {
                   result.partition_infos.emplace_back(part_id, *part_syn);
                 }
               }
@@ -405,10 +404,10 @@ auto catalog_state::lookup_impl(const expression& expr,
               return key.substr(0, pos - 1) == schema_name.substr(fpos)
                      && (fpos == 0 || schema_name[fpos - 1] == '.');
             };
-            if (!match_name()) {
+            if (not match_name()) {
               return false;
             }
-            TENZIR_ASSERT(!field.is_standalone_type());
+            TENZIR_ASSERT(not field.is_standalone_type());
             return compatible(field.type(), x.op, d);
           };
           return search(pred);
@@ -416,7 +415,7 @@ auto catalog_state::lookup_impl(const expression& expr,
         [&](const type_extractor& lhs,
             const data& d) -> catalog_lookup_result::candidate_info {
           auto result = [&] {
-            if (!lhs.type) {
+            if (not lhs.type) {
               auto pred = [&](auto& field) {
                 const auto& type = field.type();
                 return type.name() == lhs.type.name()
@@ -442,7 +441,7 @@ auto catalog_state::lookup_impl(const expression& expr,
     [&](caf::none_t) -> catalog_lookup_result::candidate_info {
       TENZIR_ERROR("{} received an empty expression",
                    detail::pretty_type_name(this));
-      TENZIR_ASSERT(!"invalid expression");
+      TENZIR_ASSERT(false, "invalid expression");
       return all_partitions();
     },
   };
@@ -487,17 +486,24 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
   }
   self->state().self = self;
   self->state().taxonomies.concepts = modules::concepts();
+  self->state().cache.emplace();
   return {
-    [self](
-      atom::merge,
-      std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps) {
-      return self->state().initialize(std::move(ps));
+    [self](atom::start, std::vector<partition_synopsis_pair>& partitions)
+      -> caf::result<atom::ok> {
+      return self->state().initialize(std::move(partitions));
     },
-    [self](atom::merge,
-           std::vector<partition_synopsis_pair>& partition_synopses) {
-      return self->state().merge(std::move(partition_synopses));
+    [self](atom::merge, std::vector<partition_synopsis_pair>& partitions)
+      -> caf::result<atom::ok> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::merge_v,
+                                          std::move(partitions));
+      }
+      return self->state().merge(std::move(partitions));
     },
-    [self](atom::get) -> std::vector<partition_synopsis_pair> {
+    [self](atom::get) -> caf::result<std::vector<partition_synopsis_pair>> {
+      // if (self->state().mail_cache) {
+      //   return self->state().stash<std::vector<partition_synopsis_pair>>();
+      // }
       std::vector<partition_synopsis_pair> result;
       result.reserve(self->state().synopses_per_type.size());
       for (const auto& [type, id_synopsis_map] :
@@ -510,6 +516,9 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
     },
     [self](atom::get, const expression& filter)
       -> caf::result<std::vector<partition_synopsis_pair>> {
+      // if (self->state().mail_cache) {
+      //   return self->state().stash<std::vector<partition_synopsis_pair>>();
+      // }
       auto result = std::vector<partition_synopsis_pair>{};
       const auto candidates = self->state().lookup(filter);
       if (not candidates) {
@@ -531,23 +540,37 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
       }
       return result;
     },
-    [self](atom::erase, uuid partition) {
+    [self](atom::erase, uuid partition) -> caf::result<atom::ok> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::erase_v, partition);
+      }
       self->state().erase(partition);
       return atom::ok_v;
     },
     [self](atom::replace, const std::vector<uuid>& old_uuids,
-           std::vector<partition_synopsis_pair>& new_synopses) {
+           std::vector<partition_synopsis_pair>& new_synopses)
+      -> caf::result<atom::ok> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::replace_v, old_uuids,
+                                          std::move(new_synopses));
+      }
       for (auto const& uuid : old_uuids) {
         self->state().erase(uuid);
       }
       return self->state().merge(std::move(new_synopses));
     },
-    [self](atom::candidates, const tenzir::query_context& query_context)
+    [self](atom::candidates, tenzir::query_context query_context)
       -> caf::result<catalog_lookup_result> {
-      TENZIR_TRACE("{} {}", *self, TENZIR_ARG(query_context));
-      return self->state().lookup(query_context.expr);
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::candidates_v,
+                                          std::move(query_context));
+      }
+      return self->state().lookup(std::move(query_context.expr));
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::get_v, uuid);
+      }
       for (const auto& [type, synopses] : self->state().synopses_per_type) {
         if (auto it = synopses.find(uuid); it != synopses.end()) {
           return partition_info{uuid, *it->second};
