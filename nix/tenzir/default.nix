@@ -19,6 +19,7 @@
     arrow-adbc-cpp,
     aws-sdk-cpp-tenzir,
     azure-sdk-for-cpp,
+    libbacktrace,
     clickhouse-cpp,
     fast-float,
     flatbuffers,
@@ -127,6 +128,7 @@
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           aws-sdk-cpp-tenzir
+          libbacktrace
           clickhouse-cpp
           fast-float
           fluent-bit

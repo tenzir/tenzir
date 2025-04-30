@@ -4,7 +4,7 @@ sidebar_position: 0
 
 # Build from source
 
-Tenzir uses [CMake](https://cmake.org) as build system. Aside from a modern C++20
+Tenzir uses [CMake](https://cmake.org) as build system. Aside from a modern C++23
 compiler, you need to ensure availability of the dependencies in the table
 below.
 
@@ -28,21 +28,22 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 
 |Required|Dependency|Version|Description|
 |:-:|:-|:-|-|
-|✓|C++ Compiler|C++20 required|Tenzir is tested to compile with GCC >= 12.0 and Clang >= 15.0.|
-|✓|[CMake](https://cmake.org)|>= 3.25|Cross-platform tool for building, testing and packaging software.|
-|✓|[CAF](https://github.com/actor-framework/actor-framework)|>= 0.18.7|Implementation of the actor model in C++. (Bundled as submodule.)|
+|✓|C++ Compiler|C++23 required|Tenzir is tested to compile with GCC >= 14.0 and Clang >= 19.0.|
+|✓|[CMake](https://cmake.org)|>= 3.30|Cross-platform tool for building, testing and packaging software.|
+|✓|[CAF](https://github.com/actor-framework/actor-framework)|>= 1.0.2|Implementation of the actor model in C++. (Bundled as submodule.)|
 |✓|[OpenSSL](https://www.openssl.org)||Utilities for secure networking and cryptography.|
 |✓|[FlatBuffers](https://google.github.io/flatbuffers/)|>= 2.0.8|Memory-efficient cross-platform serialization library.|
-|✓|[Boost](https://www.boost.org)|>= 1.81.0|Required as a general utility library.|
+|✓|[Boost](https://www.boost.org)|>= 1.83.0|Required as a general utility library.|
 |✓|[Apache Arrow](https://arrow.apache.org)|>= 13.0.0|Required for in-memory data representation. Must be built with Compute, Filesystem, S3, Zstd and Parquet enabled. For the `gcs` plugin, GCS needs to be enabled. |
 |✓|[re2](https://github.com/google/re2)||Required for regular expressione evaluation.|
 |✓|[yaml-cpp](https://github.com/jbeder/yaml-cpp)|>= 0.6.2|Required for reading YAML configuration files.|
-|✓|[simdjson](https://github.com/simdjson/simdjson)|>= 3.1.0|Required for high-performance JSON parsing. (Bundled as submodule.)|
+|✓|[simdjson](https://github.com/simdjson/simdjson)|>= 3.10.0|Required for high-performance JSON parsing. (Bundled as submodule.)|
 |✓|[spdlog](https://github.com/gabime/spdlog)|>= 1.5|Required for logging.|
-|✓|[fmt](https://fmt.dev)|>= 8.1.1|Required for formatted text output.|
+|✓|[fmt](https://fmt.dev)|>= 9.1.1|Required for formatted text output.|
 |✓|[xxHash](https://github.com/Cyan4973/xxHash)|>= 0.8.0|Required for computing fast hash digests.|
 |✓|[robin-map](https://github.com/Tessil/robin-map)|>= 0.6.3|Fast hash map and hash set using robin hood hashing. (Bundled as subtree.)|
 |✓|[fast_float](https://github.com/FastFloat/fast_float)|>= 3.2.0|Required for parsing floating point numbers. (Bundled as submodule.)|
+|✓|[libbacktrace](https://github.com/ianlancetaylor/libbacktrace)|>= 1.0|Required for generating stack traces. (Only on Linux.)|
 |✓|[libmaxminddb](https://github.com/maxmind/libmaxminddb)|>= 1.8.0|Required for the `geoip` context.|
 |✓|[lz4](https://lz4.org/)||Required as a core utility.|
 |✓|[zstd](http://www.zstd.net/)||Required as a core utility.|
@@ -67,11 +68,11 @@ The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
 
 :::tip macOS
-On macOS, we recommend using Clang from the Homebrew `llvm@17` package with the
+On macOS, we recommend using Clang from the Homebrew `llvm@20` package with the
 following settings:
 
 ```bash
-export LLVM_PREFIX="$(brew --prefix llvm@17)"
+export LLVM_PREFIX="$(brew --prefix llvm@20)"
 export PATH="${LLVM_PREFIX}/bin:${PATH}"
 export CC="${LLVM_PREFIX}/bin/clang"
 export CXX="${LLVM_PREFIX}/bin/clang++"

@@ -230,7 +230,8 @@ dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
 
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(yaml-cpp 0.6.2 REQUIRED)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(yaml-cpp 0.6.2 REQUIRED)")
 if (yaml-cpp_VERSION VERSION_GREATER_EQUAL 0.8)
   target_link_libraries(libtenzir PRIVATE yaml-cpp::yaml-cpp)
   target_link_libraries(libtenzir_builtins PRIVATE yaml-cpp::yaml-cpp)
@@ -347,12 +348,12 @@ if (NOT simdjson_FOUND)
   TenzirSystemizeTarget(simdjson)
   add_dependencies(simdjson simdjson-targets-link)
   dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
-  "Dependencies")
-  endif ()
-  target_link_libraries(libtenzir PUBLIC simdjson::simdjson)
-  string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
+                     "Dependencies")
+endif ()
+target_link_libraries(libtenzir PUBLIC simdjson::simdjson)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
 
-  # Link against robin-map.
+# Link against robin-map.
 target_link_libraries(libtenzir PUBLIC tsl::robin_map)
 # This is broken for the bundled robin-map, so we special-case it above.
 # dependency_summary("robin-map" tsl::robin_map "Dependencies")
@@ -367,15 +368,15 @@ target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
-target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem Boost::url)
+target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem
+                                       Boost::url)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
        "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url)")
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
 target_link_libraries(libtenzir PUBLIC re2::re2)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-  "\nfind_package(re2 REQUIRED)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
 
 # Link against fast_float
@@ -430,18 +431,28 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   target_link_libraries(libtenzir PRIVATE pfs)
 endif ()
 
-# Link against a boost backtrace
-find_package(Boost REQUIRED COMPONENTS stacktrace_basic)
-dependency_summary("Boost" Boost::stacktrace_basic "Dependencies")
-find_package(Boost COMPONENTS stacktrace_backtrace)
-if (${Boost_STACKTRACE_BACKTRACE_FOUND})
-  dependency_summary("Boost" Boost::stacktrace_backtrace "Dependencies")
-  target_link_libraries(libtenzir PRIVATE ${Boost_STACKTRACE_BACKTRACE_LIBRARY} backtrace dl)
-  target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
+if (LINUX)
+  find_package(Boost COMPONENTS stacktrace_backtrace)
+  # Use a compiled stacktrace_backtrace if available, otherwise use header only
+  # mode.
+  if (TARGET Boost::stacktrace_backtrace)
+    target_link_libraries(libtenzir PRIVATE Boost::stacktrace_backtrace dl)
+    target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
+  else ()
+    find_path(libbacktrace_INCLUDE_DIR NAMES backtrace.h)
+    find_library(libbacktrace_LIBRARY NAMES backtrace)
+    target_include_directories(libtenzir PRIVATE "${libbacktrace_INCLUDE_DIR}")
+    target_link_libraries(libtenzir PRIVATE "${libbacktrace_LIBRARY}" dl)
+    target_compile_definitions(libtenzir
+                               PRIVATE BOOST_STACKTRACE_USE_BACKTRACE=1)
+  endif ()
 else ()
-  target_link_libraries(libtenzir PRIVATE ${Boost_STACKTRACE_BASIC_LIBRARY} dl)
+  find_package(Boost COMPONENTS stacktrace_basic)
+  target_link_libraries(libtenzir PRIVATE Boost::stacktrace_basic dl)
+  target_compile_definitions(libtenzir PRIVATE BOOST_STACKTRACE_LINK=1)
 endif ()
-target_compile_definitions(libtenzir PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
+target_compile_definitions(libtenzir
+                           PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1)
 
 # Configure options-dependent code files.
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
@@ -519,7 +530,8 @@ endif ()
 # install the static libtenzir_builtins archive for development targets because
 # the plugin unit test binaries need to be able to link against it.
 install(
-  TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson} ${_tenzir_bundled_pfs}
+  TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
+          ${_tenzir_bundled_pfs}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${TENZIR_INSTALL_ARCHIVEDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
