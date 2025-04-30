@@ -43,6 +43,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 |✓|[xxHash](https://github.com/Cyan4973/xxHash)|>= 0.8.0|Required for computing fast hash digests.|
 |✓|[robin-map](https://github.com/Tessil/robin-map)|>= 0.6.3|Fast hash map and hash set using robin hood hashing. (Bundled as subtree.)|
 |✓|[fast_float](https://github.com/FastFloat/fast_float)|>= 3.2.0|Required for parsing floating point numbers. (Bundled as submodule.)|
+|✓|[libbacktrace](https://github.com/ianlancetaylor/libbacktrace)|>= 1.0|Required for generating stack traces. (Only on Linux.)|
 |✓|[libmaxminddb](https://github.com/maxmind/libmaxminddb)|>= 1.8.0|Required for the `geoip` context.|
 |✓|[lz4](https://lz4.org/)||Required as a core utility.|
 |✓|[zstd](http://www.zstd.net/)||Required as a core utility.|
