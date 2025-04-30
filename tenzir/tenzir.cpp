@@ -370,7 +370,7 @@ auto main(int argc, char** argv) -> int try {
     if (not string.empty() and string.back() == '\n') {
       string.pop_back();
     }
-    TENZIR_ERROR(string);
+    fmt::println(stderr, "{}", string);
   }
   return EXIT_FAILURE;
 }
