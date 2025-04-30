@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-: "${GOOGLE_CLOUD_CPP_TAG=v2.30.0}"
+: "${GOOGLE_CLOUD_CPP_TAG=v2.36.0}"
 : "${GOOGLE_CLOUD_CPP_VERSION=$(printf '%s' "$GOOGLE_CLOUD_CPP_TAG" | sed 's@[^0-9]*\(.*\)@\1@')}"
 
 CMAKE_INSTALL_PREFIX=/usr/local
@@ -38,6 +38,7 @@ pushd "${SOURCE_BASE}"
 git clone --depth 1 --shallow-submodules --recurse-submodules  https://github.com/google/crc32c
 pushd crc32c
 cmake -B build -S . \
+  -DBUILD_SHARED_LIBS=ON \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
   -DCRC32C_BUILD_TESTS=OFF \
@@ -70,10 +71,11 @@ pushd "${SOURCE_TREE}"
 
 curl -L "https://github.com/googleapis/google-cloud-cpp/archive/refs/tags/${GOOGLE_CLOUD_CPP_TAG}.tar.gz" | tar -xz --strip-components=1
 cmake -B build -S . \
+  -DBUILD_SHARED_LIBS=ON \
+  -DBUILD_TESTING=OFF \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
-  -DBUILD_TESTING=OFF \
-  -DGOOGLE_CLOUD_CPP_ENABLE="storage;pubsub" \
+  -DGOOGLE_CLOUD_CPP_ENABLE="storage;pubsub;logging" \
   -DGOOGLE_CLOUD_CPP_ENABLE_EXAMPLES=OFF \
   -DGOOGLE_CLOUD_CPP_WITH_MOCKS=OFF \
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
