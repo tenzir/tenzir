@@ -20,13 +20,13 @@ namespace {
 class from_string final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "secret::from_string";
+    return "secret::_from_string";
   }
 
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("secret::from_string")
+    TRY(argument_parser2::function(name())
           .positional("value", expr, "string")
           .parse(inv, ctx));
     return function_use::make(
@@ -72,7 +72,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("secret")
+    TRY(argument_parser2::function(name())
           .positional("name", expr, "string")
           .parse(inv, ctx));
     return function_use::make(
