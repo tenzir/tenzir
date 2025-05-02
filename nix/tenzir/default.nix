@@ -4,7 +4,6 @@
     lib,
     stdenv,
     callPackage,
-    pname,
     tenzir-source,
     cmake,
     ninja,
@@ -98,7 +97,8 @@
         ]);
   in
     stdenv.mkDerivation (finalAttrs: ({
-        inherit pname version;
+        inherit version;
+        pname = "tenzir";
         src = tenzir-source;
 
         postUnpack = ''
@@ -177,7 +177,6 @@
           [
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
             "-DCAF_ROOT_DIR=${caf}"
-            "-DTENZIR_EDITION_NAME=${lib.toUpper pname}"
             "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=ON"
             "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
             "-DTENZIR_ENABLE_MANPAGES=OFF"

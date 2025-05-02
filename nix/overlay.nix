@@ -309,14 +309,12 @@ in {
   unchecked = {
     tenzir-de = final.callPackage ./tenzir {
       inherit stdenv;
-      pname = "tenzir-de";
       isReleaseBuild = inputs.isReleaseBuild.value;
     };
     # Policy: The suffix-less `tenzir' packages come with a few closed source
     # plugins.
     tenzir = let
       pkg = final.unchecked.tenzir-de.override {
-        pname = "tenzir";
       };
     in
       pkg.withPlugins (ps: [
