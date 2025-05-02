@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 
@@ -98,6 +99,8 @@ public:
   auto end() const -> iterator {
     return iterator{&array_, index_, array_.num_fields()};
   }
+
+  auto field(std::string_view name) -> std::optional<data_view3>;
 
 private:
   record_view3(const arrow::StructArray& array, int64_t index)
@@ -213,6 +216,17 @@ inline auto record_view3::iterator::operator*() const
     array->type()->field(field)->name(),
     view_at(*array->field(field), index),
   };
+}
+
+inline auto record_view3::field(std::string_view name)
+  -> std::optional<data_view3> {
+  for (auto [index, field] :
+       detail::enumerate<int>(array_.struct_type()->fields())) {
+    if (field->name() == name) {
+      return view_at(*array_.field(index), index_);
+    }
+  }
+  return {};
 }
 
 template <std::same_as<arrow::Array> T>
