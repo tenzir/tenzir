@@ -3,6 +3,8 @@
 Secrets are accepted by operators for parameters that may be sensitive,
 such as authentication tokens, passwords or even URLs.
 
+## Usage in TQL
+
 There is two ways to pass an argument to a parameter that expects a secret:
 
 - By providing a plain `string` ([Ad-hod Secret](#ad-hoc-secrets)):
@@ -26,22 +28,32 @@ secrets where appropriate.
 
 ## The `secret` type
 
-Secrets are a special type in Tenzir's type system. They practically none of
-operations you can perform on other values in Tenzir and can effectively only be
-passed to operators.
+Secrets are a special type in Tenzir's type system. The `secret` type only supports
+a limited set of operations, all of which yield `secret`.
 
-This means that you can **not** do operations like `secret("my-secret") + "added text"`.
+### Encoding & Decoding
 
-:::info Secrets are UTF-8
-All secrets are UTF-8 unless you use the `decode_base64` function.
-:::
-
-The only operation you can perform on a secret is to `decode_base64` it, which
-can be done at most once on a secret:
+Secrets can be Base64-decoded using the [`decode_base64`](../tql2/functions/decode_base64.md)
+function and Base64-encoded using the [`encode_base64`](../tql2/functions/encode_base64.md)
+function.
 
 ```tql
 secret("my-secret").decode_base64()
 ```
+
+### Concatenation
+
+Secrets can be concatenated with other `secret`s as well as `string`s using the
+`+` operator.
+
+```tql
+auth = "Bearer " + secret("my-secret")
+url = secret("user-name") + ":" + secret("password")
+```
+
+:::info Limited Nesting
+The *result* of a concatenation can no longer be encoded or decoded.
+:::
 
 ## Ad-hoc Secrets
 
@@ -50,8 +62,6 @@ This happens when you provide a `string` to an operator that expects a `secret`.
 
 Providing plain string values can be useful when developing pipelines, if you do
 not want to add the secret to the configuration or a secret store.
-
-<!-- TODO: Do we want this? -->
 
 It is also useful for arguments that are not a secret for all users, such as URLs.
 

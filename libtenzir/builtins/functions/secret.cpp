@@ -13,7 +13,7 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-namespace tenzir::plugins::secret {
+namespace tenzir::plugins::secrets {
 
 namespace {
 
@@ -42,7 +42,7 @@ public:
                   continue;
                 }
                 check(append_builder(secret_type{}, b,
-                                     secret_view{array.GetView(i)}));
+                                     secret::make_literal(array.GetView(i))));
               }
             },
             [&](const arrow::NullArray&) {
@@ -88,8 +88,7 @@ public:
                   continue;
                 }
                 check(append_builder(secret_type{}, b,
-                                     {array.GetView(i),
-                                      secret_source_type::managed}));
+                                     secret::make_managed(array.GetView(i))));
               }
             },
             [&](const auto&) {
@@ -125,7 +124,7 @@ public:
         check(b.Reserve(eval.length()));
         for (int64_t i = 0; i < eval.length(); ++i) {
           check(append_builder(secret_type{}, b,
-                               {name, secret_source_type::managed}));
+                               ::tenzir::secret::make_managed(name)));
         }
         return series{secret_type{}, finish(b)};
       });
@@ -134,8 +133,8 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::secret
+} // namespace tenzir::plugins::secrets
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::secret::from_string)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::secret::lookup)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::secret::secret)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::from_string)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::lookup)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::secret)

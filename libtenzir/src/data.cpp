@@ -98,10 +98,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
                              value_offset.Union());
     },
     [&](const secret& value) -> flatbuffers::Offset<fbs::Data> {
-      const auto value_offset = fbs::data::CreateSecret(
-        builder, builder.CreateString(value.name()),
-        static_cast<detail::secret_enum_underlying_type>(value.source_type()),
-        static_cast<detail::secret_enum_underlying_type>(value.encoding()));
+      const auto elements = builder.CreateVector(
+        value.buffer->elements()->data(), value.buffer->elements()->size());
+      const auto value_offset = fbs::data::CreateSecret(builder, elements);
       return fbs::CreateData(builder, fbs::data::Data::secret,
                              value_offset.Union());
     },
@@ -249,11 +248,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       return caf::none;
     }
     case fbs::data::Data::secret: {
-      const auto& from_as_secret = from.data_as_secret();
-      to.get_data().emplace<secret>(
-        from_as_secret->name()->str(),
-        static_cast<secret_source_type>(from_as_secret->source_type()),
-        static_cast<secret_encoding>(from_as_secret->encoding()));
+      to = secret::from_fb(from.data_as_secret());
       return caf::none;
     }
     case fbs::data::Data::enumeration: {

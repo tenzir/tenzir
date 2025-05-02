@@ -8,83 +8,42 @@
 
 #pragma once
 
-#include "tenzir/detail/enum.hpp"
-#include "tenzir/diagnostics.hpp"
+#include "tenzir/concept/printable/core/printer.hpp"
+#include "tenzir/fbs/data.hpp"
+#include "tenzir/flatbuffer.hpp"
 
 #include <fmt/format.h>
 
-#include <string>
-
 namespace tenzir {
-
-/// @brief, how the secret was created.
-/// * `literal` means that it was a literal in the pipeline
-/// * `managed` means that it should be queried from the platform/created by the
-///    `secret` function
-TENZIR_ENUM(secret_source_type, literal, managed, uninitialized);
-/// @brief which encode/decode operations were done on the value in the pipeline
-/// `This is important for both persistence and the actual value computation.
-TENZIR_ENUM(secret_encoding, none, was_decoded);
 
 class secret;
 class secret_view;
 
-namespace detail {
-
-// The underlying type used for the enums. This exists as a typedef to be able
-// to ensure consistency between the enum, arrow and the flatbuffer
-// representation.
-using secret_enum_underlying_type = std::underlying_type_t<secret_source_type>;
+namespace detail::secrets {
 
 /// The implementation of the secret/secret_view types.
 /// The actual value can be obtained using
 /// `operator_control_plane::resolve_secret_must_yield`.
-template <typename StringType>
+template <typename FlatbufferType>
 class secret_common {
   friend class ::tenzir::secret;
   friend class ::tenzir::secret_view;
 
 public:
-  secret_common() : name_{}, source_type_{secret_source_type::uninitialized} {
-  }
+  secret_common() = default;
 
-  secret_common(StringType value)
-    : name_{std::move(value)}, source_type_{secret_source_type::literal} {
-  }
-
-  secret_common(StringType name_, secret_source_type source_type,
-                secret_encoding encoding = secret_encoding::none)
-    : name_{std::move(name_)}, source_type_{source_type}, encoding_{encoding} {
-  }
-
-  /// The name of the secret, if it was loaded from a manager
-  [[nodiscard]] auto name() const -> std::string_view {
-    return name_;
-  }
-  // The "source type"; how the secret was created.
-  [[nodiscard]] auto source_type() const -> secret_source_type {
-    return source_type_;
-  }
-  /// Whether any encoding operations have been done on the secret. This is only
-  /// meant to be used when recovering a pipeline from a checkpoint, after
-  /// querying the value from the secret manager.
-  [[nodiscard]] auto encoding() const -> secret_encoding {
-    return encoding_;
+  secret_common(FlatbufferType buffer) : buffer{std::move(buffer)} {
   }
 
   auto print_to(auto& it) const -> bool {
-    if (source_type_ == secret_source_type::literal) {
-      it = fmt::format_to(it, "secret::from_string(\"{}\")", name_);
-    } else {
-      it = fmt::format_to(it, "secret(\"{}\")", name_);
-    }
+    it = fmt::format_to(it, "secret()");
     return true;
   }
 
   template <typename T1, typename T2>
   friend auto
   operator<=>(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
-    -> std::strong_ordering;
+    -> std::partial_ordering;
 
   template <typename T1, typename T2>
   friend auto
@@ -92,71 +51,102 @@ public:
     -> bool;
 
   inline friend auto inspect(auto& f, secret_common& x) -> bool {
-    return f.object(x).fields(f.field("name", x.name_),
-                              f.field("source_type", x.source_type_),
-                              f.field("encoding", x.encoding_));
+    return f.object(x).fields(f.field("buffer", x.buffer));
   }
 
-private:
-  StringType name_ = {};
-  secret_source_type source_type_ = secret_source_type::uninitialized;
-  secret_encoding encoding_ = secret_encoding::none;
+  auto bytes() const -> std::span<const std::byte> {
+    return std::span{buffer.chunk()->data(), buffer.chunk()->size()};
+  }
+
+  FlatbufferType buffer;
 };
 
-extern template class secret_common<std::string>;
-extern template class secret_common<std::string_view>;
+using owning_root_fbs_buffer = flatbuffer<fbs::data::Secret>;
+using owning_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
+using viewing_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
 
-template <typename StringType>
-auto to_string(const secret_common<StringType>& v) {
+extern template class secret_common<owning_fbs_buffer>;
+extern template class secret_common<viewing_fbs_buffer>;
+
+template <typename BlobType>
+auto to_string(const secret_common<BlobType>& v) {
   auto s = std::string{};
   auto it = std::back_inserter(s);
-  if (v.source_type() == secret_source_type::managed) {
-    s.reserve(std::size("secret(\"\")") + v.name().size());
-  } else {
-    s.reserve(std::size("secret::from_string(\"\")") + v.name().size());
-  }
   TENZIR_ASSERT(v.print_to(it));
   return s;
 }
 
 template <typename T1, typename T2>
 auto operator<=>(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
-  -> std::strong_ordering {
-  return std::tie(lhs.name_, lhs.source_type_, lhs.encoding_)
-         <=> std::tie(rhs.name_, rhs.source_type_, rhs.encoding_);
+  -> std::partial_ordering {
+  const auto l = lhs.bytes();
+  const auto r = rhs.bytes();
+  if (l.size() != r.size()) {
+    return std::partial_ordering::unordered;
+  }
+  if (std::equal(l.begin(), l.end(), r.begin())) {
+    return std::partial_ordering::equivalent;
+  }
+  return std::partial_ordering::unordered;
 }
 
 template <typename T1, typename T2>
 auto operator==(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
   -> bool {
-  return (lhs <=> rhs) == std::strong_ordering::equal;
+  return (lhs <=> rhs) == std::partial_ordering::equivalent;
 }
 
-} // namespace detail
+/// If we dont manually implement this, we run into some issues with the
+/// recursive `hash_inspector`.
+template <class HashAlgorithm, typename FlatbufferType>
+void hash_append(HashAlgorithm& h, const secret_common<FlatbufferType>& s) {
+  return hash_append(h, s.bytes());
+}
 
-/// @relates detail::secret_common
-class secret final : public detail::secret_common<std::string> {
+} // namespace detail::secrets
+
+/// @relates detail::secret::secret_common
+class secret final
+  : public detail::secrets::secret_common<child_flatbuffer<fbs::data::Secret>> {
 public:
-  using impl = detail::secret_common<std::string>;
+  using impl
+    = detail::secrets::secret_common<child_flatbuffer<fbs::data::Secret>>;
   friend class secret_view;
   using impl::impl;
+
+  secret(std::string_view name, std::string_view operations, bool is_literal);
+
+  static auto make_literal(std::string_view value) -> secret;
+  static auto make_managed(std::string_view value) -> secret;
+  static auto from_fb(const fbs::data::Secret*) -> secret;
 };
 
-/// @relates detail::secret_common
-class secret_view final : public detail::secret_common<std::string_view> {
+/// @relates detail::secret::secret_common
+/// TODO: Currently a `secret_view` is identical to a `secret`, because both use
+/// the owning tenzir::flatbuffer wrapper. We ideally want a non-owning version
+/// of `flatbuffer` that does not hold a `chunk_ptr`, but only the `Table*`.
+class secret_view final
+  : public detail::secrets::secret_common<child_flatbuffer<fbs::data::Secret>> {
 public:
-  using impl = detail::secret_common<std::string_view>;
+  using impl
+    = detail::secrets::secret_common<child_flatbuffer<fbs::data::Secret>>;
   using impl::impl;
-  secret_view(const secret& s) : impl{s.name_, s.source_type_, s.encoding_} {
-  }
+
+  secret_view(const secret& s);
 };
 
 inline auto materialize(secret_view v) -> secret {
-  return secret{
-    std::string{v.name()},
-    v.source_type(),
-    v.encoding(),
-  };
+  return secret{v.buffer};
+}
+
+template <class HashAlgorithm>
+void hash_append(HashAlgorithm& h, const secret& s) {
+  return hash_append(h, static_cast<const secret::impl&>(s));
+}
+
+template <class HashAlgorithm>
+void hash_append(HashAlgorithm& h, const secret_view& s) {
+  return hash_append(h, static_cast<const secret_view::impl&>(s));
 }
 
 template <class T>
@@ -183,15 +173,15 @@ struct printer_registry<secret_view> {
 
 namespace fmt {
 
-template <typename StringType>
-struct formatter<tenzir::detail::secret_common<StringType>> {
+template <typename BlobType>
+struct formatter<tenzir::detail::secrets::secret_common<BlobType>> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
   template <class FormatContext>
-  auto format(const tenzir::detail::secret_common<StringType>& secret,
+  auto format(const tenzir::detail::secrets::secret_common<BlobType>& secret,
               FormatContext& ctx) const {
     auto it = ctx.out();
     secret.print_to(it);

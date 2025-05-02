@@ -31,7 +31,7 @@ The name of the secret to use. This must be a constant.
 load_tcp "127.0.0.1:4000",{
   read_ndjson
 }
-to_splunk secret("splunk_hec_endpoint"), hec_token=secret("splunk_hec_token")
+to_splunk "localhost", hec_token=secret("splunk_hec_token")
 ```
 
 ### Secrets are not rendered in output

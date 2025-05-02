@@ -1076,7 +1076,7 @@ struct cast_helper<string_type, ToType> {
 
   static auto from_str(std::string_view in, const secret_type&)
     -> caf::expected<secret> {
-    return secret{std::string{in}};
+    return secret::make_literal(in);
   }
 
   static auto can_cast(const string_type&, const ToType&) noexcept
@@ -1147,11 +1147,7 @@ struct cast_helper<secret_type, secret_type> {
 
   static auto cast_value(const secret_type&, secret_view value,
                          const secret_type&) -> caf::expected<secret> {
-    return secret{
-      std::string{value.name()},
-      value.source_type(),
-      value.encoding(),
-    };
+    return materialize(value);
   }
 
   static auto cast(const secret_type&,
