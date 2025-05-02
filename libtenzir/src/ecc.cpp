@@ -236,7 +236,7 @@ auto encrypt(std::string_view plaintext, const std::string_view public_key)
 }
 
 auto decrypt(std::string_view base64_ciphertext, const string_keypair& keypair)
-  -> caf::expected<cleansing_string> {
+  -> caf::expected<cleansing_blob> {
   // ciphertext  =   ephemeral_key   | nonce (iv) | tag  | cipherdata
   // bytes                 65        |   16       |  16  |   ..rest
   //
@@ -280,8 +280,8 @@ auto decrypt(std::string_view base64_ciphertext, const string_keypair& keypair)
   auto bytes = public_bytes + shared_bytes;
   TRY(auto shared_secret, hkdf(bytes));
   // Perform AES decryption.
-  auto plaintext = cleansing_string{};
-  plaintext.resize(base64_ciphertext.size(), '\0');
+  auto plaintext = cleansing_blob{};
+  plaintext.resize(base64_ciphertext.size());
   auto len = static_cast<int>(plaintext.size());
   // NB: It's not clear why we need to set up encryption here, but
   // decryption fails without the call.

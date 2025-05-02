@@ -14,13 +14,15 @@
 
 namespace tenzir::ecc {
 
+/// Cleanses memory using `OPENSSL_cleanse`
 void cleanse_memory(void* start, size_t size);
 
+/// C++ Allocator wrapper that cleanses memory on destruction
 template <typename T, typename Backing = std::allocator<T>>
 struct cleansing_allocator : Backing {
-  auto deallocate(T* p, std::size_t n) {
-    cleanse_memory(p, n);
-    return Backing::deallocate(p, n);
+  auto destroy(T* ptr) noexcept(std::is_nothrow_destructible_v<T>) {
+    std::allocator_traits<Backing>::destroy(*this, ptr);
+    cleanse_memory(ptr, sizeof(T));
   }
 };
 
@@ -30,28 +32,36 @@ using cleansing_string
 template <typename T>
 using cleansing_vector = std::vector<T, cleansing_allocator<T>>;
 
-// A pair of functions to perform public-key cryptography.
-//
-// Under the hood they implement the ECIES protocol on the secp256k1 curve,
-// using AES-256-GCM with 16-byte tag and 16-byte nonce as cipher, and 32-byte
-// saltless HDKF for key derivation. This is, not coincidentally, the same
-// scheme that the platform uses for transmitting encrypted secrets.
+using cleansing_blob = cleansing_vector<std::byte>;
+
+/// Functions to perform public-key cryptography.
+///
+/// Under the hood they implement the ECIES protocol on the secp256k1 curve,
+/// using AES-256-GCM with 16-byte tag and 16-byte nonce as cipher, and 32-byte
+/// saltless HDKF for key derivation. This is, not coincidentally, the same
+/// scheme that the platform uses for transmitting encrypted secrets.
 
 // An ECC keypair. Contains public and private key as hex strings.
 struct string_keypair {
-  cleansing_string private_key;
+  std::string private_key;
   std::string public_key;
+
+  ~string_keypair() {
+    cleanse_memory(private_key.data(), private_key.size());
+    cleanse_memory(public_key.data(), public_key.size());
+  }
 };
 
-// Generate a new keypair.
+/// Generate a new keypair.
 auto generate_keypair() -> caf::expected<string_keypair>;
 
-// Encrypt a text with the given public key.
+/// Encrypt a text with the given public key and base64 encode the final result.
 auto encrypt(std::string_view plaintext, std::string_view public_key)
   -> caf::expected<std::string>;
 
-// Decrypt a ciphertext that was encrypted with the public key of `keypair`.
-auto decrypt(std::string_view ciphertext, const string_keypair& keypair)
-  -> caf::expected<cleansing_string>;
+/// Decrypt a ciphertext that was encrypted with the public key of `keypair`.
+/// The ciphertext is first base64 decoded.
+auto decrypt(std::string_view base64_ciphertext, const string_keypair& keypair)
+  -> caf::expected<cleansing_blob>;
 
 } // namespace tenzir::ecc
