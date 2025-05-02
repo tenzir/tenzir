@@ -40,7 +40,7 @@ public:
   }
 
   auto print_to(auto& it) const -> bool {
-    it = fmt::format_to(it, "secret()");
+    it = fmt::format_to(it, "****");
     return true;
   }
 

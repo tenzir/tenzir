@@ -1975,9 +1975,7 @@ void secret_type::arrow_type::register_extension() noexcept {
 
 secret_type::arrow_type::arrow_type() noexcept
   : arrow::ExtensionType(arrow::struct_({
-      arrow::field("name", string_type::to_arrow_type()),
-      arrow::field("source_type", arrow::int32()),
-      arrow::field("encoding", arrow::int32()),
+      arrow::field("buffer", arrow::binary()),
     })) {
   // nop
 }
