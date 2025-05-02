@@ -105,7 +105,7 @@ struct BinOpKernel<ast::binary_op::add, secret_type, secret_type> {
   using result = secret;
   static auto evaluate(secret_view l, secret_view r)
     -> std::variant<result, const char*> {
-    TENZIR_UNIMPLEMENTED();
+    return secret{l.append(r)};
   }
 };
 
@@ -114,7 +114,7 @@ struct BinOpKernel<ast::binary_op::add, string_type, secret_type> {
   using result = secret;
   static auto evaluate(view<std::string> l, secret_view r)
     -> std::variant<result, const char*> {
-    TENZIR_UNIMPLEMENTED();
+    return secret{r.prepend(l)};
   }
 };
 
@@ -123,7 +123,7 @@ struct BinOpKernel<ast::binary_op::add, secret_type, string_type> {
   using result = secret;
   static auto evaluate(secret_view l, view<std::string> r)
     -> std::variant<result, const char*> {
-    TENZIR_UNIMPLEMENTED();
+    return secret{l.append(r)};
   }
 };
 

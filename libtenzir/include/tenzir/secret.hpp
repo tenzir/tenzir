@@ -21,6 +21,10 @@ class secret_view;
 
 namespace detail::secrets {
 
+using owning_root_fbs_buffer = flatbuffer<fbs::data::Secret>;
+using owning_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
+using viewing_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
+
 /// The implementation of the secret/secret_view types.
 /// The actual value can be obtained using
 /// `operator_control_plane::resolve_secret_must_yield`.
@@ -58,12 +62,15 @@ public:
     return std::span{buffer.chunk()->data(), buffer.chunk()->size()};
   }
 
+  auto prepend(std::string_view literal) const
+    -> secret_common<owning_fbs_buffer>;
+  auto append(std::string_view literal) const
+    -> secret_common<owning_fbs_buffer>;
+  auto append(const secret_common<viewing_fbs_buffer>& other) const
+    -> secret_common<owning_fbs_buffer>;
+
   FlatbufferType buffer;
 };
-
-using owning_root_fbs_buffer = flatbuffer<fbs::data::Secret>;
-using owning_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
-using viewing_fbs_buffer = child_flatbuffer<fbs::data::Secret>;
 
 extern template class secret_common<owning_fbs_buffer>;
 extern template class secret_common<viewing_fbs_buffer>;
@@ -114,6 +121,11 @@ public:
   friend class secret_view;
   using impl::impl;
 
+  secret(const impl& base) : impl{base} {
+  }
+  secret(impl&& base) : impl{std::move(base)} {
+  }
+
   secret(std::string_view name, std::string_view operations, bool is_literal);
 
   static auto make_literal(std::string_view value) -> secret;
@@ -132,6 +144,10 @@ public:
     = detail::secrets::secret_common<child_flatbuffer<fbs::data::Secret>>;
   using impl::impl;
 
+  secret_view(const impl& base) : impl{base} {
+  }
+  secret_view(impl&& base) : impl{std::move(base)} {
+  }
   secret_view(const secret& s);
 };
 
