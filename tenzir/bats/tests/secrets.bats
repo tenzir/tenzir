@@ -18,7 +18,13 @@ teardown() {
 }
 
 @test "secret resolution" {
-  check tenzir 'from { } | secret::_testing_operator secret="test_value", expected="test_value"'
+  check tenzir 'secret::_testing_operator secret="test_value", expected="test_value"'
   check tenzir 'secret::_testing_operator secret=secret("test-string"), expected="test_value"'
+  check tenzir 'secret::_testing_operator secret=secret("test-string").encode_base64().decode_base64(), expected="test_value"'
   check tenzir 'secret::_testing_operator secret=secret("test-encoded").decode_base64(), expected="test_value".encode_base64().decode_base64()'
+  check tenzir 'secret::_testing_operator secret=secret::_from_string("a")+"b", expected="ab"'
+  check tenzir 'secret::_testing_operator secret="a"+secret::_from_string("b"), expected="ab"'
+  check tenzir 'secret::_testing_operator secret=secret::_from_string("a")+secret::_from_string("b"), expected="ab"'
+  check tenzir 'secret::_testing_operator secret=secret::_from_string("a")+secret::_from_string("b") + "c", expected="abc"'
+  check tenzir 'secret::_testing_operator secret=secret("test-encoded").decode_base64() + "_extra", expected="test_value_extra"'
 }
