@@ -109,6 +109,51 @@ class SubnetType(pa.ExtensionType):
     def __arrow_ext_scalar_class__(self: "SubnetType") -> type[SubnetScalar]:
         return SubnetScalar
 
+class TenzirSecret :
+    def __init__(self: "TenzirSecret", b: bytes ) :
+        self.__bytes = b
+
+class SecretScalar(pa.ExtensionScalar) :
+    """Adapter for Tenzir secret values. """
+
+    def as_py(self: "SecretScalar") -> Union[TenzirSecret, None] :
+        if self.value is None :
+            return None
+        if self.value[0].as_py() is None :
+            return None
+        return TenzirSecret(self.value[0].as_py())
+
+class SecretType(pa.ExtensionType):
+    ext_name = "tenzir.secret"
+    ext_type = pa.struct([("buffer", pa.binary())])
+
+    def __init__(self: "SecretType") -> None:
+        pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
+
+    def __arrow_ext_serialize__(self: "SecretType") -> bytes:
+        """Explain how to serialize the type metadata."""
+        return self.ext_name.encode()
+
+    @classmethod
+    def __arrow_ext_deserialize__(
+        cls: pa.ExtensionType,
+        storage_type: pa.StructType,
+        serialized: bytes,
+    ) -> "SecretType":
+        if serialized.decode() != cls.ext_name:
+            msg = "type identifier does not match"
+            raise TypeError(msg)
+        if storage_type != cls.ext_type:
+            msg = "storage type does not match"
+            raise TypeError(msg)
+        return SecretType()
+
+    def __reduce__(self: "SecretType") -> tuple[type[SecretScalar], tuple[()]]:
+        return SecretScalar, ()
+
+    def __arrow_ext_scalar_class__(self: "SecretType") -> type[SecretScalar]:
+        return SecretScalar
+
 
 class EnumScalar(pa.ExtensionScalar):
     """Adapter for Tenzir enumeration values."""
@@ -315,6 +360,7 @@ TenzirType = Union[
     datetime,
     bytes,
     None,
+    TenzirSecret,
     dict[str, "TenzirType"],
     list["TenzirType"]
 ]
@@ -400,4 +446,5 @@ def make_record_batch(
 # Modules are intialized exactly once, so we can perform the registration here.
 pa.register_extension_type(IPType())
 pa.register_extension_type(SubnetType())
+pa.register_extension_type(SecretType())
 pa.register_extension_type(EnumType({"stub": 0}))
