@@ -104,11 +104,9 @@ append_builder(const secret_type&,
                type_to_arrow_builder_t<secret_type>& builder,
                const view<type_to_data_t<secret_type>>& view) noexcept {
   TRY(builder.Append());
-  TRY(builder.name_builder().Append(view.name()));
-  TRY(builder.source_type_builder().Append(
-    static_cast<detail::secret_enum_underlying_type>(view.source_type())));
-  TRY(builder.encoding_builder().Append(
-    static_cast<detail::secret_enum_underlying_type>(view.encoding())));
+  TRY(builder.buffer_builder().Append(
+    reinterpret_cast<const char*>(view.buffer.chunk()->data()),
+    view.buffer.chunk()->size()));
   return arrow::Status::OK();
 }
 

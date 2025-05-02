@@ -120,7 +120,7 @@ auto argument_parser2::parse(const ast::entity& self,
           if (not cast) {
             auto* other = try_as<std::string>(&*value);
             if (other) {
-              value = secret{std::move(*other)};
+              value = secret::make_literal(*other);
               cast = try_as<secret>(&*value);
             }
           }
@@ -233,7 +233,7 @@ auto argument_parser2::parse(const ast::entity& self,
               if (not cast) {
                 auto* other = try_as<std::string>(&*value);
                 if (other) {
-                  value = secret{std::move(*other)};
+                  value = secret::make_literal(*other);
                   cast = try_as<secret>(&*value);
                 }
               }

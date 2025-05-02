@@ -7,74 +7,68 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/ecc.hpp"
-#include "tenzir/variant.hpp"
+#include "tenzir/location.hpp"
+#include "tenzir/secret.hpp"
 
-#include <string>
+#include <optional>
+#include <span>
+#include <string_view>
 
 #pragma once
 
 namespace tenzir {
 
-struct secret_resolution_error {
-  std::string message;
-
-  secret_resolution_error() = default;
-
-  secret_resolution_error(std::string message) : message{std::move(message)} {
-  }
-
-  secret_resolution_error(caf::error err) : message{err.what()} {
-  }
-
-  friend auto inspect(auto& f, secret_resolution_error& x) {
-    return f.apply(x.message);
-  }
-};
-
-struct encrypted_secret_value {
-  std::string value;
-
-  friend auto inspect(auto& f, encrypted_secret_value& x) {
-    return f.apply(x.value);
-  }
-};
-
-struct secret_resolution_result
-  : variant<encrypted_secret_value, secret_resolution_error> {
-  using super = variant<encrypted_secret_value, secret_resolution_error>;
-  using super::super;
-};
-
+/// @relates `operator_control_plane::resolve_secrets_must_yield`
 class resolved_secret_value {
 public:
   resolved_secret_value() = default;
 
-  explicit resolved_secret_value(const ecc::cleansing_string& value)
-    : value_{value} {
-  }
-  explicit resolved_secret_value(const ecc::cleansing_vector<std::byte>& value)
-    : value_{value} {
+  explicit resolved_secret_value(ecc::cleansing_blob value)
+    : value_{std::move(value)} {
   }
 
   resolved_secret_value(const resolved_secret_value&) = delete;
 
-  ~resolved_secret_value() {
-    clear();
-  }
+  /// @brief Returns a string view over the secrets UTF-8 value,if it is valid
+  /// UTF-8.
+  auto utf8_view() const -> std::optional<std::string_view>;
 
-  const auto& value() const {
+  /// Returns a view over the secrets bytes raw bytes.
+  auto blob() const -> std::span<const std::byte> {
     return value_;
   }
 
   /// @brief Clears the secret value and scrubs the memory. This should be
   /// called on any `resolved_secret_value` objects that remain alive, but are
   /// no longer used.
-  auto clear() -> void;
+  auto clear() {
+    value_.clear();
+    value_.shrink_to_fit();
+  }
 
+  /// A `resolved_secret_value` contains a plain text secret. It must not be
+  /// serialized.
   friend auto inspect(auto&, resolved_secret_value&) = delete;
 
 private:
-  variant<ecc::cleansing_string, ecc::cleansing_vector<std::byte>> value_;
+  ecc::cleansing_blob value_;
+};
+
+/// @relates `operator_control_plane::resolve_secrets_must_yield`
+struct secret_request {
+  tenzir::secret secret;
+  resolved_secret_value& out;
+  location loc = location::unknown;
+
+  secret_request(tenzir::secret secret, resolved_secret_value& out,
+                 location loc)
+    : secret{std::move(secret)}, out{out}, loc{loc} {
+  }
+
+  secret_request(const located<tenzir::secret>& secret,
+                 resolved_secret_value& out)
+    : secret{secret.inner}, out{out}, loc{secret.source} {
+  }
 };
 
 } // namespace tenzir

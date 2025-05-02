@@ -22,6 +22,7 @@
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/secret_resolution.hpp"
+#include "tenzir/secret_store.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -212,46 +213,124 @@ struct exec_node_control_plane final : public operator_control_plane {
     }
   }
 
+  struct located_resolved_secret {
+    ecc::cleansing_blob value;
+    location loc;
+
+    located_resolved_secret(location loc) : loc{loc} {
+    }
+  };
+
+  using request_map_t
+    = std::unordered_map<std::string, located_resolved_secret>;
+
+  struct secret_finisher {
+    class secret secret;
+    resolved_secret_value& out;
+    location loc;
+
+    void finish(const request_map_t& requested, diagnostic_handler& dh) const {
+      TENZIR_UNUSED(dh);
+      auto res = ecc::cleansing_blob{};
+      auto temp_blob = ecc::cleansing_blob{};
+      // For every element in the original secret
+      for (const auto& e : *secret.buffer->elements()) {
+        const auto name = e->name()->string_view();
+        const auto ops = e->operations()->string_view();
+        const auto is_literal = e->is_literal();
+        if (is_literal) {
+          // If it is a literal secret, we copy its name into a temporary blob.
+          temp_blob.assign(
+            reinterpret_cast<const std::byte*>(name.data()),
+            reinterpret_cast<const std::byte*>(name.data() + name.size()));
+        } else {
+          // If it is managed, get the value from the requested ones.
+          // Inside of this finisher, we know that all requests gave back values.
+          const auto it = requested.find(std::string{name});
+          TENZIR_ASSERT(it != requested.end());
+          temp_blob = it->second.value;
+        }
+        // Now we perform all operations for this secret element
+        if (not ops.empty()) {
+          for (const auto& op : detail::split(ops, ";")) {
+            if (op == "decode_base64") {
+              auto decoded = detail::base64::decode(std::string_view{
+                reinterpret_cast<const char*>(temp_blob.data()),
+                reinterpret_cast<const char*>(temp_blob.data()
+                                              + temp_blob.size()),
+              });
+              temp_blob.assign(
+                reinterpret_cast<const std::byte*>(decoded.data()),
+                reinterpret_cast<const std::byte*>(decoded.data()
+                                                   + decoded.size()));
+              continue;
+            }
+            if (op == "encode_base64") {
+              auto decoded = detail::base64::encode(std::string_view{
+                reinterpret_cast<const char*>(temp_blob.data()),
+                reinterpret_cast<const char*>(temp_blob.data()
+                                              + temp_blob.size()),
+              });
+              temp_blob.assign(
+                reinterpret_cast<const std::byte*>(decoded.data()),
+                reinterpret_cast<const std::byte*>(decoded.data()
+                                                   + decoded.size()));
+              continue;
+            }
+            // Handle trailing semicolon
+            if (op.empty()) {
+              break;
+            }
+            // Any operation we enable on secret elements must be implemented here
+            TENZIR_UNREACHABLE();
+          }
+        }
+        // We append the resolved & transformed element to the final result.
+        res.insert(res.end(), temp_blob.begin(), temp_blob.end());
+      }
+      // Finally, we make the result available to the original requests
+      // out-parameter.
+      out = resolved_secret_value{std::move(res)};
+    }
+  };
+
   virtual auto resolve_secrets_must_yield(std::vector<secret_request> requests)
     -> void override {
-    auto non_local_secrets = std::vector<secret_request>{};
-    for (auto& r : requests) {
-      const auto name = r.s.name();
-      if (r.s.source_type() == secret_source_type::literal) {
-        if (r.s.encoding() == secret_encoding::was_decoded) {
-          auto decoded
-            = detail::base64::try_decode<ecc::cleansing_vector<std::byte>>(
-              r.s.name());
-          if (not decoded) {
-            diagnostic::error("failed to base64 decode secret")
-              .primary(r.loc)
-              .emit(diagnostics());
-            continue;
-          }
-          r.out = resolved_secret_value{std::move(*decoded)};
-          continue;
+    auto requested_secrets = std::make_shared<request_map_t>();
+    auto finishers = std::vector<secret_finisher>{};
+    for (auto& req : requests) {
+      for (const auto& element : *req.secret.buffer->elements()) {
+        const auto name = element->name()->string_view();
+        const auto is_literal = element->is_literal();
+        if (not is_literal) {
+          requested_secrets->try_emplace(std::string{name}, req.loc);
         }
-        r.out = resolved_secret_value{ecc::cleansing_string{name}};
-        continue;
       }
-      non_local_secrets.push_back(std::move(r));
+      finishers.emplace_back(std::move(req.secret), req.out, req.loc);
     }
-    if (non_local_secrets.empty()) {
+    if (requested_secrets->empty()) {
+      for (const auto& f : finishers) {
+        f.finish(*requested_secrets, diagnostics());
+      }
       return;
     }
-    auto callback = [this, non_local_secrets = std::move(non_local_secrets)](
+    auto callback = [this, finishers = std::move(finishers),
+                     requested_secrets = std::move(requested_secrets)](
                       caf::expected<node_actor> maybe_actor) {
       if (not maybe_actor) {
         diagnostic::error("no Tenzir Node to resolve secrets")
-          .primary(non_local_secrets.front().loc)
+          .primary(finishers.front().loc)
           .emit(diagnostics());
         return;
       }
       // FIXME: Is this actually threadsafe the way we use it? The counter
       // itself certainly is not.
       auto fan = detail::make_fanout_counter_with_error<diagnostic>(
-        non_local_secrets.size(),
-        [this]() {
+        requested_secrets->size(),
+        [this, requested_secrets, finishers = std::move(finishers)]() {
+          for (const auto& f : finishers) {
+            f.finish(*requested_secrets, diagnostics());
+          }
           set_waiting(false);
         },
         [this](std::span<diagnostic> diags) {
@@ -260,14 +339,14 @@ struct exec_node_control_plane final : public operator_control_plane {
           }
           set_waiting(false);
         });
-      for (auto& r : non_local_secrets) {
+      for (auto& [name, out] : *requested_secrets) {
         auto key_pair = ecc::generate_keypair();
         TENZIR_ASSERT(key_pair);
         auto public_key = key_pair->public_key;
-        state.self->mail(atom::resolve_v, r.s.name(), std::move(public_key))
+        state.self->mail(atom::resolve_v, name, std::move(public_key))
           .request(*maybe_actor, defaults::secret_lookup_timeout)
           .then(
-            [fan, keys = *key_pair, r](secret_resolution_result res) {
+            [fan, keys = *key_pair, name, &out](secret_resolution_result res) {
               match(
                 res,
                 [&](const encrypted_secret_value& v) {
@@ -275,38 +354,24 @@ struct exec_node_control_plane final : public operator_control_plane {
                   if (not decrypted) {
                     fan->receive_error(
                       diagnostic::error("failed to decrypt secret")
-                        .primary(r.loc)
-                        .note("secret `{}` failed: {}", r.s.name(),
-                              decrypted.error())
+                        .primary(out.loc)
+                        .note("secret `{}` failed: {}", name, decrypted.error())
                         .done());
                     return;
                   }
-                  if (r.s.encoding() == secret_encoding::none) {
-                    r.out = resolved_secret_value{std::move(*decrypted)};
-                    fan->receive_success();
-                  }
-                  auto decoded = detail::base64::try_decode<
-                    ecc::cleansing_vector<std::byte>>(*decrypted);
-                  if (not decoded) {
-                    fan->receive_error(
-                      diagnostic::error("failed to base64 decode secret")
-                        .primary(r.loc)
-                        .done());
-                    return;
-                  }
-                  r.out = resolved_secret_value{std::move(*decoded)};
+                  out.value = std::move(*decrypted);
                   fan->receive_success();
                   return;
                 },
                 [&](const secret_resolution_error& e) {
                   fan->receive_error(
                     diagnostic::error("could not get secret value")
-                      .primary(r.loc)
-                      .note("secret `{}` failed: {}", r.s.name(), e.message)
+                      .primary(out.loc)
+                      .note("secret `{}` failed: {}", name, e.message)
                       .done());
                 });
             },
-            [fan, loc = r.loc](caf::error e) {
+            [fan, loc = out.loc](caf::error e) {
               fan->receive_error(
                 diagnostic::error(std::move(e)).primary(loc).done());
             });

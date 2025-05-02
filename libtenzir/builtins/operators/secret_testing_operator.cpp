@@ -29,36 +29,28 @@ public:
     auto result = resolved_secret_value{};
     ctrl.resolve_secret_must_yield(secret_, result);
     co_yield {};
-    const auto secret_is_string = is<ecc::cleansing_string>(result.value());
-    const auto expected_is_string = is<std::string>(expected_.inner);
-    if (secret_is_string != expected_is_string) {
-      diagnostic::error(
-        "invalid use. `secret` must be the same type as `expected`")
-        .primary(secret_, secret_is_string ? "`string`" : "`blob`")
-        .primary(expected_, expected_is_string ? "`string`" : "`blob`")
+    const auto s = result.blob();
+    auto e = std::span<const std::byte>{};
+    if (const auto* b = try_as<blob>(expected_.inner)) {
+      e = std::span{*b};
+    } else if (const auto* s = try_as<std::string>(expected_.inner)) {
+      e = std::span{
+        reinterpret_cast<const std::byte*>(s->data()),
+        reinterpret_cast<const std::byte*>(s->data() + s->size()),
+      };
+    }
+    if (not std::equal(s.begin(), s.end(), e.begin())) {
+      diagnostic::error("secret does not match expected value")
+#ifndef NDEBUG
+        .primary(secret_, "[{}]", fmt::join(s, ","))
+        .primary(expected_, "[{}]", fmt::join(e, ","))
+#else
+        .primary(secret_)
+        .primary(expected_)
+#endif
         .emit(ctrl.diagnostics());
       co_return;
     }
-    if (secret_is_string) {
-      const auto& s = as<ecc::cleansing_string>(result.value());
-      const auto& e = as<std::string>(expected_.inner);
-      if (not std::equal(s.begin(), s.end(), e.begin())) {
-        diagnostic::error("secret does not match expected value")
-          .primary(secret_)
-          .primary(expected_)
-          .emit(ctrl.diagnostics());
-      }
-    } else {
-      const auto& s = as<ecc::cleansing_vector<std::byte>>(result.value());
-      const auto& e = as<blob>(expected_.inner);
-      if (not std::equal(s.begin(), s.end(), e.begin())) {
-        diagnostic::error("secret does not match expected value")
-          .primary(secret_)
-          .primary(expected_)
-          .emit(ctrl.diagnostics());
-      }
-    }
-    co_return;
   }
 
   auto name() const -> std::string override {

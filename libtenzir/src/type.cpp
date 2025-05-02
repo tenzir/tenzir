@@ -1952,17 +1952,8 @@ secret_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
 }
 
 secret_type::builder_type::builder_type(arrow::MemoryPool* pool)
-  : arrow::StructBuilder(
-      secret_type::to_arrow_type()->storage_type(), pool,
-      {
-        /*name:*/ std::make_shared<arrow::StringBuilder>(),
-        /*source_type:*/
-        std::make_shared<
-          typename secret_type::builder_type::arrow_enum_builder_type>(),
-        /*encoding:*/
-        std::make_shared<
-          typename secret_type::builder_type::arrow_enum_builder_type>(),
-      }) {
+  : arrow::StructBuilder(secret_type::to_arrow_type()->storage_type(), pool,
+                         {std::make_shared<arrow::BinaryBuilder>()}) {
   // nop
 }
 
@@ -1970,18 +1961,8 @@ std::shared_ptr<arrow::DataType> secret_type::builder_type::type() const {
   return secret_type::to_arrow_type();
 }
 
-arrow::StringBuilder& secret_type::builder_type::name_builder() noexcept {
-  return static_cast<arrow::StringBuilder&>(*field_builder(0));
-}
-
-secret_type::builder_type::arrow_enum_builder_type&
-secret_type::builder_type::source_type_builder() noexcept {
-  return static_cast<arrow_enum_builder_type&>(*field_builder(1));
-}
-
-secret_type::builder_type::arrow_enum_builder_type&
-secret_type::builder_type::encoding_builder() noexcept {
-  return static_cast<arrow_enum_builder_type&>(*field_builder(2));
+arrow::BinaryBuilder& secret_type::builder_type::buffer_builder() noexcept {
+  return static_cast<arrow::BinaryBuilder&>(*field_builder(0));
 }
 
 void secret_type::arrow_type::register_extension() noexcept {

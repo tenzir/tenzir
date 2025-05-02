@@ -76,10 +76,14 @@ table Record {
   fields: [RecordField] (required);
 }
 
+table StructuredSecretElement {
+  name: string (required);
+  operations: string (required);
+  is_literal: bool;
+}
+
 table Secret {
-  name: string;
-  source_type: int32;
-  encoding: int32;
+  elements: [StructuredSecretElement] (required);
 }
 
 /// The sum data of all possible types.

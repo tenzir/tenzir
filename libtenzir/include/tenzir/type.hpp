@@ -1458,16 +1458,10 @@ public:
   /// The corresponding Arrow ArrayBuilder.
   struct builder_type final : arrow::StructBuilder {
     using TypeClass = arrow_type;
-    using arrow_enum_type = arrow::Int32Type;
-    using arrow_enum_array_type = arrow::TypeTraits<arrow_enum_type>::ArrayType;
-    using arrow_enum_builder_type =
-      typename arrow::TypeTraits<arrow_enum_type>::BuilderType;
     explicit builder_type(arrow::MemoryPool* pool
                           = arrow::default_memory_pool());
     [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
-    [[nodiscard]] arrow::StringBuilder& name_builder() noexcept;
-    [[nodiscard]] arrow_enum_builder_type& source_type_builder() noexcept;
-    [[nodiscard]] arrow_enum_builder_type& encoding_builder() noexcept;
+    [[nodiscard]] arrow::BinaryBuilder& buffer_builder() noexcept;
 
   private:
     using arrow::StructBuilder::StructBuilder;
