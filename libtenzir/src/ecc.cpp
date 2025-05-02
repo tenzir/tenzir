@@ -8,7 +8,7 @@
 
 #include "tenzir/diagnostics.hpp"
 
-#include <tenzir/detail/base64.hpp>
+#include <tenzir/detail/base58.hpp>
 #include <tenzir/ecc.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
@@ -232,17 +232,17 @@ auto encrypt(std::string_view plaintext, const std::string_view public_key)
   std::memcpy(combined_bytes.data() + point_size + nonce_length, tag.data(),
               tag_length);
   combined_bytes += ciphertext;
-  return detail::base64::encode(combined_bytes);
+  return detail::base58::encode(combined_bytes);
 }
 
-auto decrypt(std::string_view base64_ciphertext, const string_keypair& keypair)
+auto decrypt(std::string_view base58_ciphertext, const string_keypair& keypair)
   -> caf::expected<cleansing_blob> {
   // ciphertext  =   ephemeral_key   | nonce (iv) | tag  | cipherdata
   // bytes                 65        |   16       |  16  |   ..rest
   //
   // Decode the input.
   auto pubkey_bytes = boost::algorithm::unhex(keypair.public_key);
-  auto raw_ciphertext = detail::base64::decode(base64_ciphertext);
+  TRY(auto raw_ciphertext, detail::base58::decode(base58_ciphertext));
   auto minimum_message_size = point_size + nonce_length + tag_length;
   if (raw_ciphertext.size() < minimum_message_size) {
     return diagnostic::error("invalid cipher: too short")
@@ -281,7 +281,7 @@ auto decrypt(std::string_view base64_ciphertext, const string_keypair& keypair)
   TRY(auto shared_secret, hkdf(bytes));
   // Perform AES decryption.
   auto plaintext = cleansing_blob{};
-  plaintext.resize(base64_ciphertext.size());
+  plaintext.resize(base58_ciphertext.size());
   auto len = static_cast<int>(plaintext.size());
   // NB: It's not clear why we need to set up encryption here, but
   // decryption fails without the call.

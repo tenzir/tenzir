@@ -26,5 +26,9 @@ TEST(round_trip) {
   REQUIRE(encrypted);
   const auto decrypted = ecc::decrypt(*encrypted, *keys);
   REQUIRE(decrypted);
-  REQUIRE_EQUAL(in, *decrypted);
+  const auto decrypted_string = std::string_view{
+    reinterpret_cast<const char*>(decrypted->data()),
+    reinterpret_cast<const char*>(decrypted->data() + decrypted->size()),
+  };
+  REQUIRE_EQUAL(in, decrypted_string);
 }
