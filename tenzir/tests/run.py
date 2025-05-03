@@ -23,6 +23,7 @@ from contextlib import contextmanager
 TENZIR_BINARY = shutil.which("tenzir")
 TENZIR_NODE_BINARY = shutil.which("tenzir-node")
 ROOT = Path(os.path.dirname(__file__ or ".")).resolve()
+INPUTS_DIR = ROOT / "inputs"
 CHECKMARK = "\033[92;1m✓\033[0m"
 CROSS = "\033[31m✘\033[0m"
 INFO = "\033[94;1mi\033[0m"
@@ -52,6 +53,8 @@ def get_version() -> str:
         subprocess.check_output(
             [
                 TENZIR_BINARY,
+                "--bare-mode",
+                "--console-verbosity=warning",
                 "version | select version | write_lines",
             ]
         )
@@ -116,10 +119,23 @@ def run_simple_test(
         config_file = test.parent / "tenzir.yaml"
         config_args = [f"--config={config_file}"] if config_file.exists() else []
 
+        # Set up environment with INPUTS variable
+        env = os.environ.copy()
+        env["INPUTS"] = str(INPUTS_DIR)
+
         completed = subprocess.run(
-            [TENZIR_BINARY, "--bare-mode", *config_args, *args, "-f", test],
+            [
+                TENZIR_BINARY,
+                "--bare-mode",
+                "--console-verbosity=warning",
+                *config_args,
+                *args,
+                "-f",
+                test,
+            ],
             timeout=TIMEOUT,
             stdout=subprocess.PIPE,
+            env=env,
         )
         output = completed.stdout
         output = output.replace(bytes(ROOT) + b"/", b"")
@@ -253,15 +269,21 @@ class DiffRunner(TqlRunner):
         self._b = b
 
     def run(self, test: Path, update: bool) -> bool:
+        # Set up environment with INPUTS variable
+        env = os.environ.copy()
+        env["INPUTS"] = str(INPUTS_DIR)
+
         unoptimized = subprocess.run(
             [TENZIR_BINARY, self._a, "-f", test],
             timeout=TIMEOUT,
             stdout=subprocess.PIPE,
+            env=env,
         )
         optimized = subprocess.run(
             [TENZIR_BINARY, self._b, "-f", test],
             timeout=TIMEOUT,
             stdout=subprocess.PIPE,
+            env=env,
         )
         diff = list(
             difflib.diff_bytes(
@@ -343,12 +365,16 @@ class NodeRunner(TqlRunner):
             config_args = [f"--config={config_file}"] if config_file.exists() else []
 
             # Start tenzir-node with dynamic port allocation
+            # Set up environment with INPUTS variable
+            env = os.environ.copy()
+            env["INPUTS"] = str(INPUTS_DIR)
+
             node_process = subprocess.Popen(
                 [
                     TENZIR_NODE_BINARY,
                     "--bare-mode",
-                    "--state-directory",
-                    temp_dir.name,
+                    "--console-verbosity=warning",
+                    f"--state-directory={temp_dir.name}",
                     "--endpoint=localhost:0",
                     "--print-endpoint",
                     *config_args,
@@ -357,6 +383,7 @@ class NodeRunner(TqlRunner):
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                env=env,
             )
 
             # Wait for the node to print its endpoint and parse it
