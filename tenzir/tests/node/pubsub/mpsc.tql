@@ -1,0 +1,16 @@
+pipeline::detach {
+  from {id: 1}
+  repeat
+  publish "foo"
+}
+
+pipeline::detach {
+  from {id: 2}
+  repeat
+  publish "foo"
+}
+
+subscribe "foo"
+deduplicate
+head 2
+sort

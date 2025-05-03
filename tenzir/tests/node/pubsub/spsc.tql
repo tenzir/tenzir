@@ -1,0 +1,9 @@
+pipeline::detach {
+  from {id: 1}
+  repeat
+  publish "foo"
+}
+
+subscribe "foo"
+deduplicate
+head 1

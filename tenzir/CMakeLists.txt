@@ -131,7 +131,7 @@ foreach (dir IN LISTS _integration_test_dirs)
   if (NOT IS_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/tests/${dir}")
     continue()
   endif ()
-  if ("${dir}" EQUAL "inputs")
+  if ("${dir}" MATCHES "^inputs/?$")
     continue()
   endif ()
   add_test(

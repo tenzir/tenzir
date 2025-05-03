@@ -1,0 +1,28 @@
+pipeline::detach {
+  from {id: 1}, {id: 2}
+  repeat
+  publish "foo"
+}
+
+pipeline::detach {
+  from {id: 3}, {id: 4}
+  repeat
+  publish "foo"
+}
+
+pipeline::detach {
+  subscribe "foo"
+  where id == 1 or id == 4
+  publish "bar"
+}
+
+pipeline::detach {
+  subscribe "foo"
+  where id == 2 or id == 3
+  publish "bar"
+}
+
+subscribe "bar"
+deduplicate
+head 4
+sort

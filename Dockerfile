@@ -117,19 +117,19 @@ ARG TENZIR_BUILD_OPTIONS
 ENV LDFLAGS="-Wl,--copy-dt-needed-entries"
 RUN --mount=target=/ccache,type=cache \
     cmake -B build -G Ninja \
-        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
-        -D CMAKE_BUILD_TYPE:STRING="Release" \
-        -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
-        -D TENZIR_ENABLE_AVX2_INSTRUCTIONS:BOOL="OFF" \
-        -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
-        -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
-        -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
-        -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
-        -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
-        -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
-        ${TENZIR_BUILD_OPTIONS} && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D CMAKE_BUILD_TYPE:STRING="Release" \
+      -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
+      -D TENZIR_ENABLE_AVX2_INSTRUCTIONS:BOOL="OFF" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
+      -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
+      -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
+      -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
+      -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
+      -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
+      ${TENZIR_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
-    CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test && \
+    ctest --test-dir build --output-on-failure --exclude-regex "^tenzir/" && \
     cmake --build build --target bats && \
     cmake --install build --strip --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build --strip && \
@@ -571,9 +571,9 @@ RUN --mount=target=/ccache,type=cache \
     DESTDIR=/plugin/vast cmake --install build-vast --strip --component Runtime && \
     rm -rf build-vast
 
-# -- tenzir-ce -------------------------------------------------------------------
+# -- tenzir-ce-untested --------------------------------------------------------
 
-FROM tenzir-de AS tenzir-ce
+FROM tenzir-de AS tenzir-ce-untested
 
 COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-analytics /
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
@@ -589,6 +589,18 @@ COPY --from=to_google_cloud_logging-plugin --chown=tenzir:tenzir /plugin/to_goog
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 USER tenzir:tenzir
+
+# -- tenzir-ce-integration -----------------------------------------------------
+
+FROM tenzir-ce-untested AS tenzir-ce-integration
+
+COPY tenzir/tests/ ./tests
+RUN ./tests/run.py && echo "success" > /tmp/tenzir-integration-result
+
+# -- tenzir-ce -----------------------------------------------------------------
+
+FROM tenzir-ce-untested AS tenzir-ce
+COPY --from=tenzir-ce-integration /tmp/tenzir-integration-result /tmp/tenzir-integration-result
 
 # -- tenzir-node-ce ------------------------------------------------------------
 
