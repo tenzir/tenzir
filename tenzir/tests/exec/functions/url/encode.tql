@@ -1,0 +1,12 @@
+from {
+  // Basic test with spaces, ampersand, comma, and slash
+  x: "foo & bar, qux/quux".encode_url(),
+  // Test special characters
+  special: "!@#$%^&*()=+[]{}\\|;:'\",.<>?/~`".encode_url(),
+  // Test spaces and unicode
+  unicode: "Hello World 你好".encode_url(),
+  // Test newlines and tabs
+  whitespace: "line1\nline2\ttabbed".encode_url(),
+  // URL example
+  url: "https://example.com/path?key=value&param=data".encode_url(),
+}
