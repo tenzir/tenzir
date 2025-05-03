@@ -97,6 +97,50 @@
           python-box
           pip
         ]);
+
+    allPlugins = callPackage ./plugins {
+      tenzir = self;
+      inherit tenzir-plugins-source;
+    };
+
+    withTenzirPluginsStatic =
+      selection:
+      let
+        layerPlugins = selection allPlugins;
+      in
+      self.override { extraPlugins = extraPlugins ++ map (x: x.src) layerPlugins; };
+
+    withTenzirPlugins =
+      { prevLayer }:
+      selection:
+      let
+        layerPlugins = selection allPlugins;
+        thisLayer = symlinkJoin {
+          inherit (self)
+            meta
+            pname
+            version
+            name
+            ;
+          paths = [
+            self
+          ] ++ builtins.sort (lhs: rhs: lhs.name < rhs.name) (builtins.concatLists thisLayer.plugins);
+          nativeBuildInputs = [ makeBinaryWrapper ];
+          postBuild = ''
+            rm $out/bin/tenzir
+            makeWrapper ${lib.getExe self} $out/bin/tenzir \
+              --inherit-argv0 \
+              --set-default TENZIR_RUNTIME_PREFIX $out
+          '';
+
+          passthru = self.passthru // {
+            plugins = prevLayer.plugins ++ [ layerPlugins ];
+            withPlugins = withTenzirPlugins { prevLayer = thisLayer; };
+          };
+        };
+      in
+      thisLayer;
+
   in
     stdenv.mkDerivation (finalAttrs: ({
         inherit version;
@@ -320,28 +364,13 @@
         '';
 
         passthru = {
-          plugins = bundledPlugins ++ extraPlugins;
-          withPlugins = selection: let
-            allPlugins = callPackage ./plugins {tenzir = self; inherit tenzir-plugins-source; };
-            actualPlugins = selection allPlugins;
-          in
-            if isStatic
-            then
-              self.override {
-                extraPlugins = map (x: x.src) actualPlugins;
-              }
-            else
-              symlinkJoin {
-                inherit (self) passthru meta pname version name;
-                paths = [ self ] ++ actualPlugins;
-                nativeBuildInputs = [ makeBinaryWrapper ];
-                postBuild = ''
-                  rm $out/bin/tenzir
-                  makeWrapper ${self}/bin/tenzir $out/bin/tenzir \
-                    --inherit-argv0 \
-                    --set-default TENZIR_RUNTIME_PREFIX $out
-                '';
-              };
+          plugins = [];
+          withPlugins = if isStatic then
+            withTenzirPluginsStatic
+          else
+            withTenzirPlugins {
+              prevLayer = self;
+            };
         };
 
         meta = with lib; {
