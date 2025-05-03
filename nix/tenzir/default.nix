@@ -132,12 +132,9 @@
           clickhouse-cpp
           fast-float
           fluent-bit
-          google-cloud-cpp
-          grpc
           libpcap
           libunwind
           libyamlcpp
-          protobuf
           rabbitmq-c
           rdkafka
           cppzmq
@@ -158,7 +155,10 @@
           caf
           curl
           flatbuffers
+          google-cloud-cpp
+          grpc
           libmaxminddb
+          protobuf
           re2
           robin-map
           simdjson
