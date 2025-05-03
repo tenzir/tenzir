@@ -425,7 +425,11 @@ public:
   auto parse_unary_expression() -> ast::expression {
     if (auto op = peek_unary_op()) {
       auto location = advance();
+      auto lpar = accept(tk::lpar);
       auto expr = parse_expression(precedence(*op));
+      if (lpar) {
+        expect(tk::rpar);
+      }
       return unary_expr{
         located{*op, location},
         std::move(expr),
@@ -444,6 +448,18 @@ public:
         dot = accept(tk::dot);
       }
       if (dot) {
+        // field.-() and field.+() look a bit silly, so we only support unary
+        // operators that have a keyword for the method syntax.
+        if (auto op = peek_keyword_unary_op()) {
+          auto location = advance();
+          expect(tk::lpar);
+          expect(tk::rpar);
+          expr = unary_expr{
+            located{*op, location},
+            std::move(expr),
+          };
+          continue;
+        }
         auto name = expect(tk::identifier);
         if (peek(tk::lpar) or peek(tk::colon_colon)) {
           auto entity = parse_entity(name.as_identifier());
@@ -858,23 +874,29 @@ public:
     }
   }
 
-  auto peek_unary_op() -> std::optional<unary_op> {
 #define X(x, y)                                                                \
   if (peek(tk::x)) {                                                           \
-    return unary_op::y;                                                        \
+    return y;                                                                  \
   }
+
+  auto peek_keyword_unary_op() -> std::optional<unary_op> {
+    using enum unary_op;
     X(move, move);
     X(not_, not_);
+    return std::nullopt;
+  }
+
+  auto peek_unary_op() -> std::optional<unary_op> {
+    if (auto op = peek_keyword_unary_op()) {
+      return op;
+    }
+    using enum unary_op;
     X(minus, neg);
-#undef X
     return std::nullopt;
   }
 
   auto peek_binary_op() -> std::optional<binary_op> {
-#define X(x, y)                                                                \
-  if (peek(tk::x)) {                                                           \
-    return binary_op::y;                                                       \
-  }
+    using enum binary_op;
     X(plus, add);
     X(minus, sub);
     X(star, mul);
@@ -890,9 +912,10 @@ public:
     X(in, in);
     X(if_, if_);
     X(else_, else_);
-#undef X
     return std::nullopt;
   }
+
+#undef X
 
   auto at_pipeline_end() -> bool {
     return eoi() || silent_peek(tk::rbrace);

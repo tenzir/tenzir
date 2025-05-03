@@ -146,8 +146,9 @@ may allow defining custom metadata fields.
 
 ## Unary Expression
 
-Use the unary operators `+`, `-`, and `not`. The `+` and `-` operators expect a
-number or duration, while `not` expects a boolean value.
+Use the unary operators `+`, `-`, `not`, and `move`. The `+` and `-` operators
+expect a number or duration, `not` expects a boolean value, and `move` expects a
+field.
 
 ## Binary Expression
 
