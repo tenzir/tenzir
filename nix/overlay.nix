@@ -9,6 +9,7 @@
     then package
     else package.overrideAttrs f;
 in {
+  nix2container = inputs.nix2container.packages.x86_64-linux;
   musl = overrideAttrsIf isStatic prev.musl (orig: {
     patches = (orig.patches or []) ++ [
       (prev.buildPackages.fetchpatch {

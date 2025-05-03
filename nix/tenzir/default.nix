@@ -107,8 +107,18 @@
       selection:
       let
         layerPlugins = selection allPlugins;
+        final = (self.override {
+          extraPlugins = extraPlugins ++ map (x: x.src) layerPlugins;
+        }).overrideAttrs (prevAttrs: {
+          passthru = prevAttrs.passthru // {
+            asImage = toImage {
+              pkg = final;
+              plugins = [];
+            };
+          };
+        });
       in
-      self.override { extraPlugins = extraPlugins ++ map (x: x.src) layerPlugins; };
+        final;
 
     withTenzirPlugins =
       { prevLayer }:
@@ -136,10 +146,19 @@
           passthru = self.passthru // {
             plugins = prevLayer.plugins ++ [ layerPlugins ];
             withPlugins = withTenzirPlugins { prevLayer = thisLayer; };
+
+            asImage = toImage {
+              pkg = self;
+              plugins = prevLayer.plugins ++ [ layerPlugins ];
+            };
           };
         };
       in
       thisLayer;
+
+      toImage = pkgsBuildHost.callPackage ./image.nix {
+        inherit isStatic;
+      };
 
   in
     stdenv.mkDerivation (finalAttrs: ({
@@ -371,6 +390,11 @@
             withTenzirPlugins {
               prevLayer = self;
             };
+
+          asImage = toImage {
+            pkg = self;
+            plugins = [];
+          };
         };
 
         meta = with lib; {
@@ -413,6 +437,9 @@
           tar -xf package/*.tar.gz --strip-components=2 -C $out
 
           runHook postInstall
+        '';
+        postFixup = ''
+          rm -rf $out/nix-support
         '';
       }));
   self' = callPackage pkgFun ({self = self';} // args);

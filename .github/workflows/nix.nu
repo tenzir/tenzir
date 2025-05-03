@@ -102,14 +102,12 @@ def push_images [
   let repo_name = ($name | str replace "-static" "")
   let node_repo_name = ($repo_name | str replace "tenzir" "tenzir-node")
   let tag_suffix = if ($name | str contains "-static") {"-slim"} else {""}
-  nix --accept-flake-config run $".#stream-($image_name)-image" ...($env.extra_options | split row " ") | zstd -fo tenzir.tar.zst
-  nix --accept-flake-config run $".#stream-($node_image_name)-image" ...($env.extra_options | split row " ") | zstd -fo tenzir-node.tar.zst
   for reg in $image_registries {
     for repo in [$repo_name $node_repo_name] {
       for tag in $container_tags {
         let dest = $"docker://($reg)/tenzir/($repo):($tag)($tag_suffix)"
         print $"::notice pushing ($dest)"
-        skopeo copy $"docker-archive:./($repo).tar.zst" $dest
+        nix --accept-flake-config run $".#($name).asImage.($repo).copyTo" ...($env.extra_options | split row " ")  -- $dest
       }
     }
   }
