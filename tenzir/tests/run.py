@@ -13,13 +13,15 @@ import typing
 import re
 import time
 import socket
+import tempfile
 from abc import ABC, abstractmethod
 import builtins
 
 from contextlib import contextmanager
 
 
-BINARY = shutil.which("tenzir")
+TENZIR_BINARY = shutil.which("tenzir")
+TENZIR_NODE_BINARY = shutil.which("tenzir-node")
 ROOT = Path(os.path.dirname(__file__ or ".")).resolve()
 CHECKMARK = "\033[92;1m✓\033[0m"
 CROSS = "\033[31m✘\033[0m"
@@ -49,7 +51,7 @@ def get_version() -> str:
     return (
         subprocess.check_output(
             [
-                BINARY,
+                TENZIR_BINARY,
                 "version | select version | write_lines",
             ]
         )
@@ -110,8 +112,14 @@ def run_simple_test(
     test: Path, *, update: bool, args: typing.Sequence[str] = (), ext: str
 ) -> bool:
     try:
+        # Check if tenzir.yaml exists in the same directory as the test
+        config_file = test.parent / "tenzir.yaml"
+        config_args = [f"--config={config_file}"] if config_file.exists() else []
+
         completed = subprocess.run(
-            [BINARY, *args, "-f", test], timeout=TIMEOUT, stdout=subprocess.PIPE
+            [TENZIR_BINARY, "--bare-mode", *config_args, *args, "-f", test],
+            timeout=TIMEOUT,
+            stdout=subprocess.PIPE,
         )
         output = completed.stdout
         output = output.replace(bytes(ROOT) + b"/", b"")
@@ -119,10 +127,10 @@ def run_simple_test(
     except subprocess.TimeoutExpired:
         fail(test)
         return False
-    except subprocess.CalledProcessError as e :
-        with stdout_lock :
+    except subprocess.CalledProcessError as e:
+        with stdout_lock:
             fail(test)
-            print(f"└─▶ \033[31msubprocess error \"{e}\":\033[0m")
+            print(f'└─▶ \033[31msubprocess error "{e}":\033[0m')
         return False
     if test.read_bytes().startswith(b"// error") == good:
         with stdout_lock:
@@ -142,7 +150,7 @@ def run_simple_test(
         if not ref_path.exists():
             with stdout_lock:
                 fail(test)
-                print(f"└─▶ \033[31mFailed to find ref file: \"{ref_path}\"\033[0m")
+                print(f'└─▶ \033[31mFailed to find ref file: "{ref_path}"\033[0m')
             return False
         expected = ref_path.read_bytes()
         if expected != output:
@@ -219,12 +227,16 @@ class AstRunner(TqlRunner):
     def run(self, test: str, update: bool) -> bool:
         return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt")
 
+
 class OldIrRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="oldir")
 
     def run(self, test: str, update: bool) -> bool:
-        return run_simple_test(test, update=update, args=("--dump-pipeline",), ext="txt")
+        return run_simple_test(
+            test, update=update, args=("--dump-pipeline",), ext="txt"
+        )
+
 
 class IrRunner(TqlRunner):
     def __init__(self):
@@ -242,10 +254,12 @@ class DiffRunner(TqlRunner):
 
     def run(self, test: Path, update: bool) -> bool:
         unoptimized = subprocess.run(
-            [BINARY, self._a, "-f", test], timeout=TIMEOUT, stdout=subprocess.PIPE
+            [TENZIR_BINARY, self._a, "-f", test],
+            timeout=TIMEOUT,
+            stdout=subprocess.PIPE,
         )
         optimized = subprocess.run(
-            [BINARY, self._b, "-f", test],
+            [TENZIR_BINARY, self._b, "-f", test],
             timeout=TIMEOUT,
             stdout=subprocess.PIPE,
         )
@@ -303,6 +317,95 @@ class ExecRunner(TqlRunner):
 
     def run(self, test: str, update: bool) -> bool:
         return run_simple_test(test, update=update, ext="txt")
+
+
+class NodeRunner(TqlRunner):
+    def __init__(self):
+        super().__init__(prefix="node")
+
+    def run(self, test: Path, update: bool) -> bool:
+        # Check if tenzir-node binary is available
+        if not TENZIR_NODE_BINARY:
+            with stdout_lock:
+                fail(test)
+                print(f"└─▶ \033[31mCould not find tenzir-node binary\033[0m")
+            return False
+
+        # Start tenzir-node process
+        node_process = None
+        temp_dir = None
+        try:
+            # Create a temporary directory for the node data
+            temp_dir = tempfile.TemporaryDirectory()
+
+            # Check if tenzir.yaml exists in the same directory as the test
+            config_file = test.parent / "tenzir.yaml"
+            config_args = [f"--config={config_file}"] if config_file.exists() else []
+
+            # Start tenzir-node with dynamic port allocation
+            node_process = subprocess.Popen(
+                [
+                    TENZIR_NODE_BINARY,
+                    "--bare-mode",
+                    "--state-directory",
+                    temp_dir.name,
+                    "--endpoint=localhost:0",
+                    "--print-endpoint",
+                    *config_args,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+
+            # Wait for the node to print its endpoint and parse it
+            endpoint = None
+            for line in node_process.stdout:
+                endpoint = line.strip()
+                break
+
+            if not endpoint:
+                with stdout_lock:
+                    fail(test)
+                    print(f"└─▶ \033[31mFailed to get endpoint from tenzir-node")
+                return False
+
+            # Run the test against the node with the discovered endpoint
+            result = run_simple_test(
+                test, update=update, args=[f"--endpoint={endpoint}"], ext="txt"
+            )
+
+            return result
+        except Exception as e:
+            with stdout_lock:
+                fail(test)
+                print(f"└─▶ \033[31mFailed to run node test: {e}\033[0m")
+            return False
+        finally:
+            # Make sure we always terminate the node process
+            if node_process:
+                try:
+                    node_process.terminate()
+                    try:
+                        node_process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        # If termination times out, force kill the process
+                        node_process.kill()
+                        node_process.wait()
+                except Exception as e:
+                    # Ensure we don't fail the test on process termination issues
+                    with stdout_lock:
+                        print(f"└─▶ \033[31mError terminating node process: {e}")
+
+            # Clean up temp directory
+            if temp_dir:
+                try:
+                    temp_dir.cleanup()
+                except Exception as e:
+                    # Ensure we don't fail the test on cleanup issues
+                    with stdout_lock:
+                        print(f"└─▶ \033[31mError cleaning up temp directory: {e}")
 
 
 @contextmanager
@@ -373,6 +476,7 @@ class CustomFixture(ExtRunner):
 RUNNERS = [
     AstRunner(),
     ExecRunner(),
+    NodeRunner(),
     CustomFixture(),
     OldIrRunner(),
     IrRunner(),
@@ -464,7 +568,14 @@ def main() -> None:
     try:
         version = get_version()
     except FileNotFoundError:
-        sys.exit(f"error: could not find `{BINARY}` executable")
+        sys.exit(f"error: could not find `{TENZIR_BINARY}` executable")
+
+    # Print warning if tenzir-node binary is not found
+    if "node" in [item[0].prefix for item in queue] and not TENZIR_NODE_BINARY:
+        print(
+            f"{INFO} warning: could not find `tenzir-node` executable, node tests will be skipped"
+        )
+
     print(f"{INFO} running {len(queue)} tests with v{version}")
 
     workers = [Worker(queue, update=args.update) for _ in range(args.jobs)]

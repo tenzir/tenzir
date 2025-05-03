@@ -422,10 +422,10 @@ public:
   template <class In, class Out>
   [[nodiscard]] inline auto check_type() const -> caf::expected<void> {
     auto out = infer_type<In>();
-    if (!out) {
+    if (not out) {
       return out.error();
     }
-    if (!out->template is<Out>()) {
+    if (not out->template is<Out>()) {
       return caf::make_error(ec::type_clash,
                              fmt::format("expected {} as output but got {}",
                                          operator_type_name<Out>(),
@@ -538,6 +538,9 @@ public:
   /// Returns whether this is a well-formed `void -> void` pipeline.
   auto is_closed() const -> bool;
 
+  /// Splits a pipeline into multiple closed pipelines.
+  auto split_at_void() && -> std::vector<pipeline>;
+
   /// Returns an operator location that is consistent with all operators of the
   /// pipeline or `std::nullopt` if there is none.
   auto infer_location() const -> std::optional<operator_location>;
@@ -576,7 +579,7 @@ public:
     if constexpr (Inspector::is_loading) {
       x.operators_.clear();
       auto ops = size_t{};
-      if (!f.begin_sequence(ops)) {
+      if (not f.begin_sequence(ops)) {
         return false;
       }
       x.operators_.reserve(ops);
@@ -589,7 +592,7 @@ public:
       }
       return f.end_sequence();
     } else {
-      if (!f.begin_sequence(x.operators_.size())) {
+      if (not f.begin_sequence(x.operators_.size())) {
         return false;
       }
       for (auto& op : x.operators_) {
@@ -716,7 +719,7 @@ private:
   template <class T>
   static auto convert_output(caf::expected<generator<T>> x)
     -> caf::expected<operator_output> {
-    if (!x) {
+    if (not x) {
       return x.error();
     }
     return std::move(*x);
@@ -774,7 +777,7 @@ public:
       auto it = states.find(slice.schema());
       if (it == states.end()) {
         auto state = initialize(slice.schema(), ctrl);
-        if (!state) {
+        if (not state) {
           diagnostic::error(state.error()).emit(ctrl.diagnostics());
           break;
         }
