@@ -1,0 +1,5 @@
+from {
+  x: "abc".starts_with("ab"),
+  y: starts_with("abc", "ab"),
+}
+summarize this.collect()
