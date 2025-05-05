@@ -28,6 +28,10 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
+  auto definition() const noexcept -> std::string_view override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
   auto run_id() const noexcept -> uuid override {
     TENZIR_UNIMPLEMENTED();
   }

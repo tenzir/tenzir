@@ -411,8 +411,11 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       // Do not proceed to execution if there has been an error.
       return false;
     }
-    for (auto pipe : std::move(pipe).split_at_void()) {
-      auto result = exec_pipeline(std::move(pipe), ctx, cfg, sys);
+    auto pipes = cfg.multi ? std::move(pipe).split_at_void()
+                           : std::vector{std::move(pipe)};
+    for (auto& pipe : pipes) {
+      auto result
+        = exec_pipeline(std::move(pipe), std::string{source}, ctx, cfg, sys);
       if (not result) {
         if (result.error() != ec::silent) {
           diagnostic::error(result.error()).emit(ctx);

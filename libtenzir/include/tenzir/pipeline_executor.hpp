@@ -24,6 +24,7 @@ struct pipeline_executor_state {
   node_actor node = {};
 
   /// The currently running pipeline.
+  std::string definition;
   std::optional<pipeline> pipe = {};
   std::vector<exec_node_actor> exec_nodes = {};
   caf::typed_response_promise<void> start_rp = {};
@@ -64,7 +65,7 @@ struct pipeline_executor_state {
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, receiver_actor<diagnostic> diagnostics,
+  pipeline pipe, std::string definition, receiver_actor<diagnostic> diagnostics,
   metrics_receiver_actor metrics, node_actor node, bool has_terminal,
   bool is_hidden) -> pipeline_executor_actor::behavior_type;
 

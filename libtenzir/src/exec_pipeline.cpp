@@ -211,9 +211,9 @@ auto add_implicit_source_and_sink(pipeline pipe, diagnostic_handler& dh,
 
 } // namespace
 
-auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
-                   const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void> {
+auto exec_pipeline(pipeline pipe, std::string definition,
+                   diagnostic_handler& dh, const exec_config& cfg,
+                   caf::actor_system& sys) -> caf::expected<void> {
   auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), dh, cfg);
   if (not implicit_pipe) {
     return std::move(implicit_pipe.error());
@@ -235,7 +235,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   auto handler = self->spawn(
     [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
       self->state().executor
-        = self->spawn(pipeline_executor, std::move(pipe),
+        = self->spawn(pipeline_executor, std::move(pipe), std::move(definition),
                       caf::actor_cast<receiver_actor<diagnostic>>(self),
                       caf::actor_cast<metrics_receiver_actor>(self),
                       node_actor{}, true, true);
@@ -315,7 +315,7 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
     auto success = exec2(std::move(content), dh, cfg, sys);
     return success ? caf::expected<void>{} : ec::silent;
   }
-  auto parsed = tql::parse(std::move(content), dh);
+  auto parsed = tql::parse(content, dh);
   if (not parsed) {
     return ec::silent;
   }
@@ -326,7 +326,7 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
     return {};
   }
   auto pipe = tql::to_pipeline(std::move(*parsed));
-  return exec_pipeline(std::move(pipe), dh, cfg, sys);
+  return exec_pipeline(std::move(pipe), std::move(content), dh, cfg, sys);
 }
 
 } // namespace tenzir
