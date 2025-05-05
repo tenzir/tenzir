@@ -26,6 +26,7 @@
 #include <openssl/rand.h>
 
 #include <memory>
+#include <simdjson.h>
 #include <string>
 
 namespace tenzir::ecc {
@@ -69,7 +70,7 @@ void cleanse_memory(void* start, size_t size) {
     return caf::make_error(ec::system_error, #expr);                           \
   }
 
-// All functions in here operate on the secp256k1 group and it's
+// All functions in here operate on the secp256k1 curve and it's
 // associated group; there is no API flexibility on this by design.
 constexpr size_t point_size = 65;
 constexpr size_t compressed_point_size = 33;
@@ -304,6 +305,19 @@ auto decrypt(std::string_view base58_ciphertext, const string_keypair& keypair)
   total_len += len;
   plaintext.resize(total_len);
   return plaintext;
+}
+
+auto decrypt_string(std::string_view base58_ciphertext,
+                    const string_keypair& keypair)
+  -> caf::expected<cleansing_string> {
+  TRY(auto blob, decrypt(base58_ciphertext, keypair));
+  auto str = std::string_view{reinterpret_cast<const char*>(blob.data()),
+                              reinterpret_cast<const char*>(blob.data())
+                                + blob.size()};
+  if (! simdjson::validate_utf8(str.begin(), str.size())) {
+    return diagnostic::error("invalid string").to_error();
+  }
+  return cleansing_string{str};
 }
 
 } // namespace tenzir::ecc

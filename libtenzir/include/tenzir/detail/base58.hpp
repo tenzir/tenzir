@@ -13,7 +13,6 @@
 #include <string>
 #include <string_view>
 
-/// [Base58](https://en.wikipedia.org/wiki/Base58) coding.
 namespace tenzir::detail::base58 {
 
 auto encode(const std::string_view input) -> std::string;

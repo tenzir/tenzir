@@ -55,13 +55,20 @@ struct string_keypair {
 /// Generate a new keypair.
 auto generate_keypair() -> caf::expected<string_keypair>;
 
-/// Encrypt a text with the given public key and base58 encode the final result.
+/// Encrypt a text with the given public key.
+/// The resulting ciphertext is base58-encoded, so it can be safely used in
+/// any context without additional encoding or escaping.
 auto encrypt(std::string_view plaintext, std::string_view public_key)
   -> caf::expected<std::string>;
 
 /// Decrypt a ciphertext that was encrypted with the public key of `keypair`.
-/// The ciphertext is first base58 decoded.
-auto decrypt(std::string_view base58_ciphertext, const string_keypair& keypair)
+auto decrypt(std::string_view ciphertext, const string_keypair& keypair)
   -> caf::expected<cleansing_blob>;
+
+/// Decrypt a ciphertext that was encrypted with the public key of `keypair`.
+/// Additionally, this checks that the decrypted bytes form a valid UTF-8
+/// string.
+auto decrypt_string(std::string_view ciphertext, const string_keypair& keypair)
+  -> caf::expected<cleansing_string>;
 
 } // namespace tenzir::ecc
