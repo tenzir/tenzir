@@ -1,0 +1,8 @@
+{
+  "collect(this)": [
+    {
+      x: true,
+      y: true,
+    },
+  ],
+}

@@ -1,0 +1,5 @@
+remote {
+  from {
+    message: "Hello, world!"
+  }
+}

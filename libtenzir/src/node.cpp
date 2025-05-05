@@ -502,6 +502,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
       return retrieve_versions(check(to<record>(content(self->config()))));
     },
     [self](atom::spawn, operator_box& box, operator_type input_type,
+           std::string definition,
            const receiver_actor<diagnostic>& diagnostic_handler,
            const metrics_receiver_actor& metrics_receiver, int index,
            bool is_hidden, uuid run_id) -> caf::result<exec_node_actor> {
@@ -515,8 +516,9 @@ auto node(node_actor::stateful_pointer<node_state> self,
       auto description = fmt::format("{:?}", op);
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type,
-                          static_cast<node_actor>(self), diagnostic_handler,
-                          metrics_receiver, index, false, is_hidden, run_id);
+                          std::move(definition), static_cast<node_actor>(self),
+                          diagnostic_handler, metrics_receiver, index, false,
+                          is_hidden, run_id);
       if (not spawn_result) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} failed to spawn execution node "

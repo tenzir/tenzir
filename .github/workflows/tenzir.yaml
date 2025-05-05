@@ -540,6 +540,7 @@ jobs:
               # macOS runners in GitHub Actions CI are very limited, so we
               # prefer to have fewer jobs running and build the proprietary
               # plugins as bundled on macOS.
+              - plugins/*
               - contrib/tenzir-plugins/*
     env:
       BUILD_DIR: build
@@ -594,9 +595,14 @@ jobs:
           asset_path: "tenzir.spdx.json"
           asset_name: "tenzir.spdx.json"
           asset_content_type: text/plain
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
+          git submodule update --init --recursive contrib/tenzir-plugins
           git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
           git submodule update --init --recursive tenzir

@@ -28,6 +28,10 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
+  auto definition() const noexcept -> std::string_view override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
   auto run_id() const noexcept -> uuid override {
     TENZIR_UNIMPLEMENTED();
   }
@@ -116,7 +120,7 @@ pipeline::pipeline(std::vector<operator_ptr> operators) {
 auto pipeline::parse(std::string source, diagnostic_handler& diag)
   -> std::optional<pipeline> {
   auto parsed = tql::parse(std::move(source), diag);
-  if (!parsed) {
+  if (not parsed) {
     return {};
   }
   return tql::to_pipeline(std::move(*parsed));
@@ -277,7 +281,7 @@ auto pipeline::instantiate(operator_input input,
   auto end = operators_.end();
   while (true) {
     auto output = (*it)->instantiate(std::move(input), control);
-    if (!output) {
+    if (not output) {
       return output.error();
     }
     ++it;
@@ -350,7 +354,7 @@ auto operator_base::infer_type_impl(operator_type input) const
     }
   };
   auto output = std::visit(f, input);
-  if (!output) {
+  if (not output) {
     return output.error();
   }
   return std::visit(
@@ -365,7 +369,34 @@ auto operator_base::infer_type_impl(operator_type input) const
 }
 
 auto pipeline::is_closed() const -> bool {
-  return !!check_type<void, void>();
+  return check_type<void, void>().has_value();
+}
+
+auto pipeline::split_at_void() && -> caf::expected<std::vector<pipeline>> {
+  const auto guess_or_infer_type
+    = [](std::optional<operator_type> input,
+         const operator_ptr& op) -> caf::expected<operator_type> {
+    if (input) {
+      return op->infer_type(*input);
+    }
+    if (auto output = op->infer_type(tag_v<void>)) {
+      return *output;
+    }
+    if (auto output = op->infer_type(tag_v<table_slice>)) {
+      return *output;
+    }
+    return op->infer_type(tag_v<chunk_ptr>);
+  };
+  auto result = std::vector<pipeline>{};
+  auto input = std::optional<operator_type>{};
+  for (auto& op : operators_) {
+    if (not input or input->is<void>()) {
+      result.emplace_back();
+    }
+    TRY(input, guess_or_infer_type(input, op));
+    result.back().append(std::move(op));
+  }
+  return result;
 }
 
 auto pipeline::infer_location() const -> std::optional<operator_location> {
@@ -386,13 +417,13 @@ auto pipeline::infer_type_impl(operator_type input) const
   auto current = input;
   for (const auto& op : operators_) {
     auto first = &op == &operators_.front();
-    if (!first && current.is<void>()) {
+    if (not first && current.is<void>()) {
       return caf::make_error(ec::type_clash, fmt::format("pipeline continues "
                                                          "with '{}' after sink",
                                                          op->name()));
     }
     auto next = op->infer_type(current);
-    if (!next) {
+    if (not next) {
       return next.error();
     }
     current = *next;
@@ -405,12 +436,12 @@ auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
   try {
     auto ctrl = local_control_plane{};
     auto dynamic_gen = p.instantiate(std::monostate{}, ctrl);
-    if (!dynamic_gen) {
+    if (not dynamic_gen) {
       co_yield std::move(dynamic_gen.error());
       co_return;
     }
     auto gen = std::get_if<generator<std::monostate>>(&*dynamic_gen);
-    if (!gen) {
+    if (not gen) {
       co_yield caf::make_error(ec::logic_error,
                                "right side of pipeline is not closed");
       co_return;

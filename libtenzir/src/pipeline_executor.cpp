@@ -99,7 +99,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       exec_nodes.emplace_back();
       self
         ->mail(atom::spawn_v, operator_box{std::move(op)}, input_type,
-               diagnostics, metrics, op_index, is_hidden, run_id)
+               definition, diagnostics, metrics, op_index, is_hidden, run_id)
         .request(node, caf::infinite)
         .then(
           [this, description, index](exec_node_actor& exec_node) {
@@ -123,8 +123,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     } else {
       TENZIR_TRACE("{} spawns {} locally", *self, description);
       auto spawn_result
-        = spawn_exec_node(self, std::move(op), input_type, node, diagnostics,
-                          metrics, op_index, has_terminal, is_hidden, run_id);
+        = spawn_exec_node(self, std::move(op), input_type, definition, node,
+                          diagnostics, metrics, op_index, has_terminal,
+                          is_hidden, run_id);
       if (not spawn_result) {
         abort_start(diagnostic::error(spawn_result.error())
                       .note("failed to spawn {} locally", description)
@@ -269,12 +270,13 @@ auto pipeline_executor_state::resume() -> caf::result<void> {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, receiver_actor<diagnostic> diagnostics,
+  pipeline pipe, std::string definition, receiver_actor<diagnostic> diagnostics,
   metrics_receiver_actor metrics, node_actor node, bool has_terminal,
   bool is_hidden) -> pipeline_executor_actor::behavior_type {
   TENZIR_TRACE("{} was created", *self);
   self->state().self = self;
   self->state().node = std::move(node);
+  self->state().definition = std::move(definition);
   self->state().pipe = std::move(pipe);
   self->state().diagnostics = std::move(diagnostics);
   self->state().metrics = std::move(metrics);

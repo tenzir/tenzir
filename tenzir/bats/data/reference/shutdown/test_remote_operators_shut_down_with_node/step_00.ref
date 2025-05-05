@@ -1,2 +1,0 @@
-error: !! user_shutdown
- = note: source: libtenzir/src/tql2/exec.cpp:416
