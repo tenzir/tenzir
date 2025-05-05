@@ -57,28 +57,29 @@ auto inspect(Inspector& f, plugin_type_id_block& x) ->
 }
 
 // -- plugin singleton ---------------------------------------------------------
+
 namespace plugins {
 
 /// Retrieves the system-wide plugin singleton.
 /// @note Use this function carefully; modifying the system-wide plugin
 /// singleton must only be done before the actor system is running.
-std::vector<plugin_ptr>& get_mutable() noexcept;
+auto get_mutable() noexcept -> std::vector<plugin_ptr>&;
 
 /// Retrieves the system-wide plugin singleton.
-const std::vector<plugin_ptr>& get() noexcept;
+auto get() noexcept -> const std::vector<plugin_ptr>&;
 
 /// Retrieves all plugins of a given plugin type.
 template <class Plugin>
-generator<const Plugin*> get() noexcept;
+auto get() noexcept -> generator<const Plugin*>;
 
 /// Retrieves the plugin of type `Plugin` with the given name
 /// (case-insensitive), or nullptr if it doesn't exist.
 template <class Plugin = plugin>
-const Plugin* find(std::string_view name) noexcept;
+auto find(std::string_view name) noexcept -> const Plugin*;
 
 /// Retrieves the type-ID blocks and assigners singleton for static plugins.
-std::vector<std::pair<plugin_type_id_block, void (*)()>>&
-get_static_type_id_blocks() noexcept;
+auto get_static_type_id_blocks() noexcept
+  -> std::vector<std::pair<plugin_type_id_block, void (*)()>>&;
 
 /// Load plugins specified in the configuration.
 /// @param bundled_plugins The names of the bundled plugins.
@@ -87,16 +88,16 @@ get_static_type_id_blocks() noexcept;
 /// @returns A list of paths to the loaded plugins, or an error detailing what
 /// went wrong.
 /// @note Invoke exactly once before \ref get() may be used.
-caf::expected<std::vector<std::filesystem::path>>
-load(const std::vector<std::string>& bundled_plugins,
-     caf::actor_system_config& cfg);
+auto load(const std::vector<std::string>& bundled_plugins,
+          caf::actor_system_config& cfg)
+  -> caf::expected<std::vector<std::filesystem::path>>;
 
 /// Initialize loaded plugins.
-caf::error initialize(caf::actor_system_config& cfg);
+auto initialize(caf::actor_system_config& cfg) -> caf::error;
 
 /// @returns The loaded plugin-specific config files.
 /// @note This function is not threadsafe.
-const std::vector<std::filesystem::path>& loaded_config_files();
+auto loaded_config_files() -> const std::vector<std::filesystem::path>&;
 
 } // namespace plugins
 
@@ -112,9 +113,9 @@ public:
   /// Satisfy the rule of five.
   plugin() noexcept = default;
   plugin(const plugin&) noexcept = default;
-  plugin& operator=(const plugin&) noexcept = default;
+  auto operator=(const plugin&) noexcept -> plugin& = default;
   plugin(plugin&&) noexcept = default;
-  plugin& operator=(plugin&&) noexcept = default;
+  auto operator=(plugin&&) noexcept -> plugin& = default;
 
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
@@ -130,7 +131,7 @@ public:
   }
 
   /// Returns the unique name of the plugin.
-  [[nodiscard]] virtual std::string name() const = 0;
+  [[nodiscard]] virtual auto name() const -> std::string = 0;
 };
 
 // -- component plugin --------------------------------------------------------
@@ -141,7 +142,7 @@ class component_plugin : public virtual plugin {
 public:
   /// The name for this component in the registry.
   /// Defaults to the plugin name.
-  virtual std::string component_name() const;
+  virtual auto component_name() const -> std::string;
 
   /// Components that should be created before the current one so initialization
   /// can succeed.
@@ -158,8 +159,9 @@ public:
   /// @returns The actor handle to the NODE component.
   /// @note This function runs in the actor context of the NODE actor and can
   /// safely access the NODE's state.
-  virtual component_plugin_actor
+  virtual auto
   make_component(node_actor::stateful_pointer<node_state> node) const
+    -> component_plugin_actor
     = 0;
 };
 
@@ -173,8 +175,9 @@ public:
   /// @note Tenzir calls this function before initializing the plugin, which
   /// means that this function cannot depend on any plugin state. The logger
   /// is unavailable when this function is called.
-  [[nodiscard]] virtual std::pair<std::unique_ptr<command>, command::factory>
-  make_command() const = 0;
+  [[nodiscard]] virtual auto make_command() const
+    -> std::pair<std::unique_ptr<command>, command::factory>
+    = 0;
 };
 
 // -- serialization plugin -----------------------------------------------------
@@ -504,8 +507,8 @@ class printer_plugin : public virtual printer_inspection_plugin<Printer>,
 // -- saver plugin ------------------------------------------------------------
 
 struct printer_info {
-  type input_schema{};
-  std::string format{};
+  type input_schema;
+  std::string format;
 };
 
 class plugin_saver {
@@ -561,8 +564,10 @@ public:
   /// to a single output value.
   /// @param input_types The input types for which to create the aggregation
   /// function.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<aggregation_function>>
-  make_aggregation_function(const type& input_type) const = 0;
+  [[nodiscard]] virtual auto
+  make_aggregation_function(const type& input_type) const
+    -> caf::expected<std::unique_ptr<aggregation_function>>
+    = 0;
 
   /// Return the value that should be used if there is no input.
   virtual auto aggregation_default() const -> data = 0;
@@ -632,37 +637,44 @@ public:
   /// used as a unique key by the implementation.
   /// @returns A handle to the store builder actor to add events to, and a
   /// header that uniquely identifies this store for later use in `make_store`.
-  [[nodiscard]] virtual caf::expected<builder_and_header>
-  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const = 0;
+  [[nodiscard]] virtual auto
+  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const
+    -> caf::expected<builder_and_header>
+    = 0;
 
   /// Create a store actor from the given header. Called when deserializing a
   /// partition that uses this partition as a store backend.
   /// @param fs The actor handle of a filesystem.
   /// @param header The store header as found in the partition flatbuffer.
   /// @returns A new store actor.
-  [[nodiscard]] virtual caf::expected<store_actor>
-  make_store(filesystem_actor fs, std::span<const std::byte> header) const = 0;
+  [[nodiscard]] virtual auto
+  make_store(filesystem_actor fs, std::span<const std::byte> header) const
+    -> caf::expected<store_actor>
+    = 0;
 };
 
 /// A base class for plugins that add new store backends.
 class store_plugin : public virtual store_actor_plugin {
 public:
   /// Create a store for passive partitions.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
-  make_passive_store() const = 0;
+  [[nodiscard]] virtual auto make_passive_store() const
+    -> caf::expected<std::unique_ptr<passive_store>>
+    = 0;
 
   /// Create a store for active partitions.
   /// @param tenzir_config The tenzir node configuration.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
-  make_active_store() const = 0;
+  [[nodiscard]] virtual auto make_active_store() const
+    -> caf::expected<std::unique_ptr<active_store>>
+    = 0;
 
 private:
-  [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const final;
+  [[nodiscard]] auto
+  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const
+    -> caf::expected<builder_and_header> final;
 
-  [[nodiscard]] caf::expected<store_actor>
-  make_store(filesystem_actor fs,
-             std::span<const std::byte> header) const final;
+  [[nodiscard]] auto
+  make_store(filesystem_actor fs, std::span<const std::byte> header) const
+    -> caf::expected<store_actor> final;
 };
 
 // -- metrics plugin ----------------------------------------------------------
@@ -723,26 +735,27 @@ public:
   /// Load a dynamic plugin from the specified library filename.
   /// @param filename The filename that's passed to 'dlopen'.
   /// @param cfg The actor system config to register type IDs with.
-  static caf::expected<plugin_ptr>
-  make_dynamic(const char* filename, caf::actor_system_config& cfg) noexcept;
+  static auto
+  make_dynamic(const char* filename, caf::actor_system_config& cfg) noexcept
+    -> caf::expected<plugin_ptr>;
 
   /// Take ownership of a static plugin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
   /// @param dependencies The plugin's dependencies.
-  static plugin_ptr
+  static auto
   make_static(plugin* instance, void (*deleter)(plugin*), const char* version,
-              std::vector<std::string> dependencies) noexcept;
+              std::vector<std::string> dependencies) noexcept -> plugin_ptr;
 
   /// Take ownership of a builtin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
   /// @param dependencies The plugin's dependencies.
-  static plugin_ptr
+  static auto
   make_builtin(plugin* instance, void (*deleter)(plugin*), const char* version,
-               std::vector<std::string> dependencies) noexcept;
+               std::vector<std::string> dependencies) noexcept -> plugin_ptr;
 
   /// Default-construct an invalid plugin.
   plugin_ptr() noexcept;
@@ -752,24 +765,24 @@ public:
 
   /// Forbid copying of plugins.
   plugin_ptr(const plugin_ptr&) = delete;
-  plugin_ptr& operator=(const plugin_ptr&) = delete;
+  auto operator=(const plugin_ptr&) -> plugin_ptr& = delete;
 
   /// Move-construction and move-assignment.
   plugin_ptr(plugin_ptr&& other) noexcept;
-  plugin_ptr& operator=(plugin_ptr&& rhs) noexcept;
+  auto operator=(plugin_ptr&& rhs) noexcept -> plugin_ptr&;
 
   /// Pointer facade.
   explicit operator bool() const noexcept;
-  const plugin* operator->() const noexcept;
-  plugin* operator->() noexcept;
-  const plugin& operator*() const noexcept;
-  plugin& operator&() noexcept;
+  auto operator->() const noexcept -> const plugin*;
+  auto operator->() noexcept -> plugin*;
+  auto operator*() const noexcept -> const plugin&;
+  auto operator&() noexcept -> plugin&;
 
   /// Downcast a plugin to a more specific plugin type.
   /// @tparam Plugin The specific plugin type to try to downcast to.
   /// @returns A pointer to the downcasted plugin, or 'nullptr' on failure.
   template <class Plugin>
-  [[nodiscard]] const Plugin* as() const {
+  [[nodiscard]] auto as() const -> const Plugin* {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
                                                      "from 'tenzir::plugin'");
     return dynamic_cast<const Plugin*>(ctrl_->instance);
@@ -779,33 +792,36 @@ public:
   /// @tparam Plugin The specific plugin type to try to downcast to.
   /// @returns A pointer to the downcasted plugin, or 'nullptr' on failure.
   template <class Plugin>
-  Plugin* as() {
+  auto as() -> Plugin* {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
                                                      "from 'tenzir::plugin'");
     return dynamic_cast<Plugin*>(ctrl_->instance);
   }
 
   /// Returns the plugin version.
-  [[nodiscard]] const char* version() const noexcept;
+  [[nodiscard]] auto version() const noexcept -> const char*;
 
   /// Returns the plugin's dependencies.
-  [[nodiscard]] const std::vector<std::string>& dependencies() const noexcept;
+  [[nodiscard]] auto dependencies() const noexcept
+    -> const std::vector<std::string>&;
 
   /// Returns the plugins type.
-  [[nodiscard]] enum type type() const noexcept;
+  [[nodiscard]] auto type() const noexcept -> enum type;
 
   /// Bump the reference count of all dependencies.
   auto reference_dependencies() noexcept -> void;
 
   /// Compare two plugins.
-  friend bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
-  friend std::strong_ordering
-  operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
+  friend auto operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept
+    -> bool;
+  friend auto operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept
+    -> std::strong_ordering;
 
   /// Compare a plugin by its name.
-  friend bool operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept;
-  friend std::strong_ordering
-  operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept;
+  friend auto operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept
+    -> bool;
+  friend auto operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept
+    -> std::strong_ordering;
 
 private:
   struct control_block {
@@ -815,16 +831,16 @@ private:
     ~control_block() noexcept;
 
     control_block(const control_block&) = delete;
-    control_block& operator=(const control_block&) = delete;
+    auto operator=(const control_block&) -> control_block& = delete;
     control_block(control_block&& other) noexcept = delete;
-    control_block& operator=(control_block&& rhs) noexcept = delete;
+    auto operator=(control_block&& rhs) noexcept -> control_block& = delete;
 
     void* library = {};
     plugin* instance = {};
     void (*deleter)(plugin*) = {};
     const char* version = nullptr;
-    std::vector<std::string> dependencies = {};
-    std::vector<std::shared_ptr<control_block>> dependencies_ctrl = {};
+    std::vector<std::string> dependencies;
+    std::vector<std::shared_ptr<control_block>> dependencies_ctrl;
     enum type type = {};
   };
 
@@ -832,7 +848,7 @@ private:
   explicit plugin_ptr(std::shared_ptr<control_block> ctrl) noexcept;
 
   /// The plugin's control block.
-  std::shared_ptr<control_block> ctrl_ = {};
+  std::shared_ptr<control_block> ctrl_;
 };
 
 } // namespace tenzir
@@ -884,7 +900,7 @@ struct formatter<tenzir::plugin_ptr> {
 namespace tenzir::plugins {
 
 template <class Plugin>
-const Plugin* find(std::string_view name) noexcept {
+auto find(std::string_view name) noexcept -> const Plugin* {
   const auto& plugins = get();
   const auto found = std::find(plugins.begin(), plugins.end(), name);
   if (found == plugins.end()) {
@@ -893,8 +909,8 @@ const Plugin* find(std::string_view name) noexcept {
   return found->template as<Plugin>();
 }
 
-inline const operator_parser_plugin*
-find_operator(std::string_view name) noexcept {
+inline auto find_operator(std::string_view name) noexcept
+  -> const operator_parser_plugin* {
   for (const auto* plugin : get<operator_parser_plugin>()) {
     const auto current_name = plugin->operator_name();
     const auto match
@@ -911,7 +927,7 @@ find_operator(std::string_view name) noexcept {
 }
 
 template <class Plugin>
-generator<const Plugin*> get() noexcept {
+auto get() noexcept -> generator<const Plugin*> {
   for (auto const& plugin : get()) {
     if (auto const* specific_plugin = plugin.as<Plugin>()) {
       co_yield specific_plugin;

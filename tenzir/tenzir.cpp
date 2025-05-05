@@ -21,7 +21,6 @@
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/signal_reflector.hpp"
-#include "tenzir/tql/parser.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
 
@@ -118,7 +117,7 @@ auto main(int argc, char** argv) -> int try {
   if (not is_server) {
     // Force the use of $TMPDIR as cache directory when running as a client.
     auto ec = std::error_code{};
-    auto previous_value
+    const auto* previous_value
       = get_if<std::string>(&cfg.content, "tenzir.cache-directory");
     auto tmp = std::filesystem::temp_directory_path(ec);
     if (ec) {
