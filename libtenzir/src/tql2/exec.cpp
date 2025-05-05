@@ -411,8 +411,17 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       // Do not proceed to execution if there has been an error.
       return false;
     }
-    auto pipes = cfg.multi ? std::move(pipe).split_at_void()
-                           : std::vector{std::move(pipe)};
+    auto pipes = std::vector<pipeline>{};
+    if (not cfg.multi) {
+      pipes.push_back(std::move(pipe));
+    } else {
+      auto split = std::move(pipe).split_at_void();
+      if (not split) {
+        diagnostic::error(split.error()).emit(ctx);
+        return false;
+      }
+      pipes = std::move(*split);
+    }
     for (auto& pipe : pipes) {
       auto result
         = exec_pipeline(std::move(pipe), std::string{source}, ctx, cfg, sys);

@@ -539,7 +539,7 @@ public:
   auto is_closed() const -> bool;
 
   /// Splits a pipeline into multiple closed pipelines.
-  auto split_at_void() && -> std::vector<pipeline>;
+  auto split_at_void() && -> caf::expected<std::vector<pipeline>>;
 
   /// Returns an operator location that is consistent with all operators of the
   /// pipeline or `std::nullopt` if there is none.

@@ -10,24 +10,24 @@ The core script for running tests is `run.py`.
 
 - **Run all tests:**
   ```bash
-  python run.py
+  ./run.py
   ```
 - **Run tests in a specific directory or a single test file:**
   ```bash
-  python run.py ast/
-  python run.py exec/functions/parse/parse_json.tql
+  ./run.py ast/
+  ./run.py exec/functions/parse/parse_json.tql
   ```
 - **Update reference output files:**
   Use the `-u` or `--update` flag to regenerate the `.txt` or `.diff` reference
   files for failing tests or new tests.
   ```bash
-  python run.py -u exec/functions/parse/parse_json.tql
+  ./run.py -u exec/functions/parse/parse_json.tql
   ```
 - **Run tests in parallel:**
   By default, tests run in parallel. You can control the number of parallel jobs
   with the `-j` flag:
   ```bash
-  python run.py -j 8
+  ./run.py -j 8
   ```
 
 The tests are also integrated with CTest, and run by default when running the
@@ -62,9 +62,6 @@ and what kind of output is expected.
   `--dump-opt-ir`). Output is `.diff`.
 - `finalize/`: Tests the finalized pipeline plan (`--dump-finalized`). Output is
   `.txt`.
-- `custom/`: Runs custom shell scripts (`.sh`) for more complex test scenarios.
-  See the `_custom/check` script for details on how output is captured and
-  compared using `.N.txt` files for steps.
 
 ## Contributing Tests
 
@@ -75,7 +72,7 @@ and what kind of output is expected.
 3. **Generate Reference Output**: Run the test script with the `--update` (`-u`)
    flag:
    ```bash
-   python run.py -u path/to/your/my_feature.tql
+   ./run.py -u path/to/your/my_feature.tql
    ```
    This will create the initial `.txt` (or `.diff`) file.
 4. **Verify Output**: Carefully review the generated reference file to ensure it

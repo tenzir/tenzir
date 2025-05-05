@@ -372,11 +372,12 @@ auto pipeline::is_closed() const -> bool {
   return check_type<void, void>().has_value();
 }
 
-auto pipeline::split_at_void() && -> std::vector<pipeline> {
-  const auto guess_or_infer_type = [](std::optional<operator_type> input,
-                                      const operator_ptr& op) -> operator_type {
+auto pipeline::split_at_void() && -> caf::expected<std::vector<pipeline>> {
+  const auto guess_or_infer_type
+    = [](std::optional<operator_type> input,
+         const operator_ptr& op) -> caf::expected<operator_type> {
     if (input) {
-      return check(op->infer_type(*input));
+      return op->infer_type(*input);
     }
     if (auto output = op->infer_type(tag_v<void>)) {
       return *output;
@@ -384,7 +385,7 @@ auto pipeline::split_at_void() && -> std::vector<pipeline> {
     if (auto output = op->infer_type(tag_v<table_slice>)) {
       return *output;
     }
-    return check(op->infer_type(tag_v<chunk_ptr>));
+    return op->infer_type(tag_v<chunk_ptr>);
   };
   auto result = std::vector<pipeline>{};
   auto input = std::optional<operator_type>{};
@@ -392,7 +393,7 @@ auto pipeline::split_at_void() && -> std::vector<pipeline> {
     if (not input or input->is<void>()) {
       result.emplace_back();
     }
-    input = guess_or_infer_type(input, op);
+    TRY(input, guess_or_infer_type(input, op));
     result.back().append(std::move(op));
   }
   return result;

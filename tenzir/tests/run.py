@@ -356,84 +356,81 @@ class NodeRunner(TqlRunner):
 
         # Start tenzir-node process
         node_process = None
-        temp_dir = None
-        try:
-            # Create a temporary directory for the node data
-            temp_dir = tempfile.TemporaryDirectory()
+        # Create a temporary directory for the node data
+        with tempfile.TemporaryDirectory() as temp_dir:
+            try:
+                # Check if tenzir.yaml exists in the same directory as the test
+                config_file = test.parent / "tenzir.yaml"
+                config_args = (
+                    [f"--config={config_file}"] if config_file.exists() else []
+                )
 
-            # Check if tenzir.yaml exists in the same directory as the test
-            config_file = test.parent / "tenzir.yaml"
-            config_args = [f"--config={config_file}"] if config_file.exists() else []
+                # Start tenzir-node with dynamic port allocation
+                # Set up environment with INPUTS variable
+                env = os.environ.copy()
+                env["INPUTS"] = str(INPUTS_DIR)
 
-            # Start tenzir-node with dynamic port allocation
-            # Set up environment with INPUTS variable
-            env = os.environ.copy()
-            env["INPUTS"] = str(INPUTS_DIR)
+                node_process = subprocess.Popen(
+                    [
+                        TENZIR_NODE_BINARY,
+                        "--bare-mode",
+                        "--console-verbosity=warning",
+                        f"--state-directory={Path(temp_dir) / "state"}",
+                        f"--cache-directory={Path(temp_dir) / "cache"}",
+                        "--endpoint=localhost:0",
+                        "--print-endpoint",
+                        *config_args,
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    env=env,
+                )
 
-            node_process = subprocess.Popen(
-                [
-                    TENZIR_NODE_BINARY,
-                    "--bare-mode",
-                    "--console-verbosity=warning",
-                    f"--state-directory={temp_dir.name}",
-                    "--endpoint=localhost:0",
-                    "--print-endpoint",
-                    *config_args,
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                env=env,
-            )
+                # Wait for the node to print its endpoint and parse it
+                endpoint = None
+                for line in node_process.stdout:
+                    endpoint = line.strip()
+                    break
 
-            # Wait for the node to print its endpoint and parse it
-            endpoint = None
-            for line in node_process.stdout:
-                endpoint = line.strip()
-                break
+                if not endpoint:
+                    with stdout_lock:
+                        fail(test)
+                        print(f"└─▶ \033[31mFailed to get endpoint from tenzir-node")
+                    return False
 
-            if not endpoint:
+                # Run the test against the node with the discovered endpoint
+                result = run_simple_test(
+                    test, update=update, args=[f"--endpoint={endpoint}"], ext="txt"
+                )
+
+                return result
+            except Exception as e:
                 with stdout_lock:
                     fail(test)
-                    print(f"└─▶ \033[31mFailed to get endpoint from tenzir-node")
+                    print(f"└─▶ \033[31mFailed to run node test: {e}\033[0m")
                 return False
-
-            # Run the test against the node with the discovered endpoint
-            result = run_simple_test(
-                test, update=update, args=[f"--endpoint={endpoint}"], ext="txt"
-            )
-
-            return result
-        except Exception as e:
-            with stdout_lock:
-                fail(test)
-                print(f"└─▶ \033[31mFailed to run node test: {e}\033[0m")
-            return False
-        finally:
-            # Make sure we always terminate the node process
-            if node_process:
-                try:
-                    node_process.terminate()
+            finally:
+                # Make sure we always terminate the node process
+                if node_process:
                     try:
+                        node_process.terminate()
                         node_process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
+                    except subprocess.TimeoutExpired as e:
+                        with stdout_lock:
+                            fail(test)
+                            print(
+                                f"└─▶ \033[31mError terminating node process within 5s: {e}"
+                            )
                         # If termination times out, force kill the process
                         node_process.kill()
                         node_process.wait()
-                except Exception as e:
-                    # Ensure we don't fail the test on process termination issues
-                    with stdout_lock:
-                        print(f"└─▶ \033[31mError terminating node process: {e}")
-
-            # Clean up temp directory
-            if temp_dir:
-                try:
-                    temp_dir.cleanup()
-                except Exception as e:
-                    # Ensure we don't fail the test on cleanup issues
-                    with stdout_lock:
-                        print(f"└─▶ \033[31mError cleaning up temp directory: {e}")
+                    except Exception as e:
+                        # Ensure we don't fail the test on process termination issues
+                        with stdout_lock:
+                            fail(test)
+                            print(f"└─▶ \033[31mError terminating node process: {e}")
 
 
 @contextmanager
