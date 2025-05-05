@@ -101,6 +101,10 @@ public:
     return result;
   }
 
+  auto strictness() const -> strictness_level override {
+    return op_->strictness();
+  }
+
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
     return op_->infer_type(input);
@@ -129,14 +133,14 @@ public:
     // required pipeline, and have at least one named argument.
     auto pipe = std::optional<pipeline>{};
     auto parser = argument_parser2::operator_(name());
-    parser.named("idle_after", args.idle_after, "<duration>");
-    parser.named("min_demand_elements", args.min_demand_elements, "<number>");
-    parser.named("max_demand_elements", args.max_demand_elements, "<number>");
-    parser.named("max_demand_batches", args.max_demand_batches, "<number>");
-    parser.named("min_backoff", args.min_backoff, "<duration>");
-    parser.named("max_backoff", args.max_backoff, "<duration>");
-    parser.named("backoff_rate", args.backoff_rate, "<number>");
-    parser.named("detached", args.detached, "<bool>");
+    parser.named("idle_after", args.idle_after);
+    parser.named("min_demand_elements", args.min_demand_elements);
+    parser.named("max_demand_elements", args.max_demand_elements);
+    parser.named("max_demand_batches", args.max_demand_batches);
+    parser.named("min_backoff", args.min_backoff);
+    parser.named("max_backoff", args.max_backoff);
+    parser.named("backoff_rate", args.backoff_rate);
+    parser.named("detached", args.detached);
     parser.positional("{ … }", pipe);
     TRY(parser.parse(inv, ctx));
     auto failed = false;

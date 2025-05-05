@@ -271,6 +271,8 @@ struct demand_settings {
   std::optional<double> backoff_rate = {};
 };
 
+enum class strictness_level { normal, strict };
+
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
 public:
@@ -401,6 +403,11 @@ public:
     return {};
   }
 
+  /// Returns the maximum demand from an operator to its upstream.
+  virtual auto strictness() const -> strictness_level {
+    return strictness_level::normal;
+  }
+
   /// Retrieve the output type of this operator for a given input.
   ///
   /// The default implementation will try to instantiate the operator and then
@@ -422,10 +429,10 @@ public:
   template <class In, class Out>
   [[nodiscard]] inline auto check_type() const -> caf::expected<void> {
     auto out = infer_type<In>();
-    if (!out) {
+    if (! out) {
       return out.error();
     }
-    if (!out->template is<Out>()) {
+    if (! out->template is<Out>()) {
       return caf::make_error(ec::type_clash,
                              fmt::format("expected {} as output but got {}",
                                          operator_type_name<Out>(),
@@ -576,7 +583,7 @@ public:
     if constexpr (Inspector::is_loading) {
       x.operators_.clear();
       auto ops = size_t{};
-      if (!f.begin_sequence(ops)) {
+      if (! f.begin_sequence(ops)) {
         return false;
       }
       x.operators_.reserve(ops);
@@ -589,7 +596,7 @@ public:
       }
       return f.end_sequence();
     } else {
-      if (!f.begin_sequence(x.operators_.size())) {
+      if (! f.begin_sequence(x.operators_.size())) {
         return false;
       }
       for (auto& op : x.operators_) {
@@ -716,7 +723,7 @@ private:
   template <class T>
   static auto convert_output(caf::expected<generator<T>> x)
     -> caf::expected<operator_output> {
-    if (!x) {
+    if (! x) {
       return x.error();
     }
     return std::move(*x);
@@ -774,7 +781,7 @@ public:
       auto it = states.find(slice.schema());
       if (it == states.end()) {
         auto state = initialize(slice.schema(), ctrl);
-        if (!state) {
+        if (! state) {
           diagnostic::error(state.error()).emit(ctrl.diagnostics());
           break;
         }
