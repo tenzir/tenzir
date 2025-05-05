@@ -108,7 +108,7 @@ public:
             check(b->AppendNulls(arg.length()));
           },
           [&](const duration_type& t) {
-            diagnostic::warning("casting to `duration` has no effect")
+            diagnostic::warning("interpreting as `{}` has no effect", name())
               .primary(expr, "already has type `duration`")
               .hint("use `count_{}` to extract the number of {}", name(),
                     name())
