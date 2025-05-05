@@ -113,6 +113,15 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   void emit(diagnostic diag) override {
     TENZIR_TRACE("{} {} emits diagnostic: {:?}", *state.self, state.op->name(),
                  diag);
+    switch (state.op->strictness()) {
+      case strictness_level::strict:
+        if (diag.severity == severity::warning) {
+          diag.severity = severity::error;
+        }
+        break;
+      case strictness_level::normal:
+        break;
+    }
     if (diag.severity == severity::error) {
       throw std::move(diag);
     }

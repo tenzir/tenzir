@@ -271,6 +271,8 @@ struct demand_settings {
   std::optional<double> backoff_rate = {};
 };
 
+enum class strictness_level { normal, strict };
+
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
 public:
@@ -399,6 +401,11 @@ public:
   /// Returns the maximum demand from an operator to its upstream.
   virtual auto demand() const -> demand_settings {
     return {};
+  }
+
+  /// Returns the maximum demand from an operator to its upstream.
+  virtual auto strictness() const -> strictness_level {
+    return strictness_level::normal;
   }
 
   /// Retrieve the output type of this operator for a given input.
