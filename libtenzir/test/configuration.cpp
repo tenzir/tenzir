@@ -54,16 +54,18 @@ struct fixture {
   template <class T>
   T get(std::string_view name) {
     auto x = caf::get_if<T>(&cfg, name);
-    if (!x)
+    if (not x) {
       FAIL("no such config entry: " << name);
+    }
     return *x;
   }
 
   template <class T>
   std::vector<T> get_vec(std::string_view name) {
     auto x = detail::unpack_config_list_to_vector<T>(cfg, name);
-    if (!x)
+    if (not x) {
       FAIL("failed to unpack " << name << " to vector");
+    }
     return *x;
   }
 
@@ -105,7 +107,7 @@ TEST(environment key mangling and value parsing) {
   env("TENZIR_PLUGINS", "foo,bar");       // list parsed manually
   env("TENZIR_INVALID", "foo,bar");       // list parsed late
   parse();
-  CHECK(!holds_alternative<std::string>("tenzir.endpoint"));
+  CHECK(not holds_alternative<std::string>("tenzir.endpoint"));
   CHECK(get<bool>("tenzir.bare-mode"));
   CHECK(get<bool>("tenzir.node"));
   CHECK_EQUAL(get<caf::config_value::integer>("tenzir.import.batch-size"), 42);
@@ -164,7 +166,7 @@ TEST(command line no value for timespan value generates default value) {
               std::chrono::milliseconds{0}.count());
 }
 
-TEST(command line no value for bool value generates default true value by CAF) {
+TEST(command line no value for bool value generates default true value) {
   parse(std::vector<std::string>{"rebuild", "--all="});
   CHECK_EQUAL(get<bool>("tenzir.rebuild.all"), true);
 }
