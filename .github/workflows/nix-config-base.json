@@ -12,14 +12,6 @@
         "ghcr.io",
         "docker.io"
       ]
-    },
-    {
-      "name": "tenzir",
-      "gha-runner-labels": ["macOS", "ARM64"],
-      "static": true,
-      "upload-package-to-github": true,
-      "package-stores": [],
-      "image-registries": []
     }
   ]
 }
