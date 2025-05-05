@@ -3,9 +3,14 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/concept/parseable/string/char_class.hpp>
+#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/detail/string_literal.hpp>
+#include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -13,25 +18,38 @@
 
 #include <arrow/type.h>
 
-namespace tenzir::plugins::unordered {
+namespace tenzir::plugins::strict {
 
 namespace {
 
-class unordered_operator final : public operator_base {
+class strict_operator final : public operator_base {
 public:
-  unordered_operator() = default;
+  strict_operator() = default;
 
-  explicit unordered_operator(operator_ptr op) : op_{std::move(op)} {
-    if (auto* op = dynamic_cast<unordered_operator*>(op_.get())) {
+  strict_operator(operator_ptr op) : op_{std::move(op)} {
+    if (auto* op = dynamic_cast<strict_operator*>(op_.get())) {
       op_ = std::move(op->op_);
     }
-    TENZIR_ASSERT(not dynamic_cast<const unordered_operator*>(op_.get()));
+    TENZIR_ASSERT(not dynamic_cast<const strict_operator*>(op_.get()));
   }
 
-  auto optimize(const expression& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
-    (void)order;
-    return op_->optimize(filter, event_order::unordered);
+    auto result = op_->optimize(filter, order);
+    if (not result.replacement) {
+      return result;
+    }
+    if (auto* pipe = dynamic_cast<pipeline*>(result.replacement.get())) {
+      auto ops = std::move(*pipe).unwrap();
+      for (auto& op : ops) {
+        op = std::make_unique<strict_operator>(std::move(result.replacement));
+      }
+      result.replacement = std::make_unique<pipeline>(std::move(ops));
+      return result;
+    }
+    result.replacement
+      = std::make_unique<strict_operator>(std::move(result.replacement));
+    return result;
   }
 
   auto instantiate(operator_input input, operator_control_plane& ctrl) const
@@ -40,7 +58,7 @@ public:
   }
 
   auto copy() const -> operator_ptr override {
-    return std::make_unique<unordered_operator>(op_->copy());
+    return std::make_unique<strict_operator>(op_->copy());
   };
 
   auto location() const -> operator_location override {
@@ -64,7 +82,7 @@ public:
   }
 
   auto strictness() const -> strictness_level override {
-    return op_->strictness();
+    return strictness_level::strict;
   }
 
   auto infer_type_impl(operator_type input) const
@@ -73,38 +91,18 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "unordered";
+    return "strict";
   }
 
-  friend auto inspect(auto& f, unordered_operator& x) -> bool {
-    return f.object(x).fields(f.field("op", x.op_));
+  friend auto inspect(auto& f, strict_operator& x) -> bool {
+    return f.apply(x.op_);
   }
 
 private:
   operator_ptr op_;
 };
 
-class plugin final : public virtual operator_plugin<unordered_operator>,
-                     public virtual operator_factory_plugin {
-public:
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = true,
-      .sink = true,
-    };
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto result = p.parse_operator();
-    if (not result.inner) {
-      diagnostic::error("failed to parse operator")
-        .primary(result.source)
-        .throw_();
-    }
-    return std::make_unique<unordered_operator>(std::move(result.inner));
-  }
-
+struct strict : public virtual operator_plugin2<strict_operator> {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipe = pipeline{};
@@ -112,7 +110,7 @@ public:
     TRY(parser.parse(inv, ctx));
     auto ops = std::move(pipe).unwrap();
     for (auto& op : ops) {
-      op = std::make_unique<unordered_operator>(std::move(op));
+      op = std::make_unique<strict_operator>(std::move(op));
     }
     return std::make_unique<pipeline>(std::move(ops));
   }
@@ -120,6 +118,6 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::unordered
+} // namespace tenzir::plugins::strict
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::unordered::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::strict::strict)

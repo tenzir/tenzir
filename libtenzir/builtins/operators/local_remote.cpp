@@ -91,6 +91,10 @@ public:
     return op_->demand();
   }
 
+  auto strictness() const -> strictness_level override {
+    return op_->strictness();
+  }
+
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
     return op_->infer_type(input);
