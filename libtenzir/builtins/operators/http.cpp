@@ -8,8 +8,10 @@
 
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/tql2/plugin.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/action.hpp>
@@ -35,7 +37,9 @@ namespace ssl = caf::net::ssl;
 
 struct http_args {
   located<std::string> url;
-  std::optional<located<bool>> server;
+  std::optional<located<std::string>> method;
+  std::optional<located<std::string>> payload;
+  std::optional<location> server;
   std::optional<located<record>> responses;
   located<bool> tls{false, location::unknown};
   std::optional<located<std::string>> keyfile;
@@ -47,12 +51,14 @@ struct http_args {
 
   auto add_to(argument_parser2& p) {
     p.positional("url", url);
+    p.named("method", method);
+    p.named("payload", payload);
     p.named("server", server);
-    p.named("responses", responses);
     p.named_optional("tls", tls);
     p.named("certfile", certfile);
     p.named("keyfile", keyfile);
     p.named("password", password);
+    p.named("responses", responses);
     p.named_optional("max_request_size", max_request_size);
   }
 
@@ -62,74 +68,86 @@ struct http_args {
       diagnostic::error("`url` must not be empty").primary(url).emit(dh);
       return failure::promise();
     }
-    const auto col = url.inner.rfind(':');
-    if (col == 0 or col == std::string::npos) {
-      diagnostic::error("`url` must have the form `<host>:<port>`")
-        .primary(url)
-        .emit(dh);
-      return failure::promise();
-    }
-    const auto* end = url.inner.data() + url.inner.size();
-    const auto [ptr, err]
-      = std::from_chars(url.inner.data() + col + 1, end, port);
-    if (err != std::errc{}) {
-      diagnostic::error("failed to parse port").primary(url).emit(dh);
-      return failure::promise();
-    }
-    if (ptr != end) {
-      diagnostic::error("`url` must have the form `<host>:<port>`")
-        .primary(url)
-        .emit(dh);
-      return failure::promise();
-    }
-    url.inner.resize(col);
-    if (not server) {
-      diagnostic::error("HTTP client is not yet implement")
-        .note("pass `server=true` to start an HTTP server")
-        .emit(dh);
-      return failure::promise();
-    }
-    if (not server->inner) {
-      diagnostic::error("HTTP client is not yet implement")
-        .primary(*server, "set to `true` to start an HTTP server")
-        .emit(dh);
-      return failure::promise();
-    }
-    if (max_request_size.inner == 0) {
-      diagnostic::error("request size must not be zero")
-        .primary(max_request_size)
-        .emit(dh);
-      return failure::promise();
-    }
-    if (responses) {
-      if (responses->inner.empty()) {
-        diagnostic::error("`responses` must not be empty")
-          .primary(*responses)
+    if (server) {
+      for (const auto& opt : {method, payload}) {
+        if (opt) {
+          diagnostic::error(
+            "client options cannot be specified when `server=true`")
+            .primary(opt.value())
+            .secondary(server.value())
+            .emit(dh);
+          return failure::promise();
+        }
+      }
+      const auto col = url.inner.rfind(':');
+      if (col == 0 or col == std::string::npos) {
+        diagnostic::error("`url` must have the form `<host>:<port>`")
+          .primary(url)
           .emit(dh);
         return failure::promise();
       }
-      for (const auto& [k, v] : responses->inner) {
-        const auto* rec = try_as<record>(v);
-        if (not rec) {
-          diagnostic::error("field must be `record`")
+      const auto* end = url.inner.data() + url.inner.size();
+      const auto [ptr, err]
+        = std::from_chars(url.inner.data() + col + 1, end, port);
+      if (err != std::errc{}) {
+        diagnostic::error("failed to parse port").primary(url).emit(dh);
+        return failure::promise();
+      }
+      if (ptr != end) {
+        diagnostic::error("`url` must have the form `<host>:<port>`")
+          .primary(url)
+          .emit(dh);
+        return failure::promise();
+      }
+      url.inner.resize(col);
+      if (responses) {
+        if (responses->inner.empty()) {
+          diagnostic::error("`responses` must not be empty")
             .primary(*responses)
             .emit(dh);
           return failure::promise();
         }
-        TRY(has_typed_key<uint64_t>(*rec, "code", responses->source, dh));
-        TRY(has_typed_key<std::string>(*rec, "content_type", responses->source,
-                                       dh));
-        TRY(has_typed_key<std::string>(*rec, "body", responses->source, dh));
-        const auto code = as<uint64_t>(rec->at("code"));
-        const auto ucode
-          = detail::narrow<std::underlying_type_t<http::status>>(code);
-        auto status = http::status{};
-        if (not http::from_integer(ucode, status)) {
-          diagnostic::error("got invalid http status code `{}`", code)
-            .primary(responses->source)
-            .emit(dh);
-          return failure::promise();
+        for (const auto& [k, v] : responses->inner) {
+          const auto* rec = try_as<record>(v);
+          if (not rec) {
+            diagnostic::error("field must be `record`")
+              .primary(*responses)
+              .emit(dh);
+            return failure::promise();
+          }
+          TRY(has_typed_key<uint64_t>(*rec, "code", responses->source, dh));
+          TRY(has_typed_key<std::string>(*rec, "content_type",
+                                         responses->source, dh));
+          TRY(has_typed_key<std::string>(*rec, "body", responses->source, dh));
+          const auto code = as<uint64_t>(rec->at("code"));
+          const auto ucode
+            = detail::narrow<std::underlying_type_t<http::status>>(code);
+          auto status = http::status{};
+          if (not http::from_integer(ucode, status)) {
+            diagnostic::error("got invalid http status code `{}`", code)
+              .primary(responses->source)
+              .emit(dh);
+            return failure::promise();
+          }
         }
+      }
+    } else {
+      if (responses) {
+        diagnostic::error(
+          "server options cannot be specified without `server=true`")
+          .primary(responses.value())
+          .emit(dh);
+        return failure::promise();
+      }
+      if (not method) {
+        method = {"get", location::unknown};
+      }
+      auto m = http::method{};
+      if (not http::from_string(method->inner, m)) {
+        diagnostic::error("invalid http method: `{}`", method->inner)
+          .primary(method->source)
+          .emit(dh);
+        return failure::promise();
       }
     }
     const auto tls_logic
@@ -159,9 +177,19 @@ struct http_args {
       }
       return {};
     };
-    TRY(tls_logic(certfile, "certfile", true));
-    TRY(tls_logic(keyfile, "keyfile", true));
+    TRY(tls_logic(certfile, "certfile", server.has_value()));
+    TRY(tls_logic(keyfile, "keyfile", server.has_value()));
     TRY(tls_logic(password, "password"));
+    if (not url.inner.starts_with("http://")
+        and url.inner.starts_with("https://")) {
+      url.inner.insert(0, tls.inner ? "https://" : "http://");
+    }
+    if (max_request_size.inner == 0) {
+      diagnostic::error("request size must not be zero")
+        .primary(max_request_size)
+        .emit(dh);
+      return failure::promise();
+    }
     return {};
   }
 
@@ -187,20 +215,22 @@ struct http_args {
 
   friend auto inspect(auto& f, http_args& x) -> bool {
     return f.object(x).fields(
-      f.field("url", x.url), f.field("responses", x.responses),
-      f.field("tls", x.tls), f.field("certfile", x.certfile),
-      f.field("keyfile", x.keyfile), f.field("password", x.password),
+      f.field("url", x.url), f.field("method", x.method),
+      f.field("payload", x.payload), f.field("server", x.server),
+      f.field("responses", x.responses), f.field("tls", x.tls),
+      f.field("keyfile", x.keyfile), f.field("certfile", x.certfile),
+      f.field("password", x.password),
       f.field("max_request_size", x.max_request_size), f.field("op", x.op),
       f.field("port", x.port));
   }
 };
 
-auto try_decompress_payload(const http::request& r, diagnostic_handler& dh)
-  -> std::optional<blob> {
-  if (not r.header().has_field("content-encoding")) {
+auto try_decompress_payload(const std::string_view encoding,
+                            const std::span<const std::byte> payload,
+                            diagnostic_handler& dh) -> std::optional<blob> {
+  if (encoding.empty()) {
     return std::nullopt;
   }
-  const auto encoding = r.header().field("content-encoding");
   const auto compression_type
     = arrow::util::Codec::GetCompressionType(std::string{encoding});
   // Arrow straight up crashes if we use a codec created from the
@@ -216,17 +246,17 @@ auto try_decompress_payload(const http::request& r, diagnostic_handler& dh)
     return std::nullopt;
   }
   auto out = blob{};
-  out.resize(r.payload().size_bytes() * 2);
+  out.resize(payload.size_bytes() * 2);
   const auto codec = arrow::util::Codec::Create(
     compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
   TENZIR_ASSERT(codec.ok());
   const auto decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
   auto written = size_t{};
   auto read = size_t{};
-  while (read != r.payload().size_bytes()) {
+  while (read != payload.size_bytes()) {
     const auto result = decompressor->Decompress(
-      detail::narrow<int64_t>(r.payload().size_bytes() - read),
-      reinterpret_cast<const uint8_t*>(r.payload().data() + read),
+      detail::narrow<int64_t>(payload.size_bytes() - read),
+      reinterpret_cast<const uint8_t*>(payload.data() + read),
       detail::narrow<int64_t>(out.capacity() - written),
       reinterpret_cast<uint8_t*>(out.data() + written));
     if (not result.ok()) {
@@ -265,14 +295,19 @@ auto try_decompress_payload(const http::request& r, diagnostic_handler& dh)
   }
   TENZIR_ASSERT(written != 0);
   out.resize(written);
-  return std::move(out);
+  return out;
 }
 
-class from_http_operator final : public crtp_operator<from_http_operator> {
-public:
-  from_http_operator() = default;
+constexpr auto inner(const located<std::string>& x) -> std::string {
+  return x.inner;
+};
 
-  from_http_operator(http_args args) : args_{std::move(args)} {
+class from_http_server_operator final
+  : public crtp_operator<from_http_server_operator> {
+public:
+  from_http_server_operator() = default;
+
+  from_http_server_operator(http_args args) : args_{std::move(args)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const
@@ -281,14 +316,13 @@ public:
     auto pull = std::optional<caf::async::consumer_resource<http::request>>{};
     auto context
       = ssl::context::enable(args_.tls.inner)
-          .and_then(ssl::emplace_server(ssl::tls::v1_2))
+          .and_then(ssl::emplace_server(ssl::tls::any))
           .and_then(ssl::enable_default_verify_paths())
-          .and_then(ssl::use_private_key_file_if(
-            args_.keyfile ? args_.keyfile->inner : "", ssl::format::pem))
+          .and_then(ssl::use_private_key_file_if(args_.keyfile.transform(inner),
+                                                 ssl::format::pem))
           .and_then(ssl::use_certificate_file_if(
-            args_.certfile ? args_.certfile->inner : "", ssl::format::pem))
-          .and_then(
-            ssl::use_password_if(args_.password ? args_.password->inner : ""));
+            args_.certfile.transform(inner), ssl::format::pem))
+          .and_then(ssl::use_password_if(args_.password.transform(inner)));
     auto server
       = http::with(ctrl.self().system())
           .context(std::move(context))
@@ -351,7 +385,8 @@ public:
             add_field("method", to_string(r.header().method()));
             add_field("version", r.header().version());
             if (not r.body().empty()) {
-              if (auto body = try_decompress_payload(r, dh)) {
+              const auto encoding = r.header().field("content-encoding");
+              if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
                 rb.field("body", std::move(*body));
               } else {
                 rb.field("body", r.body());
@@ -359,8 +394,8 @@ public:
             }
             return sb.finish_assert_one_slice();
           })
-          .to_typed_stream<table_slice>("from_http", std::chrono::seconds{1},
-                                        1);
+          .to_typed_stream<table_slice>("from_http_server",
+                                        std::chrono::seconds{1}, 1);
     ctrl.self().observe(stream, 30, 10).for_each([&](const table_slice& slice) {
       ctrl.set_waiting(false);
       slices.push_back(slice);
@@ -385,14 +420,14 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "tql2.http";
+    return "tql2.http_server";
   }
 
   auto location() const -> operator_location override {
     return operator_location::local;
   }
 
-  friend auto inspect(auto& f, from_http_operator& x) -> bool {
+  friend auto inspect(auto& f, from_http_server_operator& x) -> bool {
     return f.apply(x.args_);
   }
 
@@ -400,7 +435,117 @@ private:
   http_args args_;
 };
 
-struct from_http final : public virtual operator_plugin2<from_http_operator> {
+class from_http_client_operator final
+  : public crtp_operator<from_http_client_operator> {
+public:
+  from_http_client_operator() = default;
+
+  from_http_client_operator(http_args args) : args_{std::move(args)} {
+  }
+
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    co_yield {};
+    auto context
+      = ssl::context::enable(args_.tls.inner)
+          .and_then(ssl::emplace_client(ssl::tls::any))
+          .and_then(ssl::enable_default_verify_paths())
+          .and_then(ssl::use_private_key_file_if(args_.keyfile.transform(inner),
+                                                 ssl::format::pem))
+          .and_then(ssl::use_certificate_file_if(
+            args_.certfile.transform(inner), ssl::format::pem))
+          .and_then(ssl::use_password_if(args_.password.transform(inner)));
+    auto method = http::method{};
+    http::from_string(args_.method->inner, method);
+    auto [request, _]
+      = http::with(ctrl.self().system())
+          .context(std::move(context))
+          .connect(caf::make_uri(args_.url.inner))
+          .request(method, args_.payload ? args_.payload->inner : "")
+          .or_else([&](caf::error e) {
+            diagnostic::error("failed to make http request: {}", e)
+              .primary(args_.op)
+              .emit(ctrl.diagnostics());
+          })
+          .value();
+    auto slices = std::vector<table_slice>{};
+    auto [ptr, launch] = ctrl.self().system().spawn_inactive();
+    ptr->link_to(static_cast<exec_node_actor>(&ctrl.self()));
+    auto stream
+      = request.observe_on(ptr)
+          .map([responses = args_.responses, dh = ctrl.shared_diagnostics()](
+                 const http::response& r) mutable {
+            auto sb = series_builder{};
+            auto rb = sb.record();
+            if (not r.header_fields().empty()) {
+              auto hb = rb.field("headers").record();
+              for (auto&& [k, v] : r.header_fields()) {
+                hb.field(k, v);
+              }
+            }
+            if (not r.body().empty()) {
+              const auto& headers = r.header_fields();
+              const auto* it = std::ranges::find_if(headers, [](auto&& x) {
+                return caf::icase_equal(x.first, "content-encoding");
+              });
+              const auto encoding
+                = it != std::ranges::end(headers) ? it->first : "";
+              if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
+                rb.field("body", std::move(*body));
+              } else {
+                rb.field("body", r.body());
+              }
+            }
+            return sb.finish_assert_one_slice();
+          })
+          .to_typed_stream<table_slice>("from_http_client",
+                                        std::chrono::seconds{1}, 1);
+    auto done = false;
+    ctrl.self()
+      .observe(stream, 30, 1)
+      .do_finally([&]() {
+        done = true;
+        ctrl.set_waiting(false);
+      })
+      .for_each([&](const table_slice& slice) {
+        ctrl.set_waiting(false);
+        slices.push_back(slice);
+      });
+    launch();
+    while (not done) {
+      ctrl.set_waiting(true);
+      co_yield {};
+      if (slices.empty()) {
+        co_return;
+      }
+      // NOTE: Must be an index-based loop. The thread can go back to the
+      // observe loop after yielding here, causing the vector's iterator to be
+      // invalidated.
+      for (auto i = size_t{}; i < slices.size(); ++i) {
+        co_yield slices[i];
+      }
+      slices.clear();
+    }
+  }
+
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.http_client";
+  }
+
+  friend auto inspect(auto& f, from_http_client_operator& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  http_args args_;
+};
+
+struct from_http final : public virtual operator_factory_plugin {
   auto name() const -> std::string override {
     return "tql2.from_http";
   }
@@ -413,11 +558,21 @@ struct from_http final : public virtual operator_plugin2<from_http_operator> {
     args.add_to(p);
     TRY(p.parse(inv, ctx));
     TRY(args.validate(ctx));
-    return std::make_unique<from_http_operator>(std::move(args));
+    if (args.server) {
+      return std::make_unique<from_http_server_operator>(std::move(args));
+    }
+    return std::make_unique<from_http_client_operator>(std::move(args));
   }
 };
+
+using server_inspection_plugin
+  = operator_inspection_plugin<from_http_server_operator>;
+using client_inspection_plugin
+  = operator_inspection_plugin<from_http_client_operator>;
 
 } // namespace
 } // namespace tenzir::plugins::http
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::from_http)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::server_inspection_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::http::client_inspection_plugin)
