@@ -50,6 +50,9 @@ struct string_keypair {
     cleanse_memory(private_key.data(), private_key.size());
     cleanse_memory(public_key.data(), public_key.size());
   }
+
+  static auto from_private_key(std::string&& private_key)
+    -> caf::expected<string_keypair>;
 };
 
 /// Generate a new keypair.
