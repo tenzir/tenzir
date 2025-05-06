@@ -379,13 +379,15 @@ auto pipeline::split_at_void() && -> caf::expected<std::vector<pipeline>> {
     if (input) {
       return op->infer_type(*input);
     }
-    if (auto output = op->infer_type(tag_v<void>)) {
-      return *output;
-    }
+    // The order here is important for consistency with how implicit sources are
+    // added to pipelines.
     if (auto output = op->infer_type(tag_v<table_slice>)) {
       return *output;
     }
-    return op->infer_type(tag_v<chunk_ptr>);
+    if (auto output = op->infer_type(tag_v<chunk_ptr>)) {
+      return *output;
+    }
+    return op->infer_type(tag_v<void>);
   };
   auto result = std::vector<pipeline>{};
   auto input = std::optional<operator_type>{};

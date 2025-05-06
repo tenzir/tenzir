@@ -231,8 +231,8 @@ class branch {
 public:
   branch(branch_actor::pointer self, std::string definition, node_actor node,
          shared_diagnostic_handler dh, metrics_receiver_actor metrics_receiver,
-         uint64_t operator_index, ast::expression predicate_expr,
-         located<pipeline> then_pipe,
+         uint64_t operator_index, bool has_terminal, bool is_hidden,
+         ast::expression predicate_expr, located<pipeline> then_pipe,
          std::optional<located<pipeline>> else_pipe)
     : self_{self},
       definition_{std::move(definition)},
@@ -240,6 +240,8 @@ public:
       dh_{std::move(dh)},
       metrics_receiver_{std::move(metrics_receiver)},
       operator_index_{operator_index},
+      has_terminal_{has_terminal},
+      is_hidden_{is_hidden},
       predicate_expr_{std::move(predicate_expr)},
       then_branch_{check(spawn_branch(std::move(then_pipe), true))},
       else_branch_{spawn_branch(std::move(else_pipe), false)} {
@@ -298,11 +300,11 @@ private:
         branch_actor{self_}, predicate, pipe->source));
       TENZIR_ASSERT(pipe->inner.is_closed());
     }
-    auto handle
-      = self_->spawn(pipeline_executor,
-                     std::move(pipe->inner).optimize_if_closed(), definition_,
-                     receiver_actor<diagnostic>{self_},
-                     metrics_receiver_actor{self_}, node_, false, false);
+    auto handle = self_->spawn(pipeline_executor,
+                               std::move(pipe->inner).optimize_if_closed(),
+                               definition_, receiver_actor<diagnostic>{self_},
+                               metrics_receiver_actor{self_}, node_,
+                               has_terminal_, is_hidden_);
     ++running_branches_;
     self_->monitor(handle, [this, source = pipe->source](caf::error err) {
       if (err) {
@@ -526,6 +528,9 @@ private:
   uint64_t operator_index_ = 0;
   detail::flat_map<uint64_t, detail::flat_map<uuid, uuid>> registered_metrics;
 
+  bool has_terminal_;
+  bool is_hidden_;
+
   size_t running_branches_ = 0;
   ast::expression predicate_expr_;
   located<pipeline_executor_actor> then_branch_;
@@ -653,7 +658,8 @@ public:
     auto branch = scope_linked{ctrl.self().spawn<caf::linked>(
       caf::actor_from_state<class branch>, std::string{ctrl.definition()},
       ctrl.node(), ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
-      ctrl.operator_index(), predicate_, then_pipe_, else_pipe_)};
+      ctrl.operator_index(), ctrl.has_terminal(), ctrl.is_hidden(), predicate_,
+      then_pipe_, else_pipe_)};
     ctrl.self().system().registry().put(
       fmt::format("tenzir.branch.{}.{}", id_, ctrl.run_id()), branch.get());
     co_yield {};

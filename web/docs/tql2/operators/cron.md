@@ -3,7 +3,7 @@
 Runs a pipeline periodically according to a cron expression.
 
 ```tql
-cron schedule:string { … }
+cron schedule:string, [parallel=int] { … }
 ```
 
 ## Description
@@ -25,27 +25,34 @@ The cron expression with the following syntax:
 
 The 6 fields are separated by a space. Allowed values for each field are:
 
-| Field | Value range* | Special characters | Alternative Literals |
-| --- | ---  | --- | --- |
-| seconds |  0-59 | `*` `,` `-` | |
-| minutes |  0-59 | `*` `,` `-` | |
-| hours |  0-23 | `*` `,` `-` | |
-| days of | 1-31 | `*` `,` `-` `?` `L` `W` | |
-| months | 1-12 | `*` `,` `-` | `JAN` ... `DEC` |
-| days of week |  0-6 | `*` `,` `-` `?` `L` `#` | `SUN` ... `SAT` |
+| Field        | Value range\* | Special characters      | Alternative Literals |
+| ------------ | ------------- | ----------------------- | -------------------- |
+| seconds      | 0-59          | `*` `,` `-`             |                      |
+| minutes      | 0-59          | `*` `,` `-`             |                      |
+| hours        | 0-23          | `*` `,` `-`             |                      |
+| days of      | 1-31          | `*` `,` `-` `?` `L` `W` |                      |
+| months       | 1-12          | `*` `,` `-`             | `JAN` ... `DEC`      |
+| days of week | 0-6           | `*` `,` `-` `?` `L` `#` | `SUN` ... `SAT`      |
 
 The special characters have the following meaning:
 
-| Special character | Meaning | Description |
-| --- | --- | --- |
-| `*` | all values | selects all values within a field |
-| `?` | no specific value | specify one field and leave the other unspecified |
-| `-` | range | specify ranges |
-| `,` | comma | specify additional values |
-| `/` | slash | specify increments |
-| `L` | last | last day of the month or last day of the week |
-| `W` | weekday | the weekday nearest to the given day |
-| `#` | nth |  specify the Nth day of the month |
+| Special character | Meaning           | Description                                       |
+| ----------------- | ----------------- | ------------------------------------------------- |
+| `*`               | all values        | selects all values within a field                 |
+| `?`               | no specific value | specify one field and leave the other unspecified |
+| `-`               | range             | specify ranges                                    |
+| `,`               | comma             | specify additional values                         |
+| `/`               | slash             | specify increments                                |
+| `L`               | last              | last day of the month or last day of the week     |
+| `W`               | weekday           | the weekday nearest to the given day              |
+| `#`               | nth               | specify the Nth day of the month                  |
+
+### `parallel: int`
+
+Specifies how many runs of the pipeline may run in parallel if a run is not
+finished by the time the next is supposed to start.
+
+Defaults to 1, i.e., no overlap.
 
 ## Examples
 

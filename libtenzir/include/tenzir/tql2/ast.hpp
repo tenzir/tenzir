@@ -256,6 +256,9 @@ public:
 
   static auto try_from(ast::expression expr) -> std::optional<field_path>;
 
+  template <class... Segments>
+  static auto from(located<Segments>... path) -> field_path;
+
   auto get_location() const -> location {
     return expr_.get_location();
   }
@@ -776,6 +779,50 @@ inline pipeline::pipeline(std::vector<statement> body) : body{std::move(body)} {
 inline pipeline::~pipeline() = default;
 inline pipeline::pipeline(pipeline&&) noexcept = default;
 inline auto pipeline::operator=(pipeline&&) noexcept -> pipeline& = default;
+
+template <class... Segments>
+auto field_path::from(located<Segments>... path) -> field_path {
+  static_assert(sizeof...(path) > 0);
+  const auto combine = [](auto&& segment, expression expr) -> expression {
+    if constexpr (concepts::integer<decltype(segment.inner)>) {
+      return ast::index_expr{
+        std::move(expr),
+        location::unknown,
+        ast::constant{detail::narrow<int64_t>(segment.inner), segment.source},
+        location::unknown,
+        false,
+      };
+    } else {
+      return ast::field_access{
+        std::move(expr),
+        location::unknown,
+        false,
+        ast::identifier{
+          std::string{std::forward<decltype(segment)>(segment).inner},
+          segment.source},
+      };
+    }
+  };
+  const auto recurse
+    = [&](const auto& self, auto&& head, auto&&... tail) -> expression {
+    if constexpr (sizeof...(tail) == 0) {
+      if constexpr (concepts::integer<decltype(head.inner)>) {
+        return combine(std::forward<decltype(head)>(head),
+                       this_{location::unknown});
+      } else {
+        return ast::root_field{
+          .id = {head.inner, head.source},
+          .has_question_mark = false,
+        };
+      }
+    } else {
+      return combine(std::forward<decltype(head)>(head),
+                     self(self, std::forward<decltype(tail)>(tail)...));
+    }
+  };
+  return check(
+    try_from(recurse(recurse, std::forward<decltype(path)>(path)...)));
+}
 
 /// AST node visitor with mutable access.
 ///
