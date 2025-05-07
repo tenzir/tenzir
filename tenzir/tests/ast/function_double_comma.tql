@@ -1,2 +1,4 @@
-// error
+// test: ast
+// error: true
+
 a = b(c,,)

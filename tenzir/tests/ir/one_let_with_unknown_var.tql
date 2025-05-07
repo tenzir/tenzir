@@ -1,2 +1,4 @@
-// error
+// test: ir
+// error: true
+
 let $foo = $bar
