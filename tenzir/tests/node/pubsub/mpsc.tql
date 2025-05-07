@@ -1,12 +1,14 @@
 pipeline::detach {
-  from {id: 1}
-  repeat
+  every 10ms {
+    from {id: 1}
+  }
   publish "foo"
 }
 
 pipeline::detach {
-  from {id: 2}
-  repeat
+  every 10ms {
+    from {id: 2}
+  }
   publish "foo"
 }
 

@@ -88,7 +88,7 @@ struct header_parser : parser_base<header_parser> {
     };
     auto to_facility_and_severity = [&](uint16_t in) {
       // Retrieve facillity and severity from prival.
-      if constexpr (!std::is_same_v<Attribute, unused_type>) {
+      if constexpr (not std::is_same_v<Attribute, unused_type>) {
         x.facility = in / 8;
         x.severity = in % 8;
       }
@@ -163,7 +163,7 @@ struct parameters_parser : parser_base<parameters_parser> {
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     auto param = parameter_parser{}->*[&](parameter in) {
-      if constexpr (!std::is_same_v<Attribute, unused_type>) {
+      if constexpr (not std::is_same_v<Attribute, unused_type>) {
         x.emplace(std::move(in.key), data{std::move(in.value)});
       }
     };
@@ -216,7 +216,7 @@ struct structured_data_parser : parser_base<structured_data_parser> {
     using namespace parsers;
     auto sd
       = structured_data_element_parser{}->*[&](structured_data_element in) {
-          if constexpr (!std::is_same_v<Attribute, unused_type>) {
+          if constexpr (not std::is_same_v<Attribute, unused_type>) {
             x.emplace(std::move(in.id), tenzir::data{std::move(in.params)});
           }
         };
@@ -352,7 +352,7 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
       return in <= 191;
     };
     const auto to_facility_and_severity = [&](uint16_t in) {
-      if constexpr (!std::is_same_v<Attribute, unused_type>) {
+      if constexpr (not std::is_same_v<Attribute, unused_type>) {
         x.facility = in / 8;
         x.severity = in % 8;
       }
@@ -791,28 +791,34 @@ public:
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
-    for (auto&& slice : input) {
+    for (const auto& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
       const auto ty = as<record_type>(slice.schema());
-      auto facility
-        = eval_as<uint64_type>("facility", args_.facility, slice, dh, [&]() {
+      auto facility = eval_as<uint64_type>(
+        "facility", args_.facility, slice, dh, [&, warned = false] mutable {
+          if (not warned) {
+            warned = true;
             diagnostic::warning("`facility` evaluated to `null`")
               .primary(args_.loc(args_.facility))
               .note("defaulting to `1`")
               .emit(dh);
-            return 1;
-          });
-      auto severity
-        = eval_as<uint64_type>("severity", args_.severity, slice, dh, [&]() {
+          }
+          return 1;
+        });
+      auto severity = eval_as<uint64_type>(
+        "severity", args_.severity, slice, dh, [&, warned = false] mutable {
+          if (not warned) {
+            warned = true;
             diagnostic::warning("`severity` evaluated to `null`")
               .primary(args_.loc(args_.severity))
               .note("defaulting to `6`")
               .emit(dh);
-            return 6;
-          });
+          }
+          return 6;
+        });
       auto timestamp
         = eval_as<time_type>("timestamp", args_.timestamp, slice, dh);
       auto hostname
@@ -849,8 +855,8 @@ public:
         }
         if (*s > 7u) {
           diagnostic::warning(
-            "`severity` must be in the range 0 to 7, got `{}`", *f)
-            .primary(args_.loc(args_.facility))
+            "`severity` must be in the range 0 to 7, got `{}`", *s)
+            .primary(args_.loc(args_.severity))
             .note("defaulting to `6`")
             .emit(dh);
           *s = 6;
@@ -871,7 +877,7 @@ public:
           }
           fmt::format_to(it, " {}", std::views::take(*str, count));
         };
-        fmt::format_to(it, "<{}>{}", *f * 8 + *s, 1);
+        fmt::format_to(it, "<{}>{}", (*f * 8) + *s, 1);
         if (t) {
           fmt::format_to(
             it, " {:%FT%TZ}",
@@ -957,7 +963,7 @@ public:
   template <typename T>
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh,
-               auto&& make_default) const
+               auto make_default) const
     -> generator<std::optional<view<type_to_data_t<T>>>> {
     auto ms = std::invoke([&] {
       if (expr.get_location()) {
@@ -966,7 +972,7 @@ public:
       auto ndh = null_diagnostic_handler{};
       return eval(expr, slice, ndh);
     });
-    for (auto&& s : ms.parts()) {
+    for (const auto& s : ms.parts()) {
       if (s.type.kind().template is<null_type>()) {
         for (auto i = size_t{}; i < slice.rows(); ++i) {
           co_yield make_default();
@@ -974,9 +980,9 @@ public:
         continue;
       }
       if (s.type.kind().template is<T>()) {
-        for (auto&& val : s.template values<T>()) {
+        for (auto val : s.template values<T>()) {
           if (val) {
-            co_yield std::move(val).value();
+            co_yield std::move(val);
           } else {
             co_yield make_default();
           }
@@ -987,24 +993,25 @@ public:
         using alt_type = std::conditional_t<std::same_as<T, int64_type>,
                                             uint64_type, int64_type>;
         if (s.type.kind().template is<alt_type>()) {
-          auto overflow = false;
-          for (auto&& val : s.template values<alt_type>()) {
+          auto overflow_warned = false;
+          for (auto val : s.template values<alt_type>()) {
             if (not val) {
               co_yield make_default();
               continue;
             }
             if (not std::in_range<decltype(T::construct())>(*val)) {
-              overflow = true;
+              if (not overflow_warned) {
+                overflow_warned = true;
+                diagnostic::warning("overflow in `{}`, got `{}`", name, *val)
+                  .primary(args_.loc(expr))
+                  .emit(dh);
+              }
               co_yield make_default();
               continue;
             }
             co_yield *val;
           }
-          if (overflow) {
-            diagnostic::warning("`{}` must be a positive integer", name)
-              .primary(args_.loc(expr))
-              .emit(dh);
-          }
+          continue;
         }
       }
       diagnostic::warning("`{}` must be `{}`, got `{}`", name, T{},
@@ -1021,7 +1028,7 @@ public:
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh) const
     -> generator<std::optional<view<type_to_data_t<T>>>> {
-    return eval_as<T>(name, expr, slice, dh, []() {
+    return eval_as<T>(name, expr, slice, dh, [] {
       return std::nullopt;
     });
   }
