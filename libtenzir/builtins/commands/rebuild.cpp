@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/atoms.hpp"
-
 #include <tenzir/actors.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/catalog.hpp>
@@ -147,7 +145,7 @@ struct rebuilder_state {
 
   /// Shows the status of a currently ongoing rebuild.
   auto status(status_verbosity) -> record {
-    if (!run) {
+    if (not run) {
       return {};
     }
     return {
@@ -182,7 +180,7 @@ struct rebuilder_state {
     if (options.automatic && run) {
       return {};
     }
-    if (run && !run->options.automatic) {
+    if (run && not run->options.automatic) {
       return caf::make_error(
         ec::invalid_argument,
         fmt::format(
@@ -191,7 +189,7 @@ struct rebuilder_state {
           "stop'",
           *self, run->statistics.num_completed, run->statistics.num_total));
     }
-    if (!options.automatic && run && run->options.automatic) {
+    if (not options.automatic && run && run->options.automatic) {
       auto rp = self->make_response_promise<void>();
       self->mail(atom::stop_v, stop_options{.detached = false})
         .request(static_cast<rebuilder_actor>(self), caf::infinite)
@@ -213,7 +211,7 @@ struct rebuilder_state {
                  run->options.expression);
     auto rp = self->make_response_promise<void>();
     auto finish = [this, rp](caf::error err, bool silent = false) mutable {
-      if (!silent) {
+      if (not silent) {
         // Only print to INFO when work was actually done, or when the run
         // was manually requested.
         if (run->statistics.num_completed == 0) {
@@ -231,15 +229,17 @@ struct rebuilder_state {
       for (auto&& rp : std::exchange(run->stop_requests, {})) {
         rp.deliver();
       }
-      run.reset();
       if (run->options.detached) {
+        run.reset();
         return;
       }
       if (err) {
         rp.deliver(std::move(err));
+        run.reset();
         return;
       }
       rp.deliver();
+      run.reset();
     };
     if (run->options.detached) {
       rp.deliver();
@@ -326,8 +326,8 @@ struct rebuilder_state {
 
   /// Stop a rebuild.
   auto stop(const stop_options& options) -> caf::result<void> {
-    if (!run) {
-      if (!stopping) {
+    if (not run) {
+      if (not stopping) {
         TENZIR_DEBUG("{} got request to stop rebuild but no rebuild is running",
                      *self);
       } else {
@@ -337,7 +337,7 @@ struct rebuilder_state {
       return {};
     }
     stopping = true;
-    if (!run->remaining_partitions.empty()) {
+    if (not run->remaining_partitions.empty()) {
       TENZIR_ASSERT(run->remaining_partitions.size()
                     == run->statistics.num_total
                          - run->statistics.num_rebuilding
@@ -578,7 +578,7 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     [self](const caf::exit_msg& msg) {
       TENZIR_DEBUG("{} received EXIT from {}: {}", *self, msg.source,
                    msg.reason);
-      if (!self->state().run) {
+      if (not self->state().run) {
         self->quit(msg.reason);
         return;
       }
@@ -625,7 +625,7 @@ caf::expected<rebuilder_actor> get_rebuilder(caf::actor_system& sys) {
       [&](caf::error& err) { //
         result = std::move(err);
       });
-  if (!result) {
+  if (not result) {
     return std::move(result.error());
   }
   return caf::actor_cast<rebuilder_actor>(std::move(*result));
@@ -637,12 +637,12 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
   // the node.
   auto self = caf::scoped_actor{sys};
   auto rebuilder = get_rebuilder(sys);
-  if (!rebuilder) {
+  if (not rebuilder) {
     return caf::make_message(std::move(rebuilder.error()));
   }
   // Parse the query expression, iff it exists.
   auto query = read_query(inv, "tenzir.rebuild.read", must_provide_query::no);
-  if (!query) {
+  if (not query) {
     return caf::make_message(std::move(query.error()));
   }
   auto expr = expression{};
@@ -650,7 +650,7 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
     expr = trivially_true_expression();
   } else {
     auto parsed = to<expression>(*query);
-    if (!parsed) {
+    if (not parsed) {
       return caf::make_message(std::move(parsed.error()));
     }
     expr = std::move(*parsed);
@@ -684,7 +684,7 @@ rebuild_stop_command(const invocation& inv, caf::actor_system& sys) {
   // the node.
   auto self = caf::scoped_actor{sys};
   auto rebuilder = get_rebuilder(sys);
-  if (!rebuilder) {
+  if (not rebuilder) {
     return caf::make_message(std::move(rebuilder.error()));
   }
   auto result = caf::message{};
