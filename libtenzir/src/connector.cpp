@@ -110,6 +110,7 @@ bool is_recoverable_error_enum(caf::sec err_enum) {
     case caf::sec::invalid_utf8:
     case caf::sec::backpressure_overflow:
     case caf::sec::too_many_worker_failures:
+    case caf::sec::cannot_combine_empty_observables:
       return true;
     case caf::sec::incompatible_versions:
     case caf::sec::incompatible_application_ids:
@@ -125,7 +126,7 @@ bool is_recoverable_error(const caf::error& err) {
   }
   const auto err_code = std::underlying_type_t<caf::sec>{err.code()};
   auto err_enum = caf::sec{caf::sec::none};
-  if (!caf::from_integer(err_code, err_enum)) {
+  if (not caf::from_integer(err_code, err_enum)) {
     TENZIR_WARN("unable to retrieve error code for a remote node connection "
                 "error:{}",
                 err);
@@ -136,7 +137,7 @@ bool is_recoverable_error(const caf::error& err) {
 
 std::optional<caf::timespan> calculate_remaining_time(
   const std::optional<std::chrono::steady_clock::time_point>& deadline) {
-  if (!deadline) {
+  if (not deadline) {
     return caf::infinite;
   }
   const auto now = std::chrono::steady_clock::now();
@@ -176,7 +177,7 @@ connector_actor::behavior_type make_no_retry_behavior(
     [self, deadline](atom::connect,
                      connect_request request) -> caf::result<node_actor> {
       const auto remaining_time = calculate_remaining_time(deadline);
-      if (!remaining_time) {
+      if (not remaining_time) {
         return caf::make_error(ec::timeout,
                                fmt::format("{} couldn't connect to node"
                                            "within a given deadline",
@@ -212,14 +213,14 @@ connector(connector_actor::stateful_pointer<connector_state> self,
   self->state().middleman = self->system().has_openssl_manager()
                               ? self->system().openssl_manager().actor_handle()
                               : self->system().middleman().actor_handle();
-  if (!retry_delay) {
+  if (not retry_delay) {
     return make_no_retry_behavior(std::move(self), deadline);
   }
   return {
     [self, delay = *retry_delay, deadline](
       atom::connect, connect_request request) -> caf::result<node_actor> {
       const auto remaining_time = calculate_remaining_time(deadline);
-      if (!remaining_time) {
+      if (not remaining_time) {
         return caf::make_error(ec::timeout,
                                fmt::format("{} couldn't connect to node "
                                            "within a given deadline",

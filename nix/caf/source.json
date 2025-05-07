@@ -1,7 +1,7 @@
 {
   "owner": "actor-framework",
   "repo": "actor-framework",
-  "rev": "916d957408e33de75c215c896b8752519ee8724d",
-  "hash": "sha256-6zNrq+IUhGf9Nqoxk9n+KS7PiKtJ4sVJZMzMIcDi5eY=",
-  "version": "1.0.2-46-g916d95740"
+  "rev": "e728cc87c68362a67b34815e506746d131d2ff09",
+  "hash": "sha256-AFwwqr3y0mdvBCigfM7kNTgkHWebZ/sKFZzTLNYWnMU=",
+  "version": "1.0.2-tenzir"
 }
