@@ -242,7 +242,6 @@ auto decrypt(std::string_view base58_ciphertext, const string_keypair& keypair)
   // bytes                 65        |   16       |  16  |   ..rest
   //
   // Decode the input.
-  auto pubkey_bytes = boost::algorithm::unhex(keypair.public_key);
   TRY(auto raw_ciphertext, detail::base58::decode(base58_ciphertext));
   auto minimum_message_size = point_size + nonce_length + tag_length;
   if (raw_ciphertext.size() < minimum_message_size) {
@@ -263,11 +262,11 @@ auto decrypt(std::string_view base58_ciphertext, const string_keypair& keypair)
                                            raw_ciphertext.end());
   // Set up required objects.
   TRY(auto group, get_group());
-  DECLARE(secret_number, BN_new(), BN_clear_free);
   DECLARE(bignum_ctx, BN_CTX_new(), BN_CTX_free);
+  DECLARE(cipher_ctx, EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
+  DECLARE(secret_number, BN_new(), BN_clear_free);
   DECLARE(public_point, EC_POINT_new(group), EC_POINT_free);
   DECLARE(shared_point, EC_POINT_new(group), EC_POINT_free);
-  DECLARE(cipher_ctx, EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
   // Initialize the points
   CHECK_N_0(BN_hex2bn(&secret_number, keypair.private_key.c_str()));
   CHECK_EQ_1(EC_POINT_oct2point(group, public_point, ephemeral_key.data(),
