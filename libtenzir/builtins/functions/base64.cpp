@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/view3.hpp"
 
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -15,15 +16,15 @@
 
 namespace tenzir::plugins::base64 {
 
+TENZIR_ENUM(mode, encode_base64, decode_base64);
 namespace {
-
-enum class mode { encode, decode };
 
 template <mode Mode>
 class plugin final : public function_plugin {
-  using Type = std::conditional_t<Mode == mode::encode, string_type, blob_type>;
+  using Type
+    = std::conditional_t<Mode == mode::encode_base64, string_type, blob_type>;
   auto name() const -> std::string override {
-    return Mode == mode::encode ? "encode_base64" : "decode_base64";
+    return std::string{to_string(Mode)};
   }
 
   auto make_function(invocation inv,
@@ -49,7 +50,7 @@ class plugin final : public function_plugin {
                 check(b->AppendNull());
                 continue;
               }
-              if constexpr (Mode == mode::encode) {
+              if constexpr (Mode == mode::encode_base64) {
                 check(b->Append(detail::base64::encode(array.Value(i))));
               } else {
                 const auto decoded = detail::base64::try_decode(array.Value(i));
@@ -65,8 +66,40 @@ class plugin final : public function_plugin {
             }
             return series{Type{}, finish(*b)};
           },
+          [&](const type_to_arrow_array_t<secret_type>& array) -> series {
+            auto b = type_to_arrow_builder_t<secret_type>{};
+            check(b.Reserve(array.length()));
+            for (auto s : values3(array)) {
+              if (not s) {
+                check(b.AppendNull());
+                continue;
+              }
+              if (s->buffer->elements()->size() > 1) {
+                diagnostic::warning("`{}` of compound secret expressions is "
+                                    "not supported",
+                                    to_string(Mode))
+                  .primary(expr)
+                  .emit(ctx);
+                check(b.AppendNull());
+                continue;
+              }
+              const auto e = *s->buffer->elements()->begin();
+              TENZIR_ASSERT(e);
+              auto ops = e->operations()->str();
+              ops += to_string(Mode);
+              ops += ";";
+              check(append_builder(secret_type{}, b,
+                                   secret{
+                                     e->name()->string_view(),
+                                     ops,
+                                     e->is_literal(),
+                                   }));
+            }
+            return series{secret_type{}, finish(b)};
+          },
           [&](const auto&) -> series {
-            diagnostic::warning("expected `blob` or `string`, got `{}`",
+            diagnostic::warning("expected `blob` or `string`, got "
+                                "`{}`",
                                 value.type.kind())
               .primary(expr)
               .emit(ctx);
@@ -78,8 +111,8 @@ class plugin final : public function_plugin {
   }
 };
 
-using encode_base64 = plugin<mode::encode>;
-using decode_base64 = plugin<mode::decode>;
+using encode_base64 = plugin<mode::encode_base64>;
+using decode_base64 = plugin<mode::decode_base64>;
 
 } // namespace
 

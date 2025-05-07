@@ -179,6 +179,15 @@ auto value_at([[maybe_unused]] const Type& type,
     auto length
       = static_cast<const arrow::UInt8Array&>(*arr.field(1)).GetView(row);
     return {network, length};
+  } else if constexpr (std::is_same_v<Type, secret_type>) {
+    TENZIR_ASSERT_EXPENSIVE(arr.num_fields() == 1);
+    const auto& bin_array = as<arrow::BinaryArray>(*arr.field(0));
+    auto chunk
+      = chunk::make(bin_array.value_data())
+          ->slice(bin_array.value_offset(row), bin_array.value_length(row));
+    auto fbs = detail::secrets::owning_root_fbs_buffer::make(std::move(chunk));
+    TENZIR_ASSERT(fbs);
+    return secret_view{std::move(*fbs).as_child()};
   } else if constexpr (std::is_same_v<Type, enumeration_type>) {
     return detail::narrow_cast<view<type_to_data_t<enumeration_type>>>(
       arr.GetValueIndex(row));
@@ -305,7 +314,7 @@ auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
   if (arr.IsNull(row)) {
     return caf::none;
   }
-  auto f = [&]<concrete_type Type>(const Type& type) noexcept -> data_view {
+  auto f = [&]<concrete_type Type>(const Type& type) -> data_view {
     return value_at(type, arr, row);
   };
   return match(type, f);

@@ -190,6 +190,8 @@ auto print_node(auto& out, const View& value) -> void {
     out << std::string{value};
   } else if constexpr (std::is_same_v<View, view<blob>>) {
     out << detail::base64::encode(value);
+  } else if constexpr (std::is_same_v<View, view<secret>>) {
+    out << to_string(value);
   } else if constexpr (detail::is_any_v<View, view<double>, view<duration>,
                                         view<time>, view<pattern>, view<ip>,
                                         view<subnet>, view<enumeration>>) {

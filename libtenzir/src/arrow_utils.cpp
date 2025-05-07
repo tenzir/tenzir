@@ -100,6 +100,17 @@ append_builder(const subnet_type&,
 }
 
 arrow::Status
+append_builder(const secret_type&,
+               type_to_arrow_builder_t<secret_type>& builder,
+               const view<type_to_data_t<secret_type>>& view) noexcept {
+  TRY(builder.Append());
+  TRY(builder.buffer_builder().Append(
+    reinterpret_cast<const char*>(view.buffer.chunk()->data()),
+    view.buffer.chunk()->size()));
+  return arrow::Status::OK();
+}
+
+arrow::Status
 append_builder(const enumeration_type&,
                type_to_arrow_builder_t<enumeration_type>& builder,
                const view<type_to_data_t<enumeration_type>>& view) noexcept {
