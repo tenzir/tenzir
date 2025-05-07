@@ -1,3 +1,5 @@
+// test: ast
+
 activity_name = "Launch"
 activity_id = 1
 actor.process = {

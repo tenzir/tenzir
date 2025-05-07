@@ -1,1 +1,3 @@
+// test: ir
+
 let $foo = 42

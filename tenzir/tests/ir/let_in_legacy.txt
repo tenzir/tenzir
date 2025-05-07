@@ -1,8 +1,8 @@
 {
   lets: [
     {
-      ident: `$foo` @ 4..8,
-      expr: constant int64 42 @ 11..13,
+      ident: `$foo` @ 17..21,
+      expr: constant int64 42 @ 24..26,
       id: 1
     }
   ],
@@ -12,12 +12,12 @@
       inv: {
         op: {
           path: [
-            `version` @ 162..169
+            `version` @ 175..182
           ],
           ref: std::version/op
         },
         args: [
-          dollar_var `$foo` -> 1 @ 170..174
+          dollar_var `$foo` -> 1 @ 183..187
         ]
       }
     }

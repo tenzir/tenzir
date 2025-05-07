@@ -2,28 +2,28 @@
   invocation {
     op: {
       path: [
-        `from` @ 0..4
+        `from` @ 14..18
       ],
       ref: unresolved
     },
     args: [
       record {
-        begin: 5..6,
+        begin: 19..20,
         items: [
           field {
-            name: `x` @ 9..10,
-            expr: constant subnet 1.2.3.0/24 @ 12..22
+            name: `x` @ 23..24,
+            expr: constant subnet 1.2.3.0/24 @ 26..36
           },
           field {
-            name: `z` @ 26..27,
-            expr: constant subnet 1.2.3.0/24 @ 29..47
+            name: `z` @ 40..41,
+            expr: constant subnet 1.2.3.0/24 @ 43..61
           },
           field {
-            name: `y` @ 51..52,
-            expr: constant subnet ::/1 @ 54..58
+            name: `y` @ 65..66,
+            expr: constant subnet ::/1 @ 68..72
           }
         ],
-        end: 60..61
+        end: 74..75
       }
     ]
   }

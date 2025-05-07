@@ -1,3 +1,5 @@
+// test: instantiation
+
 // TODO: This should already be substituted earlier.
 let $foo = 42
 

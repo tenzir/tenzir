@@ -9,8 +9,8 @@
     {
       primary: true,
       text: "",
-      source: "42..48",
+      source: "57..63",
     },
   ],
-  rendered: "\u001B[1m\u001B[33mwarning\u001B[39m: assertion failure\u001B[0m\n \u001B[1m\u001B[34m-->\u001B[0m <input>:3:10\n  \u001B[1m\u001B[34m|\u001B[0m\n\u001B[1m\u001B[34m3 |\u001B[0m   assert x != 1\n  \u001B[1m\u001B[34m| \u001B[33m         ~~~~~~ \u001B[0m\n  \u001B[1m\u001B[34m|\u001B[0m\n",
+  rendered: "\u001B[1m\u001B[33mwarning\u001B[39m: assertion failure\u001B[0m\n \u001B[1m\u001B[34m-->\u001B[0m <input>:5:10\n  \u001B[1m\u001B[34m|\u001B[0m\n\u001B[1m\u001B[34m5 |\u001B[0m   assert x != 1\n  \u001B[1m\u001B[34m| \u001B[33m         ~~~~~~ \u001B[0m\n  \u001B[1m\u001B[34m|\u001B[0m\n",
 }

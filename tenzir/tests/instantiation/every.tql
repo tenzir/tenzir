@@ -1,3 +1,5 @@
+// test: instantiation
+
 every 1s {
   // This `let` must not be instantiated with `every`. Instantiation only
   // happens at execution time here.

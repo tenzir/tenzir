@@ -1,6 +1,6 @@
 error: unexpected comma before any arguments
- --> ast/function_only_comma.tql:2:7
+ --> ast/function_only_comma.tql:4:7
   |
-2 | a = b(,)
+4 | a = b(,)
   |       ^ 
   |

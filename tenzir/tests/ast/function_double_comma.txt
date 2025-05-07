@@ -1,6 +1,6 @@
 error: duplicate comma
- --> ast/function_double_comma.tql:2:9
+ --> ast/function_double_comma.tql:4:9
   |
-2 | a = b(c,,)
+4 | a = b(c,,)
   |         ^ 
   |

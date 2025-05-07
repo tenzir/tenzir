@@ -1,3 +1,5 @@
+// test: opt
+
 // Check that we don't propagate varying values during (early) optimization.
 // This is because we want to ensure that the IR can be long-lived, for example
 // because the pipeline below is wrapped in an `every`, which means that we
