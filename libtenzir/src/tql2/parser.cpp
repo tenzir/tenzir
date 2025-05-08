@@ -653,64 +653,131 @@ public:
         } else if (x == '0') {
           result.push_back('\0');
         } else if (x == 'u' || x == 'U') {
-          // Unicode escape sequence: \uXXXX or \UXXXXXXXX
-          auto digits = (x == 'u') ? 4uz : 8uz;
-          if (std::distance(it, e) < static_cast<ptrdiff_t>(digits)) {
-            diagnostic::error("incomplete unicode escape sequence")
-              .primary(token.location.subloc(it - f, std::distance(it, e) + 1))
-              .throw_();
-          }
-          auto codepoint = uint32_t{0};
-          auto valid = true;
-          for (size_t i = 0; i < digits; ++i) {
-            ++it;
-            if (it == e) {
-              valid = false;
-              break;
+          // Unicode escape sequence: \uXXXX or \UXXXXXXXX or \u{...}
+          if ((it + 1 != e) && (*(it + 1) == '{')) {
+            // Handle \u{...}
+            ++it; // now at '{'
+            const auto* brace_open = it;
+            ++it; // now at first hex digit or '}'
+            auto codepoint = uint32_t{0};
+            size_t digits = 0;
+            bool valid = true;
+            while (it != e && *it != '}') {
+              auto c = *it;
+              codepoint <<= 4;
+              if (c >= '0' && c <= '9') {
+                codepoint |= (c - '0');
+              } else if (c >= 'a' && c <= 'f') {
+                codepoint |= (c - 'a' + 10);
+              } else if (c >= 'A' && c <= 'F') {
+                codepoint |= (c - 'A' + 10);
+              } else {
+                valid = false;
+                break;
+              }
+              ++digits;
+              if (digits > 6) {
+                valid = false;
+                // We don't break here so that the diagnostic location goes all
+                // the way to the closing brace.
+              }
+              ++it;
             }
-            auto c = *it;
-            codepoint <<= 4;
-            if (c >= '0' && c <= '9') {
-              codepoint |= (c - '0');
-            } else if (c >= 'a' && c <= 'f') {
-              codepoint |= (c - 'a' + 10);
-            } else if (c >= 'A' && c <= 'F') {
-              codepoint |= (c - 'A' + 10);
+            if (not valid or digits == 0 or it == e or *it != '}') {
+              diagnostic::error("invalid unicode escape sequence")
+                .primary(token.location.subloc(
+                  brace_open - f, (it - brace_open) + (it != e ? 1 : 0) + 1))
+                .throw_();
+            }
+            // Encode codepoint as UTF-8
+            if (codepoint <= 0x7F) {
+              result.push_back(static_cast<char>(codepoint));
+            } else if (codepoint <= 0x7FF) {
+              result.push_back(
+                static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
+              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            } else if (codepoint <= 0xFFFF) {
+              result.push_back(
+                static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
+              result.push_back(
+                static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            } else if (codepoint <= 0x10FFFF) {
+              result.push_back(
+                static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
+              result.push_back(
+                static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+              result.push_back(
+                static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
             } else {
-              valid = false;
-              break;
+              diagnostic::error("unicode codepoint out of range")
+                .primary(token.location.subloc(
+                  brace_open - f, (it - brace_open) + (it != e ? 1 : 0) + 1))
+                .throw_();
             }
-          }
-          if (not valid) {
-            diagnostic::error("invalid unicode escape sequence")
-              .primary(token.location.subloc(it - f - digits, digits + 2))
-              .throw_();
-          }
-          // Encode codepoint as UTF-8
-          if (codepoint <= 0x7F) {
-            result.push_back(static_cast<char>(codepoint));
-          } else if (codepoint <= 0x7FF) {
-            result.push_back(
-              static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
-            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-          } else if (codepoint <= 0xFFFF) {
-            result.push_back(
-              static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
-            result.push_back(
-              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-          } else if (codepoint <= 0x10FFFF) {
-            result.push_back(
-              static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
-            result.push_back(
-              static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-            result.push_back(
-              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            // it is at '}', loop will ++it
           } else {
-            diagnostic::error("unicode codepoint out of range")
-              .primary(token.location.subloc(it - f - digits, digits + 2))
-              .throw_();
+            // Handle \uXXXX or \UXXXXXXXX
+            auto digits = (x == 'u') ? 4uz : 8uz;
+            if (std::distance(it, e) < static_cast<ptrdiff_t>(digits)) {
+              diagnostic::error("incomplete unicode escape sequence")
+                .primary(
+                  token.location.subloc(it - f, std::distance(it, e) + 1))
+                .throw_();
+            }
+            auto codepoint = uint32_t{0};
+            auto valid = true;
+            for (size_t i = 0; i < digits; ++i) {
+              ++it;
+              if (it == e) {
+                valid = false;
+                break;
+              }
+              auto c = *it;
+              codepoint <<= 4;
+              if (c >= '0' && c <= '9') {
+                codepoint |= (c - '0');
+              } else if (c >= 'a' && c <= 'f') {
+                codepoint |= (c - 'a' + 10);
+              } else if (c >= 'A' && c <= 'F') {
+                codepoint |= (c - 'A' + 10);
+              } else {
+                valid = false;
+                break;
+              }
+            }
+            if (not valid) {
+              diagnostic::error("invalid unicode escape sequence")
+                .primary(token.location.subloc(it - f - digits, digits + 2))
+                .throw_();
+            }
+            // Encode codepoint as UTF-8
+            if (codepoint <= 0x7F) {
+              result.push_back(static_cast<char>(codepoint));
+            } else if (codepoint <= 0x7FF) {
+              result.push_back(
+                static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
+              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            } else if (codepoint <= 0xFFFF) {
+              result.push_back(
+                static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
+              result.push_back(
+                static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            } else if (codepoint <= 0x10FFFF) {
+              result.push_back(
+                static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
+              result.push_back(
+                static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+              result.push_back(
+                static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            } else {
+              diagnostic::error("unicode codepoint out of range")
+                .primary(token.location.subloc(it - f - digits, digits + 2))
+                .throw_();
+            }
           }
         } else if (x == 'x') {
           // Hexadecimal byte escape: \xHH
