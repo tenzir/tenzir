@@ -118,7 +118,8 @@ struct http_args {
           TRY(has_typed_key<uint64_t>(*rec, "code", responses->source, dh));
           TRY(has_typed_key<std::string>(*rec, "content_type",
                                          responses->source, dh));
-          TRY(has_typed_key<std::string>(*rec, "body", responses->source, dh));
+          TRY(
+            has_typed_key<std::string>(*rec, "payload", responses->source, dh));
           const auto code = as<uint64_t>(rec->at("code"));
           const auto ucode
             = detail::narrow<std::underlying_type_t<http::status>>(code);
@@ -148,6 +149,10 @@ struct http_args {
           .primary(method->source)
           .emit(dh);
         return failure::promise();
+      }
+      if (not url.inner.starts_with("http://")
+          and url.inner.starts_with("https://")) {
+        url.inner.insert(0, tls.inner ? "https://" : "http://");
       }
     }
     const auto tls_logic
@@ -180,10 +185,6 @@ struct http_args {
     TRY(tls_logic(certfile, "certfile", server.has_value()));
     TRY(tls_logic(keyfile, "keyfile", server.has_value()));
     TRY(tls_logic(password, "password"));
-    if (not url.inner.starts_with("http://")
-        and url.inner.starts_with("https://")) {
-      url.inner.insert(0, tls.inner ? "https://" : "http://");
-    }
     if (max_request_size.inner == 0) {
       diagnostic::error("request size must not be zero")
         .primary(max_request_size)
@@ -353,8 +354,8 @@ public:
                 auto rec = as<record>(it->second);
                 auto code = as<uint64_t>(rec["code"]);
                 auto ty = as<std::string>(rec["content_type"]);
-                auto body = as<std::string>(rec["body"]);
-                r.respond(static_cast<http::status>(code), ty, body);
+                auto payload = as<std::string>(rec["payload"]);
+                r.respond(static_cast<http::status>(code), ty, payload);
               }
             } else {
               r.respond(http::status::ok, "", "");
@@ -387,9 +388,9 @@ public:
             if (not r.body().empty()) {
               const auto encoding = r.header().field("content-encoding");
               if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
-                rb.field("body", std::move(*body));
+                rb.field("payload", std::move(*body));
               } else {
-                rb.field("body", r.body());
+                rb.field("payload", r.body());
               }
             }
             return sb.finish_assert_one_slice();
@@ -491,9 +492,9 @@ public:
               const auto encoding
                 = it != std::ranges::end(headers) ? it->first : "";
               if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
-                rb.field("body", std::move(*body));
+                rb.field("payload", std::move(*body));
               } else {
-                rb.field("body", r.body());
+                rb.field("payload", r.body());
               }
             }
             return sb.finish_assert_one_slice();
