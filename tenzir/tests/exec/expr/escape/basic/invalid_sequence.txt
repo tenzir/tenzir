@@ -1,5 +1,5 @@
 error: invalid unicode escape sequence
- --> exec/expr/escape/invalid_sequence.tql:4:7
+ --> exec/expr/escape/basic/invalid_sequence.tql:4:7
   |
 4 |   x: "\U9999999",
   |       ^^^^^^^^^ 

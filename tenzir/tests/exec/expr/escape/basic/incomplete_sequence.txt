@@ -1,5 +1,5 @@
 error: incomplete unicode escape sequence
- --> exec/expr/escape/incomplete_sequence.tql:4:7
+ --> exec/expr/escape/basic/incomplete_sequence.tql:4:7
   |
 4 |   x: "\u11",
   |       ^^^^ 
