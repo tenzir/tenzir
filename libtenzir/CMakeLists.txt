@@ -230,6 +230,9 @@ dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
 
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED)
+# We need to resolve this in find_packge(Tenzir) for because the
+# libtenzir_builtins target needs to be installed for plugins.
+# See the comment above `install(TARGETS` for details.
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
        "\nfind_package(yaml-cpp 0.6.2 REQUIRED)")
 if (yaml-cpp_VERSION VERSION_GREATER_EQUAL 0.8)

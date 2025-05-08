@@ -199,7 +199,6 @@
           fluent-bit
           libpcap
           libunwind
-          libyamlcpp
           rabbitmq-c
           rdkafka
           cppzmq
@@ -223,6 +222,7 @@
           google-cloud-cpp
           grpc
           libmaxminddb
+          libyamlcpp
           protobuf
           re2
           robin-map
