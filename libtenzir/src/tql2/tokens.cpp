@@ -57,14 +57,20 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       ->* [] { return tk::datetime; }
     | ignore(digit >> *digit_us >> -('.' >> digit >> *digit_us) >> -identifier)
       ->* [] { return tk::scalar; }
+    | ignore("b\"" >> *(('\\' >> any) | (any - '"')) >> '"')
+      ->* [] { return tk::blob; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')) >> '"')
       ->* [] { return tk::string; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')))
       ->* [] { return tk::error; } // non-terminated string
+    | ignore("br\"" >> *(any - '"') >> '"')
+      ->* [] { return tk::raw_blob; }
     | ignore("r\"" >> *(any - '"') >> '"')
       ->* [] { return tk::raw_string; }
     | ignore("r\"" >> *(any - '"'))
       ->* [] { return tk::error; } // non-terminated raw string
+    | ignore("br#\"" >> *(any - "\"#") >> "\"#")
+      ->* [] { return tk::raw_blob; }
     | ignore("r#\"" >> *(any - "\"#") >> "\"#")
       ->* [] { return tk::raw_string; }
     | ignore("r#\"" >> *(any - "\"#"))
@@ -193,6 +199,8 @@ auto describe(token_kind k) -> std::string_view {
     X(and_, "`and`");
     X(at, "@");
     X(bang_equal, "`!=`");
+    X(blob, "blob");
+    X(raw_blob, "raw blob");
     X(colon, "`:`");
     X(colon_colon, "`::`");
     X(comma, "`,`");

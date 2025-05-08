@@ -597,28 +597,45 @@ public:
     };
   }
 
-  auto accept_string() -> std::optional<located<std::string>> {
-    if (const auto token = accept(tk::raw_string)) {
+  template <concepts::one_of<std::string, blob> T>
+  auto accept_string_or_blob() -> std::optional<located<T>> {
+    constexpr auto validate_utf8 = std::is_same_v<T, std::string>;
+    constexpr auto type_token
+      = std::is_same_v<T, std::string> ? tk::string : tk::blob;
+    constexpr auto raw_type_token
+      = std::is_same_v<T, std::string> ? tk::raw_string : tk::raw_blob;
+    const auto into_result
+      = [](std::string result, location location) -> std::optional<located<T>> {
+      if constexpr (std::is_same_v<T, std::string>) {
+        return located{std::move(result), location};
+      } else {
+        const auto* data = reinterpret_cast<const std::byte*>(result.data());
+        return located{blob{data, data + result.size()}, location};
+      }
+    };
+    if (const auto token = accept(raw_type_token)) {
       const auto begin = token.text.find('"');
       const auto end = token.text.rfind('"');
       TENZIR_ASSERT(begin != std::string_view::npos);
       TENZIR_ASSERT(end != std::string_view::npos);
       auto result = std::string{token.text.substr(begin + 1, end - begin - 1)};
-      if (not arrow::util::ValidateUTF8(result)) {
+      if (validate_utf8 and not arrow::util::ValidateUTF8(result)) {
         // TODO: Would be nice to report the actual error location.
         diagnostic::error("string contains invalid utf-8")
           .primary(token)
           .hint("consider using a blob instead: b{}", token.text)
           .throw_();
       }
-      return located{std::move(result), token.location};
+      return into_result(std::move(result), token.location);
     }
-    if (const auto token = accept(tk::string)) {
+    if (const auto token = accept(type_token)) {
       auto result = std::string{};
-      TENZIR_ASSERT(token.text.size() >= 2);
-      TENZIR_ASSERT(token.text.front() == '"');
+      constexpr auto opening_quote_offset
+        = std::is_same_v<T, std::string> ? 0 : 1;
+      TENZIR_ASSERT(token.text.size() >= 2 + opening_quote_offset);
+      TENZIR_ASSERT(token.text.at(opening_quote_offset) == '"');
       TENZIR_ASSERT(token.text.back() == '"');
-      const auto* f = token.text.begin() + 1;
+      const auto* f = token.text.begin() + 1 + opening_quote_offset;
       const auto* e = token.text.end() - 1;
       for (const auto* it = f; it != e; ++it) {
         auto x = *it;
@@ -652,9 +669,9 @@ public:
           result.push_back('\a');
         } else if (x == '0') {
           result.push_back('\0');
-        } else if (x == 'u' || x == 'U') {
+        } else if (x == 'u' or x == 'U') {
           // Unicode escape sequence: \uXXXX or \UXXXXXXXX or \u{...}
-          if ((it + 1 != e) && (*(it + 1) == '{')) {
+          if ((it + 1 != e) and (*(it + 1) == '{')) {
             // Handle \u{...}
             ++it; // now at '{'
             const auto* brace_open = it;
@@ -662,14 +679,14 @@ public:
             auto codepoint = uint32_t{0};
             size_t digits = 0;
             bool valid = true;
-            while (it != e && *it != '}') {
+            while (it != e and *it != '}') {
               auto c = *it;
               codepoint <<= 4;
-              if (c >= '0' && c <= '9') {
+              if (c >= '0' and c <= '9') {
                 codepoint |= (c - '0');
-              } else if (c >= 'a' && c <= 'f') {
+              } else if (c >= 'a' and c <= 'f') {
                 codepoint |= (c - 'a' + 10);
-              } else if (c >= 'A' && c <= 'F') {
+              } else if (c >= 'A' and c <= 'F') {
                 codepoint |= (c - 'A' + 10);
               } else {
                 valid = false;
@@ -736,11 +753,11 @@ public:
               }
               auto c = *it;
               codepoint <<= 4;
-              if (c >= '0' && c <= '9') {
+              if (c >= '0' and c <= '9') {
                 codepoint |= (c - '0');
-              } else if (c >= 'a' && c <= 'f') {
+              } else if (c >= 'a' and c <= 'f') {
                 codepoint |= (c - 'a' + 10);
-              } else if (c >= 'A' && c <= 'F') {
+              } else if (c >= 'A' and c <= 'F') {
                 codepoint |= (c - 'A' + 10);
               } else {
                 valid = false;
@@ -791,20 +808,20 @@ public:
           ++it;
           auto c2 = static_cast<unsigned char>(*it);
           auto hex_to_int = [](unsigned char c) -> int {
-            if (c >= '0' && c <= '9') {
+            if (c >= '0' and c <= '9') {
               return c - '0';
             }
-            if (c >= 'a' && c <= 'f') {
+            if (c >= 'a' and c <= 'f') {
               return c - 'a' + 10;
             }
-            if (c >= 'A' && c <= 'F') {
+            if (c >= 'A' and c <= 'F') {
               return c - 'A' + 10;
             }
             return -1;
           };
           auto hi = hex_to_int(c1);
           auto lo = hex_to_int(c2);
-          if (hi == -1 || lo == -1) {
+          if (hi == -1 or lo == -1) {
             diagnostic::error("invalid hex escape sequence")
               .primary(token.location.subloc(it - f - 2, 4))
               .throw_();
@@ -817,16 +834,24 @@ public:
             .throw_();
         }
       }
-      if (not arrow::util::ValidateUTF8(result)) {
+      if (validate_utf8 and not arrow::util::ValidateUTF8(result)) {
         // TODO: Would be nice to report the actual error location.
         diagnostic::error("string contains invalid utf-8")
           .primary(token)
           .hint("consider using a blob instead: b{}", token.text)
           .throw_();
       }
-      return located{std::move(result), token.location};
+      return into_result(std::move(result), token.location);
     }
     return std::nullopt;
+  }
+
+  auto accept_blob() -> std::optional<located<blob>> {
+    return accept_string_or_blob<blob>();
+  }
+
+  auto accept_string() -> std::optional<located<std::string>> {
+    return accept_string_or_blob<std::string>();
   }
 
   auto parse_record_item() -> ast::record::item {
@@ -915,6 +940,9 @@ public:
   }
 
   auto accept_constant() -> std::optional<constant> {
+    if (auto result = accept_blob()) {
+      return constant{std::move(result->inner), result->source};
+    }
     if (auto result = accept_string()) {
       return constant{std::move(result->inner), result->source};
     }
