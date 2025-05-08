@@ -1,0 +1,6 @@
+error: invalid unicode escape sequence
+ --> exec/expr/escape/out_of_range.tql:4:8
+  |
+4 |   x: "\u{120301230123}",
+  |        ^^^^^^^^^^^^^^^ 
+  |

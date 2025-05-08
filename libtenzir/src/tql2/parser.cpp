@@ -766,7 +766,7 @@ public:
             }
             if (not valid) {
               diagnostic::error("invalid unicode escape sequence")
-                .primary(token.location.subloc(it - f - digits, digits + 2))
+                .primary(token.location.subloc(it - f - digits, digits + 1))
                 .throw_();
             }
             // Encode codepoint as UTF-8
