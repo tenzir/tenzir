@@ -615,13 +615,12 @@ public:
     }
     if (const auto token = accept(tk::string)) {
       auto result = std::string{};
-      // TODO: Implement this properly.
       TENZIR_ASSERT(token.text.size() >= 2);
       TENZIR_ASSERT(token.text.front() == '"');
       TENZIR_ASSERT(token.text.back() == '"');
-      auto f = token.text.begin() + 1;
-      auto e = token.text.end() - 1;
-      for (auto it = f; it != e; ++it) {
+      const auto* f = token.text.begin() + 1;
+      const auto* e = token.text.end() - 1;
+      for (const auto* it = f; it != e; ++it) {
         auto x = *it;
         if (x != '\\') {
           result.push_back(x);
@@ -641,8 +640,109 @@ public:
           result.push_back('\t');
         } else if (x == 'n') {
           result.push_back('\n');
+        } else if (x == 'r') {
+          result.push_back('\r');
+        } else if (x == 'b') {
+          result.push_back('\b');
+        } else if (x == 'f') {
+          result.push_back('\f');
+        } else if (x == 'v') {
+          result.push_back('\v');
+        } else if (x == 'a') {
+          result.push_back('\a');
         } else if (x == '0') {
           result.push_back('\0');
+        } else if (x == 'u' || x == 'U') {
+          // Unicode escape sequence: \uXXXX or \UXXXXXXXX
+          auto digits = (x == 'u') ? 4uz : 8uz;
+          if (std::distance(it, e) < static_cast<ptrdiff_t>(digits)) {
+            diagnostic::error("incomplete unicode escape sequence")
+              .primary(token.location.subloc(it - f, std::distance(it, e) + 1))
+              .throw_();
+          }
+          auto codepoint = uint32_t{0};
+          auto valid = true;
+          for (size_t i = 0; i < digits; ++i) {
+            ++it;
+            if (it == e) {
+              valid = false;
+              break;
+            }
+            auto c = *it;
+            codepoint <<= 4;
+            if (c >= '0' && c <= '9') {
+              codepoint |= (c - '0');
+            } else if (c >= 'a' && c <= 'f') {
+              codepoint |= (c - 'a' + 10);
+            } else if (c >= 'A' && c <= 'F') {
+              codepoint |= (c - 'A' + 10);
+            } else {
+              valid = false;
+              break;
+            }
+          }
+          if (not valid) {
+            diagnostic::error("invalid unicode escape sequence")
+              .primary(token.location.subloc(it - f - digits, digits + 2))
+              .throw_();
+          }
+          // Encode codepoint as UTF-8
+          if (codepoint <= 0x7F) {
+            result.push_back(static_cast<char>(codepoint));
+          } else if (codepoint <= 0x7FF) {
+            result.push_back(
+              static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+          } else if (codepoint <= 0xFFFF) {
+            result.push_back(
+              static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
+            result.push_back(
+              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+          } else if (codepoint <= 0x10FFFF) {
+            result.push_back(
+              static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
+            result.push_back(
+              static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+            result.push_back(
+              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+          } else {
+            diagnostic::error("unicode codepoint out of range")
+              .primary(token.location.subloc(it - f - digits, digits + 2))
+              .throw_();
+          }
+        } else if (x == 'x') {
+          // Hexadecimal byte escape: \xHH
+          if (std::distance(it, e) < 2) {
+            diagnostic::error("incomplete hex escape sequence")
+              .primary(token.location.subloc(it - f, 4))
+              .throw_();
+          }
+          ++it;
+          auto c1 = static_cast<unsigned char>(*it);
+          ++it;
+          auto c2 = static_cast<unsigned char>(*it);
+          auto hex_to_int = [](unsigned char c) -> int {
+            if (c >= '0' && c <= '9') {
+              return c - '0';
+            }
+            if (c >= 'a' && c <= 'f') {
+              return c - 'a' + 10;
+            }
+            if (c >= 'A' && c <= 'F') {
+              return c - 'A' + 10;
+            }
+            return -1;
+          };
+          auto hi = hex_to_int(c1);
+          auto lo = hex_to_int(c2);
+          if (hi == -1 || lo == -1) {
+            diagnostic::error("invalid hex escape sequence")
+              .primary(token.location.subloc(it - f - 2, 4))
+              .throw_();
+          }
+          result.push_back(static_cast<char>((hi << 4) | lo));
         } else {
           diagnostic::error("found unknown escape sequence `{}`",
                             token.text.substr(it - f, 2))
