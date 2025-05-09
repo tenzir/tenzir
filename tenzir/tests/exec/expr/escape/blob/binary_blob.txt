@@ -1,0 +1,11 @@
+{
+  binary1: b"\u0000\u0001\u0002\u0003\u0004",
+  binary2: b"şÿ",
+  binary3: b"\u007FELF",
+  binary4: b"Êşº¾",
+  binary5: b"\u0000ÿ\u0000ÿ\u0000ÿ",
+  invalid_utf8_1: b"À¯",
+  invalid_utf8_2: b"ğ‚‚¬",
+  high_bytes: b"€‚ƒ",
+  mixed_binary: b"Hello\u0000Worldÿ",
+}
