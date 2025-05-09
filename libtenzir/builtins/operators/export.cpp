@@ -67,7 +67,7 @@ public:
         {"queued_events", uint64_type{}},
       },
     });
-    auto bridge = spawn_bridge(
+    auto bridge = spawn_and_link_export_bridge(
       ctrl.self(), expr_, mode_, std::move(filesystem),
       std::move(metrics_handler),
       std::make_unique<shared_diagnostic_handler>(ctrl.shared_diagnostics()));

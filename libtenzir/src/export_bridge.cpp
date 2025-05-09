@@ -340,12 +340,11 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
 
 } // namespace
 
-auto spawn_bridge(caf::scheduled_actor& parent, expression expr,
-                  export_mode mode, filesystem_actor filesystem,
-                  metric_handler metrics_handler,
-                  std::unique_ptr<diagnostic_handler> diagnostics_handler)
+auto spawn_and_link_export_bridge(
+  caf::scheduled_actor& parent, expression expr, export_mode mode,
+  filesystem_actor filesystem, metric_handler metrics_handler,
+  std::unique_ptr<diagnostic_handler> diagnostics_handler)
   -> export_bridge_actor {
-  // TODO: How to best expose this?
   return parent.spawn<caf::linked>(make_bridge, std::move(expr), mode,
                                    std::move(filesystem),
                                    std::move(metrics_handler),

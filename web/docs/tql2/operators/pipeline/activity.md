@@ -2,7 +2,8 @@
 
 :::warning Internal Operator
 
-This operator is for internal usage only. It can change without notice.
+This operator is only for internal usage by the Tenzir Platform. It can change
+without notice.
 :::
 
 Summarizes the activity of pipelines.
@@ -54,11 +55,12 @@ The records `ingress` and `egress` have the following schema:
 You can derive the time associated with a given throughput rate with the formula
 `first + index*interval`, except the last value, which is associated with
 `last`. The recommended way to chart these values is to show a sliding window
-over `[last - range, last]`.
+over `[last - range, last]`. The value in `bytes` is an approximation for the
+total number of bytes inside that window.
 
 ## Examples
 
-### TODO
+### Show the activity over the last 20s
 
 ```tql
 pipeline::activity range=20s, interval=20s

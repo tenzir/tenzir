@@ -19,8 +19,7 @@ struct export_bridge_traits {
     // Returns when a new table slice is available.
     auto(atom::get)->caf::result<table_slice>,
     // Insert a new table slice.
-    auto(table_slice slice) -> caf::result<void>
-    >;
+    auto(table_slice slice)->caf::result<void>>;
 };
 
 using export_bridge_actor = caf::typed_actor<export_bridge_traits>;
@@ -48,10 +47,10 @@ struct export_mode {
 
 TENZIR_ENUM(event_source, unpersisted, live, retro);
 
-auto spawn_bridge(caf::scheduled_actor& parent, expression expr,
-                  export_mode mode, filesystem_actor filesystem,
-                  metric_handler metrics_handler,
-                  std::unique_ptr<diagnostic_handler> diagnostics_handler)
+auto spawn_and_link_export_bridge(
+  caf::scheduled_actor& parent, expression expr, export_mode mode,
+  filesystem_actor filesystem, metric_handler metrics_handler,
+  std::unique_ptr<diagnostic_handler> diagnostics_handler)
   -> export_bridge_actor;
 
 } // namespace tenzir
