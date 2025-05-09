@@ -7,7 +7,7 @@ from {
   process_id: "1370",
   message_id: "",
   structured_data: {},
-  message: " PARENT process running...",
+  message: "PARENT process running...",
 },
 {
   facility: 1,
@@ -18,7 +18,7 @@ from {
   process_id: "2156",
   message_id: "",
   structured_data: {},
-  message: " no mapping for commit",
+  message: "no mapping for commit",
 },
 {
   facility: 3,
@@ -30,7 +30,7 @@ from {
   process_id: "1370",
   message_id: "",
   structured_data: {},
-  message: " Parent finished...",
+  message: "Parent finished...",
 },
 {
   facility: 20,
@@ -53,8 +53,4 @@ from {
   },
   message: null,
 }
-// TODO: Because of fmtlib/fmt#2207 and our Dockerfile using a really old
-// version of {fmt} we remove the timestamp here, as its rendering is
-// inconsistent between library versions. This needs a proper fix.
-timestamp = null
 write_syslog

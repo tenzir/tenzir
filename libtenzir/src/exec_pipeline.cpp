@@ -157,7 +157,7 @@ auto add_implicit_source_and_sink(pipeline pipe, diagnostic_handler& dh,
   if (pipe.infer_type<void>()) {
     // Don't add implicit source.
   } else if (pipe.infer_type<chunk_ptr>()
-             && !config.implicit_bytes_source.empty()) {
+             && ! config.implicit_bytes_source.empty()) {
     auto res = add_implicit("bytes source", std::move(pipe), dh,
                             config.implicit_bytes_source);
     if (not res) {
@@ -165,7 +165,7 @@ auto add_implicit_source_and_sink(pipeline pipe, diagnostic_handler& dh,
     }
     pipe = std::move(*res);
   } else if (pipe.infer_type<table_slice>()
-             && !config.implicit_events_source.empty()) {
+             && ! config.implicit_events_source.empty()) {
     auto res = add_implicit("events source", std::move(pipe), dh,
                             config.implicit_events_source);
     if (not res) {
@@ -186,14 +186,14 @@ auto add_implicit_source_and_sink(pipeline pipe, diagnostic_handler& dh,
   }
   if (out->is<void>()) {
     // Pipeline is already closed, nothing to do here.
-  } else if (out->is<chunk_ptr>() && !config.implicit_bytes_sink.empty()) {
+  } else if (out->is<chunk_ptr>() && ! config.implicit_bytes_sink.empty()) {
     auto res = add_implicit("bytes sink", std::move(pipe), dh,
                             config.implicit_bytes_sink);
     if (not res) {
       return res.error();
     }
     pipe = std::move(*res);
-  } else if (out->is<table_slice>() && !config.implicit_events_sink.empty()) {
+  } else if (out->is<table_slice>() && ! config.implicit_events_sink.empty()) {
     auto res = add_implicit("events sink", std::move(pipe), dh,
                             config.implicit_events_sink);
     if (not res) {
@@ -211,9 +211,9 @@ auto add_implicit_source_and_sink(pipeline pipe, diagnostic_handler& dh,
 
 } // namespace
 
-auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
-                   const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void> {
+auto exec_pipeline(pipeline pipe, std::string definition,
+                   diagnostic_handler& dh, const exec_config& cfg,
+                   caf::actor_system& sys) -> caf::expected<void> {
   auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), dh, cfg);
   if (not implicit_pipe) {
     return std::move(implicit_pipe.error());
@@ -235,14 +235,16 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   auto handler = self->spawn(
     [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
       self->state().executor
-        = self->spawn(pipeline_executor, std::move(pipe),
+        = self->spawn(pipeline_executor, std::move(pipe), std::move(definition),
                       caf::actor_cast<receiver_actor<diagnostic>>(self),
                       caf::actor_cast<metrics_receiver_actor>(self),
                       node_actor{}, true, true);
       self->monitor(self->state().executor, [&, self](caf::error err) {
         TENZIR_DEBUG("command received down message `{}`", err);
         if (err) {
-          result = std::move(err);
+          result = err == caf::exit_reason::user_shutdown or err == ec::silent
+                     ? ec::silent
+                     : diagnostic::error(std::move(err)).to_error();
         }
         self->quit();
       });
@@ -253,8 +255,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
             TENZIR_DEBUG("started pipeline successfully");
           },
           [&, self](caf::error& err) {
-            TENZIR_DEBUG("failed to start pipeline: {}", err);
-            result = std::move(err);
+            result = diagnostic::error(std::move(err)).to_error();
             self->quit();
           });
       return {
@@ -314,7 +315,7 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
     auto success = exec2(std::move(content), dh, cfg, sys);
     return success ? caf::expected<void>{} : ec::silent;
   }
-  auto parsed = tql::parse(std::move(content), dh);
+  auto parsed = tql::parse(content, dh);
   if (not parsed) {
     return ec::silent;
   }
@@ -325,7 +326,7 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
     return {};
   }
   auto pipe = tql::to_pipeline(std::move(*parsed));
-  return exec_pipeline(std::move(pipe), dh, cfg, sys);
+  return exec_pipeline(std::move(pipe), std::move(content), dh, cfg, sys);
 }
 
 } // namespace tenzir

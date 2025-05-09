@@ -34,6 +34,7 @@ struct exec_config {
   bool dump_opt_ir = false;
   bool dump_finalized = false;
 
+  bool multi = false;
   bool legacy = false;
   bool strict = false;
 };
@@ -42,8 +43,8 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void>;
 
-auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
-                   const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void>;
+auto exec_pipeline(pipeline pipe, std::string definition,
+                   diagnostic_handler& dh, const exec_config& cfg,
+                   caf::actor_system& sys) -> caf::expected<void>;
 
 } // namespace tenzir

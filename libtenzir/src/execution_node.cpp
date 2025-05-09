@@ -113,6 +113,15 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
   void emit(diagnostic diag) override {
     TENZIR_TRACE("{} {} emits diagnostic: {:?}", *state.self, state.op->name(),
                  diag);
+    switch (state.op->strictness()) {
+      case strictness_level::strict:
+        if (diag.severity == severity::warning) {
+          diag.severity = severity::error;
+        }
+        break;
+      case strictness_level::normal:
+        break;
+    }
     if (diag.severity == severity::error) {
       throw std::move(diag);
     }
@@ -145,6 +154,10 @@ struct exec_node_control_plane final : public operator_control_plane {
 
   auto self() noexcept -> exec_node_actor::base& override {
     return *state.self;
+  }
+
+  auto definition() const noexcept -> std::string_view override {
+    return state.definition;
   }
 
   auto run_id() const noexcept -> uuid override {
@@ -207,11 +220,12 @@ struct exec_node_control_plane final : public operator_control_plane {
 template <class Input, class Output>
 struct exec_node_state {
   exec_node_state(exec_node_actor::pointer self, operator_ptr op,
-                  const node_actor& node,
+                  std::string definition, const node_actor& node,
                   const receiver_actor<diagnostic>& diagnostic_handler,
                   const metrics_receiver_actor& metrics_receiver, int index,
                   bool has_terminal, bool is_hidden, uuid run_id)
     : self{self},
+      definition{std::move(definition)},
       run_id{run_id},
       op{std::move(op)},
       metrics_receiver{metrics_receiver} {
@@ -385,6 +399,9 @@ struct exec_node_state {
 
   /// A pointer to the parent actor.
   exec_node_actor::pointer self = {};
+
+  /// The definition of this pipeline.
+  std::string definition;
 
   /// A unique identifier for the current run.
   uuid run_id = {};
@@ -959,7 +976,8 @@ struct exec_node_state {
 } // namespace
 
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
-                     operator_type input_type, node_actor node,
+                     operator_type input_type, std::string definition,
+                     node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
                      bool has_terminal, bool is_hidden, uuid run_id)
@@ -967,7 +985,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
   TENZIR_ASSERT(node != nullptr
-                or not (op->location() == operator_location::remote));
+                or not(op->location() == operator_location::remote));
   TENZIR_ASSERT(diagnostics_handler != nullptr);
   TENZIR_ASSERT(metrics_receiver != nullptr);
   auto output_type = op->infer_type(input_type);
@@ -985,8 +1003,9 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
         = std::conditional_t<std::is_void_v<Output>, std::monostate, Output>;
       auto result = self->spawn<SpawnOptions>(
         caf::actor_from_state<exec_node_state<input_type, output_type>>,
-        std::move(op), std::move(node), std::move(diagnostics_handler),
-        std::move(metrics_receiver), index, has_terminal, is_hidden, run_id);
+        std::move(op), std::move(definition), std::move(node),
+        std::move(diagnostics_handler), std::move(metrics_receiver), index,
+        has_terminal, is_hidden, run_id);
       return result;
     };
   };

@@ -1,0 +1,14 @@
+tenzir:
+  operators:
+    foo: |
+      foo = 1 + (foo? else 0)
+      bar
+    bar: |
+      bar = 1 + (bar? else 0)
+      baz
+    baz: |
+      baz = 1 + (baz? else 0)
+    qux: |
+      qux = 1 + (qux? else 0)
+      baz
+      foo

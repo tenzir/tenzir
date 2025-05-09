@@ -177,9 +177,10 @@ auto get_or_compute(Map& map, Key&& key, F&& f) -> decltype(auto) {
 
 auto make_load_balancer(
   load_balancer_actor::stateful_pointer<load_balancer_state> self,
-  std::vector<pipeline> pipes, shared_diagnostic_handler diagnostics,
-  metrics_receiver_actor metrics, uint64_t operator_index, bool is_hidden,
-  const node_actor& node) -> load_balancer_actor::behavior_type {
+  std::vector<pipeline> pipes, std::string definition,
+  shared_diagnostic_handler diagnostics, metrics_receiver_actor metrics,
+  uint64_t operator_index, bool is_hidden, const node_actor& node)
+  -> load_balancer_actor::behavior_type {
   TENZIR_DEBUG("spawning load balancer");
   self->attach_functor([] {
     TENZIR_DEBUG("destroyed load balancer");
@@ -193,8 +194,8 @@ auto make_load_balancer(
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
     TENZIR_DEBUG("spawning inner executor");
-    auto executor = self->spawn(pipeline_executor, pipe, self, self, node,
-                                has_terminal, is_hidden);
+    auto executor = self->spawn(pipeline_executor, pipe, definition, self, self,
+                                node, has_terminal, is_hidden);
     self->monitor(executor, [self, source
                                    = executor->address()](const caf::error&) {
       auto it = std::ranges::find(self->state().executors, source,
@@ -302,9 +303,9 @@ public:
     // In case of subtle problems around the shutdown logic here, this could
     // potentially be simplified.
     auto load_balancer = scope_linked{ctrl.self().spawn<caf::linked>(
-      make_load_balancer, pipes_, ctrl.shared_diagnostics(),
-      ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
-      ctrl.node())};
+      make_load_balancer, pipes_, std::string{ctrl.definition()},
+      ctrl.shared_diagnostics(), ctrl.metrics_receiver(), ctrl.operator_index(),
+      ctrl.is_hidden(), ctrl.node())};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};

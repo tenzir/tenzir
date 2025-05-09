@@ -9,8 +9,6 @@
 #include "tenzir/curl.hpp"
 
 #include "tenzir/chunk.hpp"
-#include "tenzir/concept/parseable/numeric.hpp"
-#include "tenzir/concept/printable/tenzir/data.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
@@ -213,7 +211,7 @@ auto multi::poll(std::chrono::milliseconds timeout) -> code {
 }
 
 auto multi::perform() -> std::pair<code, size_t> {
-  auto num_running = int{0};
+  auto num_running = 0;
   auto curl_code = curl_multi_perform(multi_.get(), &num_running);
   TENZIR_ASSERT(num_running >= 0);
   return {static_cast<code>(curl_code),
@@ -314,6 +312,9 @@ url::url(const url& other) : url_{curl_url_dup(other.url_.get())} {
 }
 
 auto url::operator=(const url& other) -> url& {
+  if (this == &other) {
+    return *this;
+  }
   url_.reset(curl_url_dup(other.url_.get()));
   return *this;
 }
@@ -361,8 +362,24 @@ auto to_error(url::code code) -> caf::error {
                          fmt::format("curl: {}", to_string(code)));
 }
 
+auto try_unescape(std::string_view str) -> std::optional<std::string> {
+  auto* easy = curl_easy_init();
+  TENZIR_ASSERT(easy);
+  auto length = detail::narrow_cast<int>(str.size());
+  auto outlength = 0;
+  auto* unescaped = curl_easy_unescape(easy, str.data(), length, &outlength);
+  auto result = std::optional<std::string>{};
+  if (unescaped) {
+    result.emplace(unescaped, unescaped + outlength);
+    curl_free(unescaped);
+  }
+  curl_easy_cleanup(easy);
+  return result;
+}
+
 auto escape(std::string_view str) -> std::string {
   auto* easy = curl_easy_init();
+  TENZIR_ASSERT(easy);
   auto result = std::string{};
   auto length = detail::narrow_cast<int>(str.size());
   if (auto* escaped = curl_easy_escape(easy, str.data(), length)) {

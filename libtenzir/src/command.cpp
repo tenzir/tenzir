@@ -85,7 +85,7 @@ void parameters_helptext(const command& cmd, std::ostream& out) {
 
 // Prints the description for a command if there is any
 void description(const command& cmd, std::ostream& out) {
-  if (!cmd.description.empty()) {
+  if (not cmd.description.empty()) {
     out << cmd.description << "\n\n";
   }
 }
@@ -214,6 +214,8 @@ auto generate_default_value_for_argument_type(std::string_view type_name)
     return "[]";
   } else if (type_name.starts_with("dictionary")) {
     return "{}";
+  } else if (type_name == "bool") {
+    return "true";
   }
   TENZIR_UNIMPLEMENTED();
 }
@@ -269,7 +271,7 @@ std::string command::full_name() const {
   std::string result{name};
   for (auto ptr = parent; ptr != nullptr && ptr->parent != nullptr;
        ptr = ptr->parent) {
-    if (!ptr->name.empty()) {
+    if (not ptr->name.empty()) {
       result.insert(result.begin(), ' ');
       result.insert(result.begin(), ptr->name.begin(), ptr->name.end());
     }
@@ -325,7 +327,7 @@ caf::error parse_impl(invocation& result, const command& cmd,
     put(result.options, "help", true);
     return caf::none;
   }
-  if (!has_subcommand) {
+  if (not has_subcommand) {
     return caf::none;
   }
   // Consume CLI arguments if we have arguments but don't have subcommands.

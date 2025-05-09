@@ -186,6 +186,11 @@ public:
                                      : pipe_.operators()[0]->demand();
   }
 
+  auto strictness() const -> strictness_level override {
+    return pipe_.operators().empty() ? operator_base::strictness()
+                                     : pipe_.operators()[0]->strictness();
+  }
+
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
     return pipe_.infer_type(input);

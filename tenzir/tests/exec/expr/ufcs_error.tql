@@ -1,0 +1,5 @@
+// error
+from {
+  x: "abc".starts_with(),
+  y: starts_with("abc"),
+}

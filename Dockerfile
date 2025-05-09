@@ -117,19 +117,19 @@ ARG TENZIR_BUILD_OPTIONS
 ENV LDFLAGS="-Wl,--copy-dt-needed-entries"
 RUN --mount=target=/ccache,type=cache \
     cmake -B build -G Ninja \
-        -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
-        -D CMAKE_BUILD_TYPE:STRING="Release" \
-        -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
-        -D TENZIR_ENABLE_AVX2_INSTRUCTIONS:BOOL="OFF" \
-        -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
-        -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
-        -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
-        -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
-        -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
-        -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
-        ${TENZIR_BUILD_OPTIONS} && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
+      -D CMAKE_BUILD_TYPE:STRING="Release" \
+      -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
+      -D TENZIR_ENABLE_AVX2_INSTRUCTIONS:BOOL="OFF" \
+      -D TENZIR_ENABLE_UNIT_TESTS:BOOL="ON" \
+      -D TENZIR_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
+      -D TENZIR_ENABLE_BUNDLED_CAF:BOOL="ON" \
+      -D TENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
+      -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
+      -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
+      ${TENZIR_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
-    CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test && \
+    ctest --test-dir build --output-on-failure --exclude-regex "^tenzir/" && \
     cmake --build build --target bats && \
     cmake --install build --strip --component Runtime --prefix /opt/tenzir-runtime && \
     cmake --install build --strip && \
@@ -437,17 +437,6 @@ ENTRYPOINT ["tenzir-node"]
 
 # -- third-party-plugins -------------------------------------------------------------------
 
-FROM plugins-source AS azure-log-analytics-plugin
-
-COPY contrib/tenzir-plugins/azure-log-analytics ./contrib/tenzir-plugins/azure-log-analytics
-RUN --mount=target=/ccache,type=cache \
-    cmake -S contrib/tenzir-plugins/azure-log-analytics -B build-azure-log-analytics -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-azure-log-analytics --parallel && \
-    cmake --build build-azure-log-analytics --target bats && \
-    DESTDIR=/plugin/azure-log-analytics cmake --install build-azure-log-analytics --strip --component Runtime && \
-    rm -rf build-azure-log-analytics
-
 FROM plugins-source AS compaction-plugin
 
 COPY contrib/tenzir-plugins/compaction ./contrib/tenzir-plugins/compaction
@@ -526,6 +515,17 @@ RUN --mount=target=/ccache,type=cache \
     DESTDIR=/plugin/to_asl cmake --install build-to_asl --strip --component Runtime && \
     rm -rf build-to_asl
 
+FROM plugins-source AS to_azure_log_analytics-plugin
+
+COPY contrib/tenzir-plugins/to_azure_log_analytics ./contrib/tenzir-plugins/to_azure_log_analytics
+RUN --mount=target=/ccache,type=cache \
+    cmake -S contrib/tenzir-plugins/to_azure_log_analytics -B build-to_azure_log_analytics -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+    cmake --build build-to_azure_log_analytics --parallel && \
+    cmake --build build-to_azure_log_analytics --target bats && \
+    DESTDIR=/plugin/to_azure_log_analytics cmake --install build-to_azure_log_analytics --strip --component Runtime && \
+    rm -rf build-to_azure_log_analytics
+
 FROM plugins-source AS to_splunk-plugin
 
 COPY contrib/tenzir-plugins/to_splunk ./contrib/tenzir-plugins/to_splunk
@@ -571,11 +571,10 @@ RUN --mount=target=/ccache,type=cache \
     DESTDIR=/plugin/vast cmake --install build-vast --strip --component Runtime && \
     rm -rf build-vast
 
-# -- tenzir-ce -------------------------------------------------------------------
+# -- tenzir-ce-untested --------------------------------------------------------
 
-FROM tenzir-de AS tenzir-ce
+FROM tenzir-de AS tenzir-ce-untested
 
-COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-analytics /
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
@@ -583,12 +582,25 @@ COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
 COPY --from=to_asl-plugin --chown=tenzir:tenzir /plugin/to_asl /
+COPY --from=to_azure_log_analytics-plugin --chown=tenzir:tenzir /plugin/to_azure_log_analytics /
 COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
 COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
 COPY --from=to_google_cloud_logging-plugin --chown=tenzir:tenzir /plugin/to_google_cloud_logging /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 USER tenzir:tenzir
+
+# -- tenzir-ce-integration -----------------------------------------------------
+
+FROM tenzir-ce-untested AS tenzir-ce-integration
+
+COPY tenzir/tests/ ./tests
+RUN ./tests/run.py && echo "success" > /tmp/tenzir-integration-result
+
+# -- tenzir-ce -----------------------------------------------------------------
+
+FROM tenzir-ce-untested AS tenzir-ce
+COPY --from=tenzir-ce-integration /tmp/tenzir-integration-result /tmp/tenzir-integration-result
 
 # -- tenzir-node-ce ------------------------------------------------------------
 

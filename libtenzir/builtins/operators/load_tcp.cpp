@@ -271,6 +271,7 @@ struct connection_manager_state {
   [[maybe_unused]] static constexpr auto name = "connection-manager";
 
   connection_manager_actor<Elements>::pointer self = {};
+  std::string definition;
   load_tcp_args args = {};
   shared_diagnostic_handler diagnostics = {};
   metrics_receiver_actor metrics_receiver = {};
@@ -622,9 +623,11 @@ struct connection_manager_state {
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
-    connection->pipeline_executor = self->spawn(
-      pipeline_executor, std::move(pipeline), receiver_actor<diagnostic>{self},
-      metrics_receiver_actor{self}, node, has_terminal, is_hidden);
+    connection->pipeline_executor
+      = self->spawn(pipeline_executor, std::move(pipeline), definition,
+                    receiver_actor<diagnostic>{self},
+                    metrics_receiver_actor{self}, node, has_terminal,
+                    is_hidden);
     self->monitor(
       connection->pipeline_executor,
       [this, source = connection->pipeline_executor->address()](
@@ -763,11 +766,13 @@ auto make_connection_manager(
   typename connection_manager_actor<Elements>::template stateful_pointer<
     connection_manager_state<Elements>>
     self,
-  const load_tcp_args& args, const shared_diagnostic_handler& diagnostics,
+  std::string definition, const load_tcp_args& args,
+  const shared_diagnostic_handler& diagnostics,
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
   bool is_hidden, const node_actor& node)
   -> connection_manager_actor<Elements>::behavior_type {
   self->state().self = self;
+  self->state().definition = std::move(definition);
   self->state().args = args;
   self->state().diagnostics = diagnostics;
   self->state().metrics_receiver = metrics_receiver;
@@ -833,9 +838,9 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<Elements> {
     const auto connection_manager_actor
       = scope_linked{ctrl.self().spawn<caf::linked>(
-        make_connection_manager<Elements>, args_, ctrl.shared_diagnostics(),
-        ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
-        ctrl.node())};
+        make_connection_manager<Elements>, std::string{ctrl.definition()},
+        args_, ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
+        ctrl.operator_index(), ctrl.is_hidden(), ctrl.node())};
     while (true) {
       auto result = Elements{};
       ctrl.set_waiting(true);
