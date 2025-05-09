@@ -61,25 +61,21 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       ->* [] { return tk::blob; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')) >> '"')
       ->* [] { return tk::string; }
-    | ignore('"' >> *(('\\' >> any) | (any - '"')))
-      ->* [] { return tk::error; } // non-terminated string
     | ignore("br\"" >> *(any - '"') >> '"')
       ->* [] { return tk::raw_blob; }
     | ignore("r\"" >> *(any - '"') >> '"')
       ->* [] { return tk::raw_string; }
-    | ignore("r\"" >> *(any - '"'))
-      ->* [] { return tk::error; } // non-terminated raw string
     | ignore("br#\"" >> *(any - "\"#") >> "\"#")
       ->* [] { return tk::raw_blob; }
     | ignore("r#\"" >> *(any - "\"#") >> "\"#")
       ->* [] { return tk::raw_string; }
-    | ignore("r#\"" >> *(any - "\"#"))
-      ->* [] { return tk::error; } // non-terminated raw string
+    | ignore(*(alpha | '#') >> "\"" >> *any)
+      ->* [] { return tk::error; } // non-terminated string-like tokens
     | ignore("//" >> *(any - '\n'))
       ->* [] { return tk::line_comment; }
     | ignore("/*" >> *(any - "*/") >> "*/")
       ->* [] { return tk::delim_comment; }
-    | ignore("/*" >> *(any - "*/"))
+    | ignore("/*" >> *any)
       ->* [] { return tk::error; } // non-terminated comment
     | ignore(ch<'@'>)
       ->* [] { return tk::at; }
