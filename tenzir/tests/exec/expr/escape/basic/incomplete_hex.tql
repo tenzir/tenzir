@@ -1,4 +1,4 @@
-// error
+// error: true
 
 from {
   x: "\x1"

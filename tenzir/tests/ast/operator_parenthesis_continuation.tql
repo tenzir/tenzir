@@ -1,3 +1,5 @@
+// test: ast
+
 where (x or y)
 where (x or y) and z
 from ({}), {}

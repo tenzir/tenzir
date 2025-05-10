@@ -1,7 +1,7 @@
 error: unknown variable
- --> ir/one_let_with_unknown_var.tql:2:12
+ --> ir/one_let_with_unknown_var.tql:4:12
   |
-2 | let $foo = $bar
+4 | let $foo = $bar
   |            ^^^^ 
   |
   = hint: no variables are available here

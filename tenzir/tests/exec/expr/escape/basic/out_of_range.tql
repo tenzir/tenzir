@@ -1,4 +1,4 @@
-// error
+// error: true
 
 from {
   x: "\u{120301230123}",

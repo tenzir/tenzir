@@ -1,2 +1,4 @@
+// test: ir
+
 let $foo = 42
 let $bar = now()
