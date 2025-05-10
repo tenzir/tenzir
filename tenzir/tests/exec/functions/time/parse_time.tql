@@ -1,0 +1,36 @@
+from {
+  str1: "2024-06-15",
+  str2: "06/15/2024",
+  str3: "15.06.2024",
+  str4: "2024-06-15 14:30:45",
+  str5: "14:30:45",
+  str6: "June 15, 2024",
+  str7: "20240615",
+  str8: "Saturday, June 15, 2024",
+  str9: null
+}
+
+// Basic date parsing
+ts1 = str1.parse_time("%Y-%m-%d")
+
+// Different format styles
+ts2 = str2.parse_time("%m/%d/%Y")
+ts3 = str3.parse_time("%d.%m.%Y")
+
+// Parse date and time
+ts4 = str4.parse_time("%Y-%m-%d %H:%M:%S")
+
+// Parse time only (date defaults to 1970-01-01)
+ts5 = str5.parse_time("%H:%M:%S")
+
+// Parse with month name
+ts6 = str6.parse_time("%B %d, %Y")
+
+// Parse compact format
+ts7 = str7.parse_time("%Y%m%d")
+
+// Parse with weekday and full date
+ts8 = str8.parse_time("%A, %B %d, %Y")
+
+// Null handling
+ts9 = str9.parse_time("%Y-%m-%d")
