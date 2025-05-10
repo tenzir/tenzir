@@ -19,7 +19,9 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/ssl_options.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 #include <tenzir/try.hpp>
 
 #include <boost/asio.hpp>
@@ -78,15 +80,16 @@ struct load_tcp_args : ssl_options {
   std::optional<location> connect = {};
   std::optional<located<uint64_t>> max_buffered_chunks = {};
   std::optional<located<class pipeline>> pipeline = {};
+  std::optional<ast::field_path> local_endpoint = {};
 
   friend auto inspect(auto& f, load_tcp_args& x) -> bool {
     return f.object(x).fields(
       f.field("ssl_options", static_cast<ssl_options&>(x)),
       f.field("endpoint", x.endpoint), f.field("parallel", x.parallel),
-      f.field("connect", x.connect), f.field("tls", x.tls),
-      f.field("certfile", x.certfile), f.field("keyfile", x.keyfile),
+      f.field("connect", x.connect),
       f.field("max_buffered_chunks", x.max_buffered_chunks),
-      f.field("pipeline", x.pipeline));
+      f.field("pipeline", x.pipeline),
+      f.field("local_endpoint", x.local_endpoint));
   }
 };
 
@@ -204,18 +207,40 @@ public:
   load_tcp_sink_operator() = default;
 
   explicit load_tcp_sink_operator(
-    const connection_manager_actor<Elements>& connection_manager)
-    : connection_manager_{connection_manager} {
+    const connection_manager_actor<Elements>& connection_manager,
+    std::optional<ast::field_path> local_endpoint_field,
+    boost::asio::ip::tcp::socket::endpoint_type local_endpoint)
+    : connection_manager_{connection_manager},
+      local_endpoint_field_{std::move(local_endpoint_field)},
+      local_endpoint_ip_{
+        local_endpoint.address().is_v4()
+          ? ip::v4(as_bytes(local_endpoint.address().to_v4().to_bytes()))
+          : ip::v6(as_bytes(local_endpoint.address().to_v6().to_bytes()))},
+      local_endpoint_port_{local_endpoint.port()} {
   }
 
   auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto connection_manager = connection_manager_.lock();
     TENZIR_ASSERT(connection_manager);
+    const auto local_endpoint = ast::constant{
+      record{
+        {"ip", local_endpoint_ip_},
+        {"port", local_endpoint_port_},
+      },
+      location::unknown,
+    };
     for (auto&& elements : input) {
       if (size(elements) == 0) {
         co_yield {};
         continue;
+      }
+      if constexpr (std::is_same_v<Elements, table_slice>) {
+        if (local_endpoint_field_) {
+          auto right = eval(local_endpoint, elements, ctrl.diagnostics());
+          elements = assign(*local_endpoint_field_, std::move(right),
+                            std::move(elements), ctrl.diagnostics());
+        }
       }
       ctrl.set_waiting(true);
       ctrl.self()
@@ -256,12 +281,19 @@ public:
   }
 
   friend auto inspect(auto& f, load_tcp_sink_operator& x) -> bool {
-    return f.apply(x.connection_manager_);
+    return f.object(x).fields(
+      f.field("connection-manager", x.connection_manager_),
+      f.field("local-endpoint-field", x.local_endpoint_field_),
+      f.field("local-endpoint-ip", x.local_endpoint_ip_),
+      f.field("local-endpoint-port", x.local_endpoint_port_));
   }
 
 private:
   detail::weak_handle<connection_manager_actor<Elements>> connection_manager_
     = {};
+  std::optional<ast::field_path> local_endpoint_field_;
+  ip local_endpoint_ip_;
+  uint64_t local_endpoint_port_;
 };
 
 // -- connection-manager actor -------------------------------------------------
@@ -619,7 +651,8 @@ struct connection_manager_state {
       connection_actor{self}, connection->socket->native_handle());
     pipeline.prepend(std::move(source));
     auto sink = std::make_unique<load_tcp_sink_operator<Elements>>(
-      connection_manager_actor<Elements>{self});
+      connection_manager_actor<Elements>{self}, args.local_endpoint,
+      connection->socket->local_endpoint());
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
@@ -912,6 +945,7 @@ public:
                     .positional("endpoint", endpoint)
                     .named("parallel", parallel)
                     .named("max_buffered_chunks", args.max_buffered_chunks)
+                    .named("local_endpoint", args.local_endpoint)
                     .positional("{ … }", args.pipeline);
     args.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));

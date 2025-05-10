@@ -83,6 +83,14 @@ auto eval(const ast::field_path& expr, const table_slice& input,
   return std::move(result.parts()[0]);
 }
 
+auto eval(const ast::constant& expr, const table_slice& input,
+          diagnostic_handler& dh) -> series {
+  auto result = eval(ast::expression{expr}, input, dh);
+  TENZIR_ASSERT(result.length() == detail::narrow<int64_t>(input.rows()));
+  TENZIR_ASSERT(result.parts().size() == 1);
+  return std::move(result.parts()[0]);
+}
+
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   -> failure_or<data> {
   // TODO: Do not create a new session here.
