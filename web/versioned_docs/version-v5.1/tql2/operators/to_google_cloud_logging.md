@@ -3,40 +3,52 @@
 Sends events to [Google Cloud Logging](https://cloud.google.com/logging).
 
 ```tql
-to_google_cloud_logging name=string, resource_type=string,
-        [resource_labels=record, payload=string, service_credentials=string,
-        severity=string, timestamp=time, batch_timeout=duration,
-        max_batch_size=int]
+to_google_cloud_logging log_id=string, [project=string, organization=string,
+          billing_account=string, folder=string,] [resource_type=string,
+          resource_labels=record, payload=string, severity=string,
+          timestamp=time, service_credentials=string, batch_timeout=duration,
+          max_batch_size=int]
 ```
 
 ## Description
 
 Sends events to [Google Cloud Logging](https://cloud.google.com/logging).
 
-### `name = string`
+### `log_id = string`
 
-The resource name for the associated log entry. Must be in one of the following
-formats:
+ID to associated the ingested logs with. It must be less than 512 characters
+long and can only include the following characters: upper and lower case
+alphanumeric characters, forward-slash, underscore, hyphen, and period.
 
-```
-projects/[PROJECT_ID]/logs/[LOG_ID]
-organizations/[ORGANIZATION_ID]/logs/[LOG_ID]
-billingAccounts/[BILLING_ACCOUNT_ID]/logs/[LOG_ID]
-folders/[FOLDER_ID]/logs/[LOG_ID]
-```
+### `project = string (optional)`
 
-`[LOG_ID]` must be URL-encoded within `name`. Example:
-"organizations/1234567890/logs/cloudresourcemanager.googleapis.com%2Factivity".
+A project id to associated the ingested logs with.
 
-`[LOG_ID]` must be less than 512 characters long and can only include the
-following characters: upper and lower case alphanumeric characters,
-forward-slash, underscore, hyphen, and period.
+### `organization = string (optional)`
 
-### `resource_type = string`
+An organization id to associated the ingested logs with.
+
+### `billing_account = string (optional)`
+
+A billing account id to associated the ingested logs with.
+
+### `folder = string (optional)`
+
+A folder id to associated the ingested logs with.
+
+:::note
+At most one of `project`, `organization`, `billing_account`, and `folder` can be
+set. If none is set, the operator tries to fetch the project id from the
+metadata server.
+:::
+
+### `resource_type = string (optional)`
 
 The type of the [monitored resource](https://cloud.google.com/logging/docs/reference/v2/rest/v2/MonitoredResource).
 All available types with their associated labels are listed
 [here](https://cloud.google.com/logging/docs/api/v2/resource-list).
+
+Defaults to `global`.
 
 ### `resource_labels = record (optional)`
 
@@ -52,7 +64,7 @@ and sent.
 
 ### `service_credentials = string (optional)`
 
-Credentials to use if using a service account.
+JSON credentials to use if using a service account.
 
 ### `severity = string (optional)`
 
@@ -85,8 +97,7 @@ from {
   content: "log message",
   timestamp: now(),
 }
-to_google_cloud_logging name="projects/PROJECT_ID/logs/LOG_ID",
-  resource_type="global"
+to_google_cloud_logging log_id="LOG_ID", project="PROJECT_ID"
 ```
 
 ## Send logs using a service account
@@ -97,7 +108,7 @@ from {
   timestamp: now(),
   resource: "global",
 }
-to_google_cloud_logging name="projects/PROJECT_ID/logs/LOG_ID", 
+to_google_cloud_logging log_id="LOG_ID", project="PROJECT_ID"
   resource_type=resource,
   service_credentials=file_contents("/path/to/credentials.json")
 ```

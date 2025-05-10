@@ -60,4 +60,4 @@ update-source() {
   fi
 }
 
-update-source caf "libtenzir/aux/caf"
+update-source caf "libtenzir/aux/caf" "1.0.2+g8b3067afa"

@@ -1,0 +1,21 @@
+from {
+  // Basic unicode escapes
+  s1: "\u0041",            // A
+  s2: "\u0410",            // Cyrillic capital letter A
+  s3: "\u{41}",            // A (braced syntax)
+  s4: "\u{1F600}",         // 😀 Grinning Face
+
+  // Unicode in blobs
+  b1: b"\u0041",           // A
+  b2: b"\u0410",           // Cyrillic capital letter A
+  b3: b"\u{41}",           // A (braced syntax)
+  b4: b"\u{1F600}",        // 😀 Grinning Face
+
+  // Unicode edge cases
+  s7: "\u{0}",             // Null character
+  s8: "\u{10FFFF}",        // Maximum Unicode code point
+
+  // Mixed Unicode and hex escapes
+  mixed1: "Hello \x41\u{42}\u0043",  // Hello ABC
+  mixed2: b"Hello \x41\u{42}\u0043"  // Hello ABC
+}

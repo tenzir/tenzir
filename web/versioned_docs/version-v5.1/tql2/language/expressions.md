@@ -131,7 +131,7 @@ z = move baz
 
 Can also just be spelled as:
 
-```
+```tql
 move x=foo, y=bar, z=baz
 ```
 

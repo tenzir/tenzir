@@ -1,0 +1,21 @@
+from {
+  // Empty strings
+  empty_string: "",
+  empty_blob: b"",
+
+  // Empty raw strings
+  empty_raw_string: r"",
+  empty_raw_blob: br"",
+
+  // Strings with only escape sequences
+  just_escapes_string: "\n\t\r",
+  just_escapes_blob: b"\n\t\r",
+
+  // Just a single character
+  single_char_string: "a",
+  single_char_blob: b"a",
+
+  // Just a space
+  space_string: " ",
+  space_blob: b" "
+}

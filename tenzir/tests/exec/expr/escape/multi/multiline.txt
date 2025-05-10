@@ -1,0 +1,8 @@
+{
+  multiline_string_1: "First line\nSecond line\nThird line",
+  multiline_string_2: "First line\nSecond line\nThird line",
+  multiline_raw_string: "First line\\n\nSecond line\nThird line",
+  multiline_blob: b"First line\nSecond line\nThird line",
+  multiline_raw_blob: b"First line\\n\nSecond line\nThird line",
+  mixed_newlines: "Windows\r\nUnix\nMac (old)\r",
+}

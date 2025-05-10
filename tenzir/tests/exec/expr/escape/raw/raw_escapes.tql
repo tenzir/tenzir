@@ -1,0 +1,11 @@
+from {
+  // Raw strings don't interpret escape sequences
+  rs1: r#"foo\nbar\tbaz\\"#,
+  rs2: r#"\x41\u0041"#,
+  rs3: r#"\\\"\t\n\r\b\f\v\a\0"#,
+
+  // Raw blobs also don't interpret escape sequences
+  rb1: br#"foo\nbar\tbaz\\"#,
+  rb2: br#"\x41\u0041"#,
+  rb3: br#"\\\"\t\n\r\b\f\v\a\0"#,
+}

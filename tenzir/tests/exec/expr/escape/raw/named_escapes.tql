@@ -1,0 +1,29 @@
+from {
+  // Test all named escape sequences for strings
+  s1: "Newline: \n",
+  s2: "Tab: \t",
+  s3: "Carriage Return: \r",
+  s4: "Backspace: \b",
+  s5: "Form Feed: \f",
+  s6: "Vertical Tab: \v",
+  s7: "Bell: \a",
+  s8: "Null Character: \0",
+  s9: "Backslash: \\",
+  s10: "Double Quote: \"",
+
+  // Test all named escape sequences for blobs
+  b1: b"Newline: \n",
+  b2: b"Tab: \t",
+  b3: b"Carriage Return: \r",
+  b4: b"Backspace: \b",
+  b5: b"Form Feed: \f",
+  b6: b"Vertical Tab: \v",
+  b7: b"Bell: \a",
+  b8: b"Null Character: \0",
+  b9: b"Backslash: \\",
+  b10: b"Double Quote: \"",
+
+  // Combined escapes
+  all_string: "\\\"\t\n\r\b\f\v\a\0",
+  all_blob: b"\\\"\t\n\r\b\f\v\a\0"
+}

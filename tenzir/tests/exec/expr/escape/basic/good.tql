@@ -1,0 +1,13 @@
+from {
+  s1: "foo",
+  s1r: r"foo",
+  b1: b"foo",
+  b1r: br"foo",
+
+  s2: "Hello,\x20\u{1F310}",
+  s2r: r"Hello,\x20\u{1F310}",
+  b2: b"Hello,\x20\u{1F310}",
+  b2r: br"Hello,\x20\u{1F310}",
+
+  named: "\\\"\t\n\r\b\f\v\a\0",
+}

@@ -1,0 +1,12 @@
+{
+  empty_string: "",
+  empty_blob: b"",
+  empty_raw_string: "",
+  empty_raw_blob: b"",
+  just_escapes_string: "\n\t\r",
+  just_escapes_blob: b"\n\t\r",
+  single_char_string: "a",
+  single_char_blob: b"a",
+  space_string: " ",
+  space_blob: b" ",
+}

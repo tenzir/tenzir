@@ -1,0 +1,12 @@
+{
+  b1: b"A",
+  b2: b"a",
+  b3: b" ",
+  b4: b"\u0000",
+  b5: b"ÿ",
+  b6: b"ABC",
+  mixed1: "Hello World",
+  mixed2: b"Hello World",
+  middle1: "ABC",
+  middle2: b"ABC",
+}

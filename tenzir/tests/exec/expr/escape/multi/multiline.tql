@@ -1,0 +1,25 @@
+from {
+  // Multi-line strings with different newline patterns
+  multiline_string_1: "First line\nSecond line\nThird line",
+
+  // Multi-line strings with literal newlines (as entered in the source)
+  multiline_string_2: "First line
+Second line
+Third line",
+
+  // Multi-line raw strings
+  multiline_raw_string: r"First line\n
+Second line
+Third line",
+
+  // Multi-line blob
+  multiline_blob: b"First line\nSecond line\nThird line",
+
+  // Multi-line raw blob
+  multiline_raw_blob: br"First line\n
+Second line
+Third line",
+
+  // Mixed newline types
+  mixed_newlines: "Windows\r\nUnix\nMac (old)\r"
+}

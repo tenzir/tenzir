@@ -25,7 +25,8 @@ TENZIR_ENUM(
   this_, if_, else_, match, not_, and_, or_, move, underscore, let, in, meta,
   reserved_keyword,
   // literals
-  scalar, true_, false_, null, raw_string, string, ip, subnet, datetime,
+  scalar, true_, false_, null, raw_blob, blob, raw_string, string, ip, subnet,
+  datetime,
   // punctuation
   dot, dot_question_mark, question_mark, plus, minus, slash, star, equal_equal,
   bang_equal, less, less_equal, greater, greater_equal, at, equal, comma, colon,
