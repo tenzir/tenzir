@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 

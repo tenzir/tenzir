@@ -43,4 +43,32 @@ bool convert(duration dur, data& d);
 bool convert(time tp, double& d);
 bool convert(time tp, data& d);
 
+template <class Clock, class Duration>
+constexpr auto floor(std::chrono::time_point<Clock, Duration> t, duration d) {
+  return t - t.time_since_epoch() % d;
+}
+
+template <class Rep, class Period>
+constexpr auto floor(std::chrono::duration<Rep, Period> t, duration d) {
+  return t - t % d;
+}
+
+template <class Clock, class Duration>
+constexpr auto ceil(std::chrono::time_point<Clock, Duration> t, duration d) {
+  auto result = floor(t, d);
+  if (result != t) {
+    result += d;
+  }
+  return result;
+}
+
+template <class Rep, class Period>
+constexpr auto ceil(std::chrono::duration<Rep, Period> t, duration d) {
+  auto result = floor(t, d);
+  if (result != t) {
+    result += d;
+  }
+  return result;
+}
+
 } // namespace tenzir

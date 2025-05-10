@@ -31,6 +31,24 @@ auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
 }
 
 /// Runs an action in a loop with a given delay without keeping the actor alive.
+///
+/// The function is first called at `start`. Even if `start` is in the past, it
+/// will be scheduled and not called immediately here.
+template <class F>
+void weak_run_delayed_loop_at(caf::scheduled_actor* self,
+                              caf::actor_clock::time_point start,
+                              caf::timespan delay, F&& f) {
+  // Using `weak_run_delayed` here would introduce clock drift.
+  self->clock().schedule(
+    start,
+    caf::make_action([self, start, delay, f = std::forward<F>(f)]() mutable {
+      std::invoke(f);
+      weak_run_delayed_loop_at(self, start + delay, delay, std::move(f));
+    }),
+    caf::weak_actor_ptr{self->ctrl()});
+}
+
+/// Runs an action in a loop with a given delay without keeping the actor alive.
 /// @param self The hosting actor pointer.
 /// @param delay The delay after which to repeat the action.
 /// @param function The action to run with the signature () -> void.
@@ -42,13 +60,8 @@ void weak_run_delayed_loop(caf::scheduled_actor* self, caf::timespan delay,
   if (run_immediately) {
     std::invoke(function);
   }
-  weak_run_delayed(self, delay,
-                   [self, delay,
-                    function = std::forward<Function>(function)]() mutable {
-                     std::invoke(function);
-                     weak_run_delayed_loop(self, delay, std::move(function),
-                                           false);
-                   });
+  weak_run_delayed_loop_at(self, self->clock().now() + delay, delay,
+                           std::forward<Function>(function));
 }
 
 } // namespace tenzir::detail
