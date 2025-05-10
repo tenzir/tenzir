@@ -98,6 +98,29 @@
         "type": "github"
       }
     },
+    "nix2container": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1742501024,
+        "narHash": "sha256-4G0RaAkRQY8Oty0WjoDfIkEAkX7PckUqUGjAQrxhDiA=",
+        "owner": "nlewo",
+        "repo": "nix2container",
+        "rev": "e6315c8307edf2938ae24df0e28b47ca865121de",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nlewo",
+        "repo": "nix2container",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1736192377,
@@ -131,6 +154,7 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "isReleaseBuild": "isReleaseBuild",
+        "nix2container": "nix2container",
         "nixpkgs": "nixpkgs",
         "sbomnix": "sbomnix"
       }

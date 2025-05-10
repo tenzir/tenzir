@@ -13,6 +13,9 @@
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
+  inputs.nix2container.url = "github:nlewo/nix2container";
+  inputs.nix2container.inputs.flake-utils.follows = "flake-utils";
+  inputs.nix2container.inputs.nixpkgs.follows = "nixpkgs";
   inputs.sbomnix.url = "github:tiiuae/sbomnix";
   inputs.sbomnix.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -36,38 +39,6 @@
       system: let
         overlay = import ./nix/overlay.nix {inherit inputs;};
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [overlay];
-        stream-image = {
-          entrypoint,
-          name,
-          pkg,
-          tag ? "latest",
-        }: {
-          type = "app";
-          program = "${pkgs.dockerTools.streamLayeredImage {
-            inherit name tag;
-            contents = [
-              pkg pkgs.bash pkgs.python3
-            ];
-            config = let
-              tenzir-dir = "/var/lib/tenzir";
-            in {
-              Entrypoint = ["/bin/${entrypoint}"];
-              CMD = ["--help"];
-              Env = [
-                # When changing these, make sure to also update the
-                # corresponding entries in the Dockerfile.
-                "TENZIR_STATE_DIRECTORY=${tenzir-dir}"
-                "TENZIR_CACHE_DIRECTORY=/var/cache/tenzir"
-                "TENZIR_LOG_FILE=/var/log/tenzir/server.log"
-                "TENZIR_ENDPOINT=0.0.0.0"
-              ];
-              WorkingDir = "${tenzir-dir}";
-              Volumes = {
-                "${tenzir-dir}" = {};
-              };
-            };
-          }}";
-        };
       in {
         packages =
           flake-utils.lib.flattenTree {
@@ -88,50 +59,6 @@
         apps.tenzir-static = flake-utils.lib.mkApp {
           drv =
             self.packages.${system}.tenzir-static;
-        };
-        apps.stream-tenzir-de-image = stream-image {
-          entrypoint = "tenzir";
-          name = "tenzir/tenzir-de";
-          pkg = self.packages.${system}.tenzir-de;
-        };
-        apps.stream-tenzir-node-de-image = stream-image {
-          entrypoint = "tenzir-node";
-          name = "tenzir/tenzir-de";
-          pkg = self.packages.${system}.tenzir-de;
-        };
-        apps.stream-tenzir-de-slim-image = stream-image {
-          entrypoint = "tenzir";
-          name = "tenzir/tenzir-de-slim";
-          pkg = self.packages.${system}.tenzir-de-static;
-          tag = "latest-slim";
-        };
-        apps.stream-tenzir-node-de-slim-image = stream-image {
-          entrypoint = "tenzir-node";
-          name = "tenzir/tenzir-de-slim";
-          pkg = self.packages.${system}.tenzir-de-static;
-          tag = "latest-slim";
-        };
-        apps.stream-tenzir-image = stream-image {
-          entrypoint = "tenzir";
-          name = "tenzir/tenzir";
-          pkg = self.packages.${system}.tenzir;
-        };
-        apps.stream-tenzir-node-image = stream-image {
-          entrypoint = "tenzir-node";
-          name = "tenzir/tenzir";
-          pkg = self.packages.${system}.tenzir;
-        };
-        apps.stream-tenzir-slim-image = stream-image {
-          entrypoint = "tenzir";
-          name = "tenzir/tenzir-slim";
-          pkg = self.packages.${system}.tenzir-static;
-          tag = "latest-slim";
-        };
-        apps.stream-tenzir-node-slim-image = stream-image {
-          entrypoint = "tenzir-node";
-          name = "tenzir/tenzir-slim";
-          pkg = self.packages.${system}.tenzir-static;
-          tag = "latest-slim";
         };
         apps.default = self.apps.${system}.tenzir-static;
         # Run with `nix run .#generate-sbom`, output is created in sbom/.
@@ -177,7 +104,7 @@
         };
         # Legacy aliases for backwards compatibility.
         devShell = import ./shell.nix {inherit pkgs;};
-        formatter = pkgs.alejandra;
+        formatter = pkgs.nixfmt-rfc-style;
         hydraJobs =
           {packages = self.packages.${system};}
           // (

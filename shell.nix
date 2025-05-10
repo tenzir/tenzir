@@ -13,6 +13,7 @@ in
           pkgs.clang-tools
           pkgs.cmake-format
           pkgs.gdb
+          pkgs.nixfmt-rfc-style
           pkgs.speeve
           pkgs.shfmt
           pkgs.poetry
