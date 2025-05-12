@@ -891,11 +891,18 @@ public:
         format_n("message_id", mid, 32, args_.message_id);
         if (sd and not sd->empty()) {
           fmt::format_to(it, " ");
-          for (auto&& [name, val] : *sd) {
+          for (const auto& [name, val] : *sd) {
+            const auto* params = try_as<view<record>>(val);
+            if (not params) {
+              diagnostic::warning(
+                "structured data `{}` must be of type `record`", name)
+                .primary(args_.loc(args_.structured_data))
+                .note("skipping structured data `{}`", name)
+                .emit(dh);
+              continue;
+            }
             fmt::format_to(it, "[{}", name);
-            auto* params = try_as<view<record>>(val);
-            TENZIR_ASSERT(params);
-            for (auto&& [k, v] : *params) {
+            for (const auto& [k, v] : *params) {
               fmt::format_to(it, " {}=", k);
               format_val(it, k, v, dh);
             }
