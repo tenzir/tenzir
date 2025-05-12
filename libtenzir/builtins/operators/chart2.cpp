@@ -852,8 +852,13 @@ class chart_plugin : public virtual operator_factory_plugin {
     auto x_min = std::optional<located<data>>{};
     auto x_max = std::optional<located<data>>{};
     auto p = argument_parser2::operator_(name());
-    p.named(Ty == chart_type::pie ? "label" : "x", args.x);
-    p.named(Ty == chart_type::pie ? "value" : "y", y, "any");
+    if constexpr (Ty == chart_type::bar or Ty == chart_type::pie) {
+      p.named("x|label", args.x);
+      p.named("y|value", y, "any");
+    } else {
+      p.named("x", args.x);
+      p.named("y", y, "any");
+    }
     if constexpr (Ty != chart_type::pie) {
       p.named("x_min", x_min, "constant");
       p.named("x_max", x_max, "constant");
