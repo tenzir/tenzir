@@ -6,8 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/installdirs.hpp"
+
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/detail/string.hpp"
 
@@ -26,6 +28,9 @@ std::filesystem::path install_libdir() {
 /// directories for multi-config generators.
 std::pair<std::filesystem::path, std::filesystem::path>
 install_prefix_and_suffix() {
+  if (auto runtime_prefix = detail::getenv("TENZIR_RUNTIME_PREFIX")) {
+    return {*runtime_prefix, {}};
+  }
   auto prefix_from_libdir = [](const auto& libdir) {
     auto err = std::error_code{};
     auto prefix = libdir / "@TENZIR_LIBDIR_TO_PREFIX@";
