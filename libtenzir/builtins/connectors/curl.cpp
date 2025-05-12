@@ -507,7 +507,7 @@ auto parse_http_args(std::string name,
   args.transfer_opts.ssl.add_tls_options(parser);
   parser.named("_verbose", args.transfer_opts.verbose);
   TRY(parser.parse(inv, ctx));
-  TRY(args.transfer_opts.ssl.validate(located{url, location::unknown}, ctx));
+  TRY(args.transfer_opts.ssl.validate(url, location::unknown, ctx));
   args.url = std::move(url);
   if (form) {
     args.http_opts.form = true;
@@ -598,8 +598,7 @@ auto parse_ftp_args(std::string name,
   if (not(args.url.starts_with("ftp://") or args.url.starts_with("ftps://"))) {
     args.url.insert(0, "ftp://");
   }
-  TRY(
-    args.transfer_opts.ssl.validate(located{args.url, location::unknown}, ctx));
+  TRY(args.transfer_opts.ssl.validate(args.url, location::unknown, ctx));
   return args;
 }
 

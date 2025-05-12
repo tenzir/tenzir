@@ -301,7 +301,7 @@ struct zeek_printer {
         TENZIR_UNREACHABLE();
       },
       [](const secret_type&) -> std::string {
-        return "secret";
+        return "string";
       },
       [](const record_type&) -> std::string {
         return "record";

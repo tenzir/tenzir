@@ -41,13 +41,8 @@ public:
     }
     if (not std::equal(s.begin(), s.end(), e.begin())) {
       diagnostic::error("secret does not match expected value")
-#ifndef NDEBUG
-        .primary(secret_, "[{}]", fmt::join(s, ","))
-        .primary(expected_, "[{}]", fmt::join(e, ","))
-#else
         .primary(secret_)
         .primary(expected_)
-#endif
         .emit(ctrl.diagnostics());
       co_return;
     }

@@ -26,20 +26,8 @@ auto ssl_options::add_tls_options(argument_parser2& parser) -> void {
     .named("keyfile", keyfile);
 }
 
-auto ssl_options::validate(const located<std::string>& url,
-                           diagnostic_handler& dh) -> failure_or<void> {
-  auto url_says_safe = url.inner.starts_with("https://")
-                       or url.inner.starts_with("ftps://")
-                       or url.inner.starts_with("smtps://");
-  auto option_says_no_tls = not tls.inner;
-  if (url_says_safe and option_says_no_tls) {
-    diagnostic::error("conflicting TLS settings")
-      .primary(url, "url specifies TLS")
-      .primary(tls, "option specifies no TLS")
-      .emit(dh);
-    return failure::promise();
-  }
-  const auto tls_logic
+auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
+  const auto check_option
     = [&](auto& thing, std::string_view name) -> failure_or<void> {
     if (not tls.inner and thing) {
       diagnostic::error("`{}` requires TLS", name)
@@ -50,11 +38,12 @@ auto ssl_options::validate(const located<std::string>& url,
     }
     return {};
   };
-  TRY(tls_logic(skip_peer_verification, "skip_peer_verification"));
-  TRY(tls_logic(cacert, "cacert"));
-  TRY(tls_logic(certfile, "certfile"));
-  TRY(tls_logic(keyfile, "keyfile"));
-  if (tls.inner and not skip_peer_verification) {
+  auto res = *this;
+  TRY(check_option(res.skip_peer_verification, "skip_peer_verification"));
+  TRY(check_option(res.cacert, "cacert"));
+  TRY(check_option(res.certfile, "certfile"));
+  TRY(check_option(res.keyfile, "keyfile"));
+  if (res.tls.inner and not res.skip_peer_verification) {
     if (cacert and not std::filesystem::exists(cacert->inner)) {
       diagnostic::error("the configured CA certificate bundle does not exist")
         .note("configured location: `{}`", cacert->inner)
@@ -63,13 +52,41 @@ auto ssl_options::validate(const located<std::string>& url,
       return failure::promise();
     }
   }
-  if (skip_peer_verification) {
+  if (res.skip_peer_verification) {
     diagnostic::warning(
       "skipping peer verification allows man in the middle attacks")
       .hint("consider using a private CA")
       .emit(dh);
   }
   return {};
+}
+
+auto ssl_options::validate(located<std::string>& url,
+                           diagnostic_handler& dh) const -> failure_or<void> {
+  return validate(url.inner, url.source, dh);
+}
+
+auto ssl_options::validate(std::string& url, location url_loc,
+                           diagnostic_handler& dh) const -> failure_or<void> {
+  const auto url_says_safe = url.starts_with("https://")
+                             or url.starts_with("ftps://")
+                             or url.starts_with("smtps://");
+  const auto option_says_no_tls = not tls.inner;
+  if (url_says_safe and option_says_no_tls) {
+    diagnostic::error("conflicting TLS settings")
+      .primary(url_loc, "url specifies TLS")
+      .primary(tls, "option specifies no TLS")
+      .emit(dh);
+    return failure::promise();
+  }
+  /// Update URL. This is crucial for CURL based connectors, as curl does not
+  /// respect `CURLOPT_USE_SSL` for HTTP.
+  if (tls.inner) {
+    if (url.starts_with("http://")) {
+      url.insert(4, "s");
+    }
+  }
+  return validate(dh);
 }
 
 auto ssl_options::apply_to(
