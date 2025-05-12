@@ -1,0 +1,5 @@
+// error
+
+from {
+  s2: "\xC0\xAF", // Invalid UTF-8 overlong encoding
+}
