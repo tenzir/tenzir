@@ -266,6 +266,7 @@ Tenzir comes with a wide range of built-in pipeline operators.
 | Operator                                         | Description             | Example         |
 | :----------------------------------------------- | :---------------------- | :-------------- |
 | [`pipeline::list`](./operators/pipeline/list.md) | Shows managed pipelines | `package::list` |
+| [`pipeline::activity`](./operators/pipeline/activity.md) | Summarizes the activity of pipelines | `package::activity range=1d, interval=1h` |
 
 ## Contexts
 
