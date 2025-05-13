@@ -10,6 +10,7 @@
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/exec.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <boost/url/parse.hpp>
@@ -273,8 +274,11 @@ public:
           TENZIR_TRACE("creating saver with path {}", partitioned_url);
           // TODO: Even though we check this before with a test URL, this can
           // still fail afterwards in theory.
-          auto saver = pipeline::internal_parse(
-            fmt::format("save {:?}", partitioned_url));
+          auto parse_diags = collecting_diagnostic_handler{};
+          auto provider = session_provider::make(parse_diags);
+          auto ctx = provider.as_session();
+          auto saver = parse_and_compile(
+            fmt::format("to \"{:?}\" {{pass}}", partitioned_url), ctx);
           TENZIR_ASSERT(saver);
           it = groups.emplace_hint(it, std::move(key_data),
                                    group_t{args_.writer, std::move(*saver),
