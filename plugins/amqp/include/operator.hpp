@@ -701,6 +701,7 @@ public:
     for (auto chunk : input) {
       if (not chunk || chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       if (auto err = engine->publish(std::move(chunk), opts)) {
         diagnostic::error("failed to publish {}-byte message", chunk->size())

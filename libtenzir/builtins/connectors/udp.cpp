@@ -219,6 +219,7 @@ public:
     for (auto chunk : input) {
       if (not chunk || chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       // If we exceed the maximum UDP datagram size of 65,535 we are in trouble.
       if (chunk->size() > 65'535) {

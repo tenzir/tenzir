@@ -137,6 +137,7 @@ public:
     for (auto chunk : input) {
       if (not chunk || chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       // Format headers.
       auto headers = std::vector<std::string>{};

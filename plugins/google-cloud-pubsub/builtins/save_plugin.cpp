@@ -49,6 +49,7 @@ public:
     for (auto chunk : input) {
       if (not chunk or chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       auto message
         = pubsub::MessageBuilder{}

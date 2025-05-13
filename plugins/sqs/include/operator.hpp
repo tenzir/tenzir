@@ -240,6 +240,7 @@ public:
     for (auto chunk : input) {
       if (!chunk || chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       try {
         queue->send_message(to_aws_string(std::move(chunk)));

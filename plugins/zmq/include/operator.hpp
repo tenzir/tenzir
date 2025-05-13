@@ -435,6 +435,7 @@ public:
     for (auto chunk : input) {
       if (not chunk || chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       if (conn->monitored()) {
         // Block until we have at least one peer, or fast-track with a zero

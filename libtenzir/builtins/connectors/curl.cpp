@@ -216,6 +216,7 @@ public:
     for (auto chunk : input) {
       if (! chunk || chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       if (auto err = tx->prepare(chunk)) {
         diagnostic::error("failed to prepare transfer")

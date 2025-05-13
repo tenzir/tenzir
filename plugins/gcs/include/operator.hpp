@@ -129,7 +129,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "gcs";
+    return "load_gcs";
   }
 
   friend auto inspect(auto& f, gcs_loader& x) -> bool {
@@ -202,6 +202,7 @@ public:
     for (auto chunk : input) {
       if (! chunk || chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       auto status
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
@@ -220,7 +221,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "gcs";
+    return "save_gcs";
   }
 
   friend auto inspect(auto& f, gcs_saver& x) -> bool {

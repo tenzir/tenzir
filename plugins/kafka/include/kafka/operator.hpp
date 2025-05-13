@@ -178,7 +178,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "save_kafka";
+    return "load_kafka";
   }
 
   friend auto inspect(auto& f, kafka_loader& x) -> bool {
@@ -266,6 +266,7 @@ public:
     for (auto chunk : input) {
       if (!chunk || chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       for (const auto& topic : topics) {
         TENZIR_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);

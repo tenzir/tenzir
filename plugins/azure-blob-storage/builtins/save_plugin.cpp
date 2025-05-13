@@ -69,6 +69,7 @@ public:
     for (auto chunk : input) {
       if (! chunk || chunk->size() == 0) {
         co_yield {};
+        continue;
       }
       auto status
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
