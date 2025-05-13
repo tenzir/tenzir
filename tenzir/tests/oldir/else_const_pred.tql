@@ -1,3 +1,5 @@
+// test: oldir
+
 from {}
 if false {
   foo = 1

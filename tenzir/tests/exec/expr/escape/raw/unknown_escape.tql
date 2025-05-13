@@ -1,4 +1,4 @@
-// error
+// error: true
 
 from {
   s1: "foo\qbar", // backslash-q is not a valid escape sequence

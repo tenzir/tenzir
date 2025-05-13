@@ -46,21 +46,21 @@
        }
 -    },
 -    where_ir {
--      self: 7..12,
+-      self: 21..26,
 -      predicate: binary_expr {
 -        left: root_field {
--          id: `foo` @ 13..16,
+-          id: `foo` @ 27..30,
 -          has_question_mark: false
 -        },
--        op: "in" @ 17..19,
+-        op: "in" @ 31..33,
 -        right: list {
--          begin: 20..21,
+-          begin: 34..35,
 -          items: [
--            expression constant int64 1 @ 21..22,
--            expression constant int64 2 @ 24..25,
--            expression constant int64 3 @ 27..28
+-            expression constant int64 1 @ 35..36,
+-            expression constant int64 2 @ 38..39,
+-            expression constant int64 3 @ 41..42
 -          ],
--          end: 28..29
+-          end: 42..43
 -        }
 -      }
      }

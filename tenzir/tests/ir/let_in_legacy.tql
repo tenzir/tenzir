@@ -1,3 +1,5 @@
+// test: ir
+
 let $foo = 42
 
 // This test is for the legacy operator. It will fail once we upgrade `version`.

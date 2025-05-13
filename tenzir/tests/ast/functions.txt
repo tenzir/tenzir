@@ -2,83 +2,83 @@
   assignment {
     left: field_path {
       expr: root_field {
-        id: `a` @ 0..1,
+        id: `a` @ 14..15,
         has_question_mark: false
       },
       has_this: false,
       path: [
         {
-          id: `a` @ 0..1,
+          id: `a` @ 14..15,
           has_question_mark: false
         }
       ]
     },
-    equals: 2..3,
+    equals: 16..17,
     right: function_call {
       fn: {
         path: [
-          `b` @ 4..5
+          `b` @ 18..19
         ],
         ref: unresolved
       },
       args: [
         
       ],
-      rpar: 6..7,
+      rpar: 20..21,
       method: false
     }
   },
   assignment {
     left: field_path {
       expr: root_field {
-        id: `a` @ 8..9,
+        id: `a` @ 22..23,
         has_question_mark: false
       },
       has_this: false,
       path: [
         {
-          id: `a` @ 8..9,
+          id: `a` @ 22..23,
           has_question_mark: false
         }
       ]
     },
-    equals: 10..11,
+    equals: 24..25,
     right: function_call {
       fn: {
         path: [
-          `b` @ 12..13
+          `b` @ 26..27
         ],
         ref: unresolved
       },
       args: [
         root_field {
-          id: `c` @ 14..15,
+          id: `c` @ 28..29,
           has_question_mark: false
         }
       ],
-      rpar: 15..16,
+      rpar: 29..30,
       method: false
     }
   },
   assignment {
     left: field_path {
       expr: root_field {
-        id: `a` @ 17..18,
+        id: `a` @ 31..32,
         has_question_mark: false
       },
       has_this: false,
       path: [
         {
-          id: `a` @ 17..18,
+          id: `a` @ 31..32,
           has_question_mark: false
         }
       ]
     },
-    equals: 19..20,
+    equals: 33..34,
     right: function_call {
       fn: {
         path: [
-          `b` @ 21..22
+          `b` @ 35..36
         ],
         ref: unresolved
       },
@@ -86,72 +86,20 @@
         assignment {
           left: field_path {
             expr: root_field {
-              id: `c` @ 23..24,
+              id: `c` @ 37..38,
               has_question_mark: false
             },
             has_this: false,
             path: [
               {
-                id: `c` @ 23..24,
-                has_question_mark: false
-              }
-            ]
-          },
-          equals: 24..25,
-          right: root_field {
-            id: `d` @ 25..26,
-            has_question_mark: false
-          }
-        }
-      ],
-      rpar: 26..27,
-      method: false
-    }
-  },
-  assignment {
-    left: field_path {
-      expr: root_field {
-        id: `a` @ 28..29,
-        has_question_mark: false
-      },
-      has_this: false,
-      path: [
-        {
-          id: `a` @ 28..29,
-          has_question_mark: false
-        }
-      ]
-    },
-    equals: 30..31,
-    right: function_call {
-      fn: {
-        path: [
-          `b` @ 32..33
-        ],
-        ref: unresolved
-      },
-      args: [
-        root_field {
-          id: `c` @ 34..35,
-          has_question_mark: false
-        },
-        assignment {
-          left: field_path {
-            expr: root_field {
-              id: `d` @ 37..38,
-              has_question_mark: false
-            },
-            has_this: false,
-            path: [
-              {
-                id: `d` @ 37..38,
+                id: `c` @ 37..38,
                 has_question_mark: false
               }
             ]
           },
           equals: 38..39,
           right: root_field {
-            id: `e` @ 39..40,
+            id: `d` @ 39..40,
             has_question_mark: false
           }
         }
@@ -183,63 +131,115 @@
         ref: unresolved
       },
       args: [
-        assignment {
-          left: field_path {
-            expr: root_field {
-              id: `c` @ 48..49,
-              has_question_mark: false
-            },
-            has_this: false,
-            path: [
-              {
-                id: `c` @ 48..49,
-                has_question_mark: false
-              }
-            ]
-          },
-          equals: 49..50,
-          right: root_field {
-            id: `d` @ 50..51,
-            has_question_mark: false
-          }
-        },
         root_field {
-          id: `e` @ 53..54,
+          id: `c` @ 48..49,
           has_question_mark: false
         },
         assignment {
           left: field_path {
             expr: root_field {
-              id: `g` @ 56..57,
+              id: `d` @ 51..52,
               has_question_mark: false
             },
             has_this: false,
             path: [
               {
-                id: `g` @ 56..57,
+                id: `d` @ 51..52,
                 has_question_mark: false
               }
             ]
           },
-          equals: 57..58,
+          equals: 52..53,
           right: root_field {
-            id: `h` @ 58..59,
+            id: `e` @ 53..54,
+            has_question_mark: false
+          }
+        }
+      ],
+      rpar: 54..55,
+      method: false
+    }
+  },
+  assignment {
+    left: field_path {
+      expr: root_field {
+        id: `a` @ 56..57,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `a` @ 56..57,
+          has_question_mark: false
+        }
+      ]
+    },
+    equals: 58..59,
+    right: function_call {
+      fn: {
+        path: [
+          `b` @ 60..61
+        ],
+        ref: unresolved
+      },
+      args: [
+        assignment {
+          left: field_path {
+            expr: root_field {
+              id: `c` @ 62..63,
+              has_question_mark: false
+            },
+            has_this: false,
+            path: [
+              {
+                id: `c` @ 62..63,
+                has_question_mark: false
+              }
+            ]
+          },
+          equals: 63..64,
+          right: root_field {
+            id: `d` @ 64..65,
             has_question_mark: false
           }
         },
         root_field {
-          id: `i` @ 61..62,
+          id: `e` @ 67..68,
+          has_question_mark: false
+        },
+        assignment {
+          left: field_path {
+            expr: root_field {
+              id: `g` @ 70..71,
+              has_question_mark: false
+            },
+            has_this: false,
+            path: [
+              {
+                id: `g` @ 70..71,
+                has_question_mark: false
+              }
+            ]
+          },
+          equals: 71..72,
+          right: root_field {
+            id: `h` @ 72..73,
+            has_question_mark: false
+          }
+        },
+        root_field {
+          id: `i` @ 75..76,
           has_question_mark: false
         }
       ],
-      rpar: 63..64,
+      rpar: 77..78,
       method: false
     }
   },
   invocation {
     op: {
       path: [
-        `foo` @ 65..68
+        `foo` @ 79..82
       ],
       ref: unresolved
     },
@@ -247,17 +247,17 @@
       function_call {
         fn: {
           path: [
-            `b` @ 71..72
+            `b` @ 85..86
           ],
           ref: unresolved
         },
         args: [
           root_field {
-            id: `a` @ 69..70,
+            id: `a` @ 83..84,
             has_question_mark: false
           }
         ],
-        rpar: 73..74,
+        rpar: 87..88,
         method: true
       }
     ]
@@ -265,7 +265,7 @@
   invocation {
     op: {
       path: [
-        `foo` @ 75..78
+        `foo` @ 89..92
       ],
       ref: unresolved
     },
@@ -273,21 +273,21 @@
       function_call {
         fn: {
           path: [
-            `b` @ 81..82
+            `b` @ 95..96
           ],
           ref: unresolved
         },
         args: [
           root_field {
-            id: `a` @ 79..80,
+            id: `a` @ 93..94,
             has_question_mark: false
           },
           root_field {
-            id: `c` @ 83..84,
+            id: `c` @ 97..98,
             has_question_mark: false
           }
         ],
-        rpar: 84..85,
+        rpar: 98..99,
         method: true
       }
     ]
@@ -295,7 +295,7 @@
   invocation {
     op: {
       path: [
-        `foo` @ 86..89
+        `foo` @ 100..103
       ],
       ref: unresolved
     },
@@ -303,37 +303,37 @@
       function_call {
         fn: {
           path: [
-            `b` @ 92..93
+            `b` @ 106..107
           ],
           ref: unresolved
         },
         args: [
           root_field {
-            id: `a` @ 90..91,
+            id: `a` @ 104..105,
             has_question_mark: false
           },
           assignment {
             left: field_path {
               expr: root_field {
-                id: `c` @ 94..95,
+                id: `c` @ 108..109,
                 has_question_mark: false
               },
               has_this: false,
               path: [
                 {
-                  id: `c` @ 94..95,
+                  id: `c` @ 108..109,
                   has_question_mark: false
                 }
               ]
             },
-            equals: 95..96,
+            equals: 109..110,
             right: root_field {
-              id: `d` @ 96..97,
+              id: `d` @ 110..111,
               has_question_mark: false
             }
           }
         ],
-        rpar: 97..98,
+        rpar: 111..112,
         method: true
       }
     ]
@@ -341,7 +341,7 @@
   invocation {
     op: {
       path: [
-        `foo` @ 99..102
+        `foo` @ 113..116
       ],
       ref: unresolved
     },
@@ -349,41 +349,41 @@
       function_call {
         fn: {
           path: [
-            `b` @ 105..106
+            `b` @ 119..120
           ],
           ref: unresolved
         },
         args: [
           root_field {
-            id: `a` @ 103..104,
+            id: `a` @ 117..118,
             has_question_mark: false
           },
           root_field {
-            id: `c` @ 107..108,
+            id: `c` @ 121..122,
             has_question_mark: false
           },
           assignment {
             left: field_path {
               expr: root_field {
-                id: `d` @ 110..111,
+                id: `d` @ 124..125,
                 has_question_mark: false
               },
               has_this: false,
               path: [
                 {
-                  id: `d` @ 110..111,
+                  id: `d` @ 124..125,
                   has_question_mark: false
                 }
               ]
             },
-            equals: 111..112,
+            equals: 125..126,
             right: root_field {
-              id: `e` @ 112..113,
+              id: `e` @ 126..127,
               has_question_mark: false
             }
           }
         ],
-        rpar: 113..114,
+        rpar: 127..128,
         method: true
       }
     ]
@@ -391,7 +391,7 @@
   invocation {
     op: {
       path: [
-        `foo` @ 115..118
+        `foo` @ 129..132
       ],
       ref: unresolved
     },
@@ -399,65 +399,65 @@
       function_call {
         fn: {
           path: [
-            `b` @ 121..122
+            `b` @ 135..136
           ],
           ref: unresolved
         },
         args: [
           root_field {
-            id: `a` @ 119..120,
+            id: `a` @ 133..134,
             has_question_mark: false
           },
           assignment {
             left: field_path {
               expr: root_field {
-                id: `c` @ 123..124,
+                id: `c` @ 137..138,
                 has_question_mark: false
               },
               has_this: false,
               path: [
                 {
-                  id: `c` @ 123..124,
+                  id: `c` @ 137..138,
                   has_question_mark: false
                 }
               ]
             },
-            equals: 124..125,
+            equals: 138..139,
             right: root_field {
-              id: `d` @ 125..126,
+              id: `d` @ 139..140,
               has_question_mark: false
             }
           },
           root_field {
-            id: `e` @ 128..129,
+            id: `e` @ 142..143,
             has_question_mark: false
           },
           assignment {
             left: field_path {
               expr: root_field {
-                id: `g` @ 131..132,
+                id: `g` @ 145..146,
                 has_question_mark: false
               },
               has_this: false,
               path: [
                 {
-                  id: `g` @ 131..132,
+                  id: `g` @ 145..146,
                   has_question_mark: false
                 }
               ]
             },
-            equals: 132..133,
+            equals: 146..147,
             right: root_field {
-              id: `h` @ 133..134,
+              id: `h` @ 147..148,
               has_question_mark: false
             }
           },
           root_field {
-            id: `i` @ 136..137,
+            id: `i` @ 150..151,
             has_question_mark: false
           }
         ],
-        rpar: 138..139,
+        rpar: 152..153,
         method: true
       }
     ]

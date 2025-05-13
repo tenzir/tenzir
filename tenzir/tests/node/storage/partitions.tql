@@ -1,3 +1,5 @@
+// node: true
+
 from {}
 repeat 100
 enumerate index

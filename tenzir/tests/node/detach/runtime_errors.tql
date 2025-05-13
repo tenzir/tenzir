@@ -1,3 +1,5 @@
+// node: true
+
 pipeline::detach {
   from {x: 1}
   write_csv
