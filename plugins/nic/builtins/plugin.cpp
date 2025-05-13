@@ -29,8 +29,7 @@ namespace tenzir::plugins::nic {
 
 namespace {
 
-class load_plugin
-  : public virtual operator_plugin2<loader_adapter<nic_loader>> {
+class load_plugin : public virtual operator_plugin2<nic_loader> {
   auto make(invocation inv, session ctx) const -> failure_or<operator_ptr> {
     // FIXME: Arg parser doesn't support uint32_t
     auto snaplen = std::optional<located<uint64_t>>{};
@@ -44,8 +43,7 @@ class load_plugin
       args.snaplen
         = {detail::narrow<uint32_t>(snaplen->inner), snaplen->source};
     }
-    return std::make_unique<loader_adapter<nic_loader>>(
-      nic_loader{std::move(args)});
+    return std::make_unique<nic_loader>(std::move(args));
   }
 };
 
