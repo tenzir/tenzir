@@ -64,6 +64,9 @@ structure no longer determines which runner is used.
   is `.txt`. This is the default runner.
 - **ir**: Tests the optimized Intermediate Representation (IR) generation
   (`--dump-ir`). Output is `.txt`.
+- **config**: Tests node configuration validation. The test passes if the node
+  starts (or fails to start) as expected according to the `error` option. Output
+  is `.txt` with combined stdout/stderr from the node startup attempt.
 - **oldir**: Tests the old optimized Intermediate Representation (IR) generation
   (`--dump-pipeline`). Output is `.txt`.
 - **instantiation**: Compares the IR before and after instantiation (`--dump-ir`
@@ -123,7 +126,8 @@ frontmatter:
 ### Supported Options
 
 - **test**: String (default: `exec`) - Specifies which test runner to use. Valid
-  values: `ast`, `exec`, `ir`, `oldir`, `instantiation`, `opt`, `finalize`.
+  values: `ast`, `exec`, `ir`, `oldir`, `instantiation`, `opt`, `finalize`,
+  `config`.
 - **node**: Boolean (default: `false`) - If `true`, the test will be executed
   against a temporary `tenzir-node` instance. This works with all runner types.
 - **error**: Boolean (default: `false`) - If `true`, the test is expected to
@@ -189,6 +193,15 @@ from env("INPUTS") + "/cef/cynet.log" {
   read_cef
 }
 ```
+
+## Test Environment
+
+The test runner creates a controlled environment for each test:
+
+- All environment variables starting with `TENZIR_` are removed from the
+  environment to prevent user configurations from leaking into tests
+- `TENZIR_DISABLE_BANNER` is set to disable the version banner in test output
+- `INPUTS` is set to the absolute path of the inputs directory
 
 ## Future Work
 

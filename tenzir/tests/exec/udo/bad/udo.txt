@@ -1,0 +1,9 @@
+
+[1m[31merror[39m: operator `bar` not found[0m
+ [1m[34m=[39m hint:[0m did you mean `rare`?
+ [1m[34m=[39m docs:[0m https://docs.tenzir.com/tql2/operators
+
+[1m[31merror[39m: operator `foo` not found[0m
+ [1m[34m=[39m hint:[0m did you mean `fork`?
+ [1m[34m=[39m docs:[0m https://docs.tenzir.com/tql2/operators
+failed to resolve user-defined operators: `foo`, `bar`

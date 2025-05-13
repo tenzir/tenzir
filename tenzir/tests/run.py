@@ -34,7 +34,13 @@ def get_test_env_and_config_args(test):
     config_file = test.parent / "tenzir.yaml"
     config_args = [f"--config={config_file}"] if config_file.exists() else []
     env = os.environ.copy()
+
+    # Remove all TENZIR_ environment variables to prevent leakage from user environment
+    env = {k: v for k, v in env.items() if not k.startswith("TENZIR_")}
+
+    # Set our controlled environment variables
     env["INPUTS"] = str(INPUTS_DIR)
+    env["TENZIR_DISABLE_BANNER"] = "1"  # Disable node startup banner
     return env, config_args
 
 
@@ -53,7 +59,7 @@ def parse_test_config(test_file):
         "timeout": 5,  # Default timeout of 5 seconds
         "test": "exec",  # Default to exec runner
         "node": False,  # Default to not using a node
-        "skip": None,   # Optional skip reason
+        "skip": None,  # Optional skip reason
     }
 
     valid_keys = set(config.keys())
@@ -253,7 +259,7 @@ def run_simple_test(
                 if expected != b"":
                     report_failure(
                         test,
-                        f'└─▶ \033[31mReference file for skipped test must be empty: "{ref_path}"\033[0m'
+                        f'└─▶ \033[31mReference file for skipped test must be empty: "{ref_path}"\033[0m',
                     )
                     return False
         return "skipped"
@@ -501,13 +507,105 @@ class ExecRunner(TqlRunner):
         return run_simple_test(test, update=update, ext="txt")
 
 
+class ConfigRunner(Runner):
+    def __init__(self):
+        super().__init__(prefix="config")
+
+    def collect_tests(self):
+        return self.collect_with_ext(".tql")
+
+    def purge(self):
+        pass
+
+    def run(self, test: Path, update: bool) -> bool:
+        test_config = parse_test_config(test)
+        expect_failure = test_config.get("error", False)
+
+        # Try to start a node with the given configuration
+        env, config_args = get_test_env_and_config_args(test)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            try:
+                node_cmd = [
+                    TENZIR_NODE_BINARY,
+                    "--bare-mode",
+                    "--console-verbosity=warning",
+                    "--console-format=%v",
+                    f"--state-directory={Path(temp_dir) / 'state'}",
+                    f"--cache-directory={Path(temp_dir) / 'cache'}",
+                    "--endpoint=localhost:0",
+                    "--print-endpoint",
+                    *[x for x in config_args if x is not None],
+                ]
+
+                # Capture both stdout and stderr for reference file
+                proc = subprocess.run(
+                    node_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env=env,
+                    timeout=parse_test_config(test)["timeout"],
+                )
+
+                # Check if the process exited as expected
+                node_started = proc.returncode == 0 and "localhost:" in proc.stdout
+
+                if expect_failure and node_started:
+                    report_failure(
+                        test,
+                        f"└─▶ \033[31mNode started successfully but was expected to fail\033[0m",
+                    )
+                    return False
+                elif not expect_failure and not node_started:
+                    report_failure(
+                        test,
+                        f"└─▶ \033[31mNode failed to start but was expected to succeed\033[0m",
+                    )
+                    return False
+
+                # Create content for the reference file (combined stdout and stderr)
+                output = proc.stdout + "\n" + proc.stderr
+
+                # Check against reference or update it
+                ref_path = test.with_suffix(".txt")
+                if update:
+                    ref_path.write_text(output)
+                    success(test)
+                    return True
+                elif ref_path.exists():
+                    expected = ref_path.read_text()
+                    if output != expected:
+                        report_failure(test, "")
+                        print_diff(expected, output, ref_path)
+                        return False
+                    success(test)
+                    return True
+                else:
+                    report_failure(
+                        test,
+                        f"└─▶ \033[31mReference file {ref_path} does not exist. Run with --update to create it.\033[0m",
+                    )
+                    return False
+
+            except subprocess.TimeoutExpired:
+                report_failure(
+                    test,
+                    f"└─▶ \033[31mNode startup timed out after {test_config['timeout']} seconds\033[0m",
+                )
+                return False
+            except Exception as e:
+                report_failure(
+                    test, f"└─▶ \033[31mFailed to run node config test: {e}\033[0m"
+                )
+                return False
+
+
 @contextmanager
 def tenzir_node_endpoint(test: Path):
     # Check if tenzir-node binary is available
     if not TENZIR_NODE_BINARY:
         report_failure(test, f"└─▶ \033[31mCould not find tenzir-node binary\033[0m")
-        yield None
-        return
+        sys.exit(1)
 
     node_process = None
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -518,6 +616,7 @@ def tenzir_node_endpoint(test: Path):
                 TENZIR_NODE_BINARY,
                 "--bare-mode",
                 "--console-verbosity=warning",
+                "--console-format=%v",
                 f"--state-directory={Path(temp_dir) / 'state'}",
                 f"--cache-directory={Path(temp_dir) / 'cache'}",
                 "--endpoint=localhost:0",
@@ -541,16 +640,15 @@ def tenzir_node_endpoint(test: Path):
 
             if not endpoint:
                 report_failure(
-                    test, f"└─▶ \033[31mFailed to get endpoint from tenzir-node"
+                    test, f"└─▶ \033[31mFailed to get endpoint from tenzir-node\033[0m"
                 )
-                yield None
-                return
+                sys.exit(1)
 
             yield endpoint
 
         except Exception as e:
             report_failure(test, f"└─▶ \033[31mFailed to start node: {e}\033[0m")
-            yield None
+            sys.exit(1)
         finally:
             if node_process:
                 try:
@@ -559,22 +657,21 @@ def tenzir_node_endpoint(test: Path):
                 except subprocess.TimeoutExpired as e:
                     report_failure(
                         test,
-                        f"└─▶ \033[31mError terminating node process within 5s: {e}",
+                        f"└─▶ \033[31mError terminating node process within 5s: {e}\033[0m",
                     )
                     node_process.kill()
                     node_process.wait()
                 except Exception as e:
                     report_failure(
-                        test, f"└─▶ \033[31mError terminating node process: {e}"
+                        test, f"└─▶ \033[31mError terminating node process: {e}\033[0m"
                     )
+                    sys.exit(1)
 
 
 def run_with_node(
     test: Path, update: bool, args: typing.Sequence[str], ext: str
 ) -> bool:
     with tenzir_node_endpoint(test) as endpoint:
-        if not endpoint:
-            return False
         try:
             cmd_args = [f"--endpoint={endpoint}", *[x for x in args if x is not None]]
             result = run_simple_test(test, update=update, args=cmd_args, ext=ext)
@@ -587,8 +684,6 @@ def run_with_node(
 def run_with_node_diff(test: Path, update: bool, a: str, b: str) -> bool:
     env, _ = get_test_env_and_config_args(test)
     with tenzir_node_endpoint(test) as endpoint:
-        if not endpoint:
-            return False
         try:
             unoptimized = subprocess.run(
                 [TENZIR_BINARY, a, f"--endpoint={endpoint}", "-f", str(test)],
@@ -711,6 +806,7 @@ RUNNERS = [
     InstantiationRunner(),
     OptRunner(),
     FinalizeRunner(),
+    ConfigRunner(),
 ]
 
 runners = {}
@@ -853,7 +949,9 @@ def main() -> None:
         worker.start()
     for worker in workers:
         summary += worker.join()
-    print(f"{INFO} {summary.total - summary.failed - summary.skipped}/{summary.total} tests passed ({summary.skipped} skipped)")
+    print(
+        f"{INFO} {summary.total - summary.failed - summary.skipped}/{summary.total} tests passed ({summary.skipped} skipped)"
+    )
     if summary.failed > 0:
         sys.exit(1)
 

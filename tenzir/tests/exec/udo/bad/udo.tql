@@ -1,0 +1,6 @@
+// test: config
+// error: true
+
+// This file tests that the node fails to start with the invalid custom operator
+// configuration defined in tenzir.yaml in the same directory.
+// The custom operators foo and bar recursively call each other, which should fail.
