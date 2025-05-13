@@ -24,13 +24,13 @@ namespace tenzir::plugins::opensearch {
 namespace {
 
 struct opensearch_args {
-  located<std::string> url;
+  located<secret> url;
   ast::expression action;
   std::optional<ast::expression> index;
   std::optional<ast::expression> doc;
   std::optional<ast::expression> id;
-  std::optional<std::string> user;
-  std::optional<std::string> passwd;
+  std::optional<located<secret>> user;
+  std::optional<located<secret>> passwd;
   ssl_options ssl;
   std::optional<location> include_nulls;
   std::optional<located<uint64_t>> max_content_length
@@ -58,16 +58,6 @@ struct opensearch_args {
   }
 
   auto validate(diagnostic_handler& dh) -> failure_or<void> {
-    const auto v = boost::urls::parse_uri_reference(url.inner);
-    if (not v) {
-      diagnostic::error("failed to parse url").primary(url).emit(dh);
-      return failure::promise();
-    }
-    if (v->segments().empty() or v->segments().back() != "_bulk") {
-      auto u = boost::urls::url{*v};
-      u.segments().push_back("_bulk");
-      url.inner = fmt::to_string(u);
-    }
     if (max_content_length->inner <= 0) {
       diagnostic::error("`max_content_length` must be positive")
         .primary(*max_content_length)
@@ -80,7 +70,6 @@ struct opensearch_args {
         .emit(dh);
       return failure::promise();
     }
-    TRY(ssl.validate(url, dh));
     return {};
   }
 
@@ -278,27 +267,6 @@ public:
   opensearch_operator(opensearch_args args) : args_{std::move(args)} {
   }
 
-  auto new_req(diagnostic_handler& dh,
-               operator_control_plane& ctrl) const -> failure_or<curl::easy> {
-    auto req = curl::easy{};
-    if (args_.user or args_.passwd) {
-      const auto token = detail::base64::encode(fmt::format(
-        "{}:{}", args_.user.value_or(""), args_.passwd.value_or("")));
-      req.set_http_header("Authorization", fmt::format("Basic {}", token));
-    }
-    req.set_http_header("Content-Type", "application/json");
-    if (args_.compress) {
-      req.set_http_header("Content-Encoding", "gzip");
-    }
-    if (auto e = args_.ssl.apply_to(req, args_.url.inner, ctrl)) {
-      diagnostic::error(e).emit(dh);
-      return failure::promise();
-    }
-    check(req.set(CURLOPT_POST, 1));
-    check(req.set(CURLOPT_VERBOSE, args_._debug_curl ? 1 : 0));
-    return req;
-  }
-
   auto send_req(curl::easy& req, const std::string_view body,
                 diagnostic_handler& dh) const {
     auto response = std::string{};
@@ -351,11 +319,64 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
-    auto wrapped_req = new_req(dh, ctrl);
-    if (not wrapped_req) {
+    auto url = resolved_secret_value{};
+    auto user = resolved_secret_value{};
+    auto password = resolved_secret_value{};
+    {
+      auto requests = std::vector<secret_request>{
+        {args_.url, url},
+      };
+      if (args_.user) {
+        requests.emplace_back(*args_.user, user);
+      }
+      if (args_.passwd) {
+        requests.emplace_back(*args_.passwd, password);
+      }
+      ctrl.resolve_secrets_must_yield(std::move(requests));
+      co_yield {};
+    }
+    auto final_url = std::string{};
+    {
+      const auto url_utf8 = url.utf8_view();
+      if (not url_utf8) {
+        diagnostic::error("url must be valid UTF-8").primary(args_.url).emit(dh);
+        co_return;
+      }
+      const auto parsed_url = boost::urls::parse_uri_reference(*url_utf8);
+      if (not parsed_url) {
+        diagnostic::error("failed to parse url").primary(args_.url).emit(dh);
+        co_return;
+      }
+      if (parsed_url->segments().empty()
+          or parsed_url->segments().back() != "_bulk") {
+        auto u = boost::urls::url{*parsed_url};
+        u.segments().push_back("_bulk");
+        final_url = fmt::to_string(u);
+      }
+    }
+    if (not args_.ssl.validate(final_url, args_.url.source, dh)) {
       co_return;
     }
-    auto req = std::move(wrapped_req).unwrap();
+    auto req = curl::easy{};
+    if (args_.user or args_.passwd) {
+      const auto token = detail::base64::encode(
+        fmt::format("{}:{}", args_.user ? user.utf8_view() : std::string_view{},
+                    args_.passwd ? password.utf8_view() : std::string_view{}));
+      req.set_http_header("Authorization", fmt::format("Basic {}", token));
+      user.clear();
+      password.clear();
+    }
+    req.set_http_header("Content-Type", "application/json");
+    if (args_.compress) {
+      req.set_http_header("Content-Encoding", "gzip");
+    }
+    if (auto e = args_.ssl.apply_to(req, final_url, ctrl)) {
+      diagnostic::error(e).emit(dh);
+      co_return;
+    }
+    check(req.set(CURLOPT_POST, 1));
+    check(req.set(CURLOPT_URL, final_url));
+    check(req.set(CURLOPT_VERBOSE, args_._debug_curl ? 1 : 0));
     auto b = json_builder{
       {
         .style = no_style(),
