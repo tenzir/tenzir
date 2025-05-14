@@ -196,6 +196,12 @@ tenzir:
   # Setting this to `true` is strongly discouraged.
   platform-skip-peer-verification: false
 
+  # The name to use when connecting to the platform as an ephemeral node.
+  # This setting is ignored unless a workspace token is used to connect to
+  # the platform. Workspace tokens are currently only available for the
+  # Sovereign Edition of the Tenzir Platform.
+  platform-ephemeral-node-name: Ephemeral Node
+
   # Control how operator's calculate demand from their upstream operator. Note
   # that this is an expert feature and should only be changed if you know what
   # you are doing. The configured values can also be changed per operator by
