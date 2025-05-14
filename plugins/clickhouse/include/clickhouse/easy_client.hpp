@@ -28,7 +28,48 @@ auto inline has_location(const diagnostic& diag) -> bool {
 
 class easy_client {
 public:
-  explicit easy_client(arguments args, diagnostic_handler& dh)
+  struct arguments {
+    std::string host;
+    located<uint16_t> port = {9000, operator_location};
+    std::string user;
+    std::string password;
+    ssl_options ssl;
+    located<std::string> table = {"REQUIRED", location::unknown};
+    located<enum mode> mode = located{mode::create_append, operator_location};
+    std::optional<located<std::string>> primary = std::nullopt;
+    location operator_location;
+
+    auto make_options() const -> ::clickhouse::ClientOptions {
+      auto opts = ::clickhouse::ClientOptions()
+                    .SetEndpoints({{std::string{host}, port.inner}})
+                    .SetUser(std::string{user})
+                    .SetPassword(std::string{password});
+      if (ssl.get_tls().inner) {
+        auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
+        tls_opts.SetSkipVerification(ssl.skip_peer_verification.has_value());
+        auto commands = std::vector<
+          ::clickhouse::ClientOptions::SSLOptions::CommandAndValue>{};
+        if (ssl.cacert) {
+          commands.emplace_back("ChainCAFile", ssl.cacert->inner);
+        }
+        if (ssl.certfile) {
+          commands.emplace_back("Certificate", ssl.certfile->inner);
+        }
+        if (ssl.keyfile) {
+          commands.emplace_back("PrivateKey", ssl.keyfile->inner);
+        }
+        tls_opts.SetConfiguration(commands);
+        opts.SetSSLOptions(std::move(tls_opts));
+      }
+      return opts;
+    }
+  };
+
+private:
+  struct ctor_token {};
+
+public:
+  explicit easy_client(arguments args, diagnostic_handler& dh, ctor_token)
     : client_{args.make_options()},
       args_{std::move(args)},
       dh_{dh, [loc = args.operator_location](diagnostic diag) -> diagnostic {
@@ -39,8 +80,8 @@ public:
           }} {
   }
 
-  static auto
-  make(arguments args, diagnostic_handler& dh) -> std::unique_ptr<easy_client>;
+  static auto make(arguments args, diagnostic_handler& dh)
+    -> std::unique_ptr<easy_client>;
 
   auto insert(const table_slice& slice) -> bool;
 
