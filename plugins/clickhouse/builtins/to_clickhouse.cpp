@@ -18,15 +18,15 @@ class clickhouse_sink_operator final
 public:
   clickhouse_sink_operator() = default;
 
-  clickhouse_sink_operator(arguments args) : args_{std::move(args)} {
+  clickhouse_sink_operator(operator_arguments args) : args_{std::move(args)} {
   }
 
   friend auto inspect(auto& f, clickhouse_sink_operator& x) -> bool {
     return f.apply(x.args_);
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -46,11 +46,41 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> try {
-    auto args = args_;
+    auto args = easy_client::arguments{
+      .host = "",
+      .port = args_.port,
+      .user = "",
+      .password = "",
+      .ssl = args_.ssl,
+      .table = args_.table,
+      .mode = args_.mode,
+      .primary = args_.primary,
+      .operator_location = args_.operator_location,
+    };
+    auto host = resolved_secret_value{};
+    auto user = resolved_secret_value{};
+    auto password = resolved_secret_value{};
+    ctrl.resolve_secrets_must_yield({
+      {args_.host, host},
+      {args_.user, user},
+      {args_.password, password},
+    });
+    co_yield {};
+#define X(NAME)                                                                \
+  if (auto u = NAME.utf8_view()) {                                             \
+    args.NAME = std::string{*u};                                               \
+  } else {                                                                     \
+    diagnostic::error("expected UTF-8 value")                                  \
+      .primary(args_.NAME.source)                                              \
+      .emit(ctrl.diagnostics());                                               \
+  }
+    X(host);
+    X(user);
+    X(password);
+#undef X
     args.ssl.update_cacert(ctrl);
     auto client = easy_client::make(args, ctrl.diagnostics());
     if (not client) {
-      co_yield {};
       co_return;
     }
     for (auto&& slice : input) {
@@ -77,14 +107,14 @@ public:
   }
 
 private:
-  arguments args_;
+  operator_arguments args_;
 };
 
 class to_clickhouse final : public operator_plugin2<clickhouse_sink_operator> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    TRY(auto args, arguments::try_parse(name(), inv, ctx));
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(auto args, operator_arguments::try_parse(name(), inv, ctx));
     return std::make_unique<clickhouse_sink_operator>(std::move(args));
   }
 };
