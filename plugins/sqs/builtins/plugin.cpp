@@ -32,9 +32,8 @@ namespace tenzir::plugins::sqs {
 
 namespace {
 
-template <template <class, detail::string_literal = ""> class Adapter,
-          class Plugin>
-class plugin final : public virtual operator_plugin2<Adapter<Plugin>> {
+template <class Operator>
+class plugin final : public virtual operator_plugin2<Operator> {
 public:
   auto make(operator_factory_plugin::invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -69,12 +68,12 @@ public:
         return failure::promise();
       }
     }
-    return std::make_unique<Adapter<Plugin>>(Plugin{std::move(args)});
+    return std::make_unique<Operator>(std::move(args));
   }
 
   virtual auto load_properties() const
     -> operator_factory_plugin::load_properties_t override {
-    if constexpr (std::same_as<Plugin, sqs_loader>) {
+    if constexpr (std::same_as<Operator, sqs_loader>) {
       return {
         .schemes = {"sqs"},
         .strip_scheme = true,
@@ -86,7 +85,7 @@ public:
 
   virtual auto save_properties() const
     -> operator_factory_plugin::save_properties_t override {
-    if constexpr (std::same_as<Plugin, sqs_saver>) {
+    if constexpr (std::same_as<Operator, sqs_saver>) {
       return {
         .schemes = {"sqs"},
         .strip_scheme = true,
@@ -98,8 +97,8 @@ public:
 };
 
 } // namespace
-using load_plugin = plugin<loader_adapter, sqs_loader>;
-using save_plugin = plugin<saver_adapter, sqs_saver>;
+using load_plugin = plugin<sqs_loader>;
+using save_plugin = plugin<sqs_saver>;
 
 } // namespace tenzir::plugins::sqs
 

@@ -37,7 +37,7 @@ Defaults to `"amq.direct"`.
 
 ### `routing_key = str (optional)`
 
-For the loader, the name of the routing key to bind a queue to an exchange. For the saver, the routing key to publish messages with.
+The routing key to publish messages with.
 
 Defaults to the empty string.
 

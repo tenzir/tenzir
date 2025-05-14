@@ -15,7 +15,7 @@
 namespace tenzir::plugins::gcs {
 namespace {
 
-struct load_gcs : public operator_plugin2<loader_adapter<gcs_loader>> {
+struct load_gcs : public operator_plugin2<gcs_loader> {
   load_gcs() = default;
 
   auto make(invocation inv, session ctx) const
@@ -28,7 +28,7 @@ struct load_gcs : public operator_plugin2<loader_adapter<gcs_loader>> {
     if (not args.uri.inner.starts_with("gs://")) {
       args.uri.inner = fmt::format("gs://{}", args.uri.inner);
     }
-    return std::make_unique<loader_adapter<gcs_loader>>(std::move(args));
+    return std::make_unique<gcs_loader>(std::move(args));
   }
 
   auto load_properties() const -> load_properties_t override {
@@ -36,7 +36,7 @@ struct load_gcs : public operator_plugin2<loader_adapter<gcs_loader>> {
   }
 };
 
-struct save_gcs : public operator_plugin2<saver_adapter<gcs_saver>> {
+struct save_gcs : public operator_plugin2<gcs_saver> {
   save_gcs() = default;
 
   auto make(invocation inv, session ctx) const
@@ -49,7 +49,7 @@ struct save_gcs : public operator_plugin2<saver_adapter<gcs_saver>> {
     if (not args.uri.inner.starts_with("gs://")) {
       args.uri.inner = fmt::format("gs://{}", args.uri.inner);
     }
-    return std::make_unique<saver_adapter<gcs_saver>>(std::move(args));
+    return std::make_unique<gcs_saver>(std::move(args));
   }
 
   auto save_properties() const -> save_properties_t override {

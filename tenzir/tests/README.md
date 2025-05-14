@@ -128,7 +128,7 @@ frontmatter:
   against a temporary `tenzir-node` instance. This works with all runner types.
 - **error**: Boolean (default: `false`) - If `true`, the test is expected to
   fail (exit with non-zero status). Must be either `true` or `false`.
-- **timeout**: Integer (default: `5`) - Timeout in seconds for test execution.
+- **timeout**: Integer (default: `10`) - Timeout in seconds for test execution.
   Must be a positive integer.
 - **skip**: String (optional) - If present, the test will be skipped and not
   executed. The value should be a string describing the reason for skipping.

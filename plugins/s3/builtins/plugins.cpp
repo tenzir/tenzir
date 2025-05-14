@@ -12,9 +12,8 @@
 
 namespace tenzir::plugins::s3 {
 
-template <template <class, detail::string_literal = ""> class Adapter,
-          class Plugin>
-class plugin2 final : public virtual operator_plugin2<Adapter<Plugin>> {
+template <class Operator>
+class plugin2 final : public virtual operator_plugin2<Operator> {
 public:
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
@@ -87,12 +86,12 @@ public:
       args.uri.inner = fmt::format("s3://{}", args.uri.inner);
     }
     args.config = config_;
-    return std::make_unique<Adapter<Plugin>>(Plugin{std::move(args)});
+    return std::make_unique<Operator>(std::move(args));
   }
 
   virtual auto load_properties() const
     -> operator_factory_plugin::load_properties_t override {
-    if constexpr (std::same_as<Plugin, s3_loader>) {
+    if constexpr (std::same_as<Operator, s3_loader>) {
       return {
         .schemes = {"s3"},
       };
@@ -102,7 +101,7 @@ public:
   }
   virtual auto save_properties() const
     -> operator_factory_plugin::save_properties_t override {
-    if constexpr (std::same_as<Plugin, s3_saver>) {
+    if constexpr (std::same_as<Operator, s3_saver>) {
       return {
         .schemes = {"s3"},
       };
@@ -115,8 +114,8 @@ private:
   std::optional<s3_config> config_ = {};
 };
 
-using load_plugin = plugin2<loader_adapter, s3_loader>;
-using save_plugin = plugin2<saver_adapter, s3_saver>;
+using load_plugin = plugin2<s3_loader>;
+using save_plugin = plugin2<s3_saver>;
 
 } // namespace tenzir::plugins::s3
 

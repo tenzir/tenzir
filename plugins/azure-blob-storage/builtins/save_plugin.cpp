@@ -8,7 +8,12 @@
 
 #include <tenzir/tql2/plugin.hpp>
 
-#include "saver.hpp"
+#include <arrow/filesystem/azurefs.h>
+#include <arrow/filesystem/filesystem.h>
+#include <arrow/filesystem/type_fwd.h>
+#include <arrow/io/api.h>
+#include <arrow/util/uri.h>
+#include <fmt/core.h>
 
 namespace tenzir::plugins::abs {
 class save_abs_operator final : public crtp_operator<save_abs_operator> {
@@ -21,14 +26,58 @@ public:
   auto
   operator()(generator<chunk_ptr> input,
              operator_control_plane& ctrl) const -> generator<std::monostate> {
-    auto saver = abs_saver{uri_};
-    auto instance = saver.instantiate(ctrl, {});
-    if (not instance) {
-      co_return;
+    co_yield {};
+    auto path = std::string{};
+    auto opts = arrow::fs::AzureOptions::FromUri(uri_.inner, &path);
+    if (not opts.ok()) {
+      diagnostic::error("failed to create Arrow Azure Blob Storage "
+                        "filesystem: {}",
+                        opts.status().ToString())
+        .emit(ctrl.diagnostics());
     }
-    for (auto&& chunk : input) {
-      (*instance)(std::move(chunk));
-      co_yield {};
+    auto fs = arrow::fs::AzureFileSystem::Make(*opts);
+    if (not fs.ok()) {
+      diagnostic::error("failed to create Arrow Azure Blob Storage "
+                        "filesystem: {}",
+                        fs.status().ToString())
+        .emit(ctrl.diagnostics());
+    }
+    auto file_info = fs.ValueUnsafe()->GetFileInfo(path);
+    if (not file_info.ok()) {
+      diagnostic::error("failed to get file info"
+                        "{}",
+                        file_info.status().ToString())
+        .emit(ctrl.diagnostics());
+    }
+    auto output_stream = fs.ValueUnsafe()->OpenOutputStream(file_info->path());
+    if (not output_stream.ok()) {
+      diagnostic::error("failed to open output stream: "
+                        "{}",
+                        output_stream.status().ToString())
+        .primary(uri_)
+        .emit(ctrl.diagnostics());
+    }
+    auto stream_guard
+      = detail::scope_guard([this, &ctrl, output_stream]() noexcept {
+          auto status = output_stream.ValueUnsafe()->Close();
+          if (not output_stream.ok()) {
+            diagnostic::error("failed to close stream: {}", status.ToString())
+              .primary(uri_)
+              .emit(ctrl.diagnostics());
+          }
+        });
+    for (auto chunk : input) {
+      if (! chunk || chunk->size() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto status
+        = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
+      if (not output_stream.ok()) {
+        diagnostic::error("{}", status.ToString())
+          .note("failed to write to stream for URI `{}`", uri_.inner)
+          .emit(ctrl.diagnostics());
+      }
     }
   }
 
