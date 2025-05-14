@@ -11,6 +11,10 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <arrow/filesystem/api.h>
+#include <arrow/filesystem/filesystem.h>
+#include <arrow/util/future.h>
+#include <arrow/util/thread_pool.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -37,6 +41,176 @@ struct files_args {
       f.field("skip_permission_denied", x.skip_permission_denied));
   }
 };
+
+// template <class T>
+// void add_actor_callback(auto* self, arrow::Future<T> fut, auto&& fn) {
+//   using result_type
+//     = std::conditional_t<std::same_as<T, arrow::internal::Empty>,
+//     arrow::Status,
+//                          arrow::Result<T>>;
+//   std::move(fut).AddCallback([self, fn = std::forward<decltype(fn)>(fn)](
+//                                const result_type& result) mutable {
+//     self->delay_fn([fn = std::move(fn), result]() mutable -> void {
+//       return std::move(fn)(std::move(result));
+//     });
+//   });
+// }
+
+struct star {
+  friend auto inspect(auto& f, star& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+// Things that also match no-slash:
+// `**/x`
+// Things that do not match no-slash:
+// `x**/y` does not match `xy`
+// `x**/` does not match `x`
+struct double_star {
+  bool slash;
+
+  friend auto inspect(auto& f, double_star& x) -> bool {
+    return f.apply(x.slash);
+  }
+};
+
+using glob_part = variant<std::string, star, double_star>;
+
+using glob = std::vector<glob_part>;
+
+using glob_view = std::span<glob_part>;
+
+auto matches(std::string_view string, const glob_view& glob) -> bool {
+  if (glob.empty()) {
+    // The empty glob only matches the empty string.
+    return string.empty();
+  }
+  auto& head = glob[0];
+  auto tail = glob.subspan(1);
+  return match(
+    head,
+    [&](const std::string& part) {
+      // The given part must be a prefix.
+      if (not string.starts_with(part)) {
+        return false;
+      }
+      return matches(string.substr(part.size()), tail);
+    },
+    [&](star) {
+      if (matches(string, tail)) {
+        // The star is allowed to consume nothing.
+        return true;
+      }
+      // Make it consume something.
+      if (string.empty() or string[0] == '/') {
+        return false;
+      }
+      return matches(string.substr(1), glob);
+    },
+    [&](double_star double_star) {
+      // The sequence `**/` is parsed into a `double_star` with `slash == true`.
+      // It is allowed to consume nothing (not even a slash), but if it consumes
+      // something, then it must also consume a slash at the end.
+      if (matches(string, tail)) {
+        return true;
+      }
+      // Make it consume something.
+      if (string.empty()) {
+        return false;
+      }
+      if (double_star.slash) {
+        auto slash = string.find('/');
+        if (slash == std::string::npos) {
+          return false;
+        }
+        auto rest = string.substr(slash + 1);
+        // The slash may or may not be the end of the double star.
+        return matches(rest, glob) or matches(rest, tail);
+      }
+      return matches(string.substr(1), glob);
+    });
+}
+
+auto parse_glob(std::string_view string) -> glob {
+  auto result = glob{};
+  while (true) {
+    auto pos = string.find('*');
+    if (pos != 0) {
+      result.emplace_back(std::string{string.substr(0, pos)});
+    }
+    if (pos == std::string::npos) {
+      return result;
+    }
+    if (pos + 1 < string.size() and string[pos + 1] == '*') {
+      if (pos + 2 < string.size() and string[pos + 2] == '/') {
+        result.emplace_back(double_star{true});
+        string = string.substr(pos + 3);
+      } else {
+        result.emplace_back(double_star{false});
+        string = string.substr(pos + 2);
+      }
+    } else {
+      result.emplace_back(star{});
+      string = string.substr(pos + 1);
+    }
+  }
+}
+
+class caf_executor final : public arrow::internal::Executor {
+public:
+  explicit caf_executor(caf::scheduled_actor* self)
+    : self_{self}, weak_{self_->ctrl()} {
+  }
+
+  ~caf_executor() override = default;
+
+  auto GetCapacity() -> int override {
+    return 1;
+  };
+
+  auto OwnsThisThread() -> bool override {
+    return false;
+  }
+
+  void KeepAlive(std::shared_ptr<Resource> resource) override {
+    self_->attach_functor([resource = std::move(resource)]() {
+      static_cast<void>(resource);
+    });
+  }
+
+private:
+  auto
+  SpawnReal(arrow::internal::TaskHints, arrow::internal::FnOnce<void()> task,
+            arrow::StopToken, StopCallback&&) -> arrow::Status override {
+    if (weak_.lock()) {
+      // We need to wrap it because `task` must be moved for the call.
+      self_->schedule_fn([task = std::move(task)] mutable {
+        std::move(task)();
+      });
+    }
+    return arrow::Status::OK();
+  }
+
+  caf::scheduled_actor* self_;
+  caf::weak_actor_ptr weak_;
+};
+
+template <class F>
+void async_iter(arrow::fs::FileInfoGenerator gen, F&& f) {
+  auto next = gen();
+  next.AddCallback([gen = std::move(gen), f = std::forward<F>(f)](
+                     arrow::Result<arrow::fs::FileInfoVector> infos_result) {
+    // TODO: Don't check.
+    auto infos = check(infos_result);
+    auto done = infos.empty();
+    f(std::move(infos));
+    if (done) {
+      return;
+    }
+    async_iter(std::move(gen), std::move(f));
+  });
+}
 
 class files_operator final : public crtp_operator<files_operator> {
 public:
@@ -161,6 +335,107 @@ public:
 
   auto
   operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
+#if 1
+    auto executor = caf_executor{&ctrl.self()};
+    auto io_ctx = arrow::io::IOContext{
+      arrow::default_memory_pool(),
+      &executor,
+    };
+    TENZIR_ASSERT(args_.path);
+    auto path = std::string{};
+    // TODO: Relative local-filesystem paths.
+    // TODO: Arrow removes trailing slashes here.
+    auto fs = arrow::fs::FileSystemFromUriOrPath(*args_.path, io_ctx, &path);
+    if (not fs.ok()) {
+      diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    auto glob = parse_glob(path);
+    // TODO: Figure out the proper logic here.
+    if (auto star = path.find('*'); star != std::string::npos) {
+      auto slash = path.rfind('/', star);
+      TENZIR_ASSERT(slash != std::string::npos);
+      path = path.substr(0, slash + 1);
+    }
+    auto sel = arrow::fs::FileSelector{};
+    sel.base_dir = path;
+    sel.recursive = true;
+    // TODO: Schema.
+    auto b = series_builder{};
+    // We intentionally define the lambda in the scope of the generator to make
+    // sure that we do not capture anything that doesn't survive.
+    auto process = [&](arrow::fs::FileInfoVector infos) {
+      if (infos.empty()) {
+        ctrl.set_waiting(false);
+        return;
+      }
+      for (auto& info : infos) {
+        if (not matches(info.path(), glob)) {
+          continue;
+        }
+        auto r = b.record();
+        r.field("path", info.path());
+        r.field("type", std::invoke([&] -> data_view2 {
+                  switch (info.type()) {
+                    case arrow::fs::FileType::NotFound:
+                      // TODO: This should not happen, right?
+                      TENZIR_UNREACHABLE();
+                    case arrow::fs::FileType::Unknown:
+                      return caf::none;
+                    case arrow::fs::FileType::File:
+                      return "file";
+                    case arrow::fs::FileType::Directory:
+                      return "directory";
+                  }
+                  TENZIR_UNREACHABLE();
+                }));
+        r.field("size", info.size() == arrow::fs::kNoSize
+                          ? data_view2{caf::none}
+                          : info.size());
+        r.field("last_modified", info.mtime() == arrow::fs::kNoTime
+                                   ? data_view2{caf::none}
+                                   : info.mtime());
+      }
+    };
+    ctrl.set_waiting(true);
+    (*fs)
+      ->GetFileInfoAsync(std::vector{path})
+      .AddCallback([&](arrow::Result<std::vector<arrow::fs::FileInfo>> infos) {
+        // TODO: Improve diagnostics.
+        if (not infos.ok()) {
+          diagnostic::error("{}", infos.status().ToStringWithoutContextLines())
+            .emit(ctrl.diagnostics());
+          return;
+        }
+        TENZIR_ASSERT(infos->size() == 1);
+        auto root_info = std::move((*infos)[0]);
+        switch (root_info.type()) {
+          case arrow::fs::FileType::NotFound:
+            diagnostic::error("`{}` does not exist", *args_.path)
+              .emit(ctrl.diagnostics());
+            return;
+          case arrow::fs::FileType::Unknown:
+            diagnostic::error("`{}` is unknown", *args_.path)
+              .emit(ctrl.diagnostics());
+            return;
+          case arrow::fs::FileType::File:
+            // TODO: What do we do?
+            diagnostic::error("`{}` is file", *args_.path)
+              .emit(ctrl.diagnostics());
+            return;
+          case arrow::fs::FileType::Directory:
+            auto gen = (*fs)->GetFileInfoGenerator(sel);
+            async_iter(std::move(gen), std::move(process));
+            return;
+        }
+        TENZIR_UNREACHABLE();
+      });
+    co_yield {};
+    for (auto slice : b.finish_as_table_slice("tenzir.file")) {
+      co_yield std::move(slice);
+    }
+#else
     try {
       const auto path = args_.path ? std::filesystem::path{*args_.path}
                                    : std::filesystem::current_path();
@@ -192,6 +467,7 @@ public:
     } catch (const std::filesystem::filesystem_error& err) {
       diagnostic::error("{}", err.what()).emit(ctrl.diagnostics());
     }
+#endif
   }
 
   auto name() const -> std::string override {
