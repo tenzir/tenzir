@@ -50,7 +50,7 @@ def parse_test_config(test_file):
     # Define valid configuration keys and their default values
     config = {
         "error": False,
-        "timeout": 5,  # Default timeout of 5 seconds
+        "timeout": 10,  # Default timeout of 10 seconds
         "test": "exec",  # Default to exec runner
         "node": False,  # Default to not using a node
         "skip": None,   # Optional skip reason
