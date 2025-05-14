@@ -97,6 +97,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     // TODO: Clean this up.
+    co_yield {};
     auto args = args_;
     args.transfer_opts.ssl.update_cacert(ctrl);
     auto tx = transfer{args.transfer_opts};
@@ -138,7 +139,6 @@ public:
         }
       }
     }
-    co_yield {};
     for (auto&& chunk : tx.download_chunks()) {
       if (not chunk) {
         diagnostic::error("failed to download {}", args.url)
@@ -186,6 +186,7 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    co_yield {};
     // TODO: Clean this up.
     auto args = args_;
     args.transfer_opts.ssl.update_cacert(ctrl);
@@ -207,8 +208,8 @@ public:
         .hint("remove arguments that create a request body")
         .emit(ctrl.diagnostics());
     }
-    auto tx = std::make_shared<transfer>(args_.transfer_opts);
-    if (auto err = tx->prepare(std::move(*req))) {
+    auto tx = transfer(args_.transfer_opts);
+    if (auto err = tx.prepare(std::move(*req))) {
       diagnostic::error("failed to prepare HTTP request")
         .note("{}", err)
         .emit(ctrl.diagnostics());
@@ -218,13 +219,13 @@ public:
         co_yield {};
         continue;
       }
-      if (auto err = tx->prepare(chunk)) {
+      if (auto err = tx.prepare(chunk)) {
         diagnostic::error("failed to prepare transfer")
           .note("chunk size: {}", chunk->size())
           .note("{}", err)
           .emit(ctrl.diagnostics());
       }
-      if (auto err = tx->perform()) {
+      if (auto err = tx.perform()) {
         diagnostic::error("failed to upload chunk to {}", args.url)
           .note("{}", err)
           .emit(ctrl.diagnostics());

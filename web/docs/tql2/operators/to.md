@@ -99,6 +99,7 @@ If no scheme is present, the connector attempts to save to the local filesystem.
 | `tcp` | [`save_tcp`](save_tcp.mdx) | `to "tcp://127.0.0.1:56789" { write_json }` |
 | `udp` | [`save_udp`](save_udp.md) | `to "udp://127.0.0.1:56789" { write_json }` |
 | `zmq` | [`save_zmq`](save_zmq.md) | `to "zmq://127.0.0.1:56789" { write_json }` |
+| `smtp`, `smtps`, `mailto`, `email` | [`save_email`](save_email.mdx) | `to "smtp://john@example.com"` |
 
 Please see the respective operator pages for details on the URI's locator format.
 

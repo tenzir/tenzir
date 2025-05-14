@@ -365,12 +365,12 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    co_yield {};
     auto conn = connection::make_source(args_);
     if (not conn) {
-      TENZIR_ERROR(conn.error());
+      diagnostic::error(conn.error()).emit(ctrl.diagnostics());
       co_return;
     }
-
     while (true) {
       if (conn->monitored()) {
         // Poll in larger strides if we have no peers. Once we have at least
@@ -426,8 +426,8 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    auto conn = connection::make_sink(args_);
     co_yield {};
+    auto conn = connection::make_sink(args_);
     if (not conn) {
       diagnostic::error("failed to setup ZeroMQ: {}", conn.error())
         .emit(ctrl.diagnostics());

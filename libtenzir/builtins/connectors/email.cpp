@@ -65,6 +65,7 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    co_yield {};
     auto transfer_opts = args_.transfer_opts;
     transfer_opts.ssl.update_cacert(ctrl);
     auto tx = transfer{transfer_opts};

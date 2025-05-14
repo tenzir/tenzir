@@ -67,6 +67,7 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    co_yield {};
     auto subscription = pubsub::Subscription(args_.project_id.inner,
                                              args_.subscription_id.inner);
     auto connection = pubsub::MakeSubscriberConnection(std::move(subscription));

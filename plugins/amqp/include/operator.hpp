@@ -619,7 +619,6 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    co_yield {};
     TENZIR_DEBUG("looping over AMQP frames");
     while (true) {
       if (auto message = engine->consume(500ms)) {
@@ -628,7 +627,8 @@ public:
         diagnostic::error("failed to consume message")
           .hint("{}", message.error())
           .emit(ctrl.diagnostics());
-        break;
+        co_return;
+        ;
       }
     }
   }

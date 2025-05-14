@@ -93,8 +93,8 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
     co_yield {};
+    auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
     if (!cfg) {
       ctrl.diagnostics().emit(
         diagnostic::error("failed to create configuration: {}", cfg.error())
@@ -219,6 +219,7 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    co_yield {};
     auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
     if (!cfg) {
       diagnostic::error(cfg.error()).emit(ctrl.diagnostics());

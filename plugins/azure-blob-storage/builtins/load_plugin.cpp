@@ -30,6 +30,7 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    co_yield {};
     auto path = std::string{};
     auto opts = arrow::fs::AzureOptions::FromUri(uri_.inner, &path);
     if (not opts.ok()) {

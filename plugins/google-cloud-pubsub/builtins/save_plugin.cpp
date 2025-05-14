@@ -43,6 +43,7 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    co_yield {};
     auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
     auto connection = pubsub::MakePublisherConnection(std::move(topic));
     auto publisher = pubsub::Publisher(std::move(connection));

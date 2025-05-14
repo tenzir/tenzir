@@ -64,6 +64,7 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    co_yield {};
     auto uri = arrow::util::Uri{};
     const auto parse_result = uri.Parse(args_.uri.inner);
     if (not parse_result.ok()) {
@@ -152,6 +153,7 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    co_yield {};
     auto uri = arrow::util::Uri{};
     const auto parse_result = uri.Parse(args_.uri.inner);
     if (not parse_result.ok()) {

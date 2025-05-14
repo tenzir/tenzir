@@ -26,9 +26,9 @@ public:
   auto
   operator()(generator<chunk_ptr> input,
              operator_control_plane& ctrl) const -> generator<std::monostate> {
+    co_yield {};
     auto path = std::string{};
     auto opts = arrow::fs::AzureOptions::FromUri(uri_.inner, &path);
-    co_yield {};
     if (not opts.ok()) {
       diagnostic::error("failed to create Arrow Azure Blob Storage "
                         "filesystem: {}",

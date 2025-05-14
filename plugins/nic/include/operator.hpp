@@ -73,6 +73,9 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    // We yield here, because otherwise the error is terminal to a node on
+    // startup.
+    co_yield {};
     TENZIR_ASSERT(! args_.iface.inner.empty());
     auto snaplen = args_.snaplen ? args_.snaplen->inner : 262'144;
     TENZIR_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
@@ -103,9 +106,6 @@ public:
                                         }};
     auto linktype = pcap_datalink(pcap.get());
     TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
-    // We yield once initially to signal that the operator successfully
-    // started.
-    co_yield {};
     auto num_packets = size_t{0};
     auto num_buffered_packets = size_t{0};
     auto buffer = std::vector<std::byte>{};
@@ -208,6 +208,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    co_yield {};
     auto err = std::array<char, PCAP_ERRBUF_SIZE>{};
     pcap_if_t* devices = nullptr;
     auto result = pcap_findalldevs(&devices, err.data());

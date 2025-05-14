@@ -20,10 +20,6 @@ namespace tenzir::plugins::zmq {
 namespace {
 
 class registrar final : public plugin {
-  auto initialize(const record&, const record&) -> caf::error override {
-    return caf::none;
-  }
-
   auto name() const -> std::string override {
     return "zmq";
   }
