@@ -16,7 +16,7 @@ pip install tenzir-platform
 
 ### Synopsis
 
-```
+```text
 tenzir-platform auth login
 tenzir-platform workspace list
 tenzir-platform workspace select <workspace_id>
@@ -38,7 +38,7 @@ The unique ID of the workspace, as shown in `tenzir-platform workspace list`.
 
 ### Synopsis
 
-```
+```text
 tenzir-platform node list
 tenzir-platform node ping <node_id>
 tenzir-platform node create [--name <node_name>]
@@ -50,6 +50,7 @@ tenzir-platform node run [--name <node_name>] [--image <container_image>]
 
 The following commands interact with the selected workspace. See [Authentication](#authentication)
 above for how to select a workspace:
+
 - `tenzir-platform node list` lists all nodes in the selected workspace,
   including their ID, name, and connection status.
 - `tenzir-platform node ping` pings the specified node.
@@ -75,6 +76,7 @@ The name of the node as shown in the app.
 
 The Docker image to use for ad-hoc created node. We recommend using one of the
 following images:
+
 - `tenzir/tenzir:v4.11.2` to use the specified release.
 - `tenzir/tenzir:latest` to use the last release.
 - `tenzir/tenzir:main` to use the currnet development version.
@@ -83,7 +85,7 @@ following images:
 
 ### Synopsis
 
-```
+```text
 tenzir-platform alert add <node> <duration> <webhook_url> [<webhook_body>]
 tenzir-platform alert delete <alert_id>
 tenzir-platform alert list
@@ -120,7 +122,8 @@ where `node_id` and `duration` are set dynamically from the CLI parameters.
 ### Example
 
 Given nodes like this:
-```
+
+```text
 $ tenzir-platform node list
 🟢 Node-1 (n-w2tjezz3)
 🟢 Node-2 (n-kzw21299)
@@ -131,8 +134,8 @@ We want to receive a Slack notification whenever Node-3 is offline for more than
 First we create a webhook as described in the [Slack docs](https://api.slack.com/messaging/webhooks).
 Next, we configure the alert in the Tenzir Platform:
 
-```
-$ tenzir-platform alert add Node-3 3m "https://hooks.slack.com/services/XXXXX/YYYYY/ZZZZZ" '{"text": "Alert! Look after node $NODE_NAME"}'
+```bash
+tenzir-platform alert add Node-3 3m "https://hooks.slack.com/services/XXXXX/YYYYY/ZZZZZ" '{"text": "Alert! Look after node $NODE_NAME"}'
 ```
 
 Unless Node-3 reconnects, we should see a message appear after 3 minutes in the configured Slack channel.
@@ -152,7 +155,7 @@ to define who is an administrator in your platform deployment.
 
 ### Synopsis
 
-```
+```text
 tenzir-platform admin list-global-workspaces
 tenzir-platform admin create-workspace <owner_namespace> <owner_id> [--name <workspace_name>]
 tenzir-platform admin delete-workspace <workspace_id>
@@ -172,15 +175,16 @@ associated with a user or an organization.
 The selected namespace will determine the *default* access rules for the
 workspace:
 
- - For a user workspace, a single access rule will be created that allows
-   access to the user whose user id matches the given `owner_id`
- - For an organization workspace, no rules will be created by default and
-   they have to be manually added using the `add-auth-rule` subcommand
-   described below.
+- For a user workspace, a single access rule will be created that allows
+  access to the user whose user id matches the given `owner_id`
+- For an organization workspace, no rules will be created by default and
+  they have to be manually added using the `add-auth-rule` subcommand
+  described below.
 
 #### `<owner_id>`
 
 The unique ID of the workspace owner:
+
 - If `<owner_namespace>` is `user`, then this matches the user's `sub` claim in
   the OIDC token.
 - If `<owner_namespace>` is `organization`, then this is an arbitrary string
@@ -210,27 +214,26 @@ to define who is an administrator in your platform deployment.
 
 ### Synopsis
 
-```
+```text
 tenzir-platform admin list-auth-rules <workspace_id>
-tenzir-platform admin add-auth-rule [--dry-run]
+
+tenzir-platform admin add-auth-rule allow-all <workspace_id>
+tenzir-platform admin add-auth-rule user <workspace_id> <user_id>
+tenzir-platform admin add-auth-rule
     email-domain <workspace_id> <connection> <domain>
-tenzir-platform admin add-auth-rule [--dry-run]
+tenzir-platform admin add-auth-rule
     organization-membership <workspace_id> <connection> <organization_claim> <organization>
-tenzir-platform admin add-auth-rule [--dry-run]
+tenzir-platform admin add-auth-rule
     organization-role <workspace_id> <connection> <roles_claim> <role> <organization_claim> <organization>
-tenzir-platform admin add-auth-rule [--dry-run]
-    user <workspace_id> <user_id>
-tenzir-platform admin add-auth-rule [--dry-run]
-    allow-all <workspace_id>
+
 tenzir-platform admin delete-auth-rule <workspace_id> <auth_rule_index>
 ```
 
 ### Description
 
-Users with admin permissions can additionally use the `tenzir-platform admin
-list-auth-rules`, `tenzir-platform admin add-auth-rule`, and `tenzir-platform
-admin delete-auth-rule` commands to list, create, or delete authentication rules
-for all users, respectively.
+Users with admin permissions can use the `tenzir-platform admin list-auth-rules`,
+`tenzir-platform admin add-auth-rule`, and `tenzir-platform admin delete-auth-rule`
+commands to list, create, or delete authentication rules for all users, respectively.
 
 Authentication rules allow users to access the workspace with the provided
 `<workspace_id>` if the user's `id_token` matches the configured rule. Users
@@ -269,3 +272,37 @@ rules exist:
 - **Allow All Rule**: `tenzir-platform admin add-auth-rule allow-all` allows access
   to every user. This can be useful to e.g. set up a workspace that is shared by all
   users of a platform instance.
+
+## Prepare Static Workspaces
+
+:::warning On-Premise Setup Required
+This functionality of the CLI can only be used in combination
+with an on-premise platform deployment, which is available to users
+of the [Sovereign Edition](https://tenzir.com/pricing).
+:::
+
+Operators of an on-prem instance of the Tenzir Platform may need to add
+certain options to the configuration files that need to follow a specific
+format.
+
+These commands can be used to conveniently generate the required values.
+Unlike the other CLI commands, these work offline and don't attempt to
+establish a connection to the Tenzir Platform.
+
+### Synopsis
+
+```text
+tenzir-platform tools generate-workspace-token <workspace_id>
+tenzir-platform tools print-auth-rule <rule options>
+```
+
+### Description
+
+The `tenzir-platform tools generate-workspace-token` command prints a workspace
+token that can be used when adding statically defined workspaces to the
+Tenzir Platform.
+
+The `tenzir-platform tools generate-workspace-token` set of commands print
+the JSON representation of an auth rule, that can be used to define admin
+rules, to add auth rules to workspaces using the CLI, or to define the auth
+rules for statically defined workspaces.
