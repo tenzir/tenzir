@@ -18,8 +18,7 @@ write_ssl_certs() {
   # Generates a server certificate and corresponding CA certificate, and
   # stores their filenames into ${key_and_cert} and ${cafile}.
 
-  certdir=${BATS_TEST_DATADIR}/ssl
-  mkdir -p ${certdir}
+  certdir="$(mktemp -d)"
 
   cat >"${certdir}/script.py" <<EOF
 import trustme
@@ -31,10 +30,16 @@ server_cert = ca.issue_cert("tenzir-node.example.org")
 server_cert.private_key_and_cert_chain_pem.write_to_path("server.pem")
 EOF
 
-  uv run --with trustme --directory ${certdir} ${certdir}/script.py
+  if command -v uv &> /dev/null; then
+    UV="uv"
+  else
+    UV="$(dirname "$(command -v tenzir)")/../libexec/uv"
+  fi
 
-  key_and_cert=${certdir}/server.pem
-  cafile=${certdir}/ca.pem
+  ${UV} run --with trustme --directory "${certdir}" "${certdir}/script.py"
+
+  key_and_cert="${certdir}/server.pem"
+  cafile="${certdir}/ca.pem"
 }
 
 @test "loader - listen with SSL" {

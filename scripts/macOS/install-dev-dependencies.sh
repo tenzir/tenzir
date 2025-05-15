@@ -34,6 +34,7 @@ brew install --overwrite \
     socat \
     spdlog \
     tcpdump \
+    uv \
     xxhash \
     yaml-cpp \
     yara \
