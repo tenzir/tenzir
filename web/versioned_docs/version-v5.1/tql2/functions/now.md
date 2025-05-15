@@ -38,5 +38,5 @@ select ts=now()
 
 ## See Also
 
-[`as_secs`](as_secs.md), [`from_epoch`](from_epoch.md),
+[`from_epoch`](from_epoch.md),
 [`since_epoch`](since_epoch.md)
