@@ -38,7 +38,7 @@ Defaults to `"amq.direct"`.
 
 ### `routing_key = str (optional)`
 
-For the loader, the name of the routing key to bind a queue to an exchange. For the saver, the routing key to publish messages with.
+The name of the routing key to bind a queue to an exchange.
 
 Defaults to the empty string.
 
@@ -103,8 +103,8 @@ Defaults to `false`.
 
 If `true`, the server expects acknowledgements for messages. Otherwise, when a
 message is delivered to the client the server assumes the delivery will succeed
-and immediately dequeues it. This functionality may decrease performance at
-and improve reliability. Without this flag, messages can get lost if a client
+and immediately dequeues it. This functionality may decrease performance, while
+improving reliability. Without this flag, messages can get lost if a client
 dies before they are delivered to the application.
 
 Defaults to `false`.
