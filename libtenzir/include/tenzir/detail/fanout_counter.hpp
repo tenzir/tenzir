@@ -37,10 +37,8 @@ template <typename State, typename Error, typename SuccessContinuation,
 struct fanout_counter {
   constexpr static bool single_error_continuation
     = std::same_as<State, fanout_empty_state>
-        ? requires(Error&& error, ErrorContinuation c) { c(std::move(error)); }
-        : requires(State&& state, Error&& error, ErrorContinuation c) {
-            c(std::move(state), std::move(error));
-          };
+        ? std::is_invocable_v<ErrorContinuation, Error&&>
+        : std::is_invocable_v<ErrorContinuation, State&&, Error&&>;
 
 public:
   fanout_counter(size_t expected, SuccessContinuation then,

@@ -114,10 +114,10 @@ void hash_append(HashAlgorithm& h, const secret_common<FlatbufferType>& s) {
 
 /// @relates detail::secret::secret_common
 class secret final
-  : public detail::secrets::secret_common<child_flatbuffer<fbs::data::Secret>> {
+  : public detail::secrets::secret_common<detail::secrets::owning_fbs_buffer> {
 public:
   using impl
-    = detail::secrets::secret_common<child_flatbuffer<fbs::data::Secret>>;
+    = detail::secrets::secret_common<detail::secrets::owning_fbs_buffer>;
   friend class secret_view;
   using impl::impl;
 
@@ -138,10 +138,10 @@ public:
 /// the owning tenzir::flatbuffer wrapper. We ideally want a non-owning version
 /// of `flatbuffer` that does not hold a `chunk_ptr`, but only the `Table*`.
 class secret_view final
-  : public detail::secrets::secret_common<child_flatbuffer<fbs::data::Secret>> {
+  : public detail::secrets::secret_common<detail::secrets::viewing_fbs_buffer> {
 public:
   using impl
-    = detail::secrets::secret_common<child_flatbuffer<fbs::data::Secret>>;
+    = detail::secrets::secret_common<detail::secrets::viewing_fbs_buffer>;
   using impl::impl;
 
   secret_view(const impl& base) : impl{base} {

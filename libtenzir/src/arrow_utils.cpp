@@ -104,6 +104,7 @@ append_builder(const secret_type&,
                type_to_arrow_builder_t<secret_type>& builder,
                const view<type_to_data_t<secret_type>>& view) noexcept {
   TRY(builder.Append());
+  TENZIR_ASSERT(view.buffer.chunk());
   TRY(builder.buffer_builder().Append(
     reinterpret_cast<const char*>(view.buffer.chunk()->data()),
     view.buffer.chunk()->size()));

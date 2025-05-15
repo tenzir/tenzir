@@ -38,12 +38,11 @@ auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
     }
     return {};
   };
-  auto res = *this;
-  TRY(check_option(res.skip_peer_verification, "skip_peer_verification"));
-  TRY(check_option(res.cacert, "cacert"));
-  TRY(check_option(res.certfile, "certfile"));
-  TRY(check_option(res.keyfile, "keyfile"));
-  if (res.tls.inner and not res.skip_peer_verification) {
+  TRY(check_option(skip_peer_verification, "skip_peer_verification"));
+  TRY(check_option(cacert, "cacert"));
+  TRY(check_option(certfile, "certfile"));
+  TRY(check_option(keyfile, "keyfile"));
+  if (tls.inner and not skip_peer_verification) {
     if (cacert and not std::filesystem::exists(cacert->inner)) {
       diagnostic::error("the configured CA certificate bundle does not exist")
         .note("configured location: `{}`", cacert->inner)
@@ -52,7 +51,7 @@ auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
       return failure::promise();
     }
   }
-  if (res.skip_peer_verification) {
+  if (skip_peer_verification) {
     diagnostic::warning(
       "skipping peer verification allows man in the middle attacks")
       .hint("consider using a private CA")

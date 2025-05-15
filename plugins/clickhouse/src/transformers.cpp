@@ -778,7 +778,7 @@ auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
     },
     [&dh, &path](const secret_type&) -> failure_or<std::string> {
       diagnostic::error("column `{}` has type `secret`", fmt::join(path, "."))
-        .note("secrets cannot be send to ClickHouse")
+        .note("secrets cannot be sent to ClickHouse")
         .emit(dh);
       return failure::promise();
     },

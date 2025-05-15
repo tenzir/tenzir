@@ -229,8 +229,7 @@ struct exec_node_control_plane final : public operator_control_plane {
     resolved_secret_value& out;
     location loc;
 
-    void finish(const request_map_t& requested, diagnostic_handler& dh) const {
-      TENZIR_UNUSED(dh);
+    void finish(const request_map_t& requested) const {
       auto res = ecc::cleansing_blob{};
       auto temp_blob = ecc::cleansing_blob{};
       // For every element in the original secret
@@ -266,15 +265,15 @@ struct exec_node_control_plane final : public operator_control_plane {
               continue;
             }
             if (op == "encode_base64") {
-              auto decoded = detail::base64::encode(std::string_view{
+              auto encoded = detail::base64::encode(std::string_view{
                 reinterpret_cast<const char*>(temp_blob.data()),
                 reinterpret_cast<const char*>(temp_blob.data()
                                               + temp_blob.size()),
               });
               temp_blob.assign(
-                reinterpret_cast<const std::byte*>(decoded.data()),
-                reinterpret_cast<const std::byte*>(decoded.data()
-                                                   + decoded.size()));
+                reinterpret_cast<const std::byte*>(encoded.data()),
+                reinterpret_cast<const std::byte*>(encoded.data()
+                                                   + encoded.size()));
               continue;
             }
             // Handle trailing semicolon
@@ -310,7 +309,7 @@ struct exec_node_control_plane final : public operator_control_plane {
     }
     if (requested_secrets->empty()) {
       for (const auto& f : finishers) {
-        f.finish(*requested_secrets, diagnostics());
+        f.finish(*requested_secrets);
       }
       return;
     }
@@ -329,7 +328,7 @@ struct exec_node_control_plane final : public operator_control_plane {
         requested_secrets->size(),
         [this, requested_secrets, finishers = std::move(finishers)]() {
           for (const auto& f : finishers) {
-            f.finish(*requested_secrets, diagnostics());
+            f.finish(*requested_secrets);
           }
           set_waiting(false);
         },
@@ -353,9 +352,10 @@ struct exec_node_control_plane final : public operator_control_plane {
                   auto decrypted = ecc::decrypt(v.value, keys);
                   if (not decrypted) {
                     fan->receive_error(
-                      diagnostic::error("failed to decrypt secret")
+                      diagnostic::error("failed to decrypt secret: {}",
+                                        decrypted.error())
                         .primary(out.loc)
-                        .note("secret `{}` failed: {}", name, decrypted.error())
+                        .note("secret `{}` failed", name)
                         .done());
                     return;
                   }
@@ -365,9 +365,10 @@ struct exec_node_control_plane final : public operator_control_plane {
                 },
                 [&](const secret_resolution_error& e) {
                   fan->receive_error(
-                    diagnostic::error("could not get secret value")
+                    diagnostic::error("could not get secret value: {}",
+                                      e.message)
                       .primary(out.loc)
-                      .note("secret `{}` failed: {}", name, e.message)
+                      .note("secret `{}` failed", name)
                       .done());
                 });
             },

@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "tenzir/actors.hpp"
+#include "tenzir/atoms.hpp"
 #include "tenzir/variant.hpp"
 
 #include <caf/error.hpp>
+#include <caf/typed_actor.hpp>
 
 #include <string>
 
@@ -47,9 +48,13 @@ struct secret_resolution_result
   using super::super;
 };
 
-using secret_store_actor = typed_actor_fwd<
-  /// Resolve a secret.
-  auto(atom::resolve, std::string name, std::string public_key)
-    ->caf::result<secret_resolution_result>>::unwrap;
+struct secret_store_actor_traits {
+  using signatures = caf::type_list<
+    /// Resolve a secret.
+    auto(atom::resolve, std::string name, std::string public_key)
+      ->caf::result<secret_resolution_result>>;
+};
+
+using secret_store_actor = caf::typed_actor<secret_store_actor_traits>;
 
 } // namespace tenzir

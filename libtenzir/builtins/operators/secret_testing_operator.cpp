@@ -25,7 +25,6 @@ public:
 
   auto operator()(generator<table_slice>, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    co_yield {};
     auto result = resolved_secret_value{};
     ctrl.resolve_secret_must_yield(secret_, result);
     co_yield {};

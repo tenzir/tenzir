@@ -245,15 +245,8 @@ public:
     return *this;
   }
 
-  [[nodiscard]] auto
-  as_child() const& -> flatbuffer<Table, Identifier, flatbuffer_type::child>
-    requires(Type != flatbuffer_type::child)
-  {
-    return this->slice(*this->root());
-  }
-
-  [[nodiscard]] auto
-  as_child() && -> flatbuffer<Table, Identifier, flatbuffer_type::child>
+  [[nodiscard]] auto as_child() const
+    -> flatbuffer<Table, Identifier, flatbuffer_type::child>
     requires(Type != flatbuffer_type::child)
   {
     return this->slice(*this->root());

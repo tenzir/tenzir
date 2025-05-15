@@ -654,7 +654,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
         = self->system().registry().get<secret_store_actor>("tenzir.platform");
       if (not store) {
         return secret_resolution_error{
-          "secret does not exist locally and no secret is store available"};
+          "secret does not exist locally and no secret store is available"};
       }
       auto rp = self->make_response_promise<secret_resolution_result>();
       // We apparently cannot `delegate` here, since this may be across process
