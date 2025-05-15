@@ -30,7 +30,7 @@ server_cert = ca.issue_cert("tenzir-node.example.org")
 server_cert.private_key_and_cert_chain_pem.write_to_path("server.pem")
 EOF
 
-  if command -v uv &> /dev/null; then
+  if command -v uv &>/dev/null; then
     UV="uv"
   else
     UV="$(dirname "$(command -v tenzir)")/../libexec/uv"
@@ -50,7 +50,6 @@ EOF
   echo foo | openssl s_client -CAfile ${cafile} 127.0.0.1:56130
   wait_all "${listen[@]}"
 }
-
 
 @test "listen with multiple connections with SSL" {
   skip "Skipping; disabled test, needs further investigation"
