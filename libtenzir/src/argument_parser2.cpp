@@ -178,19 +178,29 @@ auto argument_parser2::parse(const ast::entity& self,
           return;
         }
         const auto& name = sel->path()[0].id.name;
-        auto it = std::ranges::find(named_, name, &named_t::name);
+        auto it = std::ranges::find_if(named_, [&](const auto& named) {
+          return std::ranges::find(named.names, name) != named.names.end();
+        });
         if (it == named_.end()) {
-          auto filtered = std::views::filter(named_, [](auto&& x) {
-            return not x.name.starts_with("_");
-          });
-          if (not filtered.empty()) {
-            const auto best = std::ranges::max(filtered, {}, [&](auto&& x) {
-              return detail::calculate_similarity(name, x.name);
-            });
-            if (detail::calculate_similarity(name, best.name) > -10) {
+          auto names = std::vector<std::string_view>{};
+          for (const auto& named : named_) {
+            std::ranges::copy_if(named.names, std::back_inserter(names),
+                                 [](auto&& x) {
+                                   return not x.starts_with("_");
+                                 });
+          }
+          if (not names.empty()) {
+            const auto max_sim = std::ranges::max(
+              names | std::ranges::views::transform([&](auto x) {
+                return std::make_pair(detail::calculate_similarity(name, x), x);
+              }),
+              [&](const auto& lhs, const auto& rhs) {
+                return lhs.first < rhs.first;
+              });
+            if (max_sim.first > -10) {
               emit(diagnostic::error("named argument `{}` does not exist", name)
                      .primary(assignment.left)
-                     .hint("did you mean `{}`?", best.name));
+                     .hint("did you mean `{}`?", max_sim.second));
               return;
             }
           }
@@ -310,9 +320,9 @@ auto argument_parser2::parse(const ast::entity& self,
   }
   for (const auto& arg : named_) {
     if (arg.required and not arg.found) {
-      emit(
-        diagnostic::error("required argument `{}` was not provided", arg.name)
-          .primary(self.get_location()));
+      emit(diagnostic::error("required argument `{}` was not provided",
+                             fmt::join(arg.names, "|"))
+             .primary(self.get_location()));
     }
   }
   return result;
@@ -382,7 +392,8 @@ auto argument_parser2::usage() const -> std::string {
       usage_cache_ += fmt::format("{}:{}", positional.name, type);
     }
     const auto append_named_option = [&](const named_t& opt) {
-      if (opt.name.starts_with("_")) {
+      const auto name = fmt::to_string(fmt::join(opt.names, "|"));
+      if (name.starts_with("_")) {
         // This denotes an internal/unstable option.
         return;
       }
@@ -398,7 +409,7 @@ auto argument_parser2::usage() const -> std::string {
         in_brackets = true;
       }
       auto type = opt.type.empty() ? setter_to_string(opt.set) : opt.type;
-      usage_cache_ += fmt::format("{}={}", opt.name, type);
+      usage_cache_ += fmt::format("{}={}", name, type);
     };
     for (const auto& opt : named_) {
       if (opt.required) {

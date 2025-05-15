@@ -1,4 +1,5 @@
-// error
+// node: true
+// error: true
 
 pipeline::detach {
   from env("INPUTS") + "/this-file-does-not-exist.json"

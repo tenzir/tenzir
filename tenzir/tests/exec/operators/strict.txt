@@ -1,6 +1,6 @@
 error: assertion failure
- --> exec/operators/strict.tql:3:17
+ --> exec/operators/strict.tql:4:17
   |
-3 | strict { assert false }
+4 | strict { assert false }
   |                 ^^^^^ 
   |

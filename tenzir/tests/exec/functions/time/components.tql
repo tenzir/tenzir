@@ -1,0 +1,32 @@
+from {
+  ts1: 2024-06-15T14:30:45.123456,
+  ts2: 2020-01-01T00:00:00.000000,
+  ts3: 2023-12-31T23:59:59.999999,
+  ts4: null
+}
+
+ts1_year = ts1.year()
+ts1_month = ts1.month()
+ts1_day = ts1.day()
+ts2_year = ts2.year()
+ts2_month = ts2.month()
+ts2_day = ts2.day()
+ts3_year = ts3.year()
+ts3_month = ts3.month()
+ts3_day = ts3.day()
+ts4_year = ts4.year()
+ts4_month = ts4.month()
+ts4_day = ts4.day()
+
+ts1_hour = ts1.hour()
+ts1_minute = ts1.minute()
+ts1_second = ts1.second()
+ts2_hour = ts2.hour()
+ts2_minute = ts2.minute()
+ts2_second = ts2.second()
+ts3_hour = ts3.hour()
+ts3_minute = ts3.minute()
+ts3_second = ts3.second()
+ts4_hour = ts4.hour()
+ts4_minute = ts4.minute()
+ts4_second = ts4.second()

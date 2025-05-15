@@ -55,15 +55,17 @@ auto make_headers(const saver_args& args) {
   return result;
 }
 
-class saver final : public plugin_saver {
+class saver final : public crtp_operator<saver> {
 public:
   saver() = default;
 
   explicit saver(saver_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
-    -> caf::expected<std::function<void(chunk_ptr)>> override {
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    co_yield {};
     auto transfer_opts = args_.transfer_opts;
     transfer_opts.ssl.update_cacert(ctrl);
     auto tx = transfer{transfer_opts};
@@ -71,10 +73,9 @@ public:
       diagnostic::error("failed to prepare SMTP server request")
         .note("{}", err)
         .emit(ctrl.diagnostics());
-      return err;
     }
     if (auto err = to_error(tx.handle().set(CURLOPT_UPLOAD, 1))) {
-      return err;
+      diagnostic::error(err).emit(ctrl.diagnostics());
     }
     if (args_.from) {
       if (auto err
@@ -83,7 +84,6 @@ public:
           .note("from: {}", *args_.from)
           .note("{}", err)
           .emit(ctrl.diagnostics());
-        return err;
       }
     }
     // Allow one of the recipients to fail and still consider it okay.
@@ -96,31 +96,28 @@ public:
       diagnostic::error("failed to adjust recipient failure mode")
         .note("{}", err)
         .emit(ctrl.diagnostics());
-      return err;
     }
     if (auto err = to_error(tx.handle().add_mail_recipient(args_.to))) {
       diagnostic::error("failed to set To header")
         .note("to: {}", args_.to)
         .note("{}", err)
         .emit(ctrl.diagnostics());
-      return err;
     }
     if (args_.mime) {
-      return [&ctrl, tx = std::make_shared<transfer>(std::move(tx)),
-              args = args_](chunk_ptr chunk) mutable {
+      for (auto chunk : input) {
         if (not chunk || chunk->size() == 0) {
-          return;
+          co_yield {};
         }
         // When sending a MIME message, we set the mail headers via
         // CURLOPT_HTTPHEADER as opposed to building the entire message
         // manually.
-        auto headers = make_headers(args);
+        auto headers = make_headers(args_);
         for (const auto& [name, value] : headers) {
-          auto code = tx->handle().set_http_header(name, value);
+          auto code = tx.handle().set_http_header(name, value);
           TENZIR_ASSERT(code == curl::easy::code::ok);
         }
         // Create the MIME parts.
-        auto mime = curl::mime{tx->handle()};
+        auto mime = curl::mime{tx.handle()};
         auto part = mime.add();
         auto code = part.data(as_bytes(chunk));
         TENZIR_ASSERT(code == curl::easy::code::ok);
@@ -128,58 +125,52 @@ public:
                            ? *chunk->metadata().content_type
                            : "text/plain");
         TENZIR_ASSERT(code == curl::easy::code::ok);
-        code = tx->handle().set(std::move(mime));
+        code = tx.handle().set(std::move(mime));
         TENZIR_ASSERT(code == curl::easy::code::ok);
         // Send the message.
-        if (auto err = tx->perform()) {
+        if (auto err = tx.perform()) {
           diagnostic::error("failed to send message")
             .note("{}", err)
             .emit(ctrl.diagnostics());
-          return;
         }
       };
     }
-    return [&ctrl, tx = std::make_shared<transfer>(std::move(tx)),
-            args = args_](chunk_ptr chunk) mutable {
+    for (auto chunk : input) {
       if (not chunk || chunk->size() == 0) {
-        return;
+        co_yield {};
+        continue;
       }
       // Format headers.
       auto headers = std::vector<std::string>{};
-      for (const auto& [name, value] : make_headers(args)) {
+      for (const auto& [name, value] : make_headers(args_)) {
         headers.push_back(fmt::format("{}: {}", name, value));
       }
       auto body = std::string_view{reinterpret_cast<const char*>(chunk->data()),
                                    chunk->size()};
       auto mail = fmt::format("{}\r\n{}", fmt::join(headers, "\r\n"), body);
       TENZIR_DEBUG("sending {}-byte chunk as email to {}", chunk->size(),
-                   args.to);
-      if (auto err = set(tx->handle(), chunk::make(std::move(mail)))) {
+                   args_.to);
+      if (auto err = set(tx.handle(), chunk::make(std::move(mail)))) {
         diagnostic::error("failed to assign message")
           .note("{}", err)
           .emit(ctrl.diagnostics());
-        return;
       }
       // Send the message.
-      if (auto err = tx->perform()) {
+      if (auto err = tx.perform()) {
         diagnostic::error("failed to send message")
           .note("{}", err)
           .emit(ctrl.diagnostics());
-        return;
       }
     };
   }
 
+  auto optimize(const expression&, event_order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
   auto name() const -> std::string override {
-    return "email";
-  }
-
-  auto default_printer() const -> std::string override {
-    return "json";
-  }
-
-  auto is_joining() const -> bool override {
-    return true;
+    return "save_email";
   }
 
   friend auto inspect(auto& f, saver& x) -> bool {
@@ -190,56 +181,7 @@ private:
   saver_args args_;
 };
 
-class plugin final : public virtual saver_plugin<saver> {
-public:
-  auto parse_saver(parser_interface& p) const
-    -> std::unique_ptr<plugin_saver> override {
-    auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
-    auto args = saver_args{};
-    parser.add("-e,--endpoint", args.endpoint, "<string>");
-    parser.add("-f,--from", args.from, "<email>");
-    parser.add("-s,--subject", args.subject, "<string>");
-    parser.add("-u,--username", args.transfer_opts.username, "<string>");
-    parser.add("-p,--password", args.transfer_opts.password, "<string>");
-    parser.add("-i,--authzid", args.transfer_opts.authzid, "<string>");
-    parser.add("-a,--authorization", args.transfer_opts.authorization,
-               "<string>");
-    parser.add("-P,--skip-peer-verification",
-               args.transfer_opts.ssl.skip_peer_verification);
-    parser.add("-H,--skip-hostname-verification",
-               args.transfer_opts.ssl.skip_peer_verification);
-    parser.add("-m,--mime", args.mime);
-    parser.add("-v,--verbose", args.transfer_opts.verbose);
-    parser.add(args.to, "<email>");
-    parser.parse(p);
-    if (args.endpoint.empty()) {
-      args.endpoint = default_smtp_server;
-    } else if (args.endpoint.find("://") == std::string_view::npos) {
-      args.endpoint.insert(0, "smtps://");
-    } else if (args.endpoint.starts_with("email://")) {
-      args.endpoint.erase(0, 5);
-      args.endpoint.insert(0, "smtp");
-    }
-    if (args.to.empty()) {
-      diagnostic::error("no recipient specified")
-        .hint("add --to <recipient> to your invocation")
-        .throw_();
-    }
-    return std::make_unique<saver>(std::move(args));
-  }
-
-  auto name() const -> std::string override {
-    return "email";
-  }
-
-  auto supported_uri_schemes() const -> std::vector<std::string> override {
-    return {"mailto"};
-  }
-};
-
-class save_plugin final
-  : public virtual operator_plugin2<saver_adapter<saver>> {
+class save_plugin final : public virtual operator_plugin2<saver> {
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
@@ -271,7 +213,13 @@ class save_plugin final
       return failure::promise();
     }
     args.to = std::move(to.inner);
-    return std::make_unique<saver_adapter<saver>>(saver{std::move(args)});
+    return std::make_unique<saver>(std::move(args));
+  }
+
+  auto save_properties() const -> save_properties_t override {
+    return {
+      .schemes = {"smtp", "smtps", "mailto", "email"},
+    };
   }
 };
 
@@ -279,5 +227,4 @@ class save_plugin final
 
 } // namespace tenzir::plugins::email
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::email::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::email::save_plugin)

@@ -149,7 +149,8 @@ public:
               .emit(ctrl.diagnostics());
           });
       ctrl.set_waiting(true);
-      co_yield result;
+      co_yield {};
+      co_yield std::move(result);
     }
   }
 
@@ -657,7 +658,7 @@ public:
     ctrl.self().system().registry().put(
       fmt::format("tenzir.branch.{}.{}", id_, ctrl.run_id()), branch.get());
     co_yield {};
-    auto output = std::optional<table_slice>{};
+    auto output = table_slice{};
     auto done = false;
     while (not done) {
       if (auto stub = input.next()) {
@@ -671,7 +672,6 @@ public:
         .then(
           [&](table_slice events) {
             ctrl.set_waiting(false);
-            TENZIR_ASSERT(not output);
             done = events.rows() == 0;
             output = std::move(events);
           },
@@ -681,16 +681,9 @@ public:
               .emit(ctrl.diagnostics());
           });
       ctrl.set_waiting(true);
-      if (not output) {
-        co_yield {};
-        continue;
-      }
-      auto result = *std::exchange(output, {});
-      co_yield std::move(result);
+      co_yield {};
+      co_yield std::move(output);
     }
-    // At the very end, we expect exactly the sentinel value here.
-    TENZIR_ASSERT(output);
-    TENZIR_ASSERT(output->rows() == 0);
   }
 
   auto location() const -> operator_location override {

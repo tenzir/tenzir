@@ -10,7 +10,6 @@ import sys
 import threading
 import difflib
 import typing
-import re
 import time
 import socket
 import tempfile
@@ -27,9 +26,122 @@ INPUTS_DIR = ROOT / "inputs"
 CHECKMARK = "\033[92;1m✓\033[0m"
 CROSS = "\033[31m✘\033[0m"
 INFO = "\033[94;1mi\033[0m"
-TIMEOUT = 10
 
 stdout_lock = threading.RLock()
+
+
+def get_test_env_and_config_args(test):
+    config_file = test.parent / "tenzir.yaml"
+    config_args = [f"--config={config_file}"] if config_file.exists() else []
+    env = os.environ.copy()
+    env["INPUTS"] = str(INPUTS_DIR)
+    return env, config_args
+
+
+def report_failure(test, message):
+    with stdout_lock:
+        fail(test)
+        if message:
+            print(message)
+
+
+def parse_test_config(test_file):
+    """Parse test configuration from TQL comments at the beginning of the file."""
+    # Define valid configuration keys and their default values
+    config = {
+        "error": False,
+        "timeout": 10,  # Default timeout of 10 seconds
+        "test": "exec",  # Default to exec runner
+        "node": False,  # Default to not using a node
+        "skip": None,   # Optional skip reason
+    }
+
+    valid_keys = set(config.keys())
+
+    with open(test_file, "r", errors="ignore") as f:
+        line_number = 0
+        for line in f:
+            line_number += 1
+            line = line.strip()
+            if not line.startswith("//"):
+                break  # End of frontmatter
+
+            # Remove the comment prefix and strip whitespace
+            content = line[2:].strip()
+
+            # Check if this looks like a configuration line (key: value)
+            parts = content.split(":", 1)
+            if len(parts) != 2:
+                # Gracefully handle files without frontmatter that start with a comment.
+                if line_number == 1:
+                    break
+                raise ValueError(
+                    f"Error in {test_file}:{line_number}: Invalid frontmatter, expected 'key: value'"
+                )
+
+            key = parts[0].strip()
+            value = parts[1].strip()
+
+            # Check for unknown keys
+            if key not in valid_keys:
+                raise ValueError(
+                    f"Error in {test_file}:{line_number}: Unknown configuration key '{key}'"
+                )
+
+            # Convert value to appropriate type
+            if key == "skip":
+                if not value:
+                    raise ValueError(
+                        f"Error in {test_file}:{line_number}: 'skip' value must be a non-empty string"
+                    )
+                config[key] = value
+                continue
+            if key == "error":
+                if value.lower() == "true":
+                    config[key] = True
+                    continue
+                if value.lower() == "false":
+                    config[key] = False
+                    continue
+                raise ValueError(
+                    f"Error in {test_file}:{line_number}: Invalid value for 'error', expected 'true' or 'false', got '{value}'"
+                )
+            if key == "timeout":
+                try:
+                    timeout_value = int(value)
+                    if timeout_value <= 0:
+                        raise ValueError(
+                            f"Error in {test_file}:{line_number}: Invalid value for 'timeout', expected positive integer, got '{value}'"
+                        )
+                    config[key] = timeout_value
+                    continue
+                except ValueError as e:
+                    if "Error in" in str(e):
+                        raise
+                    raise ValueError(
+                        f"Error in {test_file}:{line_number}: Invalid value for 'timeout', expected integer, got '{value}'"
+                    )
+            if key == "test":
+                # Valid runner types
+                valid_runners = [runner.prefix for runner in RUNNERS]
+                if value not in valid_runners:
+                    raise ValueError(
+                        f"Error in {test_file}:{line_number}: Invalid value for 'test', expected one of {valid_runners}, got '{value}'"
+                    )
+                config[key] = value
+                continue
+            if key == "node":
+                if value.lower() == "true":
+                    config[key] = True
+                    continue
+                if value.lower() == "false":
+                    config[key] = False
+                    continue
+                raise ValueError(
+                    f"Error in {test_file}:{line_number}: Invalid value for 'node', expected 'true' or 'false', got '{value}'"
+                )
+
+    return config
 
 
 def print(*args, **kwargs):
@@ -41,11 +153,17 @@ def print(*args, **kwargs):
 
 @dataclasses.dataclass
 class Summary:
-    failed: int = 0
-    total: int = 0
+    def __init__(self, failed: int = 0, total: int = 0, skipped: int = 0):
+        self.failed = failed
+        self.total = total
+        self.skipped = skipped
 
     def __add__(self, other: "Summary") -> "Summary":
-        return Summary(self.failed + other.failed, self.total + other.total)
+        return Summary(
+            self.failed + other.failed,
+            self.total + other.total,
+            self.skipped + other.skipped,
+        )
 
 
 def get_version() -> str:
@@ -113,49 +231,68 @@ def print_diff(expected: bytes, actual: bytes, path: Path):
 
 def run_simple_test(
     test: Path, *, update: bool, args: typing.Sequence[str] = (), ext: str
-) -> bool:
+) -> typing.Union[bool, str]:
     try:
-        # Check if tenzir.yaml exists in the same directory as the test
-        config_file = test.parent / "tenzir.yaml"
-        config_args = [f"--config={config_file}"] if config_file.exists() else []
+        # Parse test configuration
+        test_config = parse_test_config(test)
+    except ValueError as e:
+        report_failure(test, f"└─▶ \033[31m{e}\033[0m")
+        return False
 
-        # Set up environment with INPUTS variable
-        env = os.environ.copy()
-        env["INPUTS"] = str(INPUTS_DIR)
+    if test_config.get("skip"):
+        print(f"{INFO} skipped {test}: {test_config['skip']}")
+        ref_path = test.with_suffix(f".{ext}")
+        if update:
+            # Always overwrite reference file with empty content
+            with ref_path.open("wb") as f:
+                f.write(b"")
+        else:
+            # If reference file exists, it must be empty
+            if ref_path.exists():
+                expected = ref_path.read_bytes()
+                if expected != b"":
+                    report_failure(
+                        test,
+                        f'└─▶ \033[31mReference file for skipped test must be empty: "{ref_path}"\033[0m'
+                    )
+                    return False
+        return "skipped"
 
+    try:
+        env, config_args = get_test_env_and_config_args(test)
+
+        cmd = [
+            TENZIR_BINARY,
+            "--bare-mode",
+            "--console-verbosity=warning",
+            "--multi",
+            *[x for x in config_args if x is not None],
+            *[x for x in args if x is not None],
+            "-f",
+            str(test),
+        ]
         completed = subprocess.run(
-            [
-                TENZIR_BINARY,
-                "--bare-mode",
-                "--console-verbosity=warning",
-                "--multi",
-                *config_args,
-                *args,
-                "-f",
-                test,
-            ],
-            timeout=TIMEOUT,
+            cmd,
+            timeout=test_config["timeout"],
             stdout=subprocess.PIPE,
             env=env,
         )
         output = completed.stdout
-        output = output.replace(bytes(ROOT) + b"/", b"")
+        output = output.replace(str(ROOT).encode() + b"/", b"")
         good = completed.returncode == 0
     except subprocess.TimeoutExpired:
-        fail(test)
+        report_failure(test, "")
         return False
     except subprocess.CalledProcessError as e:
-        with stdout_lock:
-            fail(test)
-            print(f'└─▶ \033[31msubprocess error "{e}":\033[0m')
+        report_failure(test, f'└─▶ \033[31msubprocess error "{e}":\033[0m')
         return False
-    if test.read_bytes().startswith(b"// error") == good:
-        with stdout_lock:
-            fail(test)
-            print(f"┌─▶ \033[31mgot unexpected exit code {completed.returncode}\033[0m")
-            for last, line in last_and(output.split(b"\n")):
-                prefix = "│ " if not last else "└─"
-                sys.stdout.buffer.write(prefix.encode() + line + b"\n")
+    if test_config["error"] == good:
+        report_failure(
+            test, f"┌─▶ \033[31mgot unexpected exit code {completed.returncode}\033[0m"
+        )
+        for last, line in last_and(output.split(b"\n")):
+            prefix = "│ " if not last else "└─"
+            sys.stdout.buffer.write(prefix.encode() + line + b"\n")
         return False
     if not good:
         ext = "txt"
@@ -165,15 +302,14 @@ def run_simple_test(
             f.write(output)
     else:
         if not ref_path.exists():
-            with stdout_lock:
-                fail(test)
-                print(f'└─▶ \033[31mFailed to find ref file: "{ref_path}"\033[0m')
+            report_failure(
+                test, f'└─▶ \033[31mFailed to find ref file: "{ref_path}"\033[0m'
+            )
             return False
         expected = ref_path.read_bytes()
         if expected != output:
-            with stdout_lock:
-                fail(test)
-                print_diff(expected, output, ref_path)
+            report_failure(test, "")
+            print_diff(expected, output, ref_path)
             return False
     success(test)
     return True
@@ -209,7 +345,7 @@ class Runner(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def run(self, test_name: str, update: bool) -> bool:
+    def run(self, test: Path, update: bool) -> bool:
         raise NotImplementedError
 
 
@@ -241,7 +377,10 @@ class AstRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="ast")
 
-    def run(self, test: str, update: bool) -> bool:
+    def run(self, test: Path, update: bool) -> bool:
+        test_config = parse_test_config(test)
+        if test_config.get("node", False):
+            return run_with_node(test, update=update, args=("--dump-ast",), ext="txt")
         return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt")
 
 
@@ -249,7 +388,12 @@ class OldIrRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="oldir")
 
-    def run(self, test: str, update: bool) -> bool:
+    def run(self, test: Path, update: bool) -> bool:
+        test_config = parse_test_config(test)
+        if test_config.get("node", False):
+            return run_with_node(
+                test, update=update, args=("--dump-pipeline",), ext="txt"
+            )
         return run_simple_test(
             test, update=update, args=("--dump-pipeline",), ext="txt"
         )
@@ -259,7 +403,10 @@ class IrRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="ir")
 
-    def run(self, test: str, update: bool) -> bool:
+    def run(self, test: Path, update: bool) -> bool:
+        test_config = parse_test_config(test)
+        if test_config.get("node", False):
+            return run_with_node(test, update=update, args=("--dump-ir",), ext="txt")
         return run_simple_test(test, update=update, args=("--dump-ir",), ext="txt")
 
 
@@ -270,19 +417,24 @@ class DiffRunner(TqlRunner):
         self._b = b
 
     def run(self, test: Path, update: bool) -> bool:
-        # Set up environment with INPUTS variable
-        env = os.environ.copy()
-        env["INPUTS"] = str(INPUTS_DIR)
+        test_config = parse_test_config(test)
+        if test_config.get("node", False):
+            return run_with_node_diff(test, update=update, a=self._a, b=self._b)
+        try:
+            pass
+        except ValueError as e:
+            report_failure(test, f"└─▶ \033[31m{e}\033[0m")
+        env, _ = get_test_env_and_config_args(test)
 
         unoptimized = subprocess.run(
-            [TENZIR_BINARY, self._a, "-f", test],
-            timeout=TIMEOUT,
+            [TENZIR_BINARY, self._a, "-f", str(test)],
+            timeout=test_config["timeout"],
             stdout=subprocess.PIPE,
             env=env,
         )
         optimized = subprocess.run(
-            [TENZIR_BINARY, self._b, "-f", test],
-            timeout=TIMEOUT,
+            [TENZIR_BINARY, self._b, "-f", str(test)],
+            timeout=test_config["timeout"],
             stdout=subprocess.PIPE,
             env=env,
         )
@@ -291,7 +443,7 @@ class DiffRunner(TqlRunner):
                 difflib.unified_diff,
                 unoptimized.stdout.splitlines(keepends=True),
                 optimized.stdout.splitlines(keepends=True),
-                n=float("inf"),
+                n=2**31 - 1,
             )
         )[3:]
         if diff:
@@ -306,10 +458,9 @@ class DiffRunner(TqlRunner):
         else:
             expected = ref_path.read_bytes()
             if diff != expected:
-                with stdout_lock:
-                    fail(test)
-                    print_diff(expected, diff, ref_path)
-                    return False
+                report_failure(test, "")
+                print_diff(expected, diff, ref_path)
+                return False
         success(test)
         return True
 
@@ -328,7 +479,12 @@ class FinalizeRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="finalize")
 
-    def run(self, test: str, update: bool) -> bool:
+    def run(self, test: Path, update: bool) -> bool:
+        test_config = parse_test_config(test)
+        if test_config.get("node", False):
+            return run_with_node(
+                test, update=update, args=("--dump-finalized",), ext="txt"
+            )
         return run_simple_test(
             test, update=update, args=("--dump-finalized",), ext="txt"
         )
@@ -338,99 +494,146 @@ class ExecRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="exec")
 
-    def run(self, test: str, update: bool) -> bool:
+    def run(self, test: Path, update: bool) -> bool:
+        test_config = parse_test_config(test)
+        if test_config.get("node", False):
+            return run_with_node(test, update=update, args=(), ext="txt")
         return run_simple_test(test, update=update, ext="txt")
 
 
-class NodeRunner(TqlRunner):
-    def __init__(self):
-        super().__init__(prefix="node")
+@contextmanager
+def tenzir_node_endpoint(test: Path):
+    # Check if tenzir-node binary is available
+    if not TENZIR_NODE_BINARY:
+        report_failure(test, f"└─▶ \033[31mCould not find tenzir-node binary\033[0m")
+        yield None
+        return
 
-    def run(self, test: Path, update: bool) -> bool:
-        # Check if tenzir-node binary is available
-        if not TENZIR_NODE_BINARY:
-            with stdout_lock:
-                fail(test)
-                print(f"└─▶ \033[31mCould not find tenzir-node binary\033[0m")
+    node_process = None
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            env, config_args = get_test_env_and_config_args(test)
+
+            node_cmd = [
+                TENZIR_NODE_BINARY,
+                "--bare-mode",
+                "--console-verbosity=warning",
+                f"--state-directory={Path(temp_dir) / 'state'}",
+                f"--cache-directory={Path(temp_dir) / 'cache'}",
+                "--endpoint=localhost:0",
+                "--print-endpoint",
+                *[x for x in config_args if x is not None],
+            ]
+            node_process = subprocess.Popen(
+                node_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                env=env,
+            )
+
+            # Wait for the node to print its endpoint and parse it
+            endpoint = None
+            for line in node_process.stdout:
+                endpoint = line.strip()
+                break
+
+            if not endpoint:
+                report_failure(
+                    test, f"└─▶ \033[31mFailed to get endpoint from tenzir-node"
+                )
+                yield None
+                return
+
+            yield endpoint
+
+        except Exception as e:
+            report_failure(test, f"└─▶ \033[31mFailed to start node: {e}\033[0m")
+            yield None
+        finally:
+            if node_process:
+                try:
+                    node_process.terminate()
+                    node_process.wait(timeout=5)
+                except subprocess.TimeoutExpired as e:
+                    report_failure(
+                        test,
+                        f"└─▶ \033[31mError terminating node process within 5s: {e}",
+                    )
+                    node_process.kill()
+                    node_process.wait()
+                except Exception as e:
+                    report_failure(
+                        test, f"└─▶ \033[31mError terminating node process: {e}"
+                    )
+
+
+def run_with_node(
+    test: Path, update: bool, args: typing.Sequence[str], ext: str
+) -> bool:
+    with tenzir_node_endpoint(test) as endpoint:
+        if not endpoint:
+            return False
+        try:
+            cmd_args = [f"--endpoint={endpoint}", *[x for x in args if x is not None]]
+            result = run_simple_test(test, update=update, args=cmd_args, ext=ext)
+            return result
+        except Exception as e:
+            report_failure(test, f"└─▶ \033[31mFailed to run node test: {e}\033[0m")
             return False
 
-        # Start tenzir-node process
-        node_process = None
-        # Create a temporary directory for the node data
-        with tempfile.TemporaryDirectory() as temp_dir:
-            try:
-                # Check if tenzir.yaml exists in the same directory as the test
-                config_file = test.parent / "tenzir.yaml"
-                config_args = (
-                    [f"--config={config_file}"] if config_file.exists() else []
+
+def run_with_node_diff(test: Path, update: bool, a: str, b: str) -> bool:
+    env, _ = get_test_env_and_config_args(test)
+    with tenzir_node_endpoint(test) as endpoint:
+        if not endpoint:
+            return False
+        try:
+            unoptimized = subprocess.run(
+                [TENZIR_BINARY, a, f"--endpoint={endpoint}", "-f", str(test)],
+                timeout=parse_test_config(test)["timeout"],
+                stdout=subprocess.PIPE,
+                env=env,
+            )
+            optimized = subprocess.run(
+                [TENZIR_BINARY, b, f"--endpoint={endpoint}", "-f", str(test)],
+                timeout=parse_test_config(test)["timeout"],
+                stdout=subprocess.PIPE,
+                env=env,
+            )
+            diff = list(
+                difflib.diff_bytes(
+                    difflib.unified_diff,
+                    unoptimized.stdout.splitlines(keepends=True),
+                    optimized.stdout.splitlines(keepends=True),
+                    n=2**31 - 1,
                 )
-
-                # Start tenzir-node with dynamic port allocation
-                # Set up environment with INPUTS variable
-                env = os.environ.copy()
-                env["INPUTS"] = str(INPUTS_DIR)
-
-                node_process = subprocess.Popen(
-                    [
-                        TENZIR_NODE_BINARY,
-                        "--bare-mode",
-                        "--console-verbosity=warning",
-                        f"--state-directory={Path(temp_dir) / "state"}",
-                        f"--cache-directory={Path(temp_dir) / "cache"}",
-                        "--endpoint=localhost:0",
-                        "--print-endpoint",
-                        *config_args,
-                    ],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1,
-                    env=env,
+            )[3:]
+            if diff:
+                diff = b"".join(diff)
+            else:
+                diff = b"".join(
+                    map(
+                        lambda x: b" " + x, unoptimized.stdout.splitlines(keepends=True)
+                    )
                 )
-
-                # Wait for the node to print its endpoint and parse it
-                endpoint = None
-                for line in node_process.stdout:
-                    endpoint = line.strip()
-                    break
-
-                if not endpoint:
-                    with stdout_lock:
-                        fail(test)
-                        print(f"└─▶ \033[31mFailed to get endpoint from tenzir-node")
+            ref_path = test.with_suffix(".diff")
+            if update:
+                ref_path.write_bytes(diff)
+            else:
+                expected = ref_path.read_bytes()
+                if diff != expected:
+                    report_failure(test, "")
+                    print_diff(expected, diff, ref_path)
                     return False
-
-                # Run the test against the node with the discovered endpoint
-                result = run_simple_test(
-                    test, update=update, args=[f"--endpoint={endpoint}"], ext="txt"
-                )
-
-                return result
-            except Exception as e:
-                with stdout_lock:
-                    fail(test)
-                    print(f"└─▶ \033[31mFailed to run node test: {e}\033[0m")
-                return False
-            finally:
-                # Make sure we always terminate the node process
-                if node_process:
-                    try:
-                        node_process.terminate()
-                        node_process.wait(timeout=5)
-                    except subprocess.TimeoutExpired as e:
-                        with stdout_lock:
-                            fail(test)
-                            print(
-                                f"└─▶ \033[31mError terminating node process within 5s: {e}"
-                            )
-                        # If termination times out, force kill the process
-                        node_process.kill()
-                        node_process.wait()
-                    except Exception as e:
-                        # Ensure we don't fail the test on process termination issues
-                        with stdout_lock:
-                            fail(test)
-                            print(f"└─▶ \033[31mError terminating node process: {e}")
+            success(test)
+            return True
+        except Exception as e:
+            report_failure(
+                test, f"└─▶ \033[31mFailed to run node diff test: {e}\033[0m"
+            )
+            return False
 
 
 @contextmanager
@@ -474,34 +677,34 @@ class CustomFixture(ExtRunner):
     def __init__(self):
         super().__init__(prefix="custom", ext="sh")
 
-    def run(self, path: Path, update: bool) -> bool:
+    def run(self, test: Path, update: bool) -> bool:
         env = os.environ.copy()
         env["PATH"] = (ROOT / "_custom").as_posix() + ":" + env["PATH"]
         # TODO: Choose a random free port instead.
         with check_server() as port:
             env["TENZIR_TESTER_CHECK_PORT"] = str(port)
             env["TENZIR_TESTER_CHECK_UPDATE"] = str(int(update))
-            env["TENZIR_TESTER_CHECK_PATH"] = str(path)
+            env["TENZIR_TESTER_CHECK_PATH"] = str(test)
             try:
+                cmd = ["sh", "-eu", str(test)]
                 output = subprocess.check_output(
-                    ["sh", "-eu", path], stderr=subprocess.PIPE, env=env
+                    [x for x in cmd if x is not None], stderr=subprocess.PIPE, env=env
                 )
                 # TODO: What do to with output?
             except subprocess.CalledProcessError as e:
                 with stdout_lock:
-                    fail(path)
+                    fail(test)
                     sys.stdout.buffer.write(e.stdout)
                     sys.stdout.buffer.write(e.output)
                     sys.stdout.buffer.write(e.stderr)
                 return False
-        success(path)
+        success(test)
         return True
 
 
 RUNNERS = [
     AstRunner(),
     ExecRunner(),
-    NodeRunner(),
     CustomFixture(),
     OldIrRunner(),
     IrRunner(),
@@ -541,12 +744,28 @@ class Worker:
                     item = self._queue.pop()
                 except IndexError:
                     break
-                success = item[0].run(item[1], self._update)
+
+                runner, test_path = item
+                result = runner.run(test_path, self._update)
                 self._result.total += 1
-                if not success:
+                if result == "skipped":
+                    self._result.skipped += 1
+                elif not result:
                     self._result.failed += 1
+            return self._result
         except Exception as e:
             self._exception = e
+            return self._result if self._result is not None else Summary()
+
+
+def get_runner_for_test(test_path):
+    """Determine the appropriate runner for a test based on its configuration."""
+    config = parse_test_config(test_path)
+    runner_name = config["test"]
+    if runner_name in runners:
+        return runners[runner_name]
+    # Runner not found - this should never happen because parse_test_config should validate
+    raise ValueError(f"Runner '{runner_name}' not found - this is a bug")
 
 
 def main() -> None:
@@ -568,38 +787,63 @@ def main() -> None:
     todo = set()
     for test in tests:
         if test.resolve() == ROOT:
-            for name, runner in runners.items():
-                todo.update(runner.collect_tests(ROOT / name))
+            # Collect all tests in all directories
+            all_tests = []
+            for dir_path in ROOT.iterdir():
+                if dir_path.is_dir() and not dir_path.name.startswith("."):
+                    all_tests.extend(list(dir_path.glob("**/*.tql")))
+
+            # Process each test file using its configuration
+            for test_path in all_tests:
+                try:
+                    runner = get_runner_for_test(test_path)
+                    todo.add((runner, test_path))
+                except ValueError as e:
+                    # Show the error and exit
+                    sys.exit(f"error: {e}")
             continue
+
         resolved = test.resolve()
-        try:
-            target_name = resolved.relative_to(ROOT).parts[0]
-        except ValueError:
-            if not test.is_absolute():
-                resolved = ROOT / test
-                target_name = resolved.relative_to(ROOT).parts[0]
+        if not resolved.exists():
+            sys.exit(f"error: test path `{test}` does not exist")
+
+        # If it's a directory, collect all tests in it
+        if resolved.is_dir():
+            # Look for TQL files and use their config
+            tql_files = list(resolved.glob("**/*.tql"))
+            if not tql_files:
+                sys.exit(f"error: no TQL files found in {resolved}")
+
+            for file_path in tql_files:
+                try:
+                    runner = get_runner_for_test(file_path)
+                    todo.add((runner, file_path))
+                except ValueError as e:
+                    sys.exit(f"error: {e}")
+        # If it's a file, determine the runner from its configuration
+        elif resolved.is_file():
+            if resolved.suffix == ".tql":
+                try:
+                    runner = get_runner_for_test(resolved)
+                    todo.add((runner, resolved))
+                except ValueError as e:
+                    sys.exit(f"error: {e}")
             else:
-                sys.exit(f"error: `{test}` is not in `{ROOT}`")
-        for name, runner in runners.items():
-            if target_name == name:
-                todo.update(runner.collect_tests(resolved))
-                break
+                # Error for non-TQL files
+                sys.exit(
+                    f"error: unsupported file type {resolved.suffix} for {resolved} - only .tql files are supported"
+                )
         else:
-            sys.exit(f"error: no runner found for `{test}`")
+            sys.exit(f"error: `{test}` is neither a file nor a directory")
 
     queue = list(todo)
-    queue.sort(key=lambda tup: tup[1], reverse=True)
+    # Sort by test path (item[1])
+    queue.sort(key=lambda tup: str(tup[1]), reverse=True)
     os.environ["TENZIR_EXEC__DUMP_DIAGNOSTICS"] = "true"
     try:
         version = get_version()
     except FileNotFoundError:
         sys.exit(f"error: could not find `{TENZIR_BINARY}` executable")
-
-    # Print warning if tenzir-node binary is not found
-    if "node" in [item[0].prefix for item in queue] and not TENZIR_NODE_BINARY:
-        print(
-            f"{INFO} warning: could not find `tenzir-node` executable, node tests will be skipped"
-        )
 
     print(f"{INFO} running {len(queue)} tests with v{version}")
 
@@ -609,7 +853,7 @@ def main() -> None:
         worker.start()
     for worker in workers:
         summary += worker.join()
-    print(f"{INFO} {summary.total - summary.failed}/{summary.total} tests passed")
+    print(f"{INFO} {summary.total - summary.failed - summary.skipped}/{summary.total} tests passed ({summary.skipped} skipped)")
     if summary.failed > 0:
         sys.exit(1)
 

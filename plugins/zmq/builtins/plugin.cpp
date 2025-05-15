@@ -17,8 +17,7 @@ namespace tenzir::plugins::zmq {
 namespace {
 
 // TODO: Collapse these
-class load_plugin final
-  : public virtual operator_plugin2<loader_adapter<zmq_loader>> {
+class load_plugin final : public virtual operator_plugin2<zmq_loader> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -50,8 +49,7 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    return std::make_unique<loader_adapter<zmq_loader>>(
-      zmq_loader{std::move(args)});
+    return std::make_unique<zmq_loader>(std::move(args));
   }
 
   auto load_properties() const -> load_properties_t override {
@@ -59,8 +57,7 @@ public:
   }
 };
 
-class save_plugin final
-  : public virtual operator_plugin2<saver_adapter<zmq_saver>> {
+class save_plugin final : public virtual operator_plugin2<zmq_saver> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -91,8 +88,7 @@ public:
         .emit(ctx);
       return failure::promise();
     }
-    return std::make_unique<saver_adapter<zmq_saver>>(
-      zmq_saver{std::move(args)});
+    return std::make_unique<zmq_saver>(std::move(args));
   }
 
   auto save_properties() const -> save_properties_t override {

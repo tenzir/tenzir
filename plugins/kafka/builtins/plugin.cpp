@@ -26,8 +26,7 @@ constexpr auto stringify = detail::overload{
   },
 };
 
-class load_plugin final
-  : public virtual operator_plugin2<loader_adapter<kafka_loader>> {
+class load_plugin final : public virtual operator_plugin2<kafka_loader> {
 public:
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
@@ -124,8 +123,7 @@ public:
         return failure::promise();
       }
     }
-    return std::make_unique<loader_adapter<kafka_loader>>(
-      kafka_loader{std::move(args), config_});
+    return std::make_unique<kafka_loader>(std::move(args), config_);
   }
 
   auto load_properties() const
@@ -140,8 +138,7 @@ private:
   record config_;
 };
 
-class save_plugin final
-  : public virtual operator_plugin2<saver_adapter<kafka_saver>> {
+class save_plugin final : public virtual operator_plugin2<kafka_saver> {
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
     if (not unused_plugin_config.empty()) {
@@ -211,8 +208,7 @@ class save_plugin final
         return failure::promise();
       }
     }
-    return std::make_unique<saver_adapter<kafka_saver>>(
-      kafka_saver{std::move(args), config_});
+    return std::make_unique<kafka_saver>(std::move(args), config_);
   }
 
   auto save_properties() const
