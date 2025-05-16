@@ -45,6 +45,8 @@ struct package_config final {
   record metadata = {};  // opaque extra data that can be set at install time
   record overrides = {}; // overrides for fields in the package definition
 
+  bool disabled = {};
+
   auto to_record() const -> record;
 
   static auto parse(const view<record>& data) -> caf::expected<package_config>;
@@ -54,7 +56,8 @@ struct package_config final {
       .pretty_name("package_config")
       .fields(f.field("source", x.source), f.field("inputs", x.inputs),
               f.field("version", x.version), f.field("metadata", x.metadata),
-              f.field("overrides", x.overrides));
+              f.field("overrides", x.overrides),
+              f.field("disabled", x.disabled));
   }
 };
 

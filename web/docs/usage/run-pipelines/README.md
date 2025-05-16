@@ -10,7 +10,7 @@ binary.
 
 ## In the platform
 
-Run a pipeline by writing typing it in the editor and hitting the *Run* button.
+Run a pipeline by writing typing it in the editor and hitting the _Run_ button.
 
 The following invariants apply:
 
@@ -21,7 +21,7 @@ The diagram below illustrates these mechanics:
 
 ![Pipeline in the Browser](pipeline-browser.svg)
 
-For example, write [`version`](../../tql2/operators/version.md) and click *Run*
+For example, write [`version`](../../tql2/operators/version.md) and click _Run_
 to see a single event arrive.
 
 ## On the command line
@@ -83,8 +83,8 @@ This will interpret the file contents as pipeline and run it.
 
 ## As Code
 
-In addition to running pipelines interactively, you can also deploy *pipelines as
-code (PaC)*. This infrastructure-as-code-like method differs from the app-based
+In addition to running pipelines interactively, you can also deploy _pipelines as
+code (PaC)_. This infrastructure-as-code-like method differs from the app-based
 deployment in two ways:
 
 1. Pipelines deployed as code always start with the Tenzir node, ensuring
