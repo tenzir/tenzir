@@ -39,7 +39,8 @@ contained files as YARA rules.
 
 ### `blockwise = bool (optional)`
 
-If to match on every byte chunk instead of triggering a scan when the input exhausted.
+Whether to match on every byte chunk instead of triggering a scan when the input
+exhausted.
 
 This option makes sense for never-ending dataflows where each chunk of bytes
 constitutes a self-contained unit, such as a single file.

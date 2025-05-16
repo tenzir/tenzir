@@ -2,8 +2,6 @@
 
 Receives HTTP/1.1 requests.
 
-## Synopsis
-
 ```tql
 from_http url:string, [server=bool, responses=record, max_request_size=int,
                        tls=bool, certfile=string, keyfile=string,

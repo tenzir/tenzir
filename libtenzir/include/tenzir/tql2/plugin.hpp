@@ -19,6 +19,10 @@ class operator_factory_plugin : public virtual plugin {
 public:
   // Separate from `ast::invocation` in case we want to add things.
   struct invocation {
+    invocation(ast::entity self, std::vector<ast::expression> args)
+      : self{std::move(self)}, args{std::move(args)} {
+    }
+
     ast::entity self;
     std::vector<ast::expression> args;
   };

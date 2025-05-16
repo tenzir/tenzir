@@ -51,7 +51,7 @@ Options can be appended to the path as query parameters, as per
 
 ### `anonymous = bool (optional)`
 
-If to ignore any predefined credentials and try to load with anonymous
+Whether to ignore any predefined credentials and try to load with anonymous
 credentials.
 
 ## Examples
