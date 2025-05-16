@@ -7,9 +7,9 @@ tags: [release, platform]
 comments: true
 ---
 
-Today, we're releasing [Tenzir Platform v1.10][github-release], featuring
-a restructed page layout and the option to statically define workspaces
-in an on-prem environment.
+Today, we're releasing [Tenzir Platform v1.10][github-release], which introduces
+a restructed page layout and the ability to statically define workspaces
+in on-prem environments.
 
 ![Tenzir Platform v1.10](tenzir-platform-v1.10.svg)
 
@@ -19,24 +19,23 @@ in an on-prem environment.
 
 ## Restructured Nodes Page
 
-With this release, we reordered the page layout for better overview and
-usability.
+This release reorganizes the page layout to improve usability
+and provide a clearer overview of the current state of a Tenzir Node.
 
-In particular, the Explorer, Pipelines and Contexts tabs are now combined into
-a single, top-level Nodes tab. In addition, the Installed Packages tab from
-the library also got moved into this new nodes page.
+We combined the Explorer, Pipelines, and Contexts tabs into a single, top-level
+Nodes tab. Additionally, we moved the Installed Packages tab from the library
+into this new Nodes page.
 
 ![Nodes Page Layout](layout.png)
 
-Now, all the information related to one node is concentrated in one page,
-which makes it easier to get to it at a glance.
+All node-related information is now consolidated on a single page, making it
+easier to access at a glance.
 
-In the near future, we're planning to add a lot of additional utilites to
-the nodes page, which will allow even more insights into the state of
-your fleet.
+We plan to add more utilites to the nodes page soon, providing deeper insights
+into the state of your fleet.
 
-The library has also been redesigned, and can now be filtered by
-different subcategories:
+We also redesigned the library, allowing you to filter by the subcategories
+Sources, Destinations, Mappings and Contexts.
 
 ![Library Page Layout](library.png)
 
@@ -44,7 +43,8 @@ This makes it easier to find exactly the package you're looking for.
 
 ## Static Workspaces and Ephemeral Nodes
 
-Users of the Sovereign Edition of the Tenzir Platform now have the option to
+Sovereign Edition users can now define workspaces in a static configuration
+provided to the Tenzir Platform instance.
 
 ```yaml
 ---
@@ -52,23 +52,35 @@ workspaces:
   static0:
     name: Tenzir
     category: Statically Configured Workspaces
-    icon_url: https://storage.googleapis.com/tenzir-public-data/icons/tenzir-logo-square.svg
-    auth_rules:
+    icon-url: https://storage.googleapis.com/tenzir-public-data/icons/tenzir-logo-square.svg
+    auth-rules:
       - {"auth_fn": "auth_allow_all"}
 ```
 
-To conveniently obtain the auth rules in the correct format, use the
-new `print-auth-rule` command of the CLI. For example, to get the rule
-above you can run `tenzir-platform tools print-auth-rule allow-all`.
+:::tip Generating Auth Rules
+Use the new `print-auth-rule` CLI command to easily generate auth rules in
+the correct format. For example, to get the rule above you can
+run `tenzir-platform tools print-auth-rule allow-all`.
+:::
 
-To find the static workspace configuration file, the Tenzir Platform container
-looks at the `WORKSPACE_CONFIG_FILE` environment variable.
+The `platform` service in a Tenzir Platform deployment uses the `WORKSPACE_CONFIG_FILE` environment variable to locate the static workspace configuration file.
+
+```yaml
+# docker-compose.yaml
+services:
+  platform:
+    environment:
+      # [...]
+      - WORKSPACE_CONFIG_FILE=/etc/tenzir/workspaces.yaml
+    volumes:
+      - ./workspaces.yaml:/etc/tenzir/workspaces.yaml
+```
 
 ### Ephemeral Nodes
 
-For statically configured workspaces, it is possible to define a workspace
-token. The workspace token is a shared secret, that allows every Tenzir Node
-in possession of the token to connect to this workspace.
+You can define a workspace token for statically configured workspaces.
+This shared secret allows any Tenzir Node with the token to connect to
+the workspace.
 
 ```yaml
 workspaces:
@@ -80,13 +92,13 @@ Please note that a valid workspace token must follow a specific format.
 To obtain a suitable token for your workspace, use
 the `tenzir-platform tools generate-workspace-token` command.
 
-Instead of writing out the workspace token in plain text, it is also possible
-to specify a file that contains the token:
+Instead of writing out the workspace token in plain text, you can
+specify a file that contains the token:
 
 ```yaml
 workspaces:
   static0:
-    token_file: /run/secrets/workspace_token
+    token-file: /run/secrets/workspace_token
 ```
 
 A Tenzir Node can register itself at the Tenzir Platform dynamically
@@ -101,20 +113,20 @@ tenzir:
 $ tenzir-node --config=config.yaml
 ```
 
-A node connected this way is treated as *ephemeral*, which means that it
-is not permanently added to the workspace but will disappear as soon
+Nodes connected this way are treated as *ephemeral*, meaning they're
+not permanently added to the workspace but will disappear as soon
 as the connection ends.
 
 ### Static Dashboards
 
-It is also possible to define a static set of dashboards for a workspace.
-To do so, use the `dashboards` yaml key:
+You can define a static set of dashboards for a workspace.
+To do so, use the `dashboards` YAML key:
 
 ```yaml
 workspaces:
   static0:
     dashboards:
-      dashboard_1:
+      dashboard1:
         name: Example Dashboard
         cells:
           - name: Dashboard 1
@@ -130,19 +142,20 @@ workspaces:
             h: 12
 ```
 
-Dashboards are arranged in a virtual grid of width 24, so the constraint
-`x+w <= 24` must be obeyed when setting dashboard coordinates.
+:::note Dashboard Coordinates
+Dashboards are arranged in a virtual grid of width 24. Ensure that
+`x + w <= 24` when setting dashboard coordinates.
+:::note
 
-Please note that while it is possible to update dashboards defined like this
-at runtime, they will reset to their original state every time the platform
-is restarted.
+While it is possible to update dashboards defined like this
+at runtime, they reset to their original state every time the platform
+restarts.
 
 
 ## Other Changes
 
- - The `--dry-run` option for the `tenzir-platform admin add-auth-rule` family
-   of options was removed, in favor of the new `tenzir-platform tools print-auth-rule`
-   set of commands.
+ - We replaced the `--dry-run` option for the `tenzir-platform admin add-auth-rule`
+   commands with the new `tenzir-platform tools print-auth-rule` commands.
  - [...]
 
 
