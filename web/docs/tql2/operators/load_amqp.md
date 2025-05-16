@@ -4,8 +4,8 @@ Loads a byte stream via AMQP messages.
 
 ```tql
 load_amqp [url:str, channel=int, exchange=str, routing_key=str, queue=str,
-          options=record, passive=bool, durable=bool, exclusive=bool,
-          no_auto_delete=bool, no_local=bool, ack=bool]
+           options=record, passive=bool, durable=bool, exclusive=bool,
+           no_auto_delete=bool, no_local=bool, ack=bool]
 ```
 
 ## Description
