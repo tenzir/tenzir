@@ -398,6 +398,13 @@ template <class Table, class ParentTable,
 flatbuffer(flatbuffer<ParentTable, ParentIdentifier, ParentType>, const Table*)
   -> flatbuffer<Table, nullptr, flatbuffer_type::child>;
 
+template <class Table, flatbuffer_identifier ParentIdentifier,
+          flatbuffer_type ParentType>
+auto as_bytes(const flatbuffer<Table, ParentIdentifier, ParentType> fb)
+  -> std::span<const std::byte> {
+  return {fb.chunk()->data(), fb.chunk()->size()};
+}
+
 } // namespace tenzir
 
 // -- formatter ---------------------------------------------------------------

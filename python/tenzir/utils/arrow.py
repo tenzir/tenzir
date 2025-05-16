@@ -14,10 +14,12 @@ try:
 except ImportError:
     # Create dummy classes so we can safely test
     # `isinstance(x, Timestamp)` below.
-    class Timestamp():
+    class Timestamp:
         pass
-    class Timedelta():
+
+    class Timedelta:
         pass
+
 
 class IPScalar(pa.ExtensionScalar):
     def as_py(self: "IPScalar") -> Union[ip.IPv4Address, ip.IPv6Address, None]:
@@ -109,19 +111,22 @@ class SubnetType(pa.ExtensionType):
     def __arrow_ext_scalar_class__(self: "SubnetType") -> type[SubnetScalar]:
         return SubnetScalar
 
-class TenzirSecret :
-    def __init__(self: "TenzirSecret", b: bytes ) :
+
+class TenzirSecret:
+    def __init__(self: "TenzirSecret", b: bytes):
         self.__bytes = b
 
-class SecretScalar(pa.ExtensionScalar) :
-    """Adapter for Tenzir secret values. """
 
-    def as_py(self: "SecretScalar") -> Union[TenzirSecret, None] :
-        if self.value is None :
+class SecretScalar(pa.ExtensionScalar):
+    """Adapter for Tenzir secret values."""
+
+    def as_py(self: "SecretScalar") -> Union[TenzirSecret, None]:
+        if self.value is None:
             return None
-        if self.value[0].as_py() is None :
+        if self.value[0].as_py() is None:
             return None
         return TenzirSecret(self.value[0].as_py())
+
 
 class SecretType(pa.ExtensionType):
     ext_name = "tenzir.secret"
@@ -284,7 +289,7 @@ def extension_array_scalar(obj: Sequence, datatype: pa.DataType) -> pa.Array:
         arr = (pack_ip(e) for e in obj)
         storage = pa.array(arr, pa.binary(16))
         return pa.ExtensionArray.from_storage(datatype, storage)
-    elif isinstance(datatype,  SubnetType):
+    elif isinstance(datatype, SubnetType):
         arrs = list(zip(*[pack_subnet(e) for e in obj]))
         addr_storage = pa.array(arrs[0], pa.binary(16))
         addr_array = pa.ExtensionArray.from_storage(IPType(), addr_storage)
@@ -297,7 +302,7 @@ def extension_array_scalar(obj: Sequence, datatype: pa.DataType) -> pa.Array:
             names=["address", "length"],
         )
         return pa.ExtensionArray.from_storage(datatype, storage)
-    elif isinstance(datatype,  EnumType):
+    elif isinstance(datatype, EnumType):
         fields = datatype.fields
         # use the mappings in the `fields` metadata as indices for building
         # the dictionary
@@ -362,7 +367,7 @@ TenzirType = Union[
     None,
     TenzirSecret,
     dict[str, "TenzirType"],
-    list["TenzirType"]
+    list["TenzirType"],
 ]
 
 

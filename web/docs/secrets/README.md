@@ -5,23 +5,21 @@ such as authentication tokens, passwords or even URLs.
 
 ## Usage in TQL
 
-There is two ways to pass an argument to a parameter that expects a secret:
+There are two ways to pass an argument to a operator that expects a secret:
 
 - By providing a plain `string` ([Ad-hod Secret](#ad-hoc-secrets)):
 
   ```tql
-  to_splunk "localhost", hec_token="my-plaintext-token"
+  to_splunk "https://localhost:8088", hec_token="my-plaintext-token"
   ```
 
 - By using the [`secret`](../tql2/functions/secret.md) function ([Manged Secret](#managed-secrets)):
 
   ```tql
-  to_splunk "localhost", hec_token=secret("splunk-hec-token")
+  to_splunk "https://localhost:8088", hec_token=secret("splunk-hec-token")
   ```
 
   This will fetch the value of the secret named `splunk-hec-token`.
-
-<!-- TODO: Do we want this? -->
 
 Operators generally do not document that they accept a secret, but will accept
 secrets where appropriate.
@@ -43,7 +41,7 @@ secret("my-secret").decode_base64()
 
 ### Concatenation
 
-Secrets can be concatenated with other `secret`s as well as `string`s using the
+Secrets can be concatenated with other secrets as well as strings using the
 `+` operator.
 
 ```tql
@@ -74,14 +72,14 @@ As such, it may be persisted on the node.
 
 The [`secret`](../tql2/functions/secret.md) function retrieves a managed secret.
 
-Secrets are looked up in the following order:
+Managed secrets are looked up in the following order:
 
 1. The environment of the Tenzir Node
 2. The configuration of the Tenzir Node
-3. The Tenzir Platform secret store for the Workspace the Tenzir Node is running in
+3. The Tenzir Platform secret store for the workspace the Tenzir Node is running in
 
-A secrets actual value is only looked up when it is required by the operator
-accepting a secret. If the value is looked up over any network connection, it is
+A secret's actual value is only looked up when it is required by the operator
+accepting the secret. If the value is looked up over any network connection, it is
 additionally encrypted using ECIES with a one-time, per secret key.
 The value stays encrypted through the entire transfer until the final usage site.
 
@@ -139,12 +137,12 @@ customers running a self-hosted instance of the platform.
 :::
 
 Instead of using its internal secret store, the Tenzir Platform can be
-configured to provide access to the secrets stored in an external secrets store
-instead. This access is read-only, writing to or deleting from an external
+configured to provide access to the secrets stored in an external secrets store.
+This access is read-only, writing to or deleting from an external
 secrets store is currently not supported.
 
-External secret stores can only be configured using the `tenzir-platform` CLI.
-To configure an external secret store, use the `secret store add` subcommand.
+External secret stores can currently only be configured using the `tenzir-platform`
+CLI. To configure an external secret store, use the `secret store add` subcommand.
 
 ```bash
 tenzir-platform secret store add aws --region='eu-west-1' --assumed-role-arn='arn:aws:iam::1234567890:role/tenzir-platform-secrets-access' --prefix=tenzir/
@@ -160,3 +158,14 @@ prefix `tenzir/` from the Secrets Manager instance in the account of the
 assumed role.
 
 See the [CLI reference](../platform-cli.md#manage-external-secret-stores) for more details.
+
+## Legacy Model
+
+The configuration option `tenzir.legacy-secret-model` can be used to change the
+behavior of the `secret` function to return a `string` instead of a `secret`.
+
+When using the legacy model, only secrets from the Tenzir Node's configuration
+can be used, no secrets from the Tenzir Platform's secret store will be
+available.
+
+We do not recommend enabling this option.

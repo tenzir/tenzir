@@ -49,7 +49,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "secret::_testing_operator";
+    return "assert_secret";
   }
 
   auto location() const -> operator_location override {
@@ -79,8 +79,27 @@ public:
     return testing_operator{}.name();
   }
 
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
+    const auto v = try_get_or(global_config,
+                              "tenzir.enable-assert-secret-operator", false);
+    if (not v) {
+      return diagnostic::error(
+               "`tenzir.enable-assert-secret-operator` must be a boolean")
+        .to_error();
+    }
+    enabled_ = *v;
+    return {};
+  }
+
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
+    if (not enabled_) {
+      diagnostic::error("the `{}` operator is disabled ", name())
+        .primary(inv.self.get_location())
+        .emit(ctx);
+      return failure::promise();
+    }
     auto secret = located<class secret>{};
     auto expected = located<data>{};
     argument_parser2::operator_(name())
@@ -91,6 +110,9 @@ public:
     return std::make_unique<testing_operator>(std::move(secret),
                                               std::move(expected));
   }
+
+private:
+  bool enabled_ = false;
 };
 
 } // namespace

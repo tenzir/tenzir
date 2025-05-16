@@ -144,16 +144,16 @@ access to the secrets.
 ### Synopsis
 
 ```sh
-  tenzir-platform secret store add aws
-      --region=<region>
-      --assumed-role-arn=<assumed_role_arn>
-      [--name=<name>]
-      [--prefix=<prefix>]
-      [--access-key-id=<key_id>]
-      [--secret-access-key=<key>]
-  tenzir-platform secret store set-default <store_id>
-  tenzir-platform secret store delete <store_id>
-  tenzir-platform secret store list [--json]
+tenzir-platform secret store add aws
+    --region=<region>
+    --assumed-role-arn=<assumed_role_arn>
+    [--name=<name>]
+    [--prefix=<prefix>]
+    [--access-key-id=<key_id>]
+    [--secret-access-key=<key>]
+tenzir-platform secret store set-default <store_id>
+tenzir-platform secret store delete <store_id>
+tenzir-platform secret store list [--json]
 ```
 
 ### Description

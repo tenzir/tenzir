@@ -19,8 +19,8 @@ import builtins
 from contextlib import contextmanager
 
 
-tenzir_binary = shutil.which("tenzir")
-tenzir_node_binary = shutil.which("tenzir-node")
+TENZIR_BINARY = shutil.which("tenzir")
+TENZIR_NODE_BINARY = shutil.which("tenzir-node")
 ROOT = Path(os.path.dirname(__file__ or ".")).resolve()
 INPUTS_DIR = ROOT / "inputs"
 CHECKMARK = "\033[92;1m✓\033[0m"
@@ -170,7 +170,7 @@ def get_version() -> str:
     return (
         subprocess.check_output(
             [
-                tenzir_binary,
+                TENZIR_BINARY,
                 "--bare-mode",
                 "--console-verbosity=warning",
                 "version | select version | write_lines",
@@ -262,7 +262,7 @@ def run_simple_test(
         env, config_args = get_test_env_and_config_args(test)
 
         cmd = [
-            tenzir_binary,
+            TENZIR_BINARY,
             "--bare-mode",
             "--console-verbosity=warning",
             "--multi",
@@ -288,7 +288,6 @@ def run_simple_test(
         return False
     except Exception as e :
         report_failure(test, f'└─▶ \033[31munexpected exception: {e}\033[0m')
-        return False
     if test_config["error"] == good:
         report_failure(
             test, f"┌─▶ \033[31mgot unexpected exit code {completed.returncode}\033[0m"
@@ -430,13 +429,13 @@ class DiffRunner(TqlRunner):
         env, _ = get_test_env_and_config_args(test)
 
         unoptimized = subprocess.run(
-            [tenzir_binary, self._a, "-f", str(test)],
+            [TENZIR_BINARY, self._a, "-f", str(test)],
             timeout=test_config["timeout"],
             stdout=subprocess.PIPE,
             env=env,
         )
         optimized = subprocess.run(
-            [tenzir_binary, self._b, "-f", str(test)],
+            [TENZIR_BINARY, self._b, "-f", str(test)],
             timeout=test_config["timeout"],
             stdout=subprocess.PIPE,
             env=env,
@@ -507,7 +506,7 @@ class ExecRunner(TqlRunner):
 @contextmanager
 def tenzir_node_endpoint(test: Path):
     # Check if tenzir-node binary is available
-    if not tenzir_node_binary:
+    if not TENZIR_NODE_BINARY:
         report_failure(test, f"└─▶ \033[31mCould not find tenzir-node binary\033[0m")
         yield None
         return
@@ -518,7 +517,7 @@ def tenzir_node_endpoint(test: Path):
             env, config_args = get_test_env_and_config_args(test)
 
             node_cmd = [
-                tenzir_node_binary,
+                TENZIR_NODE_BINARY,
                 "--bare-mode",
                 "--console-verbosity=warning",
                 f"--state-directory={Path(temp_dir) / 'state'}",
@@ -594,13 +593,13 @@ def run_with_node_diff(test: Path, update: bool, a: str, b: str) -> bool:
             return False
         try:
             unoptimized = subprocess.run(
-                [tenzir_binary, a, f"--endpoint={endpoint}", "-f", str(test)],
+                [TENZIR_BINARY, a, f"--endpoint={endpoint}", "-f", str(test)],
                 timeout=parse_test_config(test)["timeout"],
                 stdout=subprocess.PIPE,
                 env=env,
             )
             optimized = subprocess.run(
-                [tenzir_binary, b, f"--endpoint={endpoint}", "-f", str(test)],
+                [TENZIR_BINARY, b, f"--endpoint={endpoint}", "-f", str(test)],
                 timeout=parse_test_config(test)["timeout"],
                 stdout=subprocess.PIPE,
                 env=env,
@@ -777,17 +776,9 @@ def main() -> None:
     parser.add_argument("tests", nargs="*", type=Path, default=[ROOT])
     parser.add_argument("-u", "--update", action="store_true")
     parser.add_argument("--purge", action="store_true")
-    parser.add_argument("-p","--executable-base-path", type=Path)
     default_jobs = 4 * (os.cpu_count() or 16)
     parser.add_argument("-j", "--jobs", type=int, default=default_jobs, metavar="N")
     args = parser.parse_args()
-    if args.executable_base_path != None :
-        global tenzir_binary
-        global tenzir_node_binary
-        tenzir_binary = args.executable_base_path / "tenzir"
-        tenzir_node_binary = args.executable_base_path / "tenzir-node"
-        print(f"using tenzir_binary `{tenzir_binary}`")
-        print(f"using tenzir_node_binary `{tenzir_node_binary}`")
     if args.purge:
         for _, runner in runners.items():
             runner.purge()
@@ -851,10 +842,12 @@ def main() -> None:
     # Sort by test path (item[1])
     queue.sort(key=lambda tup: str(tup[1]), reverse=True)
     os.environ["TENZIR_EXEC__DUMP_DIAGNOSTICS"] = "true"
+    if not TENZIR_BINARY :
+        sys.exit(f"error: could not find TENZIR_BINARY executable `{TENZIR_BINARY}`")
     try:
         version = get_version()
     except FileNotFoundError:
-        sys.exit(f"error: could not find `{tenzir_binary}` executable")
+        sys.exit(f"error: could not find TENZIR_BINARY executable `{TENZIR_BINARY}`")
 
     print(f"{INFO} running {len(queue)} tests with v{version}")
 
