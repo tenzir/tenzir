@@ -34,7 +34,7 @@ struct operator_args {
                               f.field("max_size", x.max_size));
   }
 
-  std::string uri;
+  located<std::string> uri;
   std::vector<ast::field_path> by;
   std::string extension;
   pipeline writer;
@@ -215,6 +215,24 @@ auto get_extension(std::string_view method_name) -> std::string {
   return {};
 }
 
+auto make_saver(located<std::string_view> url, diagnostic_handler& dh)
+  -> failure_or<pipeline> {
+  // We need our own diagnostic handler here, as `parse_and_compile` will refer
+  // to locations in this pipeline.
+  auto collecter = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(collecter);
+  auto ctx = provider.as_session();
+  auto saver
+    = parse_and_compile(fmt::format("to {:?} {{ pass }}", url.inner), ctx);
+  for (auto&& diag : std::move(collecter).collect()) {
+    for (auto& annotation : diag.annotations) {
+      annotation.source = url.source;
+    }
+    dh.emit(std::move(diag));
+  }
+  return saver;
+}
+
 class to_hive final : public crtp_operator<to_hive> {
 public:
   to_hive() = default;
@@ -230,7 +248,7 @@ public:
     // TODO: Using `data` is not optimal, but okay for now.
     auto groups = std::unordered_map<data, group_t>{};
     auto next_id = size_t{0};
-    auto base_url = boost::urls::parse_uri_reference(args_.uri);
+    auto base_url = boost::urls::parse_uri_reference(args_.uri.inner);
     TENZIR_ASSERT(base_url);
     auto process = [&](table_slice slice) {
       auto by = std::vector<multi_series>{};
@@ -274,19 +292,8 @@ public:
           TENZIR_TRACE("creating saver with path {}", partitioned_url);
           // TODO: Even though we check this before with a test URL, this can
           // still fail afterwards in theory.
-          // We need our own diagnostic handler here, as `parse_and_compile`
-          // will refer to locations in this pipeline.
-          auto dh = collecting_diagnostic_handler{};
-          auto provider = session_provider::make(dh);
-          auto ctx = provider.as_session();
-          auto saver = parse_and_compile(
-            fmt::format("to \"{}\" {{pass}}", partitioned_url), ctx);
-          for (auto&& diag : std::move(dh).collect()) {
-            for (auto& annotation : diag.annotations) {
-              annotation.source = location::unknown;
-            }
-            ctrl.diagnostics().emit(std::move(diag));
-          }
+          auto saver = make_saver({partitioned_url, args_.uri.source},
+                                  ctrl.diagnostics());
           TENZIR_ASSERT(saver);
           it = groups.emplace_hint(it, std::move(key_data),
                                    group_t{args_.writer, std::move(*saver),
@@ -452,17 +459,9 @@ public:
       diagnostic::error("invalid URL `{}`", uri.inner).primary(uri).emit(ctx);
       return failure::promise();
     }
-    auto test_uri
-      = extend_url_path(*url_view, fmt::format("/0.{}", format.inner));
-    auto saver = pipeline::internal_parse(fmt::format("save {:?}", test_uri));
-    if (not saver) {
-      // There might be some exotic URL format's that are recognized by Boost
-      // but not by our internal URL parser.
-      diagnostic::error("unsupported URL format `{}`", test_uri)
-        .primary(uri)
-        .emit(ctx);
-      return failure::promise();
-    }
+    auto test_uri = extend_url_path(
+      *url_view, fmt::format("/__partitions__/0.{}", format.inner));
+    TRY(make_saver({test_uri, uri.source}, ctx));
     if (format.inner == "parquet" && max_size) {
       // TODO: This is not great.
       diagnostic::error(
@@ -477,7 +476,7 @@ public:
         = fmt::format("{}.{}", format.inner, get_extension(compression->inner));
     }
     return std::make_unique<to_hive>(operator_args{
-      .uri = fmt::to_string(*url_view),
+      .uri = located{fmt::to_string(*url_view), uri.source},
       .by = std::move(by),
       // TODO: Not always right.
       .extension = std::move(extension),
