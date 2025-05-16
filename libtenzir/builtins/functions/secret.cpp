@@ -17,20 +17,96 @@ namespace tenzir::plugins::secrets {
 
 namespace {
 
-class from_string final : public function_plugin {
+class secret final : public function_plugin {
 public:
   auto name() const -> std::string override {
-    return "secret::_from_string";
+    return "tql2.secret";
+  }
+
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
+    const auto v
+      = try_get_or(global_config, "tenzir.legacy-secret-model", false);
+    if (not v) {
+      return diagnostic::error("`tenzir.legacy-secret-model` must be a boolean")
+        .to_error();
+    }
+    legacy_ = *v;
+    if (not legacy_) {
+      return {};
+    }
+    auto secrets = try_get_or(global_config, "tenzir.secrets", record{});
+    if (not secrets) {
+      return diagnostic::error(secrets.error())
+        .note("configuration key `tenzir.secrets` must be a record")
+        .to_error();
+    }
+    for (const auto& [key, value] : *secrets) {
+      const auto* str = try_as<std::string>(&value);
+      if (not str) {
+        return diagnostic::error("secrets must be strings")
+          .note("configuration key `tenzir.secrets.{}` is of type `{}`", key,
+                type::infer(value).value_or(type{}).kind())
+          .to_error();
+      }
+      secrets_.emplace(key, *str);
+    }
+    return {};
   }
 
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
-    auto expr = ast::expression{};
-    TRY(argument_parser2::function(name())
-          .positional("value", expr, "string")
+    auto name = ast::expression{};
+    auto literal = false;
+    TRY(argument_parser2::function("secret")
+          .positional("name", name, "string")
+          .named_optional("_literal", literal)
           .parse(inv, ctx));
-    return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+    if (legacy_) {
+      return function_use::make([this, expr = std::move(name), literal](
+                                  evaluator eval, session ctx) -> series {
+        auto b = arrow::StringBuilder{};
+        check(b.Reserve(eval.length()));
+        for (auto& value : eval(expr)) {
+          auto f = detail::overload{
+            [&](const arrow::StringArray& array) {
+              for (auto i = int64_t{0}; i < array.length(); ++i) {
+                if (array.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                if (literal) {
+                  check(b.Append(array.GetView(i)));
+                }
+                const auto it = secrets_.find(array.GetView(i));
+                if (it == secrets_.end()) {
+                  diagnostic::warning("unknown secret `{}`", array.GetView(i))
+                    .primary(expr)
+                    .emit(ctx);
+                  check(b.AppendNull());
+                  continue;
+                }
+                check(b.Append(it->second));
+              }
+            },
+            [&](const arrow::NullArray&) {
+              check(b.AppendNulls(value.length()));
+            },
+            [&](const auto&) {
+              diagnostic::warning("expected `string`, got `{}`",
+                                  value.type.kind())
+                .primary(expr)
+                .emit(ctx);
+              check(b.AppendNulls(value.length()));
+            },
+          };
+          match(*value.array, f);
+        }
+        return series{string_type{}, finish(b)};
+      });
+    } else {
+      return function_use::make([expr = std::move(name), literal](
+                                  evaluator eval, session ctx) -> series {
         auto b = secret_type::builder_type{};
         check(b.Reserve(eval.length()));
         for (auto& value : eval(expr)) {
@@ -41,8 +117,10 @@ public:
                   check(b.AppendNull());
                   continue;
                 }
-                check(append_builder(secret_type{}, b,
-                                     secret::make_literal(array.GetView(i))));
+                check(append_builder(
+                  secret_type{}, b,
+                  literal ? ::tenzir::secret::make_literal(array.GetView(i))
+                          : ::tenzir::secret::make_managed(array.GetView(i))));
               }
             },
             [&](const arrow::NullArray&) {
@@ -60,81 +138,16 @@ public:
         }
         return series{secret_type{}, finish(b)};
       });
-  }
-};
-
-class lookup final : public function_plugin {
-public:
-  auto name() const -> std::string override {
-    return "secret::_lookup";
+    }
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
-    auto expr = ast::expression{};
-    TRY(argument_parser2::function(name())
-          .positional("name", expr, "string")
-          .parse(inv, ctx));
-    return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = secret_type::builder_type{};
-        check(b.Reserve(eval.length()));
-        for (auto& value : eval(expr)) {
-          auto f = detail::overload{
-            [&](const arrow::StringArray& array) {
-              for (auto i = int64_t{0}; i < array.length(); ++i) {
-                if (array.IsNull(i)) {
-                  check(b.AppendNull());
-                  continue;
-                }
-                check(append_builder(secret_type{}, b,
-                                     secret::make_managed(array.GetView(i))));
-              }
-            },
-            [&](const auto&) {
-              diagnostic::warning("expected `string`, got `{}`",
-                                  value.type.kind())
-                .primary(expr)
-                .emit(ctx);
-              check(b.AppendNulls(value.length()));
-            },
-          };
-          match(*value.array, f);
-        }
-        return series{secret_type{}, finish(b)};
-      });
-  }
-};
-
-class secret final : public function_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.secret";
-  }
-
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
-    auto name = std::string{};
-    TRY(argument_parser2::function("secret")
-          .positional("name", name)
-          .parse(inv, ctx));
-    return function_use::make(
-      [name = std::move(name)](evaluator eval, session) -> series {
-        auto b = secret_type::builder_type{};
-        check(b.Reserve(eval.length()));
-        for (int64_t i = 0; i < eval.length(); ++i) {
-          check(append_builder(secret_type{}, b,
-                               ::tenzir::secret::make_managed(name)));
-        }
-        return series{secret_type{}, finish(b)};
-      });
-  }
+private:
+  bool legacy_ = false;
+  detail::heterogeneous_string_hashmap<std::string> secrets_ = {};
 };
 
 } // namespace
 
 } // namespace tenzir::plugins::secrets
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::from_string)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::lookup)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::secrets::secret)

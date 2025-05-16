@@ -8,20 +8,30 @@ secret(name:string) -> secret
 
 ## Description
 
-The `secret` function retrieves the value associated with the key `name`.
-
 The secret is first looked up locally in the environment or configuration of the
 Tenzir Node. A `tenzir` client process can use secrets only if it has a Tenzir
 Node to connect to.
-If the secret is not found in the Node, a request is made to the Tenzir Platform.
+
+If the secret is not found in the node, a request is made to the Tenzir Platform.
 Should the platform also not be able to find the secret, an error is raised.
 
-See the [Explanation page for secrets](../../../docs/secrets/README.md) for more
+See the [explanation page for secrets](../../../docs/secrets/README.md) for more
 details.
 
 ### `name: string`
 
 The name of the secret to use. This must be a constant.
+
+## Legacy Model
+
+The configuration option `tenzir.legacy-secret-model` can be used to change the
+behavior of the `secret` function to return a `string` instead of a `secret`.
+
+When using the legacy model, only secrets from the Tenzir Node's configuration
+can be used, no secrets from the Tenzir Platform's secret store will be
+available.
+
+We do not recommend enabling this option.
 
 ## Examples
 
@@ -31,7 +41,7 @@ The name of the secret to use. This must be a constant.
 load_tcp "127.0.0.1:4000",{
   read_ndjson
 }
-to_splunk "localhost", hec_token=secret("splunk_hec_token")
+to_splunk "https://localhost:8088", hec_token=secret("splunk_hec_token")
 ```
 
 ### Secrets are not rendered in output
@@ -40,7 +50,7 @@ to_splunk "localhost", hec_token=secret("splunk_hec_token")
 from {x: secret("geheim")}
 ```
 ```tql
-{x: secret("geheim")}
+{x: "***" }
 ```
 
 ## See also

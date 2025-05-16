@@ -87,7 +87,7 @@ public:
                                             view<blob>>) {
         h(value);
       } else if constexpr (std::same_as<view_type, view<secret>>) {
-        h(value.bytes());
+        h(as_bytes(value));
       } else if constexpr (detail::is_any_v<view_type, view<pattern>>) {
         h(value.string());
       } else if constexpr (detail::is_any_v<view_type, view<list>, view<map>,

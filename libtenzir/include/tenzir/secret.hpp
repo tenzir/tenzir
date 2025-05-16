@@ -39,11 +39,6 @@ public:
   secret_common(FlatbufferType buffer) : buffer{std::move(buffer)} {
   }
 
-  auto print_to(auto& it) const -> bool {
-    it = fmt::format_to(it, "****");
-    return true;
-  }
-
   template <typename T1, typename T2>
   friend auto
   operator<=>(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
@@ -58,16 +53,13 @@ public:
     return f.object(x).fields(f.field("buffer", x.buffer));
   }
 
-  auto bytes() const -> std::span<const std::byte> {
-    return std::span{buffer.chunk()->data(), buffer.chunk()->size()};
-  }
-
-  auto prepend(std::string_view literal) const
-    -> secret_common<owning_fbs_buffer>;
-  auto append(std::string_view literal) const
-    -> secret_common<owning_fbs_buffer>;
-  auto append(const secret_common<viewing_fbs_buffer>& other) const
-    -> secret_common<owning_fbs_buffer>;
+  /// Creates a new secret with `literal` prepended to it.
+  auto with_prepended(std::string_view literal) const -> secret;
+  /// Creates a new secret with `literal` appended to it.
+  auto with_appended(std::string_view literal) const -> secret;
+  /// Creates a new secret with the contents of `other` appended to it.
+  auto with_appended(const secret_common<viewing_fbs_buffer>& other) const
+    -> secret;
 
   FlatbufferType buffer;
 };
@@ -75,19 +67,11 @@ public:
 extern template class secret_common<owning_fbs_buffer>;
 extern template class secret_common<viewing_fbs_buffer>;
 
-template <typename BlobType>
-auto to_string(const secret_common<BlobType>& v) {
-  auto s = std::string{};
-  auto it = std::back_inserter(s);
-  TENZIR_ASSERT(v.print_to(it));
-  return s;
-}
-
 template <typename T1, typename T2>
 auto operator<=>(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
   -> std::partial_ordering {
-  const auto l = lhs.bytes();
-  const auto r = rhs.bytes();
+  const auto l = as_bytes(lhs.buffer);
+  const auto r = as_bytes(rhs.buffer);
   if (l.size() != r.size()) {
     return std::partial_ordering::unordered;
   }
@@ -103,16 +87,22 @@ auto operator==(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
   return (lhs <=> rhs) == std::partial_ordering::equivalent;
 }
 
+template <typename FlatbufferType>
+auto as_bytes(const secret_common<FlatbufferType>& s)
+  -> std::span<const std::byte> {
+  return as_bytes(s.buffer);
+}
+
 /// If we dont manually implement this, we run into some issues with the
 /// recursive `hash_inspector`.
 template <class HashAlgorithm, typename FlatbufferType>
 void hash_append(HashAlgorithm& h, const secret_common<FlatbufferType>& s) {
-  return hash_append(h, s.bytes());
+  return hash_append(h, as_bytes(s));
 }
 
 } // namespace detail::secrets
 
-/// @relates detail::secret::secret_common
+/// @relates detail::secrets::secret_common
 class secret final
   : public detail::secrets::secret_common<detail::secrets::owning_fbs_buffer> {
 public:
@@ -121,11 +111,6 @@ public:
   friend class secret_view;
   using impl::impl;
 
-  secret(const impl& base) : impl{base} {
-  }
-  secret(impl&& base) : impl{std::move(base)} {
-  }
-
   secret(std::string_view name, std::string_view operations, bool is_literal);
 
   static auto make_literal(std::string_view value) -> secret;
@@ -133,7 +118,7 @@ public:
   static auto from_fb(const fbs::data::Secret*) -> secret;
 };
 
-/// @relates detail::secret::secret_common
+/// @relates detail::secrets::secret_common
 /// TODO: Currently a `secret_view` is identical to a `secret`, because both use
 /// the owning tenzir::flatbuffer wrapper. We ideally want a non-owning version
 /// of `flatbuffer` that does not hold a `chunk_ptr`, but only the `Table*`.
@@ -144,10 +129,6 @@ public:
     = detail::secrets::secret_common<detail::secrets::viewing_fbs_buffer>;
   using impl::impl;
 
-  secret_view(const impl& base) : impl{base} {
-  }
-  secret_view(impl&& base) : impl{std::move(base)} {
-  }
   secret_view(const secret& s);
 };
 
@@ -165,13 +146,56 @@ void hash_append(HashAlgorithm& h, const secret_view& s) {
   return hash_append(h, static_cast<const secret_view::impl&>(s));
 }
 
+} // namespace tenzir
+
+namespace fmt {
+
+template <>
+struct formatter<::tenzir::secret> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const ::tenzir::secret&, FormatContext& ctx) const {
+    return fmt::format_to(ctx.out(), "***");
+  }
+};
+
+template <>
+struct formatter<::tenzir::secret_view> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const ::tenzir::secret_view&, FormatContext& ctx) const {
+    return fmt::format_to(ctx.out(), "***");
+  }
+};
+
+} // namespace fmt
+
+namespace tenzir {
+
+inline auto to_string(const secret& s) -> std::string {
+  return fmt::format("{}", s);
+}
+
+inline auto to_string(const secret_view& s) -> std::string {
+  return fmt::format("{}", s);
+}
+
 template <class T>
 struct secret_printer : printer_base<secret_printer<T>> {
   using attribute = T;
 
   template <class Iterator>
-  bool print(Iterator& out, const attribute& x) const {
-    return x.print_to(out);
+  bool print(Iterator& out, const attribute&) const {
+    std::ranges::copy("***", out);
+    return true;
   }
 };
 
@@ -184,30 +208,4 @@ template <>
 struct printer_registry<secret_view> {
   using type = secret_printer<secret_view>;
 };
-
 } // namespace tenzir
-
-namespace fmt {
-
-template <typename BlobType>
-struct formatter<tenzir::detail::secrets::secret_common<BlobType>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const tenzir::detail::secrets::secret_common<BlobType>& secret,
-              FormatContext& ctx) const {
-    auto it = ctx.out();
-    secret.print_to(it);
-    return it;
-  }
-};
-
-template <>
-struct formatter<tenzir::secret> : formatter<tenzir::secret::impl> {};
-
-template <>
-struct formatter<tenzir::secret_view> : formatter<tenzir::secret_view::impl> {};
-} // namespace fmt

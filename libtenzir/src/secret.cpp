@@ -41,6 +41,7 @@ auto create_buffer_with(std::string_view name, std::string_view operations,
     create_element(fbb, name, operations, is_literal));
   return create_buffer(fbb, &element_offsets);
 }
+
 auto copy_from_to(flatbuffers::FlatBufferBuilder& fbb,
                   const fbs::data::Secret* ptr, elements_offsets_t& out) {
   for (const auto* e : *(ptr->elements())) {
@@ -68,6 +69,7 @@ auto create_buffer_with_prepend(std::string_view literal,
   copy_from_to(fbb, ptr, element_offsets);
   return create_buffer(fbb, &element_offsets);
 }
+
 auto create_buffer_with_append(const fbs::data::Secret* ptr,
                                std::string_view literal) {
   TENZIR_ASSERT(ptr);
@@ -77,6 +79,7 @@ auto create_buffer_with_append(const fbs::data::Secret* ptr,
   element_offsets.emplace_back(create_element(fbb, literal, {}, true));
   return create_buffer(fbb, &element_offsets);
 }
+
 auto create_joined_buffer(const fbs::data::Secret* left,
                           const fbs::data::Secret* right) {
   TENZIR_ASSERT(left);
@@ -92,19 +95,20 @@ auto create_joined_buffer(const fbs::data::Secret* left,
 namespace detail::secrets {
 
 template <typename FlatbufferType>
-auto secret_common<FlatbufferType>::append(std::string_view literal) const
-  -> secret_common<owning_fbs_buffer> {
-  return {create_buffer_with_append(&*buffer, literal)};
-}
-template <typename FlatbufferType>
-auto secret_common<FlatbufferType>::prepend(std::string_view literal) const
-  -> secret_common<owning_fbs_buffer> {
+auto secret_common<FlatbufferType>::with_prepended(
+  std::string_view literal) const -> secret {
   return {create_buffer_with_prepend(literal, &*buffer)};
 }
+
 template <typename FlatbufferType>
-auto secret_common<FlatbufferType>::append(
-  const secret_common<viewing_fbs_buffer>& other) const
-  -> secret_common<owning_fbs_buffer> {
+auto secret_common<FlatbufferType>::with_appended(std::string_view literal) const
+  -> secret {
+  return {create_buffer_with_append(&*buffer, literal)};
+}
+
+template <typename FlatbufferType>
+auto secret_common<FlatbufferType>::with_appended(
+  const secret_common<viewing_fbs_buffer>& other) const -> secret {
   return {create_joined_buffer(&*buffer, &*other.buffer)};
 }
 

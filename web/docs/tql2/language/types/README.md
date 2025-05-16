@@ -28,6 +28,16 @@ types exist:
 | `blob`     | An arbitrary sequence of bytes
 | `ip`       | An IPv4 or IPv6 address
 | `subnet`   | An IPv4 or IPv6 subnet
+| `secret`   | A secret value
+
+#### Secrets
+
+The `secret` type is a special type created by the [`secret`](../../functions/secret.md)
+function. Secrets can only be used as arguments for operators that accept them
+and only support a limited set of operations, such as concatenation.
+
+See the [explanation page for secrets](../../../secrets/README.md) for more
+details.
 
 ### Complex Types
 
