@@ -45,6 +45,7 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
+    co_yield {};
   }
 
   auto name() const -> std::string override {
