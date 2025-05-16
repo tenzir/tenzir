@@ -1,0 +1,6 @@
+tenzir:
+  operators:
+    foo: |
+      bar
+    bar: |
+      foo

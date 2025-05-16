@@ -28,12 +28,18 @@ public:
     config_ = global_config;
     // This one's very noisy and not particularly user-facing, so we hide it.
     config_.erase("caf");
-    // This one really shouldn't be exposed.
     if (auto* tenzir = get_if<record>(&config_, "tenzir")) {
+      // Remove secrets.
       tenzir->erase("secrets");
       tenzir->erase("token");
+      // This one's an implementation detail of the test runner, and if we don't
+      // delete it then it may unexpectedly show up when using the `config()`
+      // function in tests.
+      tenzir->erase("disable-banner");
+      // This one's an implementation detail of the Nix-created Docker image.
+      tenzir->erase("runtime-prefix");
     }
-    // And neither these ones.
+    // Remove some more secrets.
     if (auto* platform = get_if<record>(&config_, "plugins.platform")) {
       platform->erase("token");
       platform->erase("tenant-id");
