@@ -153,11 +153,37 @@ restarts.
 
 ## Other Changes
 
+### Infrastructure
+
+- We improved the `localdev` example setup for the Tenzir Platform. It now
+  contains a Tenzir Node that is automatically connected to the local platform
+  instance and a CLI container with admin permissions. Additionally, users
+  of the `localdev` setup are now granted admin permissions by default.
+- We fixed a bug in the alerts API that caused configured alerts to be only
+  activated after the next restart of the websocket gateway.
+- The new `TENZIR_PLATFORM_METRICS_STORE_S3_BUCKET_NAME` variable can be set
+  to a valid S3 bucket name. If set, the platform stores all pipeline metrics
+  it receives from connected Tenzir Nodes into this bucket.
+
+### Frontend
+
+- The URL format was changed and now contains the workspace id, making
+  it easier to share Tenzir Platform URLs with other users.
+  NOTE: There is no automatic redirect, so old pipeline share url will not
+  work anymore.
+- The y-axis ticks for stacked area and bar charts were fixed.
+- Fixed rendering of blobs in the `Data.Blob` component.
+- Added BITZ and TQL as downloadable formats for events.
+- Fixed an issue where pie chart colors were sometimes incorrect in the dashboard.
+
+### CLI
+
 - We replaced the `--dry-run` option for the `tenzir-platform admin add-auth-rule`
   commands with the new `tenzir-platform tools print-auth-rule` commands.
-- We added a Tenzir Node to the `localdev` example setup for the Tenzir Platform
-  that automatically connects to the local setup.
-- [...]
+- The Tenzir Platform CLI now automatically authenticates using the client
+  credentials flow when a client secret is provided as environment variable.
+- The Tenzir Platform CLI now supports device code flow authentication for IdP's
+  without a complete verification URL (like Microsoft Entra)
 
 ## Join Us for Office Hours
 
