@@ -1,5 +1,5 @@
 ---
-title: "Tenzir Platform v1.10: A New Explorer"
+title: "Tenzir Platform v1.10: Restructured Layout and Static Workspaces"
 slug: tenzir-platform-v1.10
 authors: [lava]
 date: 2025-05-16
