@@ -23,6 +23,10 @@ auto eval(const ast::expression& expr, const table_slice& input,
 auto eval(const ast::field_path& expr, const table_slice& input,
           diagnostic_handler& dh) -> series;
 
+// A constant always yields a single type.
+auto eval(const ast::constant& expr, const table_slice& input,
+          diagnostic_handler& dh) -> series;
+
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   -> failure_or<data>;
 
