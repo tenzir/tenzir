@@ -211,9 +211,6 @@ config:
         disable: true
   # Disable all pipelines and contexts in the package.
   disabled: true
-  # Disable all pipelines and contexts in the package if the env variable holds
-  # the value `true`.
-  disabled-env: DISABLE_MY_PACKAGE
   # Opaque extra data that is ignored by the node.
   metadata:
     ansible:
