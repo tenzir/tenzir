@@ -4,7 +4,7 @@ Saves a byte stream to a Apache Kafka topic.
 
 ```tql
 save_kafka topic:string, [key=string, timestamp=time, options=record,
-          aws_iam=record]
+           aws_iam=record]
 ```
 
 ## Description

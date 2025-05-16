@@ -4,9 +4,9 @@ Sends unstructured events to a Google SecOps Chronicle instance.
 
 ```tql
 to_google_secops customer_id=string, private_key=string, client_email=string,
-                log_type=string, log_text=string, [region=string,
-                timestamp=time, labels=record, namespace=string,
-                max_request_size=int, batch_timeout=duration]
+                 log_type=string, log_text=string, [region=string,
+                 timestamp=time, labels=record, namespace=string,
+                 max_request_size=int, batch_timeout=duration]
 ```
 
 ## Description

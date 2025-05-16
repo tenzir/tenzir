@@ -16,7 +16,7 @@ Absolute path of file to read.
 
 ### `binary = bool (optional)`
 
-If to read the file contents as a `blob`, instead of a `string`.
+Whether to read the file contents as a `blob`, instead of a `string`.
 
 Defaults to `false`.
 

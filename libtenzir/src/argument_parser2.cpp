@@ -423,15 +423,19 @@ auto argument_parser2::usage() const -> std::string {
     }
     if (pipeline_last != pipeline_last_t::none) {
       auto is_optional = pipeline_last == pipeline_last_t::opt;
-      if (is_optional and not in_brackets) {
+      if (in_brackets) {
+        if (is_optional) {
+          usage_cache_ += ' ';
+        } else {
+          usage_cache_ += "] ";
+          in_brackets = false;
+        }
+      } else if (is_optional) {
+        if (std::exchange(has_previous, true)) {
+          usage_cache_ += " ";
+        }
         usage_cache_ += '[';
         in_brackets = true;
-      } else if (not is_optional and in_brackets) {
-        usage_cache_ += ']';
-        in_brackets = false;
-      }
-      if (std::exchange(has_previous, true)) {
-        usage_cache_ += " ";
       }
       usage_cache_ += "{ … }";
     }

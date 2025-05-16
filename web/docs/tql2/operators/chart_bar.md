@@ -5,7 +5,7 @@ Visualizes events on an bar chart.
 ```tql
 chart_bar x|label=field, y|value=any,
           [x_min=any, x_max=any, y_min=any, y_max=any, resolution=duration,
-          fill=any, x_log=bool, y_log=bool, group=any, position=string]
+           fill=any, x_log=bool, y_log=bool, group=any, position=string]
 ```
 
 ## Description
