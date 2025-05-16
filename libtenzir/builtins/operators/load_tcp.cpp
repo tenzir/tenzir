@@ -285,10 +285,10 @@ public:
 
   friend auto inspect(auto& f, load_tcp_sink_operator& x) -> bool {
     return f.object(x).fields(
-      f.field("connection-manager", x.connection_manager_),
-      f.field("peer-field", x.peer_field_), f.field("peer-ip", x.peer_ip_),
-      f.field("peer-port", x.peer_port_),
-      f.field("peer-hostname", x.peer_hostname_));
+      f.field("connection_manager", x.connection_manager_),
+      f.field("peer_field", x.peer_field_), f.field("peer_ip", x.peer_ip_),
+      f.field("peer_port", x.peer_port_),
+      f.field("peer_hostname", x.peer_hostname_));
   }
 
 private:
@@ -650,7 +650,7 @@ struct connection_manager_state {
       }
     }
     // Resolve the peer endpoint.
-    const auto& peer_endpoint = connection->socket->local_endpoint();
+    const auto& peer_endpoint = connection->socket->remote_endpoint();
     auto resolver = boost::asio::ip::tcp::resolver{*io_ctx};
     const auto resolved_peer = resolver.resolve(peer_endpoint);
     // Set up and spawn the nested pipeline.
