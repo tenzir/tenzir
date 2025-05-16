@@ -2,13 +2,13 @@
 title: "Tenzir Platform v1.10: A New Explorer"
 slug: tenzir-platform-v1.10
 authors: [lava]
-date: 2025-05-15
+date: 2025-05-16
 tags: [release, platform]
 comments: true
 ---
 
 Today, we're releasing [Tenzir Platform v1.10][github-release], featuring
-a revamped Nodes page and the option to statically define a set of workspaces
+a restructed page layout and the option to statically define workspaces
 in an on-prem environment.
 
 ![Tenzir Platform v1.10](tenzir-platform-v1.10.svg)
@@ -17,7 +17,7 @@ in an on-prem environment.
 
 <!-- truncate -->
 
-## The Nodes Page
+## Restructured Nodes Page
 
 With this release, we reordered the page layout for better overview and
 usability.
@@ -123,14 +123,15 @@ workspaces:
               where not internal
               summarize events=sum(events), schema
               sort -events
-            type: "chart"
+            type: table
             x: 0
             y: 0
             w: 12
             h: 12
 ```
 
-Dashboards are arranged in a virtual grid of size 24x24.
+Dashboards are arranged in a virtual grid of width 24, so the constraint
+`x+w <= 24` must be obeyed when setting dashboard coordinates.
 
 Please note that while it is possible to update dashboards defined like this
 at runtime, they will reset to their original state every time the platform
