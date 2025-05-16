@@ -19,7 +19,28 @@ in an on-prem environment.
 
 ## The Nodes Page
 
-[...]
+With this release, we reordered the page layout for better overview and
+usability.
+
+In particular, the Explorer, Pipelines and Contexts tabs are now combined into
+a single, top-level Nodes tab. In addition, the Installed Packages tab from
+the library also got moved into this new nodes page.
+
+![Nodes Page Layout](layout.png)
+
+Now, all the information related to one node is concentrated in one page,
+which makes it easier to get to it at a glance.
+
+In the near future, we're planning to add a lot of additional utilites to
+the nodes page, which will allow even more insights into the state of
+your fleet.
+
+The library has also been redesigned, and can now be filtered by
+different subcategories:
+
+![Library Page Layout](library.png)
+
+This makes it easier to find exactly the package you're looking for.
 
 ## Static Workspaces and Ephemeral Nodes
 
