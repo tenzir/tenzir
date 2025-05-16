@@ -36,7 +36,12 @@ EOF
     UV="$(dirname "$(command -v tenzir)")/../libexec/uv"
   fi
 
-  ${UV} run --with trustme --directory "${certdir}" "${certdir}/script.py"
+  # It seems to be impossible to tell uv to skip its own package index with
+  # uv run --with. We work around that by using the script dependencies stanza
+  # mode but only if the dependency is not already available.
+  python3 -m trustme --help || ${UV} add --script "${certdir}/script.py" trustme
+
+  ${UV} run --directory "${certdir}" "${certdir}/script.py"
 
   key_and_cert="${certdir}/server.pem"
   cafile="${certdir}/ca.pem"
