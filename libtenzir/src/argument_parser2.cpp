@@ -116,6 +116,15 @@ auto argument_parser2::parse(const ast::entity& self,
             }
           }
         }
+        if constexpr (std::same_as<T, secret>) {
+          if (not cast) {
+            auto* other = try_as<std::string>(&*value);
+            if (other) {
+              value = secret::make_literal(*other);
+              cast = try_as<secret>(&*value);
+            }
+          }
+        }
         if (not cast) {
           emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
                                  type_kind::of<data_to_type_t<T>>, kind(*value))
@@ -227,6 +236,15 @@ auto argument_parser2::parse(const ast::entity& self,
                   }
                   value = static_cast<uint64_t>(*other);
                   cast = try_as<T>(&*value);
+                }
+              }
+            }
+            if constexpr (std::same_as<T, secret>) {
+              if (not cast) {
+                auto* other = try_as<std::string>(&*value);
+                if (other) {
+                  value = secret::make_literal(*other);
+                  cast = try_as<secret>(&*value);
                 }
               }
             }

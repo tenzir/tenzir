@@ -100,6 +100,33 @@ namespace {
 template <ast::binary_op Op, class L, class R>
 struct BinOpKernel;
 
+template <>
+struct BinOpKernel<ast::binary_op::add, secret_type, secret_type> {
+  using result = secret;
+  static auto evaluate(secret_view l, secret_view r)
+    -> std::variant<result, const char*> {
+    return secret{l.with_appended(r)};
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::add, string_type, secret_type> {
+  using result = secret;
+  static auto evaluate(view<std::string> l, secret_view r)
+    -> std::variant<result, const char*> {
+    return secret{r.with_prepended(l)};
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::add, secret_type, string_type> {
+  using result = secret;
+  static auto evaluate(secret_view l, view<std::string> r)
+    -> std::variant<result, const char*> {
+    return secret{l.with_appended(r)};
+  }
+};
+
 template <ast::binary_op Op, integral_type L, integral_type R>
   requires(is_arithmetic(Op))
 struct BinOpKernel<Op, L, R> {

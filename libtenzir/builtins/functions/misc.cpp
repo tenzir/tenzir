@@ -84,84 +84,6 @@ public:
   }
 };
 
-class secret final : public function_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.secret";
-  }
-
-  auto initialize(const record& plugin_config, const record& global_config)
-    -> caf::error override {
-    TENZIR_UNUSED(plugin_config);
-    auto secrets = try_get_or(global_config, "tenzir.secrets", record{});
-    if (not secrets) {
-      return diagnostic::error(secrets.error())
-        .note("configuration key `tenzir.secrets` must be a record")
-        .to_error();
-    }
-    for (const auto& [key, value] : *secrets) {
-      const auto* str = try_as<std::string>(&value);
-      if (not str) {
-        return diagnostic::error("secrets must be strings")
-          .note("configuration key `tenzir.secrets.{}` is of type `{}`", key,
-                type::infer(value).value_or(type{}).kind())
-          .to_error();
-      }
-      secrets_.emplace(key, *str);
-    }
-    return {};
-  }
-
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
-    auto expr = ast::expression{};
-    TRY(argument_parser2::function("secret")
-          .positional("key", expr, "string")
-          .parse(inv, ctx));
-    return function_use::make(
-      [this, expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto b = arrow::StringBuilder{};
-        check(b.Reserve(eval.length()));
-        for (auto& value : eval(expr)) {
-          auto f = detail::overload{
-            [&](const arrow::StringArray& array) {
-              for (auto i = int64_t{0}; i < array.length(); ++i) {
-                if (array.IsNull(i)) {
-                  check(b.AppendNull());
-                  continue;
-                }
-                const auto it = secrets_.find(array.GetView(i));
-                if (it == secrets_.end()) {
-                  diagnostic::warning("unknown secret `{}`", array.GetView(i))
-                    .primary(expr)
-                    .emit(ctx);
-                  check(b.AppendNull());
-                  continue;
-                }
-                check(b.Append(it->second));
-              }
-            },
-            [&](const arrow::NullArray&) {
-              check(b.AppendNulls(value.length()));
-            },
-            [&](const auto&) {
-              diagnostic::warning("expected `string`, got `{}`",
-                                  value.type.kind())
-                .primary(expr)
-                .emit(ctx);
-              check(b.AppendNulls(value.length()));
-            },
-          };
-          match(*value.array, f);
-        }
-        return series{string_type{}, finish(b)};
-      });
-  }
-
-private:
-  detail::heterogeneous_string_hashmap<std::string> secrets_ = {};
-};
-
 class env final : public function_plugin {
 public:
   auto name() const -> std::string override {
@@ -650,7 +572,6 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_of)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::secret)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::network)

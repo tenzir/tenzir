@@ -207,8 +207,7 @@ class save_plugin final : public virtual operator_plugin2<saver> {
       args.endpoint.erase(0, 5);
       args.endpoint.insert(0, "smtp");
     }
-    TRY(args.transfer_opts.ssl.validate(
-      located{args.endpoint, location::unknown}, ctx));
+    TRY(args.transfer_opts.ssl.validate(args.endpoint, location::unknown, ctx));
     if (to.inner.empty()) {
       diagnostic::error("empty recipient specified").primary(to).emit(ctx);
       return failure::promise();

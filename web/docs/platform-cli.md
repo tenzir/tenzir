@@ -81,6 +81,112 @@ following images:
 - `tenzir/tenzir:latest` to use the last release.
 - `tenzir/tenzir:main` to use the currnet development version.
 
+## Manage Secrets
+
+The Tenzir Platform provides storage of secrets, which can be accessed by pipelines running on a Tenzir Node.
+
+### Synopsis
+
+```
+  tenzir-platform secret add <name> [--file=<file>] [--value=<value>] [--env]
+  tenzir-platform secret update <secret_id> [--file=<file>] [--value=<value>] [--env]
+  tenzir-platform secret delete <secret_id>
+  tenzir-platform secret list [--json]
+```
+
+### Description
+
+The following commands allow for managing secrets in the Tenzir Platform. Secrets can be securely stored and accessed by pipelines running on nodes.
+
+- `tenzir-platform secret add` adds a new secret to the platform. The secret value can be provided directly via the `--value` option, read from a file using the `--file` option, or sourced from an environment variable using the `--env` flag. The secret is identified by the provided `<name>`.
+
+- `tenzir-platform secret update` updates an existing secret identified by `<secret_id>`. Similar to adding a secret, the new value can be provided via `--value`, `--file`, or `--env`.
+
+- `tenzir-platform secret delete` removes a secret from the platform. The secret to be deleted is identified by its `<secret_id>`.
+
+- `tenzir-platform secret list` lists all secrets available in the platform. The `--json` flag can be used to output the list in JSON format for easier integration with other tools.
+
+#### `<name>`
+
+The unique name to identify the secret. This name is used when accessing the secret in pipelines.
+
+#### `<secret_id>`
+
+The unique identifier of the secret, as shown in the output of `tenzir-platform secret list`.
+
+#### `--file=<file>`
+
+Specifies a file containing the secret value. The file's contents will be securely stored as the secret value.
+
+#### `--value=<value>`
+
+Specifies the secret value directly as a command-line argument.
+
+#### `--env`
+
+Indicates that the secret value should be sourced from an environment variable. The environment variable must be set before running the command.
+
+#### `--json`
+
+Outputs the list of secrets in JSON format when used with the `tenzir-platform secret list` command.
+
+## Manage External Secret Stores
+
+Instead of using the built-in secret store of the Tenzir Platform, users can
+configure their workspaces to use secrets from an external secret store.
+
+At the moment, only AWS Secrets Manager is supported as an external store,
+although we're planning to add more options in the near future.
+
+By default, external secret stores are mounted read-only, ie. it will not be
+possible to add or update secrets from the CLI or the web interface. Some
+external secret store implementations may offer options to also allow write
+access to the secrets.
+
+### Synopsis
+
+```sh
+tenzir-platform secret store add aws
+    --region=<region>
+    --assumed-role-arn=<assumed_role_arn>
+    [--name=<name>]
+    [--prefix=<prefix>]
+    [--access-key-id=<key_id>]
+    [--secret-access-key=<key>]
+tenzir-platform secret store set-default <store_id>
+tenzir-platform secret store delete <store_id>
+tenzir-platform secret store list [--json]
+```
+
+### Description
+
+When the Tenzir Node accesses a secret by using the `secret("foo")` function
+in a pipeline, the Tenzir Platform will look up the secret with the name `foo`
+in the default secret store of that node's workspace and return the secret
+value to the node.
+
+When using an external secret store, the Tenzir Platform needs to have the
+necessary permissions to read secret value from that store.
+
+For the AWS Secrets Manager, the Tenzir Platform uses STS to assume a role with
+the necessary permissions. It is your responsibility to create that role and
+
+1) Create an IAM user. Download access keys and pass them via the `--access-key-id`
+   and `--secret-access-key` arguments. This approach is the easiest to set up,
+   but only acceptable for self-hosted testing or development instances of the
+   Tenzir Platform because it stores long-term credentials in the Tenzir Platform.
+
+2) Assign the permissions to the task role of the websocket gateway.
+   This the recommended option for users running the Sovereign Edition of the
+   Platform and deployed it to their own AWS account.
+
+3) Assign the permission to assume the configured role to Tenzir's AWS account
+   with the id `660178929208`. This option will only work with our publicly
+   hosted platform instance on `https://app.tenzir.com`.
+
+We're working on expanding this to offer an OIDC-based option as well, as an
+alternative to options (1) and (3) above.
+
 ## Manage Alerts
 
 ### Synopsis

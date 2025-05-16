@@ -281,11 +281,13 @@ def run_simple_test(
         output = output.replace(str(ROOT).encode() + b"/", b"")
         good = completed.returncode == 0
     except subprocess.TimeoutExpired:
-        report_failure(test, "")
+        report_failure(test, f'└─▶ \033[31msubprocess hit {test_config["timeout"]}s timeout\033[0m')
         return False
     except subprocess.CalledProcessError as e:
-        report_failure(test, f'└─▶ \033[31msubprocess error "{e}":\033[0m')
+        report_failure(test, f'└─▶ \033[31msubprocess error: {e}\033[0m')
         return False
+    except Exception as e :
+        report_failure(test, f'└─▶ \033[31munexpected exception: {e}\033[0m')
     if test_config["error"] == good:
         report_failure(
             test, f"┌─▶ \033[31mgot unexpected exit code {completed.returncode}\033[0m"
@@ -840,10 +842,12 @@ def main() -> None:
     # Sort by test path (item[1])
     queue.sort(key=lambda tup: str(tup[1]), reverse=True)
     os.environ["TENZIR_EXEC__DUMP_DIAGNOSTICS"] = "true"
+    if not TENZIR_BINARY :
+        sys.exit(f"error: could not find TENZIR_BINARY executable `{TENZIR_BINARY}`")
     try:
         version = get_version()
     except FileNotFoundError:
-        sys.exit(f"error: could not find `{TENZIR_BINARY}` executable")
+        sys.exit(f"error: could not find TENZIR_BINARY executable `{TENZIR_BINARY}`")
 
     print(f"{INFO} running {len(queue)} tests with v{version}")
 
