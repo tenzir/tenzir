@@ -151,13 +151,13 @@ While it is possible to update dashboards defined like this
 at runtime, they reset to their original state every time the platform
 restarts.
 
-
 ## Other Changes
 
- - We replaced the `--dry-run` option for the `tenzir-platform admin add-auth-rule`
-   commands with the new `tenzir-platform tools print-auth-rule` commands.
- - [...]
-
+- We replaced the `--dry-run` option for the `tenzir-platform admin add-auth-rule`
+  commands with the new `tenzir-platform tools print-auth-rule` commands.
+- We added a Tenzir Node to the `localdev` example setup for the Tenzir Platform
+  that automatically connects to the local setup.
+- [...]
 
 ## Join Us for Office Hours
 
