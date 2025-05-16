@@ -176,7 +176,7 @@ The selected namespace will determine the *default* access rules for the
 workspace:
 
 - For a user workspace, a single access rule will be created that allows
-  access to the user whose user id matches the given `owner_id`
+  access to the user whose user id matches the given `owner_id`.
 - For an organization workspace, no rules will be created by default and
   they have to be manually added using the `add-auth-rule` subcommand
   described below.
