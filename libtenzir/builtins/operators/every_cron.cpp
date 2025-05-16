@@ -6,537 +6,397 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/compile_ctx.hpp>
-#include <tenzir/concept/parseable/string/char_class.hpp>
-#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/detail/croncpp.hpp>
-#include <tenzir/detail/string_literal.hpp>
-#include <tenzir/detail/weak_run_delayed.hpp>
-#include <tenzir/error.hpp>
-#include <tenzir/exec.hpp>
-#include <tenzir/finalize_ctx.hpp>
-#include <tenzir/ir.hpp>
-#include <tenzir/logger.hpp>
-#include <tenzir/parser_interface.hpp>
-#include <tenzir/pipeline.hpp>
-#include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
-#include <tenzir/tql2/eval.hpp>
+#include "tenzir/actors.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/croncpp.hpp"
+#include "tenzir/diagnostics.hpp"
+#include "tenzir/operator_control_plane.hpp"
+#include "tenzir/pipeline.hpp"
+#include "tenzir/pipeline_executor.hpp"
+#include "tenzir/plugin.hpp"
+#include "tenzir/shared_diagnostic_handler.hpp"
+#include "tenzir/shutdown.hpp"
+#include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/exec.hpp"
+
 #include <tenzir/tql2/plugin.hpp>
 
-#include <arrow/type.h>
-#include <caf/typed_event_based_actor.hpp>
+#include <caf/actor_from_state.hpp>
+#include <caf/exit_reason.hpp>
 
-#include <string_view>
+#include <chrono>
+#include <queue>
 
 namespace tenzir::plugins::every_cron {
 
+TENZIR_ENUM(mode, every, cron);
+
 namespace {
 
-template <typename T>
-concept scheduler_concept
-  = requires(const T t, time::clock::time_point now, parser_interface& p) {
-      { t.next_after(now) } -> std::same_as<time::clock::time_point>;
-      { T::parse(p) } -> std::same_as<T>;
-      { T::name } -> std::convertible_to<std::string_view>;
-      { T::immediate } -> std::same_as<const bool&>;
-    };
+struct scheduler_traits {
+  using signatures = caf::type_list<
+    // Accepts events from the subpipeline.
+    auto(atom::push, table_slice events)->caf::result<void>,
+    // Forwards events into the parent pipeline.
+    auto(atom::pull)->caf::result<table_slice>>
+    // Accept diagnostics.
+    ::append_from<receiver_actor<diagnostic>::signatures>
+    // Accept metrics.
+    ::append_from<metrics_receiver_actor::signatures>;
+};
 
-/// This is the base template for all kinds of scheduled execution operators,
-/// such as the `every` and `cron` operators. The actual scheduling logic, CAF
-/// serialization and name are handled by the `Scheduler` template parameter
-template <scheduler_concept Scheduler>
-class scheduled_execution_operator final : public operator_base {
+using scheduler_actor = caf::typed_actor<scheduler_traits>;
+
+class internal_scheduler_sink_operator final
+  : public crtp_operator<internal_scheduler_sink_operator> {
 public:
-  scheduled_execution_operator() = default;
+  internal_scheduler_sink_operator() = default;
 
-  explicit scheduled_execution_operator(pipeline pipe, Scheduler scheduler,
-                                        operator_location location)
-    : pipe_{std::move(pipe)},
-      scheduler_{std::move(scheduler)},
-      location_{location} {
+  explicit internal_scheduler_sink_operator(scheduler_actor every_scheduler)
+    : scheduler_{std::move(every_scheduler)} {
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    auto result = pipe_.optimize(filter, order);
-    if (not result.replacement) {
-      return result;
-    }
-    auto* pipe = dynamic_cast<pipeline*>(result.replacement.get());
-    TENZIR_ASSERT(pipe);
-    result.replacement = std::make_unique<scheduled_execution_operator>(
-      std::move(*pipe), scheduler_, location_);
-    return result;
+  auto name() const -> std::string override {
+    return "internal-scheduler-sink";
   }
 
-  template <class Input, class Output>
-  auto run(operator_input input, operator_control_plane& ctrl) const
-    -> generator<Output> {
-    auto next_run = scheduler_.next_after(time::clock::now());
-    auto done = false;
-    co_yield {};
-    auto make_input = [&, input = std::move(input)]() mutable {
-      if constexpr (std::is_same_v<Input, std::monostate>) {
-        (void)next_run;
-        TENZIR_ASSERT(std::holds_alternative<std::monostate>(input));
-        return []() -> std::monostate {
-          return {};
-        };
-      } else {
-        TENZIR_ASSERT(std::holds_alternative<generator<Input>>(input));
-        auto typed_input = std::move(std::get<generator<Input>>(input));
-        // We prime the generator's coroutine manually so that we can use
-        // `unsafe_current()` in the adapted generator.
-        typed_input.begin();
-        return
-          [&, input = std::move(typed_input)]() mutable -> generator<Input> {
-            auto it = input.unsafe_current();
-            while (time::clock::now() < next_run and it != input.end()) {
-              co_yield std::move(*it);
-              ++it;
-            }
-            done = it == input.end();
-          };
-      }
-    }();
-    bool generate_output = Scheduler::immediate;
-    while (true) {
-      if (generate_output) {
-        auto gen = pipe_.instantiate(make_input(), ctrl);
-        if (not gen) {
-          diagnostic::error(gen.error()).emit(ctrl.diagnostics());
-          co_return;
-        }
-        auto typed_gen = std::get_if<generator<Output>>(&*gen);
-        TENZIR_ASSERT(typed_gen);
-        for (auto&& result : *typed_gen) {
-          co_yield std::move(result);
-        }
-        if (done) {
-          break;
-        }
-      }
-      generate_output = true;
-      const auto now = time::clock::now();
-      const duration delta = next_run - now;
-      if (delta < duration::zero()) {
-        next_run = scheduler_.next_after(now);
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    for (auto events : input) {
+      if (events.rows() == 0) {
+        co_yield {};
         continue;
       }
-      next_run = scheduler_.next_after(next_run);
-      ctrl.self().run_delayed_weak(delta, [&] {
-        ctrl.set_waiting(false);
-      });
+      ctrl.self()
+        .mail(atom::push_v, std::move(events))
+        .request(scheduler_, caf::infinite)
+        .then(
+          [&]() {
+            ctrl.set_waiting(false);
+          },
+          [&](caf::error err) {
+            diagnostic::error(std::move(err))
+              .note("failed to forward events")
+              .emit(ctrl.diagnostics());
+          });
       ctrl.set_waiting(true);
       co_yield {};
     }
   }
 
-  auto instantiate(operator_input input, operator_control_plane& ctrl) const
-    -> caf::expected<operator_output> override {
-    auto f = [&]<class Input>(const Input&) -> caf::expected<operator_output> {
-      using generator_type
-        = std::conditional_t<std::is_same_v<Input, std::monostate>,
-                             generator<std::monostate>, Input>;
-      using input_type = typename generator_type::value_type;
-      using tag_type
-        = std::conditional_t<std::is_same_v<input_type, std::monostate>,
-                             tag<void>, tag<input_type>>;
-      auto output = infer_type_impl(tag_type{});
-      if (not output) {
-        return std::move(output.error());
-      }
-      if (output->template is<table_slice>()) {
-        return run<input_type, table_slice>(std::move(input), ctrl);
-      }
-      if (output->template is<chunk_ptr>()) {
-        return run<input_type, chunk_ptr>(std::move(input), ctrl);
-      }
-      TENZIR_ASSERT(output->template is<void>());
-      return run<input_type, std::monostate>(std::move(input), ctrl);
-    };
-    return std::visit(f, input);
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
   }
 
-  auto copy() const -> operator_ptr override {
-    return std::make_unique<scheduled_execution_operator>(pipe_, scheduler_,
-                                                          location_);
-  };
-
-  auto location() const -> operator_location override {
-    return location_;
-  }
-
-  auto detached() const -> bool override {
-    return pipe_.operators().empty() ? false : pipe_.operators()[0]->detached();
-  }
-
-  auto internal() const -> bool override {
-    return pipe_.operators().empty() ? false : pipe_.operators()[0]->internal();
-  }
-
-  auto idle_after() const -> duration override {
-    return pipe_.operators().empty() ? duration::zero()
-                                     : pipe_.operators()[0]->idle_after();
-  }
-
-  auto demand() const -> demand_settings override {
-    return pipe_.operators().empty() ? operator_base::demand()
-                                     : pipe_.operators()[0]->demand();
-  }
-
-  auto strictness() const -> strictness_level override {
-    return pipe_.operators().empty() ? operator_base::strictness()
-                                     : pipe_.operators()[0]->strictness();
-  }
-
-  auto infer_type_impl(operator_type input) const
-    -> caf::expected<operator_type> override {
-    return pipe_.infer_type(input);
-  }
-
-  auto name() const -> std::string override {
-    return std::string{scheduler_.name};
-  }
-
-  friend auto inspect(auto& f, scheduled_execution_operator& x) -> bool {
-    return f.object(x).fields(f.field("pipe", x.pipe_),
-                              f.field("scheduler", x.scheduler_),
-                              f.field("location", x.location_));
+  friend auto inspect(auto& f, internal_scheduler_sink_operator& x) -> bool {
+    return f.object(x).fields(f.field("scheduler", x.scheduler_));
   }
 
 private:
-  pipeline pipe_;
-  Scheduler scheduler_;
-  operator_location location_;
+  scheduler_actor scheduler_;
 };
 
-/// This is the base plugin template for scheduled execution operators.
-/// The actual parsing is handled by the `Scheduler` type.
-template <scheduler_concept Scheduler>
-class scheduled_execution_plugin
-  : public virtual operator_plugin<scheduled_execution_operator<Scheduler>> {
+class scheduler {
 public:
-  auto signature() const -> operator_signature override {
+  [[maybe_unused]] static constexpr auto name = "scheduler";
+
+  // Given a timestamp, returns the next timestamp and a hint whether to kick
+  // off the next run immediately because the next timestamp had already passed.
+  using scheduler_impl_type
+    = std::function<auto(std::optional<time> last)->std::pair<time, bool>>;
+
+  scheduler(scheduler_actor::pointer self, scheduler_impl_type scheduler_impl,
+            located<uint64_t> parallel, located<pipeline> pipe,
+            std::string definition, node_actor node, bool has_terminal,
+            bool is_hidden, shared_diagnostic_handler dh,
+            metrics_receiver_actor mh, uint64_t op_index)
+    : self_{self},
+      scheduler_impl_{std::move(scheduler_impl)},
+      parallel_{parallel},
+      pipe_{std::move(pipe)},
+      definition_{std::move(definition)},
+      node_{std::move(node)},
+      has_terminal_{has_terminal},
+      is_hidden_{is_hidden},
+      dh_{std::move(dh)},
+      mh_{std::move(mh)},
+      op_index_{op_index} {
+    if (not pipe_.inner.is_closed()) {
+      pipe_.inner.append(std::make_unique<internal_scheduler_sink_operator>(
+        static_cast<scheduler_actor>(self_)));
+      TENZIR_ASSERT(pipe_.inner.is_closed());
+    }
+  }
+
+  auto make_behavior() -> scheduler_actor::behavior_type {
+    for (auto i = uint64_t{0}; i < parallel_.inner; ++i) {
+      schedule_start();
+    }
     return {
-      .source = true,
-      .transformation = true,
-      .sink = true,
-    };
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto scheduler = Scheduler::parse(p);
-    auto result = p.parse_operator();
-    if (not result.inner) {
-      diagnostic::error("failed to parse operator")
-        .primary(result.source)
-        .throw_();
-    }
-    auto ops = std::vector<operator_ptr>{};
-    ops.push_back(std::move(result.inner));
-    auto pipe = pipeline{std::move(ops)};
-    auto location = pipe.infer_location();
-    if (not location) {
-      diagnostic::error("pipeline contains both remote and local operators")
-        .primary(result.source)
-        .note("this limitation will be lifted soon")
-        .throw_();
-    }
-    return std::make_unique<scheduled_execution_operator<Scheduler>>(
-      std::move(pipe), std::move(scheduler), *location);
-  }
-};
-
-class every_scheduler {
-public:
-  constexpr static std::string_view name = "every";
-  constexpr static bool immediate = true;
-
-  every_scheduler() = default;
-  explicit every_scheduler(duration interval) : interval_{interval} {
-  }
-
-  friend auto inspect(auto& f, every_scheduler& x) -> bool {
-    return f.object(x).fields(f.field("interval", x.interval_));
-  }
-
-  auto next_after(time::clock::time_point now) const
-    -> time::clock::time_point {
-    return std::chrono::time_point_cast<time::clock::time_point::duration>(
-      now + interval_);
-  }
-
-  static auto parse(parser_interface& p) -> every_scheduler {
-    auto interval_data = p.parse_data();
-    const auto* interval = try_as<duration>(&interval_data.inner);
-    if (not interval) {
-      diagnostic::error("interval must be a duration")
-        .primary(interval_data.source)
-        .throw_();
-    }
-    if (*interval <= duration::zero()) {
-      diagnostic::error("interval must be a positive duration")
-        .primary(interval_data.source)
-        .throw_();
-    }
-    return every_scheduler{*interval};
-  }
-
-private:
-  duration interval_;
-};
-
-using every_plugin = scheduled_execution_plugin<every_scheduler>;
-
-class cron_scheduler {
-public:
-  constexpr static std::string_view name = "cron";
-  constexpr static bool immediate = false;
-
-  cron_scheduler() = default;
-  explicit cron_scheduler(detail::cron::cronexpr expr)
-    : cronexpr_{std::move(expr)} {
-  }
-
-  auto next_after(time::clock::time_point now) const
-    -> time::clock::time_point {
-    const auto tt = time::clock::to_time_t(now);
-    return time::clock::from_time_t(detail::cron::cron_next(cronexpr_, tt));
-  }
-
-  friend auto inspect(auto& f, cron_scheduler& x) -> bool {
-    const auto get = [&x]() {
-      return detail::cron::to_cronstr(x.cronexpr_);
-    };
-    const auto set = [&x](std::string_view text) {
-      x.cronexpr_ = detail::cron::make_cron(text);
-    };
-    return f.object(x).fields(f.field("cronexpr", get, set));
-  }
-
-  static cron_scheduler parse(parser_interface& p) {
-    auto cronexpr_string = p.accept_shell_arg();
-    if (not cronexpr_string) {
-      diagnostic::error("expected cron expression")
-        .primary(p.current_span())
-        .throw_();
-    }
-    try {
-      return cron_scheduler{detail::cron::make_cron(cronexpr_string->inner)};
-    } catch (const detail::cron::bad_cronexpr& ex) {
-      // The croncpp library re-throws the exception message from the
-      // `std::stoul` call on failure. This happens for most cases of invalid
-      // expressions, i.e. ones that do not contain unsigned integers or allowed
-      // literals. libstdc++ and libc++ exception messages both contain the
-      // string "stoul" in their what() strings. We can check for this and
-      // provide a slightly better error message back to the user.
-      if (std::string_view{ex.what()}.find("stoul") != std::string_view::npos) {
-        diagnostic::error(
-          "bad cron expression: invalid value for at least one field")
-          .primary(cronexpr_string->source)
-          .throw_();
-      } else {
-        diagnostic::error("bad cron expression: \"{}\"", ex.what())
-          .primary(cronexpr_string->source)
-          .throw_();
-      }
-    }
-  }
-
-private:
-  detail::cron::cronexpr cronexpr_;
-};
-using cron_plugin = scheduled_execution_plugin<cron_scheduler>;
-
-class every_exec final : public exec::operator_base {
-public:
-  every_exec() = default;
-
-  every_exec(duration interval, ir::pipeline pipe)
-    : interval_{interval}, pipe_{std::move(pipe)} {
-  }
-
-  auto name() const -> std::string override {
-    return "every_exec";
-  }
-
-  friend auto inspect(auto& f, every_exec& x) -> bool {
-    return f.object(x).fields(f.field("interval", x.interval_),
-                              f.field("pipe", x.pipe_));
-  }
-
-private:
-  // TODO: This needs to be part of the actor.
-  auto start_new(base_ctx ctx) const -> failure_or<exec::pipeline> {
-    auto copy = pipe_;
-    TRY(copy.substitute(substitute_ctx{ctx, nullptr}, true));
-    // TODO: Where is the type check?
-    return std::move(copy).finalize(finalize_ctx{ctx});
-  }
-
-  duration interval_{};
-  ir::pipeline pipe_;
-};
-
-using every_exec_plugin = inspection_plugin<exec::operator_base, every_exec>;
-
-class every_ir final : public ir::operator_base {
-public:
-  every_ir() = default;
-
-  every_ir(ast::expression interval, ir::pipeline pipe)
-    : interval_{std::move(interval)}, pipe_{std::move(pipe)} {
-  }
-
-  auto name() const -> std::string override {
-    return "every_ir";
-  }
-
-  auto finalize(finalize_ctx ctx) && -> failure_or<exec::pipeline> override {
-    (void)ctx;
-    // TODO: Test the instantiation of the subpipeline? But in general,
-    // instantiation is done later by the actor.
-    // TRY(auto pipe, tenzir::instantiate(std::move(pipe_), ctx));
-    // We know that this succeeds because instantiation must happen before.
-    auto interval = as<duration>(interval_);
-    return std::make_unique<every_exec>(interval, std::move(pipe_));
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    TRY(match(
-      interval_,
-      [&](ast::expression& expr) -> failure_or<void> {
-        TRY(expr.substitute(ctx));
-        if (instantiate or expr.is_deterministic(ctx)) {
-          TRY(auto value, const_eval(expr, ctx));
-          auto cast = try_as<duration>(value);
-          if (not cast) {
-            auto got = match(
-              value,
-              []<class T>(const T&) -> type_kind {
-                return tag_v<data_to_type_t<T>>;
-              },
-              [](const pattern&) -> type_kind {
-                TENZIR_UNREACHABLE();
-              });
-            diagnostic::error("expected `duration`, got `{}`", got)
-              .primary(expr)
-              .emit(ctx);
-            return failure::promise();
-          }
-          // We can also do some extended validation here...
-          if (*cast <= duration::zero()) {
-            diagnostic::error("expected a positive duration")
-              .primary(expr)
-              .emit(ctx);
-            return failure::promise();
-          }
-          interval_ = *cast;
+      [this](atom::push, table_slice events) -> caf::result<void> {
+        TENZIR_ASSERT(push_rps_.size() < parallel_.inner);
+        if (pull_rp_.pending()) {
+          TENZIR_ASSERT(buffer_.empty());
+          pull_rp_.deliver(std::move(events));
+          return {};
         }
+        buffer_.push(std::move(events));
+        if (buffer_.size() < max_buffered) {
+          return {};
+        }
+        return push_rps_.emplace(self_->make_response_promise<void>());
+      },
+      [this](atom::pull) -> caf::result<table_slice> {
+        TENZIR_ASSERT(not pull_rp_.pending());
+        if (buffer_.empty()) {
+          TENZIR_ASSERT(push_rps_.empty());
+          pull_rp_ = self_->make_response_promise<table_slice>();
+          return pull_rp_;
+        }
+        if (not push_rps_.empty()) {
+          TENZIR_ASSERT(push_rps_.front().pending());
+          push_rps_.front().deliver();
+          push_rps_.pop();
+        }
+        auto events = std::move(buffer_.front());
+        buffer_.pop();
+        return events;
+      },
+      [this](diagnostic diag) -> caf::result<void> {
+        dh_.emit(std::move(diag));
         return {};
       },
-      [&](duration&) -> failure_or<void> {
+      [this](uint64_t op_index, uuid metrics_id,
+             type schema) -> caf::result<void> {
+        TENZIR_UNUSED(op_index);
+        return self_->mail(op_index_, metrics_id, std::move(schema))
+          .delegate(mh_);
+      },
+      [this](uint64_t op_index, uuid metrics_id,
+             record metrics) -> caf::result<void> {
+        TENZIR_UNUSED(op_index);
+        return self_->mail(op_index_, metrics_id, std::move(metrics))
+          .delegate(mh_);
+      },
+      [](const operator_metric& metrics) -> caf::result<void> {
+        TENZIR_UNUSED(metrics);
         return {};
-      }));
-    TRY(pipe_.substitute(ctx, false));
-    return {};
+      },
+      [this](caf::exit_msg msg) {
+        auto handles = std::vector<caf::actor>{};
+        for (const auto& handle : running_) {
+          handles.push_back(caf::actor_cast<caf::actor>(handle));
+        }
+        shutdown<policy::parallel>(self_, handles, std::move(msg.reason));
+      },
+    };
   }
 
-  friend auto inspect(auto& f, every_ir& x) -> bool {
-    return f.object(x).fields(f.field("interval", x.interval_),
+private:
+  auto schedule_start() -> void {
+    const auto [next_start, immediate] = scheduler_impl_(last_start_);
+    last_start_ = next_start;
+    const auto start = [&] {
+      TENZIR_ASSERT(running_.size() < parallel_.inner);
+      auto handle = self_->spawn(pipeline_executor, pipe_.inner, definition_,
+                                 receiver_actor<diagnostic>{self_},
+                                 metrics_receiver_actor{self_}, node_,
+                                 has_terminal_, is_hidden_);
+      self_->monitor(handle, [this, id = handle->id()](caf::error err) {
+        const auto found
+          = std::ranges::find(running_, id, &pipeline_executor_actor::id);
+        TENZIR_ASSERT(found != running_.end());
+        running_.erase(found);
+        schedule_start();
+        if (err) {
+          diagnostic::warning(std::move(err))
+            .primary(pipe_, "failed at runtime")
+            .emit(dh_);
+        }
+      });
+      self_->mail(atom::start_v)
+        .request(handle, caf::infinite)
+        .then(
+          [] {
+            // Yay :)
+          },
+          [this](caf::error err) {
+            if (err == ec::silent or err == ec::diagnostic
+                or err == caf::exit_reason::user_shutdown) {
+              // Nothing to do; the pipeline executor will shut down on its own.
+              return;
+            }
+            // The error is unexpected so we shut down everything. This is
+            // likely a system error, so there isn't much we can do about it.
+            self_->quit(diagnostic::error(std::move(err))
+                          .primary(pipe_, "failed to start")
+                          .to_error());
+          });
+      running_.push_back(std::move(handle));
+    };
+    if (immediate) {
+      start();
+      return;
+    }
+    self_->run_scheduled_weak(next_start, start);
+  }
+
+  scheduler_actor::pointer self_;
+
+  std::vector<pipeline_executor_actor> running_;
+  std::optional<time> last_start_;
+  scheduler_impl_type scheduler_impl_;
+
+  located<uint64_t> parallel_;
+  located<pipeline> pipe_;
+  std::string definition_;
+  node_actor node_;
+  bool has_terminal_;
+  bool is_hidden_;
+  shared_diagnostic_handler dh_;
+  metrics_receiver_actor mh_;
+  uint64_t op_index_;
+
+  static constexpr auto max_buffered = 10;
+  std::queue<table_slice> buffer_;
+  std::queue<caf::typed_response_promise<void>> push_rps_;
+  caf::typed_response_promise<table_slice> pull_rp_;
+};
+
+TENZIR_ENUM(mode, every, cron);
+
+template <mode Mode>
+class every_cron_operator final
+  : public crtp_operator<every_cron_operator<Mode>> {
+public:
+  using arg_type
+    = std::conditional_t<Mode == mode::every, duration, std::string>;
+
+  every_cron_operator() = default;
+
+  explicit every_cron_operator(located<arg_type> scheduler_arg,
+                               located<uint64_t> parallel,
+                               located<pipeline> pipe)
+    : scheduler_arg_{std::move(scheduler_arg)},
+      parallel_{parallel},
+      pipe_{std::move(pipe)} {
+  }
+
+  auto name() const -> std::string override {
+    return fmt::to_string(Mode);
+  }
+
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    const auto make_scheduler_impl = [&] {
+      if constexpr (Mode == mode::every) {
+        return [interval = scheduler_arg_.inner](
+                 std::optional<time> last) -> std::pair<time, bool> {
+          const auto now = time::clock::now();
+          if (not last) {
+            return std::make_pair(now, true);
+          }
+          if (now - *last > interval) {
+            return std::make_pair(now, true);
+          }
+          return std::make_pair(*last + interval, false);
+        };
+      } else {
+        // The cronexpr was already validated in the operator's parser, so we
+        // can safely assume that it is valid here and don't need to set up
+        // exceptions again. We can't store the parsed cronexpr directly,
+        // unfortunately, because the type is not easy to make inspectable.
+        return [expr = detail::cron::make_cron(scheduler_arg_.inner)](
+                 std::optional<time> last) -> std::pair<time, bool> {
+          const auto now = last ? *last : time::clock::now();
+          const auto tt = time::clock::to_time_t(
+            std::chrono::time_point_cast<
+              std::chrono::system_clock::time_point::duration>(now));
+          const auto next
+            = time::clock::from_time_t(detail::cron::cron_next(expr, tt));
+          return std::make_pair(next, next <= now);
+        };
+      }
+    };
+    const auto handle = ctrl.self().spawn<caf::linked>(
+      caf::actor_from_state<class scheduler>, make_scheduler_impl(), parallel_,
+      pipe_, std::string{ctrl.definition()}, ctrl.node(), ctrl.has_terminal(),
+      ctrl.is_hidden(), ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
+      ctrl.operator_index());
+    auto output = table_slice{};
+    while (true) {
+      ctrl.self()
+        .mail(atom::pull_v)
+        .request(handle, caf::infinite)
+        .then(
+          [&](table_slice events) {
+            output = std::move(events);
+            ctrl.set_waiting(false);
+          },
+          [&](caf::error err) {
+            diagnostic::error(std::move(err))
+              .primary(pipe_, "failed to forward result")
+              .emit(ctrl.diagnostics());
+          });
+      ctrl.set_waiting(true);
+      co_yield {};
+      co_yield std::move(output);
+    }
+  }
+
+  auto optimize(const expression& filter, event_order order) const
+    -> optimize_result override {
+    auto result = pipe_.inner.optimize(filter, order);
+    if (not result.replacement) {
+      return result;
+    }
+    auto* pipe = dynamic_cast<pipeline*>(result.replacement.get());
+    TENZIR_ASSERT(pipe);
+    result.replacement = std::make_unique<every_cron_operator<Mode>>(
+      scheduler_arg_, parallel_, located{std::move(*pipe), pipe_.source});
+    return result;
+  }
+
+  auto location() const -> operator_location override {
+    const auto requires_node = [](const auto& ops) {
+      return std::ranges::find(ops, operator_location::remote,
+                               &operator_base::location)
+             != ops.end();
+    };
+    return requires_node(pipe_.inner.operators()) ? operator_location::remote
+                                                  : operator_location::anywhere;
+  }
+
+  friend auto inspect(auto& f, every_cron_operator& x) -> bool {
+    return f.object(x).fields(f.field("scheduler_arg", x.scheduler_arg_),
+                              f.field("parallel", x.parallel_),
                               f.field("pipe", x.pipe_));
   }
 
 private:
-  variant<ast::expression, duration> interval_;
-  ir::pipeline pipe_;
+  located<arg_type> scheduler_arg_;
+  located<uint64_t> parallel_;
+  located<pipeline> pipe_;
 };
 
-using every_ir_plugin = inspection_plugin<ir::operator_base, every_ir>;
-
-class every_plugin2 final : public virtual operator_factory_plugin,
-                            public virtual operator_compiler_plugin {
+class cron_plugin final
+  : public virtual operator_plugin2<every_cron_operator<mode::cron>> {
 public:
-  auto name() const -> std::string override {
-    return "tql2.every";
-  }
-
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto interval = located<duration>{};
-    auto pipe = pipeline{};
-    TRY(argument_parser2::operator_("every")
-          .positional("interval", interval)
-          .positional("{ … }", pipe)
-          .parse(inv, ctx));
-    auto fail = std::optional<failure>{};
-    if (interval.inner <= duration::zero()) {
-      diagnostic::error("expected a positive duration, got {}", interval.inner)
-        .primary(interval)
-        .emit(ctx);
-      fail = failure::promise();
-    }
-    auto location = pipe.infer_location();
-    if (not location) {
-      diagnostic::error("pipeline contains both remote and local operators")
-        .primary(inv.self)
-        .note("this limitation will be lifted soon")
-        .emit(ctx);
-      fail = failure::promise();
-    }
-    if (fail) {
-      return *fail;
-    }
-    return std::make_unique<scheduled_execution_operator<every_scheduler>>(
-      std::move(pipe), every_scheduler{interval.inner}, *location);
-  }
-
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::operator_ptr> override {
-    // TODO: Improve this with argument parser.
-    if (inv.args.size() != 2) {
-      diagnostic::error("expected exactly two arguments")
-        .primary(inv.op)
-        .emit(ctx);
-      return failure::promise();
-    }
-    TRY(inv.args[0].bind(ctx));
-    auto pipe = as<ast::pipeline_expr>(inv.args[1]);
-    TRY(auto pipe_ir, std::move(pipe.inner).compile(ctx));
-    return std::make_unique<every_ir>(std::move(inv.args[0]),
-                                      std::move(pipe_ir));
-  }
-};
-
-class cron_plugin2 final : public virtual operator_factory_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.cron";
-  }
-
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto interval = located<std::string>{};
-    auto pipe = pipeline{};
+    auto cronexpr = located<std::string>{};
+    auto parallel = located<uint64_t>{1, location::unknown};
+    auto pipe = located<pipeline>{};
     TRY(argument_parser2::operator_(name())
-          .positional("interval", interval)
+          .positional("interval", cronexpr)
+          .named_optional("parallel", parallel)
           .positional("{ … }", pipe)
           .parse(inv, ctx));
-    auto location = pipe.infer_location();
-    if (not location) {
-      diagnostic::error("pipeline contains both remote and local operators")
-        .primary(inv.self)
-        .note("this limitation will be lifted soon")
-        .emit(ctx);
-      return failure::promise();
-    }
     try {
-      auto scheduler = cron_scheduler{detail::cron::make_cron(interval.inner)};
-      return std::make_unique<scheduled_execution_operator<cron_scheduler>>(
-        std::move(pipe), std::move(scheduler), *location);
+      (void)detail::cron::make_cron(cronexpr.inner);
     } catch (const detail::cron::bad_cronexpr& ex) {
       // The croncpp library re-throws the exception message from the
       // `std::stoul` call on failure. This happens for most cases of invalid
@@ -547,25 +407,183 @@ public:
       if (std::string_view{ex.what()}.find("stoul") != std::string_view::npos) {
         diagnostic::error(
           "bad cron expression: invalid value for at least one field")
-          .primary(interval.source)
+          .primary(cronexpr)
           .emit(ctx);
         return failure::promise();
       }
       diagnostic::error("bad cron expression: \"{}\"", ex.what())
-        .primary(interval.source)
+        .primary(cronexpr)
         .emit(ctx);
       return failure::promise();
     }
+    if (parallel.inner == 0) {
+      diagnostic::error("parallel level must be greater than zero")
+        .primary(parallel)
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto output = pipe.inner.infer_type(tag_v<void>);
+    if (not output) {
+      diagnostic::error("pipeline must accept `void`").primary(pipe).emit(ctx);
+      return failure::promise();
+    }
+    if (output->is<chunk_ptr>()) {
+      diagnostic::error("pipeline must return `events` or `void`")
+        .primary(pipe, "returns `{}`", operator_type_name(*output))
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto result = std::make_unique<pipeline>();
+    result->append(std::make_unique<every_cron_operator<mode::cron>>(
+      cronexpr, parallel, std::move(pipe)));
+    if (output->is<void>()) {
+      // If the nested pipeline returns `void` then we "cheat" a tiny bit and
+      // add a discard operator after the nested pipeline. This reduces the
+      // typing logic inside the operator implementation.
+      const auto* discard_op
+        = plugins::find<operator_factory_plugin>("discard");
+      TENZIR_ASSERT(discard_op);
+      TRY(auto discard_pipe,
+          discard_op->make({.self = inv.self, .args = {}}, ctx));
+      result->append(std::move(discard_pipe));
+    }
+    return result;
   }
 };
+
+class every_plugin final
+  : public virtual operator_plugin2<every_cron_operator<mode::every>> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto interval = located<duration>{};
+    auto parallel = located<uint64_t>{1, location::unknown};
+    // We take an expression for the pipeline rather than an already compiled
+    // pipeline because we must be able to pass it to the `window` operator for
+    // backwards compatibility.
+    auto pipe_expr = std::optional<ast::expression>{};
+    auto parser = argument_parser2::operator_(name());
+    parser.positional("interval", interval);
+    parser.named_optional("parallel", parallel);
+    parser.positional("pipeline", pipe_expr, "{ … }");
+    TRY(parser.parse(inv, ctx));
+    if (not pipe_expr) {
+      // The argument parser has a bug that makes it impossible to specify a
+      // required positional pipeline argument after optional named arguments.
+      // We work around this by making the pipeline an optional positional
+      // argument, and then manually checking if it was provided.
+      diagnostic::error("missing required `pipe` argument")
+        .docs(parser.docs())
+        .usage(parser.usage())
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto* pipe_ast = try_as<ast::pipeline_expr>(*pipe_expr);
+    if (not pipe_ast) {
+      diagnostic::error("expected pipeline").primary(*pipe_expr).emit(ctx);
+      return failure::promise();
+    }
+    TRY(auto pipe, compile(auto{pipe_ast->inner}, ctx));
+    if (interval.inner <= duration::zero()) {
+      diagnostic::error("expected a positive duration, got {}", interval.inner)
+        .primary(interval)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (parallel.inner == 0) {
+      diagnostic::error("parallel level must be greater than zero")
+        .primary(parallel)
+        .emit(ctx);
+      return failure::promise();
+    }
+    // Historically, the `every` operator could be used as a source and as a
+    // transformation. In the latter case, it effectively created tumbling
+    // windows with a fixed time interval. This has turned out to be a problem
+    // for operators like `shell`, which can be both a source and a
+    // transformation, with the latter being preferred in type inference. For
+    // a pipeline like `every … { shell … }`, the general assumption is that
+    // `shell` acts as a source operator and not as a transformation. Because
+    // of this, we first check whether the nested pipeline works as a source,
+    // breaking with the usual type inference order of `events` > `bytes` >
+    // `void`, and emit a warning and fall back to the newly added `window` if
+    // the pipeline does not have a source.
+    if (auto output = pipe.infer_type(tag_v<void>)) {
+      if (output->is<chunk_ptr>()) {
+        diagnostic::error("pipeline must return `events` or `void`")
+          .primary(*pipe_expr, "returns `{}`", operator_type_name(*output))
+          .emit(ctx);
+        return failure::promise();
+      }
+      auto result = std::make_unique<pipeline>();
+      result->append(std::make_unique<every_cron_operator<mode::every>>(
+        interval, parallel,
+        located{std::move(pipe), pipe_expr->get_location()}));
+      if (output->is<void>()) {
+        // If the nested pipeline returns `void` then we "cheat" a tiny bit
+        // and add a discard operator after the nested pipeline. This reduces
+        // the typing logic inside the operator implementation.
+        const auto* discard_op
+          = plugins::find<operator_factory_plugin>("discard");
+        TENZIR_ASSERT(discard_op);
+        TRY(auto discard_pipe,
+            discard_op->make({.self = inv.self, .args = {}}, ctx));
+        result->append(std::move(discard_pipe));
+      }
+      return result;
+    }
+    auto window_inv = operator_factory_plugin::invocation{};
+    window_inv.self = inv.self;
+    window_inv.args.emplace_back(ast::assignment{
+      ast::field_path::from(located{"timeout", interval.source}),
+      location::unknown,
+      ast::constant{interval.inner, interval.source},
+    });
+    window_inv.args.emplace_back(ast::assignment{
+      ast::field_path::from(located{"parallel", parallel.source}),
+      location::unknown,
+      ast::constant{parallel.inner, parallel.source},
+    });
+    window_inv.args.emplace_back(ast::assignment{
+      ast::field_path::from(located{"_nonblocking", location::unknown}),
+      location::unknown,
+      ast::constant{true, location::unknown},
+    });
+    window_inv.args.push_back(std::move(*pipe_expr));
+    const auto* window_op = plugins::find<operator_factory_plugin>("window");
+    TENZIR_ASSERT(window_op);
+    auto dh = transforming_diagnostic_handler{
+      ctx.dh(),
+      [&](diagnostic diag) -> diagnostic {
+        for (auto& note : diag.notes) {
+          switch (note.kind) {
+            case tenzir::diagnostic_note_kind::note:
+            case tenzir::diagnostic_note_kind::hint:
+              break;
+            case tenzir::diagnostic_note_kind::docs: {
+              note.message = parser.docs();
+              break;
+            }
+            case tenzir::diagnostic_note_kind::usage: {
+              note.message = parser.usage();
+              break;
+            }
+          }
+        }
+        return diag;
+      },
+    };
+    auto sp = session_provider::make(dh);
+    return window_op->make(std::move(window_inv), sp.as_session());
+  }
+};
+
+using internal_scheduler_sink_plugin
+  = operator_inspection_plugin<internal_scheduler_sink_operator>;
 
 } // namespace
 
 } // namespace tenzir::plugins::every_cron
-
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::every_cron::internal_scheduler_sink_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::cron_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_exec_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_ir_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin2)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::cron_plugin2)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin)

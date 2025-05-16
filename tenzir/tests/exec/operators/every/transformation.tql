@@ -1,0 +1,15 @@
+let $interval = 500ms
+let $expected = 3
+let $cycles = 1
+let $tolerance = 1
+
+every $interval, {
+  from {}
+}, parallel=2
+every $interval * $expected, {
+  summarize count=count()
+}, parallel=2
+assert count >= $expected - $tolerance
+assert count <= $expected + $tolerance
+head $cycles
+discard
