@@ -207,7 +207,7 @@ in {
     ];
   });
   pfs = final.callPackage ./pfs {};
-  uv = final.callPackage ./uv-binary {};
+  uv-bin= final.callPackage ./uv-binary {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
   in
@@ -381,6 +381,11 @@ in {
     # to the PATH in the checkPhase directly as a workaround.
     #toybox
     yara
+    (python3.withPackages (ps:
+      with ps; [
+        trustme
+      ])
+    )
   ] ++ final.tenzir-integration-test-runner;
   pythonPackagesExtensions =
     prev.pythonPackagesExtensions

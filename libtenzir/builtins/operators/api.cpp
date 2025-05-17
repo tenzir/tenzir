@@ -37,9 +37,10 @@ public:
     ctrl.self()
       .mail(atom::proxy_v, request, request_id)
       .request(ctrl.node(), caf::infinite)
-      .await(
+      .then(
         [&](rest_response& value) {
           response = std::move(value);
+          ctrl.set_waiting(false);
         },
         [&](caf::error error) {
           if (error == ec::no_error) {
@@ -52,6 +53,7 @@ public:
             .docs("https://docs.tenzir.com/operators/api")
             .emit(ctrl.diagnostics());
         });
+    ctrl.set_waiting(true);
     co_yield {};
     TENZIR_ASSERT(response.has_value());
     if (response->is_error()) {

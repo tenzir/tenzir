@@ -9,12 +9,10 @@
 #include "tenzir/execution_node.hpp"
 
 #include "tenzir/actors.hpp"
-#include "tenzir/arrow_utils.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/weak_handle.hpp"
-#include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/operator_control_plane.hpp"
@@ -36,6 +34,21 @@
 namespace tenzir {
 
 namespace {
+
+template <class F>
+void loop_at(caf::scheduled_actor* self, caf::actor_clock::time_point start,
+             caf::timespan delay, F&& f) {
+  auto run = [self, start, delay, f = std::forward<F>(f)]() mutable {
+    std::invoke(f);
+    loop_at(self, start + delay, delay, std::move(f));
+  };
+  self->delay_until_fn(start + delay, std::move(run));
+}
+
+template <class F>
+void loop(caf::scheduled_actor* self, caf::timespan delay, F&& f) {
+  loop_at(self, self->clock().now() + delay, delay, std::forward<F>(f));
+}
 
 using namespace std::chrono_literals;
 using namespace si_literals;
@@ -333,10 +346,6 @@ struct exec_node_state {
         return error;
       });
     return {
-      [this](atom::internal, atom::run) -> caf::result<void> {
-        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-        return internal_run();
-      },
       [this](atom::start,
              std::vector<caf::actor>& all_previous) -> caf::result<void> {
         auto time_scheduled_guard
@@ -507,7 +516,7 @@ struct exec_node_state {
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
-    detail::weak_run_delayed_loop(self, defaults::metrics_interval, [this] {
+    loop(self, defaults::metrics_interval, [this] {
       auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
       emit_generic_op_metrics();
     });
@@ -778,18 +787,16 @@ struct exec_node_state {
                  data{backoff});
     run_scheduled = true;
     if (backoff == duration::zero()) {
-      self->mail(atom::internal_v, atom::run_v).send(self);
-    } else {
-      backoff_disposable = detail::weak_run_delayed(self, backoff, [this] {
-        self->mail(atom::internal_v, atom::run_v).send(self);
+      self->delay_fn([this] {
+        run_scheduled = false;
+        run();
       });
+      return;
     }
-  }
-
-  auto internal_run() -> caf::result<void> {
-    run_scheduled = false;
-    run();
-    return {};
+    backoff_disposable = self->delay_for_fn(backoff, [this] {
+      run_scheduled = false;
+      run();
+    });
   }
 
   auto issue_demand() -> void {

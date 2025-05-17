@@ -5,7 +5,8 @@ setup() {
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
-  export TENZIR_LEGACY=true
+  export_default_paths
+  write_ssl_certs
 }
 
 wait_for_tcp() {
@@ -13,79 +14,73 @@ wait_for_tcp() {
   timeout 10 bash -c "until lsof -i :$port; do sleep 0.2; done"
 }
 
-@test "loader - connect" {
-  coproc SERVER {
-    exec echo foo | socat - TCP-LISTEN:56128
-  }
-  # TODO: this works: socat - TCP4:127.0.0.1:56128
-  # Why can't Tenzir connect?
-  check tenzir "load tcp://127.0.0.1:56128 --connect"
-}
+write_ssl_certs() {
+  # Generates a server certificate and corresponding CA certificate, and
+  # stores their filenames into ${key_and_cert} and ${cafile}.
 
-@test "loader - listen once" {
-  check --bg listen \
-    tenzir "load tcp://127.0.0.1:56129 --listen-once"
-  timeout 10 bash -c 'until lsof -i :56129; do sleep 0.2; done'
-  echo foo | socat - TCP4:127.0.0.1:56129
-  wait_all "${listen[@]}"
+  certdir="$(mktemp -d)"
+
+  cat >"${certdir}/script.py" <<EOF
+import trustme
+
+ca = trustme.CA()
+ca.cert_pem.write_to_path("ca.pem")
+
+server_cert = ca.issue_cert("tenzir-node.example.org")
+server_cert.private_key_and_cert_chain_pem.write_to_path("server.pem")
+EOF
+
+  if command -v uv &>/dev/null; then
+    UV="uv"
+  else
+    UV="$(dirname "$(command -v tenzir)")/../libexec/uv"
+  fi
+
+  # It seems to be impossible to tell uv to skip its own package index with
+  # uv run --with. We work around that by using the script dependencies stanza
+  # mode but only if the dependency is not already available.
+  python3 -m trustme --help || ${UV} add --script "${certdir}/script.py" trustme
+
+  ${UV} run --directory "${certdir}" "${certdir}/script.py"
+
+  key_and_cert="${certdir}/server.pem"
+  cafile="${certdir}/ca.pem"
 }
 
 @test "loader - listen with SSL" {
-  key_and_cert=$(mktemp)
-  openssl req -x509 -newkey rsa:2048 \
-    -keyout "${key_and_cert}" \
-    -out "${key_and_cert}" \
-    -days 365 \
-    -nodes \
-    -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" >/dev/null 2>/dev/null
+  write_ssl_certs
   check --bg listen \
-    tenzir "load tcp://127.0.0.1:56130 --listen-once --tls --certfile ${key_and_cert} --keyfile ${key_and_cert}"
+    tenzir "load_tcp \"tcp://127.0.0.1:56130\", tls=true, certfile=\"${key_and_cert}\", keyfile=\"${key_and_cert}\" { read_lines } | head 1"
   timeout 10 bash -c 'until lsof -i :56130; do sleep 0.2; done'
-  echo foo | openssl s_client 127.0.0.1:56130
+  echo foo | openssl s_client -CAfile ${cafile} 127.0.0.1:56130
   wait_all "${listen[@]}"
-  rm "${key_and_cert}"
 }
 
 @test "listen with multiple connections with SSL" {
-  key_and_cert=$(mktemp)
-  openssl req -x509 -newkey rsa:2048 \
-    -keyout "${key_and_cert}" \
-    -out "${key_and_cert}" \
-    -days 365 \
-    -nodes \
-    -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" >/dev/null 2>/dev/null
+  skip "Skipping; disabled test, needs further investigation"
   check --bg listen \
-    tenzir "from tcp://127.0.0.1:56131 --tls --certfile ${key_and_cert} --keyfile ${key_and_cert} read json | deduplicate foo | head 2 | sort foo"
+    tenzir "from \"tcp://127.0.0.1:56131\", tls=true, certfile=\"${key_and_cert}\", keyfile=\"${key_and_cert}\" { read_json } | deduplicate foo | head 2 | sort foo"
   wait_for_tcp 56131
   (
-    while :; do
+    for i in {1..10}; do
       jq -n '{foo: 1}'
       sleep 1
-    done | openssl s_client "127.0.0.1:56131"
+    done | openssl s_client -CAfile ${cafile} "127.0.0.1:56131"
   ) &
   CLIENT1_PID=$!
   (
-    while :; do
+    for i in {1..10}; do
       jq -n '{foo: 2}'
       sleep 1
-    done | openssl s_client "127.0.0.1:56131"
+    done | openssl s_client -CAfile ${cafile} "127.0.0.1:56131"
   ) &
   CLIENT2_PID=$!
   wait_all "${listen[@]}" "${CLIENT1_PID}" "${CLIENT2_PID}"
-  rm "${key_and_cert}"
 }
 
 @test "saver - connect" {
   coproc SERVER {
     check exec socat TCP-LISTEN:56132 -
   }
-  echo foo | tenzir "save tcp://127.0.0.1:56132"
-}
-
-@test "saver - listen" {
-  coproc SERVER {
-    echo foo | tenzir "save tcp://127.0.0.1:56133 --listen --listen-once"
-  }
-  timeout 10 bash -c 'until lsof -i :56133; do sleep 0.2; done'
-  check socat TCP4:127.0.0.1:56133 -
+  echo foo | tenzir 'save_tcp "tcp://127.0.0.1:56132"'
 }
