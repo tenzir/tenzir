@@ -48,8 +48,9 @@ constexpr auto stringify = detail::overload{
   },
 };
 
-template <class Operator, class Args>
-class plugin : public virtual operator_plugin2<Operator> {
+template <template <class, detail::string_literal = ""> class Adapter,
+          class Plugin, class Args>
+class plugin : public virtual operator_plugin2<Adapter<Plugin>> {
   auto initialize(const record& unused_plugin_config,
                   const record& global_config) -> caf::error override {
     if (not unused_plugin_config.empty()) {
@@ -136,12 +137,13 @@ class plugin : public virtual operator_plugin2<Operator> {
         return failure::promise();
       }
     }
-    return std::make_unique<Operator>(std::move(args), std::move(config));
+    return std::make_unique<Adapter<Plugin>>(
+      Plugin{std::move(args), std::move(config)});
   }
 
   virtual auto load_properties() const
     -> operator_factory_plugin::load_properties_t override {
-    if constexpr (std::same_as<Operator, rabbitmq_loader>) {
+    if constexpr (std::same_as<Plugin, rabbitmq_loader>) {
       return {
         .schemes = {"amqp", "amqps"},
       };
@@ -152,7 +154,7 @@ class plugin : public virtual operator_plugin2<Operator> {
 
   virtual auto save_properties() const
     -> operator_factory_plugin::save_properties_t override {
-    if constexpr (std::same_as<Operator, rabbitmq_saver>) {
+    if constexpr (std::same_as<Plugin, rabbitmq_saver>) {
       return {
         .schemes = {"amqp", "amqps"},
       };
@@ -165,8 +167,8 @@ private:
   record config_;
 };
 
-using load_plugin = plugin<rabbitmq_loader, loader_args>;
-using save_plugin = plugin<rabbitmq_saver, saver_args>;
+using load_plugin = plugin<loader_adapter, rabbitmq_loader, loader_args>;
+using save_plugin = plugin<saver_adapter, rabbitmq_saver, saver_args>;
 
 } // namespace
 
