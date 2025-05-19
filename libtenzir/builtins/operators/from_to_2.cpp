@@ -13,6 +13,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
+#include <tenzir/scope_linked.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -796,15 +797,17 @@ public:
       definition_{std::move(definition)},
       node_{std::move(node)},
       is_hidden_{is_hidden},
+#if USE_EXECUTOR
       io_executor_{self},
       io_ctx_{arrow::default_memory_pool(), &io_executor_},
+#endif
       order_{order},
       pipe_{std::move(pipe)} {
     TENZIR_ASSERT(dh_);
     auto path = std::string{};
     // TODO: Relative local-filesystem paths.
     // TODO: Arrow removes trailing slashes here.
-    auto fs = arrow::fs::FileSystemFromUriOrPath(url_.inner, io_ctx_, &path);
+    auto fs = arrow::fs::FileSystemFromUriOrPath(url_.inner, &path);
     if (not fs.ok()) {
       diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
         .emit(*dh_);
@@ -824,8 +827,9 @@ public:
     auto process
       = [this, glob = std::move(glob)](arrow::fs::FileInfoVector infos) {
           if (infos.empty()) {
-            // TODO
             TENZIR_WARN("got all file infos");
+            spawned_all_jobs_ = true;
+            check_jobs_and_termination();
             return;
           }
           for (auto& info : infos) {
@@ -837,9 +841,11 @@ public:
           }
         };
     TENZIR_WARN("hello?");
-    fs_->GetFileInfoAsync(std::vector{path})
-      .AddCallback([this, process, path = std::move(path)](
-                     arrow::Result<std::vector<arrow::fs::FileInfo>> infos) {
+    add_actor_callback(
+      self_, fs_->GetFileInfoAsync(std::vector{path}),
+      [this, process, path = std::move(path)](
+        arrow::Result<std::vector<arrow::fs::FileInfo>> infos) {
+        TENZIR_WARN("callback");
         // TODO: Improve diagnostics.
         if (not infos.ok()) {
           diagnostic::error("{}", infos.status().ToStringWithoutContextLines())
@@ -865,7 +871,7 @@ public:
             sel.base_dir = path;
             sel.recursive = true;
             auto gen = fs_->GetFileInfoGenerator(sel);
-            async_iter(std::move(gen), std::move(process));
+            async_iter(self_, std::move(gen), std::move(process));
             return;
         }
         TENZIR_UNREACHABLE();
@@ -878,6 +884,7 @@ public:
         if (puts_.empty()) {
           auto rp = self_->make_response_promise<table_slice>();
           gets_.emplace_back(rp);
+          check_termination();
           return rp;
         }
         auto slice = std::move(puts_.front().first);
@@ -910,64 +917,90 @@ public:
   }
 
 private:
-  void add_job(arrow::fs::FileInfo file) {
-    jobs_.push_back(std::move(file));
-    check_jobs();
+  void check_termination() {
+    if (spawned_all_jobs_ and jobs_.empty() and active_jobs_ == 0) {
+      for (auto& get : gets_) {
+        // If there are any unmatched gets, we know that there are no puts.
+        get.deliver(table_slice{});
+      }
+    }
   }
 
   void check_jobs() {
-    if (remaining_jobs_ == 0) {
-      return;
+    while (not jobs_.empty() and active_jobs_ < parallel_) {
+      spawn_job(std::move(jobs_.front()));
+      jobs_.pop_front();
     }
-    spawn_job(std::move(jobs_.front()));
-    jobs_.pop_front();
+  }
+
+  void check_jobs_and_termination() {
+    check_jobs();
+    check_termination();
+  }
+
+  void add_job(arrow::fs::FileInfo file) {
+    jobs_.push_back(std::move(file));
+    check_jobs();
   }
 
   auto make_pipeline(std::string_view path) -> failure_or<pipeline> {
     if (pipe_) {
       return pipe_->inner;
     }
-    auto dh = collecting_diagnostic_handler{};
+    auto test = transforming_diagnostic_handler{
+      // TODO: Lifetime.
+      *dh_, [path](diagnostic d) {
+        return std::move(d)
+          .modify()
+          .note(fmt::format("while reading `{}`", path))
+          .done();
+      }};
+    TENZIR_WARN("PATH = {}", path);
     TRY(auto compression_and_format,
         get_compression_and_format<true>(
           located<std::string_view>{path, url_.source}, nullptr,
-          "https://docs.tenzir.com/operators/from_file", dh));
-    // TODO
-    TENZIR_ASSERT(dh.empty());
+          "https://docs.tenzir.com/operators/from_file", test));
     auto& format = compression_and_format.format.get();
     auto compression = compression_and_format.compression;
-    auto provider = session_provider::make(dh);
+    auto provider = session_provider::make(test);
     auto ctx = provider.as_session();
     // TODO: This is not great.
     auto inv = operator_factory_plugin::invocation{
       ast::entity{{ast::identifier{format.name(), url_.source}}}, {}};
-    // TODO: No unwrap.
     auto pipe = pipeline{};
     if (compression) {
-      pipe.append(compression->make(inv, ctx).unwrap());
+      TRY(auto decompress, compression->make(inv, ctx));
+      pipe.append(std::move(decompress));
     }
-    pipe.append(format.make(inv, ctx).unwrap());
-    // TODO
-    TENZIR_ASSERT(dh.empty());
+    TRY(auto read, format.make(inv, ctx));
+    pipe.append(std::move(read));
     return pipe;
   }
 
   void spawn_job(arrow::fs::FileInfo file) {
-    TENZIR_ASSERT(remaining_jobs_ > 0);
-    remaining_jobs_ -= 1;
+    TENZIR_WARN("spawning for {}", file.path());
+    TENZIR_ASSERT(active_jobs_ < parallel_);
+    active_jobs_ += 1;
     auto pipe = make_pipeline(file.path());
     if (pipe.is_error()) {
-      TENZIR_TODO();
+      // How do we want to handle errors in the inner pipeline?
+      active_jobs_ -= 1;
+      return;
     }
     auto output_type = pipe->infer_type<chunk_ptr>();
     TENZIR_ASSERT(output_type);
     TENZIR_ASSERT(output_type->is<table_slice>());
     // TODO: Wait for this?
-    fs_->OpenInputStreamAsync(file).AddCallback(
+    add_actor_callback(
+      self_, fs_->OpenInputStreamAsync(file),
       [this, pipe = std::move(*pipe), path = file.path()](
         arrow::Result<std::shared_ptr<arrow::io::InputStream>> stream) mutable {
-        auto source = self_->spawn(caf::actor_from_state<arrow_fs_source>,
-                                   std::move(*stream));
+        // TODO: Linked?
+        auto source = self_->spawn<caf::linked>(
+          caf::actor_from_state<arrow_fs_source>, std::move(*stream));
+        source->attach_functor([] {
+          TENZIR_ERROR("destroying arrow_fs_source");
+        });
         pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
         pipe.append(std::make_unique<from_file_sink>(
           self_, order_,
@@ -975,26 +1008,21 @@ private:
                       : std::nullopt));
         // TODO: Make sure it quits when we quit.
         pipe = pipe.optimize_if_closed();
-        TENZIR_WARN("pipe = {:#?}", pipe);
         auto executor
           = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
                          self_, node_, false, is_hidden_);
-        self_->monitor(executor, [executor](caf::error yo) {
-          // TODO: Do we know here that we got all data from our sink?
-          // Probably not!
-          TENZIR_WARN("EXIT");
+        self_->monitor(executor, [this, executor](caf::error yo) {
+          TENZIR_WARN("got exit from pipeline executor: {}", yo);
+          active_jobs_ -= 1;
+          check_jobs_and_termination();
         });
         self_->mail(atom::start_v)
           .request(executor, caf::infinite)
-          .then(
-            [] {
-              TENZIR_WARN("oh yes");
-            },
-            [](caf::error error) {
-              TENZIR_WARN("oh no: {}", error);
-            });
-        // TODO: Get rid of this?
-        // executors_.push_back(std::move(executor));
+          .then([] {},
+                [](caf::error error) {
+                  TENZIR_ERROR("could not start pipeline: {}", error);
+                  TENZIR_TODO();
+                });
       });
   }
 
@@ -1018,13 +1046,16 @@ private:
   bool is_hidden_;
 
   // stuff for running subpipelines
-  size_t remaining_jobs_ = 10;
+  size_t parallel_ = 10;
+  size_t active_jobs_ = 0;
   std::deque<arrow::fs::FileInfo> jobs_;
-  // std::vector<pipeline_executor_actor> executors_;
+  bool spawned_all_jobs_ = false;
 
   // arrow stuff
+#if USE_EXECUTOR
   caf_executor io_executor_;
   arrow::io::IOContext io_ctx_;
+#endif
   std::shared_ptr<arrow::fs::FileSystem> fs_;
 };
 
@@ -1046,33 +1077,37 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto impl = ctrl.self().spawn(
+    // TODO: Double link?
+    auto impl = scope_linked{ctrl.self().spawn<caf::linked>(
       caf::actor_from_state<from_file_impl>,
       std::make_unique<shared_diagnostic_handler>(ctrl.shared_diagnostics()),
       url_, path_field_, std::string{ctrl.definition()}, ctrl.node(),
-      ctrl.is_hidden(), order_, pipe_);
+      ctrl.is_hidden(), order_, pipe_)};
+    impl.get()->attach_functor([] {
+      TENZIR_ERROR("destroying from_file actor");
+    });
     while (true) {
       auto result = table_slice{};
       ctrl.self()
         .mail(atom::get_v)
-        .request(impl, caf::infinite)
+        .request(impl.get(), caf::infinite)
         .then(
           [&](table_slice slice) {
             result = std::move(slice);
             ctrl.set_waiting(false);
           },
           [&](caf::error error) {
-            TENZIR_TODO();
+            diagnostic::error(std::move(error)).emit(ctrl.diagnostics());
           });
       ctrl.set_waiting(true);
       co_yield {};
       if (result.rows() == 0) {
-        TENZIR_WARN("ending from_file because empty slice");
         break;
       }
-      TENZIR_WARN("got slice: {}", result.rows());
+      // TENZIR_WARN("got slice: {}", result.rows());
       co_yield std::move(result);
     }
+    TENZIR_ERROR("ending from_file generator");
   }
 
   auto optimize(expression const& filter, event_order order) const
