@@ -1,0 +1,8 @@
+from (
+  {foo: 10, bar: 20, baz: 30},
+  {foo: 100, bar: 200},
+  {baz: 300, qux: 400},
+  {},
+)
+
+select first = this[this.keys().sort().first()]?

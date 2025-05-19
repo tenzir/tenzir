@@ -100,7 +100,7 @@ COPY CMakeLists.txt LICENSE README.md tenzir.spdx.json VERSIONING.md \
 FROM dependencies AS development
 
 ENV PREFIX="/opt/tenzir" \
-    PATH="/opt/tenzir/bin:${PATH}" \
+    PATH="/opt/tenzir/bin:/opt/tenzir/libexec:${PATH}" \
     CC="gcc-14" \
     CXX="g++-14"
 
@@ -344,7 +344,7 @@ FROM runtime-base AS tenzir-de
 # When changing these, make sure to also update the entries in the flake.nix
 # file.
 ENV PREFIX="/opt/tenzir" \
-    PATH="/opt/tenzir/bin:${PATH}" \
+    PATH="/opt/tenzir/bin:/opt/tenzir/libexec:${PATH}" \
     TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
     TENZIR_STATE_DIRECTORY="/var/lib/tenzir" \
     TENZIR_LOG_FILE="/var/log/tenzir/server.log" \

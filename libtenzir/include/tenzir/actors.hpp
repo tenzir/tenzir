@@ -301,8 +301,6 @@ using exec_node_sink_actor = caf::typed_actor<exec_node_sink_actor_traits>;
 /// The interface of a EXEC NODE actor.
 struct exec_node_actor_traits {
   using signatures = caf::type_list<
-    // Resume the internal event loop.
-    auto(atom::internal, atom::run)->caf::result<void>,
     // Start an execution node. Returns after the operator has yielded for the
     // first time.
     auto(atom::start, std::vector<caf::actor> all_previous)->caf::result<void>,

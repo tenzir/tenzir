@@ -375,6 +375,56 @@ public:
   }
 };
 
+class keys final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "keys";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "record")
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> multi_series {
+        const auto result_type = list_type{string_type{}};
+        return map_series(eval(expr), [&](auto&& subject) -> series {
+          return match(
+            subject.type,
+            [&](const null_type&) {
+              return series::null(result_type, eval.length());
+            },
+            [&](const record_type& type) {
+              auto keys_builder = arrow::StringBuilder{};
+              check(keys_builder.Reserve(
+                detail::narrow<int64_t>(type.num_fields())));
+              for (const auto& field : type.fields()) {
+                check(keys_builder.Append(field.name));
+              }
+              return series{
+                result_type,
+                check(arrow::MakeArrayFromScalar(
+                  arrow::ListScalar{
+                    finish(keys_builder),
+                    result_type.to_arrow_type(),
+                  },
+                  eval.length())),
+              };
+            },
+            [&](const auto&) {
+              diagnostic::warning("expected `record`, got `{}`",
+                                  subject.type.kind())
+                .primary(expr)
+                .emit(ctx);
+              return series::null(result_type, eval.length());
+            });
+        });
+      });
+  }
+};
+
 class select_drop_matching final : public function_plugin {
 public:
   explicit select_drop_matching(bool select) : select_{select} {
@@ -526,6 +576,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::network)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::keys)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::merge)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::get)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})

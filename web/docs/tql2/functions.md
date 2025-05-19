@@ -69,6 +69,7 @@ but often resort to the method style when it is more idiomatic.
 | :---------------------------- | :---------------------------------- | :----------------------------- |
 | [`get`](functions/get.md)     | Accesses a field of a record        | `record.get("field", default)` |
 | [`has`](functions/has.md)     | Checks whether a record has a field | `record.has("field")`          |
+| [`keys`](functions/keys.md)   | Gets all field names from a record  | `record.keys()`                |
 | [`merge`](functions/merge.md) | Merges two records                  | `merge(foo, bar)`              |
 | [`sort`](functions/sort.md)   | Sorts a record by field names       | `xs.sort()`                    |
 

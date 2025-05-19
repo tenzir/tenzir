@@ -19,7 +19,9 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/ssl_options.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 #include <tenzir/try.hpp>
 
 #include <boost/asio.hpp>
@@ -78,15 +80,15 @@ struct load_tcp_args : ssl_options {
   std::optional<location> connect = {};
   std::optional<located<uint64_t>> max_buffered_chunks = {};
   std::optional<located<class pipeline>> pipeline = {};
+  std::optional<ast::field_path> peer_field = {};
 
   friend auto inspect(auto& f, load_tcp_args& x) -> bool {
     return f.object(x).fields(
       f.field("ssl_options", static_cast<ssl_options&>(x)),
       f.field("endpoint", x.endpoint), f.field("parallel", x.parallel),
-      f.field("connect", x.connect), f.field("tls", x.tls),
-      f.field("certfile", x.certfile), f.field("keyfile", x.keyfile),
+      f.field("connect", x.connect),
       f.field("max_buffered_chunks", x.max_buffered_chunks),
-      f.field("pipeline", x.pipeline));
+      f.field("pipeline", x.pipeline), f.field("peer_field", x.peer_field));
   }
 };
 
@@ -204,18 +206,44 @@ public:
   load_tcp_sink_operator() = default;
 
   explicit load_tcp_sink_operator(
-    const connection_manager_actor<Elements>& connection_manager)
-    : connection_manager_{connection_manager} {
+    const connection_manager_actor<Elements>& connection_manager,
+    std::optional<ast::field_path> peer_field,
+    const boost::asio::ip::tcp::socket::endpoint_type& peer,
+    const boost::asio::ip::tcp::resolver::results_type& resolved_peer)
+    : connection_manager_{connection_manager},
+      peer_field_{std::move(peer_field)},
+      peer_ip_{peer.address().is_v4()
+                 ? ip::v4(as_bytes(peer.address().to_v4().to_bytes()))
+                 : ip::v6(as_bytes(peer.address().to_v6().to_bytes()))},
+      peer_port_{peer.port()} {
+    if (not resolved_peer.empty()) {
+      peer_hostname_ = resolved_peer.begin()->host_name();
+    }
   }
 
   auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto connection_manager = connection_manager_.lock();
     TENZIR_ASSERT(connection_manager);
+    const auto peer = ast::constant{
+      record{
+        {"ip", peer_ip_},
+        {"port", peer_port_},
+        {"hostname", peer_hostname_},
+      },
+      location::unknown,
+    };
     for (auto&& elements : input) {
       if (size(elements) == 0) {
         co_yield {};
         continue;
+      }
+      if constexpr (std::is_same_v<Elements, table_slice>) {
+        if (peer_field_) {
+          auto right = eval(peer, elements, ctrl.diagnostics());
+          elements = assign(*peer_field_, std::move(right), std::move(elements),
+                            ctrl.diagnostics());
+        }
       }
       ctrl.set_waiting(true);
       ctrl.self()
@@ -256,12 +284,20 @@ public:
   }
 
   friend auto inspect(auto& f, load_tcp_sink_operator& x) -> bool {
-    return f.apply(x.connection_manager_);
+    return f.object(x).fields(
+      f.field("connection_manager", x.connection_manager_),
+      f.field("peer_field", x.peer_field_), f.field("peer_ip", x.peer_ip_),
+      f.field("peer_port", x.peer_port_),
+      f.field("peer_hostname", x.peer_hostname_));
   }
 
 private:
   detail::weak_handle<connection_manager_actor<Elements>> connection_manager_
     = {};
+  std::optional<ast::field_path> peer_field_;
+  ip peer_ip_;
+  uint64_t peer_port_;
+  std::optional<std::string> peer_hostname_;
 };
 
 // -- connection-manager actor -------------------------------------------------
@@ -566,7 +602,19 @@ struct connection_manager_state {
           return;
         }
       }
-      if (args.skip_peer_verification) {
+      if (! args.connect) {
+        // Always set verify_none in listen mode, since we don't have a flag
+        // to request client certificates yet.
+        if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
+                                                 ec)) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to set verify mode verification")
+            .note("handle `{}`", connection->socket->native_handle())
+            .primary(*args.skip_peer_verification)
+            .emit(diagnostics);
+          return;
+        }
+      } else if (args.connect && args.skip_peer_verification) {
         if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
                                                  ec)) {
           diagnostic::warning("{}", ec.message())
@@ -613,13 +661,18 @@ struct connection_manager_state {
         return;
       }
     }
+    // Resolve the peer endpoint.
+    const auto& peer_endpoint = connection->socket->remote_endpoint();
+    auto resolver = boost::asio::ip::tcp::resolver{*io_ctx};
+    const auto resolved_peer = resolver.resolve(peer_endpoint);
     // Set up and spawn the nested pipeline.
     auto pipeline = args.pipeline->inner;
     auto source = std::make_unique<load_tcp_source_operator>(
       connection_actor{self}, connection->socket->native_handle());
     pipeline.prepend(std::move(source));
     auto sink = std::make_unique<load_tcp_sink_operator<Elements>>(
-      connection_manager_actor<Elements>{self});
+      connection_manager_actor<Elements>{self}, args.peer_field, peer_endpoint,
+      resolved_peer);
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
@@ -912,6 +965,7 @@ public:
                     .positional("endpoint", endpoint)
                     .named("parallel", parallel)
                     .named("max_buffered_chunks", args.max_buffered_chunks)
+                    .named("peer_field", args.peer_field)
                     .positional("{ … }", args.pipeline);
     args.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
