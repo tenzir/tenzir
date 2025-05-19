@@ -51,6 +51,7 @@
     extraCmakeFlags ? [],
     python3,
     uv,
+    uv-bin,
     pkgsBuildHost,
     makeBinaryWrapper,
     isReleaseBuild ? false,
@@ -271,7 +272,7 @@
             "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
             "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCPACK_GENERATOR=${if stdenv.hostPlatform.isDarwin then "TGZ;productbuild" else "TGZ;DEB;RPM"}"
-            "-DTENZIR_UV_PATH:STRING=${lib.getExe uv}"
+            "-DTENZIR_UV_PATH:STRING=${lib.getExe uv-bin}"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
           ]

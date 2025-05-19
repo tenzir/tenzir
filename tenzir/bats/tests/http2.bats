@@ -10,11 +10,17 @@ setup() {
   bats_load_library bats-tenzir
 }
 
+wait_for_tcp() {
+  port=$1
+  timeout 10 bash -c "until lsof -i :$port; do sleep 0.2; done"
+}
+
 load() {
   if ! command -v python; then
     skip "python executable must be in PATH"
   fi
   check --bg server python "${MISCDIR}/scripts/webserver.py" --port=$1
+  wait_for_tcp "$1"
   check tenzir "$2"
   wait_all ${server[@]}
 }
@@ -24,6 +30,7 @@ save() {
     skip "python executable must be in PATH"
   fi
   check --bg server python "${MISCDIR}/scripts/webserver.py" --port=$1
+  wait_for_tcp "$1"
   tenzir "$2"
   wait_all ${server[@]}
 }

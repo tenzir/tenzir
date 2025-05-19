@@ -566,7 +566,19 @@ struct connection_manager_state {
           return;
         }
       }
-      if (args.skip_peer_verification) {
+      if (! args.connect) {
+        // Always set verify_none in listen mode, since we don't have a flag
+        // to request client certificates yet.
+        if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
+                                                 ec)) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to set verify mode verification")
+            .note("handle `{}`", connection->socket->native_handle())
+            .primary(*args.skip_peer_verification)
+            .emit(diagnostics);
+          return;
+        }
+      } else if (args.connect && args.skip_peer_verification) {
         if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
                                                  ec)) {
           diagnostic::warning("{}", ec.message())
