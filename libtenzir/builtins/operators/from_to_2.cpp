@@ -25,6 +25,7 @@
 
 #include <arrow/filesystem/api.h>
 #include <arrow/util/uri.h>
+#include <boost/unordered_set.hpp>
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
 #include <caf/actor_from_state.hpp>
@@ -782,16 +783,34 @@ private:
   std::optional<std::pair<ast::field_path, std::string>> path_field_;
 };
 
+struct file_hasher {
+  auto operator()(const arrow::fs::FileInfo& file) const -> size_t {
+    return hash(file.path(), file.type(), file.size(), file.mtime());
+  }
+};
+
+using file_set = boost::unordered_set<arrow::fs::FileInfo, file_hasher>;
+
+// How does globbing work?
+// We repeatedly issue our search and deduplicate based on:
+// File, Size, MTime
+//
+// To get non-growing memory, we use the results from the latest search as the
+// baseline for the next one.
+//
+// So we, at the earliest, send the next query when the last is done.
+
 class from_file_impl {
 public:
   from_file_impl(from_file_actor::pointer self,
                  std::unique_ptr<diagnostic_handler> dh,
-                 located<std::string> url,
+                 located<std::string> url, bool watch,
                  std::optional<ast::field_path> path_field,
                  std::string definition, node_actor node, bool is_hidden,
                  event_order order, std::optional<located<pipeline>> pipe)
     : self_{self},
       url_{std::move(url)},
+      watch_{watch},
       path_field_{std::move(path_field)},
       dh_{std::move(dh)},
       definition_{std::move(definition)},
@@ -804,10 +823,14 @@ public:
       order_{order},
       pipe_{std::move(pipe)} {
     TENZIR_ASSERT(dh_);
-    auto path = std::string{};
+    root_path_ = std::string{};
     // TODO: Relative local-filesystem paths.
     // TODO: Arrow removes trailing slashes here.
-    auto fs = arrow::fs::FileSystemFromUriOrPath(url_.inner, &path);
+    auto fs = arrow::fs::FileSystemFromUriOrPath(url_.inner,
+#if USE_EXECUTOR
+                                                 io_ctx_,
+#endif
+                                                 &root_path_);
     if (not fs.ok()) {
       diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
         .emit(*dh_);
@@ -815,36 +838,21 @@ public:
       return;
     }
     fs_ = fs.MoveValueUnsafe();
-    auto glob = parse_glob(path);
+    glob_ = parse_glob(root_path_);
     // TODO: Figure out the proper logic here.
-    if (auto star = path.find('*'); star != std::string::npos) {
-      auto slash = path.rfind('/', star);
+    if (auto star = root_path_.find('*'); star != std::string::npos) {
+      auto slash = root_path_.rfind('/', star);
       TENZIR_ASSERT(slash != std::string::npos);
-      path = path.substr(0, slash + 1);
+      root_path_ = root_path_.substr(0, slash + 1);
     }
-    // We intentionally define the lambda in the scope of the generator to make
-    // sure that we do not capture anything that doesn't survive.
-    auto process
-      = [this, glob = std::move(glob)](arrow::fs::FileInfoVector infos) {
-          if (infos.empty()) {
-            TENZIR_WARN("got all file infos");
-            spawned_all_jobs_ = true;
-            check_jobs_and_termination();
-            return;
-          }
-          for (auto& info : infos) {
-            if (not matches(info.path(), glob)) {
-              continue;
-            }
-            TENZIR_WARN("{}", info.path());
-            add_job(std::move(info));
-          }
-        };
-    TENZIR_WARN("hello?");
+    query_files();
+  }
+
+  void query_files() {
+    TENZIR_WARN("QUERY");
     add_actor_callback(
-      self_, fs_->GetFileInfoAsync(std::vector{path}),
-      [this, process, path = std::move(path)](
-        arrow::Result<std::vector<arrow::fs::FileInfo>> infos) {
+      self_, fs_->GetFileInfoAsync(std::vector{root_path_}),
+      [this](arrow::Result<std::vector<arrow::fs::FileInfo>> infos) {
         TENZIR_WARN("callback");
         // TODO: Improve diagnostics.
         if (not infos.ok()) {
@@ -868,14 +876,42 @@ public:
             return;
           case arrow::fs::FileType::Directory:
             auto sel = arrow::fs::FileSelector{};
-            sel.base_dir = path;
+            sel.base_dir = root_path_;
             sel.recursive = true;
             auto gen = fs_->GetFileInfoGenerator(sel);
-            async_iter(self_, std::move(gen), std::move(process));
+            async_iter(self_, std::move(gen),
+                       [this](arrow::fs::FileInfoVector files) {
+                         process_files(std::move(files));
+                       });
             return;
         }
         TENZIR_UNREACHABLE();
       });
+  }
+
+  void process_files(arrow::fs::FileInfoVector files) {
+    if (files.empty()) {
+      TENZIR_WARN("got all file infos");
+      if (watch_) {
+        std::swap(previous_, current_);
+        current_.clear();
+        // TODO: Restart now, or after timeout?
+        self_->run_delayed_weak(std::chrono::seconds{10}, [this] {
+          query_files();
+        });
+      } else {
+        spawned_all_jobs_ = true;
+        check_termination();
+      }
+      return;
+    }
+    for (auto& file : files) {
+      if (not matches(file.path(), glob_)) {
+        continue;
+      }
+      TENZIR_WARN("{}", file.path());
+      add_job(std::move(file));
+    }
   }
 
   auto make_behavior() -> from_file_actor::behavior_type {
@@ -939,6 +975,11 @@ private:
   }
 
   void add_job(arrow::fs::FileInfo file) {
+    auto inserted = current_.emplace(file).second;
+    TENZIR_ASSERT(inserted);
+    if (previous_.contains(file)) {
+      return;
+    }
     jobs_.push_back(std::move(file));
     check_jobs();
   }
@@ -1032,12 +1073,17 @@ private:
   std::unique_ptr<diagnostic_handler> dh_;
   event_order order_;
   std::optional<located<pipeline>> pipe_;
+  glob glob_;
+  std::string root_path_;
+  file_set previous_;
+  file_set current_;
 
   std::deque<caf::typed_response_promise<table_slice>> gets_;
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> puts_;
 
   // configuration
   located<std::string> url_;
+  bool watch_;
   std::optional<ast::field_path> path_field_;
 
   // stuff for spawning subpipelines
@@ -1063,10 +1109,11 @@ class from_file final : public crtp_operator<from_file> {
 public:
   from_file() = default;
 
-  explicit from_file(located<std::string> url,
+  explicit from_file(located<std::string> url, bool watch,
                      std::optional<ast::field_path> path_field,
                      std::optional<located<pipeline>> pipe)
     : url_{std::move(url)},
+      watch_{watch},
       path_field_{std::move(path_field)},
       pipe_{std::move(pipe)} {
   }
@@ -1081,7 +1128,7 @@ public:
     auto impl = scope_linked{ctrl.self().spawn<caf::linked>(
       caf::actor_from_state<from_file_impl>,
       std::make_unique<shared_diagnostic_handler>(ctrl.shared_diagnostics()),
-      url_, path_field_, std::string{ctrl.definition()}, ctrl.node(),
+      url_, watch_, path_field_, std::string{ctrl.definition()}, ctrl.node(),
       ctrl.is_hidden(), order_, pipe_)};
     impl.get()->attach_functor([] {
       TENZIR_ERROR("destroying from_file actor");
@@ -1119,12 +1166,16 @@ public:
   }
 
   friend auto inspect(auto& f, from_file& x) -> bool {
-    return f.object(x).fields(f.field("url", x.url_), f.field("pipe", x.pipe_),
+    return f.object(x).fields(f.field("url", x.url_),
+                              f.field("watch", x.watch_),
+                              f.field("path_field", x.path_field_),
+                              f.field("pipe", x.pipe_),
                               f.field("order", x.order_));
   }
 
 private:
   located<std::string> url_;
+  bool watch_;
   std::optional<ast::field_path> path_field_;
   std::optional<located<pipeline>> pipe_;
   event_order order_ = event_order::ordered;
@@ -1166,10 +1217,9 @@ public:
           .emit(ctx);
         return failure::promise();
       }
-      // TODO
     }
-    return std::make_unique<from_file>(std::move(url), std::move(path_field),
-                                       std::move(pipe));
+    return std::make_unique<from_file>(std::move(url), watch,
+                                       std::move(path_field), std::move(pipe));
   }
 };
 
