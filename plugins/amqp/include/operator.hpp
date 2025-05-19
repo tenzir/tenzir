@@ -577,8 +577,8 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto engine = amqp_engine::make(config_);
     co_yield {};
+    auto engine = amqp_engine::make(config_);
     if (not engine) {
       diagnostic::error("failed to construct AMQP engine")
         .note("{}", engine.error())
@@ -628,9 +628,16 @@ public:
           .hint("{}", message.error())
           .emit(ctrl.diagnostics());
         co_return;
-        ;
       }
     }
+  }
+
+  auto detached() const -> bool override {
+    return true;
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
   }
 
   auto optimize(expression const&, event_order) const
@@ -663,6 +670,7 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    co_yield {};
     auto engine = std::shared_ptr<amqp_engine>{};
     if (auto eng = amqp_engine::make(config_)) {
       engine = std::make_shared<amqp_engine>(std::move(*eng));
@@ -712,6 +720,14 @@ public:
           .emit(ctrl.diagnostics());
       }
     }
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto detached() const -> bool override {
+    return true;
   }
 
   auto optimize(expression const&, event_order) const
