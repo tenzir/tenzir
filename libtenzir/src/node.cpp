@@ -661,7 +661,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
       // boundaries if the request came from the client process.
       // https://github.com/actor-framework/actor-framework/issues/2056
       self->mail(atom::resolve_v, std::move(name), std::move(public_key))
-        .request(store, defaults::secret_lookup_timeout)
+        .request(store, caf::infinite)
         .then(
           [rp = rp](secret_resolution_result r) mutable {
             rp.deliver(std::move(r));

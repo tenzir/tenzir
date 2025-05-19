@@ -343,7 +343,7 @@ struct exec_node_control_plane final : public operator_control_plane {
         TENZIR_ASSERT(key_pair);
         auto public_key = key_pair->public_key;
         state.self->mail(atom::resolve_v, name, std::move(public_key))
-          .request(*maybe_actor, defaults::secret_lookup_timeout)
+          .request(*maybe_actor, caf::infinite)
           .then(
             [fan, keys = *key_pair, name, &out](secret_resolution_result res) {
               match(
