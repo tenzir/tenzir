@@ -219,7 +219,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       }
       auto result = pattern::make(from.data_as_pattern()->value()->str(),
                                   std::move(options));
-      if (!result) {
+      if (not result) {
         return std::move(result.error());
       }
       to = std::move(*result);
@@ -337,16 +337,16 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   };
   switch (op) {
     default:
-      TENZIR_ASSERT(!"missing case");
+      TENZIR_ASSERT(not "missing case");
       return false;
     case relational_operator::in:
       return eval_in(lhs, rhs);
     case relational_operator::not_in:
-      return !eval_in(lhs, rhs);
+      return not eval_in(lhs, rhs);
     case relational_operator::ni:
       return eval_in(rhs, lhs);
     case relational_operator::not_ni:
-      return !eval_in(rhs, lhs);
+      return not eval_in(rhs, lhs);
     case relational_operator::equal:
       if (auto x = eval_string_and_pattern(lhs, rhs)) {
         return *x;
@@ -354,7 +354,7 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
       return lhs == rhs;
     case relational_operator::not_equal:
       if (auto x = eval_string_and_pattern(lhs, rhs)) {
-        return !*x;
+        return not *x;
       }
       return lhs != rhs;
     case relational_operator::less:
@@ -386,7 +386,7 @@ bool is_basic(const data& x) {
 }
 
 bool is_complex(const data& x) {
-  return !is_basic(x);
+  return not is_basic(x);
 }
 
 bool is_recursive(const data& x) {
@@ -420,7 +420,7 @@ size_t depth(const record& r) {
   std::vector<std::tuple<record::const_iterator, record::const_iterator, size_t>>
     stack;
   stack.emplace_back(r.begin(), r.end(), 1u);
-  while (!stack.empty()) {
+  while (not stack.empty()) {
     auto [begin, end, depth] = stack.back();
     stack.pop_back();
     result = std::max(result, depth);
@@ -445,7 +445,7 @@ record flatten(const record& r, size_t max_recursion) {
   }
   for (const auto& [k, v] : r) {
     if (const auto* nested = try_as<record>(&v)) {
-      for (auto& [nk, nv] : flatten(*nested, --max_recursion)) {
+      for (auto& [nk, nv] : flatten(*nested, max_recursion - 1)) {
         result.emplace(fmt::format("{}.{}", k, nk), std::move(nv));
       }
     } else {
@@ -467,17 +467,17 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
     if (const auto* ir = try_as<record>(&v)) {
       // Look for a matching field of type record.
       const auto offset = rt.resolve_key(k);
-      if (!offset.has_value()) {
+      if (not offset.has_value()) {
         return {};
       }
       auto field = rt.field(*offset);
       const auto* irt = try_as<record_type>(&field.type);
-      if (!irt) {
+      if (not irt) {
         return {};
       }
       // Recurse.
-      auto nested = flatten(*ir, *irt, --max_recursion);
-      if (!nested) {
+      auto nested = flatten(*ir, *irt, max_recursion - 1);
+      if (not nested) {
         return {};
       }
       // Hoist nested record into parent scope by prefixing field names.
@@ -501,7 +501,7 @@ flatten(const data& x, const type& t, size_t max_recursion) {
   const auto* xs = try_as<record>(&x);
   const auto* rt = try_as<record_type>(&t);
   if (xs && rt) {
-    return flatten(*xs, *rt, --max_recursion);
+    return flatten(*xs, *rt, max_recursion - 1);
   }
   return caf::none;
 }
@@ -532,7 +532,7 @@ void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
   for (const auto& [k, v] : src) {
     if (const auto* src_rec = try_as<record>(&v)) {
       auto* dst_rec = try_as<record>(&dst[k]);
-      if (!dst_rec) {
+      if (not dst_rec) {
         // Overwrite key with empty record on type mismatch.
         dst[k] = record{};
         dst_rec = try_as<record>(&dst[k]);
@@ -544,7 +544,7 @@ void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
         dst_list->insert(dst_list->end(), src_list.begin(), src_list.end());
       } else if (auto it = dst.find(k); it != dst.end()) {
         auto dst_list = list{};
-        if (!is<caf::none_t>(it->second)) {
+        if (not is<caf::none_t>(it->second)) {
           dst_list.reserve(src_list.size() + 1);
           dst_list.push_back(std::move(it->second));
         } else {
@@ -658,7 +658,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
 bool convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
   for (const auto& [k, v] : xs) {
     data y;
-    if (!convert(v, y)) {
+    if (not convert(v, y)) {
       return false;
     }
     ys.emplace(k, std::move(y));
@@ -668,7 +668,7 @@ bool convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
 
 bool convert(const caf::dictionary<caf::config_value>& xs, data& y) {
   record result;
-  if (!convert(xs, result)) {
+  if (not convert(xs, result)) {
     return false;
   }
   y = std::move(result);
@@ -694,7 +694,7 @@ bool convert(const caf::config_value& x, data& y) {
       result.reserve(xs.size());
       for (const auto& x : xs) {
         data element;
-        if (!convert(x, element)) {
+        if (not convert(x, element)) {
           return false;
         }
         result.push_back(std::move(element));
@@ -704,7 +704,7 @@ bool convert(const caf::config_value& x, data& y) {
     },
     [&](const caf::config_value::dictionary& xs) -> bool {
       record result;
-      if (!convert(xs, result)) {
+      if (not convert(xs, result)) {
         return false;
       }
       y = std::move(result);
@@ -722,7 +722,7 @@ record strip(const record& xs) {
     }
     if (const auto* vr = try_as<record>(&v)) {
       auto nested = strip(*vr);
-      if (!nested.empty()) {
+      if (not nested.empty()) {
         result.emplace(k, std::move(nested));
       }
     } else {
@@ -874,7 +874,7 @@ caf::expected<data> from_yaml(std::string_view str) {
 
 caf::expected<data> load_yaml(const std::filesystem::path& file) {
   const auto contents = detail::load_contents(file);
-  if (!contents) {
+  if (not contents) {
     return contents.error();
   }
   if (auto yaml = from_yaml(*contents)) {
@@ -896,7 +896,7 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion) {
     return extension == ".yaml" || extension == ".yml";
   };
   auto yaml_files = detail::filter_dir(dir, std::move(filter), max_recursion);
-  if (!yaml_files) {
+  if (not yaml_files) {
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to filter YAML dir at {}: {}",
                                        dir, yaml_files.error()));
