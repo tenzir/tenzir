@@ -178,7 +178,7 @@ struct as_located {
 template <class T>
 struct is_located : detail::is_specialization_of<located, T> {};
 
-auto trace_panic(into_location trace, auto&& fun) {
+auto trace_panic(into_location trace, auto&& fun) -> decltype(auto) {
   try {
     static_cast<void>(trace);
     return std::invoke(std::forward<decltype(fun)>(fun));
