@@ -23,7 +23,8 @@ struct panic_exception final : std::exception {
                   boost::stacktrace::stacktrace stacktrace)
     : message{std::move(message)},
       location{location},
-      stacktrace{std::move(stacktrace)} {
+      stacktrace{std::move(stacktrace)},
+      trace{} {
   }
 
   auto what() const noexcept -> const char* override {
@@ -33,6 +34,13 @@ struct panic_exception final : std::exception {
   std::string message;
   std::source_location location;
   boost::stacktrace::stacktrace stacktrace;
+
+  // We can't include the location.hpp header here as that'd be a circular
+  // include, so we roll our own and convert it into a location upon printing.
+  struct {
+    size_t begin = {};
+    size_t end = {};
+  } trace;
 };
 
 template <class... Ts>
@@ -67,7 +75,8 @@ panic(located_format_string<std::type_identity_t<Ts>...> located_string,
 
 template <size_t Skip = 0, class T>
 [[noreturn]] TENZIR_NO_INLINE void
-panic(T&& message, std::source_location location = std::source_location::current()) {
+panic(T&& message, std::source_location location
+                   = std::source_location::current()) {
   panic_at<Skip + 1>(location, "{}", std::forward<T>(message));
 }
 
