@@ -293,6 +293,7 @@ auto to_diagnostic(const panic_exception& e) -> diagnostic {
     note += detail::format_frame(frame) + "\n";
   }
   return diagnostic::error("unexpected internal error: {}", e.message)
+    .primary(location{e.trace.begin, e.trace.end})
     .note(std::move(note))
     .done();
 }
