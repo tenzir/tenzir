@@ -350,9 +350,9 @@ tenzir:
       # The definition of the pipeline. Configured pipelines that fail to start
       # cause the node to fail to start.
       definition: |
-        from tcp://0.0.0.0:34343 read suricata --no-infer
+        load_tcp "0.0.0.0:34343" { read_suricata schema_only=true }
         | where event_type != "stats"
-        | publish suricata
+        | publish "suricata"
       # Pipelines that encounter an error stop running and show an error state.
       # This option causes pipelines to automatically restart when they
       # encounter an error instead. The first restart happens immediately, and
