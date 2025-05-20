@@ -445,7 +445,7 @@ record flatten(const record& r, size_t max_recursion) {
   }
   for (const auto& [k, v] : r) {
     if (const auto* nested = try_as<record>(&v)) {
-      for (auto& [nk, nv] : flatten(*nested, --max_recursion)) {
+      for (auto& [nk, nv] : flatten(*nested, max_recursion - 1)) {
         result.emplace(fmt::format("{}.{}", k, nk), std::move(nv));
       }
     } else {
@@ -476,8 +476,8 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
         return {};
       }
       // Recurse.
-      auto nested = flatten(*ir, *irt, --max_recursion);
-      if (!nested) {
+      auto nested = flatten(*ir, *irt, max_recursion - 1);
+      if (! nested) {
         return {};
       }
       // Hoist nested record into parent scope by prefixing field names.
@@ -501,7 +501,7 @@ flatten(const data& x, const type& t, size_t max_recursion) {
   const auto* xs = try_as<record>(&x);
   const auto* rt = try_as<record_type>(&t);
   if (xs && rt) {
-    return flatten(*xs, *rt, --max_recursion);
+    return flatten(*xs, *rt, max_recursion - 1);
   }
   return caf::none;
 }
