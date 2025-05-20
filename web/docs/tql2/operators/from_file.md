@@ -1,6 +1,8 @@
 # from_file
 
-:::warning This operator is still under active development. :::
+:::warning
+This operator is still under active development.
+:::
 
 Reads one or multiple files using from a filesystem.
 

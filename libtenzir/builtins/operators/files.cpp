@@ -7,15 +7,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/arrow_caf.hpp>
-#include <tenzir/glob.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <arrow/filesystem/api.h>
-#include <arrow/filesystem/filesystem.h>
-#include <arrow/util/future.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -42,36 +37,6 @@ struct files_args {
       f.field("skip_permission_denied", x.skip_permission_denied));
   }
 };
-
-// template <class T>
-// void add_actor_callback(auto* self, arrow::Future<T> fut, auto&& fn) {
-//   using result_type
-//     = std::conditional_t<std::same_as<T, arrow::internal::Empty>,
-//     arrow::Status,
-//                          arrow::Result<T>>;
-//   std::move(fut).AddCallback([self, fn = std::forward<decltype(fn)>(fn)](
-//                                const result_type& result) mutable {
-//     self->delay_fn([fn = std::move(fn), result]() mutable -> void {
-//       return std::move(fn)(std::move(result));
-//     });
-//   });
-// }
-
-template <class F>
-void async_iter(arrow::fs::FileInfoGenerator gen, F&& f) {
-  auto next = gen();
-  next.AddCallback([gen = std::move(gen), f = std::forward<F>(f)](
-                     arrow::Result<arrow::fs::FileInfoVector> infos_result) {
-    // TODO: Don't check.
-    auto infos = check(infos_result);
-    auto done = infos.empty();
-    f(std::move(infos));
-    if (done) {
-      return;
-    }
-    async_iter(std::move(gen), std::move(f));
-  });
-}
 
 class files_operator final : public crtp_operator<files_operator> {
 public:
@@ -196,104 +161,6 @@ public:
 
   auto
   operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
-#if 1
-    auto executor = caf_executor{&ctrl.self()};
-    auto io_ctx = arrow::io::IOContext{arrow::default_memory_pool(), &executor};
-    TENZIR_ASSERT(args_.path);
-    auto path = std::string{};
-    // TODO: Relative local-filesystem paths.
-    // TODO: Arrow removes trailing slashes here.
-    auto fs = arrow::fs::FileSystemFromUriOrPath(*args_.path, io_ctx, &path);
-    if (not fs.ok()) {
-      diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    auto glob = parse_glob(path);
-    // TODO: Figure out the proper logic here.
-    if (auto star = path.find('*'); star != std::string::npos) {
-      auto slash = path.rfind('/', star);
-      TENZIR_ASSERT(slash != std::string::npos);
-      path = path.substr(0, slash + 1);
-    }
-    auto sel = arrow::fs::FileSelector{};
-    sel.base_dir = path;
-    sel.recursive = true;
-    // TODO: Schema.
-    auto b = series_builder{};
-    // We intentionally define the lambda in the scope of the generator to make
-    // sure that we do not capture anything that doesn't survive.
-    auto process = [&](arrow::fs::FileInfoVector infos) {
-      if (infos.empty()) {
-        ctrl.set_waiting(false);
-        return;
-      }
-      for (auto& info : infos) {
-        if (not matches(info.path(), glob)) {
-          continue;
-        }
-        auto r = b.record();
-        r.field("path", info.path());
-        r.field("type", std::invoke([&] -> data_view2 {
-                  switch (info.type()) {
-                    case arrow::fs::FileType::NotFound:
-                      // TODO: This should not happen, right?
-                      TENZIR_UNREACHABLE();
-                    case arrow::fs::FileType::Unknown:
-                      return caf::none;
-                    case arrow::fs::FileType::File:
-                      return "file";
-                    case arrow::fs::FileType::Directory:
-                      return "directory";
-                  }
-                  TENZIR_UNREACHABLE();
-                }));
-        r.field("size", info.size() == arrow::fs::kNoSize
-                          ? data_view2{caf::none}
-                          : info.size());
-        r.field("last_modified", info.mtime() == arrow::fs::kNoTime
-                                   ? data_view2{caf::none}
-                                   : info.mtime());
-      }
-    };
-    ctrl.set_waiting(true);
-    (*fs)
-      ->GetFileInfoAsync(std::vector{path})
-      .AddCallback([&](arrow::Result<std::vector<arrow::fs::FileInfo>> infos) {
-        // TODO: Improve diagnostics.
-        if (not infos.ok()) {
-          diagnostic::error("{}", infos.status().ToStringWithoutContextLines())
-            .emit(ctrl.diagnostics());
-          return;
-        }
-        TENZIR_ASSERT(infos->size() == 1);
-        auto root_info = std::move((*infos)[0]);
-        switch (root_info.type()) {
-          case arrow::fs::FileType::NotFound:
-            diagnostic::error("`{}` does not exist", *args_.path)
-              .emit(ctrl.diagnostics());
-            return;
-          case arrow::fs::FileType::Unknown:
-            diagnostic::error("`{}` is unknown", *args_.path)
-              .emit(ctrl.diagnostics());
-            return;
-          case arrow::fs::FileType::File:
-            // TODO: What do we do?
-            diagnostic::error("`{}` is file", *args_.path)
-              .emit(ctrl.diagnostics());
-            return;
-          case arrow::fs::FileType::Directory:
-            auto gen = (*fs)->GetFileInfoGenerator(sel);
-            async_iter(std::move(gen), std::move(process));
-            return;
-        }
-        TENZIR_UNREACHABLE();
-      });
-    co_yield {};
-    for (auto slice : b.finish_as_table_slice("tenzir.file")) {
-      co_yield std::move(slice);
-    }
-#else
     try {
       const auto path = args_.path ? std::filesystem::path{*args_.path}
                                    : std::filesystem::current_path();
@@ -325,7 +192,6 @@ public:
     } catch (const std::filesystem::filesystem_error& err) {
       diagnostic::error("{}", err.what()).emit(ctrl.diagnostics());
     }
-#endif
   }
 
   auto name() const -> std::string override {
