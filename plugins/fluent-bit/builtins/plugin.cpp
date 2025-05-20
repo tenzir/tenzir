@@ -31,7 +31,8 @@ auto tls_to_fluentbit(const ssl_options& ssl, property_map& properties,
     }
     return {};
   };
-  TRY(set("tls", "tls", ssl.tls.inner ? "On" : "Off", ssl.tls.source));
+  TRY(set("tls", "tls", ssl.get_tls().inner ? "On" : "Off",
+          ssl.get_tls().source));
   if (ssl.skip_peer_verification) {
     TRY(set("tls.verify", "skip_peer_verification", "Off", location::unknown));
   }
