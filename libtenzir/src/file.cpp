@@ -9,6 +9,7 @@
 #include "tenzir/file.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/posix.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
@@ -142,6 +143,19 @@ const std::filesystem::path& file::path() const {
 
 file::native_type file::handle() const {
   return handle_;
+}
+
+auto expand_home(std::string path) -> std::string {
+  if (path.empty() || path[0] != '~') {
+    return path;
+  }
+  if (path.size() == 1 || path[1] == '/') {
+    auto home = detail::getenv("HOME");
+    if (home) {
+      path.replace(0, 1, *home);
+    }
+  }
+  return path;
 }
 
 } // namespace tenzir

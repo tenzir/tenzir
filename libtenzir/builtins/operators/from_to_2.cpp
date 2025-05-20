@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_caf.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/file.hpp>
 #include <tenzir/glob.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/pipeline_executor.hpp>
@@ -244,7 +245,7 @@ auto find_compression_and_format(std::string_view extension,
   auto loc = url.source;
   auto path = url.inner;
   if (loc.end - loc.begin == path.size() + 2) {
-    // TODO: Doesn't reads like it doesn't work reliably.
+    // FIXME: This reads like it doesn't work reliably.
     const auto extension_start = path.find(extension);
     loc.begin += extension_start + 1;
     loc.end -= 1;
@@ -634,9 +635,10 @@ public:
       [this](atom::get) -> caf::result<chunk_ptr> {
         auto buffer = stream_->Read(1 << 20);
         if (not buffer.ok()) {
-          return diagnostic::error("TODO").to_error();
+          return diagnostic::error(
+                   "{}", buffer.status().ToStringWithoutContextLines())
+            .to_error();
         }
-        // TENZIR_WARN("sending chunk");
         return chunk::make(buffer.MoveValueUnsafe());
       },
     };
@@ -651,6 +653,7 @@ public:
   from_file_source() = default;
 
   explicit from_file_source(source_actor source) : source_{std::move(source)} {
+    TENZIR_ASSERT(source_);
   }
 
   auto name() const -> std::string override {
@@ -669,28 +672,15 @@ public:
             result = std::move(chunk);
             ctrl.set_waiting(false);
           },
-          [&](caf::error) {
-            diagnostic::error("TODO").emit(ctrl.diagnostics());
+          [&](caf::error error) {
+            diagnostic::error(std::move(error)).emit(ctrl.diagnostics());
           });
       co_yield {};
       if (not result or result->size() == 0) {
-        TENZIR_WARN("from_file_source is done");
         break;
       }
-      // TENZIR_WARN("got chunk: {}", result->size());
       co_yield std::move(result);
     }
-    // arrow::fs::GcsFileSystem::Make();
-    // auto s = std::shared_ptr<arrow::io::InputStream>{};
-    // // TODO: This is blocking!
-    // auto buffer = s->Read(1 << 20);
-    // if (not buffer.ok()) {
-    //   diagnostic::error("{}", buffer.status().ToStringWithoutContextLines())
-    //     .emit(ctrl.diagnostics());
-    //   co_return;
-    // }
-    // co_yield chunk::make(buffer.MoveValueUnsafe());
-    // co_return;
   }
 
   auto optimize(const expression& filter, event_order order) const
@@ -763,7 +753,6 @@ public:
           });
       co_yield {};
     }
-    TENZIR_WARN("from_file_sink is done");
   }
 
   auto optimize(const expression& filter, event_order order) const
@@ -804,13 +793,14 @@ class from_file_impl {
 public:
   from_file_impl(from_file_actor::pointer self,
                  std::unique_ptr<diagnostic_handler> dh,
-                 located<std::string> url, bool watch,
+                 located<std::string> url, bool watch, bool remove,
                  std::optional<ast::field_path> path_field,
                  std::string definition, node_actor node, bool is_hidden,
                  event_order order, std::optional<located<pipeline>> pipe)
     : self_{self},
       url_{std::move(url)},
       watch_{watch},
+      remove_{remove},
       path_field_{std::move(path_field)},
       dh_{std::move(dh)},
       definition_{std::move(definition)},
@@ -824,15 +814,19 @@ public:
       pipe_{std::move(pipe)} {
     TENZIR_ASSERT(dh_);
     root_path_ = std::string{};
+    auto expanded = expand_home(url_.inner);
     // TODO: Relative local-filesystem paths.
     // TODO: Arrow removes trailing slashes here.
-    auto fs = arrow::fs::FileSystemFromUriOrPath(url_.inner,
+    // TODO: This is blocking.
+    // FIXME: `s3://bucket/a?.b?endpoint_override=...`
+    auto fs = arrow::fs::FileSystemFromUriOrPath(expanded,
 #if USE_EXECUTOR
                                                  io_ctx_,
 #endif
                                                  &root_path_);
     if (not fs.ok()) {
       diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
+        .primary(url_)
         .emit(*dh_);
       self->quit(ec::silent);
       return;
@@ -849,30 +843,33 @@ public:
   }
 
   void query_files() {
-    TENZIR_WARN("QUERY");
     add_actor_callback(
       self_, fs_->GetFileInfoAsync(std::vector{root_path_}),
       [this](arrow::Result<std::vector<arrow::fs::FileInfo>> infos) {
-        TENZIR_WARN("callback");
-        // TODO: Improve diagnostics.
         if (not infos.ok()) {
           diagnostic::error("{}", infos.status().ToStringWithoutContextLines())
+            .primary(url_)
             .emit(*dh_);
           return;
         }
         TENZIR_ASSERT(infos->size() == 1);
         auto root_info = std::move((*infos)[0]);
-        TENZIR_WARN("got root info: {}", root_info.path());
         switch (root_info.type()) {
           case arrow::fs::FileType::NotFound:
-            diagnostic::error("`{}` does not exist", url_.inner).emit(*dh_);
+            // TODO: Do we want to allow this? Maybe if `watch=true`?
+            diagnostic::error("`{}` does not exist", url_.inner)
+              .primary(url_)
+              .emit(*dh_);
             return;
           case arrow::fs::FileType::Unknown:
-            diagnostic::error("`{}` is unknown", url_.inner).emit(*dh_);
+            diagnostic::error("`{}` is unknown", url_.inner)
+              .primary(url_)
+              .emit(*dh_);
             return;
           case arrow::fs::FileType::File:
-            // TODO: What do we do?
-            diagnostic::error("`{}` is file", url_.inner).emit(*dh_);
+            // TODO: Do we want to warn when the glob continues?
+            process_file(std::move(root_info));
+            got_all_files();
             return;
           case arrow::fs::FileType::Directory:
             auto sel = arrow::fs::FileSelector{};
@@ -880,8 +877,21 @@ public:
             sel.recursive = true;
             auto gen = fs_->GetFileInfoGenerator(sel);
             async_iter(self_, std::move(gen),
-                       [this](arrow::fs::FileInfoVector files) {
-                         process_files(std::move(files));
+                       [this](arrow::Result<arrow::fs::FileInfoVector> files) {
+                         if (not files.ok()) {
+                           diagnostic::error(
+                             "{}", files.status().ToStringWithoutContextLines())
+                             .primary(url_)
+                             .emit(*dh_);
+                           return;
+                         }
+                         if (files->empty()) {
+                           got_all_files();
+                           return;
+                         }
+                         for (auto& file : *files) {
+                           process_file(std::move(file));
+                         }
                        });
             return;
         }
@@ -889,28 +899,23 @@ public:
       });
   }
 
-  void process_files(arrow::fs::FileInfoVector files) {
-    if (files.empty()) {
-      TENZIR_WARN("got all file infos");
-      if (watch_) {
-        std::swap(previous_, current_);
-        current_.clear();
-        // TODO: Restart now, or after timeout?
-        self_->run_delayed_weak(std::chrono::seconds{10}, [this] {
-          query_files();
-        });
-      } else {
-        spawned_all_jobs_ = true;
-        check_termination();
-      }
-      return;
-    }
-    for (auto& file : files) {
-      if (not matches(file.path(), glob_)) {
-        continue;
-      }
-      TENZIR_WARN("{}", file.path());
+  void process_file(arrow::fs::FileInfo file) {
+    if (file.IsFile() and matches(file.path(), glob_)) {
       add_job(std::move(file));
+    }
+  }
+
+  void got_all_files() {
+    if (watch_) {
+      std::swap(previous_, current_);
+      current_.clear();
+      // TODO: Restart now, or after timeout?
+      self_->run_delayed_weak(std::chrono::seconds{10}, [this] {
+        query_files();
+      });
+    } else {
+      spawned_all_jobs_ = true;
+      check_termination();
     }
   }
 
@@ -939,7 +944,7 @@ public:
         return {};
       },
       [this](diagnostic diag) {
-        TENZIR_WARN("{:#?}", diag);
+        dh_->emit(std::move(diag));
       },
       [this](uint64_t nested_operator_index, uuid nested_metrics_id,
              type schema) {},
@@ -964,7 +969,7 @@ private:
 
   void check_jobs() {
     while (not jobs_.empty() and active_jobs_ < parallel_) {
-      spawn_job(std::move(jobs_.front()));
+      spawn_job(jobs_.front());
       jobs_.pop_front();
     }
   }
@@ -1018,8 +1023,7 @@ private:
     return pipe;
   }
 
-  void spawn_job(arrow::fs::FileInfo file) {
-    TENZIR_WARN("spawning for {}", file.path());
+  void spawn_job(const arrow::fs::FileInfo& file) {
     TENZIR_ASSERT(active_jobs_ < parallel_);
     active_jobs_ += 1;
     auto pipe = make_pipeline(file.path());
@@ -1028,41 +1032,77 @@ private:
       active_jobs_ -= 1;
       return;
     }
+    // We already checked the output type after parsing.
     auto output_type = pipe->infer_type<chunk_ptr>();
     TENZIR_ASSERT(output_type);
     TENZIR_ASSERT(output_type->is<table_slice>());
-    // TODO: Wait for this?
     add_actor_callback(
       self_, fs_->OpenInputStreamAsync(file),
       [this, pipe = std::move(*pipe), path = file.path()](
         arrow::Result<std::shared_ptr<arrow::io::InputStream>> stream) mutable {
-        // TODO: Linked?
-        auto source = self_->spawn<caf::linked>(
-          caf::actor_from_state<arrow_fs_source>, std::move(*stream));
-        source->attach_functor([] {
-          TENZIR_ERROR("destroying arrow_fs_source");
-        });
+        if (not stream.ok()) {
+          diagnostic::error("failed to open `{}`", path)
+            .primary(url_)
+            .note(stream.status().ToStringWithoutContextLines())
+            .emit(*dh_);
+          active_jobs_ -= 1;
+          return;
+        }
+        auto source = self_->spawn(caf::actor_from_state<arrow_fs_source>,
+                                   std::move(*stream));
+        auto weak = caf::weak_actor_ptr{source->ctrl()};
         pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
         pipe.append(std::make_unique<from_file_sink>(
           self_, order_,
           path_field_ ? std::optional{std::pair{*path_field_, path}}
                       : std::nullopt));
-        // TODO: Make sure it quits when we quit.
         pipe = pipe.optimize_if_closed();
         auto executor
           = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
                          self_, node_, false, is_hidden_);
-        self_->monitor(executor, [this, executor](caf::error yo) {
-          TENZIR_WARN("got exit from pipeline executor: {}", yo);
+        self_->attach_functor([this, weak]() {
+          if (auto strong = weak.lock()) {
+            // FIXME: This should not be necessary to ensure that the actor is
+            // destroyed when the executor is done. This problem could also
+            // apply to other operators.
+            self_->send_exit(strong, caf::exit_reason::user_shutdown);
+          }
+        });
+        self_->monitor(executor, [this, executor, path,
+                                  weak = std::move(weak)](caf::error error) {
+          if (auto strong = weak.lock()) {
+            // FIXME: This should not be necessary to ensure that the actor is
+            // destroyed when the executor is done. This problem could also
+            // apply to other operators.
+            self_->send_exit(strong, caf::exit_reason::user_shutdown);
+          }
           active_jobs_ -= 1;
+          if (error) {
+            // TODO: Or warning?
+            diagnostic::error(std::move(error))
+              .note("while reading `{}`", path)
+              .emit(*dh_);
+            return;
+          }
+          if (remove_) {
+            // There is no async call available.
+            auto status = fs_->DeleteFile(path);
+            if (not status.ok()) {
+              diagnostic::warning("failed to remove `{}`", path)
+                .primary(url_)
+                .note(status.ToStringWithoutContextLines())
+                .emit(*dh_);
+            }
+          }
           check_jobs_and_termination();
         });
         self_->mail(atom::start_v)
           .request(executor, caf::infinite)
           .then([] {},
-                [](caf::error error) {
-                  TENZIR_ERROR("could not start pipeline: {}", error);
-                  TENZIR_TODO();
+                [this, path](caf::error error) {
+                  diagnostic::error(std::move(error))
+                    .note("while reading `{}`", path)
+                    .emit(*dh_);
                 });
       });
   }
@@ -1072,26 +1112,32 @@ private:
   // TODO
   std::unique_ptr<diagnostic_handler> dh_;
   event_order order_;
-  std::optional<located<pipeline>> pipe_;
-  glob glob_;
-  std::string root_path_;
+
+  // watching
   file_set previous_;
   file_set current_;
 
+  // communication with bridges
   std::deque<caf::typed_response_promise<table_slice>> gets_;
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> puts_;
 
   // configuration
   located<std::string> url_;
   bool watch_;
+  bool remove_;
   std::optional<ast::field_path> path_field_;
+  std::optional<located<pipeline>> pipe_;
+
+  // things derived from configuration
+  glob glob_;
+  std::string root_path_;
 
   // stuff for spawning subpipelines
   std::string definition_;
   node_actor node_;
   bool is_hidden_;
 
-  // stuff for running subpipelines
+  // job management
   size_t parallel_ = 10;
   size_t active_jobs_ = 0;
   std::deque<arrow::fs::FileInfo> jobs_;
@@ -1109,11 +1155,12 @@ class from_file final : public crtp_operator<from_file> {
 public:
   from_file() = default;
 
-  explicit from_file(located<std::string> url, bool watch,
+  explicit from_file(located<std::string> url, bool watch, bool remove,
                      std::optional<ast::field_path> path_field,
                      std::optional<located<pipeline>> pipe)
     : url_{std::move(url)},
       watch_{watch},
+      remove_{remove},
       path_field_{std::move(path_field)},
       pipe_{std::move(pipe)} {
   }
@@ -1122,17 +1169,17 @@ public:
     return "from_file";
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    // TODO: Double link?
-    auto impl = scope_linked{ctrl.self().spawn<caf::linked>(
+    auto impl = scope_linked{ctrl.self().spawn<caf::linked + caf::detached>(
       caf::actor_from_state<from_file_impl>,
       std::make_unique<shared_diagnostic_handler>(ctrl.shared_diagnostics()),
-      url_, watch_, path_field_, std::string{ctrl.definition()}, ctrl.node(),
-      ctrl.is_hidden(), order_, pipe_)};
-    impl.get()->attach_functor([] {
-      TENZIR_ERROR("destroying from_file actor");
-    });
+      url_, watch_, remove_, path_field_, std::string{ctrl.definition()},
+      ctrl.node(), ctrl.is_hidden(), order_, pipe_)};
     while (true) {
       auto result = table_slice{};
       ctrl.self()
@@ -1151,10 +1198,8 @@ public:
       if (result.rows() == 0) {
         break;
       }
-      // TENZIR_WARN("got slice: {}", result.rows());
       co_yield std::move(result);
     }
-    TENZIR_ERROR("ending from_file generator");
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -1166,16 +1211,16 @@ public:
   }
 
   friend auto inspect(auto& f, from_file& x) -> bool {
-    return f.object(x).fields(f.field("url", x.url_),
-                              f.field("watch", x.watch_),
-                              f.field("path_field", x.path_field_),
-                              f.field("pipe", x.pipe_),
-                              f.field("order", x.order_));
+    return f.object(x).fields(
+      f.field("url", x.url_), f.field("watch", x.watch_),
+      f.field("remove", x.remove_), f.field("path_field", x.path_field_),
+      f.field("pipe", x.pipe_), f.field("order", x.order_));
   }
 
 private:
   located<std::string> url_;
   bool watch_;
+  bool remove_;
   std::optional<ast::field_path> path_field_;
   std::optional<located<pipeline>> pipe_;
   event_order order_ = event_order::ordered;
@@ -1186,18 +1231,14 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto url = located<std::string>{};
-    auto pipe = std::optional<located<pipeline>>{};
     auto watch = false;
+    auto remove = false;
     auto path_field = std::optional<ast::field_path>{};
-    // from_file "<url>"
-    // ->
-    // from_file "<url>", watch=true
-    // -> from "<resolved>"
-    // from_file "<url>" { read_json schema="yo" }
-    // -> from "<resolved>" { read_json schema="yo" }
+    auto pipe = std::optional<located<pipeline>>{};
     auto parser = argument_parser2::operator_(name())
                     .positional("url", url)
                     .named_optional("watch", watch)
+                    .named_optional("remove", remove)
                     .named("path_field", path_field)
                     .positional("{ … }", pipe);
     TRY(parser.parse(inv, ctx));
@@ -1218,7 +1259,7 @@ public:
         return failure::promise();
       }
     }
-    return std::make_unique<from_file>(std::move(url), watch,
+    return std::make_unique<from_file>(std::move(url), watch, remove,
                                        std::move(path_field), std::move(pipe));
   }
 };

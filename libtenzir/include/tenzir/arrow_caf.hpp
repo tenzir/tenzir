@@ -56,7 +56,7 @@ private:
   caf::weak_actor_ptr weak_;
 };
 
-#define USE_EXECUTOR 1
+#define USE_EXECUTOR 0
 
 template <class T>
 void add_actor_callback(caf::scheduled_actor* self, arrow::Future<T> fut,
@@ -66,7 +66,6 @@ void add_actor_callback(caf::scheduled_actor* self, arrow::Future<T> fut,
                          arrow::Result<T>>;
   std::move(fut).AddCallback([self, fn = std::forward<decltype(fn)>(fn)](
                                const result_type& result) mutable {
-    TENZIR_WARN("in inner callback");
 #if USE_EXECUTOR
     std::move(fn)(result);
 #else
@@ -97,15 +96,12 @@ void async_iter(caf::scheduled_actor* self, arrow::fs::FileInfoGenerator gen,
 #else
   add_actor_callback(self, gen(),
                      [self, gen = std::move(gen), f = std::forward<F>(f)](
-                       arrow::Result<arrow::fs::FileInfoVector> infos_result) {
-                       // TODO: Don't check.
-                       auto infos = check(infos_result);
-                       auto done = infos.empty();
+                       arrow::Result<arrow::fs::FileInfoVector> infos) {
+                       auto more = infos.ok() and not infos->empty();
                        f(std::move(infos));
-                       if (done) {
-                         return;
+                       if (more) {
+                         async_iter(self, std::move(gen), std::move(f));
                        }
-                       async_iter(self, std::move(gen), std::move(f));
                      });
 #endif
 }

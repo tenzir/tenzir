@@ -18,6 +18,7 @@
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/file.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/parser_interface.hpp>
@@ -39,21 +40,6 @@ namespace tenzir::plugins::file {
 namespace {
 
 using file_description_wrapper = std::shared_ptr<int>;
-
-/// Tries to expand paths that start with a `~`. Returns the original input
-/// string if no expansion occurs.
-auto expand_path(std::string path) -> std::string {
-  if (path.empty() || path[0] != '~') {
-    return path;
-  }
-  if (path.size() == 1 || path[1] == '/') {
-    auto home = detail::getenv("HOME");
-    if (home) {
-      path.replace(0, 1, *home);
-    }
-  }
-  return path;
-}
 
 class writer {
 public:
@@ -481,7 +467,7 @@ public:
     parser.add("-m,--mmap", args.mmap);
     parser.add("-t,--timeout", args.timeout, "<duration>");
     parser.parse(p);
-    args.path.inner = expand_path(args.path.inner);
+    args.path.inner = expand_home(args.path.inner);
     if (args.mmap) {
       if (args.follow) {
         diagnostic::error("cannot have both `--follow` and `--mmap`")
@@ -528,7 +514,7 @@ public:
         }
       }
     }
-    args.path.inner = expand_path(args.path.inner);
+    args.path.inner = expand_home(args.path.inner);
     return std::make_unique<file_saver>(std::move(args));
   }
 
@@ -600,7 +586,7 @@ public:
         break;
       }
     }
-    path = expand_path(path);
+    path = expand_home(path);
     if (timeout) {
       args.timeout = located{
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout->inner),

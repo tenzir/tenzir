@@ -153,13 +153,13 @@ auto argument_parser2::parse(const ast::entity& self,
         set(std::move(*sel));
       },
       [&](setter<located<pipeline>>& set) {
-        auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
+        auto pipe_expr = try_as<ast::pipeline_expr>(expr);
         if (not pipe_expr) {
           emit(
             diagnostic::error("expected a pipeline expression").primary(expr));
           return;
         }
-        auto pipe = compile(std::move(pipe_expr->inner), ctx);
+        auto pipe = compile(ast::pipeline{pipe_expr->inner}, ctx);
         if (pipe.is_error()) {
           result = pipe.error();
           return;
@@ -170,8 +170,8 @@ auto argument_parser2::parse(const ast::entity& self,
   }
   for (; arg != args.end(); ++arg) {
     arg->match(
-      [&](ast::assignment assignment) {
-        auto* sel = std::get_if<ast::field_path>(&assignment.left);
+      [&](const ast::assignment& assignment) {
+        auto* sel = try_as<ast::field_path>(assignment.left);
         if (not sel or sel->has_this() or sel->path().size() != 1
             or sel->path()[0].has_question_mark) {
           emit(diagnostic::error("invalid name").primary(assignment.left));
@@ -278,13 +278,13 @@ auto argument_parser2::parse(const ast::entity& self,
             set(std::move(*sel));
           },
           [&](setter<located<pipeline>>& set) {
-            auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
+            auto pipe_expr = try_as<ast::pipeline_expr>(expr);
             if (not pipe_expr) {
               emit(diagnostic::error("expected a pipeline expression")
                      .primary(expr));
               return;
             }
-            auto pipe = compile(std::move(pipe_expr->inner), ctx);
+            auto pipe = compile(ast::pipeline{pipe_expr->inner}, ctx);
             if (pipe.is_error()) {
               result = pipe.error();
               return;
@@ -292,7 +292,7 @@ auto argument_parser2::parse(const ast::entity& self,
             set(located{std::move(pipe).unwrap(), expr.get_location()});
           });
       },
-      [&](ast::pipeline_expr pipe_expr) {
+      [&](const ast::pipeline_expr& pipe_expr) {
         if (positional_idx == positional_.size()) {
           emit(diagnostic::error("did not expect more positional arguments")
                  .primary(*arg));
@@ -300,7 +300,7 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         positional_[positional_idx].set.match(
           [&](setter<located<pipeline>>& set) {
-            auto pipe = compile(std::move(pipe_expr.inner), ctx);
+            auto pipe = compile(ast::pipeline{pipe_expr.inner}, ctx);
             if (pipe.is_error()) {
               result = pipe.error();
               return;
@@ -308,14 +308,13 @@ auto argument_parser2::parse(const ast::entity& self,
             set(located{std::move(pipe).unwrap(), pipe_expr.get_location()});
           },
           [&](auto&) {
+            // FIXME: It looks like this is reachable.
             TENZIR_UNREACHABLE();
           });
         ++positional_idx;
       },
-      [&](auto&) {
-        if (positional_idx == positional_.size()) {
-          emit(diagnostic::error("unexpected argument").primary(*arg));
-        }
+      [&](const auto&) {
+        emit(diagnostic::error("unexpected argument").primary(*arg));
       });
   }
   for (const auto& arg : named_) {
