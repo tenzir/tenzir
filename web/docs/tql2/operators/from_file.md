@@ -5,7 +5,7 @@
 Reads one or multiple files using from a filesystem.
 
 ```tql
-from_file url:string, [watch=bool, path_field=field { … }]
+from_file url:string, [watch=bool, remove=bool, path_field=field { … }]
 ```
 
 ## Description
@@ -22,6 +22,12 @@ match nothing. For example, `foo/**/bar` matches `foo/bar`.
 
 In addition to processing all existing files, this option keeps the operator
 running, watching for new files that also match the given URL.
+
+Defaults to `false`.
+
+### `remove = bool (optional)`
+
+Deletes files after they have been read completely.
 
 Defaults to `false`.
 
@@ -52,4 +58,10 @@ from_file `s3://my-bucket/**.csv`
 from_file "/data/**.json" {
   read_suricata
 }
+```
+
+### Read all files from S3 continuously and delete them afterwards
+
+```tql
+from_file "s3://my-bucket/**", watch=true, remove=true
 ```
