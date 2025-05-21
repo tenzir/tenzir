@@ -1,4 +1,4 @@
-# detach
+# run
 
 Starts a pipeline in the node and waits for it to complete.
 
@@ -10,6 +10,8 @@ pipeline::run { … }, [id=string]
 
 The `pipeline::detach` operator starts a hidden managed pipeline in the node,
 and returns when the pipeline has finished.
+
+Note that pipelines may emit diagnostics after they have finished.
 
 :::warning Subject to Change
 This operator primarily exists for testing purposes, where it is often required
@@ -39,4 +41,4 @@ pipeline::run {
 
 ## See also
 
-[`pipeline::run`](run.md)
+[`pipeline::detach`](detach.md)

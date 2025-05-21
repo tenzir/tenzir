@@ -40,4 +40,4 @@ pipeline::detach {
 
 ## See also
 
-[`pipeline::detach`](detach.md)
+[`pipeline::run`](run.md)
