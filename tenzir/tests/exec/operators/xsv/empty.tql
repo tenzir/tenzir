@@ -1,0 +1,2 @@
+load_file env("INPUTS") + "/empty-file.txt"
+read_csv
