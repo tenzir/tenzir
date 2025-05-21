@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/arrow_caf.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/glob.hpp>
@@ -25,6 +24,7 @@
 #include <tenzir/tql2/set.hpp>
 
 #include <arrow/filesystem/api.h>
+#include <arrow/util/future.h>
 #include <arrow/util/uri.h>
 #include <boost/unordered_set.hpp>
 #include <boost/url/parse.hpp>
@@ -800,6 +800,43 @@ private:
   std::optional<std::pair<ast::field_path, std::string>> path_field_;
 };
 
+/// Add a callback to an `arrow::Future` that shall run inside an actor context.
+template <class T, class F>
+void add_actor_callback(caf::scheduled_actor* self,
+                        const arrow::Future<T>& future, F&& f) {
+  using result_type
+    = std::conditional_t<std::same_as<T, arrow::internal::Empty>, arrow::Status,
+                         arrow::Result<T>>;
+  future.AddCallback(
+    [weak = caf::weak_actor_ptr{self->ctrl()},
+     f = std::forward<F>(f)](const result_type& result) mutable {
+      auto strong = weak.lock();
+      if (not strong) {
+        return;
+      }
+      auto self = dynamic_cast<caf::scheduled_actor*>(strong->get());
+      TENZIR_ASSERT(self);
+      self->schedule_fn([f = std::move(f), result]() mutable -> void {
+        return std::invoke(std::move(f), std::move(result));
+      });
+    });
+}
+
+/// Iterate asynchronously over an `arrow::fs::FileInfoGenerator`.
+template <class F>
+void iterate_files(caf::scheduled_actor* self, arrow::fs::FileInfoGenerator gen,
+                   F&& f) {
+  add_actor_callback(self, gen(),
+                     [self, gen = std::move(gen), f = std::forward<F>(f)](
+                       arrow::Result<arrow::fs::FileInfoVector> infos) {
+                       auto more = infos.ok() and not infos->empty();
+                       f(std::move(infos));
+                       if (more) {
+                         iterate_files(self, std::move(gen), std::move(f));
+                       }
+                     });
+}
+
 struct file_hasher {
   auto operator()(const arrow::fs::FileInfo& file) const -> size_t {
     return hash(file.path(), file.type(), file.size(), file.mtime());
@@ -842,12 +879,14 @@ public:
     TENZIR_ASSERT(dh_);
     auto expanded = expand_home(args_.url.inner);
     if (not expanded.contains("://")) {
+      // Arrow doesn't allow relative paths, so we make it absolute.
       expanded = std::filesystem::weakly_canonical(expanded);
     }
     // TODO: Arrow removes trailing slashes here. Do we need them?
     // TODO: Once we allow `?` in globs (which is currently not supported), we
     // run into trouble here because of `s3://bucket/a?.b?endpoint_override=`.
-    auto fs = arrow::fs::FileSystemFromUriOrPath(expanded, &root_path_);
+    auto path = std::string{};
+    auto fs = arrow::fs::FileSystemFromUriOrPath(expanded, &path);
     if (not fs.ok()) {
       diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
         .primary(args_.url)
@@ -856,13 +895,20 @@ public:
       return;
     }
     fs_ = fs.MoveValueUnsafe();
-    glob_ = parse_glob(root_path_);
-    // TODO: Figure out the proper logic here.
-    if (auto star = root_path_.find('*'); star != std::string::npos) {
-      auto slash = root_path_.rfind('/', star);
-      TENZIR_ASSERT(slash != std::string::npos);
-      root_path_ = root_path_.substr(0, slash + 1);
-    }
+    glob_ = parse_glob(path);
+    // Use the last directory before the globbing starts as the root.
+    root_path_ = std::invoke([&]() -> std::string {
+      if (not glob_.empty()) {
+        if (auto prefix = try_as<std::string>(glob_[0])) {
+          auto slash = prefix->rfind("/");
+          if (slash != std::string::npos) {
+            // The slash itself should be included.
+            return prefix->substr(0, slash + 1);
+          }
+        }
+      }
+      return "/";
+    });
     query_files();
   }
 
@@ -1035,6 +1081,7 @@ private:
     }
     auto path_dh = transforming_diagnostic_handler{
       *dh_, [path](diagnostic d) {
+        // TODO: Should an error here be an error for `from_file`?
         return std::move(d)
           .modify()
           .note(fmt::format("while reading `{}`", path))
@@ -1063,7 +1110,6 @@ private:
     active_jobs_ += 1;
     auto pipe = make_pipeline(file.path());
     if (pipe.is_error()) {
-      // How do we want to handle errors in the inner pipeline?
       active_jobs_ -= 1;
       return;
     }
