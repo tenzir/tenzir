@@ -892,10 +892,14 @@ public:
     }
     fs_ = fs.MoveValueUnsafe();
     glob_ = parse_glob(path);
-    // Use the last directory before the globbing starts as the root.
     root_path_ = std::invoke([&]() -> std::string {
       if (not glob_.empty()) {
         if (auto prefix = try_as<std::string>(glob_[0])) {
+          // Use the whole path if we don't do any actual globbing.
+          if (glob_.size() == 1) {
+            return *prefix;
+          }
+          // Otherwise use the last directory before the globbing starts.
           auto slash = prefix->rfind("/");
           if (slash != std::string::npos) {
             // The slash itself should be included.

@@ -1,6 +1,14 @@
 {
   json: 123,
+  path: "inputs/from_file/foo/foo1.json",
+}
+{
+  json: 123,
   path: "inputs/from_file/foo/baz/baz.json",
+}
+{
+  csv: 123,
+  path: "inputs/from_file/foo/bar/bar.csv",
 }
 {
   json: 123,
@@ -8,13 +16,5 @@
 }
 {
   json: 123,
-  path: "inputs/from_file/foo/foo1.json",
-}
-{
-  json: 123,
   path: "inputs/from_file/foo/bar/bar.json",
-}
-{
-  csv: 123,
-  path: "inputs/from_file/foo/bar/bar.csv",
 }
