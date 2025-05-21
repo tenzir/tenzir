@@ -1,20 +1,19 @@
 # detach
 
-Starts a pipeline in the node.
+Starts a pipeline in the node and waits for it to complete.
 
 ```tql
-pipeline::detach { … }, [id=string]
+pipeline::run { … }, [id=string]
 ```
 
 ## Description
 
 The `pipeline::detach` operator starts a hidden managed pipeline in the node,
-and returns as soon as the pipeline has started.
+and returns when the pipeline has finished.
 
 :::warning Subject to Change
 This operator primarily exists for testing purposes, where it is often required
-to run pipelines in the background, but to be able to wait until the pipeline
-has started. The operator may change without further notice.
+to run pipelines with an explicitly specified pipeline id.
 :::
 
 ### `id = string (optional)`
@@ -25,10 +24,10 @@ corresponds to the `id` field in the output of `pipeline::list`, and the
 
 ## Examples
 
-### Run a pipeline in the background
+### Run a pipeline in the background and wait for it to complete
 
 ```tql
-pipeline::detach {
+pipeline::run {
   every 1min {
     version
   }
@@ -40,4 +39,4 @@ pipeline::detach {
 
 ## See also
 
-[`pipeline::detach`](detach.md)
+[`pipeline::run`](run.md)
