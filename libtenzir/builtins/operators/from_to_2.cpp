@@ -808,17 +808,13 @@ void add_actor_callback(caf::scheduled_actor* self,
     = std::conditional_t<std::same_as<T, arrow::internal::Empty>, arrow::Status,
                          arrow::Result<T>>;
   future.AddCallback(
-    [weak = caf::weak_actor_ptr{self->ctrl()},
+    [self, weak = caf::weak_actor_ptr{self->ctrl()},
      f = std::forward<F>(f)](const result_type& result) mutable {
-      auto strong = weak.lock();
-      if (not strong) {
-        return;
+      if (auto strong = weak.lock()) {
+        self->schedule_fn([f = std::move(f), result]() mutable -> void {
+          return std::invoke(std::move(f), std::move(result));
+        });
       }
-      auto self = dynamic_cast<caf::scheduled_actor*>(strong->get());
-      TENZIR_ASSERT(self);
-      self->schedule_fn([f = std::move(f), result]() mutable -> void {
-        return std::invoke(std::move(f), std::move(result));
-      });
     });
 }
 
