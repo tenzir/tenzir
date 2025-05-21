@@ -97,10 +97,14 @@ private:
 };
 
 /// @relates view_trait
-struct blob_view : detail::totally_ordered<blob_view>,
-                   std::span<const std::byte> {
+struct blob_view : std::span<const std::byte>,
+                   detail::totally_ordered<blob_view> {
   using super = std::span<const std::byte>;
+
   using super::super;
+
+  explicit(false) blob_view(super span) : super{span} {
+  }
 
   friend constexpr auto operator<=>(const blob_view& l, const blob_view& r) {
     return std::lexicographical_compare_three_way(l.begin(), l.end(), r.begin(),

@@ -34,6 +34,7 @@ struct parser_args {
   }
 
   location self;
+  bool binary{false};
   std::optional<location> skip_empty;
   std::optional<location> null;
   std::optional<located<std::string>> split_at_regex;
@@ -63,20 +64,15 @@ public:
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
     auto make = [](operator_control_plane& ctrl, generator<chunk_ptr> input,
-                   location self, bool skip_empty, bool nulls,
+                   location self, bool binary, bool skip_empty, bool nulls,
                    std::optional<located<std::string>> split_at_regex)
       -> generator<table_slice> {
       TENZIR_UNUSED(ctrl);
-      auto builder = series_builder{type{
-        "tenzir.line",
-        record_type{
-          {"line", string_type{}},
-        },
-      }};
+      auto builder = series_builder{};
       auto last_finish = std::chrono::steady_clock::now();
-      auto cutter
-        = [&]() -> std::function<generator<std::optional<std::string_view>>(
-                  generator<chunk_ptr>)> {
+      auto cutter = [&]()
+        -> std::function<auto(generator<chunk_ptr>)
+                           -> generator<std::optional<std::string_view>>> {
         if (nulls) {
           return split_nulls;
         }
@@ -93,15 +89,18 @@ public:
         if (line->empty() and skip_empty) {
           continue;
         }
-        // TODO: Or should this be a warning?
-        if (not arrow::util::ValidateUTF8(*line)) {
-          diagnostic::error("got invalid UTF-8")
-            .primary(self)
-            .emit(ctrl.diagnostics());
-          co_return;
+        if (binary) {
+          builder.record().field("line", as_bytes(*line));
+        } else {
+          if (not arrow::util::ValidateUTF8(*line)) {
+            diagnostic::warning("got invalid UTF-8")
+              .primary(self)
+              .hint("use `binary=true` if you are reading binary data")
+              .emit(ctrl.diagnostics());
+            continue;
+          }
+          builder.record().field("line", *line);
         }
-        auto event = builder.record();
-        event.field("line", *line);
         const auto now = std::chrono::steady_clock::now();
         if (builder.length() >= detail::narrow_cast<int64_t>(
               defaults::import::table_slice_size)
@@ -111,10 +110,10 @@ public:
         }
       }
       if (builder.length() > 0) {
-        co_yield builder.finish_assert_one_slice();
+        co_yield builder.finish_assert_one_slice("tenzir.line");
       }
     };
-    return make(ctrl, std::move(input), args_.self,
+    return make(ctrl, std::move(input), args_.self, args_.binary,
                 args_.skip_empty.has_value(), args_.null.has_value(),
                 args_.split_at_regex);
   }
@@ -293,6 +292,7 @@ class read_lines final
     -> failure_or<operator_ptr> override {
     auto args = parser_args{inv.self.get_location()};
     argument_parser2::operator_(name())
+      .named("binary", args.binary)
       .named("skip_empty", args.skip_empty)
       .named("split_at_null", args.null)
       .named("split_at_regex", args.split_at_regex)
