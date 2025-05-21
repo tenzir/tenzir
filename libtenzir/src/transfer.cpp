@@ -36,11 +36,7 @@ auto transfer::prepare(http::request req) -> caf::error {
   if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1))) {
     return err;
   }
-  TENZIR_DEBUG("setting URL: {}", req.uri);
-  if (auto err = to_error(easy.set(CURLOPT_URL, req.uri))) {
-    return err;
-  }
-  TRY(options.ssl.apply_to(easy));
+  TRY(options.ssl.apply_to(easy, req.uri));
   // Set method.
   TENZIR_DEBUG("setting method: {}", req.method);
   if (req.method == "GET") {

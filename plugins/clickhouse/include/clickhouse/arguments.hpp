@@ -110,7 +110,7 @@ struct arguments {
     }
     TRY(res.ssl.validate(res.host, ctx));
     if (not port) {
-      if (res.ssl.tls.inner) {
+      if (res.ssl.get_tls().inner) {
         port = located{9440, res.operator_location};
       } else {
         port = located{9000, res.operator_location};
@@ -125,7 +125,7 @@ struct arguments {
                   .SetEndpoints({{host.inner, port.inner}})
                   .SetUser(user.inner)
                   .SetPassword(password.inner);
-    if (ssl.tls.inner) {
+    if (ssl.get_tls().inner) {
       auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
       tls_opts.SetSkipVerification(ssl.skip_peer_verification.has_value());
       auto commands

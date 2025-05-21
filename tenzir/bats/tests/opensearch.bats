@@ -26,13 +26,13 @@ search() {
 }
 
 @test "normal case" {
-  search 9202 'to_opensearch "localhost:9202", action="index", index="main"'
+  search 9202 'to_opensearch "localhost:9202", tls=false, action="index", index="main"'
 }
 
 @test "doc param" {
-  search 9203 'to_opensearch "localhost:9203", action="upsert", index="main", id=id, doc=doc.otherwise(this)'
+  search 9203 'to_opensearch "localhost:9203", tls=false, action="upsert", index="main", id=id, doc=doc.otherwise(this)'
 }
 
 @test "missing id" {
-  search 9204 'to_opensearch "localhost:9204", action="delete", id=id, index="main"'
+  search 9204 'to_opensearch "localhost:9204", tls=false, action="delete", id=id, index="main"'
 }

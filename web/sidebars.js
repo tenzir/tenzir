@@ -175,6 +175,10 @@ const sidebars = {
       type: 'doc',
       id: 'packages',
     },
+    // {
+    //   type: 'doc',
+    //   id: 'secrets/README',
+    // },
     {
       type: 'category',
       label: 'Use Cases',

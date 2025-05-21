@@ -21,6 +21,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/disk_monitor.hpp"
+#include "tenzir/ecc.hpp"
 #include "tenzir/execution_node.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/index.hpp"
@@ -28,6 +29,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
+#include "tenzir/secret_store.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/terminate.hpp"
 #include "tenzir/uuid.hpp"
@@ -631,6 +633,43 @@ auto node(node_actor::stateful_pointer<node_state> self,
                          *self, err);
             core_shutdown_sequence();
           });
+    },
+    [self](atom::resolve, std::string name,
+           std::string public_key) -> caf::result<secret_resolution_result> {
+      const auto& cfg = content(self->system().config());
+      const auto key = fmt::format("tenzir.secrets.{}", name);
+      const auto value = caf::get_if(&cfg, key);
+      if (value) {
+        auto value_string = caf::get_as<std::string>(*value);
+        if (not value_string) {
+          return secret_resolution_error{"config secret is not a string"};
+        }
+        auto encrypted = ecc::encrypt(*value_string, public_key);
+        if (not encrypted) {
+          return encrypted.error();
+        }
+        return encrypted_secret_value{*encrypted};
+      }
+      auto store
+        = self->system().registry().get<secret_store_actor>("tenzir.platform");
+      if (not store) {
+        return secret_resolution_error{
+          "secret does not exist locally and no secret store is available"};
+      }
+      auto rp = self->make_response_promise<secret_resolution_result>();
+      // We apparently cannot `delegate` here, since this may be across process
+      // boundaries if the request came from the client process.
+      // https://github.com/actor-framework/actor-framework/issues/2056
+      self->mail(atom::resolve_v, std::move(name), std::move(public_key))
+        .request(store, caf::infinite)
+        .then(
+          [rp = rp](secret_resolution_result r) mutable {
+            rp.deliver(std::move(r));
+          },
+          [rp = rp](caf::error e) mutable {
+            rp.deliver(std::move(e));
+          });
+      return rp;
     },
   };
 }

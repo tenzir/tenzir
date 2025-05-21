@@ -31,7 +31,8 @@ auto tls_to_fluentbit(const ssl_options& ssl, property_map& properties,
     }
     return {};
   };
-  TRY(set("tls", "tls", ssl.tls.inner ? "On" : "Off", ssl.tls.source));
+  TRY(set("tls", "tls", ssl.get_tls().inner ? "On" : "Off",
+          ssl.get_tls().source));
   if (ssl.skip_peer_verification) {
     TRY(set("tls.verify", "skip_peer_verification", "Off", location::unknown));
   }
@@ -84,7 +85,7 @@ public:
     auto opt_parser = multi_series_builder_argument_parser{};
     opt_parser.add_all_to_parser(parser);
     TRY(parser.parse(inv, ctx));
-    TRY(ssl.validate(located{std::string{}, location::unknown}, ctx));
+    TRY(ssl.validate(ctx));
     // TODO: Improve TLS option validation, right now a pipeline like
     // `from_fluent_bit "elasticsearch", tls=true` will just fail with a
     // generic "failed to start engine" error.
@@ -147,7 +148,7 @@ public:
       .named("options", plugin_options)
       .named("fluent_bit_options", fluentbit_options);
     TRY(parser.parse(inv, ctx));
-    TRY(ssl.validate(located{std::string{}, location::unknown}, ctx));
+    TRY(ssl.validate(ctx));
     auto args = operator_args{
       .plugin = std::move(plugin),
       .service_properties = to_property_map(fluentbit_options),

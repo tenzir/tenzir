@@ -10,12 +10,18 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/connect_to_node.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/base64.hpp"
+#include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/ecc.hpp"
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/secret_resolution.hpp"
+#include "tenzir/secret_store.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -219,6 +225,180 @@ struct exec_node_control_plane final : public operator_control_plane {
     if (not state.waiting) {
       state.schedule_run(false);
     }
+  }
+
+  struct located_resolved_secret {
+    ecc::cleansing_blob value;
+    location loc;
+
+    located_resolved_secret(location loc) : loc{loc} {
+    }
+  };
+
+  using request_map_t
+    = std::unordered_map<std::string, located_resolved_secret>;
+
+  struct secret_finisher {
+    class secret secret;
+    resolved_secret_value& out;
+    location loc;
+
+    void finish(const request_map_t& requested) const {
+      auto res = ecc::cleansing_blob{};
+      auto temp_blob = ecc::cleansing_blob{};
+      // For every element in the original secret
+      for (const auto& e : *secret.buffer->elements()) {
+        const auto name = e->name()->string_view();
+        const auto ops = e->operations()->string_view();
+        const auto is_literal = e->is_literal();
+        if (is_literal) {
+          // If it is a literal secret, we copy its name into a temporary blob.
+          temp_blob.assign(
+            reinterpret_cast<const std::byte*>(name.data()),
+            reinterpret_cast<const std::byte*>(name.data() + name.size()));
+        } else {
+          // If it is managed, get the value from the requested ones.
+          // Inside of this finisher, we know that all requests gave back values.
+          const auto it = requested.find(std::string{name});
+          TENZIR_ASSERT(it != requested.end());
+          temp_blob = it->second.value;
+        }
+        // Now we perform all operations for this secret element
+        if (not ops.empty()) {
+          for (const auto& op : detail::split(ops, ";")) {
+            if (op == "decode_base64") {
+              auto decoded = detail::base64::decode(std::string_view{
+                reinterpret_cast<const char*>(temp_blob.data()),
+                reinterpret_cast<const char*>(temp_blob.data()
+                                              + temp_blob.size()),
+              });
+              temp_blob.assign(
+                reinterpret_cast<const std::byte*>(decoded.data()),
+                reinterpret_cast<const std::byte*>(decoded.data()
+                                                   + decoded.size()));
+              continue;
+            }
+            if (op == "encode_base64") {
+              auto encoded = detail::base64::encode(std::string_view{
+                reinterpret_cast<const char*>(temp_blob.data()),
+                reinterpret_cast<const char*>(temp_blob.data()
+                                              + temp_blob.size()),
+              });
+              temp_blob.assign(
+                reinterpret_cast<const std::byte*>(encoded.data()),
+                reinterpret_cast<const std::byte*>(encoded.data()
+                                                   + encoded.size()));
+              continue;
+            }
+            // Handle trailing semicolon
+            if (op.empty()) {
+              break;
+            }
+            // Any operation we enable on secret elements must be implemented here
+            TENZIR_UNREACHABLE();
+          }
+        }
+        // We append the resolved & transformed element to the final result.
+        res.insert(res.end(), temp_blob.begin(), temp_blob.end());
+      }
+      // Finally, we make the result available to the original requests
+      // out-parameter.
+      out = resolved_secret_value{std::move(res)};
+    }
+  };
+
+  virtual auto resolve_secrets_must_yield(std::vector<secret_request> requests)
+    -> void override {
+    auto requested_secrets = std::make_shared<request_map_t>();
+    auto finishers = std::vector<secret_finisher>{};
+    for (auto& req : requests) {
+      for (const auto& element : *req.secret.buffer->elements()) {
+        const auto name = element->name()->string_view();
+        const auto is_literal = element->is_literal();
+        if (not is_literal) {
+          requested_secrets->try_emplace(std::string{name}, req.loc);
+        }
+      }
+      finishers.emplace_back(std::move(req.secret), req.out, req.loc);
+    }
+    if (requested_secrets->empty()) {
+      for (const auto& f : finishers) {
+        f.finish(*requested_secrets);
+      }
+      return;
+    }
+    auto callback = [this, finishers = std::move(finishers),
+                     requested_secrets = std::move(requested_secrets)](
+                      caf::expected<node_actor> maybe_actor) {
+      if (not maybe_actor) {
+        diagnostic::error("no Tenzir Node to resolve secrets")
+          .primary(finishers.front().loc)
+          .emit(diagnostics());
+        return;
+      }
+      // FIXME: Is this actually threadsafe the way we use it? The counter
+      // itself certainly is not.
+      auto fan = detail::make_fanout_counter_with_error<diagnostic>(
+        requested_secrets->size(),
+        [this, requested_secrets, finishers = std::move(finishers)]() {
+          for (const auto& f : finishers) {
+            f.finish(*requested_secrets);
+          }
+          set_waiting(false);
+        },
+        [this](std::span<diagnostic> diags) {
+          for (auto& d : diags) {
+            diagnostics().emit(std::move(d));
+          }
+          set_waiting(false);
+        });
+      for (auto& [name, out] : *requested_secrets) {
+        auto key_pair = ecc::generate_keypair();
+        TENZIR_ASSERT(key_pair);
+        auto public_key = key_pair->public_key;
+        state.self->mail(atom::resolve_v, name, std::move(public_key))
+          .request(*maybe_actor, caf::infinite)
+          .then(
+            [fan, keys = *key_pair, name, &out](secret_resolution_result res) {
+              match(
+                res,
+                [&](const encrypted_secret_value& v) {
+                  auto decrypted = ecc::decrypt(v.value, keys);
+                  if (not decrypted) {
+                    fan->receive_error(
+                      diagnostic::error("failed to decrypt secret: {}",
+                                        decrypted.error())
+                        .primary(out.loc)
+                        .note("secret `{}` failed", name)
+                        .done());
+                    return;
+                  }
+                  out.value = std::move(*decrypted);
+                  fan->receive_success();
+                  return;
+                },
+                [&](const secret_resolution_error& e) {
+                  fan->receive_error(
+                    diagnostic::error("could not get secret value: {}",
+                                      e.message)
+                      .primary(out.loc)
+                      .note("secret `{}` failed", name)
+                      .done());
+                });
+            },
+            [fan, loc = out.loc](caf::error e) {
+              fan->receive_error(
+                diagnostic::error(std::move(e)).primary(loc).done());
+            });
+      }
+    };
+    set_waiting(true);
+    auto node = this->node();
+    if (node) {
+      callback(node);
+      return;
+    }
+    connect_to_node(state.self, std::move(callback));
   }
 
   exec_node_state<Input, Output>& state;

@@ -576,7 +576,7 @@ struct connection_manager_state {
     connection->metrics_receiver = metrics_receiver;
     connection->operator_id = operator_id;
     connection->emit_metrics(self);
-    if (args.tls.inner) {
+    if (args.get_tls().inner) {
       TENZIR_ASSERT(not connection->ssl_ctx);
       connection->ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
       auto ec = boost::system::error_code{};
@@ -632,7 +632,7 @@ struct connection_manager_state {
           diagnostic::warning("{}", ec.message())
             .note("failed to enable peer certificate verification")
             .note("handle `{}`", connection->socket->native_handle())
-            .primary(args.tls)
+            .primary(args.get_tls())
             .emit(diagnostics);
           return;
         }
@@ -656,7 +656,7 @@ struct connection_manager_state {
         diagnostic::warning("{}", ec.message())
           .note("failed to perform TLS handshake")
           .note("handle `{}`", connection->socket->native_handle())
-          .primary(args.tls)
+          .primary(args.get_tls())
           .emit(diagnostics);
         return;
       }
@@ -1015,10 +1015,10 @@ public:
       args.parallel = {1, location::unknown};
     }
     TRY(args.validate(endpoint, ctx));
-    if (not args.tls.inner) {
+    if (not args.get_tls().inner) {
       if (args.certfile) {
         diagnostic::error("conflicting option: `certfile` requires `tls`")
-          .primary(args.tls)
+          .primary(args.get_tls())
           .primary(args.certfile->source)
           .usage(parser.usage())
           .docs(parser.docs())
@@ -1027,7 +1027,7 @@ public:
       }
       if (args.keyfile) {
         diagnostic::error("conflicting option: `keyfile` requires `tls`")
-          .primary(args.tls)
+          .primary(args.get_tls())
           .primary(args.keyfile->source)
           .usage(parser.usage())
           .docs(parser.docs())

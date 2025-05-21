@@ -53,6 +53,19 @@ void shutdown(caf::typed_event_based_actor<Ts...>* self,
   shutdown<Policy>(handle, std::move(xs), std::move(reason));
 }
 
+template <class Policy, class... Ts, class... Us>
+void shutdown(caf::typed_event_based_actor<Ts...>* self,
+              std::vector<caf::typed_actor<Us...>> xs,
+              caf::error reason = caf::exit_reason::user_shutdown) {
+  auto v = std::vector<caf::actor>{};
+  v.reserve(xs.size());
+  for (auto& x : xs) {
+    v.emplace_back(caf::actor_cast<caf::actor>(std::move(x)));
+  }
+  auto handle = caf::actor_cast<caf::event_based_actor*>(self);
+  shutdown<Policy>(handle, std::move(v), std::move(reason));
+}
+
 template <class Policy>
 void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
               caf::error reason = caf::exit_reason::user_shutdown);

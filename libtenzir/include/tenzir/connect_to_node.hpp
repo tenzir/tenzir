@@ -50,7 +50,7 @@ void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
   if (!node_endpoint) {
     return callback(std::move(node_endpoint.error()));
   }
-  auto timeout = detail::node_connection_timeout(opts);
+  const auto timeout = detail::node_connection_timeout(opts);
   auto connector = self->spawn(tenzir::connector, detail::get_retry_delay(opts),
                                detail::get_deadline(timeout));
   self

@@ -14,6 +14,7 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/http_api.hpp"
+#include "tenzir/secret_store.hpp"
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
@@ -36,6 +37,11 @@ struct typed_actor_fwd {
 
   template <class... Gs>
   struct extend_with_helper<caf::typed_actor<Gs...>> {
+    using type = typed_actor_fwd<Fs..., Gs...>;
+  };
+
+  template <class... Gs>
+  struct extend_with_helper<caf::type_list<Gs...>> {
     using type = typed_actor_fwd<Fs..., Gs...>;
   };
 
@@ -325,9 +331,9 @@ using metrics_receiver_actor = typed_actor_fwd<
 struct node_actor_traits {
   using signatures = caf::type_list<
     // Execute a REST endpoint on this node.
-    // Note that nodes connected via CAF trust each other completely,
-    // so this skips all authorization and access control mechanisms
-    // that come with HTTP(s).
+    // Note that nodes connected via CAF trust each other
+    // completely, so this skips all authorization and access
+    // control mechanisms that come with HTTP(s).
     auto(atom::proxy, http_request_description, std::string)
       ->caf::result<rest_response>,
     // Retrieve components by their label from the component registry.
@@ -340,7 +346,10 @@ struct node_actor_traits {
     auto(atom::spawn, operator_box, operator_type, std::string definition,
          receiver_actor<diagnostic>, metrics_receiver_actor, int index,
          bool is_hidden, uuid run_id)
-      ->caf::result<exec_node_actor>>;
+      ->caf::result<exec_node_actor>>
+    // Enable secret resolution through the node actor. It will first check the
+    // node config and then dispatch to the platform actor if necessary/possible.
+    ::append_from<secret_store_actor_traits::signatures>;
 };
 using node_actor = caf::typed_actor<node_actor_traits>;
 
