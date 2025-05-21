@@ -503,17 +503,15 @@ private:
 
   auto register_metrics(uint64_t nested_operator_index, uuid nested_metrics_id,
                         type schema) -> caf::result<void> {
-    auto& id = registered_metrics[nested_operator_index][nested_metrics_id];
-    id = uuid::random();
-    return self_->mail(operator_index_, id, std::move(schema))
+    (void)nested_operator_index;
+    return self_->mail(operator_index_, nested_metrics_id, std::move(schema))
       .delegate(metrics_receiver_);
   }
 
   auto handle_metrics(uint64_t nested_operator_index, uuid nested_metrics_id,
                       record metrics) -> caf::result<void> {
-    const auto& id
-      = registered_metrics[nested_operator_index][nested_metrics_id];
-    return self_->mail(operator_index_, id, std::move(metrics))
+    (void)nested_operator_index;
+    return self_->mail(operator_index_, nested_metrics_id, std::move(metrics))
       .delegate(metrics_receiver_);
   }
 
@@ -527,7 +525,6 @@ private:
   bool is_hidden_;
 
   uint64_t operator_index_ = 0;
-  detail::flat_map<uint64_t, detail::flat_map<uuid, uuid>> registered_metrics;
 
   size_t running_branches_ = 0;
   ast::expression predicate_expr_;
