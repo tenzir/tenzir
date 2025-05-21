@@ -8,8 +8,8 @@ pipeline::run { … }, [id=string]
 
 ## Description
 
-The `pipeline::detach` operator starts a hidden managed pipeline in the node,
-and returns when the pipeline has finished.
+The `pipeline::run` operator starts a hidden managed pipeline in the node, and
+returns when the pipeline has finished.
 
 Note that pipelines may emit diagnostics after they have finished.
 
