@@ -1,0 +1,54 @@
+// node: true
+// timeout: 15
+
+pipeline::run {
+  context::create_lookup_table "dns-servers"
+}
+
+pipeline::run {
+  from (
+    {ip: 1.1.1.1, description: "Cloudflare"},
+    {ip: 8.8.8.8, description: "Google"},
+    {ip: 9.9.9.9, description: "Quad9"},
+    {ip: 208.67.222.222, description: "OpenDNS"},
+    {ip: 8.26.56.26, description: "Comodo Secure"},
+    {ip: 64.6.64.6, description: "Verisign"},
+    {ip: 4.2.2.2, description: "Level 3"},
+  )
+  context::update "dns-servers", key=ip, value=description
+}
+
+pipeline::run {
+  from (
+    {ip: 1.1.1.1},
+    {ip: 92.21.10.1},
+    {ip: 192.168.0.1},
+    {ip: 127.0.0.1},
+    {ip: 4.2.2.2},
+  )
+  import
+}
+
+pipeline::detach {
+  every 1s {
+    from (
+      {ip: 1.1.1.1},
+      {ip: 92.21.10.1},
+      {ip: 192.168.0.1},
+      {ip: 127.0.0.1},
+      {ip: 4.2.2.2},
+    )
+    tail 10
+  }
+  head 5
+  import
+}
+
+pipeline::detach {
+  legacy "lookup dns-servers --live --retro --field ip --separate"
+  discard
+}
+
+metrics "lookup", retro=true, live=true
+head 5
+summarize live=sum(live.events), retro=sum(retro.events)

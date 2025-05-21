@@ -1,0 +1,20 @@
+{
+  ip: 1.1.1.1,
+  dns_server: "Cloudflare",
+}
+{
+  ip: 92.21.10.1,
+  dns_server: null,
+}
+{
+  ip: 192.168.0.1,
+  dns_server: null,
+}
+{
+  ip: 127.0.0.1,
+  dns_server: null,
+}
+{
+  ip: 4.2.2.2,
+  dns_server: "Level 3",
+}

@@ -1,0 +1,36 @@
+{
+  result: [
+    {
+      ip: 1.1.1.1,
+      "dns-servers": {
+        path: "ip",
+        value: 1.1.1.1,
+        context: "Cloudflare",
+      },
+    },
+    {
+      ip: 4.2.2.2,
+      "dns-servers": {
+        path: "ip",
+        value: 4.2.2.2,
+        context: "Level 3",
+      },
+    },
+    {
+      ip: 1.1.1.1,
+      "dns-servers": {
+        path: "ip",
+        value: 1.1.1.1,
+        context: "Cloudflare",
+      },
+    },
+    {
+      ip: 4.2.2.2,
+      "dns-servers": {
+        path: "ip",
+        value: 4.2.2.2,
+        context: "Level 3",
+      },
+    },
+  ],
+}
