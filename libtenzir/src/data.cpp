@@ -97,6 +97,13 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
       return fbs::CreateData(builder, fbs::data::Data::blob,
                              value_offset.Union());
     },
+    [&](const secret& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto elements = builder.CreateVector(
+        value.buffer->elements()->data(), value.buffer->elements()->size());
+      const auto value_offset = fbs::data::CreateSecret(builder, elements);
+      return fbs::CreateData(builder, fbs::data::Data::secret,
+                             value_offset.Union());
+    },
     [&](const pattern& value) -> flatbuffers::Offset<fbs::Data> {
       auto options = fbs::data::CreatePatternOptions(
         builder, value.options().case_insensitive);
@@ -238,6 +245,10 @@ caf::error unpack(const fbs::Data& from, data& to) {
       std::memcpy(&address_buffer, from.data_as_subnet()->ip().bytes()->data(),
                   sizeof(ip));
       to = subnet{address_buffer, from.data_as_subnet()->length()};
+      return caf::none;
+    }
+    case fbs::data::Data::secret: {
+      to = secret::from_fb(from.data_as_secret());
       return caf::none;
     }
     case fbs::data::Data::enumeration: {
@@ -941,6 +952,9 @@ void print(YAML::Emitter& out, const data& x) {
     },
     [&out](const blob& x) {
       out << detail::base64::encode(x);
+    },
+    [&out](const secret& x) {
+      out << to_string(x);
     },
     [&out](const pattern& x) {
       out << to_string(x);

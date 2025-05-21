@@ -516,6 +516,10 @@ struct legacy_address_type final : legacy_basic_type<legacy_address_type> {};
 /// @relates type
 struct legacy_subnet_type final : legacy_basic_type<legacy_subnet_type> {};
 
+/// A type for Secrets.
+/// @relates type
+struct legacy_secret_type final : legacy_basic_type<legacy_secret_type> {};
+
 /// The enumeration type consisting of a fixed number of strings.
 /// @relates type
 struct legacy_enumeration_type final

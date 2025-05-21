@@ -19,42 +19,30 @@ namespace tenzir {
 ssl_options::ssl_options() = default;
 
 auto ssl_options::add_tls_options(argument_parser2& parser) -> void {
-  parser.named_optional("tls", tls)
+  parser.named("tls", tls)
     .named("skip_peer_verification", skip_peer_verification)
     .named("cacert", cacert)
     .named("certfile", certfile)
     .named("keyfile", keyfile);
 }
 
-auto ssl_options::validate(const located<std::string>& url,
-                           diagnostic_handler& dh) -> failure_or<void> {
-  auto url_says_safe = url.inner.starts_with("https://")
-                       or url.inner.starts_with("ftps://")
-                       or url.inner.starts_with("smtps://");
-  auto option_says_no_tls = not tls.inner;
-  if (url_says_safe and option_says_no_tls) {
-    diagnostic::error("conflicting TLS settings")
-      .primary(url, "url specifies TLS")
-      .primary(tls, "option specifies no TLS")
-      .emit(dh);
-    return failure::promise();
-  }
-  const auto tls_logic
+auto ssl_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
+  const auto check_option
     = [&](auto& thing, std::string_view name) -> failure_or<void> {
-    if (not tls.inner and thing) {
+    if (tls and not tls->inner and thing) {
       diagnostic::error("`{}` requires TLS", name)
-        .primary(tls.source, "TLS is disabled")
+        .primary(tls->source, "TLS is disabled")
         .primary(*thing)
         .emit(dh);
       return failure::promise();
     }
     return {};
   };
-  TRY(tls_logic(skip_peer_verification, "skip_peer_verification"));
-  TRY(tls_logic(cacert, "cacert"));
-  TRY(tls_logic(certfile, "certfile"));
-  TRY(tls_logic(keyfile, "keyfile"));
-  if (tls.inner and not skip_peer_verification) {
+  TRY(check_option(skip_peer_verification, "skip_peer_verification"));
+  TRY(check_option(cacert, "cacert"));
+  TRY(check_option(certfile, "certfile"));
+  TRY(check_option(keyfile, "keyfile"));
+  if (tls and tls->inner and not skip_peer_verification) {
     if (cacert and not std::filesystem::exists(cacert->inner)) {
       diagnostic::error("the configured CA certificate bundle does not exist")
         .note("configured location: `{}`", cacert->inner)
@@ -72,8 +60,58 @@ auto ssl_options::validate(const located<std::string>& url,
   return {};
 }
 
-auto ssl_options::apply_to(
-  curl::easy& easy, std::string_view cacert_fallback) const -> caf::error {
+auto ssl_options::validate(const located<std::string>& url,
+                           diagnostic_handler& dh) const -> failure_or<void> {
+  return validate(url.inner, url.source, dh);
+}
+
+auto ssl_options::validate(std::string_view url, location url_loc,
+                           diagnostic_handler& dh) const -> failure_or<void> {
+  const auto url_says_safe = url.starts_with("https://")
+                             or url.starts_with("ftps://")
+                             or url.starts_with("smtps://");
+  const auto url_says_unsafe = url.starts_with("http://")
+                               or url.starts_with("ftp://")
+                               or url.starts_with("smtp://");
+  if ((url_says_safe and tls and not tls->inner)
+      or (url_says_unsafe and tls and tls->inner)) {
+    diagnostic::error("conflicting TLS settings")
+      .primary(url_loc, "url {} TLS", url_says_safe ? "enables" : "disables")
+      .primary(tls->source, "option {} TLS",
+               tls->inner ? "enables" : "disables")
+      .emit(dh);
+    return failure::promise();
+  }
+  return validate(dh);
+}
+
+auto ssl_options::update_url(std::string_view url) const -> std::string {
+  auto url_copy = std::string{url};
+  if (not uses_curl_http) {
+    return url_copy;
+  }
+  auto tls_opt = get_tls();
+  if (not tls_opt.inner) {
+    return url_copy;
+  }
+  /// If the url says http, and the TLS option was not defaulted
+  if (url.starts_with("http://") and tls_opt.source != location::unknown) {
+    url_copy.insert(4, "s");
+  }
+  return url_copy;
+}
+
+auto ssl_options::apply_to(curl::easy& easy, std::string_view url,
+                           std::string_view cacert_fallback) const
+  -> caf::error {
+  /// Update URL. This is crucial for CURL based connectors, as curl does not
+  /// respect `CURLOPT_USE_SSL` for HTTP.
+  auto used_url = update_url(url);
+  check(easy.set(CURLOPT_URL, used_url));
+  const auto tls_opt = get_tls();
+  if (tls_opt.inner) {
+    check(easy.set(CURLOPT_DEFAULT_PROTOCOL, "https"));
+  }
   if (cacert) {
     if (auto ec = easy.set(CURLOPT_CAINFO, cacert->inner);
         ec != curl::easy::code::ok) {
@@ -101,19 +139,19 @@ auto ssl_options::apply_to(
         .to_error();
     }
   }
-  check(
-    easy.set(CURLOPT_USE_SSL, tls.inner ? CURLUSESSL_ALL : CURLUSESSL_NONE));
+  check(easy.set(CURLOPT_USE_SSL,
+                 tls_opt.inner ? CURLUSESSL_ALL : CURLUSESSL_NONE));
   check(easy.set(CURLOPT_SSL_VERIFYPEER, skip_peer_verification ? 0 : 1));
   check(easy.set(CURLOPT_SSL_VERIFYHOST, skip_peer_verification ? 0 : 1));
   return {};
 }
 
-auto ssl_options::apply_to(curl::easy& easy,
+auto ssl_options::apply_to(curl::easy& easy, std::string_view url,
                            operator_control_plane& ctrl) const -> caf::error {
   if (not cacert.has_value()) {
-    return apply_to(easy, query_cacert_fallback(ctrl));
+    return apply_to(easy, url, query_cacert_fallback(ctrl));
   }
-  return apply_to(easy);
+  return apply_to(easy, url);
 }
 
 auto ssl_options::query_cacert_fallback(operator_control_plane& ctrl)

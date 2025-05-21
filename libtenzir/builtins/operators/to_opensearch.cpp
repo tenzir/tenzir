@@ -290,12 +290,11 @@ public:
     if (args_.compress) {
       req.set_http_header("Content-Encoding", "gzip");
     }
-    if (auto e = args_.ssl.apply_to(req, ctrl)) {
+    if (auto e = args_.ssl.apply_to(req, args_.url.inner, ctrl)) {
       diagnostic::error(e).emit(dh);
       return failure::promise();
     }
     check(req.set(CURLOPT_POST, 1));
-    check(req.set(CURLOPT_URL, args_.url.inner));
     check(req.set(CURLOPT_VERBOSE, args_._debug_curl ? 1 : 0));
     return req;
   }

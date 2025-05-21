@@ -14,10 +14,12 @@ try:
 except ImportError:
     # Create dummy classes so we can safely test
     # `isinstance(x, Timestamp)` below.
-    class Timestamp():
+    class Timestamp:
         pass
-    class Timedelta():
+
+    class Timedelta:
         pass
+
 
 class IPScalar(pa.ExtensionScalar):
     def as_py(self: "IPScalar") -> Union[ip.IPv4Address, ip.IPv6Address, None]:
@@ -108,6 +110,54 @@ class SubnetType(pa.ExtensionType):
 
     def __arrow_ext_scalar_class__(self: "SubnetType") -> type[SubnetScalar]:
         return SubnetScalar
+
+
+class TenzirSecret:
+    def __init__(self: "TenzirSecret", b: bytes):
+        self.__bytes = b
+
+
+class SecretScalar(pa.ExtensionScalar):
+    """Adapter for Tenzir secret values."""
+
+    def as_py(self: "SecretScalar") -> Union[TenzirSecret, None]:
+        if self.value is None:
+            return None
+        if self.value[0].as_py() is None:
+            return None
+        return TenzirSecret(self.value[0].as_py())
+
+
+class SecretType(pa.ExtensionType):
+    ext_name = "tenzir.secret"
+    ext_type = pa.struct([("buffer", pa.binary())])
+
+    def __init__(self: "SecretType") -> None:
+        pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
+
+    def __arrow_ext_serialize__(self: "SecretType") -> bytes:
+        """Explain how to serialize the type metadata."""
+        return self.ext_name.encode()
+
+    @classmethod
+    def __arrow_ext_deserialize__(
+        cls: pa.ExtensionType,
+        storage_type: pa.StructType,
+        serialized: bytes,
+    ) -> "SecretType":
+        if serialized.decode() != cls.ext_name:
+            msg = "type identifier does not match"
+            raise TypeError(msg)
+        if storage_type != cls.ext_type:
+            msg = "storage type does not match"
+            raise TypeError(msg)
+        return SecretType()
+
+    def __reduce__(self: "SecretType") -> tuple[type[SecretScalar], tuple[()]]:
+        return SecretScalar, ()
+
+    def __arrow_ext_scalar_class__(self: "SecretType") -> type[SecretScalar]:
+        return SecretScalar
 
 
 class EnumScalar(pa.ExtensionScalar):
@@ -239,7 +289,7 @@ def extension_array_scalar(obj: Sequence, datatype: pa.DataType) -> pa.Array:
         arr = (pack_ip(e) for e in obj)
         storage = pa.array(arr, pa.binary(16))
         return pa.ExtensionArray.from_storage(datatype, storage)
-    elif isinstance(datatype,  SubnetType):
+    elif isinstance(datatype, SubnetType):
         arrs = list(zip(*[pack_subnet(e) for e in obj]))
         addr_storage = pa.array(arrs[0], pa.binary(16))
         addr_array = pa.ExtensionArray.from_storage(IPType(), addr_storage)
@@ -252,7 +302,7 @@ def extension_array_scalar(obj: Sequence, datatype: pa.DataType) -> pa.Array:
             names=["address", "length"],
         )
         return pa.ExtensionArray.from_storage(datatype, storage)
-    elif isinstance(datatype,  EnumType):
+    elif isinstance(datatype, EnumType):
         fields = datatype.fields
         # use the mappings in the `fields` metadata as indices for building
         # the dictionary
@@ -315,8 +365,9 @@ TenzirType = Union[
     datetime,
     bytes,
     None,
+    TenzirSecret,
     dict[str, "TenzirType"],
-    list["TenzirType"]
+    list["TenzirType"],
 ]
 
 
@@ -400,4 +451,5 @@ def make_record_batch(
 # Modules are intialized exactly once, so we can perform the registration here.
 pa.register_extension_type(IPType())
 pa.register_extension_type(SubnetType())
+pa.register_extension_type(SecretType())
 pa.register_extension_type(EnumType({"stub": 0}))

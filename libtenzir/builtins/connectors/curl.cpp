@@ -258,7 +258,7 @@ private:
 auto parse_http_args(std::string name,
                      const operator_factory_plugin::invocation& inv,
                      session ctx) -> failure_or<connector_args> {
-  auto url = std::string{};
+  auto url = located<std::string>{};
   auto body_data = std::optional<located<record>>{};
   auto params = std::optional<located<record>>{};
   auto headers = std::optional<located<record>>{};
@@ -280,8 +280,8 @@ auto parse_http_args(std::string name,
   args.transfer_opts.ssl.add_tls_options(parser);
   parser.named("_verbose", args.transfer_opts.verbose);
   TRY(parser.parse(inv, ctx));
-  TRY(args.transfer_opts.ssl.validate(located{url, location::unknown}, ctx));
-  args.url = std::move(url);
+  TRY(args.transfer_opts.ssl.validate(url, ctx));
+  args.url = std::move(url.inner);
   if (form) {
     args.http_opts.form = true;
   }
@@ -372,8 +372,7 @@ auto parse_ftp_args(std::string name,
   if (not(args.url.starts_with("ftp://") or args.url.starts_with("ftps://"))) {
     args.url.insert(0, "ftp://");
   }
-  TRY(
-    args.transfer_opts.ssl.validate(located{args.url, location::unknown}, ctx));
+  TRY(args.transfer_opts.ssl.validate(args.url, location::unknown, ctx));
   return args;
 }
 

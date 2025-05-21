@@ -76,6 +76,16 @@ table Record {
   fields: [RecordField] (required);
 }
 
+table StructuredSecretElement {
+  name: string (required);
+  operations: string (required);
+  is_literal: bool;
+}
+
+table Secret {
+  elements: [StructuredSecretElement] (required);
+}
+
 /// The sum data of all possible types.
 union Data {
   boolean: Boolean,
@@ -93,6 +103,7 @@ union Data {
   map: Map,
   record: Record,
   blob: Blob,
+  secret: Secret,
 }
 
 namespace tenzir.fbs;

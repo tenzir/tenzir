@@ -149,6 +149,12 @@ struct json_printer : printer_base<json_printer> {
       }
     }
 
+    auto operator()(view3<secret> x) -> bool {
+      const auto str = fmt::format("{}", x);
+      out_ = fmt::format_to(out_, "{}", json_string_fmt_wrapper{str});
+      return true;
+    }
+
     auto operator()(view3<ip> x) -> bool {
       if (options_.tql) {
         out_ = fmt::format_to(out_, options_.style.ip, "{}", to_string(x));

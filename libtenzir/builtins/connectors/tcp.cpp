@@ -513,7 +513,7 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    if (args_.tls.inner and not args_.connect) {
+    if (args_.get_tls().inner and not args_.connect) {
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in OpenSSL.
@@ -564,8 +564,8 @@ public:
           auto keyfile
             = args.keyfile.has_value() ? args.keyfile->inner : std::string{};
           ctrl.self()
-            .mail(atom::connect_v, args.tls.inner, cacert, certfile, keyfile,
-                  false, args.hostname, args.port)
+            .mail(atom::connect_v, args.get_tls().inner, cacert, certfile,
+                  keyfile, false, args.hostname, args.port)
             .request(tcp_bridge, caf::infinite)
             .await(
               [&]() {
@@ -646,7 +646,7 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    if (args_.tls.inner and args_.listen) {
+    if (args_.get_tls().inner and args_.listen) {
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in OpenSSL.
@@ -694,7 +694,7 @@ public:
       auto keyfile
         = args_.keyfile.has_value() ? args_.keyfile->inner : std::string{};
       ctrl.self()
-        .mail(atom::connect_v, args_.tls.inner, cacert, certfile, keyfile,
+        .mail(atom::connect_v, args_.get_tls().inner, cacert, certfile, keyfile,
               args_.skip_peer_verification.has_value(), args_.hostname,
               args_.port)
         .request(tcp_bridge, caf::infinite)
@@ -789,7 +789,7 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = Args{};
-    args.tls.inner = false;
+    auto tls = std::optional<location>{};
     auto uri = located<std::string>{};
     parser.add(uri, "<endpoint>");
     if constexpr (std::is_same_v<Args, loader_args>) {
@@ -798,10 +798,13 @@ public:
       parser.add("-l,--listen", args.listen);
     }
     parser.add("-o,--listen-once", args.listen_once);
-    parser.add("--tls", args.tls.inner);
+    parser.add("--tls", tls);
     parser.add("--certfile", args.certfile, "TLS certificate");
     parser.add("--keyfile", args.keyfile, "TLS private key");
     parser.parse(p);
+    if (tls) {
+      args.tls = located{true, *tls};
+    }
     remove_scheme(uri.inner);
     auto split = detail::split(uri.inner, ":", 1);
     if (split.size() != 2) {
@@ -813,7 +816,7 @@ public:
       args.hostname = std::string{split[0]};
       args.port = std::string{split[1]};
     }
-    if (not args.tls.inner) {
+    if (not args.get_tls().inner) {
       if (args.certfile and not args.certfile->inner.empty()) {
         diagnostic::error("certificate provided, but TLS disabled")
           .hint("add --tls to use an encrypted connection")
@@ -830,7 +833,7 @@ public:
         diagnostic::error("conflicting options `--connect` and `--listen-once`")
           .throw_();
       }
-      if (not args.connect and args.tls.inner) {
+      if (not args.connect and args.get_tls().inner) {
         if (not args.certfile or args.certfile->inner.empty()) {
           diagnostic::error("invalid TLS settings")
             .hint("missing --certfile")
@@ -866,7 +869,7 @@ public:
   auto
   operator()(generator<chunk_ptr> bytes, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    if (args_.tls.inner and args_.listen) {
+    if (args_.get_tls().inner and args_.listen) {
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in
@@ -913,7 +916,7 @@ public:
       auto keyfile
         = args_.keyfile.has_value() ? args_.keyfile->inner : std::string{};
       ctrl.self()
-        .mail(atom::connect_v, args_.tls.inner, cacert, certfile, keyfile,
+        .mail(atom::connect_v, args_.get_tls().inner, cacert, certfile, keyfile,
               args_.skip_peer_verification.has_value(), args_.hostname,
               args_.port)
         .request(tcp_bridge, caf::infinite)

@@ -81,6 +81,8 @@ table RecordType {
 /// A sequence of bytes.
 table BlobType {}
 
+table SecretType {}
+
 namespace tenzir.fbs.type;
 
 /// The sum type of all possible types.
@@ -103,6 +105,7 @@ union Type {
   record_type: RecordType,
   enriched_type: detail.EnrichedType,
   blob_type: BlobType,
+  secret_type: SecretType,
 }
 
 namespace tenzir.fbs;

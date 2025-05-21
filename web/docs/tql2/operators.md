@@ -6,15 +6,15 @@ Tenzir comes with a wide range of built-in pipeline operators.
 
 ## Modify
 
-| Operator                                | Description                                                     | Example                          |
-| :-------------------------------------- | :-------------------------------------------------------------- | :------------------------------- |
-| [`set`](./operators/set.md)             | Assigns a value to a field, creating it if necessary            | `name = "Tenzir"`                |
-| [`select`](./operators/select.md)       | Selects some values and discard the rest                        | `select name, id=metadata.id`    |
-| [`drop`](./operators/drop.md)           | Removes fields from the event                                   | `drop name, metadata.id`         |
-| [`enumerate`](./operators/enumerate.md) | Adds a field with the number of the event                       | `enumerate num`                  |
+| Operator                                | Description                                                     | Example                                          |
+| :-------------------------------------- | :-------------------------------------------------------------- | :----------------------------------------------- |
+| [`set`](./operators/set.md)             | Assigns a value to a field, creating it if necessary            | `name = "Tenzir"`                                |
+| [`select`](./operators/select.md)       | Selects some values and discard the rest                        | `select name, id=metadata.id`                    |
+| [`drop`](./operators/drop.md)           | Removes fields from the event                                   | `drop name, metadata.id`                         |
+| [`enumerate`](./operators/enumerate.md) | Adds a field with the number of the event                       | `enumerate num`                                  |
 | [`move`](./operators/move.md)           | Moves a field to another                                        | `move id=parsed_id, ctx.message=incoming.status` |
-| [`timeshift`](./operators/timeshift.md) | Adjusts timestamps relative to a given start time               | `timeshift ts, start=2020-01-01` |
-| [`unroll`](./operators/unroll.md)       | Unrolls a field of type list, duplicating the surrounding event | `unroll names`                   |
+| [`timeshift`](./operators/timeshift.md) | Adjusts timestamps relative to a given start time               | `timeshift ts, start=2020-01-01`                 |
+| [`unroll`](./operators/unroll.md)       | Unrolls a field of type list, duplicating the surrounding event | `unroll names`                                   |
 
 ## Filter
 
@@ -95,19 +95,19 @@ Tenzir comes with a wide range of built-in pipeline operators.
 
 #### Events
 
-| Operator                                                     | Description                                      | Example                                                                       |
-| :----------------------------------------------------------- | :----------------------------------------------- | :---------------------------------------------------------------------------- |
-| [`to`](./operators/to.md)                                    | Writes events to an URI                          | `to "s3://examplebucket/obj.json.gz"` <!--at the top because its important--> |
-| [`to_asl`](./operators/to_asl.md)                            | Sends OCSF events to an Amazon Security Lake     | `to_asl "s3://…"`                                                             |
-| [`to_azure_log_ana…`](./operators/to_azure_log_analytics.md) | Sends events to Azure Log Analytics              | `to_azure_log_analytics tenant_id=…`                                          |
-| [`to_clickhouse`](./operators/to_clickhouse.mdx)             | Sends events to a ClickHouse Table               | `to_clickhouse table="my_table"`                                              |
-| [`to_fluent_bit`](./operators/to_fluent_bit.mdx)             | Sends events to Fluent Bit                       | `to_fluent_bit "elasticsearch" …`                                             |
-| [`to_google_secops`](./operators/to_google_secops.md)        | Sends events to Google SecOps                    | `to_google_secops …`                                                          |
-| [`to_google_cloud_logging`](./operators/to_google_cloud_logging.md) | Sends events to Google Cloud Logging      | `to_google_cloud_logging …`                                                   |
-| [`to_hive`](./operators/to_hive.md)                          | Writes events using hive partitioning            | `to_hive "s3://…", partition_by=[x]`                                          |
-| [`to_opensearch`](./operators/to_opensearch.mdx)             | Sends incoming events to the OpenSearch Bulk API | `to_opensearch 'localhost:9200", …`                                           |
-| [`to_snowflake`](./operators/to_snowflake.md)                | Sends incoming events to a Snowflake database    | `to_snowflake account_identifier="…`                                          |
-| [`to_splunk`](./operators/to_splunk.mdx)                     | Sends incoming events to a Splunk HEC            | `to_splunk "localhost:8088", …`                                               |
+| Operator                                                            | Description                                      | Example                                                                       |
+| :------------------------------------------------------------------ | :----------------------------------------------- | :---------------------------------------------------------------------------- |
+| [`to`](./operators/to.md)                                           | Writes events to an URI                          | `to "s3://examplebucket/obj.json.gz"` <!--at the top because its important--> |
+| [`to_asl`](./operators/to_asl.md)                                   | Sends OCSF events to an Amazon Security Lake     | `to_asl "s3://…"`                                                             |
+| [`to_azure_log_ana…`](./operators/to_azure_log_analytics.md)        | Sends events to Azure Log Analytics              | `to_azure_log_analytics tenant_id=…`                                          |
+| [`to_clickhouse`](./operators/to_clickhouse.mdx)                    | Sends events to a ClickHouse Table               | `to_clickhouse table="my_table"`                                              |
+| [`to_fluent_bit`](./operators/to_fluent_bit.mdx)                    | Sends events to Fluent Bit                       | `to_fluent_bit "elasticsearch" …`                                             |
+| [`to_google_secops`](./operators/to_google_secops.md)               | Sends events to Google SecOps                    | `to_google_secops …`                                                          |
+| [`to_google_cloud_logging`](./operators/to_google_cloud_logging.md) | Sends events to Google Cloud Logging             | `to_google_cloud_logging …`                                                   |
+| [`to_hive`](./operators/to_hive.md)                                 | Writes events using hive partitioning            | `to_hive "s3://…", partition_by=[x]`                                          |
+| [`to_opensearch`](./operators/to_opensearch.mdx)                    | Sends incoming events to the OpenSearch Bulk API | `to_opensearch 'localhost:9200", …`                                           |
+| [`to_snowflake`](./operators/to_snowflake.md)                       | Sends incoming events to a Snowflake database    | `to_snowflake account_identifier="…`                                          |
+| [`to_splunk`](./operators/to_splunk.mdx)                            | Sends incoming events to a Splunk HEC            | `to_splunk "localhost:8088", …`                                               |
 
 #### Bytes
 
@@ -232,19 +232,20 @@ Tenzir comes with a wide range of built-in pipeline operators.
 
 ## Internals
 
-| Operator                                | Description                                         | Example                         |
-| :-------------------------------------- | :-------------------------------------------------- | :------------------------------ |
-| [`api`](./operators/api.md)             | Calls Tenzir's REST API from a pipeline             | `api "/pipeline/list"`          |
-| [`batch`](./operators/batch.md)         | Controls the batch size of events                   | `batch timeout=1s`              |
-| [`buffer`](./operators/buffer.md)       | Adds additional buffering to handle spikes          | `buffer 10M, policy="drop"`     |
-| [`cache`](./operators/cache.md)         | In-memory cache shared between pipelines            | `cache "w01wyhTZm3", ttl=10min` |
-| [`legacy`](./operators/legacy.md)       | Provides a compatibility fallback to TQL1 pipelines | `legacy "chart area"`           |
-| [`local`](./operators/local.md)         | Forces a pipeline to run locally                    | `local { sort foo }`            |
-| [`measure`](./operators/measure.md)     | Returns events describing the incoming batches      | `measure`                       |
-| [`remote`](./operators/remote.md)       | Forces a pipeline to run remotely at a node         | `remote { version }`            |
-| [`serve`](./operators/serve.md)         | Makes events available at `/serve`                  | `serve "abcde12345"`            |
-| [`strict`](./operators/strict.md)       | Treats all warnings as errors                       | `strict { assert false }`       |
-| [`unordered`](./operators/unordered.md) | Remove ordering assumptions in a pipeline           | `unordered { read_ndjson }`     |
+| Operator                                        | Description                                         | Example                         |
+| :---------------------------------------------- | :-------------------------------------------------- | :------------------------------ |
+| [`api`](./operators/api.md)                     | Calls Tenzir's REST API from a pipeline             | `api "/pipeline/list"`          |
+| [`assert_secret`](./operators/assert_secret.md) | Checks a secret against an expected value           | `assert_secret secret=…`        |
+| [`batch`](./operators/batch.md)                 | Controls the batch size of events                   | `batch timeout=1s`              |
+| [`buffer`](./operators/buffer.md)               | Adds additional buffering to handle spikes          | `buffer 10M, policy="drop"`     |
+| [`cache`](./operators/cache.md)                 | In-memory cache shared between pipelines            | `cache "w01wyhTZm3", ttl=10min` |
+| [`legacy`](./operators/legacy.md)               | Provides a compatibility fallback to TQL1 pipelines | `legacy "chart area"`           |
+| [`local`](./operators/local.md)                 | Forces a pipeline to run locally                    | `local { sort foo }`            |
+| [`measure`](./operators/measure.md)             | Returns events describing the incoming batches      | `measure`                       |
+| [`remote`](./operators/remote.md)               | Forces a pipeline to run remotely at a node         | `remote { version }`            |
+| [`serve`](./operators/serve.md)                 | Makes events available at `/serve`                  | `serve "abcde12345"`            |
+| [`strict`](./operators/strict.md)               | Treats all warnings as errors                       | `strict { assert false }`       |
+| [`unordered`](./operators/unordered.md)         | Remove ordering assumptions in a pipeline           | `unordered { read_ndjson }`     |
 
 ## Encode & Decode
 
@@ -263,9 +264,9 @@ Tenzir comes with a wide range of built-in pipeline operators.
 
 ## Pipelines
 
-| Operator                                         | Description             | Example         |
-| :----------------------------------------------- | :---------------------- | :-------------- |
-| [`pipeline::list`](./operators/pipeline/list.md) | Shows managed pipelines | `package::list` |
+| Operator                                                 | Description                          | Example                                   |
+| :------------------------------------------------------- | :----------------------------------- | :---------------------------------------- |
+| [`pipeline::list`](./operators/pipeline/list.md)         | Shows managed pipelines              | `package::list`                           |
 | [`pipeline::activity`](./operators/pipeline/activity.md) | Summarizes the activity of pipelines | `package::activity range=1d, interval=1h` |
 
 ## Contexts
