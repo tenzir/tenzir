@@ -1,9 +1,5 @@
 {
   json: 123,
-  path: "inputs/from_file/foo/foo2.json",
-}
-{
-  json: 123,
   path: "inputs/from_file/foo/bar/bar.json",
 }
 {
@@ -13,4 +9,8 @@
 {
   json: 123,
   path: "inputs/from_file/foo/foo1.json",
+}
+{
+  json: 123,
+  path: "inputs/from_file/foo/foo2.json",
 }
