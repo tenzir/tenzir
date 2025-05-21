@@ -51,7 +51,7 @@ applicable. This is using the same logic as [`from`](from.md).
 ### Read every `.csv` file from S3
 
 ```tql
-from_file `s3://my-bucket/**.csv`
+from_file "s3://my-bucket/**.csv"
 ```
 
 ### Read every `.json` file in `/data` as Suricata EVE JSON

@@ -35,7 +35,14 @@
 #include <ranges>
 
 namespace tenzir::plugins::from {
+
 namespace {
+
+/// How long to wait between file queries when using `from_file watch=true`.
+constexpr auto watch_pause = std::chrono::seconds{10};
+
+/// The maximum number of concurrent pipelines for `from_file`.
+constexpr auto max_jobs = 10;
 
 class from_events final : public crtp_operator<from_events> {
 public:
@@ -314,6 +321,30 @@ auto strip_prefix(std::string name) -> std::string {
   return name;
 }
 
+auto entity_for_plugin(const plugin& plugin,
+                       location location = location::unknown) -> ast::entity {
+  auto name = strip_prefix(plugin.name());
+  auto segments = detail::split(name, "::");
+  auto identifiers = std::vector<ast::identifier>{};
+  for (auto& segment : segments) {
+    identifiers.emplace_back(
+      segment, &segment == &segments.back() ? location : location::unknown);
+  }
+  return ast::entity{std::move(identifiers)};
+}
+
+auto invocation_for_plugin(const plugin& plugin, location location
+                                                 = location::unknown)
+  -> ast::invocation {
+  return ast::invocation{entity_for_plugin(plugin, location), {}};
+}
+
+auto make_operator(const operator_factory_plugin& plugin, location location,
+                   session ctx) -> failure_or<operator_ptr> {
+  auto inv = invocation_for_plugin(plugin, location);
+  return plugin.make({std::move(inv.op), std::move(inv.args)}, ctx);
+}
+
 auto get_file(const boost::urls::url_view& url) -> std::string {
   if (not url.segments().empty()) {
     return url.segments().back();
@@ -340,14 +371,13 @@ auto get_compression_and_format(located<std::string_view> url,
       .emit(dh);
     return failure::promise();
   }
-  // TODO: Figure out what to do here.
-  auto filename_loc = url;
-  // auto filename_loc = inv.args.front().get_location();
-  // if (filename_loc.end - filename_loc.begin == path.size() + 2) {
-  //   auto file_start = path.find(file);
-  //   filename_loc.begin += file_start + 1;
-  //   filename_loc.end -= 1;
-  // }
+  auto filename_loc = url.source;
+  if (filename_loc.end - filename_loc.begin == url.inner.size() + 2) {
+    // FIXME: This reads like it doesn't work reliably.
+    auto file_start = url.inner.find(file);
+    filename_loc.begin += file_start + 1;
+    filename_loc.end -= 1;
+  }
   auto first_dot = file.find('.');
   if (first_dot == std::string::npos) {
     if (default_format) {
@@ -475,24 +505,17 @@ auto create_pipeline_from_uri(std::string path,
   if (not has_pipeline_or_events) {
     inv.args.emplace_back(ast::pipeline_expr{});
     pipeline_argument = try_as<ast::pipeline_expr>(inv.args.back());
-    auto io_ent = ast::entity{std::vector{
-      ast::identifier{strip_prefix(rw_plugin->name()), location::unknown},
-    }};
     if constexpr (not is_loading) {
       pipeline_argument->inner.body.emplace_back(
-        ast::invocation{std::move(io_ent), {}});
+        invocation_for_plugin(*rw_plugin));
     }
     if (compression_plugin) {
-      auto compression_ent = ast::entity{std::vector{
-        ast::identifier{strip_prefix(compression_plugin->name()),
-                        location::unknown},
-      }};
       pipeline_argument->inner.body.emplace_back(
-        ast::invocation{std::move(compression_ent), {}});
+        invocation_for_plugin(*compression_plugin));
     }
     if constexpr (is_loading) {
       pipeline_argument->inner.body.emplace_back(
-        ast::invocation{std::move(io_ent), {}});
+        invocation_for_plugin(*rw_plugin));
     }
     TENZIR_ASSERT(resolve_entities(pipeline_argument->inner, ctx));
   }
@@ -622,15 +645,19 @@ public:
   }
 };
 
-using source_actor = caf::typed_actor<auto(atom::get)->caf::result<chunk_ptr>>;
+struct chunk_source_traits {
+  using signatures = caf::type_list<auto(atom::get)->caf::result<chunk_ptr>>;
+};
 
-class arrow_fs_source {
+using chunk_source_actor = caf::typed_actor<chunk_source_traits>;
+
+class arrow_chunk_source {
 public:
-  explicit arrow_fs_source(std::shared_ptr<arrow::io::InputStream> stream)
+  explicit arrow_chunk_source(std::shared_ptr<arrow::io::InputStream> stream)
     : stream_{std::move(stream)} {
   }
 
-  auto make_behavior() -> source_actor::behavior_type {
+  auto make_behavior() -> chunk_source_actor::behavior_type {
     return {
       [this](atom::get) -> caf::result<chunk_ptr> {
         auto buffer = stream_->Read(1 << 20);
@@ -652,7 +679,8 @@ class from_file_source final : public crtp_operator<from_file_source> {
 public:
   from_file_source() = default;
 
-  explicit from_file_source(source_actor source) : source_{std::move(source)} {
+  explicit from_file_source(chunk_source_actor source)
+    : source_{std::move(source)} {
     TENZIR_ASSERT(source_);
   }
 
@@ -694,7 +722,7 @@ public:
   }
 
 private:
-  source_actor source_;
+  chunk_source_actor source_;
 };
 
 struct from_file_actor_traits {
@@ -780,9 +808,6 @@ struct file_hasher {
 
 using file_set = boost::unordered_set<arrow::fs::FileInfo, file_hasher>;
 
-constexpr auto watch_pause = std::chrono::seconds{10};
-constexpr auto max_jobs = 10;
-
 struct from_file_args {
   located<std::string> url;
   bool watch{false};
@@ -820,7 +845,8 @@ public:
       expanded = std::filesystem::weakly_canonical(expanded);
     }
     // TODO: Arrow removes trailing slashes here. Do we need them?
-    // FIXME: Double `?` in `s3://bucket/a?.b?endpoint_override=`.
+    // TODO: Once we allow `?` in globs (which is currently not supported), we
+    // run into trouble here because of `s3://bucket/a?.b?endpoint_override=`.
     auto fs = arrow::fs::FileSystemFromUriOrPath(expanded, &root_path_);
     if (not fs.ok()) {
       diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
@@ -1007,32 +1033,27 @@ private:
     if (args_.pipe) {
       return args_.pipe->inner;
     }
-    auto test = transforming_diagnostic_handler{
-      // TODO: Lifetime.
+    auto path_dh = transforming_diagnostic_handler{
       *dh_, [path](diagnostic d) {
         return std::move(d)
           .modify()
           .note(fmt::format("while reading `{}`", path))
           .done();
       }};
-    TENZIR_WARN("PATH = {}", path);
     TRY(auto compression_and_format,
         get_compression_and_format<true>(
           located<std::string_view>{path, args_.url.source}, nullptr,
-          "https://docs.tenzir.com/tql2/operators/from_file", test));
+          "https://docs.tenzir.com/tql2/operators/from_file", path_dh));
     auto& format = compression_and_format.format.get();
     auto compression = compression_and_format.compression;
-    auto provider = session_provider::make(test);
+    auto provider = session_provider::make(path_dh);
     auto ctx = provider.as_session();
-    // TODO: This is not great.
-    auto inv = operator_factory_plugin::invocation{
-      ast::entity{{ast::identifier{format.name(), args_.url.source}}}, {}};
     auto pipe = pipeline{};
     if (compression) {
-      TRY(auto decompress, compression->make(inv, ctx));
+      TRY(auto decompress, make_operator(*compression, args_.url.source, ctx));
       pipe.append(std::move(decompress));
     }
-    TRY(auto read, format.make(inv, ctx));
+    TRY(auto read, make_operator(format, args_.url.source, ctx));
     pipe.append(std::move(read));
     return pipe;
   }
@@ -1062,7 +1083,7 @@ private:
           active_jobs_ -= 1;
           return;
         }
-        auto source = self_->spawn(caf::actor_from_state<arrow_fs_source>,
+        auto source = self_->spawn(caf::actor_from_state<arrow_chunk_source>,
                                    std::move(*stream));
         auto weak = caf::weak_actor_ptr{source->ctrl()};
         pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
