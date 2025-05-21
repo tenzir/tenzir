@@ -1,56 +1,34 @@
 # secret
 
-Use the value of a secret.
+Reads a secret from a store.
 
 ```tql
-secret(name:string) -> secret
+secret(x:string) -> string
 ```
 
 ## Description
 
-The secret is first looked up locally in the environment or configuration of the
-Tenzir Node. A `tenzir` client process can use secrets only if it has a Tenzir
-Node to connect to.
+The `secret` function retrieves the value associated with the key `x` and
+replaces it with the built-in secret store, which is a section in the
+`tenzir.yaml` configuration file:
 
-If the secret is not found in the node, a request is made to the Tenzir Platform.
-Should the platform also not be able to find the secret, an error is raised.
-
-See the [explanation page for secrets](../../../docs/secrets/README.md) for more
-details.
-
-### `name: string`
-
-The name of the secret to use. This must be a constant.
-
-## Legacy Model
-
-The configuration option `tenzir.legacy-secret-model` can be used to change the
-behavior of the `secret` function to return a `string` instead of a `secret`.
-
-When using the legacy model, only secrets from the Tenzir Node's configuration
-can be used, no secrets from the Tenzir Platform's secret store will be
-available.
-
-We do not recommend enabling this option.
+```yaml
+tenzir:
+  secrets:
+    # Add your secrets there.
+    geheim: 1528F9F3-FAFA-45B4-BC3C-B755D0E0D9C2
+```
 
 ## Examples
 
-### Using secrets in an operator
-
-```tql
-load_tcp "127.0.0.1:4000",{
-  read_ndjson
-}
-to_splunk "https://localhost:8088", hec_token=secret("splunk_hec_token")
-```
-
-### Secrets are not rendered in output
+### Read a secret from the configuration
 
 ```tql
 from {x: secret("geheim")}
 ```
+
 ```tql
-{x: "***" }
+{x: "1528F9F3-FAFA-45B4-BC3C-B755D0E0D9C2"}
 ```
 
 ## See also
