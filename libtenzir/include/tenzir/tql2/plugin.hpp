@@ -163,11 +163,7 @@ public:
 
   virtual auto function_name() const -> std::string;
 
-  virtual auto is_deterministic() const -> bool {
-    // TODO: Consider making this pure-virtual or changing the default, as most
-    // functions are deterministic.
-    return false;
-  }
+  virtual auto is_deterministic() const -> bool = 0;
 };
 
 class aggregation_instance {
@@ -289,7 +285,7 @@ public:
     co_yield {};
     if (writer_.allows_joining()) {
       auto p = writer_.instantiate(type{}, ctrl);
-      if (!p) {
+      if (! p) {
         diagnostic::error(p.error())
           .note("failed to instantiate `{}`", name())
           .emit(ctrl.diagnostics());
@@ -314,9 +310,9 @@ public:
           co_yield {};
           continue;
         }
-        if (!state) {
+        if (! state) {
           auto p = writer_.instantiate(slice.schema(), ctrl);
-          if (!p) {
+          if (! p) {
             diagnostic::error(p.error())
               .note("failed to initialize `{}`", name())
               .emit(ctrl.diagnostics());

@@ -27,6 +27,10 @@ class plugin final : public function_plugin {
     return Mode == mode::encode ? "encode_url" : "decode_url";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};

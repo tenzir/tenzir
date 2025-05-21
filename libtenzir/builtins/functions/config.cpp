@@ -22,6 +22,10 @@ public:
     return "config";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto initialize(const record& plugin_config, const record& global_config)
     -> caf::error override {
     TENZIR_UNUSED(plugin_config);

@@ -35,7 +35,7 @@ private:
     if (is<caf::none_t>(view)) {
       return;
     }
-    if (!all_) {
+    if (! all_) {
       all_ = materialize(as<view_type>(view));
     } else {
       all_ = *all_ && as<view_type>(view);
@@ -44,7 +44,7 @@ private:
 
   void add(const arrow::Array& array) override {
     const auto& bool_array = as<type_to_arrow_array_t<bool_type>>(array);
-    if (!all_) {
+    if (! all_) {
       all_ = bool_array.false_count() == 0;
     } else {
       all_ = *all_ && bool_array.false_count() == 0;
@@ -162,11 +162,11 @@ class plugin final : public virtual aggregation_function_plugin,
     return {};
   }
 
-  [[nodiscard]] std::string name() const override {
+  std::string name() const override {
     return "all";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<aggregation_function>>
+  caf::expected<std::unique_ptr<aggregation_function>>
   make_aggregation_function(const type& input_type) const override {
     if (is<bool_type>(input_type)) {
       return std::make_unique<all_function>(input_type);
@@ -175,6 +175,10 @@ class plugin final : public virtual aggregation_function_plugin,
                            fmt::format("all aggregation function does not "
                                        "support type {}",
                                        input_type));
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const

@@ -32,6 +32,10 @@ public:
     return "tql2.type_id";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -61,6 +65,10 @@ class type_of final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "type_of";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -98,6 +106,10 @@ public:
       env_.emplace(entry.get_name(), entry.to_string());
     }
     return {};
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -177,6 +189,10 @@ public:
     return "length";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -224,6 +240,10 @@ class network final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "network";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -275,6 +295,10 @@ class has final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "has";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -381,6 +405,10 @@ public:
     return "keys";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -432,6 +460,10 @@ public:
 
   auto name() const -> std::string override {
     return select_ ? "select_matching" : "drop_matching";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -492,6 +524,10 @@ public:
     return "merge";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto record1 = ast::expression{};
@@ -525,6 +561,10 @@ class get final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "get";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

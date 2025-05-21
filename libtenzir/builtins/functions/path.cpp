@@ -19,6 +19,10 @@ public:
     return "tql2.file_name";
   }
 
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -71,6 +75,10 @@ class parent_dir final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parent_dir";
+  }
+
+  auto is_deterministic() const -> bool final {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

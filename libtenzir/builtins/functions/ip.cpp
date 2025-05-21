@@ -24,6 +24,10 @@ public:
     return "tql2.ip";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -79,6 +83,10 @@ public:
 
   auto name() const -> std::string override {
     return v4_ ? "is_v4" : "is_v6";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

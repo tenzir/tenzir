@@ -50,8 +50,8 @@ auto try_as(const YAML::Node& node, auto&& guard) -> bool {
   return false;
 }
 
-auto parse_node(auto&& guard, const YAML::Node& node,
-                diagnostic_handler& diag) -> void {
+auto parse_node(auto&& guard, const YAML::Node& node, diagnostic_handler& diag)
+  -> void {
   switch (node.Type()) {
     case YAML::NodeType::Undefined: {
       diagnostic::warning("yaml parser encountered undefined field").emit(diag);
@@ -174,8 +174,8 @@ template <class View>
 auto print_node(auto& out, const View& value) -> void {
   if constexpr (std::is_same_v<View, data_view>) {
     return match(value, [&](const auto& value) {
-        return print_node(out, value);
-      });
+      return print_node(out, value);
+    });
   } else if constexpr (std::same_as<View, data_view3>) {
     return match(value, [&](const auto& value) {
       return print_node(out, value);
@@ -350,8 +350,8 @@ class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
 
 class read_yaml final
   : public virtual operator_plugin2<parser_adapter<yaml_parser>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_yaml");
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
@@ -373,8 +373,12 @@ public:
     return "tql2.parse_yaml";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple yaml values.
     auto parser = argument_parser2::function(name());
@@ -424,8 +428,8 @@ public:
 
 class write_yaml final
   : public virtual operator_plugin2<writer_adapter<yaml_printer>> {
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_(name()).parse(inv, ctx));
     return std::make_unique<writer_adapter<yaml_printer>>(yaml_printer{});
   }
@@ -440,8 +444,12 @@ class print_yaml final : public virtual function_plugin {
     return "print_yaml";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto include_document_markers = std::optional<location>{};
     auto parser = argument_parser2::function(name());

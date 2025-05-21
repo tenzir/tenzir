@@ -317,7 +317,7 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
         std::vector<std::string> items;
         auto f = name.begin();
         bool s = parser(f, name.end(), items);
-        if (!s || f != name.end()) {
+        if (! s || f != name.end()) {
           diagnostic::error("invalid replacement field")
             .note("invalid NAME")
             .hint("field: `{}`, NAME: `{}`", std::string{replacement_field},
@@ -512,7 +512,7 @@ public:
     auto record = builder.record();
     auto add_field = [&](std::string_view name, const boost::csub_match& match,
                          capture_type type) {
-      if (!match.matched) {
+      if (! match.matched) {
         if (type != capture_type::unnamed or include_unnamed_) {
           record.field(name).null();
         }
@@ -768,6 +768,10 @@ class parse_grok_plugin final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parse_grok";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

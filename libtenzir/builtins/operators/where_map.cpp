@@ -134,7 +134,7 @@ public:
     parser.add(expr, "<expr>");
     parser.parse(p);
     auto normalized_and_validated = normalize_and_validate(expr.inner);
-    if (!normalized_and_validated) {
+    if (! normalized_and_validated) {
       diagnostic::error("invalid expression")
         .primary(expr.source)
         .docs("https://tenzir.com/language/expressions")
@@ -798,6 +798,10 @@ public:
     return std::make_unique<where_ir>(loc, std::move(expr));
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(function_plugin::invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     return make_where_function(std::move(inv), ctx);
@@ -808,6 +812,10 @@ class map_plugin final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.map";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

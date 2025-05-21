@@ -27,6 +27,42 @@
 
 namespace tenzir {
 
+namespace {
+
+struct is_deterministic_impl : ast::visitor<is_deterministic_impl> {
+  explicit is_deterministic_impl(session ctx) : ctx{ctx} {
+  }
+
+  void visit(ast::function_call& x) {
+    result = ctx.reg().get(x).is_deterministic();
+    if (not result) {
+      return;
+    }
+    for (auto& arg : x.args) {
+      enter(arg);
+    }
+  }
+
+  auto visit(auto& x) {
+    if (not result) {
+      return;
+    }
+    enter(x);
+  }
+
+  bool result = true;
+  session ctx;
+};
+
+auto is_deterministic(const ast::expression& expr, session ctx) -> bool {
+  auto impl = is_deterministic_impl{ctx};
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+  impl.visit(const_cast<ast::expression&>(expr));
+  return impl.result;
+}
+
+} // namespace
+
 auto resolve(const ast::field_path& sel, const table_slice& slice)
   -> variant<series, resolve_error> {
   return trace_panic(sel, [&] -> variant<series, resolve_error> {
@@ -118,13 +154,20 @@ auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   });
 }
 
-auto try_const_eval(const ast::expression& expr, diagnostic_handler& dh)
+auto try_const_eval(const ast::expression& expr, session ctx)
   -> std::optional<data> {
   return trace_panic(expr, [&] -> std::optional<data> {
+    if (not is_deterministic(expr, ctx)) {
+      // TODO: This check is not ideal, as it is a bit too broad, and
+      // incorrectly marks short-circuited expressions like `random() if false`
+      // as non-deterministic just because they contain a call to a
+      // non-deterministic function.
+      return {};
+    }
     auto const_dh = collecting_diagnostic_handler{};
     auto const_sp = session_provider::make(const_dh);
     if (auto result = const_eval(expr, const_dh)) {
-      std::move(const_dh).forward_to(dh);
+      std::move(const_dh).forward_to(ctx);
       return std::move(*result);
     }
     return {};

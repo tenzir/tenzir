@@ -28,6 +28,10 @@ public:
     return "tql2.time";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -84,6 +88,10 @@ public:
     return "since_epoch";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -133,6 +141,10 @@ public:
     return "from_epoch";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -180,6 +192,10 @@ public:
 
   auto name() const -> std::string override {
     return std::string{to_string(ymd_subtype_)};
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -248,6 +264,10 @@ public:
 
   auto name() const -> std::string override {
     return std::string{to_string(hms_subtype_)};
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -341,6 +361,10 @@ public:
     return "tql2.now";
   }
 
+  auto is_deterministic() const -> bool override {
+    return false;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     TRY(argument_parser2::function("now").parse(inv, ctx));
@@ -360,6 +384,10 @@ class format_time : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.format_time";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -414,6 +442,10 @@ class parse_time : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parse_time";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

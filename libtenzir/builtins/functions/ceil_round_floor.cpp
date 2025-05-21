@@ -28,8 +28,12 @@ public:
     return std::string{to_string(Mode)};
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto spec = std::optional<located<duration>>{};
     TRY(argument_parser2::function(name())

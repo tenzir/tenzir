@@ -25,6 +25,10 @@ public:
     return "duration";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -88,6 +92,10 @@ public:
 
   auto name() const -> std::string override {
     return name_;
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -186,6 +194,10 @@ public:
 
   auto name() const -> std::string override {
     return name_;
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

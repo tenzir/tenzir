@@ -29,6 +29,10 @@ public:
     return "tql2.sqrt";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -99,6 +103,10 @@ public:
     return "tql2.random";
   }
 
+  auto is_deterministic() const -> bool override {
+    return false;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     argument_parser2::function("random").parse(inv, ctx).ignore();
@@ -166,6 +174,10 @@ class count final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.count";
+  }
+
+  auto is_deterministic() const -> bool final {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const
@@ -285,6 +297,10 @@ public:
     return "tql2.quantile";
   }
 
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
@@ -346,6 +362,10 @@ class median final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.median";
+  }
+
+  auto is_deterministic() const -> bool final {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const

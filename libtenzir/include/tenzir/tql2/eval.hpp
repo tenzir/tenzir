@@ -32,7 +32,7 @@ auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
 
 /// Tries to evaluate an expression to a constant value. Emits diagnostics only
 /// if the evaluation succeeded.
-auto try_const_eval(const ast::expression& expr, diagnostic_handler& dh)
+auto try_const_eval(const ast::expression& expr, session ctx)
   -> std::optional<data>;
 
 struct resolve_error {

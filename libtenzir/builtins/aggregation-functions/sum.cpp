@@ -37,7 +37,7 @@ private:
     if (is<caf::none_t>(view)) {
       return;
     }
-    if (!sum_) {
+    if (! sum_) {
       sum_ = materialize(as<view_type>(view));
     } else {
       sum_ = *sum_ + materialize(as<view_type>(view));
@@ -318,6 +318,10 @@ class plugin : public virtual aggregation_function_plugin,
 
   auto aggregation_default() const -> data override {
     return caf::none;
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const

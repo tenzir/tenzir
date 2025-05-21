@@ -23,6 +23,10 @@ public:
     return "tql2.secret";
   }
 
+  auto is_deterministic() const -> bool final {
+    return true;
+  }
+
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
     const auto v
