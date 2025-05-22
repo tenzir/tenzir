@@ -980,10 +980,14 @@ private:
         auto root_info = std::move((*infos)[0]);
         switch (root_info.type()) {
           case arrow::fs::FileType::NotFound:
-            // TODO: Do we want to allow this? Maybe if `watch=true`?
-            diagnostic::error("`{}` does not exist", root_path_)
-              .primary(args_.url)
-              .emit(*dh_);
+            // We only want to allow this if `watch=true`.
+            if (args_.watch) {
+              got_all_files();
+            } else {
+              diagnostic::error("`{}` does not exist", root_path_)
+                .primary(args_.url)
+                .emit(*dh_);
+            }
             return;
           case arrow::fs::FileType::Unknown:
             diagnostic::error("`{}` is unknown", root_path_)
@@ -991,9 +995,14 @@ private:
               .emit(*dh_);
             return;
           case arrow::fs::FileType::File:
-            // TODO: Do we want to warn when the glob continues here?
-            process_file(std::move(root_info));
-            got_all_files();
+            if (matches(root_info.path(), glob_)) {
+              add_job(std::move(root_info));
+              got_all_files();
+            } else if (not args_.watch) {
+              diagnostic::error("`{}` is a file, not a directory", root_path_)
+                .primary(args_.url)
+                .emit(*dh_);
+            }
             return;
           case arrow::fs::FileType::Directory:
             auto sel = arrow::fs::FileSelector{};
@@ -1025,8 +1034,6 @@ private:
   }
 
   void process_file(arrow::fs::FileInfo file) {
-    // TODO: What if the glob matches a directory? Should the directory be
-    // processed in it's entirety?
     if (file.IsFile() and matches(file.path(), glob_)) {
       add_job(std::move(file));
     }
@@ -1080,21 +1087,23 @@ private:
     if (args_.pipe) {
       return args_.pipe->inner;
     }
-    auto path_dh = transforming_diagnostic_handler{
-      *dh_, [path](diagnostic d) {
-        // TODO: Should an error here be an error for `from_file`?
+    auto parse_dh = transforming_diagnostic_handler{
+      *dh_, [this, path](diagnostic d) {
+        if (d.severity == severity::error and is_globbing()) {
+          d.severity = severity::warning;
+        }
         return std::move(d)
           .modify()
-          .note(fmt::format("while reading `{}`", path))
+          .note(fmt::format("coming from `{}`", path))
           .done();
       }};
     TRY(auto compression_and_format,
         get_compression_and_format<true>(
           located<std::string_view>{path, args_.url.source}, nullptr,
-          "https://docs.tenzir.com/tql2/operators/from_file", path_dh));
+          "https://docs.tenzir.com/tql2/operators/from_file", parse_dh));
     auto& format = compression_and_format.format.get();
     auto compression = compression_and_format.compression;
-    auto provider = session_provider::make(path_dh);
+    auto provider = session_provider::make(parse_dh);
     auto ctx = provider.as_session();
     auto pipe = pipeline{};
     if (compression) {
@@ -1130,7 +1139,7 @@ private:
   start_stream(arrow::Result<std::shared_ptr<arrow::io::InputStream>> stream,
                pipeline pipe, std::string path) {
     if (not stream.ok()) {
-      diagnostic::error("failed to open `{}`", path)
+      pipeline_failed("failed to open `{}`", path)
         .primary(args_.url)
         .note(stream.status().ToStringWithoutContextLines())
         .emit(*dh_);
@@ -1167,9 +1176,8 @@ private:
       }
       active_jobs_ -= 1;
       if (error) {
-        // TODO: Or warning?
-        diagnostic::error(std::move(error))
-          .note("while reading `{}`", path)
+        pipeline_failed(std::move(error))
+          .note("coming from `{}`", path)
           .emit(*dh_);
         return;
       }
@@ -1189,8 +1197,8 @@ private:
       .request(executor, caf::infinite)
       .then([] {},
             [this, path = std::move(path)](caf::error error) {
-              diagnostic::error(std::move(error))
-                .note("while reading `{}`", path)
+              pipeline_failed(std::move(error))
+                .note("coming from `{}`", path)
                 .emit(*dh_);
             });
   }
@@ -1207,6 +1215,26 @@ private:
     (void)nested_operator_index;
     return self_->mail(operator_index_, nested_metrics_id, std::move(metrics))
       .delegate(metrics_receiver_);
+  }
+
+  auto pipeline_failed(caf::error error) const -> diagnostic_builder {
+    if (is_globbing()) {
+      return diagnostic::warning(std::move(error));
+    }
+    return diagnostic::error(std::move(error));
+  }
+
+  template <class... Ts>
+  auto pipeline_failed(fmt::format_string<Ts...> str, Ts&&... xs) const
+    -> diagnostic_builder {
+    if (is_globbing()) {
+      return diagnostic::warning(std::move(str), std::forward<Ts>(xs)...);
+    }
+    return diagnostic::error(std::move(str), std::forward<Ts>(xs)...);
+  }
+
+  auto is_globbing() const -> bool {
+    return glob_.size() == 1 and is<std::string>(glob_[0]);
   }
 
   from_file_actor::pointer self_;
