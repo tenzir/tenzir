@@ -966,15 +966,8 @@ struct exec_node_state {
     TENZIR_TRACE("{} {} schedules run with a delay of {}", *self, op->name(),
                  data{backoff});
     run_scheduled = true;
-    if (backoff > duration::zero()) {
-      backoff_disposable = self->delay_for_fn(backoff, [this] {
-        run_scheduled = false;
-        run();
-      });
-      return;
-    }
     if (use_backoff) {
-      backoff_disposable = self->run_delayed_weak(duration::zero(), [this] {
+      backoff_disposable = self->run_delayed_weak(backoff, [this] {
         run_scheduled = false;
         run();
       });
