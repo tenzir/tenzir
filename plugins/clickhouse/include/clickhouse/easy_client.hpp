@@ -42,7 +42,7 @@ public:
   static auto
   make(arguments args, diagnostic_handler& dh) -> std::unique_ptr<easy_client>;
 
-  auto insert(const table_slice& slice) -> failure_or<void>;
+  auto insert(const table_slice& slice) -> bool;
 
 private:
   auto check_if_table_exists() -> bool;

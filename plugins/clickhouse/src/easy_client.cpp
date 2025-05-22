@@ -141,7 +141,7 @@ auto easy_client::create_table(const tenzir::record_type& schema)
     const auto is_primary = k == args_.primary->inner;
     path.push_back(k);
     TRY(auto clickhouse_typename,
-        type_to_clickhouse_typename(path, t, is_primary, dh_));
+        type_to_clickhouse_typename(path, t, not is_primary, dh_));
     TENZIR_ASSERT(not clickhouse_typename.empty());
     auto functions
       = make_functions_from_clickhouse(path, clickhouse_typename, dh_);
@@ -176,11 +176,13 @@ auto easy_client::create_table(const tenzir::record_type& schema)
   return {};
 }
 
-auto easy_client::insert(const table_slice& slice) -> failure_or<void> {
+auto easy_client::insert(const table_slice& slice) -> bool {
   if (not transformations_) {
     TENZIR_DEBUG("creating table");
     const auto& schema = as<record_type>(slice.schema());
-    TRY(create_table(schema));
+    if (not create_table(schema)) {
+      return false;
+    }
     TENZIR_DEBUG("created table");
     TENZIR_ASSERT(transformations_);
   }
@@ -206,7 +208,11 @@ auto easy_client::insert(const table_slice& slice) -> failure_or<void> {
     updated = updated | trafo->update_dropmask(path, t, arr, dropmask_, dh_);
     path.pop_back();
     if (updated == transformer::drop::all) {
-      return failure::promise();
+      diagnostic::warning("dropped events because of incompatible column `{}`",
+                          fmt::join(path, "."))
+        .primary(args_.operator_location)
+        .emit(dh_);
+      return false;
     }
   }
   for (const auto& [i, kvp] :
@@ -221,7 +227,7 @@ auto easy_client::insert(const table_slice& slice) -> failure_or<void> {
       "required column missing in input, event will be dropped")
       .note("column `{}` is missing", kvp.first)
       .emit(dh_);
-    return failure::promise();
+    return false;
   }
   auto block = ::clickhouse::Block{};
   for (const auto& [k, t, arr] : columns_of(slice)) {
@@ -235,14 +241,13 @@ auto easy_client::insert(const table_slice& slice) -> failure_or<void> {
     if (not this_column) {
       diagnostic::warning("failed to add column `{}` to ClickHouse table", k)
         .emit(dh_);
-      return failure::promise();
+      return false;
     }
     block.AppendColumn(std::string{k}, std::move(this_column));
   }
-
-  if (block.GetColumnCount() > 0) {
+  if (block.GetRowCount() > 0 and block.GetColumnCount() > 0) {
     client_.Insert(args_.table.inner, block);
   }
-  return {};
+  return true;
 }
 } // namespace tenzir::plugins::clickhouse
