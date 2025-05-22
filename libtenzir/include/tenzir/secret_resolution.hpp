@@ -37,7 +37,7 @@ public:
   /// Returns a string view over the secret's UTF-8 value, if it is valid UTF-8.
   auto utf8_view() const -> std::optional<std::string_view>;
 
-  /// Returns a view over the secret's bytes raw bytes.
+  /// Returns a view over the secret's raw bytes.
   auto blob() const -> std::span<const std::byte> {
     return value_;
   }

@@ -791,7 +791,8 @@ public:
 
   friend auto inspect(auto& f, from_file_sink& x) -> bool {
     return f.object(x).fields(f.field("parent", x.parent_),
-                              f.field("order", x.order_));
+                              f.field("order", x.order_),
+                              f.field("path_field", x.path_field_));
   }
 
 private:
@@ -1121,71 +1122,77 @@ private:
       self_, fs_->OpenInputStreamAsync(file),
       [this, pipe = std::move(*pipe), path = file.path()](
         arrow::Result<std::shared_ptr<arrow::io::InputStream>> stream) mutable {
-        if (not stream.ok()) {
-          diagnostic::error("failed to open `{}`", path)
-            .primary(args_.url)
-            .note(stream.status().ToStringWithoutContextLines())
-            .emit(*dh_);
-          active_jobs_ -= 1;
-          return;
-        }
-        auto source = self_->spawn(caf::actor_from_state<arrow_chunk_source>,
-                                   std::move(*stream));
-        auto weak = caf::weak_actor_ptr{source->ctrl()};
-        pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
-        pipe.append(std::make_unique<from_file_sink>(
-          self_, order_,
-          args_.path_field ? std::optional{std::pair{*args_.path_field, path}}
-                           : std::nullopt));
-        pipe = pipe.optimize_if_closed();
-        auto executor
-          = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
-                         self_, node_, false, is_hidden_);
-        self_->attach_functor([this, weak]() {
-          if (auto strong = weak.lock()) {
-            // FIXME: This should not be necessary to ensure that the actor is
-            // destroyed when the executor is done. This problem could also
-            // apply to other operators.
-            self_->send_exit(strong, caf::exit_reason::user_shutdown);
-          }
-        });
-        self_->monitor(executor, [this, executor, path,
-                                  weak = std::move(weak)](caf::error error) {
-          if (auto strong = weak.lock()) {
-            // FIXME: This should not be necessary to ensure that the actor is
-            // destroyed when the executor is done. This problem could also
-            // apply to other operators.
-            self_->send_exit(strong, caf::exit_reason::user_shutdown);
-          }
-          active_jobs_ -= 1;
-          if (error) {
-            // TODO: Or warning?
-            diagnostic::error(std::move(error))
-              .note("while reading `{}`", path)
-              .emit(*dh_);
-            return;
-          }
-          if (args_.remove) {
-            // There is no async call available.
-            auto status = fs_->DeleteFile(path);
-            if (not status.ok()) {
-              diagnostic::warning("failed to remove `{}`", path)
-                .primary(args_.url)
-                .note(status.ToStringWithoutContextLines())
-                .emit(*dh_);
-            }
-          }
-          check_jobs_and_termination();
-        });
-        self_->mail(atom::start_v)
-          .request(executor, caf::infinite)
-          .then([] {},
-                [this, path](caf::error error) {
-                  diagnostic::error(std::move(error))
-                    .note("while reading `{}`", path)
-                    .emit(*dh_);
-                });
+        start_stream(std::move(stream), std::move(pipe), std::move(path));
       });
+  }
+
+  void
+  start_stream(arrow::Result<std::shared_ptr<arrow::io::InputStream>> stream,
+               pipeline pipe, std::string path) {
+    if (not stream.ok()) {
+      diagnostic::error("failed to open `{}`", path)
+        .primary(args_.url)
+        .note(stream.status().ToStringWithoutContextLines())
+        .emit(*dh_);
+      active_jobs_ -= 1;
+      return;
+    }
+    auto source = self_->spawn(caf::actor_from_state<arrow_chunk_source>,
+                               std::move(*stream));
+    auto weak = caf::weak_actor_ptr{source->ctrl()};
+    pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
+    pipe.append(std::make_unique<from_file_sink>(
+      self_, order_,
+      args_.path_field ? std::optional{std::pair{*args_.path_field, path}}
+                       : std::nullopt));
+    pipe = pipe.optimize_if_closed();
+    auto executor
+      = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
+                     self_, node_, false, is_hidden_);
+    self_->attach_functor([this, weak]() {
+      if (auto strong = weak.lock()) {
+        // FIXME: This should not be necessary to ensure that the actor is
+        // destroyed when the executor is done. This problem could also
+        // apply to other operators.
+        self_->send_exit(strong, caf::exit_reason::user_shutdown);
+      }
+    });
+    self_->monitor(executor, [this, executor, path,
+                              weak = std::move(weak)](caf::error error) {
+      if (auto strong = weak.lock()) {
+        // FIXME: This should not be necessary to ensure that the actor is
+        // destroyed when the executor is done. This problem could also
+        // apply to other operators.
+        self_->send_exit(strong, caf::exit_reason::user_shutdown);
+      }
+      active_jobs_ -= 1;
+      if (error) {
+        // TODO: Or warning?
+        diagnostic::error(std::move(error))
+          .note("while reading `{}`", path)
+          .emit(*dh_);
+        return;
+      }
+      if (args_.remove) {
+        // There is no async call available.
+        auto status = fs_->DeleteFile(path);
+        if (not status.ok()) {
+          diagnostic::warning("failed to remove `{}`", path)
+            .primary(args_.url)
+            .note(status.ToStringWithoutContextLines())
+            .emit(*dh_);
+        }
+      }
+      check_jobs_and_termination();
+    });
+    self_->mail(atom::start_v)
+      .request(executor, caf::infinite)
+      .then([] {},
+            [this, path = std::move(path)](caf::error error) {
+              diagnostic::error(std::move(error))
+                .note("while reading `{}`", path)
+                .emit(*dh_);
+            });
   }
 
   auto register_metrics(uint64_t nested_operator_index, uuid nested_metrics_id,

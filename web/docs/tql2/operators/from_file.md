@@ -4,7 +4,7 @@
 This operator is still under active development.
 :::
 
-Reads one or multiple files using from a filesystem.
+Reads one or multiple files from a filesystem.
 
 ```tql
 from_file url:string, [watch=bool, remove=bool, path_field=field { … }]
@@ -20,10 +20,17 @@ The characters `*` and `**` have a special meaning. `*` matches everything
 except `/`. `**` matches everything including `/`. The sequence `/**/` can also
 match nothing. For example, `foo/**/bar` matches `foo/bar`.
 
+The URL can include additional options. For `s3://`, the options that can be
+included in the URI as query parameters are `region`, `scheme`,
+`endpoint_override`, `allow_bucket_creation`, and `allow_bucket_deletion`. For
+`gs://`, the supported parameters are `scheme`, `endpoint_override`, and
+`retry_limit_seconds`.
+
 ### `watch = bool (optional)`
 
 In addition to processing all existing files, this option keeps the operator
-running, watching for new files that also match the given URL.
+running, watching for new files that also match the given URL. Currently, this
+scans the filesystem up to every 10s.
 
 Defaults to `false`.
 
