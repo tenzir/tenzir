@@ -1,0 +1,2 @@
+from env("INPUTS") + "/xsv/sample.tsv"
+write_tsv

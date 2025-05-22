@@ -666,6 +666,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       break;
     }
   }
+  if (it == lines.end()) {
+    co_return;
+  }
   TENZIR_ASSERT(args.header);
   // parse the body
   const auto original_field_count = args.header->size();
