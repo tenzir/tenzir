@@ -43,8 +43,11 @@ struct saver_args {
 auto make_headers(const saver_args& args) {
   auto result = std::vector<std::pair<std::string, std::string>>{};
   // According to RFC 5322, the Date and From headers are mandatory.
-  auto now = fmt::localtime(std::time(nullptr));
-  result.emplace_back("Date", fmt::format("{:%a, %d %b %Y %H:%M:%S %z}", now));
+  const auto time = std::time(nullptr);
+  auto tm = std::tm{};
+  const auto* res = localtime_r(&time, &tm);
+  TENZIR_ASSERT(res != nullptr);
+  result.emplace_back("Date", fmt::format("{:%a, %d %b %Y %H:%M:%S %z}", tm));
   result.emplace_back("To", args.to);
   if (args.from) {
     result.emplace_back("From", *args.from);
