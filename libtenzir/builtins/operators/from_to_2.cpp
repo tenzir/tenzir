@@ -1089,7 +1089,7 @@ private:
     }
     auto parse_dh = transforming_diagnostic_handler{
       *dh_, [this, path](diagnostic d) {
-        if (d.severity == severity::error and is_globbing()) {
+        if (is_globbing()) {
           d.severity = severity::warning;
         }
         return std::move(d)
@@ -1234,7 +1234,7 @@ private:
   }
 
   auto is_globbing() const -> bool {
-    return glob_.size() == 1 and is<std::string>(glob_[0]);
+    return glob_.size() != 1 or not is<std::string>(glob_[0]);
   }
 
   from_file_actor::pointer self_;
