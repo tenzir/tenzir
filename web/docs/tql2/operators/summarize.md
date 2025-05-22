@@ -112,3 +112,20 @@ pairs:
 ts = round(ts, 1h)
 summarize ts, src_ip, dest_ip, sum(bytes_in), sum(bytes_out)
 ```
+
+### Get the number of metrics per second
+
+```tql
+metrics live=true
+every 1s {
+  summarize count=count()
+}
+```
+
+```tql
+{"count": 29} // after 1s
+{"count": 32} // after 2s
+{"count": 30} // after 3s
+{"count": 30} // after 4s
+// … continues like this
+```

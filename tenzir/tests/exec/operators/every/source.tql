@@ -1,0 +1,11 @@
+let $interval = 500ms
+let $cycles = 4
+
+every $interval, {
+  from {x: now()}
+}, parallel=2
+head $cycles
+summarize min=x.min(), max=x.max()
+
+// We allow up to one interval of latency.
+delta = floor(move max - move min, $interval)
