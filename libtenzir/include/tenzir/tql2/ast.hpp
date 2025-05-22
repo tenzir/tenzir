@@ -169,8 +169,14 @@ struct this_ {
 };
 
 struct root_field {
+  root_field() = default;
+
+  root_field(identifier id, bool has_question_mark = false)
+    : id{std::move(id)}, has_question_mark{has_question_mark} {
+  }
+
   identifier id;
-  bool has_question_mark = false;
+  bool has_question_mark{};
 
   auto get_location() const -> location {
     return id.location;

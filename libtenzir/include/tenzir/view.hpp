@@ -546,6 +546,9 @@ std::string materialize(T&& x) {
   return materialize(std::string_view{std::forward<T>(x)});
 }
 
+template <class T>
+using materialize_t = decltype(materialize(std::declval<T>()));
+
 // -- utilities ----------------------------------------------------------------
 
 /// Checks whether data is valid for a given type.
