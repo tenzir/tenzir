@@ -666,7 +666,6 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     }
   }
   if (it == lines.end()) {
-    co_yield {};
     co_return;
   }
   TENZIR_ASSERT(args.header);
