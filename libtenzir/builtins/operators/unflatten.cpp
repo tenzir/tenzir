@@ -42,8 +42,8 @@ public:
     return "unflatten";
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }
@@ -73,8 +73,12 @@ public:
     return std::make_unique<unflatten_operator>(separator);
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto sep = std::optional<std::string>{};
     TRY(argument_parser2::function(name())

@@ -203,7 +203,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     for (auto& v : msb.yield_ready_as_table_slice()) {
       co_yield std::move(v);
     }
-    if (!line) {
+    if (! line) {
       co_yield {};
       continue;
     }
@@ -300,6 +300,10 @@ public:
     return "parse_cef";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -314,37 +318,36 @@ public:
                                msb_opts = std::move(msb_opts),
                                expr = std::move(expr)](auto eval, session ctx) {
       return map_series(eval(expr), [&](series arg) {
-        auto f
-          = detail::overload{
-            [&](const arrow::NullArray&) {
-              return multi_series{arg};
-            },
-            [&](const arrow::StringArray& arg) {
-              auto b = multi_series_builder{msb_opts, ctx};
-              auto quoting = detail::quoting_escaping_policy{
-                .unescape_operation = unescape,
-              };
-              for (auto string : arg) {
-                if (not string) {
-                  b.null();
-                  continue;
-                }
-                auto diag = parse_line(*string, call, b, quoting);
-                if (diag) {
-                  ctx.dh().emit(std::move(*diag));
-                  b.null();
-                }
+        auto f = detail::overload{
+          [&](const arrow::NullArray&) {
+            return multi_series{arg};
+          },
+          [&](const arrow::StringArray& arg) {
+            auto b = multi_series_builder{msb_opts, ctx};
+            auto quoting = detail::quoting_escaping_policy{
+              .unescape_operation = unescape,
+            };
+            for (auto string : arg) {
+              if (not string) {
+                b.null();
+                continue;
               }
-              return multi_series{b.finalize()};
-            },
-            [&](const auto&) -> multi_series {
-              diagnostic::warning("`parse_cef` expected `string`, got `{}`",
-                                  arg.type.kind())
-                .primary(call)
-                .emit(ctx);
-              return series::null(null_type{}, arg.length());
-            },
-          };
+              auto diag = parse_line(*string, call, b, quoting);
+              if (diag) {
+                ctx.dh().emit(std::move(*diag));
+                b.null();
+              }
+            }
+            return multi_series{b.finalize()};
+          },
+          [&](const auto&) -> multi_series {
+            diagnostic::warning("`parse_cef` expected `string`, got `{}`",
+                                arg.type.kind())
+              .primary(call)
+              .emit(ctx);
+            return series::null(null_type{}, arg.length());
+          },
+        };
         return match(*arg.array, f);
       });
     });

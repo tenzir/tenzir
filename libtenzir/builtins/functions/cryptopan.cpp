@@ -25,8 +25,12 @@ class encrypt : public virtual function_plugin {
     return "encrypt_cryptopan";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto seed = std::optional<std::string>{};
     TRY(argument_parser2::function(name())

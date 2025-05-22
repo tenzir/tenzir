@@ -25,6 +25,10 @@ struct file_contents final : public function_plugin {
     return "file_contents";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto path = located<std::string>{};

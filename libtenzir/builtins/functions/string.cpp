@@ -35,6 +35,10 @@ public:
     return starts_with_ ? "starts_with" : "ends_with";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
@@ -89,6 +93,10 @@ class match_regex : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "match_regex";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -151,6 +159,10 @@ public:
 
   auto name() const -> std::string override {
     return name_;
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -221,6 +233,10 @@ public:
     return name_;
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto function_name() const -> std::string override {
     if (name_.ends_with("()")) {
       return name_.substr(0, name_.size() - 2);
@@ -285,6 +301,10 @@ public:
 
   auto name() const -> std::string override {
     return regex_ ? "tql2.replace_regex" : "tql2.replace";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -360,6 +380,10 @@ public:
     return "tql2.slice";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
@@ -425,6 +449,10 @@ class string_fn : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return Deprecated ? "tql2.str" : "tql2.string";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -510,6 +538,10 @@ public:
     return regex_ ? "tql2.split_regex" : "tql2.split";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
@@ -580,6 +612,10 @@ class join : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.join";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

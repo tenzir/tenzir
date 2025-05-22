@@ -59,7 +59,7 @@ inline auto split_at_crlf(generator<chunk_ptr> input)
   auto buffer = std::string{};
   bool ended_on_carriage_return = false;
   for (auto&& chunk : input) {
-    if (!chunk || chunk->size() == 0) {
+    if (! chunk || chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
@@ -96,7 +96,7 @@ inline auto split_at_crlf(generator<chunk_ptr> input)
     buffer.append(begin, end);
     co_yield std::nullopt;
   }
-  if (!buffer.empty()) {
+  if (! buffer.empty()) {
     buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
     co_yield simdjson::padded_string_view{buffer};
   }
@@ -105,7 +105,7 @@ inline auto split_at_null(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
   auto buffer = std::string{};
   for (auto&& chunk : input) {
-    if (!chunk || chunk->size() == 0) {
+    if (! chunk || chunk->size() == 0) {
       co_yield std::nullopt;
       continue;
     }
@@ -130,7 +130,7 @@ inline auto split_at_null(generator<chunk_ptr> input)
     buffer.append(begin, end);
     co_yield std::nullopt;
   }
-  if (!buffer.empty()) {
+  if (! buffer.empty()) {
     buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
     co_yield simdjson::padded_string_view{buffer};
   }
@@ -1234,6 +1234,10 @@ public:
     return "tql2.parse_json";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -1398,6 +1402,10 @@ class print_json_plugin : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return compact_ ? "print_ndjson" : "print_json";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   print_json_plugin(bool compact) : compact_{compact} {

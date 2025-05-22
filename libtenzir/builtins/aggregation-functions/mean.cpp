@@ -241,6 +241,10 @@ class plugin : public virtual aggregation_function_plugin,
     return match(input_type, f);
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};

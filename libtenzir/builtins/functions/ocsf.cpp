@@ -108,8 +108,8 @@ constexpr ocsf_pair class_map[]{
   {"Network Remediation Activity", 7004},
 };
 
-auto name_to_id(std::span<const ocsf_pair> lookup,
-                std::string_view key) -> std::optional<int64_t> {
+auto name_to_id(std::span<const ocsf_pair> lookup, std::string_view key)
+  -> std::optional<int64_t> {
   for (const auto& [category, id] : lookup) {
     if (key == category) {
       return id;
@@ -118,8 +118,8 @@ auto name_to_id(std::span<const ocsf_pair> lookup,
   return std::nullopt;
 }
 
-auto id_to_name(std::span<const ocsf_pair> lookup,
-                int64_t key) -> std::optional<std::string_view> {
+auto id_to_name(std::span<const ocsf_pair> lookup, int64_t key)
+  -> std::optional<std::string_view> {
   for (const auto& [category, id] : lookup) {
     if (key == id) {
       return category;
@@ -140,6 +140,10 @@ public:
     return name_;
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   generic_mapping_plugin(std::string name, std::string input_meta,
                          const std::span<const ocsf_pair> map,
                          std::string warning_text)
@@ -149,8 +153,8 @@ public:
       warning_text_{std::move(warning_text)} {
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name_)
           .positional("x", expr, input_meta_)

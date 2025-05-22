@@ -32,7 +32,7 @@ struct heterogeneous_data_hash {
 
   [[nodiscard]] auto operator()(const type_to_data_t<Type>& value) const
     -> size_t
-    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
+    requires(! std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
   {
     return hash(make_view(value));
   }
@@ -49,7 +49,7 @@ struct heterogeneous_data_equal {
 
   [[nodiscard]] auto operator()(const type_to_data_t<Type>& lhs,
                                 view<type_to_data_t<Type>> rhs) const -> bool
-    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
+    requires(! std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
   {
     return make_view(lhs) == rhs;
   }
@@ -74,7 +74,7 @@ private:
       return;
     }
     const auto& typed_view = as<view_type>(view);
-    if (!distinct_.contains(typed_view)) {
+    if (! distinct_.contains(typed_view)) {
       const auto [it, inserted] = distinct_.insert(materialize(typed_view));
       TENZIR_ASSERT(inserted);
     }
@@ -184,17 +184,21 @@ class plugin : public virtual aggregation_function_plugin,
     return {};
   }
 
-  [[nodiscard]] auto name() const -> std::string override {
+  auto name() const -> std::string override {
     return "count_distinct";
   };
 
-  [[nodiscard]] auto make_aggregation_function(const type& input_type) const
+  auto make_aggregation_function(const type& input_type) const
     -> caf::expected<std::unique_ptr<aggregation_function>> override {
     auto f = [&]<concrete_type Type>(
                const Type&) -> std::unique_ptr<aggregation_function> {
       return std::make_unique<count_distinct_function<Type>>(input_type);
     };
     return match(input_type, f);
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const

@@ -272,7 +272,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     for (auto& v : msb.yield_ready_as_table_slice()) {
       co_yield std::move(v);
     }
-    if (!line) {
+    if (! line) {
       co_yield {};
       continue;
     }
@@ -365,6 +365,10 @@ class parse_leef final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "parse_leef";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

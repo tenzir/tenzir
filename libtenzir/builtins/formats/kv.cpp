@@ -150,8 +150,8 @@ struct kv_args {
 
 class kv_parser;
 auto parse_loop(generator<std::optional<std::string_view>> input,
-                operator_control_plane& ctrl,
-                kv_parser parser) -> generator<table_slice>;
+                operator_control_plane& ctrl, kv_parser parser)
+  -> generator<table_slice>;
 
 class kv_parser final : public plugin_parser {
 public:
@@ -193,9 +193,9 @@ public:
     }
   }
 
-  auto
-  parse_strings(const arrow::StringArray& input,
-                diagnostic_handler& diagnostics) const -> std::vector<series> {
+  auto parse_strings(const arrow::StringArray& input,
+                     diagnostic_handler& diagnostics) const
+    -> std::vector<series> {
     auto dh = transforming_diagnostic_handler{
       diagnostics,
       [](auto diag) {
@@ -229,8 +229,8 @@ public:
 };
 
 auto parse_loop(generator<std::optional<std::string_view>> input,
-                operator_control_plane& ctrl,
-                kv_parser parser) -> generator<table_slice> {
+                operator_control_plane& ctrl, kv_parser parser)
+  -> generator<table_slice> {
   auto dh = transforming_diagnostic_handler{
     ctrl.diagnostics(),
     [](auto diag) {
@@ -401,13 +401,13 @@ public:
   write_kv_operator(kv_writer writer) : writer_{std::move(writer)} {
   }
 
-  auto
-  optimize(expression const&, event_order) const -> optimize_result override {
+  auto optimize(expression const&, event_order) const
+    -> optimize_result override {
     return do_not_optimize(*this);
   }
 
-  auto operator()(generator<table_slice> input,
-                  operator_control_plane&) const -> generator<chunk_ptr> {
+  auto operator()(generator<table_slice> input, operator_control_plane&) const
+    -> generator<chunk_ptr> {
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -476,8 +476,8 @@ public:
     return "read_kv";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto field_split = std::optional<located<std::string>>{
       std::in_place,
@@ -513,8 +513,8 @@ public:
     return "write_kv";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto writer = kv_writer{inv.self.get_location()};
     writer.add(parser);
@@ -530,8 +530,12 @@ public:
     return "parse_kv";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto parser = argument_parser2::function(name());
     auto field_split = std::optional<located<std::string>>{
@@ -585,8 +589,12 @@ public:
     return "print_kv";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto parser = argument_parser2::function(name());
     auto writer = kv_writer{};

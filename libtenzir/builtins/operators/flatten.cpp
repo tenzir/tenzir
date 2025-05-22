@@ -32,8 +32,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input,
-             operator_control_plane& ctrl) const -> generator<table_slice> {
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto seen = std::unordered_set<type>{};
     for (auto&& slice : input) {
       auto result = tenzir::flatten(slice, separator_);
@@ -54,8 +54,8 @@ public:
     return "flatten";
   }
 
-  auto optimize(expression const&,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const&, event_order order) const
+    -> optimize_result override {
     return optimize_result::order_invariant(*this, order);
   }
 
@@ -74,8 +74,12 @@ public:
     return {.transformation = true};
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto sep = std::optional<std::string>{default_flatten_separator};
     TRY(argument_parser2::function("flatten")

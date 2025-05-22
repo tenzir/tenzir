@@ -27,8 +27,12 @@ class plugin final : public function_plugin {
     return std::string{to_string(Mode)};
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
           .positional("value", expr, "blob|string")

@@ -27,6 +27,10 @@ public:
     return name_;
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   struct impl final : public function_use {
     auto run(evaluator eval, session ctx) -> multi_series override {
       return map_series(eval(expr), [&](const series& values) -> multi_series {
@@ -75,6 +79,10 @@ class binary_fn : public virtual function_plugin {
 public:
   binary_fn(std::string name, std::string compute_fn)
     : name_{std::move(name)}, compute_fn_{std::move(compute_fn)} {
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto name() const -> std::string override {

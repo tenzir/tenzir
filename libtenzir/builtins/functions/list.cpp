@@ -25,6 +25,10 @@ public:
     return "prepend";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto list = ast::expression{};
@@ -57,6 +61,10 @@ public:
     return "append";
   }
 
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto list = ast::expression{};
@@ -87,6 +95,10 @@ class concatenate : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "concatenate";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -127,6 +139,10 @@ public:
 
   auto name() const -> std::string override {
     return "tql2.zip";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_function(invocation inv, session ctx) const

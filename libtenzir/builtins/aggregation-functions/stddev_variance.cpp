@@ -259,7 +259,7 @@ class plugin : public virtual aggregation_function_plugin,
     return Mode == mode::stddev ? "stddev" : "variance";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<aggregation_function>>
+  caf::expected<std::unique_ptr<aggregation_function>>
   make_aggregation_function(const type& input_type) const override {
     auto f = detail::overload{
       [&](const uint64_type&)
@@ -282,6 +282,10 @@ class plugin : public virtual aggregation_function_plugin,
       },
     };
     return match(input_type, f);
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
   auto make_aggregation(invocation inv, session ctx) const
