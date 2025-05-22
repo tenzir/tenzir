@@ -1,0 +1,95 @@
+{
+  activity_id: null,
+  activity_name: null,
+  actor: null,
+  category_name: null,
+  category_uid: null,
+  class_name: null,
+  class_uid: 1002,
+  count: null,
+  device: null,
+  driver: null,
+  duration: null,
+  end_time: null,
+  enrichments: null,
+  message: null,
+  metadata: null,
+  observables: null,
+  raw_data: null,
+  raw_data_size: null,
+  severity: null,
+  severity_id: null,
+  start_time: null,
+  status: null,
+  status_code: null,
+  status_detail: null,
+  status_id: null,
+  time: null,
+  timezone_offset: null,
+  type_name: null,
+  type_uid: null,
+  unmapped: null,
+}
+{
+  activity_id: null,
+  activity_name: null,
+  app_name: null,
+  category_name: null,
+  category_uid: null,
+  class_name: null,
+  class_uid: 4002,
+  connection_info: null,
+  count: 42,
+  dst_endpoint: null,
+  duration: null,
+  end_time: null,
+  enrichments: null,
+  file: null,
+  http_cookies: null,
+  http_request: null,
+  http_response: null,
+  http_status: null,
+  ja4_fingerprint_list: null,
+  message: null,
+  metadata: null,
+  observables: null,
+  proxy: null,
+  raw_data: null,
+  raw_data_size: null,
+  severity: null,
+  severity_id: null,
+  src_endpoint: null,
+  start_time: null,
+  status: null,
+  status_code: null,
+  status_detail: null,
+  status_id: null,
+  time: null,
+  timezone_offset: null,
+  tls: null,
+  traffic: null,
+  type_name: null,
+  type_uid: null,
+  unmapped: null,
+}
+warning: dropping events where `class_uid` does not exist
+ --> exec/ocsf/apply.tql:8:1
+  |
+8 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |
+
+warning: dropping events where `class_uid` is not an integer
+ --> exec/ocsf/apply.tql:8:1
+  |
+8 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |
+
+warning: dropping events where `class_uid` is unknown
+ --> exec/ocsf/apply.tql:8:1
+  |
+8 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |
+  = note: could not find class for ID 42

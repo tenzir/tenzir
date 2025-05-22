@@ -1,0 +1,8 @@
+from(
+  {},
+  {class_uid: ""},
+  {class_uid: 42},
+  {class_uid: 1002},
+  {class_uid: 4002, count: 42, nmapped: {foo: 192.168.0.1}},
+)
+ocsf::apply
