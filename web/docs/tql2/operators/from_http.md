@@ -3,9 +3,16 @@
 Receives HTTP/1.1 requests.
 
 ```tql
-from_http url:string, [server=bool, responses=record, max_request_size=int,
-                       tls=bool, certfile=string, keyfile=string,
-                       password=string]
+from_http url:string, [method=string, payload=string, headers=record,
+          metadata_field=field, paginate=string, paginate_delay=duration,
+          connection_timeout=duration, max_retry_count=int,
+          retry_delay=duration, responses=record, max_request_size=int,
+          tls=bool, certfile=string, keyfile=string, password=string { … }]
+```
+```tql
+
+from_http url:string, server=true, [responses=record, max_request_size=int,
+          tls=bool, certfile=string, keyfile=string, password=string { … }]
 ```
 
 ## Description
@@ -19,17 +26,75 @@ URL to listen on or to connect to.
 
 Must have the form `host[:port]`.
 
+### `method = string (optional)`
+
+One of the following HTTP method to use when using the client:
+- `get`
+- `head`
+- `post`
+- `put`
+- `del`
+- `connect`
+- `options`
+- `trace`
+
+Defaults to `get`, or `post` if `payload` is specified.
+
+### `payload = string (optional)`
+
+Payload to send with the HTTP request.
+
+### `headers = record (optional)`
+
+Record of headers to send with the request.
+
+### `metadata_field = field (optional)`
+
+Field to insert metadata into when using the parsing pipeline.
+
+The metadata has the following schema:
+
+| Field                | Type     | Description                           |
+| :------------------- | :------- | :------------------------------------ |
+| `code`               | `uint64` | The HTTP status code of the response. |
+| `headers`            | `record` | The response headers.                 |
+
+### `paginate = string (optional)`
+
+A lambda expression to evaluate against the result of the request (optionally parsed
+by the given pipeline). If the expression evaluation is successful and non-null, the
+resulting string is used as the URL for a new GET request with the same headers.
+
+### `paginate_delay = duration (optional)`
+
+The duration to wait between consecutive paginatation requests.
+
+Defaults to `0s`.
+
+### `connection_timeout = duration (optional)`
+
+Timeout for the connection.
+
+Defaults to `5s`.
+
+### `max_retry_count = int (optional)`
+
+The maximum times to retry a failed request. Every request has its own retry
+count.
+
+Defaults to `0`.
+
+### `retry_delay = duration (optional)`
+
+The duration to wait between each retry.
+
+Defaults to `1s`.
+
 ### `server = bool (optional)`
 
 Whether to spin up an HTTP server or act as an HTTP client.
 
 Defaults to `false`, i.e., the HTTP client.
-
-:::warning Currently in Development
-Support for HTTP clients is not yet implemented. To get data into a pipeline
-with an HTTP client, use the [`load_http`](load_http.mdx) operator instead.
-`load_http` will eventually be deprecated and removed in favor of `from_http`.
-:::
 
 ### `responses = record (optional)`
 
@@ -60,25 +125,62 @@ Defaults to `false`.
 
 ### `certfile = string (optional)`
 
-Path to the client certificate. Required if `tls` is `true`.
+Path to the client certificate. Required for server if `tls` is `true`.
 
 ### `keyfile = string (optional)`
 
-Path to the key for the client certificate. Required if `tls` is `true`.
+Path to the key for the client certificate. Required for server if `tls` is `true`.
 
 ### `password = string (optional)`
 
 Password for keyfile.
 
+### `{ … } (optional)`
+
+A pipeline that receives the response body as bytes, allowing parsing per
+request. This is especially useful in scenarios where the response body can be
+parsed into multiple events.
+
+If this is not provided, the operator will attempt to infer the parsing operator
+from the `content-type` header. Should this inference fail, an error is raised.
+
 ## Examples
+
+### Make a GET request
+
+Here we make a request to [urlscan.io](https://urlscan.io/docs/api#search) to search for scans for `tenzir.com` and get the first result.
+
+```tql
+from_http "https://urlscan.io/api/v1/search?q=tenzir.com" { read_json }
+unroll results
+head 1
+```
+
+```tql
+{
+  results: {
+    submitter: { ... },
+    task: { ... },
+    stats: { ... },
+    page: { ... },
+    _id: "0196edb1-521e-761f-9d62-1ca4cfad5b30",
+    _score: null,
+    sort: [ "1747744570133", "\"0196edb1-521e-761f-9d62-1ca4cfad5b30\"" ],
+    result: "https://urlscan.io/api/v1/result/0196edb1-521e-761f-9d62-1ca4cfad5b30/",
+    screenshot: "https://urlscan.io/screenshots/0196edb1-521e-761f-9d62-1ca4cfad5b30.png",
+  },
+  total: 9,
+  took: 296,
+  has_more: false,
+}
+```
 
 ### Listen on port 8080
 
 Spin up a server with:
 
 ```tql
-from_http "0.0.0.0:8080", server=true
-body = body.string().parse_json()
+from_http "0.0.0.0:8080", server=true, metadata_field=metadata { read_json }
 ```
 
 and send a curl request at it via:
@@ -91,29 +193,23 @@ and see it on the Tenzir side, parsed and decompressed(!):
 
 ```tql
 {
-  headers: {
-    "Host": "localhost:8080",
-    "User-Agent": "curl/8.13.0",
-    "Accept": "*/*",
-    "Content-Encoding": "gzip",
-    "Content-Length": "37",
-    "Content-Type": "application/x-www-form-urlencoded",
-  },
-  path: "/",
-  method: "post",
-  version: "HTTP/1.1",
-  body: {
-    key: "value",
+  key: "value",
+  metadata: {
+    headers: {
+      Host: "localhost:8080",
+      "User-Agent": "curl/8.13.0",
+      Accept: "*/*",
+      "Content-Encoding": "gzip",
+      "Content-Length": "37",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    path: "/",
+    method: "post",
+    version: "HTTP/1.1",
   },
 }
 ```
 
-and then strip out all the HTTP framing with [`select`](select.md):
+## See Also
 
-```tql
-select parsed=body
-```
-
-```tql
-{ parsed: { key: "value" } }
-```
+[`http`](http.md)

@@ -925,7 +925,8 @@ public:
 };
 
 template <detail::string_literal Name, detail::string_literal Sep,
-          detail::string_literal ListSep, detail::string_literal Null>
+          detail::string_literal ListSep, detail::string_literal Null,
+          detail::string_literal... mimes>
 class configured_read_xsv_plugin final
   : public operator_plugin2<parser_adapter<xsv_parser>> {
 public:
@@ -952,7 +953,7 @@ public:
   }
 
   auto read_properties() const -> read_properties_t override {
-    return {.extensions = {std::string{Name}}};
+    return {.extensions = {std::string{Name}}, .mime_types = {mimes...}};
   }
 };
 
@@ -1194,8 +1195,9 @@ public:
   }
 };
 
-using read_csv = configured_read_xsv_plugin<"csv", ",", ";", "">;
-using read_tsv = configured_read_xsv_plugin<"tsv", "\t", ",", "-">;
+using read_csv = configured_read_xsv_plugin<"csv", ",", ";", "", "text/csv">;
+using read_tsv = configured_read_xsv_plugin<"tsv", "\t", ",", "-",
+                                            "text/tab-separated-values">;
 using read_ssv = configured_read_xsv_plugin<"ssv", " ", ",", "-">;
 using write_csv = configured_write_xsv_plugin<"csv", ",", ";", "">;
 using write_tsv = configured_write_xsv_plugin<"tsv", "\t", ",", "-">;

@@ -392,7 +392,9 @@ auto initialize(caf::actor_system_config& cfg) -> caf::error {
   map_t load_schemes;
   map_t save_schemes;
   map_t read_extensions;
+  map_t read_mime_types;
   map_t write_extensions;
+  map_t write_mime_types;
   map_t compress_extensions;
   map_t decompress_extensions;
   constexpr static auto check
@@ -436,8 +438,16 @@ auto initialize(caf::actor_system_config& cfg) -> caf::error {
                        read_extensions)) {
       return e;
     }
+    if (auto e = check("read mime-type", name, read_prop.mime_types,
+                       read_mime_types)) {
+      return e;
+    }
     if (auto e = check("write extension", name, write_prop.extensions,
                        write_extensions)) {
+      return e;
+    }
+    if (auto e = check("write mime-type", name, write_prop.mime_types,
+                       write_mime_types)) {
       return e;
     }
   }

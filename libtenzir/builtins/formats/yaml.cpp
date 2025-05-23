@@ -363,7 +363,10 @@ class read_yaml final
   }
 
   auto read_properties() const -> read_properties_t override {
-    return {.extensions = {"yaml"}};
+    return {
+      .extensions = {"yaml"},
+      .mime_types = {"application/yaml", "text/yaml", "text/x-yaml"},
+    };
   }
 };
 

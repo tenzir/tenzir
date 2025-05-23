@@ -2,6 +2,10 @@ import TLSOptions from './_common_tls_options.mdx';
 
 # load_http
 
+:::caution
+This operator has been deprecated in favor of [`from_http`](from_http.md).
+:::
+
 Loads a byte stream via HTTP.
 
 ```tql
@@ -77,4 +81,4 @@ load_http "example.org/api", headers={"X-API-Token": "0000-0000-0000"}
 
 ## See Also
 
-[`save_http`](save_http.mdx)
+[`save_http`](save_http.mdx), [`from_http`](from_http.md)
