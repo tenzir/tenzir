@@ -16,7 +16,7 @@ DOCUMENT_FIELDS = False
 CLASS_PREFIX = "ocsf."
 OBJECT_PREFIX = "ocsf.object."
 COLUMN_LIMIT = 80
-PROFILES = ALL  # List of strings or ALL.
+PROFILES = []  # List of strings or ALL.
 # =================================================== #
 
 OMIT_MARKER = object()
@@ -24,8 +24,7 @@ BASIC_TYPES = {
     "boolean_t": "bool",
     "float_t": "double",
     "integer_t": "int64",
-    # TODO: Don't omit this.
-    "json_t": OMIT_MARKER,
+    "json_t": "string #print_json",
     "long_t": "int64",
     "string_t": "string",
     "bytestring_t": "blob",
@@ -110,9 +109,20 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
         first = False
         if DOCUMENT_ENTITIES:
             writer.comment(entity["description"])
-        entity_name = entity["name"]
+        # For classes, we do not use the given entity name, but instead derive
+        # the name from the caption. This is due to classes such as "Device
+        # Inventory Info", which have a name "inventory_info", which makes the
+        # name hard to predict from the class name, or even misspelled ones.
+        if objects:
+            entity_name = entity["name"]
+        else:
+            entity_name = entity["caption"].lower().replace(" ", "_")
+        full_name = f"{prefix}{entity_name}"
+        if full_name == "ocsf.object.object":
+            # Not needed because this is special-case to print JSON.
+            continue
         omit = OMIT.get(entity_name, [])
-        writer.begin(f"type {prefix}{entity_name} = record{{")
+        writer.begin(f"type {full_name} = record{{")
         for attr_name, attr_def in sorted(entity["attributes"].items()):
             if attr_name in omit:
                 continue
@@ -122,12 +132,16 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
                     continue
             if "object_type" in attr_def:
                 type_name = attr_def["object_type"]
-                # Some object names have a prefix, which is separated by a
-                # slash. It looks like this prefix can just be discarded.
-                slash = type_name.rfind("/")
-                if slash != -1:
-                    type_name = type_name[slash + 1 :]
-                resolved = f"{OBJECT_PREFIX}{type_name}"
+                # Special-case the "Object" type to use a JSON string instead.
+                if type_name == "object":
+                    resolved = "string #print_json"
+                else:
+                    # Some object names have a prefix, which is separated by a
+                    # slash. It looks like this prefix can just be discarded.
+                    slash = type_name.rfind("/")
+                    if slash != -1:
+                        type_name = type_name[slash + 1 :]
+                    resolved = f"{OBJECT_PREFIX}{type_name}"
             else:
                 resolved = types[attr_def["type"]]
                 if resolved is OMIT_MARKER:
@@ -136,6 +150,7 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
                 resolved = f"list<{resolved}>"
             if DOCUMENT_FIELDS:
                 writer.comment(attr_def["description"])
+            # requirement = attr_def["requirement"]
             writer.print(f"{attr_name}: {resolved},")
         writer.end("}")
 
@@ -170,9 +185,7 @@ def main():
         profiles = (
             "all"
             if PROFILES == ALL
-            else "none"
-            if PROFILES == []
-            else ", ".join(PROFILES)
+            else "none" if PROFILES == [] else ", ".join(PROFILES)
         )
         writer.comment(f"OCSF Profiles: {profiles}")
         writer.print()

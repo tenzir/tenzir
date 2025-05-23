@@ -572,8 +572,8 @@ public:
     }
     auto question_mark = accept(tk::question_mark);
     return ast::root_field{
-      .id = std::move(entity.path[0]),
-      .has_question_mark = static_cast<bool>(question_mark),
+      std::move(entity.path[0]),
+      static_cast<bool>(question_mark),
     };
   }
 
