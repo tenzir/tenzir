@@ -428,6 +428,7 @@ struct transformer_from_trait : transformer {
               continue;
             }
           }
+          TENZIR_ASSERT(v.has_value());
           column->Append(value_transform(*v));
         }
         return column;
