@@ -51,7 +51,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[librdkafka](https://github.com/confluentinc/librdkafka)||Required for building the `kafka` plugin.|
 ||[http-parser](https://github.com/nodejs/http-parser)||Required for building the `web` plugin.|
 ||[cppzmq](https://github.com/zeromq/cppzmq)||Required for building the `zmq` plugin.|
-||[clickhouse-cpp](https://github.com/clickhouse/clickhouse-cpp)|>=f606f9a|Required for building the `clickhouse` plugin. (Bundled as submodule.)|
+||[clickhouse-cpp](https://github.com/clickhouse/clickhouse-cpp)|>=fbd7945|Required for building the `clickhouse` plugin. (Bundled as submodule.)|
 ||[pfs](https://github.com/dtrugman/pfs)||Required for the `processes` and `sockets` operators on Linux.|
 ||[Protocol Buffers](https://protobuf.dev)|>= 1.4.1|Required for building the `velociraptor` plugin.|
 ||[gRPC](https://grpci.io)|>= 1.51|Required for building the `velociraptor` plugin.|

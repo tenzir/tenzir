@@ -626,7 +626,11 @@ struct transformer_array : transformer {
     const auto& list_array = as<arrow::ListArray>(array);
     const auto& value_array = *list_array.values();
     // Either this is fully nullable, or update_dropmask must have been called.
-    TENZIR_ASSERT(clickhouse_nullable or my_value_array == &value_array);
+    if (not clickhouse_nullable) {
+      TENZIR_ASSERT(my_value_array == &array, "`{}!={}` in `{}` ({})",
+                    (void*)my_value_array, (void*)&array, fmt::join(path, "."),
+                    clickhouse_typename);
+    }
     // If this is fully nullable, we need to adapt the internal dropmask here.
     if (clickhouse_nullable) {
       apply_dropmask_to_my_mask(array, dropmask);
