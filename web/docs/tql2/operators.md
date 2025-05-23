@@ -66,6 +66,7 @@ Tenzir comes with a wide range of built-in pipeline operators.
 | Operator                                             | Description                                              | Example                                                                                                    |
 | :--------------------------------------------------- | :------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
 | [`from`](./operators/from.md)                        | Reads events from an URI<br/>Creates events from records | `from "http://example.org/file.csv.gz"`<br/>`from {key: "value"}…` <!--at the top because its important--> |
+| [`from_file`](./operators/from_file.md)                        | Reads one or multiple files from a filesystem | `from_file "s3://data/**.json"` |
 | [`from_http`](./operators/from_http.md)              | Accepts or sends HTTP/1.1 requests                       | `from_http "0.0.0.0:8080`                                                                                  |
 | [`from_fluent_bit`](./operators/from_fluent_bit.mdx) | Returns results from Fluent Bit                          | `from_fluent_bit "opentelemetry"`                                                                          |
 | [`from_opensearch`](./operators/from_opensearch.md)  | Accepts requests for OpenSearch Bulk API                 | `from_opensearch`                                                                                          |

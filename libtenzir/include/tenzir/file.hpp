@@ -101,4 +101,8 @@ private:
   std::filesystem::path path_;
 };
 
+/// Tries to expand paths that start with a `~`. Returns the original input
+/// string if no expansion occurs.
+auto expand_home(std::string path) -> std::string;
+
 } // namespace tenzir

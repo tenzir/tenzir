@@ -27,13 +27,17 @@ public:
     : value_{std::move(value)} {
   }
 
+  ~resolved_secret_value() = default;
   resolved_secret_value(const resolved_secret_value&) = delete;
+  auto operator=(const resolved_secret_value&)
+    -> resolved_secret_value& = delete;
+  resolved_secret_value(resolved_secret_value&&) = default;
+  auto operator=(resolved_secret_value&&) -> resolved_secret_value& = default;
 
-  /// @brief Returns a string view over the secrets UTF-8 value,if it is valid
-  /// UTF-8.
+  /// Returns a string view over the secret's UTF-8 value, if it is valid UTF-8.
   auto utf8_view() const -> std::optional<std::string_view>;
 
-  /// Returns a view over the secrets bytes raw bytes.
+  /// Returns a view over the secret's raw bytes.
   auto blob() const -> std::span<const std::byte> {
     return value_;
   }

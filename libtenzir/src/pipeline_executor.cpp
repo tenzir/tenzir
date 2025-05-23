@@ -274,6 +274,9 @@ auto pipeline_executor(
   metrics_receiver_actor metrics, node_actor node, bool has_terminal,
   bool is_hidden) -> pipeline_executor_actor::behavior_type {
   TENZIR_TRACE("{} was created", *self);
+  self->attach_functor([self] {
+    TENZIR_TRACE("{} was destroyed", *self);
+  });
   self->state().self = self;
   self->state().node = std::move(node);
   self->state().definition = std::move(definition);

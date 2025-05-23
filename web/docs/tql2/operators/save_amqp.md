@@ -4,7 +4,7 @@ Saves a byte stream via AMQP messages.
 
 ```tql
 save_amqp [url:str, channel=int, exchange=str, routing_key=str,
-          options=record, mandatory=bool, immediate=bool]
+           options=record, mandatory=bool, immediate=bool]
 ```
 
 ## Description

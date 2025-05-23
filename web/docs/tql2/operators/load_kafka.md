@@ -4,7 +4,7 @@ Loads a byte stream from a Apache Kafka topic.
 
 ```tql
 load_kafka topic:string, [count=int, exit=bool, offset=int|string,
-          options=record, aws_iam=record]
+           options=record, aws_iam=record]
 ```
 
 ## Description

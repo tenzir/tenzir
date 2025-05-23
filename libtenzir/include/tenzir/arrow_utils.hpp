@@ -47,6 +47,9 @@ finish(T& x, std::source_location location = std::source_location::current()) {
   return std::static_pointer_cast<concrete_array_type>(array);
 }
 
+auto data_to_series(const data& value, int64_t length) -> series;
+auto data_to_series(const data& value, uint64_t length) -> series;
+
 // -- column builder helpers --------------------------------------------------
 
 arrow::Status

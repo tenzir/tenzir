@@ -547,54 +547,8 @@ auto evaluator::input_or_throw(into_location location) -> const table_slice& {
     });
 }
 
-namespace {
-
-auto contains_extension_type(const data& x) -> bool {
-  return match(
-    x,
-    [](const record& x) {
-      for (auto& y : x) {
-        if (contains_extension_type(y.second)) {
-          return true;
-        }
-      }
-      return false;
-    },
-    [](const list& x) {
-      for (auto& y : x) {
-        if (contains_extension_type(y)) {
-          return true;
-        }
-      }
-      return false;
-    },
-    []<class T>(const T&) -> bool {
-      if constexpr (concepts::one_of<T, map, pattern>) {
-        TENZIR_UNREACHABLE();
-      } else {
-        return extension_type<data_to_type_t<T>>;
-      }
-    });
-}
-
-} // namespace
-
 auto evaluator::to_series(const data& x) const -> series {
-  if (contains_extension_type(x)) {
-    // We currently cannot convert extension types to scalars.
-    auto b = series_builder{};
-    for (auto i = int64_t{0}; i < length_; ++i) {
-      b.data(x);
-    }
-    return b.finish_assert_one_array();
-  }
-  auto b = series_builder{};
-  b.data(x);
-  auto s = b.finish_assert_one_array();
-  return series{
-    std::move(s.type),
-    check(arrow::MakeArrayFromScalar(*check(s.array->GetScalar(0)), length_)),
-  };
+  return data_to_series(x, length_);
 }
 
 } // namespace tenzir
