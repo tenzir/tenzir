@@ -44,22 +44,22 @@ save() {
 }
 
 @test "save HTTP PUT" {
-  save 51380 'version | select foo="bar" | write_json | save_http "http://localhost:51380", method="PUT"'
+  save 50382 'version | select foo="bar" | write_json | save_http "http://localhost:50382", method="PUT"'
 }
 
 @test "save HTTP POST" {
-  # save 51381 'version | select foo="bar" | to http://localhost:51381'
-  save 51382 'version | select foo="bar" | write_json | save_http "http://localhost:51382", method="POST"'
+  # save 50381 'version | select foo="bar" | to http://localhost:51381'
+  save 50383 'version | select foo="bar" | write_json | save_http "http://localhost:50383", method="POST"'
 }
 
 @test "save HTTP POST delete header" {
-  save 51383 'version | select foo="bar" | write_json | save_http "http://localhost:51383", headers={"Content-Type": ""}'
+  save 50384 'version | select foo="bar" | write_json | save_http "http://localhost:50384", headers={"Content-Type": ""}'
 }
 
 @test "save HTTP POST overwrite header" {
-  save 51384 'version | select foo="bar" | write_json | save_http "http://localhost:51384", headers={"User-Agent": "Test"}'
+  save 50385 'version | select foo="bar" | write_json | save_http "http://localhost:50385", headers={"User-Agent": "Test"}'
 }
 
 @test "save HTTP POST add header" {
-  save 51385 'version | select foo="bar" | write_json | save_http "http://localhost:51385", headers={"X-Test": "foo"}'
+  save 50386 'version | select foo="bar" | write_json | save_http "http://localhost:50386", headers={"X-Test": "foo"}'
 }

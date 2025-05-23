@@ -1137,7 +1137,10 @@ public:
   }
 
   auto read_properties() const -> read_properties_t override {
-    return {.extensions = {"json"}};
+    return {
+      .extensions = {"json"},
+      .mime_types = {"application/json"},
+    };
   }
 };
 
@@ -1163,7 +1166,10 @@ public:
   }
 
   auto read_properties() const -> read_properties_t override {
-    return {.extensions = {"ndjson", "jsonl"}};
+    return {
+      .extensions = {"ndjson", "jsonl", "jsonld"},
+      .mime_types = {"application/x-ndjson", "application/ld+json"},
+    };
   }
 };
 

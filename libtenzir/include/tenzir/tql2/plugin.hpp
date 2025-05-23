@@ -96,6 +96,7 @@ public:
 
   struct format_properties_t {
     std::vector<std::string> extensions = {};
+    std::vector<std::string> mime_types = {};
   };
   using read_properties_t = format_properties_t;
   using write_properties_t = format_properties_t;
