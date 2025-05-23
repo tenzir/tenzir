@@ -53,6 +53,7 @@ public:
       co_yield {};
       co_return;
     }
+    auto running_count = size_t{0};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -65,7 +66,21 @@ public:
         continue;
       }
       slice = resolve_enumerations(slice);
-      (void)client->insert(slice);
+      try {
+        (void)client->insert(slice);
+      } catch (const std::system_error& e) {
+        diagnostic::error("system error: {}", e.what())
+          .primary(args_.operator_location)
+          .note("while sending {} events (events {} to {})", slice.rows(),
+                running_count, running_count + slice.rows())
+          .note("this error is currently being investigated")
+          .hint("(experimental): increasing the batching that goes into the "
+                "operator _may_ help with this.\n"
+                "for example: `batch 10000, timeout=5s | to_clickhouse ...`")
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      running_count += slice.rows();
     }
   } catch (::clickhouse::Error& e) {
     diagnostic::error("unexpected error: {}", e.what())
