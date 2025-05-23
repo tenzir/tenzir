@@ -74,6 +74,11 @@ auto cast(const arrow::Array& array, const type& ty)
     auto printer = json_printer{{.style = no_style(), .oneline = true}};
     auto buffer = std::string{};
     for (auto&& row : values3(array)) {
+      if (is<caf::none_t>(row)) {
+        // Preserve nulls instead of rendering them as a string.
+        check(builder.AppendNull());
+        continue;
+      }
       auto it = std::back_inserter(buffer);
       auto success = printer.print(it, row);
       TENZIR_ASSERT(success);
