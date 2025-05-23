@@ -70,7 +70,7 @@
   traffic: null,
   type_name: null,
   type_uid: null,
-  unmapped: null,
+  unmapped: "{\"foo\":\"192.168.0.1\"}",
 }
 warning: dropping events where `class_uid` does not exist
  --> exec/ocsf/apply.tql:8:1
