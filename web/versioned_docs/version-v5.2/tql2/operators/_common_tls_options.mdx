@@ -1,0 +1,26 @@
+### `tls = bool (optional)`
+
+Enables TLS.
+
+<span>Defaults to <code>{props.tls_default}</code>.</span>
+
+### `cacert = string (optional)`
+
+Path to the CA certificate used to verify the server's certificate.
+
+Defaults to the [Tenzir configuration](../../configuration.md) value `tenzir.cacert`,
+which in turn defaults to a common cacert location for the system.
+
+### `certfile = string (optional)`
+
+Path to the client certificate.
+
+### `keyfile = string (optional)`
+
+Path to the key for the client certificate.
+
+### `skip_peer_verification = bool (optional)`
+
+Toggles TLS certificate verification.
+
+Defaults to `false`.
