@@ -823,7 +823,8 @@ void add_actor_callback(caf::scheduled_actor* self,
 template <class F>
 void iterate_files(caf::scheduled_actor* self, arrow::fs::FileInfoGenerator gen,
                    F&& f) {
-  add_actor_callback(self, gen(),
+  auto future = gen();
+  add_actor_callback(self, future,
                      [self, gen = std::move(gen), f = std::forward<F>(f)](
                        arrow::Result<arrow::fs::FileInfoVector> infos) {
                        auto more = infos.ok() and not infos->empty();
