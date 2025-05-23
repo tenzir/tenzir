@@ -1,13 +1,13 @@
 # from_http
 
-Receives HTTP/1.1 requests.
+Sends and receives HTTP/1.1 requests.
 
 ## Synopsis
 
 ```tql
-from_http url:string, [server=bool, responses=record, max_request_size=int,
-                       tls=bool, certfile=string, keyfile=string,
-                       password=string]
+from_http url:string, [method=string, payload=string, server=bool, tls=bool,
+          certfile=string, keyfile=string, password=string, responses=record,
+          max_request_size=int]
 ```
 
 ## Description
@@ -19,40 +19,31 @@ a given address and forwards received requests as events.
 
 URL to listen on or to connect to.
 
-Must have the form `host[:port]`.
+Must have the form `<host>:<port>`.
+
+### `method = string (optional)`
+
+One of the following HTTP method to use when using the client:
+- `get`
+- `head`
+- `post`
+- `put`
+- `del`
+- `connect`
+- `options`
+- `trace`
+
+Defaults to `get`.
+
+### `payload = string (optional)`
+
+Payload to send with the HTTP request.
 
 ### `server = bool (optional)`
 
 Whether to spin up an HTTP server or act as an HTTP client.
 
 Defaults to `false`, i.e., the HTTP client.
-
-:::warning Currently in Development
-Support for HTTP clients is not yet implemented. To get data into a pipeline
-with an HTTP client, use the [`load_http`](load_http.mdx) operator instead.
-`load_http` will eventually be deprecated and removed in favor of `from_http`.
-:::
-
-### `responses = record (optional)`
-
-Specify custom responses for endpoints on the server. For example,
-
-```tql
-responses = {
-    "/resource/create": { code: 200, content_type: "text/html", body: "Created!" },
-    "/resource/delete": { code: 401, content_type: "text/html", body: "Unauthorized!" }
-}
-```
-
-creates two special routes on the server with different responses.
-
-Requests to an unspecified endpoint are responded with HTTP Status `200 OK`.
-
-### `max_request_size = int (optional)`
-
-The maximum size of an incoming request to accept.
-
-Defaults to `10Mib`.
 
 ### `tls = bool (optional)`
 
@@ -71,6 +62,27 @@ Path to the key for the client certificate. Required if `tls` is `true`.
 ### `password = string (optional)`
 
 Password for keyfile.
+
+### `responses = record (optional)`
+
+Specify custom responses for endpoints on the server. For example,
+
+```tql
+responses = {
+    "/resource/create": { code: 200, content_type: "text/html", payload: "Created!" },
+    "/resource/delete": { code: 401, content_type: "text/html", payload: "Unauthorized!" }
+}
+```
+
+creates two special routes on the server with different responses.
+
+Requests to an unspecified endpoint are responded with HTTP Status `200 OK`.
+
+### `max_request_size = int (optional)`
+
+The maximum size of an incoming request to accept.
+
+Defaults to `10Mib`.
 
 ## Examples
 
