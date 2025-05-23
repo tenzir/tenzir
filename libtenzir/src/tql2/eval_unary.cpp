@@ -72,7 +72,8 @@ struct EvalUnOp<ast::unary_op::neg, T> {
         }
         check(b.Append(-val));
       } else if constexpr (std::same_as<T, uint64_type>) {
-        if (val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        if (val
+            > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1) {
           overflow = true;
           check(b.AppendNull());
           continue;
