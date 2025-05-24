@@ -190,6 +190,49 @@ from env("INPUTS") + "/cef/cynet.log" {
 }
 ```
 
+## Code Coverage Integration
+
+The test runner supports collecting code coverage information when running tests
+through the `--coverage`. This helps identify which parts of the codebase are
+exercised by the tests and which parts need more testing.
+
+### Prerequisites
+
+To use code coverage:
+
+1. Tenzir must be built with code coverage instrumentation enabled:
+
+   ```bash
+   cmake -DTENZIR_ENABLE_CODE_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
+   ```
+
+2. The compiler being used must support code coverage (GCC or Clang)
+
+### Generate a Coverage Report
+
+Use the CMake targets to process the coverage data:
+
+```bash
+# Run integration tests with coverage enabled and create a report
+cmake --build path/to/build --target integration-coverage
+```
+
+The target `integration-coverage` target will run the tests and produce a
+concise output that only shows the path to the HTML report. Configure the CMake
+build with `CMAKE_VERBOSE_MAKEFILE=ON` to additionally display detailed
+information about the coverage process, including warnings and statistics.
+
+When running tests with coverage enabled, timeouts are automatically increased
+by a factor of 5 to account for the additional overhead of code coverage
+instrumentation. This helps prevent tests from failing due to the added
+execution time needed for collecting coverage data.
+
+The test runner will collect coverage data into the `ccov` directory in the
+build directory (or the directory specified by the
+`CMAKE_COVERAGE_OUTPUT_DIRECTORY` environment variable).
+
+### Processing Coverage Results
+
 ## Future Work
 
 - **Add mechanism to run arbitrary code (e.g., a Docker container) while the
@@ -228,12 +271,12 @@ from env("INPUTS") + "/cef/cynet.log" {
   correctness, and foster a healthy ecosystem of community-contributed plugins
   with robust test coverage.
 
-- **Integrate the test framework with code coverage tools:**
-  Explore ways to collect and report code coverage information when running
-  integration tests, such as by leveraging coverage instrumentation in the
-  Tenzir binary or using external tools. This will help quantify test
-  effectiveness and identify untested code paths, both for the core project and
-  for plugins.
+- **Further enhance code coverage support:**
+  Improve the current code coverage integration by:
+
+  - Integrating with CI/CD pipelines
+  - Adding summary statistics and coverage badges
+  - Implementing coverage trend tracking over time
 
 - **Integrate the test framework with Tenzir packages:**
   Develop a mechanism for installing Tenzir packages and running

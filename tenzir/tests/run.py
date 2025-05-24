@@ -45,7 +45,7 @@ def report_failure(test, message):
             print(message)
 
 
-def parse_test_config(test_file):
+def parse_test_config(test_file, coverage=False):
     """Parse test configuration from TQL comments at the beginning of the file."""
     # Define valid configuration keys and their default values
     config = {
@@ -141,6 +141,10 @@ def parse_test_config(test_file):
                     f"Error in {test_file}:{line_number}: Invalid value for 'node', expected 'true' or 'false', got '{value}'"
                 )
 
+    # If coverage is enabled, increase timeout by a factor of 5
+    if coverage:
+        config["timeout"] *= 5
+
     return config
 
 
@@ -230,11 +234,11 @@ def print_diff(expected: bytes, actual: bytes, path: Path):
 
 
 def run_simple_test(
-    test: Path, *, update: bool, args: typing.Sequence[str] = (), ext: str
+    test: Path, *, update: bool, args: typing.Sequence[str] = (), ext: str, coverage: bool = False
 ) -> typing.Union[bool, str]:
     try:
         # Parse test configuration
-        test_config = parse_test_config(test)
+        test_config = parse_test_config(test, coverage=coverage)
     except ValueError as e:
         report_failure(test, f"└─▶ \033[31m{e}\033[0m")
         return False
@@ -260,6 +264,17 @@ def run_simple_test(
 
     try:
         env, config_args = get_test_env_and_config_args(test)
+
+        # Set up environment for code coverage if enabled
+        if coverage:
+            coverage_dir = os.environ.get("CMAKE_COVERAGE_OUTPUT_DIRECTORY",
+                                       os.path.join(os.getcwd(), "coverage"))
+            source_dir = os.environ.get("COVERAGE_SOURCE_DIR", os.getcwd())
+            os.makedirs(coverage_dir, exist_ok=True)
+            test_name = test.stem
+            profile_path = os.path.join(coverage_dir, f"{test_name}-%p.profraw")
+            env["LLVM_PROFILE_FILE"] = profile_path
+            env["COVERAGE_SOURCE_DIR"] = source_dir
 
         cmd = [
             TENZIR_BINARY,
@@ -379,25 +394,25 @@ class AstRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="ast")
 
-    def run(self, test: Path, update: bool) -> bool:
-        test_config = parse_test_config(test)
+    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+        test_config = parse_test_config(test, coverage=coverage)
         if test_config.get("node", False):
-            return run_with_node(test, update=update, args=("--dump-ast",), ext="txt")
-        return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt")
+            return run_with_node(test, update=update, args=("--dump-ast",), ext="txt", coverage=coverage)
+        return run_simple_test(test, update=update, args=("--dump-ast",), ext="txt", coverage=coverage)
 
 
 class OldIrRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="oldir")
 
-    def run(self, test: Path, update: bool) -> bool:
-        test_config = parse_test_config(test)
+    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+        test_config = parse_test_config(test, coverage=coverage)
         if test_config.get("node", False):
             return run_with_node(
-                test, update=update, args=("--dump-pipeline",), ext="txt"
+                test, update=update, args=("--dump-pipeline",), ext="txt", coverage=coverage
             )
         return run_simple_test(
-            test, update=update, args=("--dump-pipeline",), ext="txt"
+            test, update=update, args=("--dump-pipeline",), ext="txt", coverage=coverage
         )
 
 
@@ -405,11 +420,11 @@ class IrRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="ir")
 
-    def run(self, test: Path, update: bool) -> bool:
-        test_config = parse_test_config(test)
+    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+        test_config = parse_test_config(test, coverage=coverage)
         if test_config.get("node", False):
-            return run_with_node(test, update=update, args=("--dump-ir",), ext="txt")
-        return run_simple_test(test, update=update, args=("--dump-ir",), ext="txt")
+            return run_with_node(test, update=update, args=("--dump-ir",), ext="txt", coverage=coverage)
+        return run_simple_test(test, update=update, args=("--dump-ir",), ext="txt", coverage=coverage)
 
 
 class DiffRunner(TqlRunner):
@@ -418,10 +433,10 @@ class DiffRunner(TqlRunner):
         self._a = a
         self._b = b
 
-    def run(self, test: Path, update: bool) -> bool:
-        test_config = parse_test_config(test)
+    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+        test_config = parse_test_config(test, coverage=coverage)
         if test_config.get("node", False):
-            return run_with_node_diff(test, update=update, a=self._a, b=self._b)
+            return run_with_node_diff(test, update=update, a=self._a, b=self._b, coverage=coverage)
         try:
             pass
         except ValueError as e:
@@ -481,14 +496,14 @@ class FinalizeRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="finalize")
 
-    def run(self, test: Path, update: bool) -> bool:
-        test_config = parse_test_config(test)
+    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+        test_config = parse_test_config(test, coverage=coverage)
         if test_config.get("node", False):
             return run_with_node(
-                test, update=update, args=("--dump-finalized",), ext="txt"
+                test, update=update, args=("--dump-finalized",), ext="txt", coverage=coverage
             )
         return run_simple_test(
-            test, update=update, args=("--dump-finalized",), ext="txt"
+            test, update=update, args=("--dump-finalized",), ext="txt", coverage=coverage
         )
 
 
@@ -496,15 +511,18 @@ class ExecRunner(TqlRunner):
     def __init__(self):
         super().__init__(prefix="exec")
 
-    def run(self, test: Path, update: bool) -> bool:
-        test_config = parse_test_config(test)
+    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+        test_config = parse_test_config(test, coverage=coverage)
         if test_config.get("node", False):
-            return run_with_node(test, update=update, args=(), ext="txt")
-        return run_simple_test(test, update=update, ext="txt")
+            return run_with_node(test, update=update, args=(), ext="txt", coverage=coverage)
+        return run_simple_test(test, update=update, ext="txt", coverage=coverage)
 
 
 @contextmanager
-def tenzir_node_endpoint(test: Path):
+def tenzir_node_endpoint(test: Path, coverage: bool = False):
+    # Parse test configuration with coverage flag to adjust timeout
+    test_config = parse_test_config(test, coverage=coverage)
+
     # Check if tenzir-node binary is available
     if not TENZIR_NODE_BINARY:
         report_failure(test, f"└─▶ \033[31mCould not find tenzir-node binary\033[0m")
@@ -515,6 +533,17 @@ def tenzir_node_endpoint(test: Path):
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
             env, config_args = get_test_env_and_config_args(test)
+
+            # Set up environment for code coverage if enabled
+            if coverage:
+                coverage_dir = os.environ.get("CMAKE_COVERAGE_OUTPUT_DIRECTORY",
+                                             os.path.join(os.getcwd(), "coverage"))
+                source_dir = os.environ.get("COVERAGE_SOURCE_DIR", os.getcwd())
+                os.makedirs(coverage_dir, exist_ok=True)
+                test_name = test.stem + "-node"
+                profile_path = os.path.join(coverage_dir, f"{test_name}-%p.profraw")
+                env["LLVM_PROFILE_FILE"] = profile_path
+                env["COVERAGE_SOURCE_DIR"] = source_dir
 
             node_cmd = [
                 TENZIR_NODE_BINARY,
@@ -572,35 +601,58 @@ def tenzir_node_endpoint(test: Path):
 
 
 def run_with_node(
-    test: Path, update: bool, args: typing.Sequence[str], ext: str
+    test: Path, update: bool, args: typing.Sequence[str], ext: str, coverage: bool = False
 ) -> bool:
-    with tenzir_node_endpoint(test) as endpoint:
+    # Parse test configuration with coverage flag to adjust timeout
+    test_config = parse_test_config(test, coverage=coverage)
+
+    with tenzir_node_endpoint(test, coverage=coverage) as endpoint:
         if not endpoint:
             return False
         try:
             cmd_args = [f"--endpoint={endpoint}", *[x for x in args if x is not None]]
-            result = run_simple_test(test, update=update, args=cmd_args, ext=ext)
+            result = run_simple_test(test, update=update, args=cmd_args, ext=ext, coverage=coverage)
             return result
         except Exception as e:
             report_failure(test, f"└─▶ \033[31mFailed to run node test: {e}\033[0m")
             return False
 
 
-def run_with_node_diff(test: Path, update: bool, a: str, b: str) -> bool:
+def run_with_node_diff(test: Path, *, update: bool, a: str, b: str, coverage: bool = False) -> bool:
+    # Parse test configuration with coverage flag to adjust timeout
+    test_config = parse_test_config(test, coverage=coverage)
     env, _ = get_test_env_and_config_args(test)
-    with tenzir_node_endpoint(test) as endpoint:
+
+    # Set up environment for code coverage if enabled
+    if coverage:
+        coverage_dir = os.environ.get("CMAKE_COVERAGE_OUTPUT_DIRECTORY",
+                                     os.path.join(os.getcwd(), "coverage"))
+        source_dir = os.environ.get("COVERAGE_SOURCE_DIR", os.getcwd())
+        os.makedirs(coverage_dir, exist_ok=True)
+        test_name = test.stem
+        profile_path = os.path.join(coverage_dir, f"{test_name}-unopt-%p.profraw")
+        env["LLVM_PROFILE_FILE"] = profile_path
+        env["COVERAGE_SOURCE_DIR"] = source_dir
+
+    with tenzir_node_endpoint(test, coverage=coverage) as endpoint:
         if not endpoint:
             return False
         try:
             unoptimized = subprocess.run(
                 [TENZIR_BINARY, a, f"--endpoint={endpoint}", "-f", str(test)],
-                timeout=parse_test_config(test)["timeout"],
+                timeout=test_config["timeout"],
                 stdout=subprocess.PIPE,
                 env=env,
             )
+
+            # Update profile path for the optimized run
+            if coverage:
+                profile_path = os.path.join(coverage_dir, f"{test_name}-opt-%p.profraw")
+                env["LLVM_PROFILE_FILE"] = profile_path
+
             optimized = subprocess.run(
                 [TENZIR_BINARY, b, f"--endpoint={endpoint}", "-f", str(test)],
-                timeout=parse_test_config(test)["timeout"],
+                timeout=test_config["timeout"],
                 stdout=subprocess.PIPE,
                 env=env,
             )
@@ -721,11 +773,12 @@ for runner in RUNNERS:
 
 
 class Worker:
-    def __init__(self, queue, *, update: bool):
+    def __init__(self, queue, *, update: bool, coverage: bool = False):
         self._queue = queue
         self._result = None
         self._exception = None
         self._update = update
+        self._coverage = coverage
         self._thread = threading.Thread(target=self._work)
 
     def start(self):
@@ -748,7 +801,7 @@ class Worker:
                     break
 
                 runner, test_path = item
-                result = runner.run(test_path, self._update)
+                result = runner.run(test_path, self._update, self._coverage)
                 self._result.total += 1
                 if result == "skipped":
                     self._result.skipped += 1
@@ -776,6 +829,9 @@ def main() -> None:
     parser.add_argument("tests", nargs="*", type=Path, default=[ROOT])
     parser.add_argument("-u", "--update", action="store_true")
     parser.add_argument("--purge", action="store_true")
+    parser.add_argument("--coverage", action="store_true", help="Enable code coverage collection (increases timeouts by 5x)")
+    parser.add_argument("--coverage-source-dir", type=str, 
+                       help="Source directory for code coverage path mapping (defaults to current directory)")
     default_jobs = 4 * (os.cpu_count() or 16)
     parser.add_argument("-j", "--jobs", type=int, default=default_jobs, metavar="N")
     args = parser.parse_args()
@@ -851,13 +907,20 @@ def main() -> None:
 
     print(f"{INFO} running {len(queue)} tests with v{version}")
 
-    workers = [Worker(queue, update=args.update) for _ in range(args.jobs)]
+    # Pass coverage flag to workers
+    workers = [Worker(queue, update=args.update, coverage=args.coverage) for _ in range(args.jobs)]
     summary = Summary()
     for worker in workers:
         worker.start()
     for worker in workers:
         summary += worker.join()
     print(f"{INFO} {summary.total - summary.failed - summary.skipped}/{summary.total} tests passed ({summary.skipped} skipped)")
+    if args.coverage:
+        coverage_dir = os.environ.get("CMAKE_COVERAGE_OUTPUT_DIRECTORY",
+                                     os.path.join(os.getcwd(), "coverage"))
+        source_dir = args.coverage_source_dir or os.getcwd()
+        print(f"{INFO} Code coverage data collected in {coverage_dir}")
+        print(f"{INFO} Source directory for coverage mapping: {source_dir}")
     if summary.failed > 0:
         sys.exit(1)
 
