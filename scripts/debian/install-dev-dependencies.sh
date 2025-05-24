@@ -71,7 +71,6 @@ apt-get update
 apt-get -y install yarn
 
 
-# Poetry
-export POETRY_HOME=/opt/poetry
-curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
-ln -nsf /opt/poetry/bin/poetry /usr/local/bin/poetry
+# uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+ln -nsf /root/.cargo/bin/uv /usr/local/bin/uv

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-# Run a poetry script in an isolated Docker environment with the Tenzir binary and
+# Run a uv script in an isolated Docker environment with the Tenzir binary and
 # dependencies installed. 
 #
 # Args:
-# - arguments to `poetry run`
+# - arguments to `uv run`
 # Env:
 # - TENZIR_CONTAINER_REF: the container tag reference (default: latest)
 # - TENZIR_CONTAINER_REGISTRY: the registry to source the base image (default: docker.io)

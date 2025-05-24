@@ -134,7 +134,9 @@ fi
 
 # Update version of Python bindings.
 pushd "${source_dir}/python"
-poetry version "${new_version#v}"
+# Update version in pyproject.toml manually since we no longer use poetry
+sed -i.bak "s/^version = .*/version = \"${new_version#v}\"/" pyproject.toml
+rm pyproject.toml.bak
 popd
 things_done+="
 * Updated the python bindings version in \`/python/pyproject.toml\` to \`${new_version}\`."

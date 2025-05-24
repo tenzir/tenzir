@@ -10,25 +10,25 @@ with other security tools.
 ## Usage
 
 To get started, clone the Tenzir repository and install the Python package via
-[Poetry](https://python-poetry.org/docs/):
+[uv](https://docs.astral.sh/uv/):
 
 ```bash
 git clone https://github.com/tenzir/tenzir.git
 cd tenzir/python
-poetry install -E module
+uv sync --extra module
 ```
 
 ## Development
 
 We recommend that you work with an editable installation, which is the default
-for `poetry install`.
+for `uv sync`.
 
 ### Unit Tests
 
 Run the unit tests via pytest:
 
 ```bash
-poetry run pytest
+uv run pytest
 ```
 
 ### Integration Tests
@@ -36,7 +36,7 @@ poetry run pytest
 Run the integrations tests via Docker Compose and pytest:
 
 ```bash
-./docker-poetry-run.sh pytest -v
+./docker-uv-run.sh pytest -v
 ```
 
 ## Packaging
@@ -53,7 +53,8 @@ package to PyPI.
 Prior to releasing a new version, bump the version, e.g.:
 
 ```bash
-poetry version 2.3.1
+uv version  # Check uv version
+# Update version in pyproject.toml manually to 2.3.1
 ```
 
 This updates the `pyproject.toml` file.
@@ -63,7 +64,8 @@ This updates the `pyproject.toml` file.
 1. Add a Test PyPi repository:
 
    ```bash
-   poetry config repositories.test-pypi https://test.pypi.org/legacy/
+   # Configure test PyPI in uv (if needed)
+   export UV_INDEX_URL=https://test.pypi.org/simple/
    ```
 
 2. Get the token from <https://test.pypi.org/manage/account/token/>.
@@ -71,13 +73,14 @@ This updates the `pyproject.toml` file.
 3. Store the token:
 
   ```bash
-  poetry config pypi-token.test-pypi pypi-XXXXXXXX
+  export UV_PUBLISH_TOKEN=pypi-XXXXXXXX
   ```
 
 4. Publish:
   
    ```bash
-   poetry publish --build -r test-pypi
+   uv build
+   uv publish --index-url https://test.pypi.org/legacy/ dist/*
    ```
 
 ### Publish to PyPI
@@ -87,11 +90,12 @@ This updates the `pyproject.toml` file.
 2. Store the token:
 
   ```bash
-  poetry config pypi-token.pypi pypi-XXXXXXXX
+  export UV_PUBLISH_TOKEN=pypi-XXXXXXXX
   ```
 
 3. Publish
 
    ```bash
-   poetry publish --build
+   uv build
+   uv publish dist/*
    ```
