@@ -16,7 +16,6 @@ in
           pkgs.nixfmt-rfc-style
           pkgs.speeve
           pkgs.shfmt
-          pkgs.poetry
           pkgs.python3Packages.spdx-tools
           pkgs.uv
           (pkgs.python3.withPackages (ps: with ps; [

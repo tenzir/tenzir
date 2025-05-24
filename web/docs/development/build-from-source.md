@@ -57,12 +57,11 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[gRPC](https://grpci.io)|>= 1.51|Required for building the `velociraptor` plugin.|
 ||[rabbitmq-c](https://github.com/alanxz/rabbitmq-c)||Required for building the `rabbitmq` plugin.|
 ||[yara](https://yara.readthedocs.io/)|>= 4.4.0|Required for building the `yara` plugin.|
-||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libtenzir.|
 ||[Pandoc](https://github.com/jgm/pandoc)||Required to build the manpage for Tenzir.|
 ||[bash](https://www.gnu.org/software/bash/)|>= 4.0.0|Required to run the integration tests.|
 ||[bats](https://bats-core.readthedocs.io)|>= 1.8.0|Required to run the integration tests.|
-||[uv](https://github.com/astral-sh/uv)|>= 0.7.2|Required to run the python operator.|
+||[uv](https://github.com/astral-sh/uv)|>= 0.7.8|Required to run the python operator.|
 
 The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.

@@ -740,7 +740,7 @@ jobs:
       matrix:
         python-version: ["3.10"]
         os: [ubuntu-latest]
-        poetry-version: ["2.1.2"]
+        uv-version: ["0.7.8"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -749,29 +749,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v4.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
         with:
-          poetry-version: ${{ matrix.poetry-version }}
-      - name: Run poetry install
+          version: ${{ matrix.uv-version }}
+      - name: Run uv sync
         working-directory: python
         run: |
-          poetry install -E module
-      - name: Run unit tests
-        working-directory: python
-        run: |
-          poetry run pytest
-      - name: Run tests in Docker
-        working-directory: python
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
-          export TENZIR_CONTAINER_REGISTRY=ghcr.io
-          ./docker-poetry-run.sh pytest
+          uv sync --extra module
       - name: Build package
         working-directory: python
         run: |
-          poetry build
+          uv build
 
   python-package:
     needs:
@@ -784,7 +773,7 @@ jobs:
       matrix:
         python-version: ["3.10"]
         os: ["ubuntu-latest"]
-        poetry-version: ["2.1.2"]
+        uv-version: ["0.7.8"]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -793,18 +782,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v4.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
         with:
-          poetry-version: ${{ matrix.poetry-version }}
-      - name: Configure PyPI
+          version: ${{ matrix.uv-version }}
+      - name: Build and Publish to PyPI
         working-directory: python
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: |
-          poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
-      - name: Publish to PyPI
-        working-directory: python
-        run: |
-          poetry publish --build --no-interaction
+          uv build
+          uv publish dist/*
 
   pass-branch-protections:
     needs:

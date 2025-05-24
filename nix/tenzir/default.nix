@@ -8,7 +8,6 @@
     cmake,
     ninja,
     pkg-config,
-    poetry,
     lld,
     boost,
     caf,
@@ -184,7 +183,6 @@
           dpkg
           protobuf
           grpc
-          poetry
           makeBinaryWrapper
         ] ++ lib.optionals stdenv.isLinux [
           rpm
@@ -236,9 +234,7 @@
           jemalloc
         ];
 
-        env = {
-          POETRY_VIRTUALENVS_IN_PROJECT = 1;
-        };
+        env = {};
         cmakeFlags =
           [
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"

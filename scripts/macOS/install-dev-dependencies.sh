@@ -26,7 +26,6 @@ brew install --overwrite \
     nmap \
     pandoc \
     parallel \
-    poetry \
     protobuf \
     rabbitmq-c \
     rsync \
