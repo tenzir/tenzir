@@ -287,8 +287,8 @@ endif ()
 dependency_summary("CURL" PkgConfig::PC_CURL "Dependencies")
 
 # Link against fmt.
-find_package(fmt 7.1.3 REQUIRED)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(fmt 7.1.3 REQUIRED)")
+find_package(fmt 10.0.0 REQUIRED)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(fmt 10.0.0 REQUIRED)")
 target_link_libraries(libtenzir PUBLIC fmt::fmt)
 dependency_summary("fmt" fmt::fmt "Dependencies")
 
