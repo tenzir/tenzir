@@ -12,6 +12,8 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/overload.hpp"
 
+#include <caf/detail/pretty_type_name.hpp>
+
 #include <utility>
 #include <variant>
 
@@ -336,7 +338,16 @@ auto as(V&& v) -> forward_like_t<V, T> {
   using bare = std::remove_cvref_t<V>;
   constexpr auto alternative_index = detail::variant_index<bare, T>;
   const auto current_index = variant_traits<bare>::index(v);
-  TENZIR_ASSERT(current_index == alternative_index);
+  TENZIR_ASSERT(current_index == alternative_index,
+                "invalid variant access: [current: `{} ({})`] != [requested: "
+                "`{} ({})`]",
+                current_index,
+                match(std::forward<V>(v),
+                      []<typename H>(const H&) {
+                        return caf::detail::pretty_type_name(
+                          typeid(std::remove_cvref_t<H>));
+                      }),
+                alternative_index, caf::detail::pretty_type_name(typeid(T)));
   return detail::variant_get<alternative_index>(std::forward<V>(v));
 };
 

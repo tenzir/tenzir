@@ -207,4 +207,9 @@ TEST(expression) {
     });
 }
 
+TEST(fail) {
+  auto v = variant<int, double>{};
+  CAF_CHECK_THROWS_AS(as<double>(v), tenzir::panic_exception);
+}
+
 } // namespace tenzir
