@@ -444,7 +444,7 @@ function (target_code_coverage TARGET_NAME)
       add_custom_command(
         TARGET ccov-${target_code_coverage_COVERAGE_TARGET_NAME}
         POST_BUILD
-        COMMAND ;
+        COMMAND ${CMAKE_COMMAND} -E echo "Coverage report generated"
         COMMENT
           "Open ${CMAKE_COVERAGE_OUTPUT_DIRECTORY}/${target_code_coverage_COVERAGE_TARGET_NAME}/index.html in your browser to view the coverage report."
       )
