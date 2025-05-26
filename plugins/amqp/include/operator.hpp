@@ -527,6 +527,15 @@ struct connector_args {
   std::optional<located<std::string>> exchange;
   std::optional<located<std::string>> options;
   std::optional<located<std::string>> url;
+  location op;
+
+  friend auto inspect(auto& f, connector_args& x) -> bool {
+    return f.object(x).fields(f.field("channel", x.channel),
+                              f.field("routing_key", x.routing_key),
+                              f.field("exchange", x.exchange),
+                              f.field("options", x.options),
+                              f.field("url", x.url), f.field("op", x.op));
+  }
 };
 
 /// The arguments for the loader.
@@ -542,10 +551,8 @@ struct loader_args : connector_args {
   friend auto inspect(auto& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("loader_args")
-      .fields(f.field("channel", x.channel), f.field("queue", x.queue),
-              f.field("routing_key", x.routing_key),
-              f.field("exchange", x.exchange), f.field("options", x.options),
-              f.field("url", x.url), f.field("passive", x.passive),
+      .fields(f.field("connector_args", static_cast<connector_args&>(x)),
+              f.field("queue", x.queue), f.field("passive", x.passive),
               f.field("durable", x.durable), f.field("exclusive", x.exclusive),
               f.field("no_auto_delete", x.no_auto_delete),
               f.field("no_local", x.no_local), f.field("ack", x.ack));
@@ -560,10 +567,8 @@ struct saver_args : connector_args {
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
-      .fields(f.field("channel", x.channel),
-              f.field("routing_key", x.routing_key),
-              f.field("exchange", x.exchange), f.field("options", x.options),
-              f.field("url", x.url), f.field("mandatory", x.mandatory),
+      .fields(f.field("connector_args", static_cast<connector_args&>(x)),
+              f.field("mandatory", x.mandatory),
               f.field("immediate", x.immediate));
   }
 };
@@ -581,12 +586,14 @@ public:
     auto engine = amqp_engine::make(config_);
     if (not engine) {
       diagnostic::error("failed to construct AMQP engine")
+        .primary(args_.op)
         .note("{}", engine.error())
         .emit(ctrl.diagnostics());
       co_return;
     }
     if (auto err = engine->connect()) {
       diagnostic::error("failed to connect to AMQP server")
+        .primary(args_.op)
         .note("{}", err)
         .emit(ctrl.diagnostics());
       co_return;
@@ -594,6 +601,7 @@ public:
     auto channel = args_.channel ? args_.channel->inner : default_channel;
     if (auto err = engine->open(channel)) {
       diagnostic::error("failed to open AMQP channel {}", channel)
+        .primary(args_.op)
         .note("{}", err)
         .emit(ctrl.diagnostics());
       co_return;
@@ -615,6 +623,7 @@ public:
     });
     if (err) {
       diagnostic::error("failed to start AMQP consumer")
+        .primary(args_.op)
         .hint("{}", err)
         .emit(ctrl.diagnostics());
       co_return;
@@ -625,6 +634,7 @@ public:
         co_yield std::move(*message);
       } else {
         diagnostic::error("failed to consume message")
+          .primary(args_.op)
           .hint("{}", message.error())
           .emit(ctrl.diagnostics());
         co_return;
@@ -711,8 +721,10 @@ public:
         co_yield {};
         continue;
       }
-      if (auto err = engine->publish(std::move(chunk), opts)) {
-        diagnostic::error("failed to publish {}-byte message", chunk->size())
+      if (auto err = engine->publish(chunk, opts)) {
+        diagnostic::error("failed to publish amqp message")
+          .primary(args_.op)
+          .note("size: {}", chunk->size())
           .note("channel: {}", opts.channel)
           .note("exchange: {}", opts.exchange)
           .note("routing key: {}", opts.routing_key)
