@@ -81,6 +81,10 @@ public:
     }
   }
 
+  auto detached() const -> bool override {
+    return true;
+  }
+
   auto name() const -> std::string override {
     return "tql2.save_azure_blob_storage";
   }

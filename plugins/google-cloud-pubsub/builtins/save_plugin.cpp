@@ -73,6 +73,10 @@ public:
     }
   }
 
+  auto detached() const -> bool override {
+    return true;
+  }
+
   auto name() const -> std::string override {
     return "tql2.save_google_cloud_pubsub";
   }
