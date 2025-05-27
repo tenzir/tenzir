@@ -141,3 +141,17 @@ warning: dropping events where `class_uid` is unknown
   | ~~~~~~~~~~~ 
   |
   = note: could not find class for value `42`
+
+warning: expected type `int64` for field, but got `string`
+ --> exec/ocsf/apply.tql:9:1
+  |
+9 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |
+
+warning: dropping field `this_field_does_not_exist` which does not exist in schema
+ --> exec/ocsf/apply.tql:9:1
+  |
+9 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |
