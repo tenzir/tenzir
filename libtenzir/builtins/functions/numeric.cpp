@@ -214,10 +214,10 @@ public:
   }
 };
 
-class count_where final : public aggregation_plugin {
+class count_if final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.count_where";
+    return "tql2.count_if";
   }
 
   auto is_deterministic() const -> bool final {
@@ -228,7 +228,7 @@ public:
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     auto lambda = ast::lambda_expr{};
-    TRY(argument_parser2::function("count_where")
+    TRY(argument_parser2::function("count_if")
           .positional("x", expr, "any")
           .positional("lambda", lambda, "lambda")
           .parse(inv, ctx));
@@ -465,6 +465,6 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sqrt)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::random)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::count)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::count_where)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::count_if)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::quantile)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::median)

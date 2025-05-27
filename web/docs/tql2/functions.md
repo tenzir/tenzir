@@ -42,26 +42,27 @@ but often resort to the method style when it is more idiomatic.
 
 ## Aggregation
 
-| Function                                        | Description                                                  | Example                      |
-| :---------------------------------------------- | :----------------------------------------------------------- | :--------------------------- |
-| [`all`](functions/all.md)                       | Computes the conjunction (AND) of all boolean values         | `all([true,true,false])`     |
-| [`any`](functions/any.md)                       | Computes the disjunction (OR) of all boolean values          | `any([true,false,true])`     |
-| [`collect`](functions/collect.md)               | Creates a list of all non-null values, preserving duplicates | `collect([1,2,2,3])`         |
-| [`count`](functions/count.md)                   | Counts the events or non-null values                         | `count([1,2,null])`          |
-| [`count_distinct`](functions/count_distinct.md) | Counts all distinct non-null values                          | `count_distinct([1,2,2,3])`  |
-| [`distinct`](functions/distinct.md)             | Creates a sorted list without duplicates of non-null values  | `distinct([1,2,2,3])`        |
-| [`first`](functions/first.md)                   | Takes the first non-null value                               | `first([null,2,3])`          |
-| [`last`](functions/last.md)                     | Takes the last non-null value                                | `last([1,2,null])`           |
-| [`max`](functions/max.md)                       | Computes the maximum of all values                           | `max([1,2,3])`               |
-| [`mean`](functions/mean.md)                     | Computes the mean of all values                              | `mean([1,2,3])`              |
-| [`median`](functions/median.md)                 | Computes the approximate median with a t-digest algorithm    | `median([1,2,3,4])`          |
-| [`min`](functions/min.md)                       | Computes the minimum of all values                           | `min([1,2,3])`               |
-| [`mode`](functions/mode.md)                     | Takes the most common non-null value                         | `mode([1,1,2,3])`            |
-| [`quantile`](functions/quantile.md)             | Computes the specified quantile `q` of values                | `quantile([1,2,3,4], q=0.5)` |
-| [`stddev`](functions/stddev.md)                 | Computes the standard deviation of all values                | `stddev([1,2,3])`            |
-| [`sum`](functions/sum.md)                       | Computes the sum of all values                               | `sum([1,2,3])`               |
-| [`value_counts`](functions/value_counts.md)     | Returns a list of values with their frequency                | `value_counts([1,2,2,3])`    |
-| [`variance`](functions/variance.md)             | Computes the variance of all values                          | `variance([1,2,3])`          |
+| Function                                        | Description                                                  | Example                            |
+| :---------------------------------------------- | :----------------------------------------------------------- | :--------------------------------- |
+| [`all`](functions/all.md)                       | Computes the conjunction (AND) of all boolean values         | `all([true,true,false])`           |
+| [`any`](functions/any.md)                       | Computes the disjunction (OR) of all boolean values          | `any([true,false,true])`           |
+| [`collect`](functions/collect.md)               | Creates a list of all non-null values, preserving duplicates | `collect([1,2,2,3])`               |
+| [`count`](functions/count.md)                   | Counts the events or non-null values                         | `count([1,2,null])`                |
+| [`count_if`](functions/count_if.md)             | Counts the events or non-null values matching a predicate    | `count_if([1,2,null], x => x > 1)` |
+| [`count_distinct`](functions/count_distinct.md) | Counts all distinct non-null values                          | `count_distinct([1,2,2,3])`        |
+| [`distinct`](functions/distinct.md)             | Creates a sorted list without duplicates of non-null values  | `distinct([1,2,2,3])`              |
+| [`first`](functions/first.md)                   | Takes the first non-null value                               | `first([null,2,3])`                |
+| [`last`](functions/last.md)                     | Takes the last non-null value                                | `last([1,2,null])`                 |
+| [`max`](functions/max.md)                       | Computes the maximum of all values                           | `max([1,2,3])`                     |
+| [`mean`](functions/mean.md)                     | Computes the mean of all values                              | `mean([1,2,3])`                    |
+| [`median`](functions/median.md)                 | Computes the approximate median with a t-digest algorithm    | `median([1,2,3,4])`                |
+| [`min`](functions/min.md)                       | Computes the minimum of all values                           | `min([1,2,3])`                     |
+| [`mode`](functions/mode.md)                     | Takes the most common non-null value                         | `mode([1,1,2,3])`                  |
+| [`quantile`](functions/quantile.md)             | Computes the specified quantile `q` of values                | `quantile([1,2,3,4], q=0.5)`       |
+| [`stddev`](functions/stddev.md)                 | Computes the standard deviation of all values                | `stddev([1,2,3])`                  |
+| [`sum`](functions/sum.md)                       | Computes the sum of all values                               | `sum([1,2,3])`                     |
+| [`value_counts`](functions/value_counts.md)     | Returns a list of values with their frequency                | `value_counts([1,2,2,3])`          |
+| [`variance`](functions/variance.md)             | Computes the variance of all values                          | `variance([1,2,3])`                |
 
 ## Record
 
@@ -82,9 +83,9 @@ but often resort to the method style when it is more idiomatic.
 | [`concatenate`](functions/concatenate.md) | Merges two lists                           | `concatenate(xs, ys)`      |
 | [`get`](functions/get.md)                 | Accesses an element of a list              | `list.get(index, default)` |
 | [`length`](functions/length.md)           | Retrieves the length of a list             | `[1,2,3].length()`         |
-| [`map`](functions/map.md)                 | Maps each list element to an expression    | `xs.map(x, x + 3)`         |
+| [`map`](functions/map.md)                 | Maps each list element to an expression    | `xs.map(x => x + 3)`       |
 | [`sort`](functions/sort.md)               | Sorts a list by its values.                | `xs.sort()`                |
-| [`where`](functions/where.md)             | Filters list elements based on a predicate | `xs.where(x, x > 5)`       |
+| [`where`](functions/where.md)             | Filters list elements based on a predicate | `xs.where(x => x > 5)`     |
 | [`zip`](functions/zip.md)                 | Combines two lists into a list of pairs    | `zip(xs, ys)`              |
 
 ## Subnet

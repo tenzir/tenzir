@@ -27,15 +27,15 @@
   num_ints: null,
 }
 warning: expected `list`, but got `string`
-  --> lambda/count_where.tql:11:17
+  --> lambda/count_if.tql:11:17
    |
-11 |   num_strings = xs.count_where(x => type_of(x).kind == "string"),
+11 |   num_strings = xs.count_if(x => type_of(x).kind == "string"),
    |                 ~~ 
    |
 
 warning: expected `list`, but got `string`
-  --> lambda/count_where.tql:12:14
+  --> lambda/count_if.tql:12:14
    |
-12 |   num_ints = xs.count_where(x => type_of(x).kind == "int64"),
+12 |   num_ints = xs.count_if(x => type_of(x).kind == "int64"),
    |              ~~ 
    |
