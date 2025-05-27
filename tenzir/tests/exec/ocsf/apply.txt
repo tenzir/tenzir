@@ -13,7 +13,31 @@
   end_time: null,
   enrichments: null,
   message: null,
-  metadata: null,
+  metadata: {
+    correlation_uid: null,
+    debug: null,
+    event_code: null,
+    extension: null,
+    extensions: null,
+    labels: null,
+    log_level: null,
+    log_name: null,
+    log_provider: null,
+    log_version: null,
+    logged_time: null,
+    loggers: null,
+    modified_time: null,
+    original_time: null,
+    processed_time: null,
+    product: null,
+    profiles: null,
+    sequence: null,
+    tags: null,
+    tenant_uid: null,
+    transformation_info_list: null,
+    uid: null,
+    version: "1.5.0",
+  },
   observables: null,
   raw_data: null,
   raw_data_size: null,
@@ -51,7 +75,31 @@
   http_status: null,
   ja4_fingerprint_list: null,
   message: null,
-  metadata: null,
+  metadata: {
+    correlation_uid: null,
+    debug: null,
+    event_code: null,
+    extension: null,
+    extensions: null,
+    labels: null,
+    log_level: null,
+    log_name: null,
+    log_provider: null,
+    log_version: null,
+    logged_time: null,
+    loggers: null,
+    modified_time: null,
+    original_time: null,
+    processed_time: null,
+    product: null,
+    profiles: null,
+    sequence: null,
+    tags: null,
+    tenant_uid: null,
+    transformation_info_list: null,
+    uid: null,
+    version: "1.5.0",
+  },
   observables: null,
   proxy: null,
   raw_data: null,
@@ -73,23 +121,23 @@
   unmapped: "{\"foo\":\"192.168.0.1\"}",
 }
 warning: dropping events where `class_uid` does not exist
- --> exec/ocsf/apply.tql:8:1
+ --> exec/ocsf/apply.tql:9:1
   |
-8 | ocsf::apply
+9 | ocsf::apply
   | ~~~~~~~~~~~ 
   |
 
 warning: dropping events where `class_uid` is not an integer
- --> exec/ocsf/apply.tql:8:1
+ --> exec/ocsf/apply.tql:9:1
   |
-8 | ocsf::apply
+9 | ocsf::apply
   | ~~~~~~~~~~~ 
   |
 
 warning: dropping events where `class_uid` is unknown
- --> exec/ocsf/apply.tql:8:1
+ --> exec/ocsf/apply.tql:9:1
   |
-8 | ocsf::apply
+9 | ocsf::apply
   | ~~~~~~~~~~~ 
   |
-  = note: could not find class for ID 42
+  = note: could not find class for value `42`

@@ -52,6 +52,8 @@ auto cast(const arrow::StructArray& array, const record_type& ty)
     fields.push_back(field.type.to_arrow_field(field.name));
     auto field_array = array.GetFieldByName(std::string{field.name});
     if (not field_array) {
+      // No warning if the a target field does not exist.
+      // TODO: Maybe if it is required?
       field_arrays.push_back(check(
         arrow::MakeArrayOfNull(field.type.to_arrow_type(), array.length())));
       continue;
@@ -62,32 +64,49 @@ auto cast(const arrow::StructArray& array, const record_type& ty)
                            field_arrays);
 }
 
-auto cast(const arrow::Array& array, const type& ty)
-  -> std::shared_ptr<arrow::Array> {
-  if (is<string_type>(ty) and ty.attribute("print_json")) {
-    if (is<arrow::StringArray>(array)) {
-      // Keep strings as they are (assuming they are already JSON).
-      return std::make_shared<arrow::StringArray>(array.data());
-    }
-    // Convert everything else into JSON.
-    auto builder = arrow::StringBuilder{};
-    auto printer = json_printer{{.style = no_style(), .oneline = true}};
-    auto buffer = std::string{};
-    for (auto&& row : values3(array)) {
-      if (is<caf::none_t>(row)) {
+auto print_json(const arrow::Array& array)
+  -> std::shared_ptr<arrow::StringArray> {
+  if (is<arrow::StringArray>(array)) {
+    // Keep strings as they are (assuming they are already JSON).
+    return std::make_shared<arrow::StringArray>(array.data());
+  }
+  // Convert everything else into JSON.
+  auto builder = arrow::StringBuilder{};
+  auto printer = json_printer{{.style = no_style(), .oneline = true}};
+  auto buffer = std::string{};
+  // TODO: At least for `unmapped`, we should think about encoding empty
+  // records as `null` as well. However, for other fields, maybe not.
+  // auto empty_records = match(
+  //   ty,
+  //   [](const record_type& ty) {
+  //     return ty.num_fields() == 0;
+  //   },
+  //   [](const auto&) {
+  //     return false;
+  //   });
+  match(array, [&](const auto& array) {
+    for (auto value : values3(array)) {
+      if (not value) {
         // Preserve nulls instead of rendering them as a string.
         check(builder.AppendNull());
         continue;
       }
       auto it = std::back_inserter(buffer);
-      auto success = printer.print(it, row);
+      auto success = printer.print(it, *value);
       TENZIR_ASSERT(success);
       check(builder.Append(buffer));
       buffer.clear();
     }
-    return finish(builder);
+  });
+  return finish(builder);
+}
+
+auto cast(const arrow::Array& array, const type& ty)
+  -> std::shared_ptr<arrow::Array> {
+  if (is<string_type>(ty) and ty.attribute("print_json")) {
+    return print_json(array);
   }
-  return match(
+  auto result = match(
     std::tie(array, ty),
     []<class Type>(const type_to_arrow_array_t<Type>& array,
                    const Type& ty) -> std::shared_ptr<arrow::Array> {
@@ -96,8 +115,16 @@ auto cast(const arrow::Array& array, const type& ty)
     []<class Array, class Type>(const Array& array, const Type& ty)
       requires(not std::same_as<Array, type_to_arrow_array_t<Type>>)
     {
+      if constexpr (not std::same_as<Array, arrow::NullArray>) {
+        // TODO: Warn because field has incompatible type.
+      }
+      // TODO: If we check `#required`, we need to check this as well.
       return check(arrow::MakeArrayOfNull(ty.to_arrow_type(), array.length()));
     });
+  if (ty.attribute("required") and result->null_count() > 0) {
+    // TODO: Warn because required attribute is not set.
+  }
+  return result;
 }
 
 auto cast(const table_slice& slice, const type& ty) -> table_slice {
@@ -106,6 +133,7 @@ auto cast(const table_slice& slice, const type& ty) -> table_slice {
   auto result = std::dynamic_pointer_cast<arrow::StructArray>(cast(*array, ty));
   TENZIR_ASSERT(result);
   auto columns = check(result->Flatten());
+  // TODO: Don't we need matching metadata here?
   return table_slice{
     arrow::RecordBatch::Make(ty.to_arrow_schema(), result->length(),
                              std::move(columns)),
@@ -137,8 +165,8 @@ public:
         co_yield {};
         continue;
       }
-      auto class_array = try_as<arrow::Int64Array>(
-        *to_record_batch(slice)->column(detail::narrow<int>(*class_index)));
+      auto class_array = std::dynamic_pointer_cast<arrow::Int64Array>(
+        to_record_batch(slice)->column(detail::narrow<int>(*class_index)));
       if (not class_array) {
         diagnostic::warning(
           "dropping events where `class_uid` is not an integer")
@@ -147,28 +175,81 @@ public:
         co_yield {};
         continue;
       }
-      // Figure out longest slices where the class ID is the constant.
+      auto metadata_index = ty.resolve_field("metadata");
+      if (not metadata_index) {
+        diagnostic::warning("dropping events where `metadata` does not exist")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      // TODO: What if `metadata` exists but is null?
+      auto metadata_array = std::dynamic_pointer_cast<arrow::StructArray>(
+        to_record_batch(slice)->column(detail::narrow<int>(*metadata_index)));
+      if (not metadata_array) {
+        diagnostic::warning("dropping events where `metadata` is not a record")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      auto version_index
+        = metadata_array->struct_type()->GetFieldIndex("version");
+      if (version_index == -1) {
+        diagnostic::warning(
+          "dropping events where `metadata.version` does not exist")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      auto version_array = std::dynamic_pointer_cast<arrow::StringArray>(
+        check(metadata_array->GetFlattenedField(version_index)));
+      if (not version_array) {
+        diagnostic::warning(
+          "dropping events where `metadata.version` is not a string")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      // Figure out longest slices for `(metadata.version, class_uid)`.
       auto begin = int64_t{0};
       auto end = begin;
+      auto version = view_at(*version_array, begin);
       auto id = view_at(*class_array, begin);
       auto process = [&]() -> table_slice {
+        if (not version) {
+          diagnostic::warning(
+            "dropping events where `metadata.version` is null")
+            .primary(self_)
+            .emit(ctrl.diagnostics());
+          return {};
+        }
         if (not id) {
           diagnostic::warning("dropping events where `class_uid` is null")
             .primary(self_)
             .emit(ctrl.diagnostics());
           return {};
         }
-        auto name = ocsf_class_name(*id);
-        if (not name) {
+        auto class_name = ocsf_class_name(*id);
+        if (not class_name) {
           diagnostic::warning("dropping events where `class_uid` is unknown")
             .primary(self_)
-            .note("could not find class for ID {}", *id)
+            .note("could not find class for value `{}`", *id)
             .emit(ctrl.diagnostics());
           return {};
         }
-        auto schema = std::string{"ocsf."};
-        schema.reserve(schema.size() + name->length());
-        for (auto c : *name) {
+        auto schema = std::string{"_ocsf.v"};
+        for (auto c : *version) {
+          if (c == '.') {
+            schema += '_';
+          } else {
+            schema += c;
+          }
+        }
+        schema += '.';
+        for (auto c : *class_name) {
           if (c == ' ') {
             schema += '_';
           } else {
@@ -180,21 +261,25 @@ public:
           return ty.name() == schema;
         });
         if (it == modules::schemas().end()) {
-          diagnostic::warning(
-            "dropping events because schema `{}` is not available", schema)
+          diagnostic::warning("dropping events with unknown version `{}` for "
+                              "class `{}`",
+                              *version, *class_name)
             .primary(self_)
             .emit(ctrl.diagnostics());
           return {};
         }
+        // TODO: Drop metadata after casting and rename!
         return cast(subslice(slice, begin, end), *it);
       };
       for (; end < class_array->length(); ++end) {
+        auto next_version = view_at(*version_array, end);
         auto next_id = view_at(*class_array, end);
-        if (next_id == id) {
+        if (next_version == version and next_id == id) {
           continue;
         }
         co_yield process();
         begin = end;
+        version = next_version;
         id = next_id;
       }
       co_yield process();

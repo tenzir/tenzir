@@ -300,6 +300,12 @@ TBD: new name
 | [`package::list`](./operators/package/list.md)  | Shows installed packages | `package::list`                   |
 | [`package::remove`](./operators/package/add.md) | Uninstalls a package     | `package::remove "suricata-ocsf"` |
 
+## OCSF
+
+| Operator                                   | Description              | Example                           |
+| :----------------------------------------- | :----------------------- | :-------------------------------- |
+| [`ocsf::apply`](./operators/ocsf/apply.md) | ???????????????????????? | `ocsf::apply`    |
+
 ## Escape Hatches
 
 | Operator                          | Description                              | Example                                           |

@@ -4,19 +4,25 @@ from pathlib import Path
 import sys
 import textwrap
 import typing
+import re
+from typing import Optional
+import contextlib
 
 import requests
 
 ALL = object()
 
 # ================== Configuration ================== #
-URL = "https://schema.ocsf.io/export/schema"
+SERVER = "https://schema.ocsf.io"
 DOCUMENT_ENTITIES = True
 DOCUMENT_FIELDS = False
-CLASS_PREFIX = "ocsf."
-OBJECT_PREFIX = "ocsf.object."
+OCSF_PREFIX = "_ocsf"
+OBJECT_INFIX = "object"
 COLUMN_LIMIT = 80
 PROFILES = []  # List of strings or ALL.
+EXCLUDE_VERSIONS = ["1.0.0-rc.2", "1.0.0-rc.3"]
+
+# TODO: Discuss dropping optional fields.
 # =================================================== #
 
 OMIT_MARKER = object()
@@ -49,13 +55,28 @@ Schema = dict[str, dict]
 TypeMap = dict[str, str]
 
 
+log_indent = 0
+
 def log(msg: str):
-    print("▶", msg, file=sys.stderr)
+    print(" " * log_indent + "▶", msg, file=sys.stderr, flush=True)
 
 
-def load_schema() -> Schema:
-    log(f"Fetching schema from {URL}")
-    return requests.get(URL).json()
+@contextlib.contextmanager
+def log_section(msg: str):
+    global log_indent
+    log(msg)
+    log_indent += 2
+    yield
+    log_indent -= 2
+
+
+def load_schema(version: Optional[str] = None) -> Schema:
+    url = SERVER
+    if version is not None:
+        url += "/" + version
+    url += "/export/schema"
+    log(f"Fetching schema from {url}")
+    return requests.get(url).json()
 
 
 def patch_types(schema: Schema) -> None:
@@ -70,6 +91,14 @@ def patch_types(schema: Schema) -> None:
                 result = BASIC_TYPES[result]
         types[type_name] = result
     schema["types"] = types
+
+
+def class_prefix(schema: Schema) -> str:
+    return OCSF_PREFIX + ".v" + schema["version"].replace(".", "_").replace("-", "_")
+
+
+def object_prefix(schema: Schema) -> str:
+    return class_prefix(schema) + "." + "object"
 
 
 class Writer:
@@ -100,7 +129,7 @@ class Writer:
 
 def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
     name = "objects" if objects else "classes"
-    prefix = OBJECT_PREFIX if objects else CLASS_PREFIX
+    prefix = object_prefix(schema) if objects else class_prefix(schema)
     types = schema["types"]
     first = True
     for entity in schema[name].values():
@@ -117,7 +146,7 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
             entity_name = entity["name"]
         else:
             entity_name = entity["caption"].lower().replace(" ", "_")
-        full_name = f"{prefix}{entity_name}"
+        full_name = f"{prefix}.{entity_name}"
         if full_name == "ocsf.object.object":
             # Not needed because this is special-case to print JSON.
             continue
@@ -141,7 +170,7 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
                     slash = type_name.rfind("/")
                     if slash != -1:
                         type_name = type_name[slash + 1 :]
-                    resolved = f"{OBJECT_PREFIX}{type_name}"
+                    resolved = f"{object_prefix(schema)}.{type_name}"
             else:
                 resolved = types[attr_def["type"]]
                 if resolved is OMIT_MARKER:
@@ -150,48 +179,63 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
                 resolved = f"list<{resolved}>"
             if DOCUMENT_FIELDS:
                 writer.comment(attr_def["description"])
-            # requirement = attr_def["requirement"]
-            writer.print(f"{attr_name}: {resolved},")
+            requirement = attr_def["requirement"]
+            attributes = f" #{requirement}"
+            if profile is not None:
+                attributes += f" #profile={profile}"
+            writer.print(f"{attr_name}: {resolved}{attributes},")
         writer.end("}")
 
 
 def emit_classes(writer: Writer, schema: Schema) -> None:
-    log("Emitting class definitions")
     _emit(writer, schema, objects=False)
 
 
 def emit_objects(writer: Writer, schema: Schema) -> None:
-    log("Emitting object definitions")
     _emit(writer, schema, objects=True)
 
 
-def open_schema_file():
+def open_schema_file(version: str):
+    version = re.sub("[^0-9a-zA-Z_-]", "", version.replace(".", "_"))
+    name = "v" + version + ".schema"
     scripts = Path(__file__).parent
     types = (scripts / "../schema/types").resolve()
     if not types.is_dir():
         raise NotADirectoryError(f"expected {types} to be a directory")
-    path = types / "ocsf.schema"
-    log(f"Opening schema file {path}")
+    ocsf_dir = types / "ocsf"
+    ocsf_dir.mkdir(exist_ok=True)
+    path = ocsf_dir / name
+    log(f"Writing schema file {path}")
     return path.open("w")
 
 
 def main():
-    schema = load_schema()
-    patch_types(schema)
-    with open_schema_file() as f:
-        writer = Writer(f)
-        writer.comment("This file is generated, do not edit manually.")
-        writer.comment(f"OCSF Version: {schema['version']}")
-        profiles = (
-            "all"
-            if PROFILES == ALL
-            else "none" if PROFILES == [] else ", ".join(PROFILES)
-        )
-        writer.comment(f"OCSF Profiles: {profiles}")
-        writer.print()
-        emit_objects(writer, schema)
-        writer.print()
-        emit_classes(writer, schema)
+    # Use a hacky regex to get the available versions.
+    log(f"Fetching available versions from {SERVER}")
+    body = requests.get(SERVER).content.decode()
+    versions = [
+        version
+        for version in re.findall("<option value=[^>]*>v([^<]*)</option>", body)
+        if version not in EXCLUDE_VERSIONS
+    ]
+    for version in versions:
+        with log_section(f"Processing version {version}"):
+            schema = load_schema(version)
+            patch_types(schema)
+            with open_schema_file(version) as f:
+                writer = Writer(f)
+                writer.comment("This file is generated, do not edit manually.")
+                writer.comment(f"OCSF version: {version}")
+                # profiles = (
+                #     "all"
+                #     if PROFILES == ALL
+                #     else "none" if PROFILES == [] else ", ".join(PROFILES)
+                # )
+                # writer.comment(f"OCSF Profiles: {profiles}")
+                writer.print()
+                emit_objects(writer, schema)
+                writer.print()
+                emit_classes(writer, schema)
     log("Done")
 
 

@@ -5,4 +5,5 @@ from(
   {class_uid: 1002},
   {class_uid: 4002, count: 42, unmapped: {foo: 192.168.0.1}},
 )
+metadata.version = "1.5.0"
 ocsf::apply
