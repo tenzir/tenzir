@@ -1,14 +1,14 @@
-# count_where
+# count_if
 
 Counts the events or non-null grouped values.
 
 ```tql
-count_where(xs:list, predicate:any => bool) -> int
+count_if(xs:list, predicate:any => bool) -> int
 ```
 
 ## Description
 
-The `count_where` function returns the number of non-null values in `xs` that
+The `count_if` function returns the number of non-null values in `xs` that
 satisfy the given `predicate`.
 
 ### `xs: list`
@@ -25,7 +25,7 @@ The values to count.
 
 ```tql
 from {x: 1}, {x: null}, {x: 2}
-summarize total=x.count_where(x => x > 1)
+summarize total=x.count_if(x => x > 1)
 ```
 
 ```tql
