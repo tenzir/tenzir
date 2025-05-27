@@ -1765,24 +1765,40 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](const caf::exit_msg& msg) {
       TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,
                      msg.source, msg.reason);
+      // TODO:
+      // * Do we have a guarantee here, that the actors in the query_contexts of
+      //   the delayed_queries are destroyed at the end of this? I.e. does this
+      //   exchange make their ref count go to 0?
+      // * If we are shutting down, do we actually need to deliver these RPs?
+      TENZIR_WARN("exit msg handler: {}",msg.reason);
       for (auto&& [rp, _] : std::exchange(self->state().delayed_queries, {})) {
         rp.deliver(msg.reason);
       }
+      auto perform_shutdown = [self](auto reason) {
+        auto dependents = std::vector<caf::actor>{};
+        dependents.push_back(
+          caf::actor_cast<caf::actor>(self->state().catalog));
+          for (const auto& [id, q] : self->state().pending_queries.queries()) {
+            dependents.push_back(caf::actor_cast<caf::actor>(q.client));
+          }
+          TENZIR_WARN("starting shutdown: {}", reason);
+          shutdown<policy::parallel>(self, std::move(dependents), reason);
+      };
       self->state().shutting_down = true;
       self->mail(atom::flush_v)
         .request(static_cast<index_actor>(self), std::chrono::minutes{10})
         .then(
-          [self]() {
-            self->quit();
+          [perform_shutdown, reason = msg.reason]() {
+            perform_shutdown(reason);
           },
-          [self](caf::error& err) {
+          [perform_shutdown](caf::error& err) {
             auto diag
               = diagnostic::error(std::move(err)).note("while shutting down");
             if (err == caf::sec::request_timeout) {
               diag
                 = std::move(diag).note("shutdown timeout: risk of data loss!");
             }
-            self->quit(std::move(diag).to_error());
+            perform_shutdown(std::move(diag).to_error());
           });
     },
   };
