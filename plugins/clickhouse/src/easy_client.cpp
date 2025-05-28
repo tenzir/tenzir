@@ -208,10 +208,7 @@ auto easy_client::insert(const table_slice& slice) -> bool {
     updated = updated | trafo->update_dropmask(path, t, arr, dropmask_, dh_);
     path.pop_back();
     if (updated == transformer::drop::all) {
-      diagnostic::warning("dropped events because of incompatible column `{}`",
-                          fmt::join(path, "."))
-        .primary(args_.operator_location)
-        .emit(dh_);
+      // has already been reported
       return false;
     }
   }
@@ -229,6 +226,7 @@ auto easy_client::insert(const table_slice& slice) -> bool {
       .emit(dh_);
     return false;
   }
+  const auto dropcount = pop_count(dropmask_);
   auto block = ::clickhouse::Block{};
   for (const auto& [k, t, arr] : columns_of(slice)) {
     const auto [trafo, out_idx] = transformations_->transfrom_and_index_for(k);
@@ -236,10 +234,12 @@ auto easy_client::insert(const table_slice& slice) -> bool {
       continue;
     }
     path.push_back(k);
-    auto this_column = trafo->create_column(path, t, arr, dropmask_, dh_);
-    TENZIR_ASSERT(this_column->Size() == slice.rows(),
-                  "wrong row count in column `{}`; {} != {}",
-                  fmt::join(path, "."), this_column->Size(), slice.rows());
+    auto this_column
+      = trafo->create_column(path, t, arr, dropmask_, dropcount, dh_);
+    TENZIR_ASSERT(this_column->Size() == slice.rows() - dropcount,
+                  "wrong row count in column `{}`; {} != {} - {}",
+                  fmt::join(path, "."), this_column->Size(), slice.rows(),
+                  dropcount);
     path.pop_back();
     if (not this_column) {
       diagnostic::warning("failed to add column `{}` to ClickHouse table", k)
@@ -248,12 +248,9 @@ auto easy_client::insert(const table_slice& slice) -> bool {
     }
     block.AppendColumn(std::string{k}, std::move(this_column));
   }
-  TENZIR_ASSERT(block.GetRowCount() == slice.rows(),
-                "wrong row count in for final block `{} != {}`",
-                block.GetRowCount(), slice.rows());
-  TENZIR_ASSERT(block.GetColumnCount() == slice.columns(),
-                "wrong column count in for final block `{} != {}`",
-                block.GetColumnCount(), slice.columns());
+  TENZIR_ASSERT(block.GetRowCount() == slice.rows() - dropcount,
+                "wrong row count for final block `{} != {} - {}`",
+                block.GetRowCount(), slice.rows(), dropcount);
   if (block.GetRowCount() > 0 and block.GetColumnCount() > 0) {
     client_.Insert(args_.table.inner, block);
   }
