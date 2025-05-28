@@ -1,6 +1,6 @@
 # count_if
 
-Counts the events or non-null grouped values.
+Counts the events or non-null grouped values matching a given predicate.
 
 ```tql
 count_if(xs:list, predicate:any => bool) -> int
@@ -17,7 +17,7 @@ The values to count.
 
 ### `predicate: any => bool`
 
-The values to count.
+The predicate to apply to each value to check whether it should be counted.
 
 ## Examples
 

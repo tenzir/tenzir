@@ -132,7 +132,22 @@ public:
                           std::optional<ast::lambda_expr> lambda)
     : expr_{std::move(expr)}, lambda_{std::move(lambda)} {
     if (lambda_) {
-      lambda_->right = lambda_->right_or(located{false, location::unknown});
+      // Aggregation functions do not evaluate their arguments for null values,
+      // so we patch the lambda expression from `left => right` to `left =>
+      // right if left != null else false`
+      lambda_->right = ast::binary_expr{
+        ast::binary_expr{
+          lambda_->right,
+          located{ast::binary_op::if_, location::unknown},
+          ast::binary_expr{
+            lambda_->left_as_field_path().inner(),
+            located{ast::binary_op::neq, location::unknown},
+            ast::constant{caf::none, location::unknown},
+          },
+        },
+        located{ast::binary_op::else_, location::unknown},
+        ast::constant{false, location::unknown},
+      };
     }
   }
 
@@ -230,7 +245,7 @@ public:
     auto lambda = ast::lambda_expr{};
     TRY(argument_parser2::function("count_if")
           .positional("x", expr, "any")
-          .positional("lambda", lambda, "lambda")
+          .positional("predicate", lambda, "any => bool")
           .parse(inv, ctx));
     return std::make_unique<count_instance>(std::move(expr), std::move(lambda));
   }

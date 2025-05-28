@@ -49,6 +49,9 @@ auto contains_extension_type(const data& x) -> bool {
 } // namespace
 
 auto data_to_series(const data& value, int64_t length) -> series {
+  if (is<caf::none_t>(value)) {
+    return series::null(null_type{}, length);
+  }
   TENZIR_ASSERT(length >= 0);
   if (contains_extension_type(value)) {
     // We currently cannot convert extension types to scalars.

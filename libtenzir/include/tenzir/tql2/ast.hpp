@@ -398,29 +398,6 @@ struct lambda_expr {
     }));
   }
 
-  auto right_or_null() const {
-    return ast::binary_expr{
-      right,
-      located{ast::binary_op::if_, location::unknown},
-      ast::binary_expr{
-        left_as_field_path().inner(),
-        located{ast::binary_op::neq, location::unknown},
-        ast::constant{caf::none, location::unknown},
-      },
-    };
-  }
-
-  // Modifies the lambda to avoid evaluating rows where the subject is null,
-  // turning the expression `y` into `y if x != null [else <fallback>]`.
-  template <class T>
-  auto right_or(located<T> fallback) const -> expression {
-    return ast::binary_expr{
-      right_or_null(),
-      located{ast::binary_op::else_, location::unknown},
-      ast::constant{fallback.inner, fallback.source},
-    };
-  }
-
   auto get_location() const -> location {
     return left.get_location().combine(right);
   }

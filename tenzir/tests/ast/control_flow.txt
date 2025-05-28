@@ -104,5 +104,107 @@
     args: [
       
     ]
+  },
+  match_stmt {
+    begin: 65..70,
+    expr: root_field {
+      id: `k` @ 71..72,
+      has_question_mark: false
+    },
+    arms: [
+      
+    ],
+    end: 74..75
+  },
+  match_stmt {
+    begin: 76..81,
+    expr: root_field {
+      id: `k` @ 82..83,
+      has_question_mark: false
+    },
+    arms: [
+      {
+        filter: [
+          constant string "foo" @ 86..91
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                `bar` @ 97..100
+              ],
+              ref: unresolved
+            },
+            args: [
+              
+            ]
+          }
+        ]
+      }
+    ],
+    end: 103..104
+  },
+  match_stmt {
+    begin: 105..110,
+    expr: root_field {
+      id: `k` @ 111..112,
+      has_question_mark: false
+    },
+    arms: [
+      {
+        filter: [
+          constant string "foo" @ 117..122
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                `bar` @ 132..135
+              ],
+              ref: unresolved
+            },
+            args: [
+              
+            ]
+          }
+        ]
+      },
+      {
+        filter: [
+          constant int64 42 @ 142..144
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                `foo` @ 154..157
+              ],
+              ref: unresolved
+            },
+            args: [
+              root_field {
+                id: `bar` @ 158..161,
+                has_question_mark: false
+              }
+            ]
+          },
+          invocation {
+            op: {
+              path: [
+                `qux` @ 166..169
+              ],
+              ref: unresolved
+            },
+            args: [
+              root_field {
+                id: `bar` @ 170..173,
+                has_question_mark: false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    end: 178..179
   }
 ]

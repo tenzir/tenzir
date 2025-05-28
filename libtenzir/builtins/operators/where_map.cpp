@@ -250,7 +250,8 @@ struct arguments {
   ast::expression field;
   ast::lambda_expr lambda;
 
-  static auto parse(const std::string& name,
+  static auto parse(const std::string& name, const std::string& lambda_name,
+                    const std::string& lambda_hint,
                     const function_plugin::invocation& inv, session ctx)
     -> failure_or<arguments> {
     auto dh = collecting_diagnostic_handler{};
@@ -258,7 +259,7 @@ struct arguments {
     auto args = arguments{};
     if (argument_parser2::function(name)
           .positional("list", args.field, "list")
-          .positional("lambda", args.lambda, "lambda")
+          .positional(lambda_name, args.lambda, lambda_hint)
           .parse(inv, sp.as_session())) {
       std::move(dh).forward_to(ctx);
       return args;
@@ -291,7 +292,8 @@ struct arguments {
 
 auto make_where_function(function_plugin::invocation inv, session ctx)
   -> failure_or<function_ptr> {
-  TRY(auto args, arguments::parse("where", inv, ctx));
+  TRY(auto args,
+      arguments::parse("where", "predicate", "any => bool", inv, ctx));
   return function_use::make(
     [args = std::move(args)](function_plugin::evaluator eval, session ctx) {
       return map_series(eval(args.field), [&](series field) -> multi_series {
@@ -307,6 +309,11 @@ auto make_where_function(function_plugin::invocation inv, session ctx)
             auto ids = null_bitmap{};
             auto all_true = true;
             auto all_false = true;
+            // TODO: Technically, this call to `evaluate` can cause warnings, as
+            // lists may contain bogus values in the value array where the list
+            // itself is `null`. This is very unlikely to happen in practice,
+            // and one proper fix for this would be passing in a null bitmap to
+            // the call to evaluate to indicate which rows not to evaluate.
             for (const auto& result :
                  tenzir::eval(args.lambda, list_values, ctx)) {
               match(
@@ -452,11 +459,7 @@ struct where_result_part {
 
 auto make_map_function(function_plugin::invocation inv, session ctx)
   -> failure_or<function_ptr> {
-  TRY(auto args, arguments::parse("map", inv, ctx));
-  // TODO: The implementation of `map` predates lambdas, so right now it handles
-  // nulls in the input list by itself. The implementation would probably be
-  // simpler if it used this:
-  // args.lambda.right = args.lambda.right_or_null();
+  TRY(auto args, arguments::parse("map", "function", "any => any", inv, ctx));
   return function_use::make([args = std::move(args)](
                               function_plugin::evaluator eval, session ctx) {
     return map_series(eval(args.field), [&](series field) -> multi_series {

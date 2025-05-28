@@ -779,60 +779,69 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
   });
 }
 
-auto eval_if(evaluator& self, const ast::binary_expr& x) -> multi_series {
+auto eval_if(evaluator& self, const ast::binary_expr& x,
+             const ast::expression& fallback
+             = ast::constant{caf::none, location::unknown}) -> multi_series {
   auto right_offset = int64_t{0};
-  return map_series(self.eval(x.right), [&](series right) -> multi_series {
-    const auto length = right.length();
-    const auto right_begin = right_offset;
-    const auto right_end = right_begin + length;
-    right_offset += length;
-    const auto typed_right = right.as<bool_type>();
-    if (not typed_right) {
-      diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
-        .primary(x.right)
-        .emit(self.ctx());
-      return series::null(null_type{}, length);
-    }
-    if (typed_right->array->true_count() == length) {
-      return self.slice(right_begin, right_end).eval(x.left);
-    }
-    if (typed_right->array->null_count() > 0) {
-      diagnostic::warning("expected `bool`, but got `null`")
-        .primary(x.right)
-        .emit(self.ctx());
-    }
-    if (typed_right->array->true_count() == 0) {
-      return series::null(null_type{}, length);
-    }
-    const auto get_right = [&](int64_t i) -> bool {
-      return typed_right->array->IsValid(i) and typed_right->array->GetView(i);
-    };
-    auto result = multi_series{};
-    auto range_offset = int64_t{0};
-    auto range_current = get_right(0);
-    const auto append_until = [&](int64_t end) {
-      if (not range_current) {
-        result.append(series::null(null_type{}, end - range_offset));
-        return;
+  return map_series(
+    self.eval(x.right), [&](const series& right) -> multi_series {
+      const auto length = right.length();
+      const auto right_begin = right_offset;
+      const auto right_end = right_begin + length;
+      right_offset += length;
+      const auto typed_right = right.as<bool_type>();
+      if (not typed_right) {
+        diagnostic::warning("expected `bool`, but got `{}`", right.type.kind())
+          .primary(x.right)
+          .emit(self.ctx());
+        return self.slice(right_begin, right_end).eval(fallback);
       }
-      result.append(
-        self.slice(right_begin + range_offset, right_begin + end).eval(x.left));
-    };
-    for (auto i = int64_t{1}; i < length; ++i) {
-      if (range_current == get_right(i)) {
-        continue;
+      if (typed_right->array->true_count() == length) {
+        return self.slice(right_begin, right_end).eval(x.left);
       }
-      append_until(i);
-      range_offset = i;
-      range_current = not range_current;
-    }
-    append_until(length);
-    TENZIR_ASSERT(result.length() == length);
-    return result;
-  });
+      if (typed_right->array->null_count() > 0) {
+        diagnostic::warning("expected `bool`, but got `null`")
+          .primary(x.right)
+          .emit(self.ctx());
+      }
+      if (typed_right->array->true_count() == 0) {
+        return self.slice(right_begin, right_end).eval(fallback);
+      }
+      const auto get_right = [&](int64_t i) -> bool {
+        return typed_right->array->IsValid(i)
+               and typed_right->array->GetView(i);
+      };
+      auto result = multi_series{};
+      auto range_offset = int64_t{0};
+      auto range_current = get_right(0);
+      const auto append_until = [&](int64_t end) {
+        result.append(self.slice(right_begin + range_offset, right_begin + end)
+                        .eval(range_current ? x.left : fallback));
+      };
+      for (auto i = int64_t{1}; i < length; ++i) {
+        if (range_current == get_right(i)) {
+          continue;
+        }
+        append_until(i);
+        range_offset = i;
+        range_current = not range_current;
+      }
+      append_until(length);
+      TENZIR_ASSERT(result.length() == length);
+      return result;
+    });
 }
 
 auto eval_else(evaluator& self, const ast::binary_expr& x) -> multi_series {
+  // Short-circuit the evaluation of `x if y else z`, avoiding the
+  // construction of null series. This is also important for correctness, as
+  // `null if true else 42` should return `null`, but without this would return
+  // `42`.
+  if (const auto* binop = try_as<ast::binary_expr>(x.left)) {
+    if (binop->op.inner == ast::binary_op::if_) {
+      return eval_if(self, *binop, x.right);
+    }
+  }
   auto left_offset = int64_t{0};
   return map_series(self.eval(x.left), [&](series left) -> multi_series {
     const auto length = left.length();
