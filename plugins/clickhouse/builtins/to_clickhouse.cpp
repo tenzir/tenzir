@@ -68,8 +68,10 @@ public:
       slice = resolve_enumerations(slice);
       try {
         (void)client->insert(slice);
-      } catch (const std::system_error& e) {
-        diagnostic::error("system error: {}", e.what())
+      } catch (const panic_exception& e) {
+        throw;
+      } catch (const std::exception& e) {
+        diagnostic::error("unexpected exception: {}", e.what())
           .primary(args_.operator_location)
           .note("while sending {} events (events {} to {})", slice.rows(),
                 running_count, running_count + slice.rows())
@@ -82,7 +84,7 @@ public:
       }
       running_count += slice.rows();
     }
-  } catch (::clickhouse::Error& e) {
+  } catch (const ::clickhouse::Error& e) {
     diagnostic::error("unexpected error: {}", e.what())
       .primary(args_.operator_location)
       .emit(ctrl.diagnostics());

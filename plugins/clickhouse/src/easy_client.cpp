@@ -249,11 +249,8 @@ auto easy_client::insert(const table_slice& slice) -> bool {
     block.AppendColumn(std::string{k}, std::move(this_column));
   }
   TENZIR_ASSERT(block.GetRowCount() == slice.rows(),
-                "wrong row count in for final block `{} != {}`",
+                "wrong row count for final block `{} != {}`",
                 block.GetRowCount(), slice.rows());
-  TENZIR_ASSERT(block.GetColumnCount() == slice.columns(),
-                "wrong column count in for final block `{} != {}`",
-                block.GetColumnCount(), slice.columns());
   if (block.GetRowCount() > 0 and block.GetColumnCount() > 0) {
     client_.Insert(args_.table.inner, block);
   }
