@@ -83,11 +83,17 @@ struct tcp_metrics {
 };
 
 class tcp_bridge {
+private:
 public:
   [[maybe_unused]] static constexpr auto name = "tcp-bridge";
 
   tcp_bridge(tcp_bridge_actor::pointer self, metric_handler metric_handler)
-    : self_{self} {
+    : self_{self},
+      max_retries_{5},
+      initial_retry_delay_ms_{1000},
+      retry_backoff_multiplier_{2.0},
+      max_retry_delay_ms_{30000},
+      current_retry_attempt_{0} {
     io_ctx_ = std::make_shared<boost::asio::io_context>();
     socket_.emplace(*io_ctx_);
     worker_ = std::thread([io_ctx = io_ctx_]() {
@@ -143,14 +149,38 @@ private:
                                          "request is pending",
                                          *self_));
     }
+
+    // Store connection parameters for retry attempts
+    connect_params_
+      = {tls,      cacert, certfile, keyfile, skip_peer_verification,
+         hostname, service};
+    current_retry_attempt_ = 0;
+    connection_rp_ = self_->make_response_promise<void>();
+
+    // Start the first connection attempt
+    attempt_connect();
+    return connection_rp_;
+  }
+
+private:
+  void attempt_connect() {
+    auto& params = *connect_params_;
+
     auto resolver = boost::asio::ip::tcp::resolver{*io_ctx_};
     auto ec = boost::system::error_code{};
-    auto endpoints = resolver.resolve(hostname, service, ec);
+    auto endpoints = resolver.resolve(params.hostname, params.service, ec);
     if (ec) {
-      return caf::make_error(ec::system_error,
-                             fmt::format("failed to resolve '{}': {}", hostname,
-                                         ec.message()));
+      handle_connection_failure(caf::make_error(
+        ec::system_error, fmt::format("failed to resolve '{}': {}",
+                                      params.hostname, ec.message())));
+      return;
     }
+
+    // Reset socket for retry attempts
+    if (current_retry_attempt_ > 0) {
+      socket_.emplace(*io_ctx_);
+    }
+
 #if TENZIR_LINUX
     const auto& endpoint = endpoints.begin()->endpoint();
     auto sfd
@@ -159,53 +189,59 @@ private:
     TENZIR_ASSERT(sfd >= 0);
     socket_->assign(endpoint.protocol(), sfd);
 #endif
-    if (tls) {
+    if (params.tls) {
       ssl_ctx_.emplace(boost::asio::ssl::context::tls_client);
       ssl_ctx_->set_default_verify_paths();
       auto ec = boost::system::error_code{};
-      if (skip_peer_verification) {
+      if (params.skip_peer_verification) {
         ssl_ctx_->set_verify_mode(boost::asio::ssl::verify_none);
       } else {
         ssl_ctx_->set_verify_mode(
           boost::asio::ssl::verify_peer
           | boost::asio::ssl::verify_fail_if_no_peer_cert);
-        if (not cacert.empty()) {
-          if (ssl_ctx_->load_verify_file(cacert, ec).failed()) {
-            return caf::make_error(ec::system_error,
-                                   fmt::format("failed to load cacert file "
-                                               "`{}`: {}",
-                                               cacert, ec.message()));
+        if (not params.cacert.empty()) {
+          if (ssl_ctx_->load_verify_file(params.cacert, ec).failed()) {
+            handle_connection_failure(caf::make_error(
+              ec::system_error, fmt::format("failed to load cacert file "
+                                            "`{}`: {}",
+                                            params.cacert, ec.message())));
+            return;
           }
         }
       }
-      if (not certfile.empty()) {
-        if (ssl_ctx_->use_certificate_chain_file(certfile, ec).failed()) {
-          return caf::make_error(ec::system_error,
-                                 fmt::format("failed to load certfile `{}`: {}",
-                                             certfile, ec.message()));
+      if (not params.certfile.empty()) {
+        if (ssl_ctx_->use_certificate_chain_file(params.certfile, ec).failed()) {
+          handle_connection_failure(caf::make_error(
+            ec::system_error, fmt::format("failed to load certfile `{}`: {}",
+                                          params.certfile, ec.message())));
+          return;
         }
       }
-      if (not keyfile.empty()) {
+      if (not params.keyfile.empty()) {
         if (ssl_ctx_
-              ->use_private_key_file(keyfile, boost::asio::ssl::context::pem,
-                                     ec)
+              ->use_private_key_file(params.keyfile,
+                                     boost::asio::ssl::context::pem, ec)
               .failed()) {
-          return caf::make_error(ec::system_error,
-                                 fmt::format("failed to load keyfile `{}`: {}",
-                                             keyfile, ec.message()));
+          handle_connection_failure(caf::make_error(
+            ec::system_error, fmt::format("failed to load keyfile `{}`: {}",
+                                          params.keyfile, ec.message())));
+          return;
         }
       }
       tls_socket_.emplace(*socket_, *ssl_ctx_);
       auto tls_handle = tls_socket_->native_handle();
-      if (SSL_set1_host(tls_handle, hostname.c_str()) != 1) {
-        return caf::make_error(ec::system_error,
-                               "failed to enable host name verification");
+      if (SSL_set1_host(tls_handle, params.hostname.c_str()) != 1) {
+        handle_connection_failure(caf::make_error(
+          ec::system_error, "failed to enable host name verification"));
+        return;
       }
-      if (not SSL_set_tlsext_host_name(tls_handle, hostname.c_str())) {
-        return caf::make_error(ec::system_error, "failed to set SNI");
+      if (not SSL_set_tlsext_host_name(tls_handle, params.hostname.c_str())) {
+        handle_connection_failure(
+          caf::make_error(ec::system_error, "failed to set SNI"));
+        return;
       }
     }
-    connection_rp_ = self_->make_response_promise<void>();
+
     boost::asio::async_connect(
       *socket_, endpoints,
       [this, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self_)](
@@ -213,15 +249,18 @@ private:
         const boost::asio::ip::tcp::endpoint& endpoint) {
 #if TENZIR_MACOS
         auto fcntl_error = std::optional<caf::error>{};
-        if (::fcntl(socket_->native_handle(), F_SETFD, FD_CLOEXEC) != 0) {
+        if (ec == boost::system::errc::success
+            && ::fcntl(socket_->native_handle(), F_SETFD, FD_CLOEXEC) != 0) {
           auto error = detail::describe_errno();
           fcntl_error = diagnostic::error("failed to configure TLS socket")
                           .hint("{}", error)
                           .to_error();
         }
 #endif
-        metrics_.port = endpoint.port();
-        metrics_.handle = fmt::to_string(socket_->native_handle());
+        if (ec == boost::system::errc::success) {
+          metrics_.port = endpoint.port();
+          metrics_.handle = fmt::to_string(socket_->native_handle());
+        }
         if (auto hdl = weak_hdl.lock()) {
           caf::anon_mail(caf::make_action([this, ec, endpoint
 #if TENZIR_MACOS
@@ -230,13 +269,15 @@ private:
 #endif
           ]() mutable {
             if (ec) {
-              return connection_rp_.deliver(caf::make_error(
+              handle_connection_failure(caf::make_error(
                 ec::system_error,
                 fmt::format("connection failed: {}", ec.message())));
+              return;
             }
 #if TENZIR_MACOS
             if (fcntl_error) {
-              return connection_rp_.deliver(*fcntl_error);
+              handle_connection_failure(*fcntl_error);
+              return;
             }
 #endif
             if (tls_socket_) {
@@ -244,22 +285,73 @@ private:
                 boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::client,
                 ec);
               if (ec) {
-                return connection_rp_.deliver(
+                handle_connection_failure(
                   caf::make_error(ec::system_error,
                                   fmt::format("TLS client handshake failed: {}",
                                               ERR_get_error())));
+                return;
               }
             }
-            TENZIR_VERBOSE("tcp connector connected to {}",
-                           endpoint.address().to_string());
-            return connection_rp_.deliver();
+            TENZIR_VERBOSE("tcp connector connected to {} after {} attempt(s)",
+                           endpoint.address().to_string(),
+                           current_retry_attempt_ + 1);
+            connection_rp_.deliver();
           }))
             .send(caf::actor_cast<caf::actor>(hdl));
         }
       });
-    return connection_rp_;
   }
 
+  void handle_connection_failure(const caf::error& error) {
+    current_retry_attempt_++;
+
+    if (current_retry_attempt_ > max_retries_) {
+      TENZIR_DEBUG("tcp connector failed to connect after {} attempts: {}",
+                   max_retries_, error);
+      connection_rp_.deliver(error);
+      return;
+    }
+
+    // Calculate delay with exponential backoff
+    auto delay_ms
+      = std::min(static_cast<uint64_t>(initial_retry_delay_ms_
+                                       * std::pow(retry_backoff_multiplier_,
+                                                  current_retry_attempt_ - 1)),
+                 max_retry_delay_ms_);
+
+    TENZIR_DEBUG("tcp connector connection attempt {} failed, retrying in "
+                 "{}ms: {}",
+                 current_retry_attempt_, delay_ms, error);
+
+    // Schedule retry after delay
+    retry_timer_.emplace(*io_ctx_);
+    retry_timer_->expires_after(std::chrono::milliseconds(delay_ms));
+    retry_timer_->async_wait(
+      [this, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self_)](
+        const boost::system::error_code& ec) {
+        if (ec) {
+          return; // Timer was cancelled
+        }
+        if (auto hdl = weak_hdl.lock()) {
+          caf::anon_mail(caf::make_action([this]() {
+            attempt_connect();
+          }))
+            .send(caf::actor_cast<caf::actor>(hdl));
+        }
+      });
+  }
+
+  struct connection_params {
+    bool tls;
+    std::string cacert;
+    std::string certfile;
+    std::string keyfile;
+    bool skip_peer_verification;
+    std::string hostname;
+    std::string service;
+  };
+
+public:
   auto accept(const std::string& hostname, const std::string& service,
               const std::string& certfile, const std::string& keyfile)
     -> caf::result<void> {
@@ -447,6 +539,14 @@ private:
 
   // Member variables
   tcp_bridge_actor::pointer self_ = {};
+  // Retry logic members
+  uint32_t max_retries_ = {};
+  uint64_t initial_retry_delay_ms_ = {};
+  double retry_backoff_multiplier_ = {};
+  uint64_t max_retry_delay_ms_ = {};
+  uint32_t current_retry_attempt_ = {};
+  std::optional<connection_params> connect_params_ = {};
+  std::optional<boost::asio::steady_timer> retry_timer_ = {};
   std::shared_ptr<boost::asio::io_context> io_ctx_ = {};
   std::thread worker_ = {};
   std::optional<boost::asio::ip::tcp::socket> socket_ = {};
