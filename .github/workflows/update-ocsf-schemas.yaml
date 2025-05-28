@@ -33,21 +33,11 @@ jobs:
         run: |
           python scripts/ocsf-schemas.py
 
-      - name: Check for changes
-        id: changes
-        run: |
-          if git diff --quiet; then
-            echo "changes=false" >> $GITHUB_OUTPUT
-          else
-            echo "changes=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create Pull Request
-        if: steps.changes.outputs.changes == 'true'
-        uses: peter-evans/create-pull-request@v7
+      - name: Create or Update Pull Request
+        uses: gr2m/create-or-update-pull-request-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: Update OCSF schemas
           title: Update OCSF schemas
           body: |
             Automated update of OCSF schemas from upstream.
@@ -55,6 +45,6 @@ jobs:
             This PR was automatically created by the update-ocsf-schemas workflow.
 
             Triggered by: @${{ github.actor }}
-          labels: maintenance
           branch: topic/update-ocsf-schemas
-          delete-branch: true
+          commit-message: Update OCSF schemas
+          labels: maintenance
