@@ -71,10 +71,10 @@ struct tcp_metrics {
     bytes_read = 0;
     bytes_written = 0;
   }
-  class metric_handler metric_handler = {};
+  class metric_handler metric_handler;
 
   uint16_t port = {};
-  std::string handle = {};
+  std::string handle;
 
   uint64_t reads = {};
   uint64_t writes = {};
@@ -83,7 +83,6 @@ struct tcp_metrics {
 };
 
 class tcp_bridge {
-private:
 public:
   [[maybe_unused]] static constexpr auto name = "tcp-bridge";
 
@@ -92,8 +91,7 @@ public:
       max_retries_{5},
       initial_retry_delay_ms_{1000},
       retry_backoff_multiplier_{2.0},
-      max_retry_delay_ms_{30000},
-      current_retry_attempt_{0} {
+      max_retry_delay_ms_{30000} {
     io_ctx_ = std::make_shared<boost::asio::io_context>();
     socket_.emplace(*io_ctx_);
     worker_ = std::thread([io_ctx = io_ctx_]() {
@@ -155,6 +153,7 @@ private:
       = {tls,      cacert, certfile, keyfile, skip_peer_verification,
          hostname, service};
     current_retry_attempt_ = 0;
+    is_connected_ = false;
     connection_rp_ = self_->make_response_promise<void>();
 
     // Start the first connection attempt
@@ -162,7 +161,6 @@ private:
     return connection_rp_;
   }
 
-private:
   void attempt_connect() {
     auto& params = *connect_params_;
 
@@ -229,7 +227,7 @@ private:
         }
       }
       tls_socket_.emplace(*socket_, *ssl_ctx_);
-      auto tls_handle = tls_socket_->native_handle();
+      auto* tls_handle = tls_socket_->native_handle();
       if (SSL_set1_host(tls_handle, params.hostname.c_str()) != 1) {
         handle_connection_failure(caf::make_error(
           ec::system_error, "failed to enable host name verification"));
@@ -295,7 +293,9 @@ private:
             TENZIR_VERBOSE("tcp connector connected to {} after {} attempt(s)",
                            endpoint.address().to_string(),
                            current_retry_attempt_ + 1);
+            is_connected_ = true;
             connection_rp_.deliver();
+            process_pending_operations();
           }))
             .send(caf::actor_cast<caf::actor>(hdl));
         }
@@ -308,6 +308,20 @@ private:
     if (current_retry_attempt_ > max_retries_) {
       TENZIR_DEBUG("tcp connector failed to connect after {} attempts: {}",
                    max_retries_, error);
+
+      // Deliver error to all pending promises
+      for (auto& promise : pending_read_promises_) {
+        promise.deliver(
+          caf::make_error(ec::system_error, "connection failed after retries"));
+      }
+      pending_read_promises_.clear();
+
+      for (auto& [promise, chunk] : pending_write_promises_) {
+        promise.deliver(
+          caf::make_error(ec::system_error, "connection failed after retries"));
+      }
+      pending_write_promises_.clear();
+
       connection_rp_.deliver(error);
       return;
     }
@@ -319,9 +333,9 @@ private:
                                                   current_retry_attempt_ - 1)),
                  max_retry_delay_ms_);
 
-    TENZIR_DEBUG("tcp connector connection attempt {} failed, retrying in "
-                 "{}ms: {}",
-                 current_retry_attempt_, delay_ms, error);
+    TENZIR_INFO("tcp connector connection attempt {} failed, retrying in "
+                "{}ms: {}",
+                current_retry_attempt_, delay_ms, error);
 
     // Schedule retry after delay
     retry_timer_.emplace(*io_ctx_);
@@ -339,6 +353,71 @@ private:
             .send(caf::actor_cast<caf::actor>(hdl));
         }
       });
+  }
+
+  // Check if an error indicates a connection was lost
+  bool is_disconnection_error(const boost::system::error_code& ec) const {
+    return ec == boost::asio::error::connection_reset
+           || ec == boost::asio::error::broken_pipe
+           || ec == boost::asio::error::connection_aborted
+           || ec == boost::asio::error::eof
+           || ec == boost::asio::error::network_down
+           || ec == boost::asio::error::network_unreachable
+           || ec == boost::asio::error::host_unreachable
+           || ec == boost::asio::error::connection_refused
+           || ec == boost::asio::error::timed_out
+           || ec == boost::system::errc::broken_pipe
+           || ec == boost::system::errc::connection_reset
+           || ec == boost::system::errc::connection_aborted;
+  }
+
+  // Handle disconnection by triggering reconnection
+  void handle_disconnection() {
+    if (! connect_params_ || connection_rp_.pending()) {
+      return; // Already reconnecting or no connection params stored
+    }
+
+    is_connected_ = false;
+    current_retry_attempt_ = 0;
+
+    TENZIR_DEBUG("tcp connector initiating reconnection due to disconnection");
+
+    // Close existing sockets
+    if (tls_socket_) {
+      boost::system::error_code ec;
+      tls_socket_->lowest_layer().close(ec);
+      tls_socket_.reset();
+    }
+    if (socket_) {
+      boost::system::error_code ec;
+      socket_->close(ec);
+    }
+    ssl_ctx_.reset();
+
+    // Start reconnection
+    connection_rp_ = self_->make_response_promise<void>();
+    attempt_connect();
+  }
+
+  // Process any pending promises after successful reconnection
+  void process_pending_operations() {
+    // Restart pending read operations
+    for (auto& promise : pending_read_promises_) {
+      promise.delegate(static_cast<tcp_bridge_actor>(self_), atom::read_v,
+                       uint64_t{65536});
+    }
+    pending_read_promises_.clear();
+
+    // Restart pending write operations
+    for (auto& [promise, chunk] : pending_write_promises_) {
+      auto bytes = as_bytes(chunk);
+      auto sv = std::string_view(reinterpret_cast<const char*>(bytes.data()),
+                                 bytes.size());
+      TENZIR_INFO("processing pending write {}", sv);
+      promise.delegate(static_cast<tcp_bridge_actor>(self_), atom::write_v,
+                       std::move(chunk));
+    }
+    pending_write_promises_.clear();
   }
 
   struct connection_params {
@@ -457,6 +536,12 @@ public:
                                          "request is pending",
                                          *self_));
     }
+    if (! is_connected_ && connect_params_) {
+      // Hold the promise until reconnection completes
+      read_rp_ = self_->make_response_promise<chunk_ptr>();
+      pending_read_promises_.push_back(read_rp_);
+      return read_rp_;
+    }
     read_buffer_.resize(buffer_size);
     read_rp_ = self_->make_response_promise<chunk_ptr>();
     auto on_read = [this, weak_hdl
@@ -465,6 +550,13 @@ public:
       if (auto hdl = weak_hdl.lock()) {
         caf::anon_mail(caf::make_action([this, ec, length] {
           if (ec) {
+            if (is_disconnection_error(ec) && connect_params_) {
+              TENZIR_DEBUG("tcp connector read detected disconnection: {}",
+                           ec.message());
+              pending_read_promises_.push_back(read_rp_);
+              handle_disconnection();
+              return;
+            }
             return read_rp_.deliver(
               caf::make_error(ec::system_error, fmt::format("failed to read "
                                                             "from TCP socket: "
@@ -502,13 +594,35 @@ public:
                                          "request is pending",
                                          *self_));
     }
+
+    if (! is_connected_ && connect_params_) {
+      // Hold the promise until reconnection completes
+      write_rp_ = self_->make_response_promise<void>();
+      pending_write_promises_.emplace_back(write_rp_, chunk);
+      return write_rp_;
+    }
+
     write_rp_ = self_->make_response_promise<void>();
     auto on_write = [this, chunk,
                      weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self_)](
                       boost::system::error_code ec, size_t length) {
       if (auto hdl = weak_hdl.lock()) {
         caf::anon_mail(caf::make_action([this, chunk, ec, length] {
+          auto bytes = as_bytes(chunk);
+          auto sv = std::string_view(
+            reinterpret_cast<const char*>(bytes.data()), bytes.size());
+          TENZIR_INFO("callback {}", sv);
           if (ec) {
+            if (is_disconnection_error(ec) && connect_params_) {
+              auto bytes = as_bytes(chunk);
+              auto sv = std::string_view(
+                reinterpret_cast<const char*>(bytes.data()), bytes.size());
+              TENZIR_INFO("tcp connector write detected disconnection: {}",
+                          ec.message());
+              pending_write_promises_.emplace_back(write_rp_, chunk);
+              handle_disconnection();
+              return;
+            }
             write_rp_.deliver(caf::make_error(
               ec::system_error,
               fmt::format("failed to write to TCP socket: {}", ec.message())));
@@ -547,6 +661,11 @@ public:
   uint32_t current_retry_attempt_ = {};
   std::optional<connection_params> connect_params_ = {};
   std::optional<boost::asio::steady_timer> retry_timer_ = {};
+  bool is_connected_ = {};
+  std::vector<caf::typed_response_promise<chunk_ptr>> pending_read_promises_
+    = {};
+  std::vector<std::pair<caf::typed_response_promise<void>, chunk_ptr>>
+    pending_write_promises_ = {};
   std::shared_ptr<boost::asio::io_context> io_ctx_ = {};
   std::thread worker_ = {};
   std::optional<boost::asio::ip::tcp::socket> socket_ = {};
