@@ -25,9 +25,6 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
-#include <filesystem>
-#include <regex>
-#include <system_error>
 
 using namespace std::chrono_literals;
 
@@ -46,8 +43,6 @@ struct tcp_bridge_actor_traits {
     auto(atom::accept, std::string hostname, std::string port,
          std::string tls_certfile, std::string tls_keyfile)
       ->caf::result<void>,
-    // Read up to the number of bytes from the socket.
-    auto(atom::read, uint64_t buffer_size)->caf::result<chunk_ptr>,
     // Write a chunk to the socket.
     auto(atom::write, chunk_ptr chunk)->caf::result<void>>;
 };
@@ -127,9 +122,6 @@ public:
              const std::string& tls_keyfile) -> caf::result<void> {
         return accept(hostname, service, tls_certfile, tls_keyfile);
       },
-      [this](atom::read, uint64_t buffer_size) -> caf::result<chunk_ptr> {
-        return read(buffer_size);
-      },
       [this](atom::write, chunk_ptr chunk) -> caf::result<void> {
         return write(std::move(chunk));
       },
@@ -149,9 +141,13 @@ private:
     }
 
     // Store connection parameters for retry attempts
-    connect_params_
-      = {tls,      cacert, certfile, keyfile, skip_peer_verification,
-         hostname, service};
+    connect_params_ = {.tls = tls,
+                       .cacert = cacert,
+                       .certfile = certfile,
+                       .keyfile = keyfile,
+                       .skip_peer_verification = skip_peer_verification,
+                       .hostname = hostname,
+                       .service = service};
     current_retry_attempt_ = 0;
     is_connected_ = false;
     connection_rp_ = self_->make_response_promise<void>();
@@ -309,13 +305,6 @@ private:
       TENZIR_DEBUG("tcp connector failed to connect after {} attempts: {}",
                    max_retries_, error);
 
-      // Deliver error to all pending promises
-      for (auto& promise : pending_read_promises_) {
-        promise.deliver(
-          caf::make_error(ec::system_error, "connection failed after retries"));
-      }
-      pending_read_promises_.clear();
-
       for (auto& [promise, chunk] : pending_write_promises_) {
         promise.deliver(
           caf::make_error(ec::system_error, "connection failed after retries"));
@@ -401,13 +390,6 @@ private:
 
   // Process any pending promises after successful reconnection
   void process_pending_operations() {
-    // Restart pending read operations
-    for (auto& promise : pending_read_promises_) {
-      promise.delegate(static_cast<tcp_bridge_actor>(self_), atom::read_v,
-                       uint64_t{65536});
-    }
-    pending_read_promises_.clear();
-
     // Restart pending write operations
     for (auto& [promise, chunk] : pending_write_promises_) {
       auto bytes = as_bytes(chunk);
@@ -523,64 +505,6 @@ public:
     return connection_rp_;
   }
 
-  auto read(uint64_t buffer_size) -> caf::result<chunk_ptr> {
-    if (connection_rp_.pending()) {
-      return caf::make_error(ec::logic_error,
-                             fmt::format("{} cannot read while a connect "
-                                         "request is pending",
-                                         *self_));
-    }
-    if (read_rp_.pending()) {
-      return caf::make_error(ec::logic_error,
-                             fmt::format("{} cannot read while a read "
-                                         "request is pending",
-                                         *self_));
-    }
-    if (! is_connected_ && connect_params_) {
-      // Hold the promise until reconnection completes
-      read_rp_ = self_->make_response_promise<chunk_ptr>();
-      pending_read_promises_.push_back(read_rp_);
-      return read_rp_;
-    }
-    read_buffer_.resize(buffer_size);
-    read_rp_ = self_->make_response_promise<chunk_ptr>();
-    auto on_read = [this, weak_hdl
-                          = caf::actor_cast<caf::weak_actor_ptr>(self_)](
-                     boost::system::error_code ec, size_t length) {
-      if (auto hdl = weak_hdl.lock()) {
-        caf::anon_mail(caf::make_action([this, ec, length] {
-          if (ec) {
-            if (is_disconnection_error(ec) && connect_params_) {
-              TENZIR_DEBUG("tcp connector read detected disconnection: {}",
-                           ec.message());
-              pending_read_promises_.push_back(read_rp_);
-              handle_disconnection();
-              return;
-            }
-            return read_rp_.deliver(
-              caf::make_error(ec::system_error, fmt::format("failed to read "
-                                                            "from TCP socket: "
-                                                            "{}",
-                                                            ec.message())));
-          }
-          metrics_.reads++;
-          metrics_.bytes_read += length;
-          read_buffer_.resize(length);
-          read_buffer_.shrink_to_fit();
-          return read_rp_.deliver(chunk::make(std::exchange(read_buffer_, {})));
-        }))
-          .send(caf::actor_cast<caf::actor>(hdl));
-      }
-    };
-    auto asio_buffer = boost::asio::buffer(read_buffer_, buffer_size);
-    if (tls_socket_) {
-      tls_socket_->async_read_some(asio_buffer, on_read);
-    } else {
-      socket_->async_read_some(asio_buffer, on_read);
-    }
-    return read_rp_;
-  }
-
   auto write(chunk_ptr chunk) -> caf::result<void> {
     if (connection_rp_.pending()) {
       return caf::make_error(ec::logic_error,
@@ -662,8 +586,6 @@ public:
   std::optional<connection_params> connect_params_ = {};
   std::optional<boost::asio::steady_timer> retry_timer_ = {};
   bool is_connected_ = {};
-  std::vector<caf::typed_response_promise<chunk_ptr>> pending_read_promises_
-    = {};
   std::vector<std::pair<caf::typed_response_promise<void>, chunk_ptr>>
     pending_write_promises_ = {};
   std::shared_ptr<boost::asio::io_context> io_ctx_ = {};
@@ -674,9 +596,7 @@ public:
     tls_socket_ = {};
   std::optional<boost::asio::ip::tcp::acceptor> acceptor_ = {};
   caf::typed_response_promise<void> connection_rp_ = {};
-  caf::typed_response_promise<chunk_ptr> read_rp_ = {};
   caf::typed_response_promise<void> write_rp_ = {};
-  std::vector<char> read_buffer_ = {};
   tcp_metrics metrics_ = {};
 };
 
@@ -693,381 +613,14 @@ struct connector_args : ssl_options {
   }
 };
 
-struct loader_args : connector_args {
-  bool connect = false;
-
-  friend auto inspect(auto& f, loader_args& x) -> bool {
-    return f.object(x)
-      .pretty_name("tenzir.plugins.tcp.loader_args")
-      .fields(f.field("connector_args", static_cast<connector_args&>(x)),
-              f.field("connect", x.connect));
-  }
-};
-
 struct saver_args : connector_args {
   bool listen = false;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
-      .pretty_name("tenzir.plugins.tcp.loader_args")
+      .pretty_name("tenzir.plugins.tcp.saver_args")
       .fields(f.field("connector_args", static_cast<connector_args&>(x)),
               f.field("listen", x.listen));
-  }
-};
-
-class loader final : public plugin_loader {
-public:
-  loader() = default;
-
-  explicit loader(loader_args args) : args_{std::move(args)} {
-  }
-
-  auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> override {
-    if (args_.get_tls().inner and not args_.connect) {
-      // Verify that the files actually exist and are readable.
-      // Ideally we'd also like to verify that the files contain valid
-      // key material, but there's no straightforward API for this in OpenSSL.
-      TENZIR_ASSERT(args_.keyfile);
-      TENZIR_ASSERT(args_.certfile);
-      auto* keyfile = std::fopen(args_.keyfile->inner.c_str(), "r");
-      if (keyfile) {
-        std::fclose(keyfile);
-      } else {
-        auto error = detail::describe_errno();
-        diagnostic::error("failed to open TLS keyfile")
-          .hint("{}", error)
-          .emit(ctrl.diagnostics());
-        return {};
-      }
-      auto* certfile = std::fopen(args_.certfile->inner.c_str(), "r");
-      if (certfile) {
-        std::fclose(certfile);
-      } else {
-        auto error = detail::describe_errno();
-        diagnostic::error("failed to open TLS certfile")
-          .hint("{}", error)
-          .emit(ctrl.diagnostics());
-        return {};
-      }
-    }
-    auto make
-      = [](loader_args args,
-           operator_control_plane& ctrl) mutable -> generator<chunk_ptr> {
-      auto tcp_bridge
-        = ctrl.self().spawn(caf::actor_from_state<class tcp_bridge>,
-                            ctrl.metrics({
-                              "tenzir.metrics.tcp",
-                              record_type{
-                                {"handle", string_type{}},
-                                {"reads", uint64_type{}},
-                                {"writes", uint64_type{}},
-                                {"bytes_read", uint64_type{}},
-                                {"bytes_written", uint64_type{}},
-                              },
-                            }));
-      do {
-        if (args.connect) {
-          auto cacert = args.cacert.has_value()
-                          ? args.cacert->inner
-                          : ssl_options::query_cacert_fallback(ctrl);
-          auto certfile
-            = args.certfile.has_value() ? args.certfile->inner : std::string{};
-          auto keyfile
-            = args.keyfile.has_value() ? args.keyfile->inner : std::string{};
-          ctrl.self()
-            .mail(atom::connect_v, args.get_tls().inner, cacert, certfile,
-                  keyfile, false, args.hostname, args.port)
-            .request(tcp_bridge, caf::infinite)
-            .await(
-              [&]() {
-                // nop
-              },
-              [&](const caf::error& err) {
-                diagnostic::error("tcp loader failed to connect")
-                  .note("with error: {}", err)
-                  .note("while connecting to {}:{}", args.hostname, args.port)
-                  .emit(ctrl.diagnostics());
-              });
-        } else {
-          ctrl.self()
-            .mail(
-              atom::accept_v, args.hostname, args.port,
-              args.certfile.value_or(located{std::string{}, location::unknown})
-                .inner,
-              args.keyfile.value_or(located{std::string{}, location::unknown})
-                .inner)
-            .request(tcp_bridge, caf::infinite)
-            .await(
-              [&]() {
-                // nop
-              },
-              [&](const caf::error& err) {
-                diagnostic::error("failed to listen: {}", err)
-                  .emit(ctrl.diagnostics());
-              });
-        }
-        co_yield {};
-        // Read and forward incoming data.
-        auto result = chunk_ptr{};
-        auto running = true;
-        while (running) {
-          constexpr auto buffer_size = uint64_t{65'536};
-          ctrl.self()
-            .mail(atom::read_v, buffer_size)
-            .request(tcp_bridge, caf::infinite)
-            .await(
-              [&](chunk_ptr& chunk) {
-                result = std::move(chunk);
-              },
-              [&](const caf::error& err) {
-                TENZIR_DEBUG("tcp connector encountered error: {}", err);
-                running = false;
-              });
-          co_yield std::exchange(result, {});
-        }
-      } while (not args.connect and not args.listen_once);
-    };
-    return make(args_, ctrl);
-  }
-
-  auto name() const -> std::string override {
-    return "tcp";
-  }
-
-  auto default_parser() const -> std::string override {
-    return "json";
-  }
-
-  friend auto inspect(auto& f, loader& x) -> bool {
-    return f.object(x)
-      .pretty_name("tenzir.plugins.tcp.loader")
-      .fields(f.field("args", x.args_));
-  }
-
-private:
-  loader_args args_;
-};
-
-class saver final : public plugin_saver {
-public:
-  saver() = default;
-
-  explicit saver(saver_args args) : args_{std::move(args)} {
-  }
-
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
-    -> caf::expected<std::function<void(chunk_ptr)>> override {
-    if (args_.get_tls().inner and args_.listen) {
-      // Verify that the files actually exist and are readable.
-      // Ideally we'd also like to verify that the files contain valid
-      // key material, but there's no straightforward API for this in OpenSSL.
-      TENZIR_ASSERT(args_.keyfile);
-      TENZIR_ASSERT(args_.certfile);
-      auto* keyfile = std::fopen(args_.keyfile->inner.c_str(), "r");
-      if (keyfile) {
-        std::fclose(keyfile);
-      } else {
-        auto error = detail::describe_errno();
-        diagnostic::error("failed to open TLS keyfile")
-          .hint("{}", error)
-          .emit(ctrl.diagnostics());
-        return caf::make_error(ec::invalid_argument);
-      }
-      auto* certfile = std::fopen(args_.certfile->inner.c_str(), "r");
-      if (certfile) {
-        std::fclose(certfile);
-      } else {
-        auto error = detail::describe_errno();
-        diagnostic::error("failed to open TLS certfile")
-          .hint("{}", error)
-          .emit(ctrl.diagnostics());
-        return caf::make_error(ec::invalid_argument);
-      }
-    }
-    auto tcp_bridge = ctrl.self().spawn(caf::actor_from_state<class tcp_bridge>,
-                                        ctrl.metrics({
-                                          "tenzir.metrics.tcp",
-                                          record_type{
-                                            {"handle", string_type{}},
-                                            {"reads", uint64_type{}},
-                                            {"writes", uint64_type{}},
-                                            {"bytes_read", uint64_type{}},
-                                            {"bytes_written", uint64_type{}},
-                                          },
-                                        }));
-
-    if (not args_.listen) {
-      auto cacert = args_.cacert.has_value()
-                      ? args_.cacert->inner
-                      : ssl_options::query_cacert_fallback(ctrl);
-      auto certfile
-        = args_.certfile.has_value() ? args_.certfile->inner : std::string{};
-      auto keyfile
-        = args_.keyfile.has_value() ? args_.keyfile->inner : std::string{};
-      ctrl.self()
-        .mail(atom::connect_v, args_.get_tls().inner, cacert, certfile, keyfile,
-              args_.skip_peer_verification.has_value(), args_.hostname,
-              args_.port)
-        .request(tcp_bridge, caf::infinite)
-        .await(
-          [&]() {
-            // nop
-          },
-          [&](const caf::error& err) {
-            diagnostic::error("tcp saver failed to connect")
-              .note("with error: {}", err)
-              .note("while connecting to {}:{}", args_.hostname, args_.port)
-              .emit(ctrl.diagnostics());
-          });
-    } else {
-      ctrl.self()
-        .mail(atom::accept_v, args_.hostname, args_.port,
-              args_.certfile.value_or(located{std::string{}, location::unknown})
-                .inner,
-              args_.keyfile.value_or(located{std::string{}, location::unknown})
-                .inner)
-        .request(tcp_bridge, caf::infinite)
-        .await(
-          [&]() {
-            // nop
-          },
-          [&](const caf::error& err) {
-            diagnostic::error("failed to listen: {}", err)
-              .emit(ctrl.diagnostics());
-          });
-    }
-    return [&ctrl, tcp_bridge](chunk_ptr chunk) mutable {
-      if (not chunk || chunk->size() == 0) {
-        return;
-      }
-      ctrl.self()
-        .mail(atom::write_v, std::move(chunk))
-        .request(tcp_bridge, caf::infinite)
-        .await(
-          [&]() {
-            // nop
-          },
-          [&](const caf::error& err) {
-            diagnostic::error("tcp connector encountered error: {}", err)
-              .emit(ctrl.diagnostics());
-          });
-    };
-  }
-
-  auto name() const -> std::string override {
-    return "tcp";
-  }
-
-  auto default_printer() const -> std::string override {
-    return "json";
-  }
-
-  auto is_joining() const -> bool override {
-    return true;
-  }
-
-  friend auto inspect(auto& f, saver& x) -> bool {
-    return f.object(x).pretty_name("saver").fields(f.field("args", x.args_));
-  }
-
-private:
-  saver_args args_;
-};
-
-class plugin final : public virtual loader_plugin<loader>, saver_plugin<saver> {
-  /// Auto-completes a scheme-less URI with the scheme from this plugin.
-  static auto remove_scheme(std::string& uri) {
-    if (uri.starts_with("tcp://")) {
-      uri = std::move(uri).substr(6);
-    }
-  }
-
-public:
-  auto parse_loader(parser_interface& p) const
-    -> std::unique_ptr<plugin_loader> override {
-    auto args = parse_args<loader_args>(p);
-    return std::make_unique<loader>(std::move(args));
-  }
-
-  auto parse_saver(parser_interface& p) const
-    -> std::unique_ptr<plugin_saver> override {
-    auto args = parse_args<saver_args>(p);
-    return std::make_unique<saver>(std::move(args));
-  }
-
-  template <class Args>
-  auto parse_args(parser_interface& p) const -> Args {
-    auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
-    auto args = Args{};
-    auto tls = std::optional<location>{};
-    auto uri = located<std::string>{};
-    parser.add(uri, "<endpoint>");
-    if constexpr (std::is_same_v<Args, loader_args>) {
-      parser.add("-c,--connect", args.connect);
-    } else if constexpr (std::is_same_v<Args, saver_args>) {
-      parser.add("-l,--listen", args.listen);
-    }
-    parser.add("-o,--listen-once", args.listen_once);
-    parser.add("--tls", tls);
-    parser.add("--certfile", args.certfile, "TLS certificate");
-    parser.add("--keyfile", args.keyfile, "TLS private key");
-    parser.parse(p);
-    if (tls) {
-      args.tls = located{true, *tls};
-    }
-    remove_scheme(uri.inner);
-    auto split = detail::split(uri.inner, ":", 1);
-    if (split.size() != 2) {
-      diagnostic::error("malformed endpoint")
-        .primary(uri.source)
-        .hint("format must be 'tcp://address:port'")
-        .throw_();
-    } else {
-      args.hostname = std::string{split[0]};
-      args.port = std::string{split[1]};
-    }
-    if (not args.get_tls().inner) {
-      if (args.certfile and not args.certfile->inner.empty()) {
-        diagnostic::error("certificate provided, but TLS disabled")
-          .hint("add --tls to use an encrypted connection")
-          .throw_();
-      }
-      if (args.keyfile and not args.keyfile->inner.empty()) {
-        diagnostic::error("keyfile provided, but TLS disabled")
-          .hint("add --tls to use an encrypted connection")
-          .throw_();
-      }
-    }
-    if constexpr (std::is_same_v<Args, loader_args>) {
-      if (args.listen_once and args.connect) {
-        diagnostic::error("conflicting options `--connect` and `--listen-once`")
-          .throw_();
-      }
-      if (not args.connect and args.get_tls().inner) {
-        if (not args.certfile or args.certfile->inner.empty()) {
-          diagnostic::error("invalid TLS settings")
-            .hint("missing --certfile")
-            .throw_();
-        }
-        if (not args.keyfile or args.keyfile->inner.empty()) {
-          diagnostic::error("invalid TLS settings")
-            .hint("missing --keyfile")
-            .throw_();
-        }
-      }
-    }
-    if constexpr (std::is_same_v<Args, saver_args>) {
-      if (args.listen_once) {
-        args.listen = true;
-      }
-    }
-    return args;
-  }
-
-  auto name() const -> std::string override {
-    return "tcp";
   }
 };
 
@@ -1247,5 +800,4 @@ class save_tcp final : public virtual operator_plugin2<save_tcp_operator> {
 
 } // namespace tenzir::plugins::tcp
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::tcp::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::tcp::save_tcp)
