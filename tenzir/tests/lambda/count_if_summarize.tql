@@ -1,0 +1,12 @@
+from (
+  {x: 1},
+  {x: 2},
+  {x: "3"},
+  {x: 4},
+  {x: "5"},
+  {x: null},
+)
+summarize (
+  num_strings = x.count_if(x => type_of(x).kind == "string"),
+  num_ints = x.count_if(x => type_of(x).kind == "int64"),
+)

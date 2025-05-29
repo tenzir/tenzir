@@ -8,10 +8,10 @@
   ],
 }
 warning: grok parser: pattern could not be matched
- --> exec/functions/list_map/null_promotion.tql:4:32
+ --> exec/functions/list_map/null_promotion.tql:6:33
   |
-4 | l = l.map( str, str.parse_grok($pattern) )
-  |                                ~~~~~~~~ 
+6 | l = l.map(str => str.parse_grok($pattern))
+  |                                 ~~~~~~~~ 
   |
   = hint: input: `hello`
   = hint: pattern: `(?<w>\b\w+\b) (?<n>(?:(?<BASE10NUM>(?<![0-9.+-])(?>[+-]?(?:(?:[0-9]+(?:\.[0-9]+)?)|(?:\.[0-9]+))))))`

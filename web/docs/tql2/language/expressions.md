@@ -381,6 +381,16 @@ an operator is a pipeline expression, omit the preceding comma, e.g.,
 `every 10s { head 5 }`. Braces can contain multiple statements. Separate
 statements using newlines or other delimiters.
 
+## Lambda Expression
+
+Some functions and operators execute expressions on values other than their
+input. For example, the `map` function evaluates an expression on each element
+of a list. Such functions or operators accept a lambda expression of the form
+`arg => expr`, where the input is explicitly named.
+
+For example `[1, 2, 3].map(x => x * 2)` returns `[2, 4, 6]`, referring to each
+element of the list as `x`.
+
 ## Let Substitution
 
 Reference a previously defined `let` binding in an expression using the same

@@ -174,4 +174,32 @@ auto try_const_eval(const ast::expression& expr, session ctx)
   });
 }
 
+auto eval(const ast::lambda_expr& lambda, const multi_series& input,
+          diagnostic_handler& dh) -> multi_series {
+  auto result = multi_series{};
+  for (const auto& part : input) {
+    if (part.length() == 0) {
+      continue;
+    }
+    // TODO: This is rather expensive; instead of evaluating the lambda on a
+    // newly created table slice, we should much rather support them in the
+    // evaluator directly.
+    auto schema = type{
+      "lambda",
+      record_type{
+        {lambda.left.name, part.type},
+      },
+    };
+    auto arrow_schema = arrow::schema({{lambda.left.name, part.array->type()}},
+                                      schema.make_arrow_metadata());
+    auto slice = table_slice{
+      arrow::RecordBatch::Make(std::move(arrow_schema), input.length(),
+                               arrow::ArrayVector{part.array}),
+      std::move(schema),
+    };
+    result.append(eval(lambda.right, slice, dh));
+  }
+  return result;
+}
+
 } // namespace tenzir

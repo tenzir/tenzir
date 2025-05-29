@@ -336,10 +336,6 @@ namespace {
 struct move_resolver final : ast::visitor<move_resolver> {
   std::vector<ast::field_path> out;
 
-  auto visit(ast::assignment& x) -> void {
-    enter(x);
-  }
-
   auto visit(ast::expression& x) -> void {
     if (auto* unary = try_as<ast::unary_expr>(x)) {
       if (unary->op.inner == ast::unary_op::move) {
@@ -352,21 +348,9 @@ struct move_resolver final : ast::visitor<move_resolver> {
     enter(x);
   }
 
-  auto visit(ast::function_call& x) -> void {
-    // TODO: The `map` and `where` functions abuse the expressions they take as
-    // arguments as a poor-mans lambda expression. We only recurse on their
-    // first argument when we encounter them here, but that's at best a stopgap.
-    // Ideally, there'd be proper lambda support in the language itself.
-    if (x.fn.path.size() == 1) {
-      const auto& name = x.fn.path.front().name;
-      if (name == "map" or name == "where") {
-        if (not x.args.empty()) {
-          enter(x.args.front());
-        }
-        return;
-      }
-    }
-    enter(x);
+  auto visit(ast::lambda_expr&) -> void {
+    // Expressions inside lambda arguments do not necessarily refer to the
+    // top-level event. We cannot resolve the move keyword inside of them.
   }
 
   auto visit(auto& x) -> void {
