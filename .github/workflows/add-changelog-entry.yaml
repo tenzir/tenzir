@@ -43,20 +43,6 @@ jobs:
 
           if [ "$CHANGELOG_FILES" -gt 0 ]; then
             echo "has_changelog_entries=true" >> $GITHUB_OUTPUT
-            # Extract titles from changelog files for display
-            CHANGELOG_TITLES=""
-            while IFS= read -r file; do
-              if [ -n "$file" ]; then
-                # Extract title from YAML frontmatter
-                TITLE=$(grep "^title:" "$file" | sed 's/^title: *//' | sed 's/^"//' | sed 's/"$//')
-                if [ -n "$CHANGELOG_TITLES" ]; then
-                  CHANGELOG_TITLES="$CHANGELOG_TITLES, $TITLE"
-                else
-                  CHANGELOG_TITLES="$TITLE"
-                fi
-              fi
-            done < <(git diff --name-only origin/$BASE_REF...HEAD | grep "^changelog/changes/")
-            echo "changelog_list=$CHANGELOG_TITLES" >> $GITHUB_OUTPUT
           else
             echo "has_changelog_entries=false" >> $GITHUB_OUTPUT
           fi
@@ -78,12 +64,11 @@ jobs:
           PR_NUMBER="${{ github.event.pull_request.number }}"
           HAS_CHANGELOG="${{ steps.check-and-generate.outputs.has_changelog_entries }}"
           CHANGELOG_COUNT="${{ steps.check-and-generate.outputs.changelog_entries_count }}"
-          CHANGELOG_LIST="${{ steps.check-and-generate.outputs.changelog_list }}"
 
           if [ "$HAS_CHANGELOG" = "true" ]; then
             COMMENT_BODY="<!-- add-changelog-entry -->
           > [!NOTE]
-          > 🎉 **Great work!** This PR already includes $CHANGELOG_COUNT changelog $([ $CHANGELOG_COUNT -eq 1 ] && echo "entry" || echo "entries"): $CHANGELOG_LIST
+          > 🎉 **Great work!** This PR already includes $CHANGELOG_COUNT changelog $([ $CHANGELOG_COUNT -eq 1 ] && echo "entry" || echo "entries").
           >
           > If you need to add additional changelog entries, you can use the links below or run \`./changelog/add.py change|bugfix|feature\` on the command-line.
 
