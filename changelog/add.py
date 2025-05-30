@@ -83,7 +83,7 @@ def get_file_content(type_value, author=None, pr=None, title=None, description=N
     description_value = description.strip() if description else ""
 
     content = f"""---
-title: {title_value}
+title: "{title_value}"
 type: {type_value}
 authors: {author_value}
 pr: {pr_value}
