@@ -1,0 +1,28 @@
+// test: lexer
+""
+
+"foo"
+
+"{}"
+
+"\{}"
+
+"\""
+
+"\{ident}"
+
+"\{a+b}"
+
+"pre {}"
+
+"pre \{}"
+
+"pre \{} post"
+
+"pre \{"string"}"
+
+"\{{}}"
+
+"\{{key: "value"}}"
+
+"\{{key: "pre2\{{key2: "string"}}"}}"

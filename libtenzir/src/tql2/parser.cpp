@@ -15,6 +15,7 @@
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval.hpp"
 
 #include <arrow/util/utf8.h>
 
@@ -89,6 +90,8 @@ public:
       TENZIR_ASSERT(d.severity == severity::error);
       diag.emit(std::move(d));
       return failure::promise();
+    } catch (failure& f) {
+      return f;
     }
   }
 
@@ -505,12 +508,40 @@ public:
     return expr;
   }
 
+  auto parse_format_expr() -> ast::format_expr {
+    auto r = ast::format_expr{};
+    r.loc = expect(tk::string_begin).location;
+    while (true) {
+      if (auto end = accept(tk::closing_quote)) {
+        r.loc.end = end.location.end;
+        return r;
+      } else if (auto chars = accept(tk::char_seq)) {
+        r.segments.emplace_back(
+          unescape_string(located{chars.text, chars.location}));
+      } else if (auto fmt = accept(tk::fmt_begin)) {
+        r.segments.emplace_back(
+          std::in_place_type<ast::format_expr::replacement>,
+          parse_expression());
+        expect(tk::fmt_end);
+      } else {
+        TENZIR_ASSERT(eoi());
+        diagnostic::error("non-terminated string literal")
+          .secondary(r.loc)
+          .primary(next_location())
+          .throw_();
+      }
+    }
+  }
+
   auto parse_primary_expression() -> ast::expression {
     if (accept(tk::lpar)) {
       auto scope = ignore_newlines(true);
       auto result = parse_expression();
       expect(tk::rpar);
       return result;
+    }
+    if (peek(tk::string_begin)) {
+      return parse_format_expr();
     }
     if (auto constant = accept_constant()) {
       return std::move(*constant);
@@ -591,10 +622,11 @@ public:
     auto begin = expect(tk::lbrace);
     auto scope = ignore_newlines(true);
     // TODO: Try to implement this better.
-    auto is_record = silent_peek(tk::rbrace) || silent_peek(tk::dot_dot_dot)
-                     || ((silent_peek(tk::string) || silent_peek(tk::raw_string)
-                          || silent_peek(tk::identifier))
-                         && silent_peek_n(tk::colon, 1));
+    auto is_record
+      = silent_peek(tk::rbrace) || silent_peek(tk::dot_dot_dot)
+        || ((silent_peek(tk::string_begin) || silent_peek(tk::raw_string_begin)
+             || silent_peek(tk::identifier))
+            && silent_peek_n(tk::colon, 1));
     if (is_record) {
       return parse_record(begin.location);
     }
@@ -607,261 +639,228 @@ public:
     };
   }
 
-  template <concepts::one_of<std::string, blob> T>
-  auto accept_string_or_blob() -> std::optional<located<T>> {
-    constexpr auto validate_utf8 = std::is_same_v<T, std::string>;
-    constexpr auto type_token
-      = std::is_same_v<T, std::string> ? tk::string : tk::blob;
-    constexpr auto raw_type_token
-      = std::is_same_v<T, std::string> ? tk::raw_string : tk::raw_blob;
-    const auto into_result
-      = [](std::string result, location location) -> std::optional<located<T>> {
-      if constexpr (std::is_same_v<T, std::string>) {
-        return located{std::move(result), location};
-      } else {
-        const auto* data = reinterpret_cast<const std::byte*>(result.data());
-        return located{blob{data, data + result.size()}, location};
+  static auto unescape_unchecked(located<std::string_view> input)
+    -> std::string {
+    auto result = std::string{};
+    auto f = input.inner.begin();
+    auto e = input.inner.end();
+    for (const auto* it = f; it != e; ++it) {
+      auto x = *it;
+      if (x != '\\') {
+        result.push_back(x);
+        continue;
       }
-    };
-    if (const auto token = accept(raw_type_token)) {
-      const auto begin = token.text.find('"');
-      const auto end = token.text.rfind('"');
-      TENZIR_ASSERT(begin != std::string_view::npos);
-      TENZIR_ASSERT(end != std::string_view::npos);
-      auto result = std::string{token.text.substr(begin + 1, end - begin - 1)};
-      if (validate_utf8 and not arrow::util::ValidateUTF8(result)) {
-        // TODO: Would be nice to report the actual error location.
-        diagnostic::error("string contains invalid utf-8")
-          .primary(token)
-          .hint("consider using a blob instead: b{}", token.text)
-          .throw_();
+      ++it;
+      if (it == e) {
+        // TODO: invalid, but cannot happen
+        TENZIR_UNREACHABLE();
       }
-      return into_result(std::move(result), token.location);
-    }
-    if (const auto token = accept(type_token)) {
-      auto result = std::string{};
-      constexpr auto opening_quote_offset
-        = std::is_same_v<T, std::string> ? 0 : 1;
-      TENZIR_ASSERT(token.text.size() >= 2 + opening_quote_offset);
-      TENZIR_ASSERT(token.text.at(opening_quote_offset) == '"');
-      TENZIR_ASSERT(token.text.back() == '"');
-      const auto* f = token.text.begin() + 1 + opening_quote_offset;
-      const auto* e = token.text.end() - 1;
-      for (const auto* it = f; it != e; ++it) {
-        auto x = *it;
-        if (x != '\\') {
-          result.push_back(x);
-          continue;
-        }
-        ++it;
-        if (it == e) {
-          // TODO: invalid, but cannot happen
-          TENZIR_UNREACHABLE();
-        }
-        x = *it;
-        if (x == '\\') {
-          result.push_back('\\');
-        } else if (x == '"') {
-          result.push_back('"');
-        } else if (x == 't') {
-          result.push_back('\t');
-        } else if (x == 'n') {
-          result.push_back('\n');
-        } else if (x == 'r') {
-          result.push_back('\r');
-        } else if (x == 'b') {
-          result.push_back('\b');
-        } else if (x == 'f') {
-          result.push_back('\f');
-        } else if (x == 'v') {
-          result.push_back('\v');
-        } else if (x == 'a') {
-          result.push_back('\a');
-        } else if (x == '0') {
-          result.push_back('\0');
-        } else if (x == 'u' or x == 'U') {
-          // Unicode escape sequence: \uXXXX or \UXXXXXXXX or \u{...}
-          if ((it + 1 != e) and (*(it + 1) == '{')) {
-            // Handle \u{...}
-            ++it; // now at '{'
-            const auto* brace_open = it;
-            ++it; // now at first hex digit or '}'
-            auto codepoint = uint32_t{0};
-            size_t digits = 0;
-            bool valid = true;
-            while (it != e and *it != '}') {
-              auto c = *it;
-              codepoint <<= 4;
-              if (c >= '0' and c <= '9') {
-                codepoint |= (c - '0');
-              } else if (c >= 'a' and c <= 'f') {
-                codepoint |= (c - 'a' + 10);
-              } else if (c >= 'A' and c <= 'F') {
-                codepoint |= (c - 'A' + 10);
-              } else {
-                valid = false;
-                break;
-              }
-              ++digits;
-              if (digits > 6) {
-                valid = false;
-                // We don't break here so that the diagnostic location goes all
-                // the way to the closing brace.
-              }
-              ++it;
-            }
-            if (not valid or digits == 0 or it == e or *it != '}') {
-              diagnostic::error("invalid unicode escape sequence")
-                .primary(token.location.subloc(
-                  brace_open - f, (it - brace_open) + (it != e ? 1 : 0) + 1))
-                .throw_();
-            }
-            // Encode codepoint as UTF-8
-            if (codepoint <= 0x7F) {
-              result.push_back(static_cast<char>(codepoint));
-            } else if (codepoint <= 0x7FF) {
-              result.push_back(
-                static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
-              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-            } else if (codepoint <= 0xFFFF) {
-              result.push_back(
-                static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
-              result.push_back(
-                static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-            } else if (codepoint <= 0x10FFFF) {
-              result.push_back(
-                static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
-              result.push_back(
-                static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-              result.push_back(
-                static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-            } else {
-              diagnostic::error("unicode codepoint out of range")
-                .primary(token.location.subloc(
-                  brace_open - f, (it - brace_open) + (it != e ? 1 : 0) + 1))
-                .throw_();
-            }
-            // it is at '}', loop will ++it
-          } else {
-            // Handle \uXXXX or \UXXXXXXXX
-            auto digits = (x == 'u') ? 4uz : 8uz;
-            if (std::distance(it, e) < static_cast<ptrdiff_t>(digits)) {
-              diagnostic::error("incomplete unicode escape sequence")
-                .primary(
-                  token.location.subloc(it - f, std::distance(it, e) + 1))
-                .throw_();
-            }
-            auto codepoint = uint32_t{0};
-            auto valid = true;
-            for (size_t i = 0; i < digits; ++i) {
-              ++it;
-              if (it == e) {
-                valid = false;
-                break;
-              }
-              auto c = *it;
-              codepoint <<= 4;
-              if (c >= '0' and c <= '9') {
-                codepoint |= (c - '0');
-              } else if (c >= 'a' and c <= 'f') {
-                codepoint |= (c - 'a' + 10);
-              } else if (c >= 'A' and c <= 'F') {
-                codepoint |= (c - 'A' + 10);
-              } else {
-                valid = false;
-                break;
-              }
-            }
-            if (not valid) {
-              diagnostic::error("invalid unicode escape sequence")
-                .primary(token.location.subloc(it - f - digits, digits + 1))
-                .throw_();
-            }
-            // Encode codepoint as UTF-8
-            if (codepoint <= 0x7F) {
-              result.push_back(static_cast<char>(codepoint));
-            } else if (codepoint <= 0x7FF) {
-              result.push_back(
-                static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
-              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-            } else if (codepoint <= 0xFFFF) {
-              result.push_back(
-                static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
-              result.push_back(
-                static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-            } else if (codepoint <= 0x10FFFF) {
-              result.push_back(
-                static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
-              result.push_back(
-                static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-              result.push_back(
-                static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-              result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-            } else {
-              diagnostic::error("unicode codepoint out of range")
-                .primary(token.location.subloc(it - f - digits, digits + 2))
-                .throw_();
-            }
-          }
-        } else if (x == 'x') {
-          // Hexadecimal byte escape: \xHH
-          if (std::distance(it, e) < 2) {
-            diagnostic::error("incomplete hex escape sequence")
-              .primary(token.location.subloc(it - f, 4))
-              .throw_();
-          }
-          ++it;
-          auto c1 = static_cast<unsigned char>(*it);
-          ++it;
-          auto c2 = static_cast<unsigned char>(*it);
-          auto hex_to_int = [](unsigned char c) -> int {
+      x = *it;
+      if (x == '\\') {
+        result.push_back('\\');
+      } else if (x == '"') {
+        result.push_back('"');
+      } else if (x == 't') {
+        result.push_back('\t');
+      } else if (x == 'n') {
+        result.push_back('\n');
+      } else if (x == 'r') {
+        result.push_back('\r');
+      } else if (x == 'b') {
+        result.push_back('\b');
+      } else if (x == 'f') {
+        result.push_back('\f');
+      } else if (x == 'v') {
+        result.push_back('\v');
+      } else if (x == 'a') {
+        result.push_back('\a');
+      } else if (x == '0') {
+        result.push_back('\0');
+      } else if (x == 'u' or x == 'U') {
+        // Unicode escape sequence: \uXXXX or \UXXXXXXXX or \u{...}
+        if ((it + 1 != e) and (*(it + 1) == '{')) {
+          // Handle \u{...}
+          ++it; // now at '{'
+          const auto* brace_open = it;
+          ++it; // now at first hex digit or '}'
+          auto codepoint = uint32_t{0};
+          size_t digits = 0;
+          bool valid = true;
+          while (it != e and *it != '}') {
+            auto c = *it;
+            codepoint <<= 4;
             if (c >= '0' and c <= '9') {
-              return c - '0';
+              codepoint |= (c - '0');
+            } else if (c >= 'a' and c <= 'f') {
+              codepoint |= (c - 'a' + 10);
+            } else if (c >= 'A' and c <= 'F') {
+              codepoint |= (c - 'A' + 10);
+            } else {
+              valid = false;
+              break;
             }
-            if (c >= 'a' and c <= 'f') {
-              return c - 'a' + 10;
+            ++digits;
+            if (digits > 6) {
+              valid = false;
+              // We don't break here so that the diagnostic location goes all
+              // the way to the closing brace.
             }
-            if (c >= 'A' and c <= 'F') {
-              return c - 'A' + 10;
-            }
-            return -1;
-          };
-          auto hi = hex_to_int(c1);
-          auto lo = hex_to_int(c2);
-          if (hi == -1 or lo == -1) {
-            diagnostic::error("invalid hex escape sequence")
-              .primary(token.location.subloc(it - f - 2, 4))
+            ++it;
+          }
+          if (not valid or digits == 0 or it == e or *it != '}') {
+            diagnostic::error("invalid unicode escape sequence")
+              .primary(input.source.subloc(
+                brace_open - f, (it - brace_open) + (it != e ? 1 : 0) + 1))
               .throw_();
           }
-          result.push_back(static_cast<char>((hi << 4) | lo));
+          // Encode codepoint as UTF-8
+          if (codepoint <= 0x7F) {
+            result.push_back(static_cast<char>(codepoint));
+          } else if (codepoint <= 0x7FF) {
+            result.push_back(
+              static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+          } else if (codepoint <= 0xFFFF) {
+            result.push_back(
+              static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
+            result.push_back(
+              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+          } else if (codepoint <= 0x10FFFF) {
+            result.push_back(
+              static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
+            result.push_back(
+              static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+            result.push_back(
+              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+          } else {
+            diagnostic::error("unicode codepoint out of range")
+              .primary(input.source.subloc(
+                brace_open - f, (it - brace_open) + (it != e ? 1 : 0) + 1))
+              .throw_();
+          }
+          // it is at '}', loop will ++it
         } else {
-          diagnostic::error("found unknown escape sequence `{}`",
-                            token.text.substr(it - f, 2))
-            .primary(token.location.subloc(it - f, 2))
+          // Handle \uXXXX or \UXXXXXXXX
+          auto digits = (x == 'u') ? 4uz : 8uz;
+          if (std::distance(it, e) < static_cast<ptrdiff_t>(digits)) {
+            diagnostic::error("incomplete unicode escape sequence")
+              .primary(input.source.subloc(it - f, std::distance(it, e) + 1))
+              .throw_();
+          }
+          auto codepoint = uint32_t{0};
+          auto valid = true;
+          for (size_t i = 0; i < digits; ++i) {
+            ++it;
+            if (it == e) {
+              valid = false;
+              break;
+            }
+            auto c = *it;
+            codepoint <<= 4;
+            if (c >= '0' and c <= '9') {
+              codepoint |= (c - '0');
+            } else if (c >= 'a' and c <= 'f') {
+              codepoint |= (c - 'a' + 10);
+            } else if (c >= 'A' and c <= 'F') {
+              codepoint |= (c - 'A' + 10);
+            } else {
+              valid = false;
+              break;
+            }
+          }
+          if (not valid) {
+            diagnostic::error("invalid unicode escape sequence")
+              .primary(input.source.subloc(it - f - digits, digits + 1))
+              .throw_();
+          }
+          // Encode codepoint as UTF-8
+          if (codepoint <= 0x7F) {
+            result.push_back(static_cast<char>(codepoint));
+          } else if (codepoint <= 0x7FF) {
+            result.push_back(
+              static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+          } else if (codepoint <= 0xFFFF) {
+            result.push_back(
+              static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
+            result.push_back(
+              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+          } else if (codepoint <= 0x10FFFF) {
+            result.push_back(
+              static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
+            result.push_back(
+              static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+            result.push_back(
+              static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+          } else {
+            diagnostic::error("unicode codepoint out of range")
+              .primary(input.source.subloc(it - f - digits, digits + 2))
+              .throw_();
+          }
+        }
+      } else if (x == 'x') {
+        // Hexadecimal byte escape: \xHH
+        if (std::distance(it, e) < 2) {
+          diagnostic::error("incomplete hex escape sequence")
+            .primary(input.source.subloc(it - f, 4))
             .throw_();
         }
-      }
-      if (validate_utf8 and not arrow::util::ValidateUTF8(result)) {
-        // TODO: Would be nice to report the actual error location.
-        diagnostic::error("string contains invalid utf-8")
-          .primary(token)
-          .hint("consider using a blob instead: b{}", token.text)
+        ++it;
+        auto c1 = static_cast<unsigned char>(*it);
+        ++it;
+        auto c2 = static_cast<unsigned char>(*it);
+        auto hex_to_int = [](unsigned char c) -> int {
+          if (c >= '0' and c <= '9') {
+            return c - '0';
+          }
+          if (c >= 'a' and c <= 'f') {
+            return c - 'a' + 10;
+          }
+          if (c >= 'A' and c <= 'F') {
+            return c - 'A' + 10;
+          }
+          return -1;
+        };
+        auto hi = hex_to_int(c1);
+        auto lo = hex_to_int(c2);
+        if (hi == -1 or lo == -1) {
+          diagnostic::error("invalid hex escape sequence")
+            .primary(input.source.subloc(it - f - 2, 4))
+            .throw_();
+        }
+        result.push_back(static_cast<char>((hi << 4) | lo));
+      } else {
+        diagnostic::error("found unknown escape sequence `{}`",
+                          input.inner.substr(it - f, 2))
+          .primary(input.source.subloc(it - f, 2))
           .throw_();
       }
-      return into_result(std::move(result), token.location);
     }
-    return std::nullopt;
+    return result;
   }
 
-  auto accept_blob() -> std::optional<located<blob>> {
-    return accept_string_or_blob<blob>();
+  auto unescape_blob(located<std::string_view> input) -> blob {
+    auto u = unescape_unchecked(input);
+    auto* data = reinterpret_cast<std::byte*>(u.data());
+    return {data, data + u.size()};
   }
 
-  auto accept_string() -> std::optional<located<std::string>> {
-    return accept_string_or_blob<std::string>();
+  auto unescape_string(located<std::string_view> input) -> std::string {
+    auto u = unescape_unchecked(input);
+    if (not arrow::util::ValidateUTF8(u)) {
+      // TODO: Would be nice to report the actual error location.
+      diagnostic::error("string contains invalid utf-8")
+        // TODO: Maybe this should include the quotes... sometimes
+        .primary(input)
+        // TODO: This hint would be helpful, but we cannot support it
+        // .hint("consider using a blob instead: b{}", token.text)
+        .throw_();
+    }
+    return u;
   }
 
   auto parse_record_item() -> ast::record::item {
@@ -873,8 +872,17 @@ public:
       if (auto result = accept(tk::identifier)) {
         return result.as_identifier();
       }
-      if (auto result = accept_string()) {
-        return ast::identifier{std::move(result->inner), result->source};
+      if (peek(tk::string_begin) or peek(tk::raw_string_begin)) {
+        auto v = parse_format_expr();
+        // TODO: This should be const_eval'ed later.
+        auto r = const_eval(v, diag_);
+        if (not r) {
+          throw r.error();
+        }
+        if (auto* s = try_as<std::string>(*r)) {
+          return ast::identifier{std::move(*s), v.loc};
+        }
+        diagnostic::error("expected `string`").primary(v).throw_();
       }
       throw_token();
     }();
@@ -950,12 +958,6 @@ public:
   }
 
   auto accept_constant() -> std::optional<constant> {
-    if (auto result = accept_blob()) {
-      return constant{std::move(result->inner), result->source};
-    }
-    if (auto result = accept_string()) {
-      return constant{std::move(result->inner), result->source};
-    }
     if (peek(tk::scalar)) {
       return parse_scalar();
     }
