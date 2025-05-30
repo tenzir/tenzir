@@ -69,7 +69,6 @@ jobs:
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
       tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
       tenzir-version-build-metadata: ${{ steps.configure.outputs.tenzir-version-build-metadata }}
-      run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-docs: ${{ steps.configure.outputs.run-docs }}
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
@@ -162,7 +161,6 @@ jobs:
           # * Set version variables (above)
           # * Enable Jobs (below)
           echo "::notice Disable all others so we can selectivly enable again"
-          echo "run-changelog=false" >> $GITHUB_OUTPUT
           echo "run-regression-tests=false" >> $GITHUB_OUTPUT
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
@@ -173,7 +171,6 @@ jobs:
           # A little helper to enable all checks.
           shopt -s expand_aliases
           alias run_all_checks=' \
-            echo "run-changelog=true" >> $GITHUB_OUTPUT; \
             echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
             echo "run-docs=true" >> $GITHUB_OUTPUT; \
@@ -217,7 +214,6 @@ jobs:
           fi
           run_if_changed python "python/"
           run_if_changed docs "web/" "python/"
-          run_if_changed changelog "changelog/" "web/" "python/"
           TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
           run_if_changed tenzir "${TENZIR_SOURCES[@]}"
           run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
@@ -360,42 +356,9 @@ jobs:
             [ $pr_number ] # Assert the pr number was non-empty
           fi
 
-  changelog:
-    name: Changelog
-    needs:
-      - configure
-    if: ${{ needs.configure.outputs.run-changelog == 'true' }}
-    runs-on: ubuntu-latest
-    container: debian:trixie-slim
-    steps:
-      - name: Install git
-        run: |
-          apt-get update
-          apt-get -y install git
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Dependencies
-        run: ./scripts/debian/install-dev-dependencies.sh
-      - name: Configure Build
-        env:
-          CC: gcc-14
-          CXX: g++-14
-        run: |
-          cmake -B build -DTENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
-      - name: Generate CHANGELOG.md
-        run: |
-          cmake --build build --target changelog
-      - name: Upload CHANGELOG.md
-        uses: actions/upload-artifact@v4
-        with:
-          name: CHANGELOG.md
-          path: build/CHANGELOG.md
-          if-no-files-found: error
-
   docs:
     needs:
       - configure
-      - changelog
     if: ${{ needs.configure.outputs.run-docs == 'true' }}
     name: Documentation
     runs-on: ubuntu-latest
@@ -405,13 +368,6 @@ jobs:
       - name: Checkout dotgithub submodule
         run: |
           git submodule update --init web/.github
-      - name: Download CHANGELOG.md
-        uses: actions/download-artifact@v4
-        with:
-          name: CHANGELOG.md
-      - name: Override Stub Changelog
-        run: |
-          cp -f CHANGELOG.md web/src/pages/changelog.md
       - uses: actions/setup-node@v4
         with:
           node-version: 20.x
@@ -808,7 +764,6 @@ jobs:
 
   pass-branch-protections:
     needs:
-      - changelog
       - configure
       - docker-tenzir
       - docs
