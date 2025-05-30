@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 1223-1362
+title: PRs 1223-1362
 type: feature
 authors: dominiklohmann
 pr: 1223

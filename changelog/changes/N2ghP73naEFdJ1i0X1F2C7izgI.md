@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 2513-2738
+title: PRs 2513-2738
 type: feature
 authors: tobim
 pr: 2513

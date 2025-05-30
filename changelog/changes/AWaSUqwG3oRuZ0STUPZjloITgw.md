@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 2064-2082
+title: PRs 2064-2082
 type: feature
 authors: lava
 pr: 2064

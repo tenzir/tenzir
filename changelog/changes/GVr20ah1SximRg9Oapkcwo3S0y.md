@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 1176-1180-1186-1237-satta
+title: PRs 1176-1180-1186-1237-satta
 type: change
 authors: satta
 pr: 1176

@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 2922-2927
+title: PRs 2922-2927
 type: change
 authors: dominiklohmann
 pr: 2922

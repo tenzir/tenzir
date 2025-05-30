@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 4295-4322-4325
+title: PRs 4295-4322-4325
 type: bugfix
 authors: tobim
 pr: 4295

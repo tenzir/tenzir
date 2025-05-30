@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 4339-4365
+title: PRs 4339-4365
 type: feature
 authors: Dakostu
 pr: 4339

@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 632-726
+title: PRs 632-726
 type: feature
 authors: mavam
 pr: 632

@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 2877-2904-2907
+title: PRs 2877-2904-2907
 type: feature
 authors: Dakostu
 pr: 2877

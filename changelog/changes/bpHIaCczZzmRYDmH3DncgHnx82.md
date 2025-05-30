@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 1544-1547-1588
+title: PRs 1544-1547-1588
 type: feature
 authors: dominiklohmann
 pr: 1544

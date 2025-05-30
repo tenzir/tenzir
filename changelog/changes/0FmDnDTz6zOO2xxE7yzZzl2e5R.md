@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 827-844
+title: PRs 827-844
 type: feature
 authors: dominiklohmann
 pr: 827

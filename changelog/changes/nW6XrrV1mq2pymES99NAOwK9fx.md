@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 908-951
+title: PRs 908-951
 type: change
 authors: tobim
 pr: 908
