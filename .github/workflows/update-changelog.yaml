@@ -1,0 +1,21 @@
+name: Update Changelog
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  update-docs:
+    name: Update Docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Trigger changelog update in tenzir/docs repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+        run: |
+          gh workflow run update-changelog.yaml \
+            --repo tenzir/docs
