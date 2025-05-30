@@ -1,5 +1,6 @@
-title: Tenzir Node v5.0.1
-description: ""
+title: ClickHouse Fixes
+description: |
+  This release improves the integration with ClickHouse.
 changes:
   - 5MtkuNJwdNPS9aTlagcn86QQRh
   - NFIRrkVNdMSeelSBfbcrF8icm5

@@ -1,5 +1,7 @@
-title: Tenzir Node v5.1.3
-description: ""
+title: URL Encoding
+description: |
+  This release adds support for URL encoding and decoding, and fixes the
+  handling of user-defined operators in TQL2.
 changes:
   - GnCuozfIsp3gVT5ZLuRD5kt4pn
   - NvltFrs9lD82yc1FLKe2UvNnqH

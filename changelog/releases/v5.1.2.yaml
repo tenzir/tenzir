@@ -1,5 +1,6 @@
-title: Tenzir Node v5.1.2
-description: ""
+title: Google Cloud Logging Improvements
+description: |
+  This release improves the integration with Google Cloud Logging.
 changes:
   - 0EPDgeIaUygQZutWQRGXbOk1Yz
   - 33YNHvaXtmFtXpzXmLq3KxWwmT

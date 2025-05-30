@@ -1,5 +1,7 @@
-title: Tenzir Node v5.1.0
-description: ""
+title: Moving Fields
+description: |
+  Tenzir Node v5.1 adds more flexible ways to access and move fields, bitwise
+  functions, and a native integration with Google Cloud Logging.
 changes:
   - 2pRAmwn4zyOhyoCni8YZGcSXqm
   - Odv3bNt7aDo99NGUWrhxT7i8I8
