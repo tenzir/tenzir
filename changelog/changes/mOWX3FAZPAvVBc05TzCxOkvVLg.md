@@ -1,5 +1,5 @@
 ---
-title: Add file extension detection to `from`/`to`
+title: "Add file extension detection to `from`/`to`"
 type: feature
 authors: eliaskosunen
 pr: 3653

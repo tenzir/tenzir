@@ -1,5 +1,5 @@
 ---
-title: Improve `json` parser, add `null` type, and various fixes
+title: "Improve `json` parser, add `null` type, and various fixes"
 type: bugfix
 authors: jachris
 pr: 3503

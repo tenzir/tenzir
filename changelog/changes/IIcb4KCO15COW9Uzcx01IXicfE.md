@@ -1,5 +1,5 @@
 ---
-title: Introduce the `no-location-overrides` option
+title: "Introduce the `no-location-overrides` option"
 type: change
 authors: dominiklohmann
 pr: 3978

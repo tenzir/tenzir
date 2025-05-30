@@ -1,5 +1,5 @@
 ---
-title: Parse time from JSON strings containing numbers
+title: "Parse time from JSON strings containing numbers"
 type: bugfix
 authors: dominiklohmann
 pr: 2340

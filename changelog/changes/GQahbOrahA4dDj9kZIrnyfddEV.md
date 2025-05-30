@@ -1,5 +1,5 @@
 ---
-title: Fix a logic error for retried requests in `/serve`
+title: "Fix a logic error for retried requests in `/serve`"
 type: bugfix
 authors: dominiklohmann
 pr: 4585

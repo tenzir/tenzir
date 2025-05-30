@@ -1,5 +1,5 @@
 ---
-title: Add `batches` to input/output operator metrics
+title: "Add `batches` to input/output operator metrics"
 type: feature
 authors: dominiklohmann
 pr: 4962

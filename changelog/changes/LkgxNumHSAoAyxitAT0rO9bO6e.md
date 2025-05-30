@@ -1,5 +1,5 @@
 ---
-title: PRs 3461-fluent-bit
+title: "PRs 3461-fluent-bit"
 type: feature
 authors: tobim
 pr: 3461

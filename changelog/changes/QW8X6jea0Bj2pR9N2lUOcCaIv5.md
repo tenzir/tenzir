@@ -1,5 +1,5 @@
 ---
-title: Make port-encoding for Arrow host-independent
+title: "Make port-encoding for Arrow host-independent"
 type: bugfix
 authors: dominiklohmann
 pr: 1007

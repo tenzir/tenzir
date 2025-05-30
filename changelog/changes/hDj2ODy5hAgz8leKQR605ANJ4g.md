@@ -1,5 +1,5 @@
 ---
-title: Change `summarize` to operate across schemas
+title: "Change `summarize` to operate across schemas"
 type: change
 authors: jachris
 pr: 3250

@@ -1,5 +1,5 @@
 ---
-title: Support bytes inputs in the `buffer` operator
+title: "Support bytes inputs in the `buffer` operator"
 type: feature
 authors: dominiklohmann
 pr: 4594

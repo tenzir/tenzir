@@ -1,5 +1,5 @@
 ---
-title: Rename `vast dump` to `vast show`
+title: "Rename `vast dump` to `vast show`"
 type: change
 authors: dominiklohmann
 pr: 2686

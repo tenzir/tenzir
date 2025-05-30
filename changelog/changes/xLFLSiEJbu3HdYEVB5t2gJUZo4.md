@@ -1,5 +1,5 @@
 ---
-title: Compress serialized indexers
+title: "Compress serialized indexers"
 type: feature
 authors: dominiklohmann
 pr: 2346

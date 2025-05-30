@@ -1,5 +1,5 @@
 ---
-title: Support decapsulating SLL2 packets
+title: "Support decapsulating SLL2 packets"
 type: feature
 authors: mavam
 pr: 4744

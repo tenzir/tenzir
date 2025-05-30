@@ -1,5 +1,5 @@
 ---
-title: Make JSON field selectors configurable
+title: "Make JSON field selectors configurable"
 type: feature
 authors: dominiklohmann
 pr: 1974

@@ -1,5 +1,5 @@
 ---
-title: Add percentile aggregation functions
+title: "Add percentile aggregation functions"
 type: change
 authors: dominiklohmann
 pr: 4273

@@ -1,5 +1,5 @@
 ---
-title: Allow pip to write to stdout in venv creation
+title: "Allow pip to write to stdout in venv creation"
 type: feature
 authors: tobim
 pr: 4279

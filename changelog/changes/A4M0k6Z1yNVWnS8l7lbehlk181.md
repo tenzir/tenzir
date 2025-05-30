@@ -1,5 +1,5 @@
 ---
-title: Small fixes for projections
+title: "Small fixes for projections"
 type: change
 authors: tobim
 pr: 1531

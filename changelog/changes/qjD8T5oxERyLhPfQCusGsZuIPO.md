@@ -1,5 +1,5 @@
 ---
-title: Add Bash autocompletion for VAST
+title: "Add Bash autocompletion for VAST"
 type: feature
 authors: lava
 pr: 833

@@ -1,5 +1,5 @@
 ---
-title: Fix a potentially uncaught exception in `shell`
+title: "Fix a potentially uncaught exception in `shell`"
 type: bugfix
 authors: dominiklohmann
 pr: 4508

@@ -1,5 +1,5 @@
 ---
-title: Stabilize the `bitz` format
+title: "Stabilize the `bitz` format"
 type: bugfix
 authors: dominiklohmann
 pr: 4633

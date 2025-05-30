@@ -1,5 +1,5 @@
 ---
-title: Close file descriptor by default in 'vast::file'
+title: "Close file descriptor by default in 'vast::file'"
 type: bugfix
 authors: lava
 pr: 1018

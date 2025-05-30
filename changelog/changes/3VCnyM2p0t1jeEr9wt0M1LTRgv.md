@@ -1,5 +1,5 @@
 ---
-title: Compact NDJSON output
+title: "Compact NDJSON output"
 type: change
 authors: dominiklohmann
 pr: 5015

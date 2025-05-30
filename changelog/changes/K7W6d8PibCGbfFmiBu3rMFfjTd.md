@@ -1,5 +1,5 @@
 ---
-title: Make amqp saver/loader detached
+title: "Make amqp saver/loader detached"
 type: bugfix
 authors: IyeOnline
 pr: 5206

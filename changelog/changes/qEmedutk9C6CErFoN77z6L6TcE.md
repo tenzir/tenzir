@@ -1,5 +1,5 @@
 ---
-title: Fix an off-by-one error when loading persisted contexts
+title: "Fix an off-by-one error when loading persisted contexts"
 type: bugfix
 authors: dominiklohmann
 pr: 4045

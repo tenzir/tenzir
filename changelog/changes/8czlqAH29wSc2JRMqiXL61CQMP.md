@@ -1,5 +1,5 @@
 ---
-title: Expand CAF stream slot ids to 32 bits
+title: "Expand CAF stream slot ids to 32 bits"
 type: bugfix
 authors: lava
 pr: 1020

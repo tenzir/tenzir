@@ -1,5 +1,5 @@
 ---
-title: Prevent delays for blocking operators
+title: "Prevent delays for blocking operators"
 type: bugfix
 authors: dominiklohmann
 pr: 3743

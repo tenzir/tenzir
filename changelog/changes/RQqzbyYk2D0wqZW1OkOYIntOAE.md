@@ -1,5 +1,5 @@
 ---
-title: Fix verification of large FlatBuffers tables
+title: "Fix verification of large FlatBuffers tables"
 type: bugfix
 authors: dominiklohmann
 pr: 4137

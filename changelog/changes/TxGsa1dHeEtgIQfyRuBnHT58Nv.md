@@ -1,5 +1,5 @@
 ---
-title: Check cURL response codes and do not deliver data on error
+title: "Check cURL response codes and do not deliver data on error"
 type: bugfix
 authors: IyeOnline
 pr: 4660

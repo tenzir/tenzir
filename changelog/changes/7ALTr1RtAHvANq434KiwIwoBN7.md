@@ -1,5 +1,5 @@
 ---
-title: Make the source a regular class
+title: "Make the source a regular class"
 type: change
 authors: tobim
 pr: 1498

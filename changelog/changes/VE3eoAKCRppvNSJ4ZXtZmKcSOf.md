@@ -1,5 +1,5 @@
 ---
-title: Schedule idle operators less aggressively
+title: "Schedule idle operators less aggressively"
 type: bugfix
 authors: dominiklohmann
 pr: 3865

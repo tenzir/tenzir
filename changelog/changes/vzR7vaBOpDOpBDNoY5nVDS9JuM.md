@@ -1,5 +1,5 @@
 ---
-title: Allow aggregation functions to be called on lists
+title: "Allow aggregation functions to be called on lists"
 type: feature
 authors: dominiklohmann
 pr: 4821

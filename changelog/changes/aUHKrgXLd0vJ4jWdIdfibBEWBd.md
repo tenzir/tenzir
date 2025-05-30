@@ -1,5 +1,5 @@
 ---
-title: Fix a hang on shutdown and remove deprecated things
+title: "Fix a hang on shutdown and remove deprecated things"
 type: change
 authors: dominiklohmann
 pr: 4187

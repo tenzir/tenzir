@@ -1,5 +1,5 @@
 ---
-title: Allow read access to user home dir in the systemd unit
+title: "Allow read access to user home dir in the systemd unit"
 type: bugfix
 authors: tobim
 pr: 2734

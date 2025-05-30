@@ -1,5 +1,5 @@
 ---
-title: Add `yield` operator
+title: "Add `yield` operator"
 type: feature
 authors: jachris
 pr: 3651

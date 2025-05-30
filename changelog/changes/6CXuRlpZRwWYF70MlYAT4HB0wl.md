@@ -1,5 +1,5 @@
 ---
-title: Clean up old venvs in the python operator
+title: "Clean up old venvs in the python operator"
 type: bugfix
 authors: lava
 pr: 4669

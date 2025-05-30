@@ -1,5 +1,5 @@
 ---
-title: Fix mismatch in type metadata after assignments
+title: "Fix mismatch in type metadata after assignments"
 type: bugfix
 authors: dominiklohmann
 pr: 5033

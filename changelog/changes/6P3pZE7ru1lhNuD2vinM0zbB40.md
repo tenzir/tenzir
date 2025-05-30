@@ -1,5 +1,5 @@
 ---
-title: Fix a stack-use-after-move in `save_tcp`
+title: "Fix a stack-use-after-move in `save_tcp`"
 type: bugfix
 authors: dominiklohmann
 pr: 5103

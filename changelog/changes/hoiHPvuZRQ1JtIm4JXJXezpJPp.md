@@ -1,5 +1,5 @@
 ---
-title: Ignore types unrelated to the configuration in the summarize plugin
+title: "Ignore types unrelated to the configuration in the summarize plugin"
 type: bugfix
 authors: dominiklohmann
 pr: 2258

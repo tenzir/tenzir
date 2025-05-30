@@ -1,5 +1,5 @@
 ---
-title: Add file data to show partitions
+title: "Add file data to show partitions"
 type: feature
 authors: tobim
 pr: 3675

@@ -1,5 +1,5 @@
 ---
-title: Add a `rendered` field to diagnostics
+title: "Add a `rendered` field to diagnostics"
 type: feature
 authors: dominiklohmann
 pr: 4290

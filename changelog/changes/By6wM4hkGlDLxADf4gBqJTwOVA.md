@@ -1,5 +1,5 @@
 ---
-title: Improve the `export` operator
+title: "Improve the `export` operator"
 type: feature
 authors: dominiklohmann
 pr: 3909

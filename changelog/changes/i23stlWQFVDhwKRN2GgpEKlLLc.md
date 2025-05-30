@@ -1,5 +1,5 @@
 ---
-title: Support `show nics` to see network interfaces
+title: "Support `show nics` to see network interfaces"
 type: feature
 authors: mavam
 pr: 3517

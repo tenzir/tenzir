@@ -1,5 +1,5 @@
 ---
-title: Report by schema metrics from the importer
+title: "Report by schema metrics from the importer"
 type: feature
 authors: tobim
 pr: 2274

@@ -1,5 +1,5 @@
 ---
-title: Stop using connection timeout to get node components
+title: "Stop using connection timeout to get node components"
 type: bugfix
 authors: dominiklohmann
 pr: 4597

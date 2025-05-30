@@ -1,5 +1,5 @@
 ---
-title: Show file size information in lsvast
+title: "Show file size information in lsvast"
 type: feature
 authors: lava
 pr: 1149

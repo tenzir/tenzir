@@ -1,5 +1,5 @@
 ---
-title: Deprecate the msgpack table slice
+title: "Deprecate the msgpack table slice"
 type: change
 authors: tobim
 pr: 2087

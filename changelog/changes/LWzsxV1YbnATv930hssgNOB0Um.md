@@ -1,5 +1,5 @@
 ---
-title: Add `from_file` operator
+title: "Add `from_file` operator"
 type: feature
 authors: jachris
 pr: 5203

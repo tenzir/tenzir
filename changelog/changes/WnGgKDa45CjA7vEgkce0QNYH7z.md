@@ -1,5 +1,5 @@
 ---
-title: Generalize splunk-to-vast
+title: "Generalize splunk-to-vast"
 type: change
 authors: mavam
 pr: 1134

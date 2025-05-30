@@ -1,5 +1,5 @@
 ---
-title: Make `show pipelines` a thing
+title: "Make `show pipelines` a thing"
 type: feature
 authors: mavam
 pr: 3457

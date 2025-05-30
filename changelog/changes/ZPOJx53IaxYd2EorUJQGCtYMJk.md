@@ -1,5 +1,5 @@
 ---
-title: Make the source shutdown instantaneous
+title: "Make the source shutdown instantaneous"
 type: bugfix
 authors: dominiklohmann
 pr: 1771

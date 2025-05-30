@@ -1,5 +1,5 @@
 ---
-title: Generalize `every` to work with all operators
+title: "Generalize `every` to work with all operators"
 type: feature
 authors: dominiklohmann
 pr: 4109

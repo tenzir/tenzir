@@ -1,5 +1,5 @@
 ---
-title: Run start commands asynchronously
+title: "Run start commands asynchronously"
 type: bugfix
 authors: lava
 pr: 2868

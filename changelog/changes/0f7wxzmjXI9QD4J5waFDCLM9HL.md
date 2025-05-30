@@ -1,5 +1,5 @@
 ---
-title: Rework the plugin loading logic
+title: "Rework the plugin loading logic"
 type: change
 authors: dominiklohmann
 pr: 1703

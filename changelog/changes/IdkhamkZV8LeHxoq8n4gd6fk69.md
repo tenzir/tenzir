@@ -1,5 +1,5 @@
 ---
-title: Lift selector field requirements for JSON import
+title: "Lift selector field requirements for JSON import"
 type: bugfix
 authors: dominiklohmann
 pr: 2255

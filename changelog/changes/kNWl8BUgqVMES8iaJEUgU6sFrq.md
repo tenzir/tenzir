@@ -1,5 +1,5 @@
 ---
-title: Add Zeek Broker reader plugin
+title: "Add Zeek Broker reader plugin"
 type: feature
 authors: mavam
 pr: 1758

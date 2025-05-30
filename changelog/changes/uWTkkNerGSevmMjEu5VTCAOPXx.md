@@ -1,5 +1,5 @@
 ---
-title: Fix lifetime issues and small bugs in `write_syslog`
+title: "Fix lifetime issues and small bugs in `write_syslog`"
 type: bugfix
 authors: raxyte
 pr: 5180

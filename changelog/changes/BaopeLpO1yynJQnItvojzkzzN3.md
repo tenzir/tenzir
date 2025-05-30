@@ -1,5 +1,5 @@
 ---
-title: Implement extended deployment options
+title: "Implement extended deployment options"
 type: change
 authors: Dakostu
 pr: 3585

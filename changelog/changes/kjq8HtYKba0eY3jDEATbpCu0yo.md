@@ -1,5 +1,5 @@
 ---
-title: Explicitly handle AMQP heartbeats in saver
+title: "Explicitly handle AMQP heartbeats in saver"
 type: bugfix
 authors: satta
 pr: 4428

@@ -1,5 +1,5 @@
 ---
-title: Change `suricata.dns` schema to match current DNS structure
+title: "Change `suricata.dns` schema to match current DNS structure"
 type: bugfix
 authors: satta
 pr: 1919

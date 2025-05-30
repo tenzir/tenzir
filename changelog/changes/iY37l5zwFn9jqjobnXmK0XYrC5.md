@@ -1,5 +1,5 @@
 ---
-title: Refactor `show` aspects and rewrite `version`
+title: "Refactor `show` aspects and rewrite `version`"
 type: change
 authors: mavam
 pr: 3442

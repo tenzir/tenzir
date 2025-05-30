@@ -1,5 +1,5 @@
 ---
-title: Use fast_float to parse reals
+title: "Use fast_float to parse reals"
 type: bugfix
 authors: tobim
 pr: 2332

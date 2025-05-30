@@ -1,5 +1,5 @@
 ---
-title: Multiple node shutdown fixes
+title: "Multiple node shutdown fixes"
 type: bugfix
 authors: tobim
 pr: 1563

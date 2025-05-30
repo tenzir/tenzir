@@ -1,5 +1,5 @@
 ---
-title: Show meta index size in vast status
+title: "Show meta index size in vast status"
 type: feature
 authors: lava
 pr: 1193

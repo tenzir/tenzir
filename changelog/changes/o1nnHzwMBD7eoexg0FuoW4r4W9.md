@@ -1,5 +1,5 @@
 ---
-title: Allow editing definitions of managed pipelines
+title: "Allow editing definitions of managed pipelines"
 type: feature
 authors: Dakostu
 pr: 4196

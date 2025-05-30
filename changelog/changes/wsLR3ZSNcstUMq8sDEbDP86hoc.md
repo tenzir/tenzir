@@ -1,5 +1,5 @@
 ---
-title: Add `events` field to output of `show partitions`
+title: "Add `events` field to output of `show partitions`"
 type: feature
 authors: dominiklohmann
 pr: 3580

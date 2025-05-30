@@ -1,5 +1,5 @@
 ---
-title: Remove restriction for unflattening into empty field names
+title: "Remove restriction for unflattening into empty field names"
 type: bugfix
 authors: dominiklohmann
 pr: 3814

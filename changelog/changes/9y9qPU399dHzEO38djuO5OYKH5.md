@@ -1,5 +1,5 @@
 ---
-title: Make it easy to create docker images with Nix
+title: "Make it easy to create docker images with Nix"
 type: feature
 authors: tobim
 pr: 2742

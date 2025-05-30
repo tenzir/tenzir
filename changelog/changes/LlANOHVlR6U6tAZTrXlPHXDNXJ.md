@@ -1,5 +1,5 @@
 ---
-title: Fix the wrong type for the version record type in the `zeek.software` schema
+title: "Fix the wrong type for the version record type in the `zeek.software` schema"
 type: bugfix
 authors: Dakostu
 pr: 3538

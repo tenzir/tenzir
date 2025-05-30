@@ -1,5 +1,5 @@
 ---
-title: Fix RFC3164 (legacy-syslog) parser expecting spaces after `<PRI>`
+title: "Fix RFC3164 (legacy-syslog) parser expecting spaces after `<PRI>`"
 type: bugfix
 authors: eliaskosunen
 pr: 3718

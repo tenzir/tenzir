@@ -1,5 +1,5 @@
 ---
-title: Remove `pipeline::internal_parse()` from `to_azure_log_analytics`
+title: "Remove `pipeline::internal_parse()` from `to_azure_log_analytics`"
 type: change
 authors: raxyte
 pr: 5166

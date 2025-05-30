@@ -1,5 +1,5 @@
 ---
-title: Upstream Debian patches
+title: "Upstream Debian patches"
 type: change
 authors: dominiklohmann
 pr: 1515

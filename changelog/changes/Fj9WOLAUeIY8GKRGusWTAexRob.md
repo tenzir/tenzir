@@ -1,5 +1,5 @@
 ---
-title: Fix CSV/XSV format printing the header once for each batch
+title: "Fix CSV/XSV format printing the header once for each batch"
 type: bugfix
 authors: jachris
 pr: 4195

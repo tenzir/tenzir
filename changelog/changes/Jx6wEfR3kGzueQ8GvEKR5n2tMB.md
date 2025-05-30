@@ -1,5 +1,5 @@
 ---
-title: Compile with C++20
+title: "Compile with C++20"
 type: change
 authors: tobim
 pr: 1768

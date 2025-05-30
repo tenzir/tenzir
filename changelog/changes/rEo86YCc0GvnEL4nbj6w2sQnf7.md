@@ -1,5 +1,5 @@
 ---
-title: Change the syntax of the `slice` operator
+title: "Change the syntax of the `slice` operator"
 type: change
 authors: dominiklohmann
 pr: 4211

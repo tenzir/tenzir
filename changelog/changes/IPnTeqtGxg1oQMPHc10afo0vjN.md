@@ -1,5 +1,5 @@
 ---
-title: Reduce the default log queue size for client commands
+title: "Reduce the default log queue size for client commands"
 type: bugfix
 authors: tobim
 pr: 2176

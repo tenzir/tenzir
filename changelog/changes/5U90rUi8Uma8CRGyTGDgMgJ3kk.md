@@ -1,5 +1,5 @@
 ---
-title: Fix sorting of plugins by name
+title: "Fix sorting of plugins by name"
 type: bugfix
 authors: dominiklohmann
 pr: 1756

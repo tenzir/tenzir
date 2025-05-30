@@ -1,5 +1,5 @@
 ---
-title: Fix `/pipeline/launch` when no cache is provided
+title: "Fix `/pipeline/launch` when no cache is provided"
 type: bugfix
 authors: dominiklohmann
 pr: 4554

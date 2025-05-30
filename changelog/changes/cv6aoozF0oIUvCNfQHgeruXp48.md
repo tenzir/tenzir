@@ -1,5 +1,5 @@
 ---
-title: Fix shutdown of the lookup helper actor
+title: "Fix shutdown of the lookup helper actor"
 type: bugfix
 authors: tobim
 pr: 4978

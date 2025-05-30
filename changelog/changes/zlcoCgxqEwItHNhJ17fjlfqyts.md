@@ -1,5 +1,5 @@
 ---
-title: Introduce lambda functions
+title: "Introduce lambda functions"
 type: bugfix
 authors: dominiklohmann
 pr: 5150

@@ -1,5 +1,5 @@
 ---
-title: Make duration units abbreviations consistent
+title: "Make duration units abbreviations consistent"
 type: feature
 authors: rolandpeelen
 pr: 1265

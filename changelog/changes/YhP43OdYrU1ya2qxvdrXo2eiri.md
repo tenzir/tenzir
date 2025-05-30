@@ -1,5 +1,5 @@
 ---
-title: Allow reinstantiating the `buffer` operator
+title: "Allow reinstantiating the `buffer` operator"
 type: bugfix
 authors: dominiklohmann
 pr: 4702

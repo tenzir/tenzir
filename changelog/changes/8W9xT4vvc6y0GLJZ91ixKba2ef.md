@@ -1,5 +1,5 @@
 ---
-title: Fix a segfault in `save_amqp` on connection loss
+title: "Fix a segfault in `save_amqp` on connection loss"
 type: bugfix
 authors: IyeOnline
 pr: 5226

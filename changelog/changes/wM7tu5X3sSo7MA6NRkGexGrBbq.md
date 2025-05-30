@@ -1,5 +1,5 @@
 ---
-title: Implement a generic aggregation transform step
+title: "Implement a generic aggregation transform step"
 type: feature
 authors: dominiklohmann
 pr: 2076

@@ -1,5 +1,5 @@
 ---
-title: Remove -c short option for setting config file
+title: "Remove -c short option for setting config file"
 type: feature
 authors: dominiklohmann
 pr: 781

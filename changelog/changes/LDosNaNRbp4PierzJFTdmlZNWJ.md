@@ -1,5 +1,5 @@
 ---
-title: Change /var/db to /var/lib on Linux deployments
+title: "Change /var/db to /var/lib on Linux deployments"
 type: change
 authors: 0snap
 pr: 1116

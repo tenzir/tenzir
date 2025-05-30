@@ -1,5 +1,5 @@
 ---
-title: Introduce a potpourri of smaller improvements
+title: "Introduce a potpourri of smaller improvements"
 type: bugfix
 authors: dominiklohmann
 pr: 2832

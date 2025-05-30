@@ -1,5 +1,5 @@
 ---
-title: Rename pytenzir to tenzir
+title: "Rename pytenzir to tenzir"
 type: change
 authors: lava
 pr: 3660

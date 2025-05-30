@@ -1,5 +1,5 @@
 ---
-title: Remove the `use_simple_format` option for `/serve`
+title: "Remove the `use_simple_format` option for `/serve`"
 type: change
 authors: dominiklohmann
 pr: 4411

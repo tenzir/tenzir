@@ -1,5 +1,5 @@
 ---
-title: Change the default batch size to 1024
+title: "Change the default batch size to 1024"
 type: change
 authors: tobim
 pr: 1396

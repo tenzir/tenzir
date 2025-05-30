@@ -1,5 +1,5 @@
 ---
-title: Fix compilation error handling inside `if`
+title: "Fix compilation error handling inside `if`"
 type: bugfix
 authors: jachris
 pr: 5011

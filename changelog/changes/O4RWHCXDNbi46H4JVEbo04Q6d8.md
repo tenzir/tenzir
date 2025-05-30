@@ -1,5 +1,5 @@
 ---
-title: Make the disk-monitor a singleton component
+title: "Make the disk-monitor a singleton component"
 type: bugfix
 authors: tobim
 pr: 1495

@@ -1,5 +1,5 @@
 ---
-title: Emit metrics from the filesystem actor
+title: "Emit metrics from the filesystem actor"
 type: feature
 authors: dominiklohmann
 pr: 2572

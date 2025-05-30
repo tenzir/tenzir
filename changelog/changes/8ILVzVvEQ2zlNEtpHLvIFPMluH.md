@@ -1,5 +1,5 @@
 ---
-title: Prefer recent partitions for retro lookups
+title: "Prefer recent partitions for retro lookups"
 type: change
 authors: dominiklohmann
 pr: 4636

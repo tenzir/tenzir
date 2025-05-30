@@ -1,5 +1,5 @@
 ---
-title: Show loaded config files in status output
+title: "Show loaded config files in status output"
 type: feature
 authors: dominiklohmann
 pr: 1871

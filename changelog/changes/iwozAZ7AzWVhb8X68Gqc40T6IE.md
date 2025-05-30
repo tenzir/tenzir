@@ -1,5 +1,5 @@
 ---
-title: Fix a hang in `if` for stalled inputs
+title: "Fix a hang in `if` for stalled inputs"
 type: bugfix
 authors: dominiklohmann
 pr: 5196

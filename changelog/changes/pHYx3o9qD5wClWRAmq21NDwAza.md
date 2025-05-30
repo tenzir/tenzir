@@ -1,5 +1,5 @@
 ---
-title: Add `--precise` mode to JSON parser
+title: "Add `--precise` mode to JSON parser"
 type: feature
 authors: jachris
 pr: 4169

@@ -1,5 +1,5 @@
 ---
-title: Fix crash when using configured pipelines for the first time
+title: "Fix crash when using configured pipelines for the first time"
 type: bugfix
 authors: dominiklohmann
 pr: 4020

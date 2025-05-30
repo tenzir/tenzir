@@ -1,5 +1,5 @@
 ---
-title: Fix the demo node Docker image's entrypoint
+title: "Fix the demo node Docker image's entrypoint"
 type: bugfix
 authors: dominiklohmann
 pr: 4258

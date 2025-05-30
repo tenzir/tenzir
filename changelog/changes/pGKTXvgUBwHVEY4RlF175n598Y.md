@@ -1,5 +1,5 @@
 ---
-title: Upgrade partition transformer to new pipelines
+title: "Upgrade partition transformer to new pipelines"
 type: feature
 authors: jachris
 pr: 3064

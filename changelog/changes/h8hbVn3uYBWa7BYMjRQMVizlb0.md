@@ -1,5 +1,5 @@
 ---
-title: Ignore static plugins when specified in config
+title: "Ignore static plugins when specified in config"
 type: bugfix
 authors: dominiklohmann
 pr: 1528

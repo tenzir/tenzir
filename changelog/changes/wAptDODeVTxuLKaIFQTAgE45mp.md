@@ -1,5 +1,5 @@
 ---
-title: Enable type extractors to support user defined types
+title: "Enable type extractors to support user defined types"
 type: feature
 authors: tobim
 pr: 1382

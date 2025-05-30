@@ -1,5 +1,5 @@
 ---
-title: Deduplicate plugin entrypoint in sources
+title: "Deduplicate plugin entrypoint in sources"
 type: bugfix
 authors: dominiklohmann
 pr: 1573

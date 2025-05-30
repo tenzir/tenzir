@@ -1,5 +1,5 @@
 ---
-title: Handle assert gracefully in `write_syslog`
+title: "Handle assert gracefully in `write_syslog`"
 type: bugfix
 authors: raxyte
 pr: 5191

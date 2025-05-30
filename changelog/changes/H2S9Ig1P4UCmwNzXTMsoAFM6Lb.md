@@ -1,5 +1,5 @@
 ---
-title: Remove metrics from `/pipeline/list`
+title: "Remove metrics from `/pipeline/list`"
 type: change
 authors: dominiklohmann
 pr: 4114

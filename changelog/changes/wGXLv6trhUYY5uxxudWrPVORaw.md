@@ -1,5 +1,5 @@
 ---
-title: Implement an `assert_throughput` operator
+title: "Implement an `assert_throughput` operator"
 type: feature
 authors: dominiklohmann
 pr: 5055

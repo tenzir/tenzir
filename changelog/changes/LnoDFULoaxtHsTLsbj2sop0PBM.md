@@ -1,5 +1,5 @@
 ---
-title: Properly indicate failure in the rebuild command
+title: "Properly indicate failure in the rebuild command"
 type: bugfix
 authors: dominiklohmann
 pr: 2466

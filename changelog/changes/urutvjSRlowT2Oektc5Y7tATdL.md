@@ -1,5 +1,5 @@
 ---
-title: Fix spawn source subcommand
+title: "Fix spawn source subcommand"
 type: bugfix
 authors: tobim
 pr: 954

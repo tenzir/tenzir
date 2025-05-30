@@ -1,5 +1,5 @@
 ---
-title: Implement serialization_plugins for store_plugins
+title: "Implement serialization_plugins for store_plugins"
 type: bugfix
 authors: Dakostu
 pr: 3537

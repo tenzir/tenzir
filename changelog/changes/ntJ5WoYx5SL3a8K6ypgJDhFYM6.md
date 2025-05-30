@@ -1,5 +1,5 @@
 ---
-title: Add a get subcommand to retrieve events from the archive directly
+title: "Add a get subcommand to retrieve events from the archive directly"
 type: feature
 authors: tobim
 pr: 938

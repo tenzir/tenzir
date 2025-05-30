@@ -1,5 +1,5 @@
 ---
-title: Delay catalog lookups until catalog is ready
+title: "Delay catalog lookups until catalog is ready"
 type: bugfix
 authors: dominiklohmann
 pr: 5156

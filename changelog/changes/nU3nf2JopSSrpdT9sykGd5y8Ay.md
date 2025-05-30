@@ -1,5 +1,5 @@
 ---
-title: Support environment variables as alternate config mechanism
+title: "Support environment variables as alternate config mechanism"
 type: feature
 authors: mavam
 pr: 2162

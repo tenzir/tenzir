@@ -1,5 +1,5 @@
 ---
-title: Fix some shutdown issues in the web plugin
+title: "Fix some shutdown issues in the web plugin"
 type: bugfix
 authors: lava
 pr: 2860

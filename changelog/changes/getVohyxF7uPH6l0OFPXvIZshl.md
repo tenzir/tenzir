@@ -1,5 +1,5 @@
 ---
-title: Add index metric for created active partitions
+title: "Add index metric for created active partitions"
 type: feature
 authors: lava
 pr: 2302

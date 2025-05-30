@@ -1,5 +1,5 @@
 ---
-title: Fix cache eviction always happening on maximally large caches
+title: "Fix cache eviction always happening on maximally large caches"
 type: bugfix
 authors: Avaq
 pr: 5039

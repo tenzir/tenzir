@@ -1,5 +1,5 @@
 ---
-title: Add new expert-only options to control demand
+title: "Add new expert-only options to control demand"
 type: change
 authors: dominiklohmann
 pr: 4447

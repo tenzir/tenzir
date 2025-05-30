@@ -1,5 +1,5 @@
 ---
-title: Add percentage of total number of events to index status
+title: "Add percentage of total number of events to index status"
 type: feature
 authors: dominiklohmann
 pr: 2351

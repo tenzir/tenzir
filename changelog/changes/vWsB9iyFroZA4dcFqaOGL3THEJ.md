@@ -1,5 +1,5 @@
 ---
-title: Disable 0mq socket lingering
+title: "Disable 0mq socket lingering"
 type: change
 authors: mavam
 pr: 3536

@@ -1,5 +1,5 @@
 ---
-title: Merge contents of all configuration files
+title: "Merge contents of all configuration files"
 type: feature
 authors: dominiklohmann
 pr: 1040

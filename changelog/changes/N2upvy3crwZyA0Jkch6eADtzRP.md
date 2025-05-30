@@ -1,5 +1,5 @@
 ---
-title: Do not refuse startup when `pid.lock` is invalid
+title: "Do not refuse startup when `pid.lock` is invalid"
 type: bugfix
 authors: dominiklohmann
 pr: 5164

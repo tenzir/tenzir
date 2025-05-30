@@ -1,5 +1,5 @@
 ---
-title: Keep from tcp pipelines running on connection failures
+title: "Keep from tcp pipelines running on connection failures"
 type: bugfix
 authors: tobim
 pr: 4602

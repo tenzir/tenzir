@@ -1,5 +1,5 @@
 ---
-title: Don't terminate `export` when used with `every`
+title: "Don't terminate `export` when used with `every`"
 type: bugfix
 authors: tobim
 pr: 4382

@@ -1,5 +1,5 @@
 ---
-title: Support case insensitivity in patterns
+title: "Support case insensitivity in patterns"
 type: feature
 authors: Dakostu
 pr: 2951

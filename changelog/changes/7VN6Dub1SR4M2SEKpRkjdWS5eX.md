@@ -1,5 +1,5 @@
 ---
-title: Fix a bunch of smaller issues
+title: "Fix a bunch of smaller issues"
 type: bugfix
 authors: dominiklohmann
 pr: 1697

@@ -1,5 +1,5 @@
 ---
-title: Normalize GNUInstallDirs for external plugins
+title: "Normalize GNUInstallDirs for external plugins"
 type: bugfix
 authors: dominiklohmann
 pr: 1786

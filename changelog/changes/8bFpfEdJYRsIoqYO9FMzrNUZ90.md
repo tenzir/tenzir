@@ -1,5 +1,5 @@
 ---
-title: Clean up transform steps (and native plugins generally)
+title: "Clean up transform steps (and native plugins generally)"
 type: feature
 authors: dominiklohmann
 pr: 2228

@@ -1,5 +1,5 @@
 ---
-title: Add plugin options to enable self-signed platform certificates
+title: "Add plugin options to enable self-signed platform certificates"
 type: feature
 authors: lava
 pr: 4918

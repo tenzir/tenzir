@@ -1,5 +1,5 @@
 ---
-title: Add running and paused times to pipeline metrics
+title: "Add running and paused times to pipeline metrics"
 type: feature
 authors: dominiklohmann
 pr: 3940

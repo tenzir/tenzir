@@ -1,5 +1,5 @@
 ---
-title: Add 'pseudonymize' pipeline operator
+title: "Add 'pseudonymize' pipeline operator"
 type: change
 authors: Dakostu
 pr: 2719

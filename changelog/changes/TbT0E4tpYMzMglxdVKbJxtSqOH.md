@@ -1,5 +1,5 @@
 ---
-title: Fix data parser precedence
+title: "Fix data parser precedence"
 type: bugfix
 authors: jachris
 pr: 4523

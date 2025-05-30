@@ -1,5 +1,5 @@
 ---
-title: Add new debugging features to VAST tools
+title: "Add new debugging features to VAST tools"
 type: change
 authors: lava
 pr: 2260

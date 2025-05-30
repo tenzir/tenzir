@@ -1,5 +1,5 @@
 ---
-title: Use adaptive resolution and `Z` suffix in timestamp printer
+title: "Use adaptive resolution and `Z` suffix in timestamp printer"
 type: change
 authors: jachris
 pr: 4916

@@ -1,5 +1,5 @@
 ---
-title: Keep layer-2 framing when reading PCAP payload
+title: "Keep layer-2 framing when reading PCAP payload"
 type: change
 authors: mavam
 pr: 1797

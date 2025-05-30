@@ -1,5 +1,5 @@
 ---
-title: Send initial db state to new partition creation listeners
+title: "Send initial db state to new partition creation listeners"
 type: bugfix
 authors: lava
 pr: 2103

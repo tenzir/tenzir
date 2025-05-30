@@ -1,5 +1,5 @@
 ---
-title: Expand subnet value predicates
+title: "Expand subnet value predicates"
 type: change
 authors: mavam
 pr: 1373

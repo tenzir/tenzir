@@ -1,5 +1,5 @@
 ---
-title: Support building with against {fmt} 8.x
+title: "Support building with against {fmt} 8.x"
 type: change
 authors: dominiklohmann
 pr: 1846

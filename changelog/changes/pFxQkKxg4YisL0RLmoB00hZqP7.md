@@ -1,5 +1,5 @@
 ---
-title: Make the start command print the endpoint on stdout
+title: "Make the start command print the endpoint on stdout"
 type: change
 authors: tobim
 pr: 1271

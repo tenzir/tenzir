@@ -1,5 +1,5 @@
 ---
-title: Automatically add the skip attribute to records in lists
+title: "Automatically add the skip attribute to records in lists"
 type: bugfix
 authors: tobim
 pr: 1933

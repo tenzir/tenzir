@@ -1,5 +1,5 @@
 ---
-title: Honor proxy settings in the SQS connector
+title: "Honor proxy settings in the SQS connector"
 type: bugfix
 authors: tobim
 pr: 4359

@@ -1,5 +1,5 @@
 ---
-title: Implement `context::erase`
+title: "Implement `context::erase`"
 type: feature
 authors: dominiklohmann
 pr: 4864

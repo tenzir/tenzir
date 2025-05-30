@@ -1,5 +1,5 @@
 ---
-title: Handle arbitrary types in bloom filter synopsis
+title: "Handle arbitrary types in bloom filter synopsis"
 type: bugfix
 authors: lava
 pr: 1685

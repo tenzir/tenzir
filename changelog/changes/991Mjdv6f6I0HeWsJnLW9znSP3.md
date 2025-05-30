@@ -1,5 +1,5 @@
 ---
-title: Fix open partition tracking in the `lookup` operator
+title: "Fix open partition tracking in the `lookup` operator"
 type: bugfix
 authors: dominiklohmann
 pr: 4363

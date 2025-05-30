@@ -1,5 +1,5 @@
 ---
-title: Enable real-time metrics reporting
+title: "Enable real-time metrics reporting"
 type: feature
 authors: dominiklohmann
 pr: 1368

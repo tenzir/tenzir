@@ -1,5 +1,5 @@
 ---
-title: Add `xsv --no-header`
+title: "Add `xsv --no-header`"
 type: feature
 authors: eliaskosunen
 pr: 3821

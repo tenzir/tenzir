@@ -1,5 +1,5 @@
 ---
-title: Fix hang in `cache` when creating an empty cache
+title: "Fix hang in `cache` when creating an empty cache"
 type: bugfix
 authors: dominiklohmann
 pr: 5042

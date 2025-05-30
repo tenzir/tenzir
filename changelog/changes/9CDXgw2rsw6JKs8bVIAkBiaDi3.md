@@ -1,5 +1,5 @@
 ---
-title: Parquet store plugin
+title: "Parquet store plugin"
 type: change
 authors: dispanser
 pr: 2284

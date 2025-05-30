@@ -1,5 +1,5 @@
 ---
-title: Fix `python` deadlock for empty input
+title: "Fix `python` deadlock for empty input"
 type: bugfix
 authors: jachris
 pr: 4086

@@ -1,5 +1,5 @@
 ---
-title: Implement the s3 connector
+title: "Implement the s3 connector"
 type: feature
 authors: Dakostu
 pr: 3496

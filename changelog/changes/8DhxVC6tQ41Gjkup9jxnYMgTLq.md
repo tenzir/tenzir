@@ -1,5 +1,5 @@
 ---
-title: Handle empty files in `read_xsv` & friends
+title: "Handle empty files in `read_xsv` & friends"
 type: bugfix
 authors: IyeOnline
 pr: 5215

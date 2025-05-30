@@ -1,5 +1,5 @@
 ---
-title: Add support for type-level synopses and a string synopsis
+title: "Add support for type-level synopses and a string synopsis"
 type: feature
 authors: tobim
 pr: 1214

@@ -1,5 +1,5 @@
 ---
-title: Fix printing of non-null intrusive pointers
+title: "Fix printing of non-null intrusive pointers"
 type: bugfix
 authors: lava
 pr: 1430

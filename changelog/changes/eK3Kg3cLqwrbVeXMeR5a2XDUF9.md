@@ -1,5 +1,5 @@
 ---
-title: Apply the changes from the new `pipeline_manager` plugin
+title: "Apply the changes from the new `pipeline_manager` plugin"
 type: feature
 authors: Dakostu
 pr: 3164

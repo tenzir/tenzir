@@ -1,5 +1,5 @@
 ---
-title: Make metrics opt-in
+title: "Make metrics opt-in"
 type: change
 authors: tobim
 pr: 1137

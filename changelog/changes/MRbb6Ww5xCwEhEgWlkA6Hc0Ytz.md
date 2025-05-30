@@ -1,5 +1,5 @@
 ---
-title: Fix operator parenthesis continuation
+title: "Fix operator parenthesis continuation"
 type: bugfix
 authors: jachris
 pr: 4885

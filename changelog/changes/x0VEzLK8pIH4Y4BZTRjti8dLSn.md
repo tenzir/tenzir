@@ -1,5 +1,5 @@
 ---
-title: Prevent unbounded memory usage in `export --live`
+title: "Prevent unbounded memory usage in `export --live`"
 type: change
 authors: dominiklohmann
 pr: 4396

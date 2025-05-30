@@ -1,5 +1,5 @@
 ---
-title: Implement `timeshift` and `delay` operators
+title: "Implement `timeshift` and `delay` operators"
 type: feature
 authors: dominiklohmann
 pr: 3701

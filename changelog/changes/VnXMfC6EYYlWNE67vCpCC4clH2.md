@@ -1,5 +1,5 @@
 ---
-title: Add the `openapi` operator
+title: "Add the `openapi` operator"
 type: feature
 authors: dominiklohmann
 pr: 3898

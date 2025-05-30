@@ -1,5 +1,5 @@
 ---
-title: Raise the default and max timeouts for `/serve`
+title: "Raise the default and max timeouts for `/serve`"
 type: change
 authors: dominiklohmann
 pr: 4370

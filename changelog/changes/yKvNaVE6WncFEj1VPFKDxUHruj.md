@@ -1,5 +1,5 @@
 ---
-title: Remove previously deprecated options
+title: "Remove previously deprecated options"
 type: change
 authors: dominiklohmann
 pr: 3358

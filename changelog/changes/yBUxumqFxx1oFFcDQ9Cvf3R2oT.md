@@ -1,5 +1,5 @@
 ---
-title: Implement optional dense indexes
+title: "Implement optional dense indexes"
 type: feature
 authors: patszt
 pr: 2430

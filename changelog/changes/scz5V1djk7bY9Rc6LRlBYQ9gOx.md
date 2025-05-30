@@ -1,5 +1,5 @@
 ---
-title: Merge the type-registry into the catalog
+title: "Merge the type-registry into the catalog"
 type: change
 authors: Dakostu
 pr: 2745

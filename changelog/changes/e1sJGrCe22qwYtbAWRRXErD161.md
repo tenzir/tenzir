@@ -1,5 +1,5 @@
 ---
-title: Support dropping entire schemas in `drop` operator
+title: "Support dropping entire schemas in `drop` operator"
 type: feature
 authors: dominiklohmann
 pr: 2419

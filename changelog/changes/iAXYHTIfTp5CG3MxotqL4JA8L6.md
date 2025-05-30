@@ -1,5 +1,5 @@
 ---
-title: Add new CEF parser plugin
+title: "Add new CEF parser plugin"
 type: feature
 authors: jachris
 pr: 3110

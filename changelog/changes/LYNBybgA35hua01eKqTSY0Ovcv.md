@@ -1,5 +1,5 @@
 ---
-title: Don't send dynamic type information to connecting sources
+title: "Don't send dynamic type information to connecting sources"
 type: change
 authors: lava
 pr: 1656

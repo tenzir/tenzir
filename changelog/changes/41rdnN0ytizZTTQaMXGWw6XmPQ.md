@@ -1,5 +1,5 @@
 ---
-title: Support concepts in more places
+title: "Support concepts in more places"
 type: feature
 authors: dominiklohmann
 pr: 3812

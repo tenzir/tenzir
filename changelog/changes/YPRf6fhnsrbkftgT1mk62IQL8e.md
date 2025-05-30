@@ -1,5 +1,5 @@
 ---
-title: Fix query pruning in the catalog
+title: "Fix query pruning in the catalog"
 type: bugfix
 authors: lava
 pr: 2264

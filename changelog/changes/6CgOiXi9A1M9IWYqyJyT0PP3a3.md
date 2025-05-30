@@ -1,5 +1,5 @@
 ---
-title: Introduce a `version` source operator
+title: "Introduce a `version` source operator"
 type: feature
 authors: dominiklohmann
 pr: 3123

@@ -1,5 +1,5 @@
 ---
-title: Add 'min_events' parameters to /serve endpoint
+title: "Add 'min_events' parameters to /serve endpoint"
 type: feature
 authors: lava
 pr: 3666

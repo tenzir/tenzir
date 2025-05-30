@@ -1,5 +1,5 @@
 ---
-title: Support nested records in the Arrow Builder
+title: "Support nested records in the Arrow Builder"
 type: feature
 authors: dominiklohmann
 pr: 1429

@@ -1,5 +1,5 @@
 ---
-title: Change Arrow extension type and metadata prefixes
+title: "Change Arrow extension type and metadata prefixes"
 type: change
 authors: dominiklohmann
 pr: 3208

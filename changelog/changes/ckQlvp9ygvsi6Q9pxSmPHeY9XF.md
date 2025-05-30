@@ -1,5 +1,5 @@
 ---
-title: Allow configuring pcap snapshot length
+title: "Allow configuring pcap snapshot length"
 type: feature
 authors: dominiklohmann
 pr: 642

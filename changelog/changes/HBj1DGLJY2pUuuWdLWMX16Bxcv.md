@@ -1,5 +1,5 @@
 ---
-title: Add a nix package expression for VAST
+title: "Add a nix package expression for VAST"
 type: feature
 authors: tobim
 pr: 740

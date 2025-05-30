@@ -1,5 +1,5 @@
 ---
-title: Support `show`-ing all aspects at once
+title: "Support `show`-ing all aspects at once"
 type: feature
 authors: dominiklohmann
 pr: 3650

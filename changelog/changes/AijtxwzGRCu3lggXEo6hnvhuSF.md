@@ -1,5 +1,5 @@
 ---
-title: Make data predicate evaluation column-major
+title: "Make data predicate evaluation column-major"
 type: feature
 authors: dominiklohmann
 pr: 2730

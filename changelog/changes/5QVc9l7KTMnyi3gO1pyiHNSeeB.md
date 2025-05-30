@@ -1,5 +1,5 @@
 ---
-title: PRs 1330-1376
+title: "PRs 1330-1376"
 type: feature
 authors: dominiklohmann
 pr: 1330

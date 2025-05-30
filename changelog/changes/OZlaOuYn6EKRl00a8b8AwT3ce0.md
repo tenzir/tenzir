@@ -1,5 +1,5 @@
 ---
-title: Split `compress`/`decompress` into separate operators
+title: "Split `compress`/`decompress` into separate operators"
 type: change
 authors: IyeOnline
 pr: 4876

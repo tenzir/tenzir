@@ -1,5 +1,5 @@
 ---
-title: Fix crash in `sigma` operator for non-existent file
+title: "Fix crash in `sigma` operator for non-existent file"
 type: bugfix
 authors: dominiklohmann
 pr: 4010

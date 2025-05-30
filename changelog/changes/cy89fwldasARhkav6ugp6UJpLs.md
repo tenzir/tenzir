@@ -1,5 +1,5 @@
 ---
-title: Fix crash for heterogeneous subnet lookup tables
+title: "Fix crash for heterogeneous subnet lookup tables"
 type: bugfix
 authors: dominiklohmann
 pr: 4531

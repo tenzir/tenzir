@@ -1,5 +1,5 @@
 ---
-title: Allow using `and`, `or`, and `not` in expressions
+title: "Allow using `and`, `or`, and `not` in expressions"
 type: feature
 authors: dominiklohmann
 pr: 3993

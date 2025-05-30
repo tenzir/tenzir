@@ -1,5 +1,5 @@
 ---
-title: Forcefully emit batches on input timeout error
+title: "Forcefully emit batches on input timeout error"
 type: feature
 authors: dominiklohmann
 pr: 916

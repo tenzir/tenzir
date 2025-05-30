@@ -1,5 +1,5 @@
 ---
-title: Add a --live option to the export operator
+title: "Add a --live option to the export operator"
 type: feature
 authors: tobim
 pr: 3612

@@ -1,5 +1,5 @@
 ---
-title: Reply to status requests in sinks
+title: "Reply to status requests in sinks"
 type: bugfix
 authors: dominiklohmann
 pr: 1155

@@ -1,5 +1,5 @@
 ---
-title: Fix response promises for disk monitor deletion
+title: "Fix response promises for disk monitor deletion"
 type: bugfix
 authors: dominiklohmann
 pr: 1892

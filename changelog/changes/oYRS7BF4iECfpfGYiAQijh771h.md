@@ -1,5 +1,5 @@
 ---
-title: Switch to a calendar-based versioning scheme
+title: "Switch to a calendar-based versioning scheme"
 type: change
 authors: dominiklohmann
 pr: 739

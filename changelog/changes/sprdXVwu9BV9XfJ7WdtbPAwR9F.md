@@ -1,5 +1,5 @@
 ---
-title: Fix config parsing bug
+title: "Fix config parsing bug"
 type: bugfix
 authors: dominiklohmann
 pr: 5210

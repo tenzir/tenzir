@@ -1,5 +1,5 @@
 ---
-title: Fix CONVERSION part for GROK patterns
+title: "Fix CONVERSION part for GROK patterns"
 type: bugfix
 authors: IyeOnline
 pr: 4939

@@ -1,5 +1,5 @@
 ---
-title: Support parsing of concatenated PCAPs
+title: "Support parsing of concatenated PCAPs"
 type: change
 authors: mavam
 pr: 3513

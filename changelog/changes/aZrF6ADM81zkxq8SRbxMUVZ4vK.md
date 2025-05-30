@@ -1,5 +1,5 @@
 ---
-title: Allow the '-' in the expression key parser
+title: "Allow the '-' in the expression key parser"
 type: change
 authors: tobim
 pr: 999

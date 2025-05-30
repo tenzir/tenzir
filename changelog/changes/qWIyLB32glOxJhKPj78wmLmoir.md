@@ -1,5 +1,5 @@
 ---
-title: Set `SO_REUSEADDR` in the UDP connector
+title: "Set `SO_REUSEADDR` in the UDP connector"
 type: bugfix
 authors: dominiklohmann
 pr: 4579

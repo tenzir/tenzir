@@ -1,5 +1,5 @@
 ---
-title: Add third-party licenses for embedded dependencies
+title: "Add third-party licenses for embedded dependencies"
 type: feature
 authors: dominiklohmann
 pr: 1306

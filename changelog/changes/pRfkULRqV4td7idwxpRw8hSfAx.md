@@ -1,5 +1,5 @@
 ---
-title: Don't overwrite index state after startup error
+title: "Don't overwrite index state after startup error"
 type: bugfix
 authors: lava
 pr: 1026

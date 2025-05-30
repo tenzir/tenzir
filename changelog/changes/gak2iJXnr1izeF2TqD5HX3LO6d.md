@@ -1,5 +1,5 @@
 ---
-title: Add Snowflake sink
+title: "Add Snowflake sink"
 type: feature
 authors: IyeOnline
 pr: 4589

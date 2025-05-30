@@ -1,5 +1,5 @@
 ---
-title: Improve configured pipeline startup errors
+title: "Improve configured pipeline startup errors"
 type: change
 authors: jachris
 pr: 4886

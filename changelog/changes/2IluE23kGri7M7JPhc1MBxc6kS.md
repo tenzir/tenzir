@@ -1,5 +1,5 @@
 ---
-title: Rename `#type` to `#schema` and introduce `#schema_id`
+title: "Rename `#type` to `#schema` and introduce `#schema_id`"
 type: feature
 authors: jachris
 pr: 3183

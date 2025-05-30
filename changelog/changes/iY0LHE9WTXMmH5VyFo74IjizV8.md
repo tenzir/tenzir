@@ -1,5 +1,5 @@
 ---
-title: Trigger new compaction runs immediately on error
+title: "Trigger new compaction runs immediately on error"
 type: bugfix
 authors: dominiklohmann
 pr: 3006

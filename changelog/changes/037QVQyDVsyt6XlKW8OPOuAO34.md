@@ -1,5 +1,5 @@
 ---
-title: Remove built-in type aliases
+title: "Remove built-in type aliases"
 type: change
 authors: dominiklohmann
 pr: 4299

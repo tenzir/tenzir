@@ -1,5 +1,5 @@
 ---
-title: Enhance HTTP connector controls
+title: "Enhance HTTP connector controls"
 type: feature
 authors: mavam
 pr: 4811

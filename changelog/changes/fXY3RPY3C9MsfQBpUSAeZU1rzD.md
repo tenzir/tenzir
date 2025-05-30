@@ -1,5 +1,5 @@
 ---
-title: Bump vast-plugins to a95e420
+title: "Bump vast-plugins to a95e420"
 type: bugfix
 authors: tobim
 pr: 3115

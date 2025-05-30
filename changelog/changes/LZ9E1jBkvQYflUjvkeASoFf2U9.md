@@ -1,5 +1,5 @@
 ---
-title: Fix start command detection for spdlog
+title: "Fix start command detection for spdlog"
 type: bugfix
 authors: dominiklohmann
 pr: 1530

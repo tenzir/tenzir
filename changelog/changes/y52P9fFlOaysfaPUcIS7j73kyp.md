@@ -1,5 +1,5 @@
 ---
-title: Override lookup-table context entries for duplicate keys
+title: "Override lookup-table context entries for duplicate keys"
 type: bugfix
 authors: dominiklohmann
 pr: 3808

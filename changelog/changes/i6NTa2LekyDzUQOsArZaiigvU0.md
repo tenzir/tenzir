@@ -1,5 +1,5 @@
 ---
-title: Fix use-after-free bug in indexer state
+title: "Fix use-after-free bug in indexer state"
 type: bugfix
 authors: lava
 pr: 896

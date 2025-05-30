@@ -1,5 +1,5 @@
 ---
-title: Implement `from_opensearch`
+title: "Implement `from_opensearch`"
 type: feature
 authors: raxyte
 pr: 5075

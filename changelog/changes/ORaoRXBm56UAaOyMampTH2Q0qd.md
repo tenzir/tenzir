@@ -1,5 +1,5 @@
 ---
-title: Always format time values with microsecond precision
+title: "Always format time values with microsecond precision"
 type: change
 authors: tobim
 pr: 2380

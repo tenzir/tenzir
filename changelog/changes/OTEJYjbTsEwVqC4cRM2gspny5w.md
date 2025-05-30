@@ -1,5 +1,5 @@
 ---
-title: Implement `where` and `map` on lists
+title: "Implement `where` and `map` on lists"
 type: feature
 authors: dominiklohmann
 pr: 4788

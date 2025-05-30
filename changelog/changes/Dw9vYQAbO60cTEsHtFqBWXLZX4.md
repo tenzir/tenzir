@@ -1,5 +1,5 @@
 ---
-title: Fix datagram source actor not running heartbeat
+title: "Fix datagram source actor not running heartbeat"
 type: bugfix
 authors: dominiklohmann
 pr: 662

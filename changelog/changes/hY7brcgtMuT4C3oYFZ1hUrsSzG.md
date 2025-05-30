@@ -1,5 +1,5 @@
 ---
-title: Introduce the VERBOSE log level
+title: "Introduce the VERBOSE log level"
 type: change
 authors: tobim
 pr: 787

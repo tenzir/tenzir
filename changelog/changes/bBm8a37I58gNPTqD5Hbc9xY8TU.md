@@ -1,5 +1,5 @@
 ---
-title: Infer non-config types in extend and replace operators
+title: "Infer non-config types in extend and replace operators"
 type: bugfix
 authors: dominiklohmann
 pr: 2768

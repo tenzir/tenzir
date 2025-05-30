@@ -1,5 +1,5 @@
 ---
-title: Improve handling of open file descriptors
+title: "Improve handling of open file descriptors"
 type: feature
 authors: lava
 pr: 3784

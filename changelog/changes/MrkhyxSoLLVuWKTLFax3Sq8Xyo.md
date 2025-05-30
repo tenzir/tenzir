@@ -1,5 +1,5 @@
 ---
-title: Rename count.skip-candidate-checks to count.estimate
+title: "Rename count.skip-candidate-checks to count.estimate"
 type: change
 authors: dominiklohmann
 pr: 843

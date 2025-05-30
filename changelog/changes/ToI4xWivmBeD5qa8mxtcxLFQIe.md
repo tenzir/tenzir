@@ -1,5 +1,5 @@
 ---
-title: Publish Sysmon schema
+title: "Publish Sysmon schema"
 type: feature
 authors: dominiklohmann
 pr: 886

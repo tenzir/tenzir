@@ -1,5 +1,5 @@
 ---
-title: Add `to_opensearch` and `to_elasticsearch` sink operators
+title: "Add `to_opensearch` and `to_elasticsearch` sink operators"
 type: feature
 authors: raxyte
 pr: 4871

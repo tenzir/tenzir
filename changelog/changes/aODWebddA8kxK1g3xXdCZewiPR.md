@@ -1,5 +1,5 @@
 ---
-title: Change boolean literals to `true` and `false`
+title: "Change boolean literals to `true` and `false`"
 type: change
 authors: dominiklohmann
 pr: 2844

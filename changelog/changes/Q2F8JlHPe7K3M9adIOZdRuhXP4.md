@@ -1,5 +1,5 @@
 ---
-title: Remove the legacy metrics system
+title: "Remove the legacy metrics system"
 type: feature
 authors: dominiklohmann
 pr: 4381

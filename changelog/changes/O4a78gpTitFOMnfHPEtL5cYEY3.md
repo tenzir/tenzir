@@ -1,5 +1,5 @@
 ---
-title: Build the `parquet` plugin in the Dockerfile
+title: "Build the `parquet` plugin in the Dockerfile"
 type: bugfix
 authors: dominiklohmann
 pr: 4760

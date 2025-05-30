@@ -1,5 +1,5 @@
 ---
-title: Add support for Apache Arrow
+title: "Add support for Apache Arrow"
 type: feature
 authors: dominiklohmann
 pr: 633

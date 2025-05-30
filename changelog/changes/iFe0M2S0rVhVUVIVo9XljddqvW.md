@@ -1,5 +1,5 @@
 ---
-title: Fix deletion of removed configured contexts
+title: "Fix deletion of removed configured contexts"
 type: bugfix
 authors: tobim
 pr: 4330

@@ -1,5 +1,5 @@
 ---
-title: Install example configuration files to datarootdir
+title: "Install example configuration files to datarootdir"
 type: change
 authors: dominiklohmann
 pr: 1880

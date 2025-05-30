@@ -1,5 +1,5 @@
 ---
-title: Implement sub-duration functions
+title: "Implement sub-duration functions"
 type: feature
 authors: raxyte
 pr: 4985

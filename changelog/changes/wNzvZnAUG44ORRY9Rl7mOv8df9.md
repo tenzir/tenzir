@@ -1,5 +1,5 @@
 ---
-title: Fix HTTP PUT with empty request body
+title: "Fix HTTP PUT with empty request body"
 type: bugfix
 authors: mavam
 pr: 4092

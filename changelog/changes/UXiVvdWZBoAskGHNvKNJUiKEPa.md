@@ -1,5 +1,5 @@
 ---
-title: Support -v, -vv, -vvv, -q, -qq, -qqq for verbosity
+title: "Support -v, -vv, -vvv, -q, -qq, -qqq for verbosity"
 type: change
 authors: dominiklohmann
 pr: 1244

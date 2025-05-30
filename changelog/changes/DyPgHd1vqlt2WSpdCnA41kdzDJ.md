@@ -1,5 +1,5 @@
 ---
-title: Create intermediate dirs for db-directory and respect schema-dirs in bare mode
+title: "Create intermediate dirs for db-directory and respect schema-dirs in bare mode"
 type: bugfix
 authors: dominiklohmann
 pr: 2046

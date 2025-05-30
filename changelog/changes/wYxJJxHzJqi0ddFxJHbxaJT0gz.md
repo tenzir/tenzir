@@ -1,5 +1,5 @@
 ---
-title: Add native Sigma support
+title: "Add native Sigma support"
 type: feature
 authors: mavam
 pr: 1379

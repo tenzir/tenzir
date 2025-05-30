@@ -1,5 +1,5 @@
 ---
-title: Rename statistics event to metrics
+title: "Rename statistics event to metrics"
 type: change
 authors: dominiklohmann
 pr: 870

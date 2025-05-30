@@ -1,5 +1,5 @@
 ---
-title: Fail late in the python operator setup
+title: "Fail late in the python operator setup"
 type: bugfix
 authors: tobim
 pr: 4066

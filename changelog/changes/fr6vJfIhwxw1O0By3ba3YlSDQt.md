@@ -1,5 +1,5 @@
 ---
-title: Update the plugins submodule pointer to include extended & serialized pipeline states
+title: "Update the plugins submodule pointer to include extended & serialized pipeline states"
 type: feature
 authors: Dakostu
 pr: 3554

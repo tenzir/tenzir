@@ -1,5 +1,5 @@
 ---
-title: Display failing pipeline diagnostics in `/serve`
+title: "Display failing pipeline diagnostics in `/serve`"
 type: bugfix
 authors: dominiklohmann
 pr: 3788

@@ -1,5 +1,5 @@
 ---
-title: Introduce `select` / `replace` / `extend` operators
+title: "Introduce `select` / `replace` / `extend` operators"
 type: change
 authors: dominiklohmann
 pr: 2423

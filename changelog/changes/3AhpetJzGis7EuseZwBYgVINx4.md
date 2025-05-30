@@ -1,5 +1,5 @@
 ---
-title: Fix race condition with exporter timeouts
+title: "Fix race condition with exporter timeouts"
 type: bugfix
 authors: lava
 pr: 2165

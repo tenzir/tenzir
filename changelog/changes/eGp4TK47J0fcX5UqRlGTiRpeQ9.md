@@ -1,5 +1,5 @@
 ---
-title: Return instantly in `/serve` if pipeline fails early
+title: "Return instantly in `/serve` if pipeline fails early"
 type: bugfix
 authors: dominiklohmann
 pr: 4688

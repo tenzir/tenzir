@@ -1,5 +1,5 @@
 ---
-title: Correct the use of ::read()
+title: "Correct the use of ::read()"
 type: bugfix
 authors: tobim
 pr: 1025

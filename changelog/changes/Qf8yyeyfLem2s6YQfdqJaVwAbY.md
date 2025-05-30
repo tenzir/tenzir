@@ -1,5 +1,5 @@
 ---
-title: Fix edge case when parsing nullable lists with type conflicts
+title: "Fix edge case when parsing nullable lists with type conflicts"
 type: bugfix
 authors: jachris
 pr: 5134

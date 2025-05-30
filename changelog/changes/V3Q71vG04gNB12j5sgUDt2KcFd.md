@@ -1,5 +1,5 @@
 ---
-title: Ensure cache directory is writable for multiple users
+title: "Ensure cache directory is writable for multiple users"
 type: bugfix
 authors: dominiklohmann
 pr: 4694

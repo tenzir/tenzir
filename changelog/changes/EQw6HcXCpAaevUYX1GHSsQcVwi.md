@@ -1,5 +1,5 @@
 ---
-title: Add active partition actor to unpersisted partitions on decomission
+title: "Add active partition actor to unpersisted partitions on decomission"
 type: bugfix
 authors: patszt
 pr: 2500

@@ -1,5 +1,5 @@
 ---
-title: Consolidate Dockerfiles
+title: "Consolidate Dockerfiles"
 type: change
 authors: 0snap
 pr: 1294

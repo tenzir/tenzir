@@ -1,5 +1,5 @@
 ---
-title: Add statistical aggregation functions
+title: "Add statistical aggregation functions"
 type: feature
 authors: dominiklohmann
 pr: 4208

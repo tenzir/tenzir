@@ -1,5 +1,5 @@
 ---
-title: Deduce types for heterogenous JSONL import
+title: "Deduce types for heterogenous JSONL import"
 type: feature
 authors: dominiklohmann
 pr: 875

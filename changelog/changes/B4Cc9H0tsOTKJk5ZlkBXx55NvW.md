@@ -1,5 +1,5 @@
 ---
-title: Add configurable pipelines
+title: "Add configurable pipelines"
 type: feature
 authors: tobim
 pr: 4006

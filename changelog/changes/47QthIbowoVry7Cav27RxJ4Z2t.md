@@ -1,5 +1,5 @@
 ---
-title: Make `feather` the default store-backend
+title: "Make `feather` the default store-backend"
 type: change
 authors: dominiklohmann
 pr: 2587

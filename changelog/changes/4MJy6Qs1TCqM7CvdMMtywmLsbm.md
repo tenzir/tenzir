@@ -1,5 +1,5 @@
 ---
-title: Implement `to_google_secops`
+title: "Implement `to_google_secops`"
 type: feature
 authors: raxyte
 pr: 5101

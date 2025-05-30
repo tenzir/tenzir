@@ -1,5 +1,5 @@
 ---
-title: Bundle an example configuration file with plugins
+title: "Bundle an example configuration file with plugins"
 type: feature
 authors: dominiklohmann
 pr: 1860

@@ -1,5 +1,5 @@
 ---
-title: Relax `transform_columns`
+title: "Relax `transform_columns`"
 type: bugfix
 authors: dominiklohmann
 pr: 4215

@@ -1,5 +1,5 @@
 ---
-title: Add an operator for partition candidate checks
+title: "Add an operator for partition candidate checks"
 type: feature
 authors: dominiklohmann
 pr: 4329

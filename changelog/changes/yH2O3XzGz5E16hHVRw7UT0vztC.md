@@ -1,5 +1,5 @@
 ---
-title: Fix incorrect context updates count in lookup metrics
+title: "Fix incorrect context updates count in lookup metrics"
 type: bugfix
 authors: dominiklohmann
 pr: 4655

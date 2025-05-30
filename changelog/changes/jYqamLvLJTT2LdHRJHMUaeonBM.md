@@ -1,5 +1,5 @@
 ---
-title: Fix potential race condition between evaluator and partition
+title: "Fix potential race condition between evaluator and partition"
 type: bugfix
 authors: lava
 pr: 1295

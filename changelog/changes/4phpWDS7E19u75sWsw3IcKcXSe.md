@@ -1,5 +1,5 @@
 ---
-title: Improve metrics collection
+title: "Improve metrics collection"
 type: change
 authors: dominiklohmann
 pr: 3982

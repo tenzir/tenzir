@@ -1,5 +1,5 @@
 ---
-title: Use proper full install dirs for system config
+title: "Use proper full install dirs for system config"
 type: bugfix
 authors: dominiklohmann
 pr: 1580

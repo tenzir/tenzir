@@ -1,5 +1,5 @@
 ---
-title: Optimize pipeline when using `/pipeline/launch`
+title: "Optimize pipeline when using `/pipeline/launch`"
 type: bugfix
 authors: jachris
 pr: 3801

@@ -1,5 +1,5 @@
 ---
-title: Allow the '-' in the expression key parser
+title: "Allow the '-' in the expression key parser"
 type: bugfix
 authors: tobim
 pr: 999

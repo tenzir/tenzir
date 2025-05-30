@@ -1,5 +1,5 @@
 ---
-title: Fix shutdown of sources and importer
+title: "Fix shutdown of sources and importer"
 type: bugfix
 authors: dominiklohmann
 pr: 3207

@@ -1,5 +1,5 @@
 ---
-title: Implement `x[y]` record indexing
+title: "Implement `x[y]` record indexing"
 type: feature
 authors: raxyte
 pr: 4795

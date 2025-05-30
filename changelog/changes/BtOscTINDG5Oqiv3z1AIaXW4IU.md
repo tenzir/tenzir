@@ -1,5 +1,5 @@
 ---
-title: Detect and report incomplete object in JSON parser
+title: "Detect and report incomplete object in JSON parser"
 type: bugfix
 authors: jachris
 pr: 3570

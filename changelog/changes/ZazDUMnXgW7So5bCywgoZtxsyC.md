@@ -1,5 +1,5 @@
 ---
-title: Update chat URL in README
+title: "Update chat URL in README"
 type: change
 authors: dominiklohmann
 pr: 1591

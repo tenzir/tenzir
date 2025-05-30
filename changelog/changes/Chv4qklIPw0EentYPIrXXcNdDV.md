@@ -1,5 +1,5 @@
 ---
-title: Fix a TOCTOU bug that caused the index to fail
+title: "Fix a TOCTOU bug that caused the index to fail"
 type: bugfix
 authors: dominiklohmann
 pr: 3994

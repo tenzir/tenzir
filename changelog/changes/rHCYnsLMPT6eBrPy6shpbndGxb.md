@@ -1,5 +1,5 @@
 ---
-title: Fix configured pipelines causing a crash when they contain a syntax error
+title: "Fix configured pipelines causing a crash when they contain a syntax error"
 type: bugfix
 authors: Dakostu
 pr: 4334

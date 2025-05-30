@@ -1,5 +1,5 @@
 ---
-title: Add support for reals in CSV without dot
+title: "Add support for reals in CSV without dot"
 type: bugfix
 authors: dominiklohmann
 pr: 2184

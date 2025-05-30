@@ -1,5 +1,5 @@
 ---
-title: Fix crash in the MSB in merging mode
+title: "Fix crash in the MSB in merging mode"
 type: bugfix
 authors: IyeOnline
 pr: 5028

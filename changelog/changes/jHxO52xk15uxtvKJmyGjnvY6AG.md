@@ -1,5 +1,5 @@
 ---
-title: Fix bugs in `where` when predicate evaluates to `null`
+title: "Fix bugs in `where` when predicate evaluates to `null`"
 type: bugfix
 authors: dominiklohmann
 pr: 4785

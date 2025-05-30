@@ -1,5 +1,5 @@
 ---
-title: Replace PID file if process does not exist
+title: "Replace PID file if process does not exist"
 type: change
 authors: tobim
 pr: 1128

@@ -1,5 +1,5 @@
 ---
-title: Remove the shutdown grace period
+title: "Remove the shutdown grace period"
 type: bugfix
 authors: dominiklohmann
 pr: 2568

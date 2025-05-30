@@ -1,5 +1,5 @@
 ---
-title: Bump minimum Debian requirement to Bullseye
+title: "Bump minimum Debian requirement to Bullseye"
 type: change
 authors: dominiklohmann
 pr: 1765

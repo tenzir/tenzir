@@ -1,5 +1,5 @@
 ---
-title: Add `deduplicate` operator
+title: "Add `deduplicate` operator"
 type: feature
 authors: eliaskosunen
 pr: 4068

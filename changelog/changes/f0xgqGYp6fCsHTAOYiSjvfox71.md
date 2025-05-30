@@ -1,5 +1,5 @@
 ---
-title: Deploy VAST to AWS Lambda
+title: "Deploy VAST to AWS Lambda"
 type: change
 authors: rdettai
 pr: 2108

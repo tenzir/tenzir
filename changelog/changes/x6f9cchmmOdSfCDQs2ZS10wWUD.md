@@ -1,5 +1,5 @@
 ---
-title: Fix `sort` type check
+title: "Fix `sort` type check"
 type: bugfix
 authors: jachris
 pr: 3655

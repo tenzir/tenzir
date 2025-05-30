@@ -1,5 +1,5 @@
 ---
-title: Use dedicated partitions for each layout
+title: "Use dedicated partitions for each layout"
 type: feature
 authors: tobim
 pr: 2096

@@ -1,5 +1,5 @@
 ---
-title: Update the repository to include retry delay-related bug fixes
+title: "Update the repository to include retry delay-related bug fixes"
 type: bugfix
 authors: Dakostu
 pr: 4184

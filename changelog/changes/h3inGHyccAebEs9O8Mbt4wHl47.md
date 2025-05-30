@@ -1,5 +1,5 @@
 ---
-title: Detect and handle breaking changes in schemas
+title: "Detect and handle breaking changes in schemas"
 type: bugfix
 authors: dominiklohmann
 pr: 1195

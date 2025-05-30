@@ -1,5 +1,5 @@
 ---
-title: Implement `encode_base64` and `decode_base64`
+title: "Implement `encode_base64` and `decode_base64`"
 type: feature
 authors: raxyte
 pr: 4806

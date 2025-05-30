@@ -1,5 +1,5 @@
 ---
-title: Add to_splunk to the ce binary packages
+title: "Add to_splunk to the ce binary packages"
 type: bugfix
 authors: tobim
 pr: 5012

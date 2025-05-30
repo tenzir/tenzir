@@ -1,5 +1,5 @@
 ---
-title: Implement the `measure` operator
+title: "Implement the `measure` operator"
 type: feature
 authors: dominiklohmann
 pr: 3093

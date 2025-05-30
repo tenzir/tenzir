@@ -1,5 +1,5 @@
 ---
-title: Fix configuration file option parsing
+title: "Fix configuration file option parsing"
 type: bugfix
 authors: tobim
 pr: 705

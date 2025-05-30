@@ -1,5 +1,5 @@
 ---
-title: Print timestamps with full precision for JSON
+title: "Print timestamps with full precision for JSON"
 type: change
 authors: dominiklohmann
 pr: 909

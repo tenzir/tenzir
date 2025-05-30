@@ -1,5 +1,5 @@
 ---
-title: Use the timestamp type for inferred event timestamp fields in the Zeek reader
+title: "Use the timestamp type for inferred event timestamp fields in the Zeek reader"
 type: bugfix
 authors: tobim
 pr: 2155

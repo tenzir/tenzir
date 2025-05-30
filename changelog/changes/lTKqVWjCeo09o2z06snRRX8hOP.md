@@ -1,5 +1,5 @@
 ---
-title: Always enable time and bool synopses
+title: "Always enable time and bool synopses"
 type: change
 authors: dominiklohmann
 pr: 3639

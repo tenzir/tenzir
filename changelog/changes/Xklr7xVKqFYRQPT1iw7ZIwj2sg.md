@@ -1,5 +1,5 @@
 ---
-title: Add `tenzir.retention` configuration
+title: "Add `tenzir.retention` configuration"
 type: feature
 authors: dominiklohmann
 pr: 4949

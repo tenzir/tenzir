@@ -1,5 +1,5 @@
 ---
-title: Evict old caches when exceeding capacity limits
+title: "Evict old caches when exceeding capacity limits"
 type: bugfix
 authors: dominiklohmann
 pr: 4984

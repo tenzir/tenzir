@@ -1,5 +1,5 @@
 ---
-title: Fix configuration options for the kafka plugin
+title: "Fix configuration options for the kafka plugin"
 type: bugfix
 authors: tobim
 pr: 4761

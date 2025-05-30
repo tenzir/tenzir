@@ -1,5 +1,5 @@
 ---
-title: Use individual files for changelog entries
+title: "Use individual files for changelog entries"
 type: change
 authors: dominiklohmann
 pr: 1559

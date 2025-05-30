@@ -1,5 +1,5 @@
 ---
-title: Add a timeout option to the export command
+title: "Add a timeout option to the export command"
 type: feature
 authors: dominiklohmann
 pr: 1611

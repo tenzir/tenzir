@@ -1,5 +1,5 @@
 ---
-title: Log actor names together with the unique actor ID
+title: "Log actor names together with the unique actor ID"
 type: change
 authors: tobim
 pr: 2119

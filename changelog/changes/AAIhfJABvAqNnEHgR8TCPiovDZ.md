@@ -1,5 +1,5 @@
 ---
-title: Add `parse` operator
+title: "Add `parse` operator"
 type: feature
 authors: jachris
 pr: 3665

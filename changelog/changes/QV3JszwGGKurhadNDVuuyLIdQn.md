@@ -1,5 +1,5 @@
 ---
-title: Allow assigning ids for pipelines manually
+title: "Allow assigning ids for pipelines manually"
 type: feature
 authors: dominiklohmann
 pr: 5026

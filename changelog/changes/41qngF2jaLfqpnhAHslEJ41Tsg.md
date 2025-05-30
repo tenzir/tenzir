@@ -1,5 +1,5 @@
 ---
-title: Add a --null option to the lines parser
+title: "Add a --null option to the lines parser"
 type: feature
 authors: tobim
 pr: 4603

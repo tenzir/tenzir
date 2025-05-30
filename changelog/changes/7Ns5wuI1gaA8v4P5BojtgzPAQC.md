@@ -1,5 +1,5 @@
 ---
-title: Include in-process sources/sinks in status output
+title: "Include in-process sources/sinks in status output"
 type: bugfix
 authors: dominiklohmann
 pr: 1852

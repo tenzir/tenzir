@@ -1,5 +1,5 @@
 ---
-title: Introduce `{package,pipeline}::list`
+title: "Introduce `{package,pipeline}::list`"
 type: bugfix
 authors: dominiklohmann
 pr: 4746

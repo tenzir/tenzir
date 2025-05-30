@@ -1,5 +1,5 @@
 ---
-title: Base image with Closed Source plugins
+title: "Base image with Closed Source plugins"
 type: feature
 authors: rdettai
 pr: 2415

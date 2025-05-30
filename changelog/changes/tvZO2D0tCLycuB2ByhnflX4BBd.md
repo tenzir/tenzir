@@ -1,5 +1,5 @@
 ---
-title: Register the accountant for datagram sources
+title: "Register the accountant for datagram sources"
 type: bugfix
 authors: dominiklohmann
 pr: 655

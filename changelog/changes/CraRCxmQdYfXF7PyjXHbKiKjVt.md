@@ -1,5 +1,5 @@
 ---
-title: Use a unique version for plugins
+title: "Use a unique version for plugins"
 type: feature
 authors: dominiklohmann
 pr: 1764

@@ -1,5 +1,5 @@
 ---
-title: Rename `identity` operator to `pass`
+title: "Rename `identity` operator to `pass`"
 type: change
 authors: jachris
 pr: 2980

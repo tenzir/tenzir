@@ -1,5 +1,5 @@
 ---
-title: Rename default database directory to `tenzir.db`
+title: "Rename default database directory to `tenzir.db`"
 type: change
 authors: dominiklohmann
 pr: 3212

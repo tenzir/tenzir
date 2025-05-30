@@ -1,5 +1,5 @@
 ---
-title: Introduce a `zip` function for merging lists
+title: "Introduce a `zip` function for merging lists"
 type: feature
 authors: dominiklohmann
 pr: 4803

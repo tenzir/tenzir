@@ -1,5 +1,5 @@
 ---
-title: Add new query language plugin
+title: "Add new query language plugin"
 type: change
 authors: mavam
 pr: 2074

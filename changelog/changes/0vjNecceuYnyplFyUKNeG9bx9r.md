@@ -1,5 +1,5 @@
 ---
-title: Introduce the `#import_time` meta extractor
+title: "Introduce the `#import_time` meta extractor"
 type: feature
 authors: dominiklohmann
 pr: 2019

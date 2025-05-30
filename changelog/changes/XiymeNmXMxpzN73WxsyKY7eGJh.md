@@ -1,5 +1,5 @@
 ---
-title: Support multiple fields in `sort`
+title: "Support multiple fields in `sort`"
 type: feature
 authors: dominiklohmann
 pr: 4242

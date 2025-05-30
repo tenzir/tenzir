@@ -1,5 +1,5 @@
 ---
-title: Add a `duration` field to operator metrics
+title: "Add a `duration` field to operator metrics"
 type: feature
 authors: dominiklohmann
 pr: 3713

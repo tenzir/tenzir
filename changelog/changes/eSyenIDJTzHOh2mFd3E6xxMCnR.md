@@ -1,5 +1,5 @@
 ---
-title: Remove default option for historical queries
+title: "Remove default option for historical queries"
 type: change
 authors: dominiklohmann
 pr: 754

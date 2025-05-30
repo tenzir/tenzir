@@ -1,5 +1,5 @@
 ---
-title: Add option to `load_tcp` for storing sender information
+title: "Add option to `load_tcp` for storing sender information"
 type: feature
 authors: dominiklohmann
 pr: 5173

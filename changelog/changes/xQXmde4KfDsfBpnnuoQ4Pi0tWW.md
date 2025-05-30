@@ -1,5 +1,5 @@
 ---
-title: Remove /etc as hardcoded sysconfdir from Nix build 
+title: "Remove /etc as hardcoded sysconfdir from Nix build"
 type: feature
 authors: dominiklohmann
 pr: 1777

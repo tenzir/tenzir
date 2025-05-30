@@ -1,5 +1,5 @@
 ---
-title: Bump CAF to version 0.18.6
+title: "Bump CAF to version 0.18.6"
 type: bugfix
 authors: patszt
 pr: 2693

@@ -1,5 +1,5 @@
 ---
-title: Add `show` operator
+title: "Add `show` operator"
 type: feature
 authors: mavam
 pr: 3414

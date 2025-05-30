@@ -1,5 +1,5 @@
 ---
-title: Fix log rotation threshold option
+title: "Fix log rotation threshold option"
 type: bugfix
 authors: dominiklohmann
 pr: 1709

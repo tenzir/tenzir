@@ -1,5 +1,5 @@
 ---
-title: PRs 1929-1947
+title: "PRs 1929-1947"
 type: feature
 authors: tobim
 pr: 1929

@@ -1,5 +1,5 @@
 ---
-title: Support parallel connections in `from tcp`
+title: "Support parallel connections in `from tcp`"
 type: bugfix
 authors: dominiklohmann
 pr: 4084

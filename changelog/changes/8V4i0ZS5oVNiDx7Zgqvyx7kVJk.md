@@ -1,5 +1,5 @@
 ---
-title: PRs 1532-1541
+title: "PRs 1532-1541"
 type: feature
 authors: dominiklohmann
 pr: 1532

@@ -1,5 +1,5 @@
 ---
-title: Stabilize the `bitz` format
+title: "Stabilize the `bitz` format"
 type: change
 authors: dominiklohmann
 pr: 4633

@@ -1,5 +1,5 @@
 ---
-title: Correct check for user schema in zeek reader
+title: "Correct check for user schema in zeek reader"
 type: bugfix
 authors: tobim
 pr: 847

@@ -1,5 +1,5 @@
 ---
-title: Abort the response promise if running into oversized partitions
+title: "Abort the response promise if running into oversized partitions"
 type: bugfix
 authors: lava
 pr: 2624

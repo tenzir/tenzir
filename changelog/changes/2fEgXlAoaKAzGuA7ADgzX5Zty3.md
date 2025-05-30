@@ -1,5 +1,5 @@
 ---
-title: Remove the get subcommand
+title: "Remove the get subcommand"
 type: change
 authors: tobim
 pr: 2121

@@ -1,5 +1,5 @@
 ---
-title: Add a `--timeout <duration>` option to `batch`
+title: "Add a `--timeout <duration>` option to `batch`"
 type: feature
 authors: dominiklohmann
 pr: 4095

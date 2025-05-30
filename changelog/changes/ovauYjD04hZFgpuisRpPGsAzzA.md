@@ -1,5 +1,5 @@
 ---
-title: Disallow unsupported field meta extractor predicates
+title: "Disallow unsupported field meta extractor predicates"
 type: bugfix
 authors: tobim
 pr: 1886

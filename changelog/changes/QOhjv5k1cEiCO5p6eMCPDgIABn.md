@@ -1,5 +1,5 @@
 ---
-title: Fix ODR violation of `tenzir::socket` type
+title: "Fix ODR violation of `tenzir::socket` type"
 type: bugfix
 authors: raxyte
 pr: 4816

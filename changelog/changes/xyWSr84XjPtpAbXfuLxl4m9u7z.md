@@ -1,5 +1,5 @@
 ---
-title: Make schema definitions represent the type system exactly
+title: "Make schema definitions represent the type system exactly"
 type: feature
 authors: dominiklohmann
 pr: 5062

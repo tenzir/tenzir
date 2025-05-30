@@ -1,5 +1,5 @@
 ---
-title: Fix URL check in `to_hive`
+title: "Fix URL check in `to_hive`"
 type: bugfix
 authors: jachris
 pr: 5204

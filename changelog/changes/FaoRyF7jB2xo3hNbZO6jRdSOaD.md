@@ -1,5 +1,5 @@
 ---
-title: Fix `map(move foo, name, expr)`
+title: "Fix `map(move foo, name, expr)`"
 type: bugfix
 authors: dominiklohmann
 pr: 5151

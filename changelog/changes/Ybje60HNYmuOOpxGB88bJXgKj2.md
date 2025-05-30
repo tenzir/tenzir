@@ -1,5 +1,5 @@
 ---
-title: Rename the attribute_extractor to meta_extractor
+title: "Rename the attribute_extractor to meta_extractor"
 type: change
 authors: tobim
 pr: 1399

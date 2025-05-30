@@ -1,5 +1,5 @@
 ---
-title: Implement `xsv` parser & printer
+title: "Implement `xsv` parser & printer"
 type: feature
 authors: Dakostu
 pr: 3104

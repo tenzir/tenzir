@@ -1,5 +1,5 @@
 ---
-title: Switch /status to POST
+title: "Switch /status to POST"
 type: change
 authors: tobim
 pr: 3194

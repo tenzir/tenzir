@@ -1,5 +1,5 @@
 ---
-title: Add LEEF parser
+title: "Add LEEF parser"
 type: bugfix
 authors: mavam
 pr: 4178

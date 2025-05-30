@@ -1,5 +1,5 @@
 ---
-title: Change default listen address to 'localhost'
+title: "Change default listen address to 'localhost'"
 type: change
 authors: lava
 pr: 828

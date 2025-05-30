@@ -1,5 +1,5 @@
 ---
-title: Fix panic on parsing invalid syslog messages
+title: "Fix panic on parsing invalid syslog messages"
 type: bugfix
 authors: eliaskosunen
 pr: 4012

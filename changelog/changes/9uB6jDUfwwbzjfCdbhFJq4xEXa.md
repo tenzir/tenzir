@@ -1,5 +1,5 @@
 ---
-title: Fix `engine::push` and co. for fluent-bit
+title: "Fix `engine::push` and co. for fluent-bit"
 type: bugfix
 authors: raxyte
 pr: 5076

@@ -1,5 +1,5 @@
 ---
-title: Introduce multi-arch Docker images
+title: "Introduce multi-arch Docker images"
 type: feature
 authors: dominiklohmann
 pr: 3989

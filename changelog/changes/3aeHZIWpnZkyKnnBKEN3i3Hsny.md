@@ -1,5 +1,5 @@
 ---
-title: Fix a crash when starting `export` on shutdown
+title: "Fix a crash when starting `export` on shutdown"
 type: bugfix
 authors: dominiklohmann
 pr: 4530

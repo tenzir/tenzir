@@ -1,5 +1,5 @@
 ---
-title: Implement `match_regex`
+title: "Implement `match_regex`"
 type: feature
 authors: IyeOnline
 pr: 4917

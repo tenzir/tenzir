@@ -1,5 +1,5 @@
 ---
-title: Implement some `print_*` functions
+title: "Implement some `print_*` functions"
 type: feature
 authors: IyeOnline
 pr: 5001

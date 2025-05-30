@@ -1,5 +1,5 @@
 ---
-title: Add `lines` printer
+title: "Add `lines` printer"
 type: feature
 authors: eliaskosunen
 pr: 3847

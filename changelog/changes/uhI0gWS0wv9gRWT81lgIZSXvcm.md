@@ -1,5 +1,5 @@
 ---
-title: Push expressions into `subscribe` for better metrics
+title: "Push expressions into `subscribe` for better metrics"
 type: bugfix
 authors: dominiklohmann
 pr: 4349

@@ -1,5 +1,5 @@
 ---
-title: Change how signed ints are rendered in logs
+title: "Change how signed ints are rendered in logs"
 type: bugfix
 authors: dominiklohmann
 pr: 5037

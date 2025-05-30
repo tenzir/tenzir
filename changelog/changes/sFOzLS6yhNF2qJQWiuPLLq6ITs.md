@@ -1,5 +1,5 @@
 ---
-title: Add extractor predicates
+title: "Add extractor predicates"
 type: feature
 authors: jachris
 pr: 2984

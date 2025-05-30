@@ -1,5 +1,5 @@
 ---
-title: Rebatch undersized batches when rebuilding partitions
+title: "Rebatch undersized batches when rebuilding partitions"
 type: feature
 authors: dominiklohmann
 pr: 2583

@@ -1,5 +1,5 @@
 ---
-title: Update xxHash and hashing APIs
+title: "Update xxHash and hashing APIs"
 type: change
 authors: mavam
 pr: 1905

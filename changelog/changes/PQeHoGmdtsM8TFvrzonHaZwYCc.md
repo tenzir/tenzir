@@ -1,5 +1,5 @@
 ---
-title: Follow up for the CMake refactoring
+title: "Follow up for the CMake refactoring"
 type: bugfix
 authors: tobim
 pr: 1249

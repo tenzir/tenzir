@@ -1,5 +1,5 @@
 ---
-title: Implement a `flush` command
+title: "Implement a `flush` command"
 type: feature
 authors: dominiklohmann
 pr: 2396

@@ -1,5 +1,5 @@
 ---
-title: Update VAST for Apache Arrow 0.16
+title: "Update VAST for Apache Arrow 0.16"
 type: change
 authors: dominiklohmann
 pr: 751

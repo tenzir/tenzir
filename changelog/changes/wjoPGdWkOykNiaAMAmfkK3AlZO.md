@@ -1,5 +1,5 @@
 ---
-title: Simplify the node actor setup
+title: "Simplify the node actor setup"
 type: change
 authors: dominiklohmann
 pr: 4343

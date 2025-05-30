@@ -1,5 +1,5 @@
 ---
-title: Emit connection status metrics from the platform
+title: "Emit connection status metrics from the platform"
 type: feature
 authors: dominiklohmann
 pr: 4374

@@ -1,5 +1,5 @@
 ---
-title: Use `load -` and `read json` as implicit sources
+title: "Use `load -` and `read json` as implicit sources"
 type: feature
 authors: dominiklohmann
 pr: 3329

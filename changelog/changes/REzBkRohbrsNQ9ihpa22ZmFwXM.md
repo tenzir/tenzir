@@ -1,5 +1,5 @@
 ---
-title: Fix install dirs wrt binary relocatability
+title: "Fix install dirs wrt binary relocatability"
 type: bugfix
 authors: dominiklohmann
 pr: 1624

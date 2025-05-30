@@ -1,5 +1,5 @@
 ---
-title: Implement support for transforms that apply to every type and use compaction for aging
+title: "Implement support for transforms that apply to every type and use compaction for aging"
 type: feature
 authors: lava
 pr: 2186

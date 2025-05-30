@@ -1,5 +1,5 @@
 ---
-title: Do not optimize `deduplicate`
+title: "Do not optimize `deduplicate`"
 type: bugfix
 authors: dominiklohmann
 pr: 4379

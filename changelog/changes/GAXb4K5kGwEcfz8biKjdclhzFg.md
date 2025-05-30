@@ -1,5 +1,5 @@
 ---
-title: Add missing `-X` option for `kafka` saver
+title: "Add missing `-X` option for `kafka` saver"
 type: bugfix
 authors: dominiklohmann
 pr: 4317

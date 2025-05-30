@@ -1,5 +1,5 @@
 ---
-title: Try and switch the Docker Image to `debian::trixie`
+title: "Try and switch the Docker Image to `debian::trixie`"
 type: feature
 authors: IyeOnline
 pr: 5113

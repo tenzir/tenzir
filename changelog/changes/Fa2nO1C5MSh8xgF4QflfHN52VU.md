@@ -1,5 +1,5 @@
 ---
-title: Error when initializing a plugin fails
+title: "Error when initializing a plugin fails"
 type: bugfix
 authors: dominiklohmann
 pr: 1618

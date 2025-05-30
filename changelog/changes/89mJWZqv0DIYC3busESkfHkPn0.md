@@ -1,5 +1,5 @@
 ---
-title: Support pattern case insensitivity in Sigma plugin
+title: "Support pattern case insensitivity in Sigma plugin"
 type: feature
 authors: Dakostu
 pr: 2974

@@ -1,5 +1,5 @@
 ---
-title: Remove caf::skip usages
+title: "Remove caf::skip usages"
 type: bugfix
 authors: patszt
 pr: 2530

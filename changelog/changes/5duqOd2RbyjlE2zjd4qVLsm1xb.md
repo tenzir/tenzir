@@ -1,5 +1,5 @@
 ---
-title: Add new '--file' option to the python operator
+title: "Add new '--file' option to the python operator"
 type: feature
 authors: lava
 pr: 3901

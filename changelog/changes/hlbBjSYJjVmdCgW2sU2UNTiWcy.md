@@ -1,5 +1,5 @@
 ---
-title: Backport bug fixes for a v1.1.1 release
+title: "Backport bug fixes for a v1.1.1 release"
 type: feature
 authors: dominiklohmann
 pr: 2160

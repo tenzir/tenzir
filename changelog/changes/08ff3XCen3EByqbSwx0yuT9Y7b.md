@@ -1,5 +1,5 @@
 ---
-title: Add `show serves` for debugging the `serve` operator
+title: "Add `show serves` for debugging the `serve` operator"
 type: feature
 authors: dominiklohmann
 pr: 3596

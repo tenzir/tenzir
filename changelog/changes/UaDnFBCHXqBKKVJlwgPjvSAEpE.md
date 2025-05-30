@@ -1,5 +1,5 @@
 ---
-title: The index shall not quit on write errors
+title: "The index shall not quit on write errors"
 type: bugfix
 authors: tobim
 pr: 2376

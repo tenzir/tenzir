@@ -1,5 +1,5 @@
 ---
-title: Add CEF reader plugin
+title: "Add CEF reader plugin"
 type: feature
 authors: mavam
 pr: 2216

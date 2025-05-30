@@ -1,5 +1,5 @@
 ---
-title: Fix loading of the optional OpenSSL module
+title: "Fix loading of the optional OpenSSL module"
 type: bugfix
 authors: dominiklohmann
 pr: 1740

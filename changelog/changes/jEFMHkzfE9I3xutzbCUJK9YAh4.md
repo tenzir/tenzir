@@ -1,5 +1,5 @@
 ---
-title: Support multiple publishers
+title: "Support multiple publishers"
 type: feature
 authors: dominiklohmann
 pr: 4270

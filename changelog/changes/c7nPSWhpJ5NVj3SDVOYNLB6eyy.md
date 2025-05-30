@@ -1,5 +1,5 @@
 ---
-title: Include outdated but not undersized partitions in automatic rebuilds
+title: "Include outdated but not undersized partitions in automatic rebuilds"
 type: bugfix
 authors: dominiklohmann
 pr: 3020

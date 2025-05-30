@@ -1,5 +1,5 @@
 ---
-title: Deprecate the archive store-backend
+title: "Deprecate the archive store-backend"
 type: change
 authors: dominiklohmann
 pr: 2290

@@ -1,5 +1,5 @@
 ---
-title: Fix a potential crash in `enrich --replace`
+title: "Fix a potential crash in `enrich --replace`"
 type: feature
 authors: tobim
 pr: 4291

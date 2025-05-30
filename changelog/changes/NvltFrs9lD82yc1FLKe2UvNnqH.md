@@ -1,5 +1,5 @@
 ---
-title: Add `node` integration test type
+title: "Add `node` integration test type"
 type: bugfix
 authors: dominiklohmann
 pr: 5169

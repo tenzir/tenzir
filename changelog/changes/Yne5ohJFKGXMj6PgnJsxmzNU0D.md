@@ -1,5 +1,5 @@
 ---
-title: Add a `velociraptor` operator
+title: "Add a `velociraptor` operator"
 type: feature
 authors: mavam
 pr: 3556

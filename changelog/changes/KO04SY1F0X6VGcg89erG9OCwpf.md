@@ -1,5 +1,5 @@
 ---
-title: Ignore whole line when NDJSON parser fails
+title: "Ignore whole line when NDJSON parser fails"
 type: bugfix
 authors: jachris
 pr: 4801

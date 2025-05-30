@@ -1,5 +1,5 @@
 ---
-title: Add optimizations for `if`
+title: "Add optimizations for `if`"
 type: feature
 authors: dominiklohmann
 pr: 5110

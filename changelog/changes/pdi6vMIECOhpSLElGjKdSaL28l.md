@@ -1,5 +1,5 @@
 ---
-title: Fixup repository-internal symlinks in Dockerfile
+title: "Fixup repository-internal symlinks in Dockerfile"
 type: change
 authors: dominiklohmann
 pr: 1705

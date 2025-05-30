@@ -1,5 +1,5 @@
 ---
-title: Add time parser
+title: "Add time parser"
 type: feature
 authors: eliaskosunen
 pr: 3738

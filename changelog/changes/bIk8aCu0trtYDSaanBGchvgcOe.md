@@ -1,5 +1,5 @@
 ---
-title: Fix hanging queries
+title: "Fix hanging queries"
 type: bugfix
 authors: tobim
 pr: 2092

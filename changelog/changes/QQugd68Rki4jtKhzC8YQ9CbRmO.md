@@ -1,5 +1,5 @@
 ---
-title: Allow plugins to bundle further builtins
+title: "Allow plugins to bundle further builtins"
 type: change
 authors: dominiklohmann
 pr: 3877

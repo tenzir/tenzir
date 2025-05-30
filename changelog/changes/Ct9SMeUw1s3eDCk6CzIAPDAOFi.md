@@ -1,5 +1,5 @@
 ---
-title: Make partition deletion resilient against oversize
+title: "Make partition deletion resilient against oversize"
 type: bugfix
 authors: tobim
 pr: 2431

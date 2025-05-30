@@ -1,5 +1,5 @@
 ---
-title: Rename package artifacts from vast to tenzir
+title: "Rename package artifacts from vast to tenzir"
 type: change
 authors: tobim
 pr: 3203

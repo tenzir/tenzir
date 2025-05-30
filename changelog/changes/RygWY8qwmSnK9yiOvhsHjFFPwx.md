@@ -1,5 +1,5 @@
 ---
-title: Update response format of the /export endpoint
+title: "Update response format of the /export endpoint"
 type: change
 authors: lava
 pr: 2899

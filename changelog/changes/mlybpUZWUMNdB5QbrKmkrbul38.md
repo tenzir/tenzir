@@ -1,5 +1,5 @@
 ---
-title: Eploit synergies when evaluating many queries at the same time
+title: "Eploit synergies when evaluating many queries at the same time"
 type: change
 authors: tobim
 pr: 2117

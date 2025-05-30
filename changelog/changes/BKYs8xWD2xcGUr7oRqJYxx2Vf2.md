@@ -1,5 +1,5 @@
 ---
-title: Enable selective deletion of lookup table entries
+title: "Enable selective deletion of lookup table entries"
 type: feature
 authors: dominiklohmann
 pr: 4274

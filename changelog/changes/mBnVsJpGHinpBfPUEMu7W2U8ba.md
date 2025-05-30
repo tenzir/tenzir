@@ -1,5 +1,5 @@
 ---
-title: Make UDO resolution order-independent
+title: "Make UDO resolution order-independent"
 type: bugfix
 authors: dominiklohmann
 pr: 5029

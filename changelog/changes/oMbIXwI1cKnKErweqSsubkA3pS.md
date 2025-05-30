@@ -1,5 +1,5 @@
 ---
-title: Add metrics to the index
+title: "Add metrics to the index"
 type: feature
 authors: tobim
 pr: 1942

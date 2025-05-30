@@ -1,5 +1,5 @@
 ---
-title: Build an RPM package
+title: "Build an RPM package"
 type: feature
 authors: tobim
 pr: 4188

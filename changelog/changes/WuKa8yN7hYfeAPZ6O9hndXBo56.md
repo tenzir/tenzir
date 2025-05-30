@@ -1,5 +1,5 @@
 ---
-title: Fix regression in `azure-log-analytics`
+title: "Fix regression in `azure-log-analytics`"
 type: bugfix
 authors: dominiklohmann
 pr: 4516

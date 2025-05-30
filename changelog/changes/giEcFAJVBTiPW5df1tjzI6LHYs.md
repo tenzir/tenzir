@@ -1,5 +1,5 @@
 ---
-title: Add colors to JSON printer
+title: "Add colors to JSON printer"
 type: change
 authors: mavam
 pr: 3343

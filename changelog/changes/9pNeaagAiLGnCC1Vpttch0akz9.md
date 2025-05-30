@@ -1,5 +1,5 @@
 ---
-title: Minor parser changes
+title: "Minor parser changes"
 type: change
 authors: tobim
 pr: 706

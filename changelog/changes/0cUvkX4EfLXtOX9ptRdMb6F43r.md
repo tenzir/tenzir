@@ -1,5 +1,5 @@
 ---
-title: Allow output format selection for the pivot/explore command
+title: "Allow output format selection for the pivot/explore command"
 type: feature
 authors: dominiklohmann
 pr: 921

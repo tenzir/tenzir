@@ -1,5 +1,5 @@
 ---
-title: Prepend the field added by `enumerate`
+title: "Prepend the field added by `enumerate`"
 type: bugfix
 authors: dominiklohmann
 pr: 4756

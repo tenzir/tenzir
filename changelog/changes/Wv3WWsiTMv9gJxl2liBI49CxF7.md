@@ -1,5 +1,5 @@
 ---
-title: Improve usability of CSV format
+title: "Improve usability of CSV format"
 type: bugfix
 authors: dominiklohmann
 pr: 2336

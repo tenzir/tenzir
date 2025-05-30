@@ -1,5 +1,5 @@
 ---
-title: Implement strides for the `slice` operator
+title: "Implement strides for the `slice` operator"
 type: feature
 authors: dominiklohmann
 pr: 4216

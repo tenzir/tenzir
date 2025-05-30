@@ -1,5 +1,5 @@
 ---
-title: Simplify partition structure
+title: "Simplify partition structure"
 type: change
 authors: tobim
 pr: 728

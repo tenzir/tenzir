@@ -1,5 +1,5 @@
 ---
-title: Fix hang for operators with infinite idle timeout
+title: "Fix hang for operators with infinite idle timeout"
 type: bugfix
 authors: dominiklohmann
 pr: 5219

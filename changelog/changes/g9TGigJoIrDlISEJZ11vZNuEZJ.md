@@ -1,5 +1,5 @@
 ---
-title: Align argument parser usage format with docs
+title: "Align argument parser usage format with docs"
 type: change
 authors: jachris
 pr: 4740

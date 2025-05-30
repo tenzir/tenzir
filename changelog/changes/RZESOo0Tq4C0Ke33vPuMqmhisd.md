@@ -1,5 +1,5 @@
 ---
-title: Port kafka connector to TQL2
+title: "Port kafka connector to TQL2"
 type: feature
 authors: raxyte
 pr: 4725

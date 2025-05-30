@@ -1,5 +1,5 @@
 ---
-title: Make `ip == subnet` and `string == pattern` commutative
+title: "Make `ip == subnet` and `string == pattern` commutative"
 type: bugfix
 authors: dominiklohmann
 pr: 4280

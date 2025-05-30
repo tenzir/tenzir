@@ -1,5 +1,5 @@
 ---
-title: Move PCAP import/export into a plugin
+title: "Move PCAP import/export into a plugin"
 type: bugfix
 authors: dominiklohmann
 pr: 1549

@@ -1,5 +1,5 @@
 ---
-title: Implement `if … else` expressions and short-circuiting for `and` / `or`
+title: "Implement `if … else` expressions and short-circuiting for `and` / `or`"
 type: bugfix
 authors: dominiklohmann
 pr: 5085

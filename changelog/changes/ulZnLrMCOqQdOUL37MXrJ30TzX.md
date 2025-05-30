@@ -1,5 +1,5 @@
 ---
-title: Add a `rebuild` command plugin
+title: "Add a `rebuild` command plugin"
 type: feature
 authors: dominiklohmann
 pr: 2321

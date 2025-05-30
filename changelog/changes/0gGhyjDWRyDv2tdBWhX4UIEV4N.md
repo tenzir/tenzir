@@ -1,5 +1,5 @@
 ---
-title: Move zeek-to-vast from tenzir/vast to tenzir/zeek-vast
+title: "Move zeek-to-vast from tenzir/vast to tenzir/zeek-vast"
 type: change
 authors: dominiklohmann
 pr: 1435

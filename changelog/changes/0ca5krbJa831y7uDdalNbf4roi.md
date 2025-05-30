@@ -1,5 +1,5 @@
 ---
-title: Stop collecting metrics for hidden pipelines
+title: "Stop collecting metrics for hidden pipelines"
 type: change
 authors: dominiklohmann
 pr: 4966

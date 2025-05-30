@@ -1,5 +1,5 @@
 ---
-title: Implement unstoppable pipelines
+title: "Implement unstoppable pipelines"
 type: feature
 authors: Dakostu
 pr: 4513

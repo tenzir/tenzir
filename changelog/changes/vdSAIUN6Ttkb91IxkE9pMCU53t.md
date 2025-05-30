@@ -1,5 +1,5 @@
 ---
-title: Prefer reading query from stdin if available
+title: "Prefer reading query from stdin if available"
 type: change
 authors: dominiklohmann
 pr: 1917

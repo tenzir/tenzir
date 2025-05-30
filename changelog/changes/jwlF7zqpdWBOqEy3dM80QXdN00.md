@@ -1,5 +1,5 @@
 ---
-title: Implement a fallback parser mechanism for extensions that don't have …
+title: "Implement a fallback parser mechanism for extensions that don't have …"
 type: feature
 authors: Dakostu
 pr: 3422

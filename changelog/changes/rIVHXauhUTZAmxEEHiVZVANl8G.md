@@ -1,5 +1,5 @@
 ---
-title: Fix healthcheck in docker-compose.yaml
+title: "Fix healthcheck in docker-compose.yaml"
 type: feature
 authors: lo-chr
 pr: 5126

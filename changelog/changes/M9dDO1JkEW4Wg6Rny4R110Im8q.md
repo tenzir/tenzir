@@ -1,5 +1,5 @@
 ---
-title: Fix excessive CPU usage of `serve`
+title: "Fix excessive CPU usage of `serve`"
 type: bugfix
 authors: dominiklohmann
 pr: 4499

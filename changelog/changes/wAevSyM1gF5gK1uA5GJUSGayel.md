@@ -1,5 +1,5 @@
 ---
-title: Add label definitions to configured pipelines
+title: "Add label definitions to configured pipelines"
 type: bugfix
 authors: tobim
 pr: 4247

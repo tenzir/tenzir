@@ -1,5 +1,5 @@
 ---
-title: Rename vast.account event type to vast.statistics
+title: "Rename vast.account event type to vast.statistics"
 type: change
 authors: dominiklohmann
 pr: 789

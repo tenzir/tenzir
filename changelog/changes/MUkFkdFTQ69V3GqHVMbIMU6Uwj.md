@@ -1,5 +1,5 @@
 ---
-title: Optionally read environment variable for VAST endpoint
+title: "Optionally read environment variable for VAST endpoint"
 type: feature
 authors: rolandpeelen
 pr: 1714

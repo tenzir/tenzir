@@ -1,5 +1,5 @@
 ---
-title: Render reals with at least one decimal place
+title: "Render reals with at least one decimal place"
 type: bugfix
 authors: patszt
 pr: 2393

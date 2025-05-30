@@ -1,5 +1,5 @@
 ---
-title: Arrow 10.0.0 support
+title: "Arrow 10.0.0 support"
 type: change
 authors: Dakostu
 pr: 2685

@@ -1,5 +1,5 @@
 ---
-title: Upgrade exporter to use new pipelines
+title: "Upgrade exporter to use new pipelines"
 type: feature
 authors: jachris
 pr: 3076

@@ -1,5 +1,5 @@
 ---
-title: Introduce the `every` operator modifier
+title: "Introduce the `every` operator modifier"
 type: feature
 authors: dominiklohmann
 pr: 4050

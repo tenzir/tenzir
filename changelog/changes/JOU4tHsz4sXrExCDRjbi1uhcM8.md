@@ -1,5 +1,5 @@
 ---
-title: Remove deprecated no-default-schema option
+title: "Remove deprecated no-default-schema option"
 type: change
 authors: dominiklohmann
 pr: 1507

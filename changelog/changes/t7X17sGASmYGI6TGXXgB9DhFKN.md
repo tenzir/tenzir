@@ -1,5 +1,5 @@
 ---
-title: Fix logger deadlock in python tests
+title: "Fix logger deadlock in python tests"
 type: bugfix
 authors: lava
 pr: 3911

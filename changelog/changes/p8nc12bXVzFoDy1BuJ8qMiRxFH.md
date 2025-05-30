@@ -1,5 +1,5 @@
 ---
-title: Don't enable automatic connections by default
+title: "Don't enable automatic connections by default"
 type: bugfix
 authors: lava
 pr: 1110

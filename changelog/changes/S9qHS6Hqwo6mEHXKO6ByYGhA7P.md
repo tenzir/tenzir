@@ -1,5 +1,5 @@
 ---
-title: Disable dense indexes
+title: "Disable dense indexes"
 type: change
 authors: dominiklohmann
 pr: 3552

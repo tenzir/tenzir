@@ -1,5 +1,5 @@
 ---
-title: Fix start abort error message
+title: "Fix start abort error message"
 type: bugfix
 authors: jachris
 pr: 4288

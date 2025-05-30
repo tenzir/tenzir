@@ -1,5 +1,5 @@
 ---
-title: Implement `in` for `list_type`
+title: "Implement `in` for `list_type`"
 type: feature
 authors: raxyte
 pr: 4691

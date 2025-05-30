@@ -1,5 +1,5 @@
 ---
-title: Fix exporter.selectivity for idle periods
+title: "Fix exporter.selectivity for idle periods"
 type: bugfix
 authors: dominiklohmann
 pr: 1574

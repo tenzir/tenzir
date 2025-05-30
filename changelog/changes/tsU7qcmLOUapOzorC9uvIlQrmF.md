@@ -1,5 +1,5 @@
 ---
-title: Update the submodule pointers to include periodic platform reconnects
+title: "Update the submodule pointers to include periodic platform reconnects"
 type: change
 authors: Dakostu
 pr: 3997

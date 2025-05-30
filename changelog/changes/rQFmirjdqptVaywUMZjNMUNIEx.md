@@ -1,5 +1,5 @@
 ---
-title: Let the JSON reader recover from unexpected inputs
+title: "Let the JSON reader recover from unexpected inputs"
 type: bugfix
 authors: tobim
 pr: 1386

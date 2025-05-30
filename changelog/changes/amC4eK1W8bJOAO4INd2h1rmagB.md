@@ -1,5 +1,5 @@
 ---
-title: Make the expression evaluator support heterogeneous results
+title: "Make the expression evaluator support heterogeneous results"
 type: bugfix
 authors: jachris
 pr: 4839

@@ -1,5 +1,5 @@
 ---
-title: Eliminate shutdown lag from the signal monitor
+title: "Eliminate shutdown lag from the signal monitor"
 type: feature
 authors: tobim
 pr: 2766

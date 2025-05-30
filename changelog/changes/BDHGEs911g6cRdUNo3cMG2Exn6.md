@@ -1,5 +1,5 @@
 ---
-title: Add a workaround to fix CAF OpenSSL options
+title: "Add a workaround to fix CAF OpenSSL options"
 type: bugfix
 authors: tobim
 pr: 2908

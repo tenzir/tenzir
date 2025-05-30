@@ -1,5 +1,5 @@
 ---
-title: Deprecate builds without Apache Arrow
+title: "Deprecate builds without Apache Arrow"
 type: change
 authors: dominiklohmann
 pr: 1682

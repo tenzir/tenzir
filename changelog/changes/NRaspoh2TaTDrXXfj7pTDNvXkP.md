@@ -1,5 +1,5 @@
 ---
-title: Use /etc as sysconfdir for install prefix /usr
+title: "Use /etc as sysconfdir for install prefix /usr"
 type: bugfix
 authors: dominiklohmann
 pr: 1856

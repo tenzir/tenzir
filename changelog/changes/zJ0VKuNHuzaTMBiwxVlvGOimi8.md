@@ -1,5 +1,5 @@
 ---
-title: Add `hour`, `minute`, and `second` time component extraction
+title: "Add `hour`, `minute`, and `second` time component extraction"
 type: change
 authors: dominiklohmann
 pr: 5190

@@ -1,5 +1,5 @@
 ---
-title: Fix possible garbage in status command output
+title: "Fix possible garbage in status command output"
 type: bugfix
 authors: dominiklohmann
 pr: 1872

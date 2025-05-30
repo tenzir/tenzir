@@ -1,5 +1,5 @@
 ---
-title: Add GELF parser and document Graylog integration
+title: "Add GELF parser and document Graylog integration"
 type: feature
 authors: mavam
 pr: 3768

@@ -1,5 +1,5 @@
 ---
-title: `save_email` cleanup
+title: "`save_email` cleanup"
 type: bugfix
 authors: raxyte
 pr: 4848

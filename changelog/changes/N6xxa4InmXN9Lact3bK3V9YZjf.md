@@ -1,5 +1,5 @@
 ---
-title: Support /etc/vast/vast.conf as global config
+title: "Support /etc/vast/vast.conf as global config"
 type: feature
 authors: dominiklohmann
 pr: 898

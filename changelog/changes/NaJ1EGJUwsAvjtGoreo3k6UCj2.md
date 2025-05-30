@@ -1,5 +1,5 @@
 ---
-title: Add node health metrics
+title: "Add node health metrics"
 type: feature
 authors: lava
 pr: 3736

@@ -1,5 +1,5 @@
 ---
-title: Evaluate `ip == subnet` predicates
+title: "Evaluate `ip == subnet` predicates"
 type: bugfix
 authors: dominiklohmann
 pr: 4268

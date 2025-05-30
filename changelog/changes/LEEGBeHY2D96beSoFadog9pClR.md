@@ -1,5 +1,5 @@
 ---
-title: Introduce the BITZ format
+title: "Introduce the BITZ format"
 type: feature
 authors: dominiklohmann
 pr: 4079

@@ -1,5 +1,5 @@
 ---
-title: Add CORS preflight request handling
+title: "Add CORS preflight request handling"
 type: feature
 authors: lava
 pr: 2944

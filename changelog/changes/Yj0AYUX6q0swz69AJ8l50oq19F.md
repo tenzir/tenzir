@@ -1,5 +1,5 @@
 ---
-title: Establish subtyping relationships for type extractors
+title: "Establish subtyping relationships for type extractors"
 type: change
 authors: tobim
 pr: 1446

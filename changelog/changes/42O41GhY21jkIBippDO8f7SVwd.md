@@ -1,5 +1,5 @@
 ---
-title: Lower the impact of low-priority queries
+title: "Lower the impact of low-priority queries"
 type: change
 authors: dominiklohmann
 pr: 2484

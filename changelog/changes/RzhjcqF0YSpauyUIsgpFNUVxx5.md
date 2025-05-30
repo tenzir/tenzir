@@ -1,5 +1,5 @@
 ---
-title: Fix possible crash when one of multiple subscribers disconnects
+title: "Fix possible crash when one of multiple subscribers disconnects"
 type: bugfix
 authors: dominiklohmann
 pr: 4346

@@ -1,5 +1,5 @@
 ---
-title: Add support for per-plugin configuration files
+title: "Add support for per-plugin configuration files"
 type: feature
 authors: dominiklohmann
 pr: 1724

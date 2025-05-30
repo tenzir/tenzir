@@ -1,5 +1,5 @@
 ---
-title: Support native systemd startup notification from VAST
+title: "Support native systemd startup notification from VAST"
 type: feature
 authors: lava
 pr: 1091

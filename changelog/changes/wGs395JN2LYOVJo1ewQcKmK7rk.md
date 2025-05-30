@@ -1,5 +1,5 @@
 ---
-title: Factor common functionality in component plugin
+title: "Factor common functionality in component plugin"
 type: change
 authors: dominiklohmann
 pr: 1544

@@ -1,5 +1,5 @@
 ---
-title: Respect `--connection-timeout` in more places
+title: "Respect `--connection-timeout` in more places"
 type: bugfix
 authors: dominiklohmann
 pr: 2503

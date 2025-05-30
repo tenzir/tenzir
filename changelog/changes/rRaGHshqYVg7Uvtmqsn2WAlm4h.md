@@ -1,5 +1,5 @@
 ---
-title: Remove stream managers when decommissioning partitions
+title: "Remove stream managers when decommissioning partitions"
 type: bugfix
 authors: dominiklohmann
 pr: 4214

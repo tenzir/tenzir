@@ -1,5 +1,5 @@
 ---
-title: Implement `load_stdin` and `save_stdout`
+title: "Implement `load_stdin` and `save_stdout`"
 type: feature
 authors: IyeOnline
 pr: 4969

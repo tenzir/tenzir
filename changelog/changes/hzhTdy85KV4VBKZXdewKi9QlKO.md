@@ -1,5 +1,5 @@
 ---
-title: Bump the tenzir-plugins submodule pointer to include the pipeline manager's resuming and pausing functionality
+title: "Bump the tenzir-plugins submodule pointer to include the pipeline manager's resuming and pausing functionality"
 type: feature
 authors: Dakostu
 pr: 3471

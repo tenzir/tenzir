@@ -1,5 +1,5 @@
 ---
-title: Add -c as shorthand for --config
+title: "Add -c as shorthand for --config"
 type: feature
 authors: mavam
 pr: 689

@@ -1,5 +1,5 @@
 ---
-title: Allow tuple-style syntax for parsing records
+title: "Allow tuple-style syntax for parsing records"
 type: feature
 authors: tobim
 pr: 1129

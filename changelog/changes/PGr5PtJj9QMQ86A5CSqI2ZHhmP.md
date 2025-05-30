@@ -1,5 +1,5 @@
 ---
-title: Restart the systemd service on failure
+title: "Restart the systemd service on failure"
 type: change
 authors: tobim
 pr: 3058

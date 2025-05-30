@@ -1,5 +1,5 @@
 ---
-title: Add `from_file` operator
+title: "Add `from_file` operator"
 type: bugfix
 authors: jachris
 pr: 5203

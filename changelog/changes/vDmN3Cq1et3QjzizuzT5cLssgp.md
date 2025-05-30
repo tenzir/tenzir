@@ -1,5 +1,5 @@
 ---
-title: Add Python module for submitting queries to VAST
+title: "Add Python module for submitting queries to VAST"
 type: bugfix
 authors: tobim
 pr: 685

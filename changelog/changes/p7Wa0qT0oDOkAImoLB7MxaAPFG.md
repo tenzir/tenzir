@@ -1,5 +1,5 @@
 ---
-title: Activate cloud plugins explicitely
+title: "Activate cloud plugins explicitely"
 type: bugfix
 authors: rdettai
 pr: 2510

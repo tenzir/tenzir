@@ -1,5 +1,5 @@
 ---
-title: Implement the `cache` operator
+title: "Implement the `cache` operator"
 type: feature
 authors: dominiklohmann
 pr: 4515

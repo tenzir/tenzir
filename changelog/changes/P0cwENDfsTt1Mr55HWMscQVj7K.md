@@ -1,5 +1,5 @@
 ---
-title: Add 'pipeline' parameter and schematized format to export endpoint
+title: "Add 'pipeline' parameter and schematized format to export endpoint"
 type: feature
 authors: lava
 pr: 2773

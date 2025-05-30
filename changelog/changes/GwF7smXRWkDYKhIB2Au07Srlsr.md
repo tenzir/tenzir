@@ -1,5 +1,5 @@
 ---
-title: Support type relaxation for JSON import
+title: "Support type relaxation for JSON import"
 type: feature
 authors: dominiklohmann
 pr: 891

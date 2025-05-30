@@ -1,5 +1,5 @@
 ---
-title: Use systemd provided default paths if available
+title: "Use systemd provided default paths if available"
 type: change
 authors: tobim
 pr: 3714

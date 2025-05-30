@@ -1,5 +1,5 @@
 ---
-title: Use `append_array_slice` everywhere
+title: "Use `append_array_slice` everywhere"
 type: bugfix
 authors: jachris
 pr: 4394

@@ -1,5 +1,5 @@
 ---
-title: Fix pipeline manager discarding parse-time warnings
+title: "Fix pipeline manager discarding parse-time warnings"
 type: bugfix
 authors: jachris
 pr: 4867

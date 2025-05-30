@@ -1,5 +1,5 @@
 ---
-title: Improve `summarize` result for empty inputs
+title: "Improve `summarize` result for empty inputs"
 type: feature
 authors: jachris
 pr: 3640

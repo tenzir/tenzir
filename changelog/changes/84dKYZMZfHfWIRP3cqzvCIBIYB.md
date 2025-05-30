@@ -1,5 +1,5 @@
 ---
-title: Fix shutdown hang in sources on SIGTERM/SIGINT
+title: "Fix shutdown hang in sources on SIGTERM/SIGINT"
 type: bugfix
 authors: dominiklohmann
 pr: 1718

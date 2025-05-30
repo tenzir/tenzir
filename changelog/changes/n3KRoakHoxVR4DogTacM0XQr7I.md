@@ -1,5 +1,5 @@
 ---
-title: Remove deprecated format-specific options
+title: "Remove deprecated format-specific options"
 type: change
 authors: dominiklohmann
 pr: 1529

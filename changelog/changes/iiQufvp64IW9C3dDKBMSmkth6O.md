@@ -1,5 +1,5 @@
 ---
-title: Tailor expressions in filter operation
+title: "Tailor expressions in filter operation"
 type: bugfix
 authors: dominiklohmann
 pr: 1885

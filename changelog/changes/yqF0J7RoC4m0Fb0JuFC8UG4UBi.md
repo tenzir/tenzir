@@ -1,5 +1,5 @@
 ---
-title: Switch index behavior when running out of workers
+title: "Switch index behavior when running out of workers"
 type: bugfix
 authors: dominiklohmann
 pr: 1210

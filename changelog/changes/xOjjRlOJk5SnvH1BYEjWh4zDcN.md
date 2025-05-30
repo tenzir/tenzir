@@ -1,5 +1,5 @@
 ---
-title: Fix error response and lifetime issues in `from_opensearch`
+title: "Fix error response and lifetime issues in `from_opensearch`"
 type: bugfix
 authors: raxyte
 pr: 5096

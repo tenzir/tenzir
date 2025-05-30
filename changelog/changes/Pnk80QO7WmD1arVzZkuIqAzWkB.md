@@ -1,5 +1,5 @@
 ---
-title: Prepare small fixes for release
+title: "Prepare small fixes for release"
 type: change
 authors: raxyte
 pr: 4834

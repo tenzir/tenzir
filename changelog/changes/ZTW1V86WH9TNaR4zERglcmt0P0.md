@@ -1,5 +1,5 @@
 ---
-title: Fix syslog parser not yielding on infinite streams
+title: "Fix syslog parser not yielding on infinite streams"
 type: bugfix
 authors: IyeOnline
 pr: 4777

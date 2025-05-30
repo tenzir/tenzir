@@ -1,5 +1,5 @@
 ---
-title: Add `unroll` operator
+title: "Add `unroll` operator"
 type: feature
 authors: jachris
 pr: 4078

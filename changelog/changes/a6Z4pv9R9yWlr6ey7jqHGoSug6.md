@@ -1,5 +1,5 @@
 ---
-title: Implement the GCS connector plugin
+title: "Implement the GCS connector plugin"
 type: feature
 authors: Dakostu
 pr: 3498

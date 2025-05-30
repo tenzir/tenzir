@@ -1,5 +1,5 @@
 ---
-title: Fix handling of empty records in `write_parquet`
+title: "Fix handling of empty records in `write_parquet`"
 type: bugfix
 authors: dominiklohmann
 pr: 4874

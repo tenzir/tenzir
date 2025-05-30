@@ -1,5 +1,5 @@
 ---
-title: Add new `unflatten` implementation
+title: "Add new `unflatten` implementation"
 type: bugfix
 authors: jachris
 pr: 4405

@@ -1,5 +1,5 @@
 ---
-title: Allow for building plugins separately from VAST
+title: "Allow for building plugins separately from VAST"
 type: bugfix
 authors: dominiklohmann
 pr: 1532

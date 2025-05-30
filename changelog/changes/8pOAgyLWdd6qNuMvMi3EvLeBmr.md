@@ -1,5 +1,5 @@
 ---
-title: Don't allow field extractors to match field name suffixes
+title: "Don't allow field extractors to match field name suffixes"
 type: bugfix
 authors: lava
 pr: 1447

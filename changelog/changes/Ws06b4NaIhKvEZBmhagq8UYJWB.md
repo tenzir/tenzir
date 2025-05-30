@@ -1,5 +1,5 @@
 ---
-title: Add a new /openapi.json endpoint to the web plugin
+title: "Add a new /openapi.json endpoint to the web plugin"
 type: feature
 authors: lava
 pr: 2981

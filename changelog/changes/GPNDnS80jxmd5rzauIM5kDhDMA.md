@@ -1,5 +1,5 @@
 ---
-title: Add `grok` parser
+title: "Add `grok` parser"
 type: feature
 authors: eliaskosunen
 pr: 3683

@@ -1,5 +1,5 @@
 ---
-title: Add spread syntax `...expr` for lists
+title: "Add spread syntax `...expr` for lists"
 type: feature
 authors: jachris
 pr: 4729

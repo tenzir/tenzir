@@ -1,5 +1,5 @@
 ---
-title: Remove 20k element limits from `data_builder`
+title: "Remove 20k element limits from `data_builder`"
 type: bugfix
 authors: IyeOnline
 pr: 5091

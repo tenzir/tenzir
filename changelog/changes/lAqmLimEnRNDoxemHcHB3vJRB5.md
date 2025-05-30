@@ -1,5 +1,5 @@
 ---
-title: Consolidate community and enterprise edition builds
+title: "Consolidate community and enterprise edition builds"
 type: bugfix
 authors: tobim
 pr: 4149

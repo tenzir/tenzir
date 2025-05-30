@@ -1,5 +1,5 @@
 ---
-title: Add timeout to multiline syslog
+title: "Add timeout to multiline syslog"
 type: bugfix
 authors: IyeOnline
 pr: 4829

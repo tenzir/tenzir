@@ -1,5 +1,5 @@
 ---
-title: Remove set data type
+title: "Remove set data type"
 type: change
 authors: mavam
 pr: 1010

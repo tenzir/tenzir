@@ -1,5 +1,5 @@
 ---
-title: Add FreeBSD rc.d script
+title: "Add FreeBSD rc.d script"
 type: feature
 authors: mavam
 pr: 693

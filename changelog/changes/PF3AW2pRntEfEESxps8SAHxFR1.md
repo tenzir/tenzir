@@ -1,5 +1,5 @@
 ---
-title: Respect the default fp-rate setting
+title: "Respect the default fp-rate setting"
 type: bugfix
 authors: dominiklohmann
 pr: 2325

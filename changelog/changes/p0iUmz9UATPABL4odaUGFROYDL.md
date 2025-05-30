@@ -1,5 +1,5 @@
 ---
-title: Precise Parsing
+title: "Precise Parsing"
 type: bugfix
 authors: IyeOnline
 pr: 4527

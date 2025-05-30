@@ -1,5 +1,5 @@
 ---
-title: Downtone push behavior of pipelines
+title: "Downtone push behavior of pipelines"
 type: bugfix
 authors: dominiklohmann
 pr: 3758

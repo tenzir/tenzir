@@ -1,5 +1,5 @@
 ---
-title: Fix :timestamp queries for old data
+title: "Fix :timestamp queries for old data"
 type: bugfix
 authors: tobim
 pr: 1432

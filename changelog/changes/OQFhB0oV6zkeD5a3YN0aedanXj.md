@@ -1,5 +1,5 @@
 ---
-title: Add options to omit empty values when exporting as JSON
+title: "Add options to omit empty values when exporting as JSON"
 type: feature
 authors: dominiklohmann
 pr: 2856

@@ -1,5 +1,5 @@
 ---
-title: Implement a retry mechanism for VAST clients failing to connect to the server
+title: "Implement a retry mechanism for VAST clients failing to connect to the server"
 type: feature
 authors: patszt
 pr: 2835

@@ -1,5 +1,5 @@
 ---
-title: Rename the 'default' table slice type to 'caf'
+title: "Rename the 'default' table slice type to 'caf'"
 type: change
 authors: dominiklohmann
 pr: 948

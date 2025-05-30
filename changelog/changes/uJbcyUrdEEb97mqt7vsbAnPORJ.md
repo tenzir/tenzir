@@ -1,5 +1,5 @@
 ---
-title: Add an `api` source operator
+title: "Add an `api` source operator"
 type: feature
 authors: dominiklohmann
 pr: 3630

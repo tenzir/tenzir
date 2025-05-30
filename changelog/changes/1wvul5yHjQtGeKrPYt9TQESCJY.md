@@ -1,5 +1,5 @@
 ---
-title: Stop URL-encoding pub/sub topics
+title: "Stop URL-encoding pub/sub topics"
 type: change
 authors: dominiklohmann
 pr: 4738

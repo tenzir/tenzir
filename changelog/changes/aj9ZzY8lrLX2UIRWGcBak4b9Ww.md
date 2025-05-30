@@ -1,5 +1,5 @@
 ---
-title: Prevent duplicate fields in schema
+title: "Prevent duplicate fields in schema"
 type: bugfix
 authors: jachris
 pr: 3929

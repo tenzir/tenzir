@@ -1,5 +1,5 @@
 ---
-title: Rename `--appending` option for `save file` to `--append`
+title: "Rename `--appending` option for `save file` to `--append`"
 type: bugfix
 authors: dominiklohmann
 pr: 3629

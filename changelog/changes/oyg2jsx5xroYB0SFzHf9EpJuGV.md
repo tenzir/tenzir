@@ -1,5 +1,5 @@
 ---
-title: Restructure configuration file hierarchy
+title: "Restructure configuration file hierarchy"
 type: change
 authors: dominiklohmann
 pr: 1073

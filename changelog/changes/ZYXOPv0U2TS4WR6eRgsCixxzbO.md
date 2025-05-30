@@ -1,5 +1,5 @@
 ---
-title: Remove events output from many context operators
+title: "Remove events output from many context operators"
 type: change
 authors: dominiklohmann
 pr: 4143

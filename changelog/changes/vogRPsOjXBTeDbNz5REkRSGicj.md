@@ -1,5 +1,5 @@
 ---
-title: A collection of minor UX improvements
+title: "A collection of minor UX improvements"
 type: feature
 authors: tobim
 pr: 3162

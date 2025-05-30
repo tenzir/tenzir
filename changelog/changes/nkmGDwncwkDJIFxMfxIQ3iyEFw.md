@@ -1,5 +1,5 @@
 ---
-title: Remove support for building without Arrow
+title: "Remove support for building without Arrow"
 type: change
 authors: dominiklohmann
 pr: 1683

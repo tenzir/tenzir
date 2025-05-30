@@ -1,5 +1,5 @@
 ---
-title: Render help and documentation on stdout
+title: "Render help and documentation on stdout"
 type: change
 authors: mavam
 pr: 1385

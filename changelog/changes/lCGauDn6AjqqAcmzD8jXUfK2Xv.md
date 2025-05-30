@@ -1,5 +1,5 @@
 ---
-title: Fix crash in `context::enrich` for heterogeneous enrichments
+title: "Fix crash in `context::enrich` for heterogeneous enrichments"
 type: feature
 authors: dominiklohmann
 pr: 4828

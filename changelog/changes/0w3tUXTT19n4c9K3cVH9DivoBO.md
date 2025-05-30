@@ -1,5 +1,5 @@
 ---
-title: Make `python` operator not discard fields that start with an underscore
+title: "Make `python` operator not discard fields that start with an underscore"
 type: bugfix
 authors: jachris
 pr: 4085

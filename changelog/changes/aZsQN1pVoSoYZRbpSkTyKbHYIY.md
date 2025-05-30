@@ -1,5 +1,5 @@
 ---
-title: Fix remaining partitions counter in the rebuilder
+title: "Fix remaining partitions counter in the rebuilder"
 type: bugfix
 authors: dominiklohmann
 pr: 3147

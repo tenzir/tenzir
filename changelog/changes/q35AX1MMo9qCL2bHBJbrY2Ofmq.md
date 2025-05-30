@@ -1,5 +1,5 @@
 ---
-title: Update query endpoint to use new pipeline executor
+title: "Update query endpoint to use new pipeline executor"
 type: change
 authors: jachris
 pr: 3015

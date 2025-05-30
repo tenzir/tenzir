@@ -1,5 +1,5 @@
 ---
-title: Implement `append`, `prepend`, and `concatenate`
+title: "Implement `append`, `prepend`, and `concatenate`"
 type: feature
 authors: dominiklohmann
 pr: 4792

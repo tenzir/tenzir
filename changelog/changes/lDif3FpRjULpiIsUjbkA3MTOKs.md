@@ -1,5 +1,5 @@
 ---
-title: Add diagnostics (and some other improvements)
+title: "Add diagnostics (and some other improvements)"
 type: change
 authors: jachris
 pr: 3223

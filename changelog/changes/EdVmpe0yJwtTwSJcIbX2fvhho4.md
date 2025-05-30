@@ -1,5 +1,5 @@
 ---
-title: Introduce the `tenzir` and `tenzird` binaries
+title: "Introduce the `tenzir` and `tenzird` binaries"
 type: change
 authors: dominiklohmann
 pr: 3187

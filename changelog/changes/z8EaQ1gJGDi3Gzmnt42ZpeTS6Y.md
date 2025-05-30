@@ -1,5 +1,5 @@
 ---
-title: Add prototype for static platform config
+title: "Add prototype for static platform config"
 type: feature
 authors: lava
 pr: 5149

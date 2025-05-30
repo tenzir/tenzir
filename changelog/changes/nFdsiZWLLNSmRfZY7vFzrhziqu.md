@@ -1,5 +1,5 @@
 ---
-title: Type FlatBuffers
+title: "Type FlatBuffers"
 type: change
 authors: dominiklohmann
 pr: 1888

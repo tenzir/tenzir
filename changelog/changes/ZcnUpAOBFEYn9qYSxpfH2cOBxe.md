@@ -1,5 +1,5 @@
 ---
-title: Allow for enabling client file logging
+title: "Allow for enabling client file logging"
 type: feature
 authors: dominiklohmann
 pr: 1132

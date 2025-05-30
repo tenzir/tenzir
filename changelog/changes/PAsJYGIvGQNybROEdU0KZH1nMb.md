@@ -1,5 +1,5 @@
 ---
-title: Improve names for the `cache` operator's timeout options
+title: "Improve names for the `cache` operator's timeout options"
 type: change
 authors: dominiklohmann
 pr: 4758

@@ -1,5 +1,5 @@
 ---
-title: Fix bug that caused `read_zeek_tsv` to produce invalid fields
+title: "Fix bug that caused `read_zeek_tsv` to produce invalid fields"
 type: bugfix
 authors: dominiklohmann
 pr: 5052

@@ -1,5 +1,5 @@
 ---
-title: Fix two concurrency issues related to child process creation
+title: "Fix two concurrency issues related to child process creation"
 type: bugfix
 authors: tobim
 pr: 4333

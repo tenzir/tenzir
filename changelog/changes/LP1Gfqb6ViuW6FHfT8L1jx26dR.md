@@ -1,5 +1,5 @@
 ---
-title: Allow values to be `null` when charting
+title: "Allow values to be `null` when charting"
 type: change
 authors: raxyte
 pr: 5009

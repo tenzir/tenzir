@@ -1,5 +1,5 @@
 ---
-title: Align plugin and library output names
+title: "Align plugin and library output names"
 type: change
 authors: dominiklohmann
 pr: 1527

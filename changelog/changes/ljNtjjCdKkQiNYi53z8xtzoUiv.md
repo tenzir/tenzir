@@ -1,5 +1,5 @@
 ---
-title: Fix predicate pushdown in `export` and other small fixes
+title: "Fix predicate pushdown in `export` and other small fixes"
 type: bugfix
 authors: dominiklohmann
 pr: 3599

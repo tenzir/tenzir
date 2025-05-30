@@ -1,5 +1,5 @@
 ---
-title: Add MsgPack-based Table Slice implementation
+title: "Add MsgPack-based Table Slice implementation"
 type: feature
 authors: dominiklohmann
 pr: 975

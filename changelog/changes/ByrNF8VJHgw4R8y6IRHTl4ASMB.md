@@ -1,5 +1,5 @@
 ---
-title: Make `to_google_secops` max size configurable
+title: "Make `to_google_secops` max size configurable"
 type: bugfix
 authors: raxyte
 pr: 5108

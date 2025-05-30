@@ -1,5 +1,5 @@
 ---
-title: Add a `hidden` field to `diagnostics`
+title: "Add a `hidden` field to `diagnostics`"
 type: feature
 authors: dominiklohmann
 pr: 5119

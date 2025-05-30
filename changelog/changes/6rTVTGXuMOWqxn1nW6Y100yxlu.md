@@ -1,5 +1,5 @@
 ---
-title: Add SQS Connector
+title: "Add SQS Connector"
 type: bugfix
 authors: mavam
 pr: 3819

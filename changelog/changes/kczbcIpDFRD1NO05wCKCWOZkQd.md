@@ -1,5 +1,5 @@
 ---
-title: Implement `head` and `taste` operators
+title: "Implement `head` and `taste` operators"
 type: feature
 authors: dominiklohmann
 pr: 2891

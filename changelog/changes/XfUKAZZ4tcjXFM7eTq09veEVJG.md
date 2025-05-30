@@ -1,5 +1,5 @@
 ---
-title: Refactor importer initialization
+title: "Refactor importer initialization"
 type: bugfix
 authors: tobim
 pr: 647

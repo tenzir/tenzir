@@ -1,5 +1,5 @@
 ---
-title: Add a `value_counts` aggregation function
+title: "Add a `value_counts` aggregation function"
 type: feature
 authors: dominiklohmann
 pr: 4701

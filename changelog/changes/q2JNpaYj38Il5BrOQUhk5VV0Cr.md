@@ -1,5 +1,5 @@
 ---
-title: Remove special character escaping from `lines_printer`
+title: "Remove special character escaping from `lines_printer`"
 type: change
 authors: raxyte
 pr: 4520

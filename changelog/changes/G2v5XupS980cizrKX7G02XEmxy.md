@@ -1,5 +1,5 @@
 ---
-title: Remove the `#field` meta extractor
+title: "Remove the `#field` meta extractor"
 type: change
 authors: dominiklohmann
 pr: 2776

@@ -1,5 +1,5 @@
 ---
-title: Error when specified config file does not exist
+title: "Error when specified config file does not exist"
 type: bugfix
 authors: dominiklohmann
 pr: 1147

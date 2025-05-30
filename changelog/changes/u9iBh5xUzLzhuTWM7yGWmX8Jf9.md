@@ -1,5 +1,5 @@
 ---
-title: Increase the default segment size to 1 GiB
+title: "Increase the default segment size to 1 GiB"
 type: change
 authors: mavam
 pr: 1166

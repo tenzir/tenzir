@@ -1,5 +1,5 @@
 ---
-title: Make stop command blocking and return properly
+title: "Make stop command blocking and return properly"
 type: bugfix
 authors: mavam
 pr: 849

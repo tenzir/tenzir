@@ -1,5 +1,5 @@
 ---
-title: Fix crash in query evaluation for new partitions
+title: "Fix crash in query evaluation for new partitions"
 type: bugfix
 authors: dominiklohmann
 pr: 2295

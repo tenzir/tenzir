@@ -1,5 +1,5 @@
 ---
-title: Fix JSON default selector for nested records
+title: "Fix JSON default selector for nested records"
 type: bugfix
 authors: dominiklohmann
 pr: 1988

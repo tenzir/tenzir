@@ -1,5 +1,5 @@
 ---
-title: Fix meta index nondeterminism
+title: "Fix meta index nondeterminism"
 type: bugfix
 authors: tobim
 pr: 842

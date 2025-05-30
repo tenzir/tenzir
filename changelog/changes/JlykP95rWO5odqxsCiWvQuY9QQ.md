@@ -1,5 +1,5 @@
 ---
-title: Fix bug in bitmap offset computation
+title: "Fix bug in bitmap offset computation"
 type: bugfix
 authors: lava
 pr: 1755

@@ -1,5 +1,5 @@
 ---
-title: Add `syslog` parser
+title: "Add `syslog` parser"
 type: feature
 authors: eliaskosunen
 pr: 3645

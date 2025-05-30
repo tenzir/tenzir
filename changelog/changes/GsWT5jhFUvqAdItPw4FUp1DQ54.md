@@ -1,5 +1,5 @@
 ---
-title: Move schema definitions into subdirectory
+title: "Move schema definitions into subdirectory"
 type: change
 authors: dominiklohmann
 pr: 1194

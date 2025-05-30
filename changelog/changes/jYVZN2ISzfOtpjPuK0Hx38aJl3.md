@@ -1,5 +1,5 @@
 ---
-title: Bump submodule pointer to include pipeline manager deserialization update
+title: "Bump submodule pointer to include pipeline manager deserialization update"
 type: bugfix
 authors: Dakostu
 pr: 3487

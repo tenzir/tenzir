@@ -1,5 +1,5 @@
 ---
-title: Implement `otherwise(<expr>, <expr>)`
+title: "Implement `otherwise(<expr>, <expr>)`"
 type: feature
 authors: raxyte
 pr: 4794

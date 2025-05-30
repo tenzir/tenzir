@@ -1,5 +1,5 @@
 ---
-title: PRs 2574-2652
+title: "PRs 2574-2652"
 type: feature
 authors: KaanSK
 pr: 2574

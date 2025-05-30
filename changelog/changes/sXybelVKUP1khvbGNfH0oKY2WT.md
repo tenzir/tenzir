@@ -1,5 +1,5 @@
 ---
-title: Implement a ZeroMQ connector
+title: "Implement a ZeroMQ connector"
 type: feature
 authors: mavam
 pr: 3497
