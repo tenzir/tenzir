@@ -71,6 +71,12 @@ auto transformer_record::update_dropmask(
   if (clickhouse_nullable) {
     return drop::none;
   }
+  if (type.kind().is<null_type>()) {
+    for (auto& v : dropmask) {
+      v = true;
+    }
+    return drop::all;
+  }
   my_array = &array;
   std::fill(found_column.begin(), found_column.end(), false);
   /// Update the dropmask based of the record itself. If we are here, we know
@@ -145,6 +151,9 @@ auto transformer_record::create_column(path_type& path,
                                        tenzir::diagnostic_handler& dh)
   -> ::clickhouse::ColumnRef {
   auto columns = std::vector<ColumnRef>(transformations.size());
+  if (type.kind().is<null_type>()) {
+    return create_null_column(array.length());
+  }
   const auto& rt = as<record_type>(type);
   const auto& struct_array = as<arrow::StructArray>(array);
   // If `update_dropmask` was not called
@@ -236,7 +245,8 @@ auto value_transform(tenzir::duration v) -> int64_t {
 
 auto value_transform(tenzir::ip v) -> in6_addr {
   auto res = in6_addr{};
-  // TODO: I feel dirty. Please clean this.
+  static_assert(sizeof(tenzir::ip) == sizeof(in6_addr));
+  // I feel dirty, but at least right now this is valid.
   std::memcpy(&res, &v, sizeof(v));
   return res;
 }
@@ -393,14 +403,7 @@ struct transformer_from_trait : transformer {
     -> ::clickhouse::ColumnRef override {
     const auto f = detail::overload{
       [&](const null_type&) -> std::shared_ptr<Column> {
-        if constexpr (Nullable) {
-          auto column = traits::template allocate<Nullable>(array.length());
-          for (int64_t i = 0; i < array.length(); ++i) {
-            column->Append(traits::null_value);
-          }
-          return column;
-        }
-        return nullptr;
+        return create_null_column(array.length());
       },
       [&]<typename U>(const U&) -> std::shared_ptr<Column> {
         // error case. Potentially do more conversions?
@@ -428,6 +431,7 @@ struct transformer_from_trait : transformer {
               continue;
             }
           }
+          TENZIR_ASSERT(v.has_value());
           column->Append(value_transform(*v));
         }
         return column;
@@ -471,6 +475,9 @@ struct transformer_blob : transformer {
                              const arrow::Array& array, dropmask_cref dropmask,
                              tenzir::diagnostic_handler& dh)
     -> ::clickhouse::ColumnRef override {
+    if (type.kind().is<null_type>()) {
+      return create_null_column(array.length());
+    }
     if (not type.kind().is<blob_type>()) {
       diagnostic::warning("unexpected type in column `{}`",
                           fmt::join(path, "."))
@@ -506,7 +513,7 @@ struct transformer_blob : transformer {
 struct transformer_array : transformer {
   std::unique_ptr<transformer> data_transform;
   dropmask_type my_mask;
-  const arrow::Array* my_value_array;
+  const arrow::ListArray* my_list_array;
 
   transformer_array(std::string clickhouse_typename,
                     std::unique_ptr<transformer> data_transform)
@@ -515,22 +522,43 @@ struct transformer_array : transformer {
       data_transform{std::move(data_transform)} {
   }
 
-  auto apply_dropmask_to_my_mask(const arrow::Array& array,
+  static auto values_size(const arrow::ListArray& list_array) -> int64_t {
+    const auto length = list_array.length();
+    if (length == 0) {
+      return 0;
+    }
+    return list_array.value_offset(length - 1)
+           + list_array.value_length(length - 1) - list_array.offset();
+  }
+
+  /// Slices the actually relevant values for this list array.
+  static auto sliced_values(const arrow::ListArray& list_array) {
+    // The actual values start at value_offset and end after the end of the
+    // last list
+    const auto length = list_array.length();
+    if (length == 0) {
+      return list_array.values()->Slice(list_array.offset(), 0);
+    }
+    return list_array.values()->Slice(list_array.offset(),
+                                      values_size(list_array));
+  }
+
+  auto apply_dropmask_to_my_mask(const arrow::ListArray& list_array,
                                  dropmask_cref dropmask) -> void {
     my_mask.clear();
-    my_mask.resize(array.length(), false);
-    my_value_array = &array;
-    const auto& list_array = as<arrow::ListArray>(array);
-    const auto* offsets = list_array.raw_value_offsets();
-    for (int64_t i = 0; i < array.length(); ++i) {
+    my_mask.resize(values_size(list_array), false);
+    my_list_array = &list_array;
+    auto write_index = int64_t{0};
+    for (int64_t i = 0; i < list_array.length(); ++i) {
       if (not dropmask[i]) {
+        write_index += list_array.value_length(i);
         continue;
       }
-      const auto start = offsets[i];
-      const auto end = offsets[i + 1];
-      for (int64_t j = start; j < end; ++j) {
+      const auto end = write_index + list_array.value_length(i);
+      for (int64_t j = write_index; j < end; ++j) {
         my_mask[j] = true;
       }
+      write_index += list_array.value_length(i);
     }
   }
 
@@ -538,17 +566,26 @@ struct transformer_array : transformer {
                                const arrow::Array& array, dropmask_ref dropmask,
                                tenzir::diagnostic_handler& dh)
     -> drop override {
+    if (type.kind().is<null_type>()) {
+      if (clickhouse_nullable) {
+        return drop::none;
+      } else {
+        for (auto& v : dropmask) {
+          v = true;
+        }
+        return drop::all;
+      }
+    }
     const auto value_type = as<list_type>(type).value_type();
     const auto& list_array = as<arrow::ListArray>(array);
-    const auto& value_array = *list_array.values();
-    apply_dropmask_to_my_mask(array, dropmask);
-    /// These "early returns MUST happen after we updated `my_mask`"
+    apply_dropmask_to_my_mask(list_array, dropmask);
     if (clickhouse_nullable) {
       return drop::none;
     }
+    const auto value_array = sliced_values(list_array);
     path.push_back("[]");
     auto updated = data_transform->update_dropmask(path, value_type,
-                                                   value_array, my_mask, dh);
+                                                   *value_array, my_mask, dh);
     path.pop_back();
     if (updated == drop::none) {
       return drop::none;
@@ -580,16 +617,13 @@ struct transformer_array : transformer {
     if (not clickhouse_nullable) {
       return nullptr;
     }
-    auto column = data_transform->create_null_column(n);
+    auto column = data_transform->create_null_column(0);
     if (not column) {
       return nullptr;
     }
     auto column_offsets = std::make_shared<ColumnUInt64>();
-    auto& output = column_offsets->GetWritableData();
-    output.resize(n);
-    for (size_t i = 0; i < n; ++i) {
-      output[i] = i;
-    }
+    auto& offsets = column_offsets->GetWritableData();
+    offsets.resize(n, 0);
     return std::make_shared<ColumnArray>(std::move(column),
                                          std::move(column_offsets));
   }
@@ -601,7 +635,6 @@ struct transformer_array : transformer {
   static auto
   make_offsets(const arrow::ListArray& list_array, dropmask_cref dropmask)
     -> std::shared_ptr<ColumnUInt64> {
-    const auto arr = list_array.raw_value_offsets();
     const auto size = list_array.length();
     auto res = std::make_shared<ColumnUInt64>();
     auto& output = res->GetWritableData();
@@ -611,8 +644,9 @@ struct transformer_array : transformer {
       if (dropmask[i]) {
         continue;
       }
+      const auto start = actual_size > 0 ? output[actual_size - 1] : 0;
+      output[actual_size] = start + list_array.value_length(i);
       ++actual_size;
-      output[i] = arr[i + 1];
     }
     output.resize(actual_size);
     return res;
@@ -622,27 +656,27 @@ struct transformer_array : transformer {
                              const arrow::Array& array, dropmask_cref dropmask,
                              tenzir::diagnostic_handler& dh)
     -> ::clickhouse::ColumnRef override {
+    if (type.kind().is<null_type>()) {
+      return create_null_column(array.length());
+    }
     const auto value_type = as<list_type>(type).value_type();
     const auto& list_array = as<arrow::ListArray>(array);
-    const auto& value_array = *list_array.values();
     // Either this is fully nullable, or update_dropmask must have been called.
     if (not clickhouse_nullable) {
-      TENZIR_ASSERT(my_value_array == &array, "`{}!={}` in `{}` ({})",
-                    (void*)my_value_array, (void*)&array, fmt::join(path, "."),
+      TENZIR_ASSERT(my_list_array == &list_array, "`{}!={}` in `{}` ({})",
+                    (void*)my_list_array, (void*)&array, fmt::join(path, "."),
                     clickhouse_typename);
     }
-    // If this is fully nullable, we need to adapt the internal dropmask here.
-    if (clickhouse_nullable) {
-      apply_dropmask_to_my_mask(array, dropmask);
-    }
+    apply_dropmask_to_my_mask(list_array, dropmask);
+    auto clickhouse_offsets = make_offsets(list_array, dropmask);
+    const auto value_array = sliced_values(list_array);
     path.push_back("[]");
     auto clickhouse_columns = data_transform->create_column(
-      path, value_type, value_array, my_mask, dh);
+      path, value_type, *value_array, my_mask, dh);
     path.pop_back();
     if (not clickhouse_columns) {
       return nullptr;
     }
-    auto clickhouse_offsets = make_offsets(list_array, dropmask);
     return std::make_shared<ColumnArray>(std::move(clickhouse_columns),
                                          std::move(clickhouse_offsets));
   }
