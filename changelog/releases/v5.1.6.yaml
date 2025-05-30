@@ -1,4 +1,4 @@
-title: Timestamp Compoennts
+title: Timestamp Components
 description: |
   This release adds the ability to extract hour, minute, and day components from
   timestamps.
