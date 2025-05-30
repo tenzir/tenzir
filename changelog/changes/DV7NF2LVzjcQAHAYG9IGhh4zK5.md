@@ -1,5 +1,5 @@
 ---
-title: Fix user shutdown handling for continuous exports
+title: "Fix user shutdown handling for continuous exports"
 type: feature
 authors: dominiklohmann
 pr: 779

@@ -1,5 +1,5 @@
 ---
-title: Require fmt to be installed separately from spdlog
+title: "Require fmt to be installed separately from spdlog"
 type: change
 authors: dominiklohmann
 pr: 1330

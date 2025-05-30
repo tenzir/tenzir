@@ -1,5 +1,5 @@
 ---
-title: Fix build without Arrow
+title: "Fix build without Arrow"
 type: bugfix
 authors: dominiklohmann
 pr: 1673

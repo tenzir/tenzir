@@ -1,5 +1,5 @@
 ---
-title: Make partition-local stores the default
+title: "Make partition-local stores the default"
 type: change
 authors: lava
 pr: 1876

@@ -1,5 +1,5 @@
 ---
-title: Introduce an experimental `python` pipeline operator
+title: "Introduce an experimental `python` pipeline operator"
 type: feature
 authors: lava
 pr: 3592

@@ -1,5 +1,5 @@
 ---
-title: Fix TQL2 `summarize` with no groups and no input
+title: "Fix TQL2 `summarize` with no groups and no input"
 type: bugfix
 authors: dominiklohmann
 pr: 4709

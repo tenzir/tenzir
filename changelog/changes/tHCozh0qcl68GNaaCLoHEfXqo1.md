@@ -1,5 +1,5 @@
 ---
-title: Validate legacy expressions when splitting for predicate pushdown
+title: "Validate legacy expressions when splitting for predicate pushdown"
 type: bugfix
 authors: jachris
 pr: 4861

@@ -1,5 +1,5 @@
 ---
-title: Remove `lsvast`
+title: "Remove `lsvast`"
 type: change
 authors: dominiklohmann
 pr: 3211

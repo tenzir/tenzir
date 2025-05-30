@@ -1,5 +1,5 @@
 ---
-title: Prepare the pipeline manager for TQLv2
+title: "Prepare the pipeline manager for TQLv2"
 type: change
 authors: jachris
 pr: 4348

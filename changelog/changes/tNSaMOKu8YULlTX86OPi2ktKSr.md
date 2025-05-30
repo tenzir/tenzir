@@ -1,5 +1,5 @@
 ---
-title: Avoid references to record fields in fill_status_map
+title: "Avoid references to record fields in fill_status_map"
 type: bugfix
 authors: tobim
 pr: 1915

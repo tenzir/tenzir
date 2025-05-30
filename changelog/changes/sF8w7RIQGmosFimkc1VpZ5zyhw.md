@@ -1,5 +1,5 @@
 ---
-title: Protect DB directory with PID lock
+title: "Protect DB directory with PID lock"
 type: feature
 authors: mavam
 pr: 1001

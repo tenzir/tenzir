@@ -1,5 +1,5 @@
 ---
-title: Remove long-deprecated code
+title: "Remove long-deprecated code"
 type: change
 authors: dominiklohmann
 pr: 1374

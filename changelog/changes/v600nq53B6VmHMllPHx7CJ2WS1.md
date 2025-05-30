@@ -1,5 +1,5 @@
 ---
-title: Remove type layering
+title: "Remove type layering"
 type: bugfix
 authors: dominiklohmann
 pr: 5008

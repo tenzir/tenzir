@@ -1,5 +1,5 @@
 ---
-title: Fix partition selection for the `rebuild` command
+title: "Fix partition selection for the `rebuild` command"
 type: bugfix
 authors: dominiklohmann
 pr: 3083

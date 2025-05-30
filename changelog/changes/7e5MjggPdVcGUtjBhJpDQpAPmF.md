@@ -1,5 +1,5 @@
 ---
-title: Remove dead condition and fix Docker release tags
+title: "Remove dead condition and fix Docker release tags"
 type: bugfix
 authors: 0snap
 pr: 1711

@@ -1,5 +1,5 @@
 ---
-title: Fix `slice 1:-1` for exactly one event
+title: "Fix `slice 1:-1` for exactly one event"
 type: bugfix
 authors: dominiklohmann
 pr: 4505

@@ -1,5 +1,5 @@
 ---
-title: Allow packages to be disabled properly
+title: "Allow packages to be disabled properly"
 type: feature
 authors: dominiklohmann
 pr: 5161

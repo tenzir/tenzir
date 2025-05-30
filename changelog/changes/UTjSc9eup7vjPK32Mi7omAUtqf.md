@@ -1,5 +1,5 @@
 ---
-title: Make archive session extraction interruptible
+title: "Make archive session extraction interruptible"
 type: bugfix
 authors: dominiklohmann
 pr: 825

@@ -1,5 +1,5 @@
 ---
-title: Do not persist pipeline state updates on node shutdown
+title: "Do not persist pipeline state updates on node shutdown"
 type: bugfix
 authors: dominiklohmann
 pr: 4261

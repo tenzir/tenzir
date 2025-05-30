@@ -1,5 +1,5 @@
 ---
-title: Implement a context content dumping mechanism
+title: "Implement a context content dumping mechanism"
 type: feature
 authors: Dakostu
 pr: 3893

@@ -1,5 +1,5 @@
 ---
-title: Gracefully handle misaligned header and values in `xsv` parser
+title: "Gracefully handle misaligned header and values in `xsv` parser"
 type: bugfix
 authors: dominiklohmann
 pr: 3874

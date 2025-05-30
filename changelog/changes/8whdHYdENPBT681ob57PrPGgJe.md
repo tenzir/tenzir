@@ -1,5 +1,5 @@
 ---
-title: Support multiple table slice schemas when dumping contexts
+title: "Support multiple table slice schemas when dumping contexts"
 type: bugfix
 authors: Dakostu
 pr: 4236

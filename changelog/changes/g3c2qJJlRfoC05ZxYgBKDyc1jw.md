@@ -1,5 +1,5 @@
 ---
-title: Fix minor issues with the diagnostics and metrics collector
+title: "Fix minor issues with the diagnostics and metrics collector"
 type: bugfix
 authors: jachris
 pr: 4326

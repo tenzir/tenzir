@@ -1,5 +1,5 @@
 ---
-title: Terminate exporters when sinks die
+title: "Terminate exporters when sinks die"
 type: bugfix
 authors: mavam
 pr: 1006

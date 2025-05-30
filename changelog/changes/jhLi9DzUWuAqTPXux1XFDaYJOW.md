@@ -1,5 +1,5 @@
 ---
-title: Shutdown node when component startup fails
+title: "Shutdown node when component startup fails"
 type: bugfix
 authors: mavam
 pr: 1028

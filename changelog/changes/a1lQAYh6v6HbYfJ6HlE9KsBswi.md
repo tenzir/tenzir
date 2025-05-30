@@ -1,5 +1,5 @@
 ---
-title: Isolate environment in python operator
+title: "Isolate environment in python operator"
 type: bugfix
 authors: jachris
 pr: 4036

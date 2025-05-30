@@ -1,5 +1,5 @@
 ---
-title: Fix a race condition in `/serve`
+title: "Fix a race condition in `/serve`"
 type: bugfix
 authors: dominiklohmann
 pr: 4123

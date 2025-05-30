@@ -1,5 +1,5 @@
 ---
-title: Add missing time format specifiers for the static binary 
+title: "Add missing time format specifiers for the static binary"
 type: bugfix
 authors: tobim
 pr: 4366

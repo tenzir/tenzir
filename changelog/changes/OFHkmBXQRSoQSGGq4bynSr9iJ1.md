@@ -1,5 +1,5 @@
 ---
-title: Add missing concepts for Suricata events
+title: "Add missing concepts for Suricata events"
 type: bugfix
 authors: tobim
 pr: 1798

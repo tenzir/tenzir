@@ -1,5 +1,5 @@
 ---
-title: Stop accepting new queries after initiating shutdown
+title: "Stop accepting new queries after initiating shutdown"
 type: bugfix
 authors: dominiklohmann
 pr: 2215

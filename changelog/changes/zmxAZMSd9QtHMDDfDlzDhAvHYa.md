@@ -1,5 +1,5 @@
 ---
-title: Add optional status command filters
+title: "Add optional status command filters"
 type: feature
 authors: dominiklohmann
 pr: 2288

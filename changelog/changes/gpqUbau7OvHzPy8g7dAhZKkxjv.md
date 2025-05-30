@@ -1,5 +1,5 @@
 ---
-title: Make feather stores read incrementally
+title: "Make feather stores read incrementally"
 type: feature
 authors: dominiklohmann
 pr: 2805

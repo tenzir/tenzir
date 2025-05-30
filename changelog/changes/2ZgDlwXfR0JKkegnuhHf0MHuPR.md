@@ -1,5 +1,5 @@
 ---
-title: Support unique plugin versions for Nix and Docker
+title: "Support unique plugin versions for Nix and Docker"
 type: bugfix
 authors: dominiklohmann
 pr: 1799

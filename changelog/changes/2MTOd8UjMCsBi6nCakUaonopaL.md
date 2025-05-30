@@ -1,5 +1,5 @@
 ---
-title: Add an option for writing JSON arrays of objects
+title: "Add an option for writing JSON arrays of objects"
 type: feature
 authors: dominiklohmann
 pr: 4249

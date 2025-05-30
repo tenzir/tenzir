@@ -1,5 +1,5 @@
 ---
-title: Propagate VAST_ENABLE_JOURNALD_LOGGING setting to config header
+title: "Propagate VAST_ENABLE_JOURNALD_LOGGING setting to config header"
 type: bugfix
 authors: lava
 pr: 1780

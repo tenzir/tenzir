@@ -1,5 +1,5 @@
 ---
-title: Enable the AMQP plugin in the static binary
+title: "Enable the AMQP plugin in the static binary"
 type: bugfix
 authors: dominiklohmann
 pr: 3854

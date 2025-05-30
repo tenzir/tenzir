@@ -1,5 +1,5 @@
 ---
-title: Perform pass over build config defaults
+title: "Perform pass over build config defaults"
 type: change
 authors: dominiklohmann
 pr: 695

@@ -1,5 +1,5 @@
 ---
-title: Align endpoints between regular and slim Docker images
+title: "Align endpoints between regular and slim Docker images"
 type: bugfix
 authors: dominiklohmann
 pr: 3137

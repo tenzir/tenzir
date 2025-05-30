@@ -1,5 +1,5 @@
 ---
-title: Fix JSON printer handling of `inf` and `nan`
+title: "Fix JSON printer handling of `inf` and `nan`"
 type: bugfix
 authors: jachris
 pr: 4087

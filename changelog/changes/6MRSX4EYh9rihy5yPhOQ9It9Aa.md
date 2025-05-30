@@ -1,5 +1,5 @@
 ---
-title: Fix `from`/`to` not respecting default formats
+title: "Fix `from`/`to` not respecting default formats"
 type: feature
 authors: IyeOnline
 pr: 4990

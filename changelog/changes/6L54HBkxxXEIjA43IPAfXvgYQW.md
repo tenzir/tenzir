@@ -1,5 +1,5 @@
 ---
-title: Add `duration(string) -> duration`
+title: "Add `duration(string) -> duration`"
 type: feature
 authors: raxyte
 pr: 4877

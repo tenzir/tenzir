@@ -1,5 +1,5 @@
 ---
-title: Fix linux PID file check on startup
+title: "Fix linux PID file check on startup"
 type: bugfix
 authors: lava
 pr: 2861

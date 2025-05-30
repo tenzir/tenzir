@@ -1,5 +1,5 @@
 ---
-title: Fix loading of large contexts
+title: "Fix loading of large contexts"
 type: bugfix
 authors: eliaskosunen
 pr: 4033

@@ -1,5 +1,5 @@
 ---
-title: Fix the `azure-log-analytics` operator (again)
+title: "Fix the `azure-log-analytics` operator (again)"
 type: bugfix
 authors: dominiklohmann
 pr: 4578

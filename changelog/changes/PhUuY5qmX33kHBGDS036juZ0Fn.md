@@ -1,5 +1,5 @@
 ---
-title: PRs 1445-1452
+title: "PRs 1445-1452"
 type: change
 authors: dominiklohmann
 pr: 1445

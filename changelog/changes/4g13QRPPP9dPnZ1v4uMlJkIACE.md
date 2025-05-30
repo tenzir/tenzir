@@ -1,5 +1,5 @@
 ---
-title: Bump the tenzir-plugins submodule pointer to include the pipeline manager's failure and rendered diagnostics functionality
+title: "Bump the tenzir-plugins submodule pointer to include the pipeline manager's failure and rendered diagnostics functionality"
 type: feature
 authors: Dakostu
 pr: 3479

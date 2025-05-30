@@ -1,5 +1,5 @@
 ---
-title: Make unix dgram metrics sink connectionless
+title: "Make unix dgram metrics sink connectionless"
 type: bugfix
 authors: tobim
 pr: 1702

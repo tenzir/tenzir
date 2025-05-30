@@ -1,5 +1,5 @@
 ---
-title:  Improve `to_splunk` TLS functionality
+title: "Improve `to_splunk` TLS functionality"
 type: change
 authors: raxyte
 pr: 4825

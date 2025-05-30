@@ -1,5 +1,5 @@
 ---
-title: Implement `parse_syslog`
+title: "Implement `parse_syslog`"
 type: feature
 authors: IyeOnline
 pr: 4980

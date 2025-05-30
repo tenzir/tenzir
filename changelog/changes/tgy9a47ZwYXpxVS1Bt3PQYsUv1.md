@@ -1,5 +1,5 @@
 ---
-title: Support native plugins in the static binary
+title: "Support native plugins in the static binary"
 type: bugfix
 authors: dominiklohmann
 pr: 1850

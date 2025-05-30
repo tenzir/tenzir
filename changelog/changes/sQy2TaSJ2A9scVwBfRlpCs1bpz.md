@@ -1,5 +1,5 @@
 ---
-title: Do not drop the `data` field in `decapsulate`
+title: "Do not drop the `data` field in `decapsulate`"
 type: change
 authors: dominiklohmann
 pr: 3515

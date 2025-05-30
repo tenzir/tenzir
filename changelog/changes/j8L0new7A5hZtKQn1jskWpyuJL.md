@@ -1,5 +1,5 @@
 ---
-title: Add option for configurable post-start hooks
+title: "Add option for configurable post-start hooks"
 type: feature
 authors: dominiklohmann
 pr: 1699

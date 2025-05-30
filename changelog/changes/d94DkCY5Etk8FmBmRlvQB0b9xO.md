@@ -1,5 +1,5 @@
 ---
-title: Implement the `serve` operator and `/serve` endpoint
+title: "Implement the `serve` operator and `/serve` endpoint"
 type: feature
 authors: dominiklohmann
 pr: 3180

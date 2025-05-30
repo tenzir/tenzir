@@ -1,5 +1,5 @@
 ---
-title: Only wipe the cache directory contents but not the dir itself
+title: "Only wipe the cache directory contents but not the dir itself"
 type: bugfix
 authors: lava
 pr: 4742

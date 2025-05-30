@@ -1,5 +1,5 @@
 ---
-title: Fix the schema name in `show contexts`
+title: "Fix the schema name in `show contexts`"
 type: bugfix
 authors: dominiklohmann
 pr: 4082

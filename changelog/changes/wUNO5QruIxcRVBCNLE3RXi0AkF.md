@@ -1,5 +1,5 @@
 ---
-title: Fix processing of http arguments
+title: "Fix processing of http arguments"
 type: bugfix
 authors: mavam
 pr: 3535

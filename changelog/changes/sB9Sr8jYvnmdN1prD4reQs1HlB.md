@@ -1,5 +1,5 @@
 ---
-title: Improve panics to show stacktrace in diagnostics and logs
+title: "Improve panics to show stacktrace in diagnostics and logs"
 type: change
 authors: jachris
 pr: 5023

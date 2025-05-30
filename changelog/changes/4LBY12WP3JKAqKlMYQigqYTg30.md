@@ -1,5 +1,5 @@
 ---
-title: Add `vast import arrow` enabling ingestion of arrow IPC format
+title: "Add `vast import arrow` enabling ingestion of arrow IPC format"
 type: feature
 authors: dispanser
 pr: 2707

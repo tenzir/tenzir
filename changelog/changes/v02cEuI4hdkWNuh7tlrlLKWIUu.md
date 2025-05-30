@@ -1,5 +1,5 @@
 ---
-title: Implement more malleable lookup data for contexts
+title: "Implement more malleable lookup data for contexts"
 type: feature
 authors: Dakostu
 pr: 3920

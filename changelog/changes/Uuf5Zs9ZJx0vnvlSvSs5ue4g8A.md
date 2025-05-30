@@ -1,5 +1,5 @@
 ---
-title: `splunk` fixes & consistent operator naming
+title: "`splunk` fixes & consistent operator naming"
 type: change
 authors: IyeOnline
 pr: 4726

@@ -1,5 +1,5 @@
 ---
-title: Minimize the threadpool for client commands
+title: "Minimize the threadpool for client commands"
 type: change
 authors: tobim
 pr: 2193

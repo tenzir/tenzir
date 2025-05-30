@@ -1,5 +1,5 @@
 ---
-title: Add a global ca-certificates config option
+title: "Add a global ca-certificates config option"
 type: change
 authors: tobim
 pr: 5022

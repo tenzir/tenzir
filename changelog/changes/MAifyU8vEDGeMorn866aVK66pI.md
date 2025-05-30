@@ -1,5 +1,5 @@
 ---
-title: Allow for running unit tests in parallel
+title: "Allow for running unit tests in parallel"
 type: bugfix
 authors: dominiklohmann
 pr: 1659

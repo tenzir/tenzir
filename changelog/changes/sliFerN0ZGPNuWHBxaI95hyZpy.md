@@ -1,5 +1,5 @@
 ---
-title: Support environment variables for plugin options
+title: "Support environment variables for plugin options"
 type: bugfix
 authors: dominiklohmann
 pr: 2390

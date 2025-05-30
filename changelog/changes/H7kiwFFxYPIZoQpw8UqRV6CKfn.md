@@ -1,5 +1,5 @@
 ---
-title: Support hard-kill for unresponsive actors
+title: "Support hard-kill for unresponsive actors"
 type: bugfix
 authors: mavam
 pr: 1005

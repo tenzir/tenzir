@@ -1,5 +1,5 @@
 ---
-title: Fix possibly unhandled exception in disk monitor
+title: "Fix possibly unhandled exception in disk monitor"
 type: bugfix
 authors: dominiklohmann
 pr: 1458

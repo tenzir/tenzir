@@ -1,5 +1,5 @@
 ---
-title: Don't allow manual erasing of contexts from packages
+title: "Don't allow manual erasing of contexts from packages"
 type: bugfix
 authors: lava
 pr: 4768

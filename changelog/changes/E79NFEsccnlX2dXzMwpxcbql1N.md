@@ -1,5 +1,5 @@
 ---
-title: Normalize expressions for live and unpersisted data
+title: "Normalize expressions for live and unpersisted data"
 type: bugfix
 authors: tobim
 pr: 4774

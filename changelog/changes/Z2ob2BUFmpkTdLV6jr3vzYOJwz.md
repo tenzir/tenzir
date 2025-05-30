@@ -1,5 +1,5 @@
 ---
-title: Remove Version FlatBuffers table
+title: "Remove Version FlatBuffers table"
 type: change
 authors: dominiklohmann
 pr: 1168

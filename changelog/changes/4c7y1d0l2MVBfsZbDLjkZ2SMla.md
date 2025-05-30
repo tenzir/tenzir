@@ -1,5 +1,5 @@
 ---
-title: Remove broker plugin
+title: "Remove broker plugin"
 type: change
 authors: patszt
 pr: 2796

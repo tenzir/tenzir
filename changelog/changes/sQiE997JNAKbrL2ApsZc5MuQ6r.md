@@ -1,5 +1,5 @@
 ---
-title: Don't collect status from sources and sinks
+title: "Don't collect status from sources and sinks"
 type: bugfix
 authors: tobim
 pr: 1234

@@ -1,5 +1,5 @@
 ---
-title: Fix up `to_azure_log_analytics`
+title: "Fix up `to_azure_log_analytics`"
 type: bugfix
 authors: dominiklohmann
 pr: 5077

@@ -1,5 +1,5 @@
 ---
-title: Read user-supplied schema files from config dirs
+title: "Read user-supplied schema files from config dirs"
 type: change
 authors: dominiklohmann
 pr: 1372

@@ -1,5 +1,5 @@
 ---
-title: Print Zeek TSV metadata when schema changes
+title: "Print Zeek TSV metadata when schema changes"
 type: bugfix
 authors: dominiklohmann
 pr: 3836

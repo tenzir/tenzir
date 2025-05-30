@@ -1,5 +1,5 @@
 ---
-title: Add a `files` source
+title: "Add a `files` source"
 type: feature
 authors: dominiklohmann
 pr: 4035

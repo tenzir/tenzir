@@ -1,5 +1,5 @@
 ---
-title: Remove many deprecated things
+title: "Remove many deprecated things"
 type: change
 authors: dominiklohmann
 pr: 4103

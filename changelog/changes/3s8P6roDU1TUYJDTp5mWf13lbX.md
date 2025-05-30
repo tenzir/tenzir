@@ -1,5 +1,5 @@
 ---
-title: Add OCSF schema type definitions
+title: "Add OCSF schema type definitions"
 type: bugfix
 authors: jachris
 pr: 4558

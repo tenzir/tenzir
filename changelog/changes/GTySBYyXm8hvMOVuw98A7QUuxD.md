@@ -1,5 +1,5 @@
 ---
-title: Delete `delete_when_stopped` from the pipeline manager
+title: "Delete `delete_when_stopped` from the pipeline manager"
 type: change
 authors: jachris
 pr: 3292

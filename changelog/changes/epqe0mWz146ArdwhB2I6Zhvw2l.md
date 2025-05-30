@@ -1,5 +1,5 @@
 ---
-title: Revamp packet acquisition and parsing
+title: "Revamp packet acquisition and parsing"
 type: change
 authors: mavam
 pr: 3263

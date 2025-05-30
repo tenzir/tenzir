@@ -1,5 +1,5 @@
 ---
-title: Support aging out data based on a query
+title: "Support aging out data based on a query"
 type: feature
 authors: dominiklohmann
 pr: 929

@@ -1,5 +1,5 @@
 ---
-title: Fix timing-related crashes in the `web` plugin
+title: "Fix timing-related crashes in the `web` plugin"
 type: bugfix
 authors: Dakostu
 pr: 3553

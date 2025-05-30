@@ -1,5 +1,5 @@
 ---
-title: Enable google-cloud-pubsub connector in the Docker Image
+title: "Enable google-cloud-pubsub connector in the Docker Image"
 type: bugfix
 authors: IyeOnline
 pr: 4690

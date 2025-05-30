@@ -1,5 +1,5 @@
 ---
-title: Fix Docker image builds for arm64
+title: "Fix Docker image builds for arm64"
 type: feature
 authors: dominiklohmann
 pr: 1773

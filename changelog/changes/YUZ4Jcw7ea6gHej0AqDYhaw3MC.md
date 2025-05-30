@@ -1,5 +1,5 @@
 ---
-title: Add metrics for select component actors
+title: "Add metrics for select component actors"
 type: feature
 authors: tobim
 pr: 4668

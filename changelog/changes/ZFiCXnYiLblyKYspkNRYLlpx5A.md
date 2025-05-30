@@ -1,5 +1,5 @@
 ---
-title: Fix overzealous parameter validation in `/pipeline/launch`
+title: "Fix overzealous parameter validation in `/pipeline/launch`"
 type: change
 authors: dominiklohmann
 pr: 4919

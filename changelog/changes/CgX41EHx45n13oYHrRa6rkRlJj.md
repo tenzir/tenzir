@@ -1,5 +1,5 @@
 ---
-title: Implement Apache Parquet & Apache Feather V2 stores
+title: "Implement Apache Parquet & Apache Feather V2 stores"
 type: change
 authors: dominiklohmann
 pr: 2413

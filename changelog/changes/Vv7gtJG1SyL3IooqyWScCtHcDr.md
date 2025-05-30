@@ -1,5 +1,5 @@
 ---
-title: Add '--disk-budget-check-binary' option to disk monitor
+title: "Add '--disk-budget-check-binary' option to disk monitor"
 type: feature
 authors: lava
 pr: 1453

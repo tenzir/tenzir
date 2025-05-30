@@ -1,5 +1,5 @@
 ---
-title: Implement `top` and `rare`
+title: "Implement `top` and `rare`"
 type: feature
 authors: dominiklohmann
 pr: 3176

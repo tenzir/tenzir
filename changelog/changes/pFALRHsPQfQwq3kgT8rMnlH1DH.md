@@ -1,5 +1,5 @@
 ---
-title: PRs 1185-1228
+title: "PRs 1185-1228"
 type: feature
 authors: tobim
 pr: 1185

@@ -1,5 +1,5 @@
 ---
-title: Implement `floor` and `ceil` functions
+title: "Implement `floor` and `ceil` functions"
 type: feature
 authors: raxyte
 pr: 4712

@@ -1,5 +1,5 @@
 ---
-title: Fix the `tenzir/tenzir:latest-slim` image
+title: "Fix the `tenzir/tenzir:latest-slim` image"
 type: bugfix
 authors: dominiklohmann
 pr: 3764

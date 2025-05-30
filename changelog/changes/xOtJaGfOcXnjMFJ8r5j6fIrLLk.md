@@ -1,5 +1,5 @@
 ---
-title: Add a package manager
+title: "Add a package manager"
 type: feature
 authors: lava
 pr: 4344

@@ -1,5 +1,5 @@
 ---
-title: Start the telemetry loop of the index correctly
+title: "Start the telemetry loop of the index correctly"
 type: bugfix
 authors: dominiklohmann
 pr: 2032

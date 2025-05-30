@@ -1,5 +1,5 @@
 ---
-title: Allow empty field names
+title: "Allow empty field names"
 type: change
 authors: jachris
 pr: 3742

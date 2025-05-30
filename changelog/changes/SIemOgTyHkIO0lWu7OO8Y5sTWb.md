@@ -1,5 +1,5 @@
 ---
-title: Make syslog parser more lenient
+title: "Make syslog parser more lenient"
 type: bugfix
 authors: mavam
 pr: 4225

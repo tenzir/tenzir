@@ -1,5 +1,5 @@
 ---
-title: Add LEEF parser
+title: "Add LEEF parser"
 type: feature
 authors: mavam
 pr: 4178

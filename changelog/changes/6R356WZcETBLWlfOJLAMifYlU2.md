@@ -1,5 +1,5 @@
 ---
-title: Allow `/* ... */` comments in the VAST language
+title: "Allow `/* ... */` comments in the VAST language"
 type: feature
 authors: dominiklohmann
 pr: 3011

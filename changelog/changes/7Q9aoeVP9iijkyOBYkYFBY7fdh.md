@@ -1,5 +1,5 @@
 ---
-title: Let empty queries export everything
+title: "Let empty queries export everything"
 type: feature
 authors: dominiklohmann
 pr: 1879

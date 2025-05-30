@@ -1,5 +1,5 @@
 ---
-title: Prune expressions for the meta index lookup
+title: "Prune expressions for the meta index lookup"
 type: change
 authors: tobim
 pr: 1433

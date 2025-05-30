@@ -1,5 +1,5 @@
 ---
-title: Fix a connection error message
+title: "Fix a connection error message"
 type: bugfix
 authors: tobim
 pr: 2609

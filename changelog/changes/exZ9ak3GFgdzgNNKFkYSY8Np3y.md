@@ -1,5 +1,5 @@
 ---
-title: Fix `vast.export.json.omit-nulls` for nested records
+title: "Fix `vast.export.json.omit-nulls` for nested records"
 type: bugfix
 authors: dominiklohmann
 pr: 2447

@@ -1,5 +1,5 @@
 ---
-title: Fix double-closing fds in the python operator
+title: "Fix double-closing fds in the python operator"
 type: bugfix
 authors: lava
 pr: 4646

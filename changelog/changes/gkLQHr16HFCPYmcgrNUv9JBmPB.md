@@ -1,5 +1,5 @@
 ---
-title: Add support for Cisco Firepower syslog messages
+title: "Add support for Cisco Firepower syslog messages"
 type: feature
 authors: eliaskosunen
 pr: 3833

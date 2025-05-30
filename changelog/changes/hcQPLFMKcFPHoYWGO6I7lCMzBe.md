@@ -1,5 +1,5 @@
 ---
-title: Implement `split`, `split_regex`, and `join`
+title: "Implement `split`, `split_regex`, and `join`"
 type: feature
 authors: dominiklohmann
 pr: 4799

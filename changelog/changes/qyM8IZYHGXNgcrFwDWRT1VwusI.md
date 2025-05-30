@@ -1,5 +1,5 @@
 ---
-title: Properly recover corrupted partition data on startup
+title: "Properly recover corrupted partition data on startup"
 type: bugfix
 authors: lava
 pr: 2631

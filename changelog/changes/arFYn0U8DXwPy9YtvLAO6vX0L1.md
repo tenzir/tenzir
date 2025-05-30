@@ -1,5 +1,5 @@
 ---
-title: Add `encode_url` and `decode_url` functions
+title: "Add `encode_url` and `decode_url` functions"
 type: feature
 authors: dominiklohmann
 pr: 5168

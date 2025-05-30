@@ -1,5 +1,5 @@
 ---
-title: Add value grouping to `chart` and remove `--title`
+title: "Add value grouping to `chart` and remove `--title`"
 type: change
 authors: jachris
 pr: 4119

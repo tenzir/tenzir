@@ -1,5 +1,5 @@
 ---
-title: Introduce an experimental `sigma` operator
+title: "Introduce an experimental `sigma` operator"
 type: feature
 authors: dominiklohmann
 pr: 3138

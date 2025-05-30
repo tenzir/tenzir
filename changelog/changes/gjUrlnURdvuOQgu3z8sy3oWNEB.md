@@ -1,5 +1,5 @@
 ---
-title: Avoid shutdown when config dirs are not readable
+title: "Avoid shutdown when config dirs are not readable"
 type: bugfix
 authors: dominiklohmann
 pr: 1533

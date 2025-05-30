@@ -1,5 +1,5 @@
 ---
-title: Add `unique` operator
+title: "Add `unique` operator"
 type: feature
 authors: jachris
 pr: 3051

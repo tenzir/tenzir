@@ -1,5 +1,5 @@
 ---
-title: Bump minimum required CMake version to 3.18
+title: "Bump minimum required CMake version to 3.18"
 type: change
 authors: dominiklohmann
 pr: 1914

@@ -1,5 +1,5 @@
 ---
-title: Make it easier to reference user defined types in the schema language
+title: "Make it easier to reference user defined types in the schema language"
 type: change
 authors: tobim
 pr: 1331

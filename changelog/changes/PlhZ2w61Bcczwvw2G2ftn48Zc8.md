@@ -1,5 +1,5 @@
 ---
-title: Enable Broker plugin by default for Nix
+title: "Enable Broker plugin by default for Nix"
 type: feature
 authors: dominiklohmann
 pr: 1789

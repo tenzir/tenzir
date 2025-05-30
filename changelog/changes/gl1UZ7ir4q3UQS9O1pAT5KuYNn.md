@@ -1,5 +1,5 @@
 ---
-title: Summarize operator with pluggable aggregation functions
+title: "Summarize operator with pluggable aggregation functions"
 type: change
 authors: dominiklohmann
 pr: 2417

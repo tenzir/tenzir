@@ -1,5 +1,5 @@
 ---
-title: Implement `and` and `or` for `null_type`
+title: "Implement `and` and `or` for `null_type`"
 type: bugfix
 authors: raxyte
 pr: 4689

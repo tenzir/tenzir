@@ -1,5 +1,5 @@
 ---
-title: Make man-page creation more robust
+title: "Make man-page creation more robust"
 type: bugfix
 authors: dominiklohmann
 pr: 2190

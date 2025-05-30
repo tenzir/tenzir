@@ -1,5 +1,5 @@
 ---
-title: Perform individual catalog lookups in `lookup`
+title: "Perform individual catalog lookups in `lookup`"
 type: bugfix
 authors: dominiklohmann
 pr: 4535

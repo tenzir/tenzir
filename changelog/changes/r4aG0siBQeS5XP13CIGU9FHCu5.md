@@ -1,5 +1,5 @@
 ---
-title: Introduce and make use of the timestamp type
+title: "Introduce and make use of the timestamp type"
 type: change
 authors: tobim
 pr: 1388

@@ -1,5 +1,5 @@
 ---
-title: Fix merging of source status objects
+title: "Fix merging of source status objects"
 type: bugfix
 authors: dominiklohmann
 pr: 1109

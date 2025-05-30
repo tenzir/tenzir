@@ -1,5 +1,5 @@
 ---
-title: Make python venv creation independent from the user
+title: "Make python venv creation independent from the user"
 type: bugfix
 authors: tobim
 pr: 4189

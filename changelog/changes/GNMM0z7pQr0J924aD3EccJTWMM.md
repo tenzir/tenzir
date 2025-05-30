@@ -1,5 +1,5 @@
 ---
-title: Relax type restrictions for queries with numeric literals
+title: "Relax type restrictions for queries with numeric literals"
 type: feature
 authors: dominiklohmann
 pr: 3634

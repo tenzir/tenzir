@@ -1,5 +1,5 @@
 ---
-title: Remove the /export endpoint
+title: "Remove the /export endpoint"
 type: change
 authors: Dakostu
 pr: 2990

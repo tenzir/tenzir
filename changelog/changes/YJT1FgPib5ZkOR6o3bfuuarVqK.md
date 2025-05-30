@@ -1,5 +1,5 @@
 ---
-title: Make it possible to run VAST without user configs
+title: "Make it possible to run VAST without user configs"
 type: change
 authors: dominiklohmann
 pr: 1557

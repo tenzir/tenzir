@@ -1,5 +1,5 @@
 ---
-title: Move options from format to the import subcommand
+title: "Move options from format to the import subcommand"
 type: change
 authors: tobim
 pr: 1354

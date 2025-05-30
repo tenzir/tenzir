@@ -1,5 +1,5 @@
 ---
-title: Restore unique IDs for partition-local stores
+title: "Restore unique IDs for partition-local stores"
 type: feature
 authors: lava
 pr: 1805

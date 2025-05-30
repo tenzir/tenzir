@@ -1,5 +1,5 @@
 ---
-title: Fail properly when transfer breaks
+title: "Fail properly when transfer breaks"
 type: bugfix
 authors: mavam
 pr: 3842

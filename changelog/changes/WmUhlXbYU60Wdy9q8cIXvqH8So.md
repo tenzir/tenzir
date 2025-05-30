@@ -1,5 +1,5 @@
 ---
-title: Wait until all stores have exited before finishing a partition transform
+title: "Wait until all stores have exited before finishing a partition transform"
 type: bugfix
 authors: lava
 pr: 2543

@@ -1,5 +1,5 @@
 ---
-title: Remove assertion from expression tailoring
+title: "Remove assertion from expression tailoring"
 type: bugfix
 authors: lava
 pr: 830

@@ -1,5 +1,5 @@
 ---
-title: Make `str(enum)` return the name of the enum entry
+title: "Make `str(enum)` return the name of the enum entry"
 type: bugfix
 authors: jachris
 pr: 4717

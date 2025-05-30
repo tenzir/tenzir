@@ -1,5 +1,5 @@
 ---
-title: Fix parsing of subnet columns in zeek-tsv
+title: "Fix parsing of subnet columns in zeek-tsv"
 type: bugfix
 authors: tobim
 pr: 3606

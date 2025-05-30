@@ -1,5 +1,5 @@
 ---
-title: Add a `--cumulative` option to the `measure` operator
+title: "Add a `--cumulative` option to the `measure` operator"
 type: feature
 authors: dominiklohmann
 pr: 3156

@@ -1,5 +1,5 @@
 ---
-title: Implement `strict { ... }`
+title: "Implement `strict { ... }`"
 type: feature
 authors: raxyte
 pr: 5174

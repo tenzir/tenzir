@@ -1,5 +1,5 @@
 ---
-title: Fix the timezone shift to UTC for ISO8601 dates
+title: "Fix the timezone shift to UTC for ISO8601 dates"
 type: bugfix
 authors: tobim
 pr: 1537

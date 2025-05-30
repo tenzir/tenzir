@@ -1,5 +1,5 @@
 ---
-title: Fix `serve` exiting prematurely
+title: "Fix `serve` exiting prematurely"
 type: bugfix
 authors: dominiklohmann
 pr: 3562

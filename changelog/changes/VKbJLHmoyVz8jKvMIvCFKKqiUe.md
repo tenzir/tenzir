@@ -1,5 +1,5 @@
 ---
-title: Fix building VAST within a shallow git tree
+title: "Fix building VAST within a shallow git tree"
 type: bugfix
 authors: dominiklohmann
 pr: 1570

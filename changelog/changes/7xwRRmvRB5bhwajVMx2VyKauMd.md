@@ -1,5 +1,5 @@
 ---
-title: Correctly handle partition transforms without output
+title: "Correctly handle partition transforms without output"
 type: change
 authors: lava
 pr: 2123

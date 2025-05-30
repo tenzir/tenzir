@@ -1,5 +1,5 @@
 ---
-title: Add support for user-defined operator aliases
+title: "Add support for user-defined operator aliases"
 type: change
 authors: jachris
 pr: 3067

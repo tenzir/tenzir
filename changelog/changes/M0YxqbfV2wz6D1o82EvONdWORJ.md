@@ -1,5 +1,5 @@
 ---
-title: Ignore spaces before SI prefixes
+title: "Ignore spaces before SI prefixes"
 type: bugfix
 authors: dominiklohmann
 pr: 1590

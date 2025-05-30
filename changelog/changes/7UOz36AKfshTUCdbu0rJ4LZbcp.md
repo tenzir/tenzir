@@ -1,5 +1,5 @@
 ---
-title: Handle loading of configured and non-configured contexts with the same name
+title: "Handle loading of configured and non-configured contexts with the same name"
 type: bugfix
 authors: Dakostu
 pr: 4224

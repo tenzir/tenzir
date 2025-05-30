@@ -1,5 +1,5 @@
 ---
-title: Fix out-of-bounds access in command-line parser
+title: "Fix out-of-bounds access in command-line parser"
 type: bugfix
 authors: lava
 pr: 1536

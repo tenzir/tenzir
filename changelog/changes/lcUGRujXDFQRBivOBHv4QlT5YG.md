@@ -1,5 +1,5 @@
 ---
-title: Add Bloom filter meta index
+title: "Add Bloom filter meta index"
 type: feature
 authors: mavam
 pr: 931

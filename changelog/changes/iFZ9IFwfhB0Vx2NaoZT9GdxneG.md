@@ -1,5 +1,5 @@
 ---
-title: Make the `rebuild` command more reliable
+title: "Make the `rebuild` command more reliable"
 type: feature
 authors: dominiklohmann
 pr: 2493

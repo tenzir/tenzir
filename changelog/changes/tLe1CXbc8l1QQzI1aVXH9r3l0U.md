@@ -1,5 +1,5 @@
 ---
-title: Fix operator name for TQL2 `nics`
+title: "Fix operator name for TQL2 `nics`"
 type: bugfix
 authors: raxyte
 pr: 4847

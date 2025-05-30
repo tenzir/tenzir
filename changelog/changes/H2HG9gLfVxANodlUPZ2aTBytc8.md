@@ -1,5 +1,5 @@
 ---
-title: Fix disk metrics with custom state directories
+title: "Fix disk metrics with custom state directories"
 type: bugfix
 authors: dominiklohmann
 pr: 4058

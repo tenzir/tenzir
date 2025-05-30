@@ -1,5 +1,5 @@
 ---
-title: Enable configuration of the zstd compression level for feather store
+title: "Enable configuration of the zstd compression level for feather store"
 type: feature
 authors: dispanser
 pr: 2623

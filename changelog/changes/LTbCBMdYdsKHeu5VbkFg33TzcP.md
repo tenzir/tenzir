@@ -1,5 +1,5 @@
 ---
-title: Add support for USDT tracepoints in VAST
+title: "Add support for USDT tracepoints in VAST"
 type: feature
 authors: lava
 pr: 1206

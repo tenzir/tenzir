@@ -1,5 +1,5 @@
 ---
-title: Make default log format less verbose
+title: "Make default log format less verbose"
 type: change
 authors: lava
 pr: 1107

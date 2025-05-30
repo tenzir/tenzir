@@ -1,5 +1,5 @@
 ---
-title: Implement `<list>.sort()` and `<record>.sort()`
+title: "Implement `<list>.sort()` and `<record>.sort()`"
 type: feature
 authors: dominiklohmann
 pr: 4704

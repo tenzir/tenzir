@@ -1,5 +1,5 @@
 ---
-title: Compress in-memory slices with Zstd
+title: "Compress in-memory slices with Zstd"
 type: feature
 authors: dominiklohmann
 pr: 2268

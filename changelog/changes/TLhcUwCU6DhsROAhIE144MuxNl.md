@@ -1,5 +1,5 @@
 ---
-title: Restrict log file creation to 'vast start'
+title: "Restrict log file creation to 'vast start'"
 type: change
 authors: lava
 pr: 803

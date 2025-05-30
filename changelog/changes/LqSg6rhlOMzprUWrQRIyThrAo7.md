@@ -1,5 +1,5 @@
 ---
-title: Fix splitting logic for heterogeneous evaluation
+title: "Fix splitting logic for heterogeneous evaluation"
 type: bugfix
 authors: jachris
 pr: 5043

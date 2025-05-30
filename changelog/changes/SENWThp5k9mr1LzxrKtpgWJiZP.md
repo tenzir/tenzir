@@ -1,5 +1,5 @@
 ---
-title: Make the kv-parser consider quotes when looking for separators
+title: "Make the kv-parser consider quotes when looking for separators"
 type: feature
 authors: IyeOnline
 pr: 4591

@@ -1,5 +1,5 @@
 ---
-title: Introduce the `count_distinct` aggregation function
+title: "Introduce the `count_distinct` aggregation function"
 type: feature
 authors: dominiklohmann
 pr: 3068

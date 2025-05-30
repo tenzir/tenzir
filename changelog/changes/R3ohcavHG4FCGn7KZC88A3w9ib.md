@@ -1,5 +1,5 @@
 ---
-title: Add limit options for vast explore
+title: "Add limit options for vast explore"
 type: feature
 authors: lava
 pr: 882

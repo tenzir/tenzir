@@ -1,5 +1,5 @@
 ---
-title: Add clean command
+title: "Add clean command"
 type: change
 authors: rdettai
 pr: 2435

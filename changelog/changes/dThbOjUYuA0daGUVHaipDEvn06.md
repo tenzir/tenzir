@@ -1,5 +1,5 @@
 ---
-title: Increase the partition erase timeout to 1 minute
+title: "Increase the partition erase timeout to 1 minute"
 type: bugfix
 authors: tobim
 pr: 1897

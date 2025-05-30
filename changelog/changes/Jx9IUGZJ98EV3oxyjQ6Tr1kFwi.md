@@ -1,5 +1,5 @@
 ---
-title: Add `blob` type for arbitrary binary data
+title: "Add `blob` type for arbitrary binary data"
 type: feature
 authors: jachris
 pr: 3581

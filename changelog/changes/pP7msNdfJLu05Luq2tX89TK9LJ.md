@@ -1,5 +1,5 @@
 ---
-title: Warn on client-server version mismatch
+title: "Warn on client-server version mismatch"
 type: change
 authors: tobim
 pr: 1098

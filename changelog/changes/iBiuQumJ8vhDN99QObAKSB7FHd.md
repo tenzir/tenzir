@@ -1,5 +1,5 @@
 ---
-title: Fix CLI verbosity shorthands
+title: "Fix CLI verbosity shorthands"
 type: change
 authors: mavam
 pr: 2178

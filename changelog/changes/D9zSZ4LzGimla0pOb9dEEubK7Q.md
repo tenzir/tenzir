@@ -1,5 +1,5 @@
 ---
-title: Implement a RabbitMQ-based AMQP connector
+title: "Implement a RabbitMQ-based AMQP connector"
 type: feature
 authors: mavam
 pr: 3546

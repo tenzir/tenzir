@@ -1,5 +1,5 @@
 ---
-title: Clear failed partitions from the cache
+title: "Clear failed partitions from the cache"
 type: bugfix
 authors: lava
 pr: 2642

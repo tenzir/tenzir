@@ -1,5 +1,5 @@
 ---
-title: Support quoted non-string fields in the CSV parser
+title: "Support quoted non-string fields in the CSV parser"
 type: bugfix
 authors: dominiklohmann
 pr: 1858

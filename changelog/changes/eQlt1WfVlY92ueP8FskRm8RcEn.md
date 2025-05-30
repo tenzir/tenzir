@@ -1,5 +1,5 @@
 ---
-title: Allow fine-grained meta index configuration
+title: "Allow fine-grained meta index configuration"
 type: feature
 authors: lava
 pr: 2065

@@ -1,5 +1,5 @@
 ---
-title: Always convert JSON null to VAST nil
+title: "Always convert JSON null to VAST nil"
 type: bugfix
 authors: dominiklohmann
 pr: 1009

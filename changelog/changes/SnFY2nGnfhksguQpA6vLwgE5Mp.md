@@ -1,5 +1,5 @@
 ---
-title: Rename transform to pipeline
+title: "Rename transform to pipeline"
 type: change
 authors: dispanser
 pr: 2429

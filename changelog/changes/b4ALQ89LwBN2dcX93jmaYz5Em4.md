@@ -1,5 +1,5 @@
 ---
-title: Add explicit `tls` options to `to_opensearch` and `to_splunk`
+title: "Add explicit `tls` options to `to_opensearch` and `to_splunk`"
 type: feature
 authors: IyeOnline
 pr: 4983

@@ -1,5 +1,5 @@
 ---
-title: Implement support for `:string == /pattern/` queries
+title: "Implement support for `:string == /pattern/` queries"
 type: feature
 authors: dominiklohmann
 pr: 2769

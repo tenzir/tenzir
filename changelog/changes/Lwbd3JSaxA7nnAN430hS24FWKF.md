@@ -1,5 +1,5 @@
 ---
-title: Deprecate the vast.no-default-schema option
+title: "Deprecate the vast.no-default-schema option"
 type: change
 authors: dominiklohmann
 pr: 1409

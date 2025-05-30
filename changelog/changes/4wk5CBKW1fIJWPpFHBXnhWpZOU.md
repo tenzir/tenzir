@@ -1,5 +1,5 @@
 ---
-title: Mark `experimental` encoding as `arrow.v2`
+title: "Mark `experimental` encoding as `arrow.v2`"
 type: change
 authors: dominiklohmann
 pr: 2159

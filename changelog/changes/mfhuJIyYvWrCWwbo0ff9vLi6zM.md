@@ -1,5 +1,5 @@
 ---
-title: Rename `meta-index` to `catalog`
+title: "Rename `meta-index` to `catalog`"
 type: change
 authors: dominiklohmann
 pr: 2128

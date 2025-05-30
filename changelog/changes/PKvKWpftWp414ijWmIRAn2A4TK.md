@@ -1,5 +1,5 @@
 ---
-title: Respect `--color` option in default implicit events sink
+title: "Respect `--color` option in default implicit events sink"
 type: bugfix
 authors: dominiklohmann
 pr: 5007

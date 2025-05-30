@@ -1,5 +1,5 @@
 ---
-title: Split out `name` option and use metadata server when unset
+title: "Split out `name` option and use metadata server when unset"
 type: change
 authors: raxyte
 pr: 5160

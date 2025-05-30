@@ -1,5 +1,5 @@
 ---
-title: Add a static binary workflow
+title: "Add a static binary workflow"
 type: feature
 authors: tobim
 pr: 966

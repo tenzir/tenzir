@@ -1,5 +1,5 @@
 ---
-title: Add support for macOS-style syslog messages
+title: "Add support for macOS-style syslog messages"
 type: feature
 authors: eliaskosunen
 pr: 3692

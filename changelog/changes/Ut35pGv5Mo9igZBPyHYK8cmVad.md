@@ -1,5 +1,5 @@
 ---
-title: Use non-throwing std::filesystem functions in the type registry
+title: "Use non-throwing std::filesystem functions in the type registry"
 type: bugfix
 authors: tobim
 pr: 1472

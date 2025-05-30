@@ -1,5 +1,5 @@
 ---
-title: Implement `encode_hex()` and `decode_hex()`
+title: "Implement `encode_hex()` and `decode_hex()`"
 type: feature
 authors: raxyte
 pr: 4815

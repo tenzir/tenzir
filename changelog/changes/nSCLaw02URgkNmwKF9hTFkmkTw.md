@@ -1,5 +1,5 @@
 ---
-title: Add `lines` parser
+title: "Add `lines` parser"
 type: feature
 authors: mavam
 pr: 3511

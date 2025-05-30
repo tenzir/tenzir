@@ -1,5 +1,5 @@
 ---
-title: Make the parallel level in `lookup` configurable
+title: "Make the parallel level in `lookup` configurable"
 type: feature
 authors: dominiklohmann
 pr: 4300

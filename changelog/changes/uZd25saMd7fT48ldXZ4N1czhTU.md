@@ -1,5 +1,5 @@
 ---
-title: Add an operator for dumping schemas
+title: "Add an operator for dumping schemas"
 type: feature
 authors: dominiklohmann
 pr: 4147

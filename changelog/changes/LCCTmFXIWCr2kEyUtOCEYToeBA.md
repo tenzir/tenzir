@@ -1,5 +1,5 @@
 ---
-title: Restructure vast status
+title: "Restructure vast status"
 type: feature
 authors: tobim
 pr: 995

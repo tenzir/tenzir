@@ -1,5 +1,5 @@
 ---
-title: Use a proper subpipeline for `fork`
+title: "Use a proper subpipeline for `fork`"
 type: bugfix
 authors: dominiklohmann
 pr: 5133

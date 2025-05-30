@@ -1,5 +1,5 @@
 ---
-title: Fix plugin versions in prebuilt Docker images
+title: "Fix plugin versions in prebuilt Docker images"
 type: bugfix
 authors: dominiklohmann
 pr: 1828

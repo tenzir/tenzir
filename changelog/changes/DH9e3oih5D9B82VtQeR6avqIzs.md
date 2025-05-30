@@ -1,5 +1,5 @@
 ---
-title: Fix debian package installation when a vast state directory exists
+title: "Fix debian package installation when a vast state directory exists"
 type: bugfix
 authors: tobim
 pr: 3705

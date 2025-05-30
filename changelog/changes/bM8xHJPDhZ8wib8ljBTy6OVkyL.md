@@ -1,5 +1,5 @@
 ---
-title: Make the map type inaccessible to users
+title: "Make the map type inaccessible to users"
 type: change
 authors: dominiklohmann
 pr: 2976

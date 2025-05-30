@@ -1,5 +1,5 @@
 ---
-title: Display store load failures to the user
+title: "Display store load failures to the user"
 type: bugfix
 authors: dominiklohmann
 pr: 2507

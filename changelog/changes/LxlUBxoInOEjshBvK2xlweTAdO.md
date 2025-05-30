@@ -1,5 +1,5 @@
 ---
-title: Introduce CAF metrics
+title: "Introduce CAF metrics"
 type: feature
 authors: dominiklohmann
 pr: 4897

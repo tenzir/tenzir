@@ -1,5 +1,5 @@
 ---
-title: Use separate volumes in docker-compose
+title: "Use separate volumes in docker-compose"
 type: bugfix
 authors: sunnewehr
 pr: 4749

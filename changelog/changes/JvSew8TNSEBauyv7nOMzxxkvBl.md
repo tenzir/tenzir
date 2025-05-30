@@ -1,5 +1,5 @@
 ---
-title: Enable azure-blob-storage in the DEB and RPM packages
+title: "Enable azure-blob-storage in the DEB and RPM packages"
 type: bugfix
 authors: tobim
 pr: 4649

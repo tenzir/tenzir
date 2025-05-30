@@ -1,5 +1,5 @@
 ---
-title: Interpret metrics paths relative to the db root
+title: "Interpret metrics paths relative to the db root"
 type: bugfix
 authors: dominiklohmann
 pr: 1848

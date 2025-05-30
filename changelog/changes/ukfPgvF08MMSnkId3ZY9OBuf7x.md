@@ -1,5 +1,5 @@
 ---
-title: Add `tail` operator
+title: "Add `tail` operator"
 type: feature
 authors: Dakostu
 pr: 3050

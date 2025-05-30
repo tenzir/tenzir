@@ -1,5 +1,5 @@
 ---
-title: Include hidden pipelines in `show pipelines`
+title: "Include hidden pipelines in `show pipelines`"
 type: change
 authors: dominiklohmann
 pr: 4309

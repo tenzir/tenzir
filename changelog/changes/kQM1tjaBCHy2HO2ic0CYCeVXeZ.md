@@ -1,5 +1,5 @@
 ---
-title: Remove configure script
+title: "Remove configure script"
 type: change
 authors: lava
 pr: 1657

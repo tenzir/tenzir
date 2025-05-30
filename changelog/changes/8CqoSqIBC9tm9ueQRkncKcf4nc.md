@@ -1,5 +1,5 @@
 ---
-title: Add `apply` operator
+title: "Add `apply` operator"
 type: feature
 authors: jachris
 pr: 3677

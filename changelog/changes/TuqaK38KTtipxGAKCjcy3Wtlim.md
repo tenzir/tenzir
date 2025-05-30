@@ -1,5 +1,5 @@
 ---
-title: Gracefully deal with JSON to data conversion errors
+title: "Gracefully deal with JSON to data conversion errors"
 type: bugfix
 authors: tobim
 pr: 1250

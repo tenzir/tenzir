@@ -1,5 +1,5 @@
 ---
-title: Rewrite `chart` and `set-attributes` operators
+title: "Rewrite `chart` and `set-attributes` operators"
 type: feature
 authors: eliaskosunen
 pr: 3866

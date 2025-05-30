@@ -1,5 +1,5 @@
 ---
-title: Move taxonomy resolution to the catalog
+title: "Move taxonomy resolution to the catalog"
 type: change
 authors: Dakostu
 pr: 2771

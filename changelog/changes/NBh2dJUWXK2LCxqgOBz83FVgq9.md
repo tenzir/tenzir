@@ -1,5 +1,5 @@
 ---
-title: Prefer CLI over config file for vast.plugins
+title: "Prefer CLI over config file for vast.plugins"
 type: bugfix
 authors: dominiklohmann
 pr: 2289

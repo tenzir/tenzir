@@ -1,5 +1,5 @@
 ---
-title: Make the connection timeout configurable
+title: "Make the connection timeout configurable"
 type: feature
 authors: dominiklohmann
 pr: 2499

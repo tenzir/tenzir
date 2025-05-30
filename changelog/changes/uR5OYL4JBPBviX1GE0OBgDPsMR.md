@@ -1,5 +1,5 @@
 ---
-title: Prevent tcp socket inheritance to child processes
+title: "Prevent tcp socket inheritance to child processes"
 type: bugfix
 authors: tobim
 pr: 3998

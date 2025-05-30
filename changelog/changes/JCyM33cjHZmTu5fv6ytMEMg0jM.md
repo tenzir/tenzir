@@ -1,5 +1,5 @@
 ---
-title: Ignore additional fields in package config
+title: "Ignore additional fields in package config"
 type: bugfix
 authors: dominiklohmann
 pr: 5031

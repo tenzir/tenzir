@@ -1,5 +1,5 @@
 ---
-title: Change default endpoint to 127.0.0.1
+title: "Change default endpoint to 127.0.0.1"
 type: change
 authors: lava
 pr: 2512

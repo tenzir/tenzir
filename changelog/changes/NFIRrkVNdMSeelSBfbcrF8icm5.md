@@ -1,5 +1,5 @@
 ---
-title: Keep the y-axis order for `chart_*` as specified
+title: "Keep the y-axis order for `chart_*` as specified"
 type: bugfix
 authors: dominiklohmann
 pr: 5131

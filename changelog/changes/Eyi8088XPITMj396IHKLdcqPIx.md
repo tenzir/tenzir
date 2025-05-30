@@ -1,5 +1,5 @@
 ---
-title: Switch from JSON to MsgPack data transport
+title: "Switch from JSON to MsgPack data transport"
 type: change
 authors: mavam
 pr: 3770

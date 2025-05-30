@@ -1,5 +1,5 @@
 ---
-title: Use line reader timeout
+title: "Use line reader timeout"
 type: bugfix
 authors: dominiklohmann
 pr: 835

@@ -1,5 +1,5 @@
 ---
-title: Fix panic in `head 0 | write_json arrays_of_objects=true`
+title: "Fix panic in `head 0 | write_json arrays_of_objects=true`"
 type: feature
 authors: dominiklohmann
 pr: 5115

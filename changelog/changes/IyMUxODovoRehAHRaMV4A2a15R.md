@@ -1,5 +1,5 @@
 ---
-title: Rename vector to list
+title: "Rename vector to list"
 type: change
 authors: mavam
 pr: 1016

@@ -1,5 +1,5 @@
 ---
-title: Correctly terminate the explore command
+title: "Correctly terminate the explore command"
 type: bugfix
 authors: tobim
 pr: 2120

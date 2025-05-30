@@ -1,5 +1,5 @@
 ---
-title: Add `fill` option to chart operators
+title: "Add `fill` option to chart operators"
 type: feature
 authors: raxyte
 pr: 4967

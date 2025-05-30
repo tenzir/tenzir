@@ -1,5 +1,5 @@
 ---
-title: Fall back to string when parsing config options from environment
+title: "Fall back to string when parsing config options from environment"
 type: bugfix
 authors: dispanser
 pr: 2305

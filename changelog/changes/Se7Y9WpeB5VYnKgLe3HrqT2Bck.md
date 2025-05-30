@@ -1,5 +1,5 @@
 ---
-title: Implement the `unflatten` operator
+title: "Implement the `unflatten` operator"
 type: feature
 authors: Dakostu
 pr: 3304

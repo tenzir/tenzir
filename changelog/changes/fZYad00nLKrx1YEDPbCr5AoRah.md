@@ -1,5 +1,5 @@
 ---
-title: Fix restart on failure
+title: "Fix restart on failure"
 type: bugfix
 authors: dominiklohmann
 pr: 3947

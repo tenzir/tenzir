@@ -1,5 +1,5 @@
 ---
-title: Add `to_clickhouse` operator
+title: "Add `to_clickhouse` operator"
 type: feature
 authors: IyeOnline
 pr: 5032

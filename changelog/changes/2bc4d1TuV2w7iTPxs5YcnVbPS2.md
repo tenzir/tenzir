@@ -1,5 +1,5 @@
 ---
-title: Add an optional `name` argument to the `metrics` operator
+title: "Add an optional `name` argument to the `metrics` operator"
 type: feature
 authors: dominiklohmann
 pr: 4369

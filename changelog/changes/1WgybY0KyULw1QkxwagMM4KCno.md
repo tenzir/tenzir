@@ -1,5 +1,5 @@
 ---
-title: Make `drop` not remove empty records
+title: "Make `drop` not remove empty records"
 type: bugfix
 authors: dominiklohmann
 pr: 5021

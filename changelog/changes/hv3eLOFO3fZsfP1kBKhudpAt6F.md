@@ -1,5 +1,5 @@
 ---
-title: Fix blob parsing with padding
+title: "Fix blob parsing with padding"
 type: bugfix
 authors: jachris
 pr: 3765

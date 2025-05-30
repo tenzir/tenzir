@@ -1,5 +1,5 @@
 ---
-title: Accept numbers in place of strings in JSON
+title: "Accept numbers in place of strings in JSON"
 type: bugfix
 authors: tobim
 pr: 1439

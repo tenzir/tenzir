@@ -1,5 +1,5 @@
 ---
-title: Add step size to disk monitor
+title: "Add step size to disk monitor"
 type: feature
 authors: lava
 pr: 1655

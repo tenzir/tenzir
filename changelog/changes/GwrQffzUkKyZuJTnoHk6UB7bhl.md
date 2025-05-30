@@ -1,5 +1,5 @@
 ---
-title: Dynamically grow simdjson buffer if necessary
+title: "Dynamically grow simdjson buffer if necessary"
 type: feature
 authors: IyeOnline
 pr: 4590

@@ -1,5 +1,5 @@
 ---
-title: Fix bug in decoding multi-object MsgPack types
+title: "Fix bug in decoding multi-object MsgPack types"
 type: bugfix
 authors: mavam
 pr: 984

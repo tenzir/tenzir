@@ -1,5 +1,5 @@
 ---
-title: Make `remote python` work
+title: "Make `remote python` work"
 type: bugfix
 authors: dominiklohmann
 pr: 3999

@@ -1,5 +1,5 @@
 ---
-title: Add event type name to the record batch metadata
+title: "Add event type name to the record batch metadata"
 type: change
 authors: tobim
 pr: 1072

@@ -1,5 +1,5 @@
 ---
-title: Always store pipeline state for configured packaged pipelines
+title: "Always store pipeline state for configured packaged pipelines"
 type: bugfix
 authors: lava
 pr: 4479

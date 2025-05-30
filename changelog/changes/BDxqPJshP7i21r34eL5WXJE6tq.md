@@ -1,5 +1,5 @@
 ---
-title: Introduce a TQL2-only mode
+title: "Introduce a TQL2-only mode"
 type: feature
 authors: dominiklohmann
 pr: 4840

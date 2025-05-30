@@ -1,5 +1,5 @@
 ---
-title: Tune defaults and demo-node experience
+title: "Tune defaults and demo-node experience"
 type: change
 authors: tobim
 pr: 3320

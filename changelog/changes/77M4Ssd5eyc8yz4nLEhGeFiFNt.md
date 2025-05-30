@@ -1,5 +1,5 @@
 ---
-title: Improve index crash recovery
+title: "Improve index crash recovery"
 type: bugfix
 authors: tobim
 pr: 2394

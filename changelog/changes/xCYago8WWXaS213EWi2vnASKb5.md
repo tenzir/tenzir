@@ -1,5 +1,5 @@
 ---
-title: Remove the delay between importing and exporting events
+title: "Remove the delay between importing and exporting events"
 type: bugfix
 authors: dominiklohmann
 pr: 4583

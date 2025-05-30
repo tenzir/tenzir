@@ -1,5 +1,5 @@
 ---
-title: Implement the `slice` operator
+title: "Implement the `slice` operator"
 type: feature
 authors: dominiklohmann
 pr: 3703

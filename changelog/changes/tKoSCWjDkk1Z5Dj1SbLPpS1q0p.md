@@ -1,5 +1,5 @@
 ---
-title: Fix possible desync in pending queries map
+title: "Fix possible desync in pending queries map"
 type: bugfix
 authors: dominiklohmann
 pr: 1884

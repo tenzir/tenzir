@@ -1,5 +1,5 @@
 ---
-title: Handle Arrow decoder errors gracefully
+title: "Handle Arrow decoder errors gracefully"
 type: bugfix
 authors: dominiklohmann
 pr: 1247

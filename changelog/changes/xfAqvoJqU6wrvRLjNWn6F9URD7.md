@@ -1,5 +1,5 @@
 ---
-title: Emit version column along with metrics
+title: "Emit version column along with metrics"
 type: feature
 authors: 6yozo
 pr: 1973

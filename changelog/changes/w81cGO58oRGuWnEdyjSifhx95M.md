@@ -1,5 +1,5 @@
 ---
-title: Implement `write_syslog`
+title: "Implement `write_syslog`"
 type: feature
 authors: raxyte
 pr: 5083

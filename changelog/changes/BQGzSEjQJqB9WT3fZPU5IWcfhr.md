@@ -1,5 +1,5 @@
 ---
-title: Use heterogenous lookup for hash index
+title: "Use heterogenous lookup for hash index"
 type: feature
 authors: lava
 pr: 796

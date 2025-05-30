@@ -1,5 +1,5 @@
 ---
-title: Fix logging in systemd when built without support
+title: "Fix logging in systemd when built without support"
 type: bugfix
 authors: tobim
 pr: 1857

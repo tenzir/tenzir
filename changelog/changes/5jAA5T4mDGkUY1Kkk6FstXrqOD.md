@@ -1,5 +1,5 @@
 ---
-title: Remove reader, writer, and language plugin types
+title: "Remove reader, writer, and language plugin types"
 type: change
 authors: dominiklohmann
 pr: 3899

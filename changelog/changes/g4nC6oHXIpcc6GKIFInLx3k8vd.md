@@ -1,5 +1,5 @@
 ---
-title: Fix a rare crash in the index actor on startup
+title: "Fix a rare crash in the index actor on startup"
 type: bugfix
 authors: dominiklohmann
 pr: 4846

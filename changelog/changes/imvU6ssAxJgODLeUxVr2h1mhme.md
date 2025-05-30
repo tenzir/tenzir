@@ -1,5 +1,5 @@
 ---
-title: Publish a tenzir/vast-dev Docker image
+title: "Publish a tenzir/vast-dev Docker image"
 type: feature
 authors: dominiklohmann
 pr: 1749

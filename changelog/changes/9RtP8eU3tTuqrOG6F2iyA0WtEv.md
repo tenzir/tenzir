@@ -1,5 +1,5 @@
 ---
-title: Fix rounding issue when printing duration types
+title: "Fix rounding issue when printing duration types"
 type: bugfix
 authors: patszt
 pr: 2906

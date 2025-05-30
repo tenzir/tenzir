@@ -1,5 +1,5 @@
 ---
-title: Flatbufferize index
+title: "Flatbufferize index"
 type: change
 authors: mavam
 pr: 863

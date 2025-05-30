@@ -1,5 +1,5 @@
 ---
-title: Sort loaded plugins by name
+title: "Sort loaded plugins by name"
 type: bugfix
 authors: dominiklohmann
 pr: 1679

@@ -1,5 +1,5 @@
 ---
-title: Implement `to_google_cloud_logging`
+title: "Implement `to_google_cloud_logging`"
 type: feature
 authors: raxyte
 pr: 5135

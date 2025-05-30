@@ -1,5 +1,5 @@
 ---
-title: Do not ignore the `tenzir.zstd-compression-level` option
+title: "Do not ignore the `tenzir.zstd-compression-level` option"
 type: bugfix
 authors: dominiklohmann
 pr: 5183

@@ -1,5 +1,5 @@
 ---
-title: Move the version string into a central JSON file
+title: "Move the version string into a central JSON file"
 type: change
 authors: tobim
 pr: 2582

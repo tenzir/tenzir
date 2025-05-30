@@ -1,5 +1,5 @@
 ---
-title: Use consistent attributes for y-axis in `chart`
+title: "Use consistent attributes for y-axis in `chart`"
 type: bugfix
 authors: dominiklohmann
 pr: 4173

@@ -1,5 +1,5 @@
 ---
-title: Fix `export --live` and introduce `metrics`
+title: "Fix `export --live` and introduce `metrics`"
 type: bugfix
 authors: dominiklohmann
 pr: 3790

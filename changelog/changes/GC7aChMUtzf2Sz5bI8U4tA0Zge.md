@@ -1,5 +1,5 @@
 ---
-title: Fix `tls` option of `to_splunk`
+title: "Fix `tls` option of `to_splunk`"
 type: bugfix
 authors: jachris
 pr: 5027

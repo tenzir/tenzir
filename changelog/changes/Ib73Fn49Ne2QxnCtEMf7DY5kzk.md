@@ -1,5 +1,5 @@
 ---
-title: Run commands from scripts
+title: "Run commands from scripts"
 type: feature
 authors: rdettai
 pr: 2446

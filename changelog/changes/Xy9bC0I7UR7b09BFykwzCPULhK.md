@@ -1,5 +1,5 @@
 ---
-title: Implement reader for Syslog RFC5424
+title: "Implement reader for Syslog RFC5424"
 type: feature
 authors: knapperzbusch
 pr: 770

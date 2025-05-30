@@ -1,5 +1,5 @@
 ---
-title: Always shut down the pipeline manager first
+title: "Always shut down the pipeline manager first"
 type: bugfix
 authors: dominiklohmann
 pr: 5163

@@ -1,5 +1,5 @@
 ---
-title: Fix a bug that causes sources to stall
+title: "Fix a bug that causes sources to stall"
 type: bugfix
 authors: dominiklohmann
 pr: 1136

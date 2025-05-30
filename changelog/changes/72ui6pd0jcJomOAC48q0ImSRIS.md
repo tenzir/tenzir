@@ -1,5 +1,5 @@
 ---
-title: Process schema directories recursively
+title: "Process schema directories recursively"
 type: change
 authors: mavam
 pr: 1154

@@ -1,5 +1,5 @@
 ---
-title: PRs 2769-2873
+title: "PRs 2769-2873"
 type: change
 authors: dominiklohmann
 pr: 2769

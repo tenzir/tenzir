@@ -1,5 +1,5 @@
 ---
-title: Make periodic logging more sensible
+title: "Make periodic logging more sensible"
 type: change
 authors: tobim
 pr: 1035

@@ -1,5 +1,5 @@
 ---
-title: Implement Google Cloud Pub/Sub connectors
+title: "Implement Google Cloud Pub/Sub connectors"
 type: feature
 authors: IyeOnline
 pr: 4656

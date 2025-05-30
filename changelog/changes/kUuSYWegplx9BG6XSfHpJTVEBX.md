@@ -1,5 +1,5 @@
 ---
-title: Chain the execution node start response promise to the node lifetime
+title: "Chain the execution node start response promise to the node lifetime"
 type: bugfix
 authors: Dakostu
 pr: 4171

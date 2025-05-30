@@ -1,5 +1,5 @@
 ---
-title: Expose Arrow's bit-wise compute functions
+title: "Expose Arrow's bit-wise compute functions"
 type: feature
 authors: dominiklohmann
 pr: 5129

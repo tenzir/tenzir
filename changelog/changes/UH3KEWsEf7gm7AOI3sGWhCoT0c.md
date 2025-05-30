@@ -1,5 +1,5 @@
 ---
-title: Remove the --clear parameter for lookup table contexts
+title: "Remove the --clear parameter for lookup table contexts"
 type: change
 authors: Dakostu
 pr: 4179

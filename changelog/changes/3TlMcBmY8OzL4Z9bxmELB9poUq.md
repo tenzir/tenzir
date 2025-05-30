@@ -1,5 +1,5 @@
 ---
-title: Implement `chart_line`, `chart_area`, `chart_bar` and `chart_pie`
+title: "Implement `chart_line`, `chart_area`, `chart_bar` and `chart_pie`"
 type: feature
 authors: raxyte
 pr: 4888

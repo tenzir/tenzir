@@ -1,5 +1,5 @@
 ---
-title: Add memory-usage to index and catalog telemetry reports
+title: "Add memory-usage to index and catalog telemetry reports"
 type: change
 authors: patszt
 pr: 2471

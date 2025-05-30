@@ -1,5 +1,5 @@
 ---
-title: Add structured_data to syslog output
+title: "Add structured_data to syslog output"
 type: feature
 authors: eliaskosunen
 pr: 3871

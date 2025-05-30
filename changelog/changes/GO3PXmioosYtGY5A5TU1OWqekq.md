@@ -1,5 +1,5 @@
 ---
-title: Fix sporadic stalling of pipelines
+title: "Fix sporadic stalling of pipelines"
 type: feature
 authors: dominiklohmann
 pr: 3264

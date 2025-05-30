@@ -1,5 +1,5 @@
 ---
-title: Handle quoted strings in CSV parser
+title: "Handle quoted strings in CSV parser"
 type: bugfix
 authors: dominiklohmann
 pr: 1712

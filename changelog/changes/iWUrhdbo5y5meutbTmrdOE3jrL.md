@@ -1,5 +1,5 @@
 ---
-title: Adjust index statistics for partition transforms
+title: "Adjust index statistics for partition transforms"
 type: bugfix
 authors: lava
 pr: 2097

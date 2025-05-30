@@ -1,5 +1,5 @@
 ---
-title: Move rebatching into the `importer` actor
+title: "Move rebatching into the `importer` actor"
 type: feature
 authors: dominiklohmann
 pr: 5056

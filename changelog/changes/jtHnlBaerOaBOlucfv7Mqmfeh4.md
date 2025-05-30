@@ -1,5 +1,5 @@
 ---
-title: Implement the `lookup` operator
+title: "Implement the `lookup` operator"
 type: feature
 authors: Dakostu
 pr: 3721

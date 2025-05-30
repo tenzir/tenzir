@@ -1,5 +1,5 @@
 ---
-title: Support optional numeric duration output for JSON
+title: "Support optional numeric duration output for JSON"
 type: feature
 authors: dominiklohmann
 pr: 1628

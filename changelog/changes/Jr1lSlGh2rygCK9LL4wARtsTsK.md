@@ -1,5 +1,5 @@
 ---
-title: Add a throttle operator
+title: "Add a throttle operator"
 type: feature
 authors: lava
 pr: 4448

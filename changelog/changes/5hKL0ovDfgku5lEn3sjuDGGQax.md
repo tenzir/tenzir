@@ -1,5 +1,5 @@
 ---
-title: Add Bloom filter context
+title: "Add Bloom filter context"
 type: feature
 authors: mavam
 pr: 3834

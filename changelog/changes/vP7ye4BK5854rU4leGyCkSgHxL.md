@@ -1,5 +1,5 @@
 ---
-title: Fix startup delay in `from_fluent_bit`
+title: "Fix startup delay in `from_fluent_bit`"
 type: bugfix
 authors: dominiklohmann
 pr: 5025

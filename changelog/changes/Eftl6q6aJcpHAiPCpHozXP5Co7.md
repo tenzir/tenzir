@@ -1,5 +1,5 @@
 ---
-title: Check mmapped chunks for required minimum size
+title: "Check mmapped chunks for required minimum size"
 type: bugfix
 authors: lava
 pr: 4856

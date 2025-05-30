@@ -1,5 +1,5 @@
 ---
-title: Add `export --internal` to access metrics
+title: "Add `export --internal` to access metrics"
 type: bugfix
 authors: jachris
 pr: 3619

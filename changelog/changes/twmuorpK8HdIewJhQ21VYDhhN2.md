@@ -1,5 +1,5 @@
 ---
-title: Add `sample` operator
+title: "Add `sample` operator"
 type: feature
 authors: raxyte
 pr: 4645

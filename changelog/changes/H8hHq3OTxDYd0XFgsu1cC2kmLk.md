@@ -1,5 +1,5 @@
 ---
-title: Fix inequality port lookups
+title: "Fix inequality port lookups"
 type: bugfix
 authors: mavam
 pr: 834

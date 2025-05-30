@@ -1,5 +1,5 @@
 ---
-title: Support setting profiles in the Velociraptor config
+title: "Support setting profiles in the Velociraptor config"
 type: feature
 authors: dominiklohmann
 pr: 3848

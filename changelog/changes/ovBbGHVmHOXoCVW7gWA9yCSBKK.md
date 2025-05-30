@@ -1,5 +1,5 @@
 ---
-title: Make `read json --arrays-of-objects` faster
+title: "Make `read json --arrays-of-objects` faster"
 type: bugfix
 authors: dominiklohmann
 pr: 4601

@@ -1,5 +1,5 @@
 ---
-title: Fix index worker depletion
+title: "Fix index worker depletion"
 type: bugfix
 authors: tobim
 pr: 1225

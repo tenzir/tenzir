@@ -1,5 +1,5 @@
 ---
-title: Simplify id space management
+title: "Simplify id space management"
 type: bugfix
 authors: tobim
 pr: 908

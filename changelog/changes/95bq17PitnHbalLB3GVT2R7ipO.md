@@ -1,5 +1,5 @@
 ---
-title: Fix passing string params to `{from,to}_fluent_bit`
+title: "Fix passing string params to `{from,to}_fluent_bit`"
 type: bugfix
 authors: dominiklohmann
 pr: 5053

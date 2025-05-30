@@ -1,5 +1,5 @@
 ---
-title: UX improvements for `read_query()`
+title: "UX improvements for `read_query()`"
 type: feature
 authors: lava
 pr: 878

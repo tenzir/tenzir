@@ -1,5 +1,5 @@
 ---
-title: Remove the transformer actor
+title: "Remove the transformer actor"
 type: bugfix
 authors: Dakostu
 pr: 2896

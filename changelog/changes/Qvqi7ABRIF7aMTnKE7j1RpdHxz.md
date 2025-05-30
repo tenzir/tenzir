@@ -1,5 +1,5 @@
 ---
-title:  Improve `to_splunk` TLS functionality
+title: "Improve `to_splunk` TLS functionality"
 type: bugfix
 authors: raxyte
 pr: 4825

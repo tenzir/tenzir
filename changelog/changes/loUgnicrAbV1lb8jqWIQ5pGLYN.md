@@ -1,5 +1,5 @@
 ---
-title: Remove the zero-size check in the split_at_null() input loop
+title: "Remove the zero-size check in the split_at_null() input loop"
 type: bugfix
 authors: Dakostu
 pr: 4341

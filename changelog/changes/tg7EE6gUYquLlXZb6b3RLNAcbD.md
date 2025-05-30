@@ -1,5 +1,5 @@
 ---
-title: Disable auto-vectorization in prebuilt Docker images
+title: "Disable auto-vectorization in prebuilt Docker images"
 type: change
 authors: dominiklohmann
 pr: 1778

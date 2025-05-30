@@ -1,5 +1,5 @@
 ---
-title: Add packages plugin to list in 'overlay.nix'
+title: "Add packages plugin to list in 'overlay.nix'"
 type: bugfix
 authors: lava
 pr: 4490

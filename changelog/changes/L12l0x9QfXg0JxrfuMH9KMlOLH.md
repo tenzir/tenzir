@@ -1,5 +1,5 @@
 ---
-title: Make transform application transactional
+title: "Make transform application transactional"
 type: bugfix
 authors: lava
 pr: 2465

@@ -1,5 +1,5 @@
 ---
-title: Ensure exporter metrics don't get lost
+title: "Ensure exporter metrics don't get lost"
 type: bugfix
 authors: tobim
 pr: 3633

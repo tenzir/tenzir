@@ -1,5 +1,5 @@
 ---
-title: Fix `str` function quotes
+title: "Fix `str` function quotes"
 type: bugfix
 authors: jachris
 pr: 4809

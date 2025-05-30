@@ -1,5 +1,5 @@
 ---
-title: Custom quotes and doubled quote escaping
+title: "Custom quotes and doubled quote escaping"
 type: feature
 authors: IyeOnline
 pr: 4837

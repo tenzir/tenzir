@@ -1,5 +1,5 @@
 ---
-title: Fix reopening ports while subprocesses are open
+title: "Fix reopening ports while subprocesses are open"
 type: bugfix
 authors: tobim
 pr: 4170

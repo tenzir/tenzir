@@ -1,5 +1,5 @@
 ---
-title: Create projection plugin
+title: "Create projection plugin"
 type: feature
 authors: 6yozo
 pr: 2000

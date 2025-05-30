@@ -1,5 +1,5 @@
 ---
-title: Metrics for TCP connections
+title: "Metrics for TCP connections"
 type: feature
 authors: tobim
 pr: 4564

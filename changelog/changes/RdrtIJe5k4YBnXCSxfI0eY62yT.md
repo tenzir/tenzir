@@ -1,5 +1,5 @@
 ---
-title: Fix race in index lookup
+title: "Fix race in index lookup"
 type: bugfix
 authors: tobim
 pr: 703

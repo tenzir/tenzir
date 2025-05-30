@@ -1,5 +1,5 @@
 ---
-title: Introduce a query backlog in the index
+title: "Introduce a query backlog in the index"
 type: change
 authors: tobim
 pr: 1896

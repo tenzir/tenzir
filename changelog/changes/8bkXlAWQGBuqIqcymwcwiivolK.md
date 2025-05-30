@@ -1,5 +1,5 @@
 ---
-title: Add Zeek writer plugin
+title: "Add Zeek writer plugin"
 type: feature
 authors: mavam
 pr: 1863

@@ -1,5 +1,5 @@
 ---
-title: Show processes and sockets
+title: "Show processes and sockets"
 type: feature
 authors: mavam
 pr: 3521

@@ -1,5 +1,5 @@
 ---
-title: Cloud MISP
+title: "Cloud MISP"
 type: feature
 authors: rdettai
 pr: 2548

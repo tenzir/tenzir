@@ -1,5 +1,5 @@
 ---
-title: Deprecate TQL1
+title: "Deprecate TQL1"
 type: change
 authors: dominiklohmann
 pr: 4954

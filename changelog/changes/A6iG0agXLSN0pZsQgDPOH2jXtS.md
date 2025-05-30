@@ -1,5 +1,5 @@
 ---
-title: Add universal function call syntax
+title: "Add universal function call syntax"
 type: feature
 authors: jachris
 pr: 4730

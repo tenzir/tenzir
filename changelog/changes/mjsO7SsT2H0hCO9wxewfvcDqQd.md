@@ -1,5 +1,5 @@
 ---
-title: Fix reconnect attempts for remote pipelines
+title: "Fix reconnect attempts for remote pipelines"
 type: bugfix
 authors: dominiklohmann
 pr: 3188

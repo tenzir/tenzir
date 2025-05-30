@@ -1,5 +1,5 @@
 ---
-title: Improve low-load memory consumption
+title: "Improve low-load memory consumption"
 type: change
 authors: tobim
 pr: 3377

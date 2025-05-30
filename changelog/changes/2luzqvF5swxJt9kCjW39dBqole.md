@@ -1,5 +1,5 @@
 ---
-title: Add a timeout to the UDS metric sink
+title: "Add a timeout to the UDS metric sink"
 type: bugfix
 authors: tobim
 pr: 2635

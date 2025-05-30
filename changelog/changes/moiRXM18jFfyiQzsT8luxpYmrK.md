@@ -1,5 +1,5 @@
 ---
-title: Upgrade remaining usages of the adaptive table slice builder
+title: "Upgrade remaining usages of the adaptive table slice builder"
 type: bugfix
 authors: jachris
 pr: 3582

@@ -1,5 +1,5 @@
 ---
-title: Replace 'caf#' prefix for CAF options with 'caf.'
+title: "Replace 'caf#' prefix for CAF options with 'caf.'"
 type: change
 authors: dominiklohmann
 pr: 797

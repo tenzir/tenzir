@@ -1,5 +1,5 @@
 ---
-title: Tweak the execution node behavior
+title: "Tweak the execution node behavior"
 type: bugfix
 authors: dominiklohmann
 pr: 3470

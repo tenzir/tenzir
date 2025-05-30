@@ -1,5 +1,5 @@
 ---
-title: Prepare repository for VAST v1.0.0-rc1
+title: "Prepare repository for VAST v1.0.0-rc1"
 type: change
 authors: dominiklohmann
 pr: 2035

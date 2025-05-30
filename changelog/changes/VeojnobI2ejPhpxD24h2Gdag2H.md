@@ -1,5 +1,5 @@
 ---
-title: Allow setting the header for csv, tsv, and ssv manually
+title: "Allow setting the header for csv, tsv, and ssv manually"
 type: feature
 authors: dominiklohmann
 pr: 3778

@@ -1,5 +1,5 @@
 ---
-title: Implement `float(number|string)`
+title: "Implement `float(number|string)`"
 type: feature
 authors: raxyte
 pr: 4882

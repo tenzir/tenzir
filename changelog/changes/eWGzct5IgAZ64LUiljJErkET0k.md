@@ -1,5 +1,5 @@
 ---
-title: Improve import batching options
+title: "Improve import batching options"
 type: change
 authors: dominiklohmann
 pr: 1058

@@ -1,5 +1,5 @@
 ---
-title: Fix YAML syntax errors in example config
+title: "Fix YAML syntax errors in example config"
 type: bugfix
 authors: mavam
 pr: 1145

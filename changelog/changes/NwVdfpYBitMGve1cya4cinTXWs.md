@@ -1,5 +1,5 @@
 ---
-title: Various config and default setting fixes
+title: "Various config and default setting fixes"
 type: bugfix
 authors: tobim
 pr: 866

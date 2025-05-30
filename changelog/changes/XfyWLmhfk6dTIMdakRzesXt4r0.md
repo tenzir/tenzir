@@ -1,5 +1,5 @@
 ---
-title: Add a delay to retrying failed pipelines
+title: "Add a delay to retrying failed pipelines"
 type: feature
 authors: Dakostu
 pr: 4108

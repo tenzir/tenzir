@@ -1,5 +1,5 @@
 ---
-title: Fix subnet queries for some subnets
+title: "Fix subnet queries for some subnets"
 type: bugfix
 authors: dominiklohmann
 pr: 3060

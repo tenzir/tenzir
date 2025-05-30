@@ -1,5 +1,5 @@
 ---
-title: Add the `set` operator for upserting fields
+title: "Add the `set` operator for upserting fields"
 type: feature
 authors: dominiklohmann
 pr: 4057

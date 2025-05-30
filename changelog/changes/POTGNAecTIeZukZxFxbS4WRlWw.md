@@ -1,5 +1,5 @@
 ---
-title: PRs 2360-2363
+title: "PRs 2360-2363"
 type: feature
 authors: dominiklohmann
 pr: 2360

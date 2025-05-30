@@ -1,5 +1,5 @@
 ---
-title: Add Boost as a dependency
+title: "Add Boost as a dependency"
 type: change
 authors: tobim
 pr: 3043

@@ -1,5 +1,5 @@
 ---
-title: Restore implicit `read json` in `from tcp`
+title: "Restore implicit `read json` in `from tcp`"
 type: bugfix
 authors: dominiklohmann
 pr: 4175

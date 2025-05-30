@@ -1,5 +1,5 @@
 ---
-title: Fix occasional shutdown hangs
+title: "Fix occasional shutdown hangs"
 type: bugfix
 authors: tobim
 pr: 2324

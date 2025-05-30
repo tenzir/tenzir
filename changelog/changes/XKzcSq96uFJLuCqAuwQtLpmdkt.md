@@ -1,5 +1,5 @@
 ---
-title: Add `parse_time` and `format_time` methods
+title: "Add `parse_time` and `format_time` methods"
 type: feature
 authors: mavam
 pr: 4576

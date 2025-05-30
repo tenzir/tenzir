@@ -1,5 +1,5 @@
 ---
-title: Enable `to_gogle_cloud_logging` for the Nix builds
+title: "Enable `to_gogle_cloud_logging` for the Nix builds"
 type: bugfix
 authors: dominiklohmann
 pr: 5154

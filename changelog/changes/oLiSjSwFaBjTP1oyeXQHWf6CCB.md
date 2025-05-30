@@ -1,5 +1,5 @@
 ---
-title: Add multi-line syslog message support
+title: "Add multi-line syslog message support"
 type: feature
 authors: eliaskosunen
 pr: 4080

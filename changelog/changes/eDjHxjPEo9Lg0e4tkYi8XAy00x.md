@@ -1,5 +1,5 @@
 ---
-title: Fix a crash in the Sigma operator
+title: "Fix a crash in the Sigma operator"
 type: bugfix
 authors: dominiklohmann
 pr: 4034

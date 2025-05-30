@@ -1,5 +1,5 @@
 ---
-title: Remove the `prefix()` function from the REST endpoint plugin API
+title: "Remove the `prefix()` function from the REST endpoint plugin API"
 type: change
 authors: lava
 pr: 3221

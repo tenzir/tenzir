@@ -1,5 +1,5 @@
 ---
-title: Allow disabling node-to-node connections
+title: "Allow disabling node-to-node connections"
 type: feature
 authors: dominiklohmann
 pr: 4380

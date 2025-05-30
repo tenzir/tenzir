@@ -1,5 +1,5 @@
 ---
-title: Add timestamp attribute to statistics ts field
+title: "Add timestamp attribute to statistics ts field"
 type: change
 authors: tobim
 pr: 806

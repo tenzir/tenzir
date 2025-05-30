@@ -1,5 +1,5 @@
 ---
-title: Implement the `assert` operator
+title: "Implement the `assert` operator"
 type: feature
 authors: dominiklohmann
 pr: 4506

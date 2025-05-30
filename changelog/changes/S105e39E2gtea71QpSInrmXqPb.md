@@ -1,5 +1,5 @@
 ---
-title: Update the repository to include lookup lifetime fixes
+title: "Update the repository to include lookup lifetime fixes"
 type: bugfix
 authors: Dakostu
 pr: 3910

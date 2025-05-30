@@ -1,5 +1,5 @@
 ---
-title: Add `show schemas` to display all available schemas
+title: "Add `show schemas` to display all available schemas"
 type: feature
 authors: dominiklohmann
 pr: 4131

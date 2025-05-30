@@ -1,5 +1,5 @@
 ---
-title: Implement the `azure-log-analytics` plugin
+title: "Implement the `azure-log-analytics` plugin"
 type: bugfix
 authors: Dakostu
 pr: 4281

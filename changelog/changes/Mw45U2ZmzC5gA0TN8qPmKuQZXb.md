@@ -1,5 +1,5 @@
 ---
-title: Normalize pushed-up predicates in `subscribe`
+title: "Normalize pushed-up predicates in `subscribe`"
 type: bugfix
 authors: dominiklohmann
 pr: 5014

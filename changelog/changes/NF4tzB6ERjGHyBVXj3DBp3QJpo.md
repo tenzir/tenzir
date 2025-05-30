@@ -1,5 +1,5 @@
 ---
-title: Fix file identifier check in lsvast
+title: "Fix file identifier check in lsvast"
 type: bugfix
 authors: lava
 pr: 1123

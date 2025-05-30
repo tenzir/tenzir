@@ -1,5 +1,5 @@
 ---
-title: Introduce the #field meta extractor
+title: "Introduce the #field meta extractor"
 type: bugfix
 authors: tobim
 pr: 1228

@@ -1,5 +1,5 @@
 ---
-title: Dont abort JSON import when encountering non-objects
+title: "Dont abort JSON import when encountering non-objects"
 type: bugfix
 authors: lava
 pr: 1759

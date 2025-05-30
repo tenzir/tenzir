@@ -1,5 +1,5 @@
 ---
-title: Expose the `batch` operator underlying rebuild
+title: "Expose the `batch` operator underlying rebuild"
 type: feature
 authors: dominiklohmann
 pr: 3391

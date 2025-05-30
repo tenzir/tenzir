@@ -1,5 +1,5 @@
 ---
-title: Enable loading of concepts from disk
+title: "Enable loading of concepts from disk"
 type: feature
 authors: tobim
 pr: 1102

@@ -1,5 +1,5 @@
 ---
-title: Mark some CAF types as nodiscard
+title: "Mark some CAF types as nodiscard"
 type: bugfix
 authors: dominiklohmann
 pr: 3086

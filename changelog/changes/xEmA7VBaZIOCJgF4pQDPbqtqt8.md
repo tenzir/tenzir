@@ -1,5 +1,5 @@
 ---
-title: Improve import batching options
+title: "Improve import batching options"
 type: bugfix
 authors: dominiklohmann
 pr: 1058

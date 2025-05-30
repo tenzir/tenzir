@@ -1,5 +1,5 @@
 ---
-title: Prefix plugin library output names with vast-plugin-
+title: "Prefix plugin library output names with vast-plugin-"
 type: change
 authors: dominiklohmann
 pr: 1593

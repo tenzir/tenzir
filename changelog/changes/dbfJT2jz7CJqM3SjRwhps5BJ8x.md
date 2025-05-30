@@ -1,5 +1,5 @@
 ---
-title: Check array validity before iterating
+title: "Check array validity before iterating"
 type: bugfix
 authors: tobim
 pr: 5100

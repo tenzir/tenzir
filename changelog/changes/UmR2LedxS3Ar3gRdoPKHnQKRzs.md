@@ -1,5 +1,5 @@
 ---
-title: Replace `tenzir.db-directory` with `tenzir.state-directory`
+title: "Replace `tenzir.db-directory` with `tenzir.state-directory`"
 type: change
 authors: dominiklohmann
 pr: 3889

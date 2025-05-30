@@ -1,5 +1,5 @@
 ---
-title: Align suricata.dhcp with the latest eve.log schema
+title: "Align suricata.dhcp with the latest eve.log schema"
 type: change
 authors: tobim
 pr: 1854

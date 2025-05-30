@@ -1,5 +1,5 @@
 ---
-title: Explicitly close ending TCP connection sockets
+title: "Explicitly close ending TCP connection sockets"
 type: bugfix
 authors: tobim
 pr: 4674

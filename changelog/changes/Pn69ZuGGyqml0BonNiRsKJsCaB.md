@@ -1,5 +1,5 @@
 ---
-title: Improve handling of UTF-8 input
+title: "Improve handling of UTF-8 input"
 type: bugfix
 authors: dominiklohmann
 pr: 910

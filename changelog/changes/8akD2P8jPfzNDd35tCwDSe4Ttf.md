@@ -1,5 +1,5 @@
 ---
-title: Print memory counts in bytes instead of kB
+title: "Print memory counts in bytes instead of kB"
 type: bugfix
 authors: tobim
 pr: 1862

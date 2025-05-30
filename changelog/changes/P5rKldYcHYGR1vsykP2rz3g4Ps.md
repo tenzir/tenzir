@@ -1,5 +1,5 @@
 ---
-title: Correctly handle duplicate serve requests and tune some logs
+title: "Correctly handle duplicate serve requests and tune some logs"
 type: bugfix
 authors: tobim
 pr: 4715

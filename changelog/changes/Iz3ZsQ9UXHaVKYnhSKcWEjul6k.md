@@ -1,5 +1,5 @@
 ---
-title: Add a `yara` operator
+title: "Add a `yara` operator"
 type: feature
 authors: mavam
 pr: 3594

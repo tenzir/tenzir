@@ -1,5 +1,5 @@
 ---
-title: Load plugin schemas after built-in schemas
+title: "Load plugin schemas after built-in schemas"
 type: feature
 authors: dominiklohmann
 pr: 1608

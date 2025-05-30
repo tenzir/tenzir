@@ -1,5 +1,5 @@
 ---
-title: Remove wrong EXPOSE in Dockerfile
+title: "Remove wrong EXPOSE in Dockerfile"
 type: bugfix
 authors: dominiklohmann
 pr: 4099

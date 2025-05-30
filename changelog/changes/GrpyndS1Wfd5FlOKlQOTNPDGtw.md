@@ -1,5 +1,5 @@
 ---
-title: Introduce API metrics
+title: "Introduce API metrics"
 type: feature
 authors: dominiklohmann
 pr: 4368

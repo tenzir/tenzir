@@ -1,5 +1,5 @@
 ---
-title: Remove configuration-defined import/export pipelines
+title: "Remove configuration-defined import/export pipelines"
 type: change
 authors: dominiklohmann
 pr: 3052

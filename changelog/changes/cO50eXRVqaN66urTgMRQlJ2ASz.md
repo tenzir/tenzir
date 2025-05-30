@@ -1,5 +1,5 @@
 ---
-title: Implement a selection transform plugin
+title: "Implement a selection transform plugin"
 type: feature
 authors: 6yozo
 pr: 2014

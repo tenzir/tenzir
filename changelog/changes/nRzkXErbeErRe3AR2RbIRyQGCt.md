@@ -1,5 +1,5 @@
 ---
-title: Port `deduplicate` to TQL2
+title: "Port `deduplicate` to TQL2"
 type: feature
 authors: dominiklohmann
 pr: 4850

@@ -1,5 +1,5 @@
 ---
-title: Change chat from Gitter to Slack
+title: "Change chat from Gitter to Slack"
 type: change
 authors: mavam
 pr: 1696

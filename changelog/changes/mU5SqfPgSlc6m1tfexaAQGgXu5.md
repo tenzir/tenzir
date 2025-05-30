@@ -1,5 +1,5 @@
 ---
-title: Report metrics while idle
+title: "Report metrics while idle"
 type: bugfix
 authors: dominiklohmann
 pr: 1451

@@ -1,5 +1,5 @@
 ---
-title: Fix usage of moved from variable in rebuild metrics
+title: "Fix usage of moved from variable in rebuild metrics"
 type: bugfix
 authors: patszt
 pr: 3026

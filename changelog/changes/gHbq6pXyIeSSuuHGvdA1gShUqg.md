@@ -1,5 +1,5 @@
 ---
-title: Add a grand total event counter to the status output
+title: "Add a grand total event counter to the status output"
 type: feature
 authors: 6yozo
 pr: 2133

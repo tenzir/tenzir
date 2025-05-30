@@ -1,5 +1,5 @@
 ---
-title: Check for duplicate field names in zeek_tsv_parser
+title: "Check for duplicate field names in zeek_tsv_parser"
 type: bugfix
 authors: eliaskosunen
 pr: 3578

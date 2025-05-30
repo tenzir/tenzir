@@ -1,5 +1,5 @@
 ---
-title: Make `/serve` more consistent
+title: "Make `/serve` more consistent"
 type: bugfix
 authors: dominiklohmann
 pr: 3885

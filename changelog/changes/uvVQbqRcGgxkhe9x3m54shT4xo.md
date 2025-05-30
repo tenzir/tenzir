@@ -1,5 +1,5 @@
 ---
-title: Allow for separating persistent state and log directories
+title: "Allow for separating persistent state and log directories"
 type: change
 authors: dominiklohmann
 pr: 758

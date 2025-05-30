@@ -1,5 +1,5 @@
 ---
-title: Add an operator blocklist
+title: "Add an operator blocklist"
 type: feature
 authors: dominiklohmann
 pr: 3642

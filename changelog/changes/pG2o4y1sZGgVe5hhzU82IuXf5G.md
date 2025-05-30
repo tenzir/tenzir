@@ -1,5 +1,5 @@
 ---
-title: Implement a `zeek-tsv` format
+title: "Implement a `zeek-tsv` format"
 type: feature
 authors: Dakostu
 pr: 3114

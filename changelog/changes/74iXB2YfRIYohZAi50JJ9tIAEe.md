@@ -1,5 +1,5 @@
 ---
-title: Count nulls and absent values in `top` and `rare`
+title: "Count nulls and absent values in `top` and `rare`"
 type: bugfix
 authors: dominiklohmann
 pr: 3990

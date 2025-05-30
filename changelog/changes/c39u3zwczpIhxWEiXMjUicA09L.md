@@ -1,5 +1,5 @@
 ---
-title: Improve rendering of error messages & fix record to map conversion
+title: "Improve rendering of error messages & fix record to map conversion"
 type: change
 authors: tobim
 pr: 1842

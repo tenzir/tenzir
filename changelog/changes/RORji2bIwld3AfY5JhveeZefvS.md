@@ -1,5 +1,5 @@
 ---
-title: Use Flatbuffers for Persistent State of Segment Store and Meta Index
+title: "Use Flatbuffers for Persistent State of Segment Store and Meta Index"
 type: change
 authors: lava
 pr: 972

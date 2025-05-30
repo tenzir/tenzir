@@ -1,5 +1,5 @@
 ---
-title: Add a `splunk` sink operator
+title: "Add a `splunk` sink operator"
 type: feature
 authors: IyeOnline
 pr: 4719

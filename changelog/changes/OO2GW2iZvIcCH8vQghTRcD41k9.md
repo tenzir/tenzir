@@ -1,5 +1,5 @@
 ---
-title: Fix a crash in `to_clickhouse` and bump `clickhouse-cpp`
+title: "Fix a crash in `to_clickhouse` and bump `clickhouse-cpp`"
 type: bugfix
 authors: IyeOnline
 pr: 5221

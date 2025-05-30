@@ -1,5 +1,5 @@
 ---
-title: Remove PyVAST in favor of new Python bindings
+title: "Remove PyVAST in favor of new Python bindings"
 type: change
 authors: dominiklohmann
 pr: 2674

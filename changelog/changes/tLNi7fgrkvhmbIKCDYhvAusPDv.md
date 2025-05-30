@@ -1,5 +1,5 @@
 ---
-title: Add user-defined operators to TQL2
+title: "Add user-defined operators to TQL2"
 type: feature
 authors: jachris
 pr: 4884

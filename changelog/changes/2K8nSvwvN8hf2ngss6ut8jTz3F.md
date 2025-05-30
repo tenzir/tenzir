@@ -1,5 +1,5 @@
 ---
-title: Make the run loop of exec nodes cheaper
+title: "Make the run loop of exec nodes cheaper"
 type: bugfix
 authors: dominiklohmann
 pr: 5193

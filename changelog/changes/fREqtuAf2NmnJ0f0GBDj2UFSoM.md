@@ -1,5 +1,5 @@
 ---
-title: Remove legacy index from VAST
+title: "Remove legacy index from VAST"
 type: change
 authors: lava
 pr: 2312

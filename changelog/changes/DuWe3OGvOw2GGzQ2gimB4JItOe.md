@@ -1,5 +1,5 @@
 ---
-title: Implement AWS MSK IAM Authentication Mechanism for `{load,save}_kafka`
+title: "Implement AWS MSK IAM Authentication Mechanism for `{load,save}_kafka`"
 type: feature
 authors: raxyte
 pr: 4944

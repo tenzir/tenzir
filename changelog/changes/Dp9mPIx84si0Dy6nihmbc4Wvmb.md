@@ -1,5 +1,5 @@
 ---
-title: Render duration and port as JSON strings
+title: "Render duration and port as JSON strings"
 type: change
 authors: dominiklohmann
 pr: 1034

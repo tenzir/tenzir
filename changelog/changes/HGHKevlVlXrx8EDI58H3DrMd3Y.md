@@ -1,5 +1,5 @@
 ---
-title: Use prefix matching instead of suffix matching
+title: "Use prefix matching instead of suffix matching"
 type: change
 authors: jachris
 pr: 3616

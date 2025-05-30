@@ -1,5 +1,5 @@
 ---
-title: Add the `ttl` to the `/pipeline/list` API
+title: "Add the `ttl` to the `/pipeline/list` API"
 type: feature
 authors: dominiklohmann
 pr: 4314

@@ -1,5 +1,5 @@
 ---
-title: Unroll the Zeek TSV header parsing loop
+title: "Unroll the Zeek TSV header parsing loop"
 type: feature
 authors: Dakostu
 pr: 3291

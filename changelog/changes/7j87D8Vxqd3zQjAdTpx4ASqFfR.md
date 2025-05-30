@@ -1,5 +1,5 @@
 ---
-title: Make TQL2 the default
+title: "Make TQL2 the default"
 type: change
 authors: dominiklohmann
 pr: 5086

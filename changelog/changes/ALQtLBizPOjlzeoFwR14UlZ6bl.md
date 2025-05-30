@@ -1,5 +1,5 @@
 ---
-title: Send a hard shutdown to the export bridge
+title: "Send a hard shutdown to the export bridge"
 type: bugfix
 authors: tobim
 pr: 4389

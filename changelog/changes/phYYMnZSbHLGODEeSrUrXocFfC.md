@@ -1,5 +1,5 @@
 ---
-title: Support IP-in-subnet queries in lookup tables
+title: "Support IP-in-subnet queries in lookup tables"
 type: feature
 authors: mavam
 pr: 4051

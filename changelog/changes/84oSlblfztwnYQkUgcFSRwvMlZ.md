@@ -1,5 +1,5 @@
 ---
-title: Implement `file_content(path:string)`
+title: "Implement `file_content(path:string)`"
 type: change
 authors: raxyte
 pr: 5111

@@ -1,5 +1,5 @@
 ---
-title: Align output of the Zeek TSV reader with schemas
+title: "Align output of the Zeek TSV reader with schemas"
 type: change
 authors: dominiklohmann
 pr: 2887

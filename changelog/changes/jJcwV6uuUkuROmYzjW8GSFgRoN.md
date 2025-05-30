@@ -1,5 +1,5 @@
 ---
-title: More parsing functions
+title: "More parsing functions"
 type: feature
 authors: IyeOnline
 pr: 4933

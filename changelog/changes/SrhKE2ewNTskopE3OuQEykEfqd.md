@@ -1,5 +1,5 @@
 ---
-title: Implement a `sort` operator
+title: "Implement a `sort` operator"
 type: feature
 authors: dominiklohmann
 pr: 3155

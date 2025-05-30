@@ -1,5 +1,5 @@
 ---
-title: Require expressions to be parsed to end-of-input
+title: "Require expressions to be parsed to end-of-input"
 type: feature
 authors: dominiklohmann
 pr: 791

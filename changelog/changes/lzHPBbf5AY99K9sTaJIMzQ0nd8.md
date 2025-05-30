@@ -1,5 +1,5 @@
 ---
-title: Write homogenous partitions from the partition transformer
+title: "Write homogenous partitions from the partition transformer"
 type: change
 authors: lava
 pr: 2277

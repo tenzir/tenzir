@@ -1,5 +1,5 @@
 ---
-title: Fix `last` aggregation
+title: "Fix `last` aggregation"
 type: bugfix
 authors: raxyte
 pr: 4855

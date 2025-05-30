@@ -1,5 +1,5 @@
 ---
-title: Add per-layout metrics to imports
+title: "Add per-layout metrics to imports"
 type: feature
 authors: dominiklohmann
 pr: 1781

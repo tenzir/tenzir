@@ -1,5 +1,5 @@
 ---
-title: Implement `show config`
+title: "Implement `show config`"
 type: feature
 authors: dominiklohmann
 pr: 3455

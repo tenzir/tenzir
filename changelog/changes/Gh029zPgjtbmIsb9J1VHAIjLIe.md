@@ -1,5 +1,5 @@
 ---
-title: Add a round of loaders: `http`, `https`, `ftp`, `ftps`
+title: "Add a round of loaders: `http`, `https`, `ftp`, `ftps`"
 type: feature
 authors: mavam
 pr: 3499

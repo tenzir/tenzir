@@ -1,5 +1,5 @@
 ---
-title: Fix shutdown of `every <interval> <transformation|sink>`
+title: "Fix shutdown of `every <interval> <transformation|sink>`"
 type: bugfix
 authors: dominiklohmann
 pr: 4166

@@ -1,5 +1,5 @@
 ---
-title: Fix yaml printer enums
+title: "Fix yaml printer enums"
 type: bugfix
 authors: jachris
 pr: 3719

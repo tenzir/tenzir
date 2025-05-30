@@ -1,5 +1,5 @@
 ---
-title: Add timeout options to `summarize`
+title: "Add timeout options to `summarize`"
 type: feature
 authors: dominiklohmann
 pr: 4209

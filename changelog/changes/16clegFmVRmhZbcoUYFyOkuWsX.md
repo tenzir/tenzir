@@ -1,5 +1,5 @@
 ---
-title: Improve name lookup in meta index to reduce FPs
+title: "Improve name lookup in meta index to reduce FPs"
 type: bugfix
 authors: dominiklohmann
 pr: 2086

@@ -1,5 +1,5 @@
 ---
-title: Remove CAF-encoded table slices
+title: "Remove CAF-encoded table slices"
 type: change
 authors: dominiklohmann
 pr: 1142

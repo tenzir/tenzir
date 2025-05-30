@@ -1,5 +1,5 @@
 ---
-title: PRs 1143-1157-1160-1165
+title: "PRs 1143-1157-1160-1165"
 type: change
 authors: dominiklohmann
 pr: 1143

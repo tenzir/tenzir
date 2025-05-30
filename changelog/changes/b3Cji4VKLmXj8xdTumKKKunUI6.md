@@ -1,5 +1,5 @@
 ---
-title: Allow disabling Community ID computation for PCAPs
+title: "Allow disabling Community ID computation for PCAPs"
 type: feature
 authors: dominiklohmann
 pr: 777

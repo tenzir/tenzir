@@ -1,5 +1,5 @@
 ---
-title: Hardcode the fluent-bit page size to 24576
+title: "Hardcode the fluent-bit page size to 24576"
 type: bugfix
 authors: tobim
 pr: 5084

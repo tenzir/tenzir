@@ -1,5 +1,5 @@
 ---
-title: Fix missing options sometimes not causing an error
+title: "Fix missing options sometimes not causing an error"
 type: bugfix
 authors: dominiklohmann
 pr: 2470

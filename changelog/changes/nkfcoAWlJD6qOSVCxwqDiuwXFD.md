@@ -1,5 +1,5 @@
 ---
-title: Avoid crashing when reading a pre-2.0 partition
+title: "Avoid crashing when reading a pre-2.0 partition"
 type: bugfix
 authors: dominiklohmann
 pr: 3018

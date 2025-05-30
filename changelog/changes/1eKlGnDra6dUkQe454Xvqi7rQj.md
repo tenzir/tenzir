@@ -1,5 +1,5 @@
 ---
-title: Add the enumerate operator
+title: "Add the enumerate operator"
 type: feature
 authors: mavam
 pr: 3142

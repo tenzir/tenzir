@@ -1,5 +1,5 @@
 ---
-title: Set minimum timestamp of partitions properly
+title: "Set minimum timestamp of partitions properly"
 type: bugfix
 authors: dominiklohmann
 pr: 3141

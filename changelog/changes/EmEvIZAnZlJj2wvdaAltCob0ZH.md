@@ -1,5 +1,5 @@
 ---
-title: Implement `compress` and `decompress` operators
+title: "Implement `compress` and `decompress` operators"
 type: feature
 authors: dominiklohmann
 pr: 3443

@@ -1,5 +1,5 @@
 ---
-title: Ignore events in `lookup` that did not bind
+title: "Ignore events in `lookup` that did not bind"
 type: bugfix
 authors: dominiklohmann
 pr: 4028

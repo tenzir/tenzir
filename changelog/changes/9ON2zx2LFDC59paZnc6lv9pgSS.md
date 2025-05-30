@@ -1,5 +1,5 @@
 ---
-title: Fix rare crash when transforming sliced nested arrays
+title: "Fix rare crash when transforming sliced nested arrays"
 type: bugfix
 authors: dominiklohmann
 pr: 3171

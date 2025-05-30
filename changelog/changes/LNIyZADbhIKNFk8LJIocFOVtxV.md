@@ -1,5 +1,5 @@
 ---
-title: Add a changelog entry for the compaction fix
+title: "Add a changelog entry for the compaction fix"
 type: bugfix
 authors: tobim
 pr: 3185

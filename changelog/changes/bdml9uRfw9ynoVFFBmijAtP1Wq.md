@@ -1,5 +1,5 @@
 ---
-title: Add script to convert CIM to VAST taxonomy
+title: "Add script to convert CIM to VAST taxonomy"
 type: feature
 authors: mavam
 pr: 1121

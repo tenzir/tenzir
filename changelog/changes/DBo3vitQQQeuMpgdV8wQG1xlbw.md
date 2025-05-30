@@ -1,5 +1,5 @@
 ---
-title: Add per partition memory usage information to vast status
+title: "Add per partition memory usage information to vast status"
 type: feature
 authors: tobim
 pr: 1297

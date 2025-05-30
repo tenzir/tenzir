@@ -1,5 +1,5 @@
 ---
-title: Check that disk budget was not specified as non-string
+title: "Check that disk budget was not specified as non-string"
 type: bugfix
 authors: lava
 pr: 1278

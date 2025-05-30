@@ -1,5 +1,5 @@
 ---
-title: Update the main repository to include the pipeline manager autostart changes
+title: "Update the main repository to include the pipeline manager autostart changes"
 type: feature
 authors: Dakostu
 pr: 3785

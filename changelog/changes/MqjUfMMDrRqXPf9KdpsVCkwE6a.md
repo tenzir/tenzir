@@ -1,5 +1,5 @@
 ---
-title: Add `load_balance` operator 
+title: "Add `load_balance` operator"
 type: feature
 authors: jachris
 pr: 4720

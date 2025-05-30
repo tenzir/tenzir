@@ -1,5 +1,5 @@
 ---
-title: Add compression support to `to_hive`
+title: "Add compression support to `to_hive`"
 type: feature
 authors: tobim
 pr: 5088

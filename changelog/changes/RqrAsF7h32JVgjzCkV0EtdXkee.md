@@ -1,5 +1,5 @@
 ---
-title: Fix partial specialization of S3 configuration in URL
+title: "Fix partial specialization of S3 configuration in URL"
 type: bugfix
 authors: dominiklohmann
 pr: 4001

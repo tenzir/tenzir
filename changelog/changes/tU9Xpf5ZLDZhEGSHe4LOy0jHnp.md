@@ -1,5 +1,5 @@
 ---
-title: Fix infinite recursion in the record algebra parser
+title: "Fix infinite recursion in the record algebra parser"
 type: bugfix
 authors: tobim
 pr: 2977

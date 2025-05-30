@@ -1,5 +1,5 @@
 ---
-title: Refactor python operator setup
+title: "Refactor python operator setup"
 type: change
 authors: tobim
 pr: 4336

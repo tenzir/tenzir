@@ -1,5 +1,5 @@
 ---
-title: Add an option to `export` both past and future events
+title: "Add an option to `export` both past and future events"
 type: bugfix
 authors: IyeOnline
 pr: 4203

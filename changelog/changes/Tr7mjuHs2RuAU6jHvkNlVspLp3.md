@@ -1,5 +1,5 @@
 ---
-title: Load stores lazily
+title: "Load stores lazily"
 type: bugfix
 authors: dominiklohmann
 pr: 2146

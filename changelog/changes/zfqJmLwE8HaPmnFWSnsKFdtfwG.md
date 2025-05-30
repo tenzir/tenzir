@@ -1,5 +1,5 @@
 ---
-title: Install Python bindings along with VAST
+title: "Install Python bindings along with VAST"
 type: feature
 authors: dominiklohmann
 pr: 2636

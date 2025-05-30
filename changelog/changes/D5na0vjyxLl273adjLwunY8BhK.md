@@ -1,5 +1,5 @@
 ---
-title: Require end-of-input to be reached for range-based parser invocations
+title: "Require end-of-input to be reached for range-based parser invocations"
 type: feature
 authors: dominiklohmann
 pr: 808

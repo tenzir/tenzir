@@ -1,5 +1,5 @@
 ---
-title: Fix a crash in `{parse,read}_grok` for invalid patterns
+title: "Fix a crash in `{parse,read}_grok` for invalid patterns"
 type: bugfix
 authors: dominiklohmann
 pr: 5018

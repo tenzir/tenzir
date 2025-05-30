@@ -1,5 +1,5 @@
 ---
-title: Load static plugins only when enabled
+title: "Load static plugins only when enabled"
 type: bugfix
 authors: dominiklohmann
 pr: 1959

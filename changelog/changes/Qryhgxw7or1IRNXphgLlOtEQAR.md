@@ -1,5 +1,5 @@
 ---
-title: Remove the superfluous path separators when using S3 or GS connectors
+title: "Remove the superfluous path separators when using S3 or GS connectors"
 type: bugfix
 authors: Dakostu
 pr: 4222

@@ -1,5 +1,5 @@
 ---
-title: Upgrade the minimum Arrow dependency to 6.0
+title: "Upgrade the minimum Arrow dependency to 6.0"
 type: change
 authors: dispanser
 pr: 2033

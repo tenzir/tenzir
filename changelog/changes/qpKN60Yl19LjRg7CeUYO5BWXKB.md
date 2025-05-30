@@ -1,5 +1,5 @@
 ---
-title: Improve metrics (and some other things)
+title: "Improve metrics (and some other things)"
 type: feature
 authors: dominiklohmann
 pr: 3390

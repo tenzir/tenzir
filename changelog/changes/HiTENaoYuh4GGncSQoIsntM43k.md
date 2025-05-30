@@ -1,5 +1,5 @@
 ---
-title: Allow immediate restarts of the TCP listen connector
+title: "Allow immediate restarts of the TCP listen connector"
 type: bugfix
 authors: tobim
 pr: 4367

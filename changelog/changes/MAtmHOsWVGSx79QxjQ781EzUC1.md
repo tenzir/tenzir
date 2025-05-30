@@ -1,5 +1,5 @@
 ---
-title: Provide an Ansible role for VAST
+title: "Provide an Ansible role for VAST"
 type: change
 authors: tobim
 pr: 2604

@@ -1,5 +1,5 @@
 ---
-title: Find syntax errors before record batch reading
+title: "Find syntax errors before record batch reading"
 type: bugfix
 authors: balavinaithirthan
 pr: 4139

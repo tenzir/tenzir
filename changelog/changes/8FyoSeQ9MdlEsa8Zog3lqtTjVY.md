@@ -1,5 +1,5 @@
 ---
-title: Add the import zeek-json command
+title: "Add the import zeek-json command"
 type: feature
 authors: dominiklohmann
 pr: 1259

@@ -1,5 +1,5 @@
 ---
-title: Deprecate `vast.pipeline-triggers`
+title: "Deprecate `vast.pipeline-triggers`"
 type: change
 authors: dominiklohmann
 pr: 3008

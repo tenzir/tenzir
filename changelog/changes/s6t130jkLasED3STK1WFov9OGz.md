@@ -1,5 +1,5 @@
 ---
-title: Update the main repository to include timestamped pipelines
+title: "Update the main repository to include timestamped pipelines"
 type: feature
 authors: Dakostu
 pr: 3869

@@ -1,5 +1,5 @@
 ---
-title: Shut down node a configured pipeline fails to start
+title: "Shut down node a configured pipeline fails to start"
 type: bugfix
 authors: dominiklohmann
 pr: 4097

@@ -1,5 +1,5 @@
 ---
-title: Improve HTTP transfer abstraction
+title: "Improve HTTP transfer abstraction"
 type: bugfix
 authors: mavam
 pr: 4031

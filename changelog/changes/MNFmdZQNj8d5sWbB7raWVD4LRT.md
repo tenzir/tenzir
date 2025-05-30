@@ -1,5 +1,5 @@
 ---
-title: Switch the index to basic messaging
+title: "Switch the index to basic messaging"
 type: change
 authors: tobim
 pr: 4613

@@ -1,5 +1,5 @@
 ---
-title: Add tool to regenerate .mdx files
+title: "Add tool to regenerate .mdx files"
 type: feature
 authors: lava
 pr: 1866

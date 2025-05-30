@@ -1,5 +1,5 @@
 ---
-title: Implement a distributed pipeline executor
+title: "Implement a distributed pipeline executor"
 type: feature
 authors: dominiklohmann
 pr: 3119

@@ -1,5 +1,5 @@
 ---
-title: Fix using `summarize … by x` when `x` is of type `null`
+title: "Fix using `summarize … by x` when `x` is of type `null`"
 type: bugfix
 authors: dominiklohmann
 pr: 4289

@@ -1,5 +1,5 @@
 ---
-title: Ignore VLAN tags in PCAP import
+title: "Ignore VLAN tags in PCAP import"
 type: bugfix
 authors: mavam
 pr: 650

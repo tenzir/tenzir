@@ -1,5 +1,5 @@
 ---
-title: Make vast.conf lookup on Linux systems more intuitive
+title: "Make vast.conf lookup on Linux systems more intuitive"
 type: change
 authors: dominiklohmann
 pr: 1036

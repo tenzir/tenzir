@@ -1,5 +1,5 @@
 ---
-title: Avoid idle wakeups in `load_tcp`
+title: "Avoid idle wakeups in `load_tcp`"
 type: bugfix
 authors: dominiklohmann
 pr: 5035

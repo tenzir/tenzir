@@ -1,5 +1,5 @@
 ---
-title: Disable colors if `NO_COLOR` or not a terminal
+title: "Disable colors if `NO_COLOR` or not a terminal"
 type: change
 authors: jachris
 pr: 3952

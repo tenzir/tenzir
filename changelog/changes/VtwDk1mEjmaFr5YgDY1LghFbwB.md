@@ -1,5 +1,5 @@
 ---
-title: Implement `--limit` flag for the `chart` operator
+title: "Implement `--limit` flag for the `chart` operator"
 type: feature
 authors: IyeOnline
 pr: 4757

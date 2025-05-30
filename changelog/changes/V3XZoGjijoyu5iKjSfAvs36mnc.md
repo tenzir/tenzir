@@ -1,5 +1,5 @@
 ---
-title: Add the `buffer` operator for breaking back pressure
+title: "Add the `buffer` operator for breaking back pressure"
 type: feature
 authors: dominiklohmann
 pr: 4404

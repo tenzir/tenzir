@@ -1,5 +1,5 @@
 ---
-title: PRs 1804-1809
+title: "PRs 1804-1809"
 type: bugfix
 authors: tobim
 pr: 1804

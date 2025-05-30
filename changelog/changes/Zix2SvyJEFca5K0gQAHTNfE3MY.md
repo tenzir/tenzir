@@ -1,5 +1,5 @@
 ---
-title: Add a `split_at_regex` option to `read_lines`
+title: "Add a `split_at_regex` option to `read_lines`"
 type: feature
 authors: tobim
 pr: 5123

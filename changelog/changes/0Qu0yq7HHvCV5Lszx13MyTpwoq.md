@@ -1,5 +1,5 @@
 ---
-title: Remove erased partitions from the meta index
+title: "Remove erased partitions from the meta index"
 type: bugfix
 authors: lava
 pr: 1450

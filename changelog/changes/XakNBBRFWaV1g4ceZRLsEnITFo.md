@@ -1,5 +1,5 @@
 ---
-title: Remove port type
+title: "Remove port type"
 type: change
 authors: mavam
 pr: 1187

@@ -1,5 +1,5 @@
 ---
-title: Add support for commas in seconds in the time data parser
+title: "Add support for commas in seconds in the time data parser"
 type: bugfix
 authors: eliaskosunen
 pr: 3903

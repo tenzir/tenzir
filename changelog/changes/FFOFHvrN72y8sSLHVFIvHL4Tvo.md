@@ -1,5 +1,5 @@
 ---
-title: Fix shutdown of connected pipelines alongside node
+title: "Fix shutdown of connected pipelines alongside node"
 type: bugfix
 authors: dominiklohmann
 pr: 4093

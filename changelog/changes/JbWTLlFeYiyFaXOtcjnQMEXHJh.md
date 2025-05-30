@@ -1,5 +1,5 @@
 ---
-title: Prevent query_processor from hanging when there are no candidate partitions
+title: "Prevent query_processor from hanging when there are no candidate partitions"
 type: bugfix
 authors: Dakostu
 pr: 2924

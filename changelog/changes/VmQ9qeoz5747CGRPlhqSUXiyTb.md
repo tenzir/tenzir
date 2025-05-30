@@ -1,5 +1,5 @@
 ---
-title: Remove old commands
+title: "Remove old commands"
 type: change
 authors: dominiklohmann
 pr: 3166

@@ -1,5 +1,5 @@
 ---
-title: Remove check whether config file is a regular file
+title: "Remove check whether config file is a regular file"
 type: bugfix
 authors: dominiklohmann
 pr: 1248

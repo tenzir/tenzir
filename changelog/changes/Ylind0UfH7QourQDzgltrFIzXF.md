@@ -1,5 +1,5 @@
 ---
-title: Implement the `diagnostics` operator
+title: "Implement the `diagnostics` operator"
 type: feature
 authors: Dakostu
 pr: 3828

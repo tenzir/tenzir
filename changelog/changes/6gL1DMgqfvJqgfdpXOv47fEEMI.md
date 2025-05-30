@@ -1,5 +1,5 @@
 ---
-title: Make Zeek writer work with all data types
+title: "Make Zeek writer work with all data types"
 type: change
 authors: mavam
 pr: 1205

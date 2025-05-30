@@ -1,5 +1,5 @@
 ---
-title: Send correct message to index when dropping further results
+title: "Send correct message to index when dropping further results"
 type: bugfix
 authors: lava
 pr: 1209

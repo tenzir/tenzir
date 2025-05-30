@@ -1,5 +1,5 @@
 ---
-title: Bump the minimum version of Apache Arrow to 7.0
+title: "Bump the minimum version of Apache Arrow to 7.0"
 type: change
 authors: tobim
 pr: 2122

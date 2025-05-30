@@ -1,5 +1,5 @@
 ---
-title: Continuous import of Zeek logs in VAST is broken
+title: "Continuous import of Zeek logs in VAST is broken"
 type: bugfix
 authors: tobim
 pr: 750

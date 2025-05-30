@@ -1,5 +1,5 @@
 ---
-title: Fix deletion of segments if CWD != dbdir
+title: "Fix deletion of segments if CWD != dbdir"
 type: bugfix
 authors: tobim
 pr: 1912

@@ -1,5 +1,5 @@
 ---
-title: PRs 2693-2923
+title: "PRs 2693-2923"
 type: change
 authors: patszt
 pr: 2693

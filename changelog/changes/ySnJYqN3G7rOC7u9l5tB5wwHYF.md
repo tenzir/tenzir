@@ -1,5 +1,5 @@
 ---
-title: Expose new hash functions
+title: "Expose new hash functions"
 type: feature
 authors: mavam
 pr: 4705

@@ -1,5 +1,5 @@
 ---
-title: Move event distribution statistics to the catalog
+title: "Move event distribution statistics to the catalog"
 type: change
 authors: dominiklohmann
 pr: 2852

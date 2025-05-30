@@ -1,5 +1,5 @@
 ---
-title: Implement a flatbuffer container class to hold excess table slices in segments
+title: "Implement a flatbuffer container class to hold excess table slices in segments"
 type: bugfix
 authors: lava
 pr: 2449

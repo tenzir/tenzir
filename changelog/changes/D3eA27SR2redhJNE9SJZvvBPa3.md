@@ -1,5 +1,5 @@
 ---
-title: Treat list options in env variables consistently
+title: "Treat list options in env variables consistently"
 type: bugfix
 authors: dominiklohmann
 pr: 2236

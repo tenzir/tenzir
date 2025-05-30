@@ -1,5 +1,5 @@
 ---
-title: Fix invalid assertion in `compress` operator
+title: "Fix invalid assertion in `compress` operator"
 type: bugfix
 authors: dominiklohmann
 pr: 4048

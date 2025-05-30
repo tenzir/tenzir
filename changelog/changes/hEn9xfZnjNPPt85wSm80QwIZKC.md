@@ -1,5 +1,5 @@
 ---
-title: Break back pressure in hidden subscribers
+title: "Break back pressure in hidden subscribers"
 type: bugfix
 authors: dominiklohmann
 pr: 4399

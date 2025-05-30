@@ -1,5 +1,5 @@
 ---
-title: Add a `--schema` option to the JSON parser
+title: "Add a `--schema` option to the JSON parser"
 type: feature
 authors: dominiklohmann
 pr: 3295
