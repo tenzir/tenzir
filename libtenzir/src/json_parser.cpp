@@ -195,7 +195,8 @@ auto default_parser::parse(const chunk& json_chunk) -> void {
           auto diag = diagnostic::error("expected an object")
                         .note("got: {}", truncate(view));
           if (type == simdjson::ondemand::json_type::array) {
-            diag = std::move(diag).hint("use the `--arrays-of-objects` option");
+            diag
+              = std::move(diag).hint("use the `arrays_of_objects=true` option");
           }
           std::move(diag).emit(*dh);
           return;

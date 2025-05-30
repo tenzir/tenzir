@@ -4,10 +4,10 @@ Sends HTTP/1.1 requests and forwards the response.
 
 ```tql
 http url:string, [method=string, payload=string, headers=record,
-    response_field=field, metadata_field=field, paginate=string,
-    paginate_delay=duration, parallel=int, tls=bool, certfile=string,
-    keyfile=string, password=string, connection_timeout=duration,
-    max_retry_count=int, retry_delay=duration] { … }
+     response_field=field, metadata_field=field, paginate=string,
+     paginate_delay=duration, parallel=int, tls=bool, certfile=string,
+     keyfile=string, password=string, connection_timeout=duration,
+     max_retry_count=int, retry_delay=duration] { … }
 ```
 
 ## Description
@@ -59,7 +59,7 @@ The metadata has the following schema:
 
 ### `paginate = string (optional)`
 
-An expression to evaluate against the result of the request (optionally parsed
+A lambda expression to evaluate against the result of the request (optionally parsed
 by the given pipeline). If the expression evaluation is successful and non-null, the
 resulting string is used as the URL for a new GET request with the same headers.
 
@@ -110,7 +110,7 @@ The duration to wait between each retry.
 
 Defaults to `1s`.
 
-### `{ … }`
+### `{ … } (optional)`
 
 A pipeline that receives the response body as bytes, allowing parsing per
 request. This is especially useful in scenarios where the response body can be
@@ -198,7 +198,7 @@ more pages from the API.
 ```tql
 let $URL = "https://urlscan.io/api/v1/search?q=example.com"
 from {}
-http $URL, paginate=$URL + "&search_after=" + results.last().sort.first() + "," + results.last().sort.last().slice(begin=1, end=-1) if has_more? {
+http $URL, paginate=(x => $URL + "&search_after=" + x.results.last().sort.first() + "," + x.results.last().sort.last().slice(begin=1, end=-1) if has_more?) {
   read_json
 }
 head 10
@@ -215,3 +215,7 @@ The `if has_more?` ensures pagination only continues till we have a `has_more`
 field that is `true`.
 
 Additionally, we limit the maximum pages by a simple `head 10`.
+
+## See Also
+
+[`from_http`](from_http.md)

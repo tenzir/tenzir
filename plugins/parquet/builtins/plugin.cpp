@@ -27,7 +27,10 @@ public:
 
   auto read_properties() const
     -> operator_factory_plugin::read_properties_t override {
-    return {.extensions = {"parquet"}};
+    return {
+      .extensions = {"parquet"},
+      .mime_types = {"application/vnd.apache.parquet"},
+    };
   }
 };
 

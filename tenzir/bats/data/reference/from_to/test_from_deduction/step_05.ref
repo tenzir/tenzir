@@ -1,42 +1,13 @@
 [
-  tql2.load_http {
-    url: "https://example.org/example.yaml.bz2",
-    transfer_opts: {
-      verbose: false,
-      default_protocol: "https",
-      poll_timeout: "100ms",
-      ssl: {
-        uses_curl_http: false
-      }
-    },
-    http_opts: {
-      json: false,
-      form: false,
-      chunked: false,
-      multipart: false,
-      method: "",
-      items: [
-        
-      ]
-    }
-  },
-  decompress {
-    type: "bz2" @ 0..0,
-    gzip_format: "gzip" @ 0..0
-  },
-  read_yaml {
-    policy: policy_default {
-      
-    },
-    settings: {
-      default_schema_name: "tenzir.unknown",
-      ordered: true,
-      schema_only: false,
-      merge: false,
-      raw: false,
-      unnest_separator: "",
-      timeout: "1s",
-      desired_batch_size: 65536
-    }
+  from_http_client {
+    op: 0..4,
+    port: 0,
+    url: "https://example.org/example.yaml.bz2" @ 5..43,
+    paginate_delay: "0s" @ 0..0,
+    connection_timeout: "5s" @ 0..0,
+    max_retry_count: 0 @ 0..0,
+    retry_delay: "1s" @ 0..0,
+    tls: false @ 0..0,
+    max_request_size: 10485760 @ 0..0
   }
 ]

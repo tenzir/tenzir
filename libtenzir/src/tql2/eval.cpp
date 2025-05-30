@@ -190,8 +190,7 @@ auto eval(const ast::lambda_expr& lambda, const multi_series& input,
         {lambda.left.name, part.type},
       },
     };
-    auto arrow_schema = arrow::schema({{lambda.left.name, part.array->type()}},
-                                      schema.make_arrow_metadata());
+    auto arrow_schema = schema.to_arrow_schema();
     auto slice = table_slice{
       arrow::RecordBatch::Make(std::move(arrow_schema), input.length(),
                                arrow::ArrayVector{part.array}),
