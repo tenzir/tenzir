@@ -30,7 +30,10 @@ def get_current_branch():
         result = subprocess.run(['git', 'branch', '--show-current'],
                               capture_output=True, text=True, check=True)
         return result.stdout.strip()
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
+        print(f"Debug: git branch --show-current failed with exit code {e.returncode}", file=sys.stderr)
+        print(f"Debug: stdout: {e.stdout if hasattr(e, 'stdout') else 'N/A'}", file=sys.stderr)
+        print(f"Debug: stderr: {e.stderr if hasattr(e, 'stderr') else 'N/A'}", file=sys.stderr)
         return None
 
 def strip_html_comments(text):
@@ -40,22 +43,34 @@ def strip_html_comments(text):
     # Remove HTML comments (<!-- comment -->)
     return re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL).strip()
 
-def get_pr_info():
-    """Get current PR number, author, title, and body using gh."""
+def get_pr_info(pr_number=None):
+    """Get PR number, author, title, and body using gh.
+    
+    Args:
+        pr_number: Optional PR number to view. If None, views PR for current branch.
+    """
     try:
-        # Get PR info for current branch
-        result = subprocess.run(['gh', 'pr', 'view', '--json', 'number,author,title,body'],
-                              capture_output=True, text=True, check=True)
+        # Build gh pr view command
+        cmd = ['gh', 'pr', 'view', '--json', 'number,author,title,body']
+        if pr_number:
+            cmd.append(str(pr_number))
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         pr_data = json.loads(result.stdout)
         pr_number = str(pr_data.get('number', ''))
         author = pr_data.get('author', {}).get('login', '')
         title = pr_data.get('title', '')
         body = strip_html_comments(pr_data.get('body', ''))
         return pr_number, author, title, body
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
+        print(f"Debug: gh pr view failed with exit code {e.returncode}", file=sys.stderr)
+        print(f"Debug: gh command: {' '.join(cmd)}", file=sys.stderr)
+        print(f"Debug: gh stdout: {e.stdout if hasattr(e, 'stdout') else 'N/A'}", file=sys.stderr)
+        print(f"Debug: gh stderr: {e.stderr if hasattr(e, 'stderr') else 'N/A'}", file=sys.stderr)
         # Check if it's specifically a "no pull request found" error
         return "NO_PR_FOUND", None, None, None
-    except (json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"Debug: JSON parsing failed: {e}", file=sys.stderr)
         return None, None, None, None
 
 def get_file_content(type_value, author=None, pr=None, title=None, description=None, for_web=False):
@@ -154,13 +169,18 @@ def main():
 
     if is_gh_available():
         detected_branch = get_current_branch()
-        detected_pr, detected_author, detected_title, detected_description = get_pr_info()
+        # If PR number is explicitly provided, use it to get PR info
+        pr_for_lookup = args.pr if args.pr else None
+        detected_pr, detected_author, detected_title, detected_description = get_pr_info(pr_for_lookup)
 
         # Check if no PR was found and provide clear error message
         if detected_pr == "NO_PR_FOUND":
-            print("Error: No pull request found for the current branch.", file=sys.stderr)
-            print("Please open a pull request first and then retry.", file=sys.stderr)
-            print("You can create a PR with: gh pr create", file=sys.stderr)
+            if pr_for_lookup:
+                print(f"Error: Pull request #{pr_for_lookup} not found.", file=sys.stderr)
+            else:
+                print("Error: No pull request found for the current branch.", file=sys.stderr)
+                print("Please open a pull request first and then retry.", file=sys.stderr)
+                print("You can create a PR with: gh pr create", file=sys.stderr)
             sys.exit(1)
 
     # Use provided values or fall back to detected values
@@ -172,7 +192,14 @@ def main():
 
     if args.web:
         if not final_branch:
-            parser.error("--branch is required when using --web (could not auto-detect)")
+            error_msg = "--branch is required when using --web (could not auto-detect)"
+            if is_gh_available():
+                error_msg += f"\nDebug: gh CLI is available"
+                error_msg += f"\nDebug: detected_branch = {repr(detected_branch)}"
+                error_msg += f"\nDebug: args.branch = {repr(args.branch)}"
+            else:
+                error_msg += f"\nDebug: gh CLI is not available"
+            parser.error(error_msg)
         create_github_url(final_branch, args.type, final_author, final_pr, final_title, final_description)
     else:
         if args.branch:

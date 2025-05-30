@@ -1,0 +1,81 @@
+name: Changelog
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  add-comment:
+    name: Add Comment
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Generate changelog entry URLs
+        id: generate-urls
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+
+          # Use the changelog/add.py script with --web option to generate URLs
+          # Pass the PR number and branch explicitly to ensure it works correctly in CI
+          CHANGE_URL=$(python3 changelog/add.py change --web --pr "$PR_NUMBER" --branch "$BRANCH")
+          BUGFIX_URL=$(python3 changelog/add.py bugfix --web --pr "$PR_NUMBER" --branch "$BRANCH")
+          FEATURE_URL=$(python3 changelog/add.py feature --web --pr "$PR_NUMBER" --branch "$BRANCH")
+
+          echo "change_url=$CHANGE_URL" >> $GITHUB_OUTPUT
+          echo "bugfix_url=$BUGFIX_URL" >> $GITHUB_OUTPUT
+          echo "feature_url=$FEATURE_URL" >> $GITHUB_OUTPUT
+
+      - name: Create or update comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          COMMENT_BODY="<!-- add-changelog-entry -->
+          > [!TIP]
+          > Please add a changelog entry for this PR by clicking one of the links below.
+          >
+          > The changelog entry will be pre-filled with information from this PR. You can edit the title and description as needed before committing.
+          >
+          > You can also add a changelog entry manually by running \`./changelog/add.py change|bugfix|feature\` on the command-line.
+
+          | Type | Description | Link |
+          |------|-------------|------|
+          | 🔄 **Change** | Modifications to existing functionality | [Add Change](${{ steps.generate-urls.outputs.change_url }}) |
+          | 🐛 **Bugfix** | Fixes for bugs or issues | [Add Bugfix](${{ steps.generate-urls.outputs.bugfix_url }}) |
+          | ✨ **Feature** | New functionality or enhancements | [Add Feature](${{ steps.generate-urls.outputs.feature_url }}) |
+
+          *This comment is automatically updated when the PR is modified.*"
+
+          # Check if a comment already exists
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+            --jq '.[] | select(.body | startswith("<!-- add-changelog-entry -->")) | .id')
+
+          if [ -n "$COMMENT_ID" ]; then
+            # Update existing comment
+            echo "Updating existing comment $COMMENT_ID"
+            gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+              -X PATCH \
+              -f body="$COMMENT_BODY"
+          else
+            # Create new comment
+            echo "Creating new comment"
+            gh api repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+              -f body="$COMMENT_BODY"
+          fi
