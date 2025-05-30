@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 4133-4138-satta
+title: PRs 4133-4138-satta
 type: feature
 authors: satta
 pr: 4133

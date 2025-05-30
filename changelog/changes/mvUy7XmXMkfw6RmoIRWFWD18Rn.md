@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 954-986
+title: PRs 954-986
 type: change
 authors: tobim
 pr: 954

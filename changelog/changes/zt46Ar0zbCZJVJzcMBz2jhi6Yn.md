@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 873-877
+title: PRs 873-877
 type: feature
 authors: lava
 pr: 873

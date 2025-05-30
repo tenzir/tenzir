@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 4073-satta
+title: PRs 4073-satta
 type: change
 authors: satta
 pr: 4073

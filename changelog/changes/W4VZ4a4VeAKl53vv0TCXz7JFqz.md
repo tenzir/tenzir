@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 4212-satta
+title: PRs 4212-satta
 type: bugfix
 authors: satta
 pr: 4212

@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 1514-1574
+title: PRs 1514-1574
 type: change
 authors: tobim
 pr: 1514

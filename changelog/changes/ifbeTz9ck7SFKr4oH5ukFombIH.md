@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 1473-1485
+title: PRs 1473-1485
 type: bugfix
 authors: mavam
 pr: 1473

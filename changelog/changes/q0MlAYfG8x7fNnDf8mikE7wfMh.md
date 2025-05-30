@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 3128-3173-3193
+title: PRs 3128-3173-3193
 type: feature
 authors: dominiklohmann
 pr: 3128

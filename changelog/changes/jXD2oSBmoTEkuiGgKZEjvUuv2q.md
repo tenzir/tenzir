@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 2807-2848
+title: PRs 2807-2848
 type: change
 authors: tobim
 pr: 2807

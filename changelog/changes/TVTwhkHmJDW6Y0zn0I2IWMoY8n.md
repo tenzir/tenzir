@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 1135-1150
+title: PRs 1135-1150
 type: feature
 authors: mavam
 pr: 1135

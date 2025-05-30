@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 1987-1992
+title: PRs 1987-1992
 type: feature
 authors: tobim
 pr: 1987

@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 2334-KaanSK
+title: PRs 2334-KaanSK
 type: feature
 authors: KaanSK
 pr: 2334

@@ -1,5 +1,5 @@
 ---
-title: Legacy entry: 1720-1762-1802
+title: PRs 1720-1762-1802
 type: feature
 authors: lava
 pr: 1720
