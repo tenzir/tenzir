@@ -327,16 +327,16 @@ using metrics_receiver_actor = typed_actor_fwd<
   // Receive the standard execution node metrics.
   auto(operator_metric)->caf::result<void>>::unwrap;
 
+/// The interface of the PIPELINE SHELL actor.
 struct pipeline_shell_actor_traits {
   using signatures = caf::type_list<
     // Spawn a set of execution nodes for a given pipeline. Does not start the
     // execution nodes.
     auto(atom::spawn, operator_box, operator_type, std::string definition,
-         receiver_actor<diagnostic>, metrics_receiver_actor, int index,
+         receiver_actor<diagnostic>, metrics_receiver_actor, int32_t index,
          bool is_hidden, uuid run_id)
       ->caf::result<exec_node_actor>>;
 };
-
 using pipeline_shell_actor = caf::typed_actor<pipeline_shell_actor_traits>;
 
 /// The interface of the NODE actor.
@@ -353,19 +353,15 @@ struct node_actor_traits {
       ->caf::result<std::vector<caf::actor>>,
     // Retrieve the version of the process running the NODE.
     auto(atom::get, atom::version)->caf::result<record>,
-    // Spawn an execution node for a given pipeline. Does not start the
-    // execution node.
-    auto(atom::spawn, operator_box, operator_type, std::string definition,
-         receiver_actor<diagnostic>, metrics_receiver_actor, int index,
-         bool is_hidden, uuid run_id)
-      ->caf::result<exec_node_actor>,
     // Set the listening port of the tenzir-node.
     auto(atom::set, uint16_t)->caf::result<void>,
     // Spawn an pipeline_shell subprocess.
     auto(atom::spawn, atom::shell)->caf::result<pipeline_shell_actor>,
     // Callback from subprocess when shell actor is ready.
-    auto(atom::connect, atom::shell, caf::actor_addr, pipeline_shell_actor)
+    auto(atom::connect, atom::shell, std::string, pipeline_shell_actor)
       ->caf::result<void>>
+    // Allow spawning exec nodes inside of the node process.
+    ::append_from<pipeline_shell_actor_traits::signatures>
     // Enable secret resolution through the node actor. It will first check the
     // node config and then dispatch to the platform actor if necessary/possible.
     ::append_from<secret_store_actor_traits::signatures>;

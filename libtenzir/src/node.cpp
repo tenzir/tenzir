@@ -645,33 +645,8 @@ auto node(node_actor::stateful_pointer<node_state> self,
     [self](atom::spawn, atom::shell) -> caf::result<pipeline_shell_actor> {
       TENZIR_ASSERT(self->state().listening_port != 0);
       namespace bp = boost::process;
-      auto tenzir_ctl = detail::objectpath()->parent_path().parent_path()
-                        / "bin" / "tenzir-ctl";
-      TENZIR_INFO("path is {}", tenzir_ctl);
       auto addr = self->current_sender()->address();
-      auto ctx = boost::asio::io_context{};
-      auto env = bp::process_environment{bp::environment::current()};
-      auto proc = bp::process{
-        ctx,
-        tenzir_ctl.generic_string(),
-        {
-          "operator-shell",
-          fmt::to_string(self->state().listening_port),
-          // TODO: idk
-          caf::deep_to_string(addr),
-        },
-        std::move(env),
-      };
-      self->state().shell_children.emplace(addr, std::move(proc));
-      auto rp = self->make_response_promise<pipeline_shell_actor>();
-      auto [it, inserted] = self->state().shell_response_promises.try_emplace(
-        addr, std::move(rp));
-      TENZIR_ASSERT(inserted);
-      return it->second;
-    },
-    [self](atom::connect, atom::shell, const caf::actor_addr& addr,
-           pipeline_shell_actor handle) -> caf::result<void> {
-      self->monitor(handle, [self, addr](const caf::error&) {
+      self->monitor(self->current_sender(), [self, addr](const caf::error&) {
         auto& ps = self->state().shell_children;
         const auto it = ps.find(addr);
         if (it == ps.end()) {
@@ -681,8 +656,33 @@ auto node(node_actor::stateful_pointer<node_state> self,
         it->second.terminate();
         ps.erase(it);
       });
+      auto tenzir_ctl = detail::objectpath()->parent_path().parent_path()
+                        / "bin" / "tenzir-ctl";
+      auto env = bp::process_environment{bp::environment::current()};
+      auto identifier = caf::deep_to_string(addr);
+      auto proc = bp::process{
+        self->state().ctx_,
+        tenzir_ctl.generic_string(),
+        {
+          "pipeline_shell",
+          fmt::to_string(self->state().listening_port),
+          // TODO: idk
+          identifier,
+        },
+        std::move(env),
+      };
+      self->state().shell_children.emplace(addr, std::move(proc));
+      auto rp = self->make_response_promise<pipeline_shell_actor>();
+      auto [it, inserted] = self->state().shell_response_promises.try_emplace(
+        identifier, std::move(rp));
+      TENZIR_ASSERT(inserted);
+      return it->second;
+    },
+    [self](atom::connect, atom::shell, const std::string& identifier,
+           pipeline_shell_actor handle) -> caf::result<void> {
+      TENZIR_INFO("got response");
       auto& ps = self->state().shell_response_promises;
-      const auto it = ps.find(addr);
+      const auto it = ps.find(identifier);
       if (it == ps.end()) {
         return caf::make_error(ec::lookup_error, "unknown actor");
       }

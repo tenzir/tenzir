@@ -64,6 +64,12 @@ struct pipeline_executor_state {
 
   void finish_start();
 
+  auto spawn_in_shell(const pipeline_shell_actor& shell, operator_ptr op,
+                      operator_type input_type, std::string definition,
+                      receiver_actor<diagnostic> diagnostics,
+                      metrics_receiver_actor metrics, int32_t op_index,
+                      bool has_terminal, uuid run_id) -> operator_type;
+
   void spawn_execution_nodes(pipeline pipe);
 };
 

@@ -12,7 +12,12 @@
 #include "tenzir/component_registry.hpp"
 #include "tenzir/series_builder.hpp"
 
-#include <boost/process.hpp>
+#if __has_include("boost/process.hpp")
+#  include <boost/process.hpp>
+#else
+#  include <boost/process/v2.hpp>
+#endif
+
 #include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -85,13 +90,15 @@ struct node_state {
 
   /// Response promises for pending subprocess operations, indexed by caller
   /// address.
-  std::unordered_map<caf::actor_addr,
+  std::unordered_map<std::string,
                      caf::typed_response_promise<pipeline_shell_actor>>
     shell_response_promises;
 
   /// Response promises for pending subprocess operations, indexed by caller
   /// address.
   std::unordered_map<caf::actor_addr, boost::process::process> shell_children;
+
+  boost::asio::io_context ctx_{};
 };
 
 /// Spawns a node.
