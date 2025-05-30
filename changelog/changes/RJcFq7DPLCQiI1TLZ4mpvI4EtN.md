@@ -1,5 +1,5 @@
 ---
-title: "Implement `to_google_cloud_logging`"
+title: "Assume UTF8 in `file_contents`"
 type: change
 authors: raxyte
 pr: 5135

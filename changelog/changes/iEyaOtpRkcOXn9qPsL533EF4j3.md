@@ -1,5 +1,5 @@
 ---
-title: "Implement `to_google_cloud_logging`"
+title: "Fix TLS options in `from_http`"
 type: bugfix
 authors: raxyte
 pr: 5135

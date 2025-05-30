@@ -1,5 +1,8 @@
-title: Tenzir Node v5.2.0
-description: ""
+title: Watching Directories
+description: |
+  Tenzir Node v5.2 brings our most requested feature to life, adding the ability
+  to watch a local filesystem directory or a blob storage bucket for new files
+  within a pipeline.
 changes:
   - 8DhxVC6tQ41Gjkup9jxnYMgTLq
   - LDyaUXxVDW5XLT8htKBApejGzd

@@ -1,5 +1,7 @@
-title: Tenzir Node v5.1.6
-description: ""
+title: Timestamp Compoennts
+description: |
+  This release adds the ability to extract hour, minute, and day components from
+  timestamps.
 changes:
   - iwozAZ7AzWVhb8X68Gqc40T6IE
   - jZkKBaerq2LcIVbmaE9VpBeIco

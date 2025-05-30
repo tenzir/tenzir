@@ -1,5 +1,5 @@
 ---
-title: "Rename *-paths to *-dirs options"
+title: "Rename `*-paths` to `*-dirs` options"
 type: change
 authors: dominiklohmann
 pr: 1287

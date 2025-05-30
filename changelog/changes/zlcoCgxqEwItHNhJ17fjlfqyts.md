@@ -1,5 +1,5 @@
 ---
-title: "Introduce lambda functions"
+title: "Fix evaluation of `null if true else …`"
 type: bugfix
 authors: dominiklohmann
 pr: 5150

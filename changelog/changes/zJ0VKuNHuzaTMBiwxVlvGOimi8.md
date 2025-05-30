@@ -1,5 +1,5 @@
 ---
-title: "Add `hour`, `minute`, and `second` time component extraction"
+title: "Remove deprecated `as_secs()` function"
 type: change
 authors: dominiklohmann
 pr: 5190
