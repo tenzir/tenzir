@@ -71,25 +71,25 @@ def create_release_file(script_dir, version, entry_ids):
     """Create a release YAML file for the given version."""
     releases_dir = script_dir / "releases"
     releases_dir.mkdir(exist_ok=True)
-    
+
     release_file = releases_dir / f"{version}.yaml"
-    
+
     # Don't overwrite existing release files
     if release_file.exists():
         print(f"Release file {release_file} already exists, skipping.")
         return release_file
-    
-    content = f"""title: {version}
+
+    content = f"""title: Tenzir Node {version}
 description: ""
 changes:
 """
-    
+
     for entry_id in sorted(entry_ids):
         content += f"  - {entry_id}\n"
-    
+
     with open(release_file, 'w') as f:
         f.write(content)
-    
+
     return release_file
 
 
@@ -235,7 +235,7 @@ def main():
                        help="Show detailed statistics about entries found")
     parser.add_argument("--create-releases", action="store_true",
                        help="Create release YAML files for migrated versions")
-    
+
     args = parser.parse_args()
 
     # Get the directory where this script is located
@@ -290,12 +290,12 @@ def main():
     # Migrate each entry and collect results for release creation
     success_count = 0
     migrated_by_version = {}
-    
+
     for version, entry_type, pr_number, content_file, original_filename in filtered_entries:
         print(f"Migrating {version}/{entry_type}/PR#{pr_number}...")
         if original_filename != pr_number:
             print(f"  (Original filename: {original_filename})")
-        
+
         if args.dry_run:
             # For dry run, just show what would be done
             if migrate_entry(add_script, entry_type, pr_number, content_file, original_filename, args.dry_run):
@@ -307,17 +307,17 @@ def main():
             # Capture the output to get the entry ID
             import subprocess
             import tempfile
-            
+
             try:
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as tmp_file:
                     with open(content_file, 'r', encoding='utf-8') as f:
                         content = f.read().strip()
-                    
+
                     # Generate a title from the original filename if it was complex
                     title = None
                     if original_filename != pr_number:
                         title = f"Legacy entry: {original_filename}"
-                    
+
                     # Build the command to run add.py
                     cmd = [
                         sys.executable,
@@ -326,24 +326,24 @@ def main():
                         "--pr", pr_number,
                         "--description", content
                     ]
-                    
+
                     if title:
                         cmd.extend(["--title", title])
-                    
+
                     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
                     entry_file_path = result.stdout.strip()
-                    
+
                     # Extract entry ID from the file path
                     entry_id = Path(entry_file_path).stem
-                    
+
                     print(f"Migrated PR #{pr_number} ({entry_type}): {entry_file_path}")
                     success_count += 1
-                    
+
                     # Track for release creation
                     if version not in migrated_by_version:
                         migrated_by_version[version] = []
                     migrated_by_version[version].append(entry_id)
-                    
+
             except subprocess.CalledProcessError as e:
                 print(f"Error migrating PR #{pr_number}: {e}", file=sys.stderr)
                 if e.stdout:
@@ -353,9 +353,9 @@ def main():
             except Exception as e:
                 print(f"Error migrating PR #{pr_number}: {e}", file=sys.stderr)
         print()
-    
+
     print(f"Migration complete: {success_count}/{len(filtered_entries)} entries migrated successfully.")
-    
+
     # Create release files if requested
     if args.create_releases and not args.dry_run and migrated_by_version:
         print("\nCreating release files...")
@@ -365,10 +365,10 @@ def main():
                 print(f"Created release file: {release_file}")
     elif args.create_releases and args.dry_run:
         print(f"\nWould create release files for: {list(migrated_by_version.keys())}")
-    
+
     if not args.dry_run and success_count > 0:
         print(f"New changelog entries created in: {script_dir / 'changes'}")
-    
+
     # Show final statistics
     if not args.stats and len(entries) != len(filtered_entries):
         print(f"Total entries found: {len(entries)}")
