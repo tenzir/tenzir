@@ -130,7 +130,7 @@ def create_changelog_entry(type_value, author=None, pr=None, title=None, descrip
 def create_github_url(branch, type_value, author=None, pr=None, title=None, description=None):
     """Create a GitHub URL for creating a new changelog entry."""
     random_id = generate_random_id()
-    filename = f"./changelog/changes/{random_id}.md"
+    filename = f"changelog/changes/{random_id}.md"
     content = get_file_content(type_value, author, pr, title, description, for_web=True)
 
     # URL encode the content
