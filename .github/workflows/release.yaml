@@ -105,9 +105,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Format version for changelog URL (replace dots with dashes, remove 'v' prefix)
+          VERSION_FOR_URL=$(echo "${{ github.event.inputs.version }}" | sed 's/^v//' | sed 's/\./-/g')
+          CHANGELOG_URL="https://docs.tenzir.com/changelog/node/v${VERSION_FOR_URL}/"
+
+          # Create release notes with changelog link
+          RELEASE_NOTES="${{ github.event.inputs.description }}
+
+          For a detailed list of all changes, view [the changelog](${CHANGELOG_URL})"
+
           gh release create "${{ github.event.inputs.version }}" \
             --title "${{ github.event.inputs.title }}" \
-            --notes "${{ github.event.inputs.description }}"
+            --notes "$RELEASE_NOTES"
 
       - name: Output success message
         run: |
