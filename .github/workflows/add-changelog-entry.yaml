@@ -18,18 +18,48 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Fetch base branch
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.x"
 
-      - name: Generate changelog entry URLs
-        id: generate-urls
+      - name: Check for existing changelog entries and generate URLs
+        id: check-and-generate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           BRANCH="${{ github.event.pull_request.head.ref }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+
+          # Check if any changelog entries were added in this PR
+          CHANGELOG_FILES=$(git diff --name-only origin/$BASE_REF...HEAD | grep "^changelog/changes/" | wc -l)
+
+          echo "changelog_entries_count=$CHANGELOG_FILES" >> $GITHUB_OUTPUT
+
+          if [ "$CHANGELOG_FILES" -gt 0 ]; then
+            echo "has_changelog_entries=true" >> $GITHUB_OUTPUT
+            # Extract titles from changelog files for display
+            CHANGELOG_TITLES=""
+            while IFS= read -r file; do
+              if [ -n "$file" ]; then
+                # Extract title from YAML frontmatter
+                TITLE=$(grep "^title:" "$file" | sed 's/^title: *//' | sed 's/^"//' | sed 's/"$//')
+                if [ -n "$CHANGELOG_TITLES" ]; then
+                  CHANGELOG_TITLES="$CHANGELOG_TITLES, $TITLE"
+                else
+                  CHANGELOG_TITLES="$TITLE"
+                fi
+              fi
+            done < <(git diff --name-only origin/$BASE_REF...HEAD | grep "^changelog/changes/")
+            echo "changelog_list=$CHANGELOG_TITLES" >> $GITHUB_OUTPUT
+          else
+            echo "has_changelog_entries=false" >> $GITHUB_OUTPUT
+          fi
 
           # Use the changelog/add.py script with --web option to generate URLs
           # Pass the PR number and branch explicitly to ensure it works correctly in CI
@@ -46,8 +76,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
+          HAS_CHANGELOG="${{ steps.check-and-generate.outputs.has_changelog_entries }}"
+          CHANGELOG_COUNT="${{ steps.check-and-generate.outputs.changelog_entries_count }}"
+          CHANGELOG_LIST="${{ steps.check-and-generate.outputs.changelog_list }}"
 
-          COMMENT_BODY="<!-- add-changelog-entry -->
+          if [ "$HAS_CHANGELOG" = "true" ]; then
+            COMMENT_BODY="<!-- add-changelog-entry -->
+          > [!NOTE]
+          > 🎉 **Great work!** This PR already includes $CHANGELOG_COUNT changelog $([ $CHANGELOG_COUNT -eq 1 ] && echo "entry" || echo "entries"): $CHANGELOG_LIST
+          >
+          > If you need to add additional changelog entries, you can use the links below or run \`./changelog/add.py change|bugfix|feature\` on the command-line.
+
+          | Type | Description | Link |
+          |------|-------------|------|
+          | 🔄 **Change** | Modifications to existing functionality | [Add Change](${{ steps.check-and-generate.outputs.change_url }}) |
+          | 🐛 **Bugfix** | Fixes for bugs or issues | [Add Bugfix](${{ steps.check-and-generate.outputs.bugfix_url }}) |
+          | ✨ **Feature** | New functionality or enhancements | [Add Feature](${{ steps.check-and-generate.outputs.feature_url }}) |
+
+          *This comment is automatically updated when the PR is modified.*"
+          else
+            COMMENT_BODY="<!-- add-changelog-entry -->
           > [!TIP]
           > Please add a changelog entry for this PR by clicking one of the links below.
           >
@@ -57,11 +105,12 @@ jobs:
 
           | Type | Description | Link |
           |------|-------------|------|
-          | 🔄 **Change** | Modifications to existing functionality | [Add Change](${{ steps.generate-urls.outputs.change_url }}) |
-          | 🐛 **Bugfix** | Fixes for bugs or issues | [Add Bugfix](${{ steps.generate-urls.outputs.bugfix_url }}) |
-          | ✨ **Feature** | New functionality or enhancements | [Add Feature](${{ steps.generate-urls.outputs.feature_url }}) |
+          | 🔄 **Change** | Modifications to existing functionality | [Add Change](${{ steps.check-and-generate.outputs.change_url }}) |
+          | 🐛 **Bugfix** | Fixes for bugs or issues | [Add Bugfix](${{ steps.check-and-generate.outputs.bugfix_url }}) |
+          | ✨ **Feature** | New functionality or enhancements | [Add Feature](${{ steps.check-and-generate.outputs.feature_url }}) |
 
           *This comment is automatically updated when the PR is modified.*"
+          fi
 
           # Check if a comment already exists
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
