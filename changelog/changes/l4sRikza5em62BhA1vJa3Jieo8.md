@@ -1,5 +1,5 @@
 ---
-title: "Fix compile error with {fmt} 11.0.2"
+title: "Fix compile error with fmt 11.0.2"
 type: bugfix
 authors: dominiklohmann
 pr: 4559
