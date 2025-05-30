@@ -1,0 +1,200 @@
+[
+  invocation {
+    op: {
+      path: [
+        `from` @ 13..17
+      ],
+      ref: unresolved
+    },
+    args: [
+      record {
+        begin: 18..19,
+        items: [
+          field {
+            name: `x` @ 19..20,
+            expr: format_expr {
+              segments: [
+                string "\""
+              ],
+              loc: 22..26
+            }
+          }
+        ],
+        end: 26..27
+      },
+      record {
+        begin: 31..32,
+        items: [
+          field {
+            name: `x` @ 32..33,
+            expr: format_expr {
+              segments: [
+                string "{}"
+              ],
+              loc: 35..39
+            }
+          }
+        ],
+        end: 39..40
+      },
+      record {
+        begin: 44..45,
+        items: [
+          field {
+            name: `x` @ 45..46,
+            expr: format_expr {
+              segments: [
+                format_expr root_field {
+                  id: `ident` @ 51..56,
+                  has_question_mark: false
+                }
+              ],
+              loc: 48..58
+            }
+          }
+        ],
+        end: 58..59
+      },
+      record {
+        begin: 63..64,
+        items: [
+          field {
+            name: `x` @ 64..65,
+            expr: format_expr {
+              segments: [
+                format_expr binary_expr {
+                  left: root_field {
+                    id: `a` @ 70..71,
+                    has_question_mark: false
+                  },
+                  op: "add" @ 71..72,
+                  right: root_field {
+                    id: `b` @ 72..73,
+                    has_question_mark: false
+                  }
+                }
+              ],
+              loc: 67..75
+            }
+          }
+        ],
+        end: 75..76
+      },
+      record {
+        begin: 80..81,
+        items: [
+          field {
+            name: `x` @ 81..82,
+            expr: format_expr {
+              segments: [
+                string "pre ",
+                format_expr format_expr {
+                  segments: [
+                    string "string"
+                  ],
+                  loc: 91..99
+                }
+              ],
+              loc: 84..101
+            }
+          }
+        ],
+        end: 101..102
+      },
+      record {
+        begin: 106..107,
+        items: [
+          field {
+            name: `x` @ 107..108,
+            expr: format_expr {
+              segments: [
+                format_expr record {
+                  begin: 113..114,
+                  items: [
+                    
+                  ],
+                  end: 114..115
+                }
+              ],
+              loc: 110..117
+            }
+          }
+        ],
+        end: 117..118
+      },
+      record {
+        begin: 122..123,
+        items: [
+          field {
+            name: `x` @ 123..124,
+            expr: format_expr {
+              segments: [
+                format_expr record {
+                  begin: 129..130,
+                  items: [
+                    field {
+                      name: `key` @ 130..133,
+                      expr: format_expr {
+                        segments: [
+                          string "value"
+                        ],
+                        loc: 135..142
+                      }
+                    }
+                  ],
+                  end: 142..143
+                }
+              ],
+              loc: 126..145
+            }
+          }
+        ],
+        end: 145..146
+      },
+      record {
+        begin: 150..151,
+        items: [
+          field {
+            name: `x` @ 151..152,
+            expr: format_expr {
+              segments: [
+                format_expr record {
+                  begin: 157..158,
+                  items: [
+                    field {
+                      name: `key` @ 158..161,
+                      expr: format_expr {
+                        segments: [
+                          string "pre2",
+                          format_expr record {
+                            begin: 170..171,
+                            items: [
+                              field {
+                                name: `key2` @ 171..175,
+                                expr: format_expr {
+                                  segments: [
+                                    string "string"
+                                  ],
+                                  loc: 177..185
+                                }
+                              }
+                            ],
+                            end: 185..186
+                          }
+                        ],
+                        loc: 163..188
+                      }
+                    }
+                  ],
+                  end: 188..189
+                }
+              ],
+              loc: 154..191
+            }
+          }
+        ],
+        end: 192..193
+      }
+    ]
+  }
+]

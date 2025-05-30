@@ -1,0 +1,9 @@
+// test: ast
+from {x: "\""},
+  {x: "{}"},
+  {x: "\{ident}"},
+  {x: "\{a+b}"},
+  {x: "pre \{"string"}"},
+  {x: "\{{}}"},
+  {x: "\{{key: "value"}}"},
+  {x: "\{{key: "pre2\{{key2: "string"}}"}}" }
