@@ -327,6 +327,18 @@ using metrics_receiver_actor = typed_actor_fwd<
   // Receive the standard execution node metrics.
   auto(operator_metric)->caf::result<void>>::unwrap;
 
+struct pipeline_shell_actor_traits {
+  using signatures = caf::type_list<
+    // Spawn a set of execution nodes for a given pipeline. Does not start the
+    // execution nodes.
+    auto(atom::spawn, operator_box, operator_type, std::string definition,
+         receiver_actor<diagnostic>, metrics_receiver_actor, int index,
+         bool is_hidden, uuid run_id)
+      ->caf::result<exec_node_actor>>;
+};
+
+using pipeline_shell_actor = caf::typed_actor<pipeline_shell_actor_traits>;
+
 /// The interface of the NODE actor.
 struct node_actor_traits {
   using signatures = caf::type_list<
@@ -341,12 +353,19 @@ struct node_actor_traits {
       ->caf::result<std::vector<caf::actor>>,
     // Retrieve the version of the process running the NODE.
     auto(atom::get, atom::version)->caf::result<record>,
-    // Spawn a set of execution nodes for a given pipeline. Does not start the
-    // execution nodes.
+    // Spawn an execution node for a given pipeline. Does not start the
+    // execution node.
     auto(atom::spawn, operator_box, operator_type, std::string definition,
          receiver_actor<diagnostic>, metrics_receiver_actor, int index,
          bool is_hidden, uuid run_id)
-      ->caf::result<exec_node_actor>>
+      ->caf::result<exec_node_actor>,
+    // Set the listening port of the tenzir-node.
+    auto(atom::set, uint16_t)->caf::result<void>,
+    // Spawn an pipeline_shell subprocess.
+    auto(atom::spawn, atom::shell)->caf::result<pipeline_shell_actor>,
+    // Callback from subprocess when shell actor is ready.
+    auto(atom::connect, atom::shell, caf::actor_addr, pipeline_shell_actor)
+      ->caf::result<void>>
     // Enable secret resolution through the node actor. It will first check the
     // node config and then dispatch to the platform actor if necessary/possible.
     ::append_from<secret_store_actor_traits::signatures>;
@@ -417,6 +436,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::pipeline_shell_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))

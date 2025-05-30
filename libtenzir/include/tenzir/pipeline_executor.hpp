@@ -29,6 +29,9 @@ struct pipeline_executor_state {
   std::vector<exec_node_actor> exec_nodes = {};
   caf::typed_response_promise<void> start_rp = {};
 
+  /// Handle to the `pipeline_shell_actor` responsible for the subprocess.
+  pipeline_shell_actor shell;
+
   /// The diagnostic handler that receives diagnostics from all the execution
   /// nodes.
   receiver_actor<diagnostic> diagnostics = {};
@@ -47,6 +50,8 @@ struct pipeline_executor_state {
 
   /// Determines whether the pipeline has been started.
   bool is_started = {};
+
+  auto is_ad_hoc() const -> bool;
 
   auto start() -> caf::result<void>;
   auto pause() -> caf::result<void>;
