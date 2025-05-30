@@ -528,7 +528,33 @@ auto evaluator::eval(const ast::constant& x) -> multi_series {
   return to_series(x.as_data());
 }
 
-auto evaluator::eval(const ast::format_expr& x) -> multi_series {
+template <>
+auto evaluator::eval(const ast::format_expr<blob>& x) -> multi_series {
+  if (x.segments.size() > 1) {
+    diagnostic::warning("format strings for `blob` are not implemented")
+      .primary(x.loc)
+      .emit(ctx_);
+    return series::null(blob_type{}, length_);
+  }
+  auto b = type_to_arrow_builder_t<blob_type>{};
+  check(b.Reserve(length_));
+  auto row_bob = blob{};
+  for (auto i = int64_t{0}; i < length_; ++i) {
+    if (auto* s = try_as<blob>(x.segments.front())) {
+      const auto* data = reinterpret_cast<const char*>(s->data());
+      check(b.Append(std::string_view{data, data + s->size()}));
+    } else {
+      diagnostic::warning("format strings for `blob` are not implemented")
+        .primary(x.loc)
+        .emit(ctx_);
+      check(b.AppendNull());
+    }
+  }
+  return series{blob_type{}, finish(b)};
+}
+
+template <>
+auto evaluator::eval(const ast::format_expr<std::string>& x) -> multi_series {
   auto cols = std::vector<variant<std::string, basic_series<string_type>>>{};
   cols.reserve(x.segments.size());
   for (auto& s : x.segments) {
@@ -537,7 +563,7 @@ auto evaluator::eval(const ast::format_expr& x) -> multi_series {
       [&](const std::string& s) {
         cols.emplace_back(s);
       },
-      [&](const ast::format_expr::replacement& r) {
+      [&](const ast::format_expr<std::string>::replacement& r) {
         auto arr = cols.emplace_back(
           to_string(eval(r.expr), r.expr.get_location(), ctx_));
       });

@@ -165,7 +165,10 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       const auto start = current;
       success = p.parse(current, content.end(), kind);
       if (success) {
-        if (kind == tk::string_begin) {
+        const auto starts_string
+          = kind == tk::string_begin or kind == tk::raw_string_begin
+            or kind == tk::blob_begin or kind == tk::raw_blob_begin;
+        if (starts_string) {
           stack.emplace(in_string{std::count(start, current, '#')});
         } else if (not stack.empty()) {
           auto& rep = as<in_replacement>(stack.top());

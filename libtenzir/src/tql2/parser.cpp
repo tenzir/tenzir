@@ -508,24 +508,73 @@ public:
     return expr;
   }
 
-  auto parse_format_expr() -> ast::format_expr {
-    auto r = ast::format_expr{};
-    r.loc = expect(tk::string_begin).location;
+  template <concepts::one_of<std::string, blob> Type>
+  auto parse_format_expr() -> ast::format_expr<Type> {
+    auto r = ast::format_expr<Type>{};
+    constexpr static auto is_string = std::same_as<Type, std::string>;
+    constexpr static auto begin_token
+      = is_string ? tk::string_begin : tk::blob_begin;
+    constexpr static auto raw_begin_token
+      = is_string ? tk::raw_string_begin : tk::raw_blob_begin;
+    const auto begin = [&]() {
+      if (peek(begin_token)) {
+        return std::pair{accept(begin_token), begin_token};
+      }
+      if (peek(raw_begin_token)) {
+        return std::pair{accept(raw_begin_token), raw_begin_token};
+      }
+      throw_token();
+    }();
+    r.loc = begin.first.location;
     while (true) {
       if (auto end = accept(tk::closing_quote)) {
         r.loc.end = end.location.end;
         return r;
       } else if (auto chars = accept(tk::char_seq)) {
-        r.segments.emplace_back(
-          unescape_string(located{chars.text, chars.location}));
+        switch (begin.second) {
+          case begin_token: {
+            if constexpr (is_string) {
+              r.segments.emplace_back(
+                unescape_string(located{chars.text, chars.location}));
+            } else {
+              r.segments.emplace_back(
+                unescape_blob(located{chars.text, chars.location}));
+            }
+            break;
+          }
+          case raw_begin_token: {
+            if constexpr (is_string) {
+              if (not arrow::util::ValidateUTF8(chars.text)) {
+                // TODO: Would be nice to report the actual error location.
+                diagnostic::error("string contains invalid utf-8")
+                  // TODO: Maybe this should include the quotes... sometimes
+                  .primary(chars.location)
+                  // TODO: This hint would be helpful, but we cannot support it
+                  // .hint("consider using a blob instead: b{}", token.text)
+                  .throw_();
+              }
+              r.segments.emplace_back(std::in_place_type<std::string>,
+                                      chars.text);
+            } else {
+              const auto data
+                = reinterpret_cast<const std::byte*>(chars.text.data());
+              r.segments.emplace_back(std::in_place_type<blob>, data,
+                                      data + chars.text.size());
+            }
+            break;
+          }
+          default:
+            TENZIR_UNREACHABLE();
+        }
       } else if (auto fmt = accept(tk::fmt_begin)) {
         r.segments.emplace_back(
-          std::in_place_type<ast::format_expr::replacement>,
+          std::in_place_type<typename ast::format_expr<Type>::replacement>,
           parse_expression());
         expect(tk::fmt_end);
       } else {
         TENZIR_ASSERT(eoi());
-        diagnostic::error("non-terminated string literal")
+        diagnostic::error("non-terminated {} literal",
+                          type_kind{tag_v < data_to_type_t<Type>})
           .secondary(r.loc)
           .primary(next_location())
           .throw_();
@@ -540,8 +589,11 @@ public:
       expect(tk::rpar);
       return result;
     }
-    if (peek(tk::string_begin)) {
-      return parse_format_expr();
+    if (peek(tk::string_begin) or peek(tk::raw_string_begin)) {
+      return parse_format_expr<std::string>();
+    }
+    if (peek(tk::blob_begin) or peek(tk::raw_blob_begin)) {
+      return parse_format_expr<blob>();
     }
     if (auto constant = accept_constant()) {
       return std::move(*constant);
@@ -873,7 +925,7 @@ public:
         return result.as_identifier();
       }
       if (peek(tk::string_begin) or peek(tk::raw_string_begin)) {
-        auto v = parse_format_expr();
+        auto v = parse_format_expr<std::string>();
         // TODO: This should be const_eval'ed later.
         auto r = const_eval(v, diag_);
         if (not r) {

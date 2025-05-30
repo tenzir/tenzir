@@ -182,13 +182,13 @@ struct root_field {
   }
 };
 
+template <concepts::one_of<std::string, blob> Type>
 struct format_expr;
 
-using expression_kinds
-  = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
-                      constant, field_access, index_expr, binary_expr,
-                      unary_expr, function_call, lambda_expr, underscore,
-                      unpack, assignment, dollar_var, format_expr>;
+using expression_kinds = detail::type_list<
+  record, list, meta, this_, root_field, pipeline_expr, constant, field_access,
+  index_expr, binary_expr, unary_expr, function_call, lambda_expr, underscore,
+  unpack, assignment, dollar_var, format_expr<std::string>, format_expr<blob>>;
 
 using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
@@ -773,6 +773,7 @@ struct pipeline_expr {
   }
 };
 
+template <concepts::one_of<std::string, blob> Type>
 struct format_expr {
   struct replacement {
     ast::expression expr;
@@ -781,7 +782,7 @@ struct format_expr {
       return f.apply(x.expr);
     }
   };
-  using segment = variant<std::string, replacement>;
+  using segment = variant<Type, replacement>;
   std::vector<segment> segments;
   location loc;
 
@@ -994,14 +995,15 @@ protected:
     TENZIR_UNUSED(x);
   }
 
-  void enter(ast::format_expr& x) {
+  template <concepts::one_of<std::string, blob> Type>
+  void enter(ast::format_expr<Type>& x) {
     for (auto& s : x.segments) {
       tenzir::match(
         s,
-        [&](const std::string&) {
+        [&](const Type&) {
           // noop
         },
-        [&](ast::format_expr::replacement& r) {
+        [&](ast::format_expr<Type>::replacement& r) {
           go(r.expr);
         });
     }
