@@ -5,4 +5,4 @@ authors: dominiklohmann
 pr: 1330
 ---
 
-VAST now requires [{fmt} >= 5.2.1](https://fmt.dev) to be installed.
+VAST now requires [fmt >= 5.2.1](https://fmt.dev) to be installed.
