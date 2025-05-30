@@ -1,5 +1,5 @@
 ---
-title: "Support \r\n-style newlines in VAST"
+title: "Support `\r\n`-style newlines in VAST"
 type: feature
 authors: lava
 pr: 865
