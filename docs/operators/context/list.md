@@ -1,6 +1,6 @@
 ---
 title: list
-category: Packages
+category: Contexts, Packages
 example: 'context::list'
 ---
 
