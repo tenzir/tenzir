@@ -1,7 +1,8 @@
 ---
 title: file_name
+category: String/Filesystem
+example: 'file_name("/path/to/log.json")'
 ---
-
 Extracts the file name from a file path.
 
 ```tql

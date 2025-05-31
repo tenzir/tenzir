@@ -1,8 +1,8 @@
-
 ---
 title: activity
+category: Pipelines
+example: 'pipeline::activity range=1d, interval=1h'
 ---
-
 Summarizes the activity of pipelines.
 
 ```tql
@@ -32,27 +32,27 @@ needs to cleanly divide `range`.
 
 ### `tenzir.activity`
 
-|Field|Type|Description|
-|:-|:-|:-|
-|`first`|`time`|The time of the first throughput rate in the lists below.|
-|`last`|`time`|The time of the last throughput rate in the lists below.|
-|`pipelines`|`list<record>`|The activity for individual pipelines.|
+| Field       | Type           | Description                                               |
+| :---------- | :------------- | :-------------------------------------------------------- |
+| `first`     | `time`         | The time of the first throughput rate in the lists below. |
+| `last`      | `time`         | The time of the last throughput rate in the lists below.  |
+| `pipelines` | `list<record>` | The activity for individual pipelines.                    |
 
 The records in `pipelines` have the following schema:
 
-|Field|Type|Description|
-|:-|:-|:-|
-|`id`|`string`|The ID uniquely identifying the pipeline this activity belongs to.|
-|`ingress`|`record`|The activity at the source of the pipeline.|
-|`egress`|`record`|The activity at the destination of the pipeline.|
+| Field     | Type     | Description                                                        |
+| :-------- | :------- | :----------------------------------------------------------------- |
+| `id`      | `string` | The ID uniquely identifying the pipeline this activity belongs to. |
+| `ingress` | `record` | The activity at the source of the pipeline.                        |
+| `egress`  | `record` | The activity at the destination of the pipeline.                   |
 
 The records `ingress` and `egress` have the following schema:
 
-|Field|Type|Description|
-|:-|:-|:-|
-|`internal`|`bool`|Whether this end of the pipeline is considered internal.|
-|`bytes`|`uint64`|The total number of bytes over the range.|
-|`rates`|`list<uint64>`|The throughput in bytes/second over time.|
+| Field      | Type           | Description                                              |
+| :--------- | :------------- | :------------------------------------------------------- |
+| `internal` | `bool`         | Whether this end of the pipeline is considered internal. |
+| `bytes`    | `uint64`       | The total number of bytes over the range.                |
+| `rates`    | `list<uint64>` | The throughput in bytes/second over time.                |
 
 You can derive the time associated with a given throughput rate with the formula
 `first + index*interval`, except the last value, which is associated with

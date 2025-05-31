@@ -1,7 +1,8 @@
 ---
 title: write_xsv
+category: Printing
+example: 'write_xsv'
 ---
-
 Transforms event stream to XSV byte stream.
 
 ```tql

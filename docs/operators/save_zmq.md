@@ -1,7 +1,8 @@
 ---
 title: save_zmq
+category: Outputs/Bytes
+example: 'save_zmq'
 ---
-
 Sends bytes as ZeroMQ messages.
 
 ```tql

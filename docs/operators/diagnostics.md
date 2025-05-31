@@ -1,7 +1,8 @@
 ---
 title: diagnostics
+category: Node/Inspection
+example: 'diagnostics'
 ---
-
 Retrieves diagnostic events from a Tenzir node.
 
 ```tql

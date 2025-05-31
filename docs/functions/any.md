@@ -1,7 +1,8 @@
 ---
 title: any
+category: Aggregation
+example: 'any([true,false,true])'
 ---
-
 Computes the disjunction (OR) of all grouped boolean values.
 
 ```tql

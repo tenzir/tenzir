@@ -1,7 +1,8 @@
 ---
 title: write_ndjson
+category: Printing
+example: 'write_ndjson'
 ---
-
 Transforms the input event stream to a Newline-Delimited JSON byte stream.
 
 ```tql

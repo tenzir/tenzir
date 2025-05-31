@@ -1,7 +1,8 @@
 ---
 title: write_lines
+category: Printing
+example: 'write_lines'
 ---
-
 Writes events as key-value pairsthe *values* of an event.
 
 ```tql

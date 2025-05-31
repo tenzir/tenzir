@@ -1,7 +1,8 @@
 ---
 title: count_distinct
+category: Aggregation
+example: 'count_distinct([1,2,2,3])'
 ---
-
 Counts all distinct non-null grouped values.
 
 ```tql

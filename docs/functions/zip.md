@@ -1,7 +1,8 @@
 ---
 title: zip
+category: List
+example: 'zip(xs, ys)'
 ---
-
 Combines two lists into a list of pairs.
 
 ```tql

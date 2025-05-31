@@ -1,7 +1,8 @@
 ---
 title: save_azure_blob_storage
+category: Outputs/Bytes
+example: 'save_azure_blob_storage "abfs://container/file"'
 ---
-
 Saves bytes to Azure Blob Storage.
 
 ```tql

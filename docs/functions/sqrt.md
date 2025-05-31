@@ -1,7 +1,8 @@
 ---
 title: sqrt
+category: Math
+example: 'sqrt(49)'
 ---
-
 Computes the square root of a number.
 
 ```tql

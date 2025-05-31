@@ -1,7 +1,8 @@
 ---
 title: remove
+category: Contexts
+example: 'package::remove "suricata-ocsf"'
 ---
-
 Uninstalls a package.
 
 ```tql

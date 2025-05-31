@@ -1,7 +1,8 @@
 ---
 title: load_udp
+category: Inputs/Bytes
+example: 'load_udp "0.0.0.0:8090"'
 ---
-
 Loads bytes from a UDP socket.
 
 ```tql

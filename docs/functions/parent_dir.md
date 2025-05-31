@@ -1,7 +1,8 @@
 ---
 title: parent_dir
+category: String/Filesystem
+example: 'parent_dir("/path/to/log.json")'
 ---
-
 Extracts the parent directory from a file path.
 
 ```tql

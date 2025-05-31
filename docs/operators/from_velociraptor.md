@@ -1,7 +1,8 @@
 ---
 title: from_velociraptor
+category: Inputs/Events
+example: 'from_velociraptor subscribe="Windows"'
 ---
-
 Submits VQL to a Velociraptor server and returns the response as events.
 
 ```tql

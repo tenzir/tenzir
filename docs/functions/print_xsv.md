@@ -1,7 +1,8 @@
 ---
 title: print_xsv
+category: Printing
+example: 'record.print_tsv()'
 ---
-
 Prints a record as a delimited sequence of values.
 
 ```tql

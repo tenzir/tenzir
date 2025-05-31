@@ -1,7 +1,8 @@
 ---
 title: bit_or
+category: Bit Operations
+example: 'bit_or(lhs, rhs)'
 ---
-
 Computes the bit-wise OR of its arguments.
 
 ```tql

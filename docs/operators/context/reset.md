@@ -1,7 +1,8 @@
 ---
 title: reset
+category: Contexts
+example: 'context::reset "ctx"'
 ---
-
 Resets a context.
 
 ```tql

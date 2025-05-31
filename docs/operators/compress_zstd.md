@@ -1,7 +1,8 @@
 ---
 title: compress_zstd
+category: Encode & Decode
+example: 'compress_zstd, level=6'
 ---
-
 Compresses a stream of bytes using zstd compression.
 
 ```tql

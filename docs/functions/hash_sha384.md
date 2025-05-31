@@ -1,7 +1,8 @@
 ---
 title: hash_sha384
+category: Hashing
+example: 'hash_sha384("foo")'
 ---
-
 Computes a SHA-384 hash digest.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: select
+category: Modify
+example: 'select name, id=metadata.id'
 ---
-
 Selects some values and discards the rest.
 
 ```tql

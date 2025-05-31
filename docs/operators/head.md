@@ -1,7 +1,8 @@
 ---
 title: head
+category: Filter
+example: 'head 20'
 ---
-
 Limits the input to the first `n` events.
 
 ```tql

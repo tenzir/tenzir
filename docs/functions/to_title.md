@@ -1,7 +1,8 @@
 ---
 title: to_title
+category: String/Transformation
+example: '"hello world".to_title()'
 ---
-
 Converts a string to title case.
 
 ```tql

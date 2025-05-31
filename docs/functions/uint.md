@@ -1,7 +1,8 @@
 ---
 title: uint
+category: Type System/Conversion
+example: 'uint(4.2)'
 ---
-
 Casts an expression to an unsigned integer.
 
 ```tql

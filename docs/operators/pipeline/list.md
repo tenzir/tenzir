@@ -1,7 +1,8 @@
 ---
 title: list
+category: Packages
+example: 'pipeline::list'
 ---
-
 Shows managed pipelines.
 
 ```tql

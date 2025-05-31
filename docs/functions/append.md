@@ -1,7 +1,8 @@
 ---
 title: append
+category: List
+example: 'xs.append(y)'
 ---
-
 Inserts an element at the back of a list.
 
 ```tql

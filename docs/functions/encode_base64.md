@@ -1,7 +1,8 @@
 ---
 title: encode_base64
+category: Encoding
+example: 'encode_base64("Tenzir")'
 ---
-
 Encodes bytes as Base64.
 
 ```tql

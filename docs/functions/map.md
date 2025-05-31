@@ -1,7 +1,8 @@
 ---
 title: map
+category: List
+example: 'xs.map(x => x + 3)'
 ---
-
 Maps each list element to an expression.
 
 ```tql

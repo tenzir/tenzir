@@ -1,7 +1,8 @@
 ---
 title: hash_md5
+category: Hashing
+example: 'hash_md5("foo")'
 ---
-
 Computes an MD5 hash digest.
 
 ```tql

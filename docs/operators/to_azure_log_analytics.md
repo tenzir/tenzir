@@ -1,7 +1,8 @@
 ---
 title: to_azure_log_analytics
+category: Outputs/Events
+example: 'to_azure_log_analytics tenant_id="...", workspace_id="..."'
 ---
-
 Sends events to the [Microsoft Azure Logs Ingestion API][api].
 
 [api]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview

@@ -1,7 +1,8 @@
 ---
 title: cache
+category: Internals
+example: 'cache "w01wyhTZm3", ttl=10min'
 ---
-
 An in-memory cache shared between pipelines.
 
 ```tql

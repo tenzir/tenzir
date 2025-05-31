@@ -1,7 +1,8 @@
 ---
 title: decapsulate
+category: Networking
+example: 'decapsulate(this)'
 ---
-
 Decapsulates packet data at link, network, and transport layer.
 
 ```tql

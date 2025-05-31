@@ -1,7 +1,8 @@
 ---
 title: save
+category: Contexts
+example: 'context::save "ctx"'
 ---
-
 Saves context state.
 
 ```tql

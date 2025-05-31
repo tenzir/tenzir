@@ -1,7 +1,8 @@
 ---
 title: hash_sha256
+category: Hashing
+example: 'hash_sha256("foo")'
 ---
-
 Computes a SHA-256 hash digest.
 
 ```tql
