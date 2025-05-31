@@ -13,11 +13,7 @@
 #include "tenzir/endpoint.hpp"
 #include "tenzir/series_builder.hpp"
 
-#if __has_include("boost/process.hpp")
-#  include <boost/process.hpp>
-#else
-#  include <boost/process/v2.hpp>
-#endif
+#include <boost/process/v2/process.hpp>
 
 #include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>

@@ -37,6 +37,7 @@
 #include "tenzir/version.hpp"
 
 #include <boost/asio/execution_context.hpp>
+#include <boost/process/v2/environment.hpp>
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
