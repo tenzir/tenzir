@@ -3,6 +3,7 @@ title: detach
 category: Pipelines
 example: 'pipeline::detach { … }'
 ---
+
 Starts a pipeline in the node.
 
 ```tql

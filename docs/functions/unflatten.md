@@ -3,6 +3,7 @@ title: unflatten
 category: Type System/Transposition
 example: 'unflatten(this)'
 ---
+
 Unflattens nested data.
 
 ```tql

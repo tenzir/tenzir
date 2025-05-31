@@ -3,6 +3,7 @@ title: is_upper
 category: String/Inspection
 example: '"HELLO".is_upper()'
 ---
+
 Checks if a string is in uppercase.
 
 ```tql

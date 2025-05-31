@@ -3,6 +3,7 @@ title: repeat
 category: Flow Control
 example: 'repeat 100'
 ---
+
 Repeats the input a number of times.
 
 ```tql

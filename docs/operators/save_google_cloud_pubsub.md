@@ -3,6 +3,7 @@ title: save_google_cloud_pubsub
 category: Outputs/Bytes
 example: 'save_google_cloud_pubsub project_id="my-project"'
 ---
+
 Publishes to a Google Cloud Pub/Sub topic.
 
 ```tql

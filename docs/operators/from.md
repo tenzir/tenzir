@@ -3,6 +3,7 @@ title: from
 category: Inputs/Events
 example: 'from "data.json"'
 ---
+
 Obtains events from an URI, inferring the source, compression and format.
 
 ```tql

@@ -3,6 +3,7 @@ title: write_tql
 category: Printing
 example: 'write_tql'
 ---
+
 Transforms the input event stream to a TQL notation byte stream.
 
 ```tql

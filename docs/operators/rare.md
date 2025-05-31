@@ -3,6 +3,7 @@ title: rare
 category: Analyze
 example: 'rare auth.token'
 ---
+
 Shows the least common values.
 
 ```tql

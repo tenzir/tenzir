@@ -3,6 +3,7 @@ title: is_lower
 category: String/Inspection
 example: '"hello".is_lower()'
 ---
+
 Checks if a string is in lowercase.
 
 ```tql

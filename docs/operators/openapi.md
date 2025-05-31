@@ -3,6 +3,7 @@ title: openapi
 category: Node/Inspection
 example: 'openapi'
 ---
+
 Shows the node's OpenAPI specification.
 
 ```tql

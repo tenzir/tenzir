@@ -3,6 +3,7 @@ title: max
 category: Aggregation
 example: 'max([1,2,3])'
 ---
+
 Computes the maximum of all grouped values.
 
 ```tql

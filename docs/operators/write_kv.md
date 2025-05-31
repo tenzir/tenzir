@@ -3,6 +3,7 @@ title: write_kv
 category: Printing
 example: 'write_kv'
 ---
+
 Writes events in a Key-Value format.
 
 ```tql

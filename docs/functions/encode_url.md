@@ -3,6 +3,7 @@ title: encode_url
 category: Encoding
 example: 'encode_url("Hello World")'
 ---
+
 Encodes strings using URL encoding.
 
 ```tql

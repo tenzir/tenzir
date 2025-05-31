@@ -3,6 +3,7 @@ title: mean
 category: Aggregation
 example: 'mean([1,2,3])'
 ---
+
 Computes the mean of all grouped values.
 
 ```tql

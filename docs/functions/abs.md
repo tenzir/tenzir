@@ -3,6 +3,7 @@ title: abs
 category: Math
 example: 'abs(-42)'
 ---
+
 Returns the absolute value.
 
 ```tql

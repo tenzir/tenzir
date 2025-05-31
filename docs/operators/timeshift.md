@@ -3,6 +3,7 @@ title: timeshift
 category: Modify
 example: 'timeshift ts, start=2020-01-01'
 ---
+
 Adjusts timestamps relative to a given start time, with an optional speedup.
 
 ```tql

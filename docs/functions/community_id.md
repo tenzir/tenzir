@@ -3,6 +3,7 @@ title: community_id
 category: Networking
 example: 'community_id(src_ip=1.2.3.4, dst_ip=4.5.6.7, proto="tcp")'
 ---
+
 Computes the Community ID for a network connection/flow.
 
 ```tql

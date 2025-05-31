@@ -3,6 +3,7 @@ title: yara
 category: Detection
 example: 'yara "/path/to/rules", blockwise=true'
 ---
+
 Executes YARA rules on byte streams.
 
 ```tql
@@ -83,7 +84,7 @@ due to memory locality when using `mmap`.
 
 Let's unpack a concrete example:
 
-```yara
+```
 rule test {
   meta:
     string = "string meta data"

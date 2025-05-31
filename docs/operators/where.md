@@ -3,6 +3,7 @@ title: where
 category: Filter
 example: 'where name.starts_with("John")'
 ---
+
 Keeps only events for which the given predicate is true.
 
 ```tql

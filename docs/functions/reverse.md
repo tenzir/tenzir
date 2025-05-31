@@ -3,6 +3,7 @@ title: reverse
 category: String/Transformation
 example: '"hello".reverse()'
 ---
+
 Reverses the characters of a string.
 
 ```tql

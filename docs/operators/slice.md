@@ -3,6 +3,7 @@ title: slice
 category: Filter
 example: 'slice begin=10, end=30'
 ---
+
 Keeps a range of events within the interval `[begin, end)` stepping by `stride`.
 
 ```tql

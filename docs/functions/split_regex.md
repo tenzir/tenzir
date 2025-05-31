@@ -3,6 +3,7 @@ title: split_regex
 category: String/Transformation
 example: 'split_regex("a1b2c", r"\d")'
 ---
+
 Splits a string into substrings with a regex.
 
 ```tql

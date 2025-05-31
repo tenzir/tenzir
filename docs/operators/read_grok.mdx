@@ -3,6 +3,7 @@ title: read_grok
 category: Parsing
 example: 'read_grok "%{IP:client} %{WORD:action}"'
 ---
+
 ```tql
 read_grok pattern:string, [pattern_definitions=record|string, indexed_captures=bool,
           include_unnamed=bool, schema=string, selector=string,

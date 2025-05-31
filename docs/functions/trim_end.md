@@ -3,6 +3,7 @@ title: trim_end
 category: String/Transformation
 example: '"hello ".trim_end()'
 ---
+
 Trims whitespace from the end of a string.
 
 ```tql

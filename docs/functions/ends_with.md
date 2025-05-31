@@ -3,6 +3,7 @@ title: ends_with
 category: String/Inspection
 example: '"hello".ends_with("lo")'
 ---
+
 Checks if a string ends with a specified substring.
 
 ```tql

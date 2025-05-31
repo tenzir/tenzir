@@ -3,6 +3,7 @@ title: reverse
 category: Analyze
 example: 'reverse'
 ---
+
 Reverses the event order.
 
 ```tql

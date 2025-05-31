@@ -3,6 +3,7 @@ title: read_pcap
 category: Parsing
 example: 'read_pcap'
 ---
+
 Reads raw network packets in [PCAP][pcap-rfc] file format.
 
 [pcap-rfc]: https://datatracker.ietf.org/doc/id/draft-gharris-opsawg-pcap-00.html

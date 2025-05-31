@@ -3,6 +3,7 @@ title: merge
 category: Record
 example: 'merge(foo, bar)'
 ---
+
 Combines two records into a single record by merging their fields.
 
 ```tql

@@ -3,6 +3,7 @@ title: save_stdout
 category: Outputs/Bytes
 example: 'save_stdout'
 ---
+
 Writes a byte stream to standard output.
 
 ```tql

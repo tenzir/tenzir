@@ -3,6 +3,7 @@ title: to
 category: Outputs/Events
 example: 'to "output.json"'
 ---
+
 Saves to an URI, inferring the destination, compression and format.
 
 ```tql

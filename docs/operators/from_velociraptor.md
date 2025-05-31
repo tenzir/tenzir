@@ -3,6 +3,7 @@ title: from_velociraptor
 category: Inputs/Events
 example: 'from_velociraptor subscribe="Windows"'
 ---
+
 Submits VQL to a Velociraptor server and returns the response as events.
 
 ```tql
@@ -108,11 +109,13 @@ To use profiles, edit your `velociraptor.yaml` configuration like this, where
 ---
 title: before
 ---
+
 <config>
 
 ---
 title: after
 ---
+
 profiles:
   <profile>:
     <config>

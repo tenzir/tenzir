@@ -3,6 +3,7 @@ title: format_time
 category: Time & Date
 example: 'ts.format_time("%d/ %m/%Y")'
 ---
+
 Formats a time into a string that follows a specific format.
 
 ```tql

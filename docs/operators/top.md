@@ -3,6 +3,7 @@ title: top
 category: Analyze
 example: 'top user'
 ---
+
 Shows the most common values. The dual to [`rare`](/reference/operators/rare).
 
 ```tql

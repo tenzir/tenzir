@@ -3,6 +3,7 @@ title: flatten
 category: Type System/Transposition
 example: 'flatten(this)'
 ---
+
 Flattens nested data.
 
 ```tql

@@ -3,6 +3,7 @@ title: load_file
 category: Inputs/Bytes
 example: 'load_file "/tmp/data.json"'
 ---
+
 Loads the contents of the file at `path` as a byte stream.
 
 ```tql

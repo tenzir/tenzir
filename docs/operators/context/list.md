@@ -3,6 +3,7 @@ title: list
 category: Packages
 example: 'context::list'
 ---
+
 Lists all contexts
 
 ```tql

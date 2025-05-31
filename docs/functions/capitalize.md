@@ -3,6 +3,7 @@ title: capitalize
 category: String/Transformation
 example: '"hello".capitalize()'
 ---
+
 Capitalizes the first character of a string.
 
 ```tql

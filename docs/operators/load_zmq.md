@@ -3,6 +3,7 @@ title: load_zmq
 category: Inputs/Bytes
 example: 'load_zmq'
 ---
+
 Receives ZeroMQ messages.
 
 ```tql

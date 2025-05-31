@@ -3,6 +3,7 @@ title: metrics
 category: Node/Inspection
 example: 'metrics "cpu"'
 ---
+
 Retrieves metrics events from a Tenzir node.
 
 ```tql

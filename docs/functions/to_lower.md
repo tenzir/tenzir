@@ -3,6 +3,7 @@ title: to_lower
 category: String/Transformation
 example: '"HELLO".to_lower()'
 ---
+
 Converts a string to lowercase.
 
 ```tql

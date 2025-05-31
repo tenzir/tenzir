@@ -3,6 +3,7 @@ title: compress_lz4
 category: Encode & Decode
 example: 'compress_lz4, level=7'
 ---
+
 Compresses a stream of bytes using lz4 compression.
 
 ```tql

@@ -3,6 +3,7 @@ title: decode_hex
 category: Decoding
 example: 'decode_hex("4e6f6E6365")'
 ---
+
 Decodes bytes from their hexadecimal representation.
 
 ```tql

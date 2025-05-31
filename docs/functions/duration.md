@@ -3,6 +3,7 @@ title: duration
 category: Type System/Conversion
 example: 'duration("1.34w")'
 ---
+
 Casts an expression to a duration value.
 
 ```tql

@@ -3,6 +3,7 @@ title: float
 category: Type System/Conversion
 example: 'float(42)'
 ---
+
 Casts an expression to a float.
 
 ```tql

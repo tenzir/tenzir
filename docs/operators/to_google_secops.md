@@ -3,6 +3,7 @@ title: to_google_secops
 category: Outputs/Events
 example: 'to_google_secops …'
 ---
+
 Sends unstructured events to a Google SecOps Chronicle instance.
 
 ```tql

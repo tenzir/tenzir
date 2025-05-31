@@ -3,6 +3,7 @@ title: load_balance
 category: Flow Control
 example: 'load_balance $over { publish $over }'
 ---
+
 Routes the data to one of multiple subpipelines.
 
 ```tql

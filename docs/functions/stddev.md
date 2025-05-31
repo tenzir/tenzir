@@ -3,6 +3,7 @@ title: stddev
 category: Aggregation
 example: 'stddev([1,2,3])'
 ---
+
 Computes the standard deviation of all grouped values.
 
 ```tql

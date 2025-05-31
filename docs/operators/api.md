@@ -3,6 +3,7 @@ title: api
 category: Internals
 example: 'api "/pipeline/list"'
 ---
+
 Use Tenzir's REST API directly from a pipeline.
 
 ```tql

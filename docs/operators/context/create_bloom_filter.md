@@ -3,6 +3,7 @@ title: create_bloom_filter
 category: Contexts
 example: 'context::create_bloom_filter "ctx", capacity=1Mi, fp_probability=0.01'
 ---
+
 Creates a Bloom filter context.
 
 ```tql

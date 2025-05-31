@@ -3,6 +3,7 @@ title: length_chars
 category: String/Inspection
 example: '"hello".length_chars()'
 ---
+
 Returns the length of a string in characters.
 
 ```tql

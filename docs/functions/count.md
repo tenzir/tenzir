@@ -3,6 +3,7 @@ title: count
 category: Aggregation
 example: 'count([1,2,null])'
 ---
+
 Counts the events or non-null grouped values.
 
 ```tql

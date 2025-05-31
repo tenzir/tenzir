@@ -3,6 +3,7 @@ title: variance
 category: Aggregation
 example: 'variance([1,2,3])'
 ---
+
 Computes the variance of all grouped values.
 
 ```tql

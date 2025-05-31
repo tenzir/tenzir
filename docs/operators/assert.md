@@ -3,6 +3,7 @@ title: assert
 category: Filter
 example: 'assert name.starts_with("John")'
 ---
+
 Drops event and emits a warning if the invariant is violated.
 
 ```tql

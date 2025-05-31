@@ -3,6 +3,7 @@ title: decompress
 category: Encode & Decode
 example: 'decompress "gzip"'
 ---
+
 Decompresses a stream of bytes.
 
 ```tql

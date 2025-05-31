@@ -3,6 +3,7 @@ title: parse_time
 category: Time & Date
 example: '"10/11/2012".parse_time("%d/%m/%Y")'
 ---
+
 Parses a time from a string that follows a specific format.
 
 ```tql

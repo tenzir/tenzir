@@ -3,6 +3,7 @@ title: from_epoch
 category: Time & Date
 example: 'from_epoch(time_ms * 1ms)'
 ---
+
 Interprets a duration as Unix time.
 
 ```tql

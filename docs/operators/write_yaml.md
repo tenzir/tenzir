@@ -3,6 +3,7 @@ title: write_yaml
 category: Printing
 example: 'write_yaml'
 ---
+
 Transforms the input event stream to YAML byte stream.
 
 ```tql

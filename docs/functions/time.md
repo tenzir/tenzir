@@ -3,6 +3,7 @@ title: time
 category: Type System/Conversion
 example: 'time("2020-03-15")'
 ---
+
 Casts an expression to a time value.
 
 ```tql

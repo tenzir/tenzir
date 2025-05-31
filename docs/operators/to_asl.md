@@ -3,6 +3,7 @@ title: to_asl
 category: Outputs/Events
 example: 'to_asl "s3://…"'
 ---
+
 Sends events to [Amazon Security Lake (ASL)][asl].
 
 [asl]: https://aws.amazon.com/security-lake/

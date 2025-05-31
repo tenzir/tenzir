@@ -3,6 +3,7 @@ title: has
 category: Record
 example: 'record.has("field")'
 ---
+
 Checks whether a record has a specified field.
 
 ```tql

@@ -3,6 +3,7 @@ title: is_alnum
 category: String/Inspection
 example: '"hello123".is_alnum()'
 ---
+
 Checks if a string is alphanumeric.
 
 ```tql
