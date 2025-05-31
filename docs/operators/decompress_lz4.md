@@ -3,6 +3,7 @@ title: decompress_lz4
 category: Encode & Decode
 example: 'decompress_lz4'
 ---
+
 Decompresses a stream of bytes in the Lz4 format.
 
 ```tql

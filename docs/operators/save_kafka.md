@@ -3,6 +3,7 @@ title: save_kafka
 category: Outputs/Bytes
 example: 'save_kafka topic="example"'
 ---
+
 Saves a byte stream to a Apache Kafka topic.
 
 ```tql

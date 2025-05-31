@@ -3,6 +3,7 @@ title: encrypt_cryptopan
 category: Networking
 example: 'encrypt_cryptopan(1.2.3.4)'
 ---
+
 Encrypts an IP address via Crypto-PAn.
 
 ```tql

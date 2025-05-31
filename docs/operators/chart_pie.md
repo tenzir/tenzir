@@ -3,6 +3,7 @@ title: chart_pie
 category: Charts
 example: 'chart_pie …'
 ---
+
 Plots events on an pie chart.
 
 ```tql

@@ -3,6 +3,7 @@ title: write_json
 category: Printing
 example: 'write_json'
 ---
+
 Transforms the input event stream to a JSON byte stream.
 
 ```tql

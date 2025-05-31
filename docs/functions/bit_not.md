@@ -3,6 +3,7 @@ title: bit_not
 category: Bit Operations
 example: 'bit_not(x)'
 ---
+
 Computes the bit-wise NOT of its argument.
 
 ```tql

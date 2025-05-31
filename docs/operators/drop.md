@@ -3,6 +3,7 @@ title: drop
 category: Modify
 example: 'drop name, metadata.id'
 ---
+
 Removes fields from the event.
 
 ```tql

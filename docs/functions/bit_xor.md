@@ -3,6 +3,7 @@ title: bit_xor
 category: Bit Operations
 example: 'bit_xor(lhs, rhs)'
 ---
+
 Computes the bit-wise XOR of its arguments.
 
 ```tql

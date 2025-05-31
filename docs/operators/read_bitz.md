@@ -3,6 +3,7 @@ title: read_bitz
 category: Parsing
 example: 'read_bitz'
 ---
+
 Parses bytes as *BITZ* format.
 
 ```tql

@@ -3,6 +3,7 @@ title: int
 category: Type System/Conversion
 example: 'int(-4.2)'
 ---
+
 Casts an expression to an integer.
 
 ```tql

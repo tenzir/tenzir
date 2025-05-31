@@ -3,6 +3,7 @@ title: hash_xxh3
 category: Hashing
 example: 'hash_xxh3("foo")'
 ---
+
 Computes an XXH3 hash digest.
 
 ```tql

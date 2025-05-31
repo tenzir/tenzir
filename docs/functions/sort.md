@@ -3,6 +3,7 @@ title: sort
 category: List, Record
 example: 'xs.sort()'
 ---
+
 Sorts lists and record fields.
 
 ```tql

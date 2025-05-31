@@ -3,6 +3,7 @@ title: local
 category: Internals
 example: 'local { sort foo }'
 ---
+
 Forces a pipeline to run locally.
 
 ```tql

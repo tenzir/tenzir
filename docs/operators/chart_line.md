@@ -3,6 +3,7 @@ title: chart_line
 category: Charts
 example: 'chart_line …'
 ---
+
 Plots events on an line chart.
 
 ```tql

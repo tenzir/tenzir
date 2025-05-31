@@ -3,6 +3,7 @@ title: second
 category: Time & Date
 example: 'ts.second()'
 ---
+
 Extracts the second component from a timestamp with subsecond precision.
 
 ```tql

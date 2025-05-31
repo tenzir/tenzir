@@ -3,6 +3,7 @@ title: enrich
 category: Contexts
 example: 'context::enrich "ctx", key=x'
 ---
+
 Resets data with a context.
 
 ```tql

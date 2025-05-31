@@ -3,6 +3,7 @@ title: summarize
 category: Analyze
 example: 'summarize name, sum(amount)'
 ---
+
 Groups events and applies aggregate functions to each group.
 
 ```tql

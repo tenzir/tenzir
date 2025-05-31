@@ -3,6 +3,7 @@ title: where
 category: List
 example: 'xs.where(x, x > 5)'
 ---
+
 Filters list elements based on a predicate.
 
 ```tql

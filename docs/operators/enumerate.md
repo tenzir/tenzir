@@ -3,6 +3,7 @@ title: enumerate
 category: Modify
 example: 'enumerate num'
 ---
+
 Add a field with the number of preceding events.
 
 ```tql

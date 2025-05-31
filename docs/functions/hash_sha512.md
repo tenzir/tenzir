@@ -3,6 +3,7 @@ title: hash_sha512
 category: Hashing
 example: 'hash_sha512("foo")'
 ---
+
 Computes a SHA-512 hash digest.
 
 ```tql

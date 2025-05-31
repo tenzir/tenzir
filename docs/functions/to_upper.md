@@ -3,6 +3,7 @@ title: to_upper
 category: String/Transformation
 example: '"hello".to_upper()'
 ---
+
 Converts a string to uppercase.
 
 ```tql

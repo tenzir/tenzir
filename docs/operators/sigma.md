@@ -3,6 +3,7 @@ title: sigma
 category: Detection
 example: 'sigma "/tmp/rules/"'
 ---
+
 Filter the input with [Sigma rules][sigma] and output matching events.
 
 [sigma]: https://github.com/SigmaHQ/sigma

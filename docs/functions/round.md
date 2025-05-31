@@ -3,6 +3,7 @@ title: round
 category: Math
 example: 'round(4.6)'
 ---
+
 Rounds a number or a time/duration with a specified unit.
 
 ```tql

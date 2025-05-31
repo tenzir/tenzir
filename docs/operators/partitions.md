@@ -3,6 +3,7 @@ title: partitions
 category: Node/Storage Engine
 example: 'partitions src_ip == 1.2.3.4'
 ---
+
 Retrieves metadata about events stored at a node.
 
 ```tql

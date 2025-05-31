@@ -3,6 +3,7 @@ title: get
 category: List, Record
 example: 'list.get(index, default)'
 ---
+
 Gets a field from a record or an element from a list
 
 ```tql

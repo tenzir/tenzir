@@ -3,6 +3,7 @@ title: create_geoip
 category: Contexts
 example: 'context::create_geoip "ctx", db_path="GeoLite2-City.mmdb"'
 ---
+
 Creates a GeoIP context.
 
 ```tql

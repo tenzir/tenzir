@@ -3,6 +3,7 @@ title: value_counts
 category: Aggregation
 example: 'value_counts([1,2,2,3])'
 ---
+
 Returns a list of all grouped values alongside their frequency.
 
 ```tql

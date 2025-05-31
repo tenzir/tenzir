@@ -3,6 +3,7 @@ title: save_gcs
 category: Outputs/Bytes
 example: 'save_gcs "gs://bucket/object.json"'
 ---
+
 Saves bytes to a Google Cloud Storage object.
 
 ```tql

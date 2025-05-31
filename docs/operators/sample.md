@@ -3,6 +3,7 @@ title: sample
 category: Filter
 example: 'sample 30s, max_samples=2k'
 ---
+
 Dynamically samples events from a event stream.
 
 ```tql

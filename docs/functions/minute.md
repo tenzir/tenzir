@@ -3,6 +3,7 @@ title: minute
 category: Time & Date
 example: 'ts.minute()'
 ---
+
 Extracts the minute component from a timestamp.
 
 ```tql

@@ -3,6 +3,7 @@ title: add
 category: Packages
 example: 'package::add "suricata-ocsf"'
 ---
+
 Installs a package.
 
 ```tql

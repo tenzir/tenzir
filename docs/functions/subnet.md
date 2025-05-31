@@ -3,6 +3,7 @@ title: subnet
 category: Type System/Conversion
 example: 'subnet("1.2.3.4/16")'
 ---
+
 Casts an expression to a subnet value.
 
 ```tql

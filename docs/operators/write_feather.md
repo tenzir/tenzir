@@ -3,6 +3,7 @@ title: write_feather
 category: Printing
 example: 'write_feather'
 ---
+
 Transforms the input event stream to Feather byte stream.
 
 ```tql

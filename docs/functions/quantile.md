@@ -3,6 +3,7 @@ title: quantile
 category: Aggregation
 example: 'quantile([1,2,3,4], q=0.5)'
 ---
+
 Computes the specified quantile of all grouped values.
 
 ```tql

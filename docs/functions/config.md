@@ -3,6 +3,7 @@ title: config
 category: Runtime
 example: 'config()'
 ---
+
 Reads Tenzir's configuration file.
 
 ```tql

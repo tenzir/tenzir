@@ -3,6 +3,7 @@ title: save_amqp
 category: Outputs/Bytes
 example: 'save_amqp'
 ---
+
 Saves a byte stream via AMQP messages.
 
 ```tql

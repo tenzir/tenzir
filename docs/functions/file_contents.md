@@ -3,6 +3,7 @@ title: file_contents
 category: String/Filesystem
 example: 'file_contents("/path/to/file")'
 ---
+
 Reads a file's contents.
 
 ```tql

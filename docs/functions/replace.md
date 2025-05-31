@@ -3,6 +3,7 @@ title: replace
 category: String/Transformation
 example: '"hello".replace("o", "a")'
 ---
+
 Replaces characters within a string.
 
 ```tql

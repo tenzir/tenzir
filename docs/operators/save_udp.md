@@ -3,6 +3,7 @@ title: save_udp
 category: Outputs/Bytes
 example: 'save_udp "0.0.0.0:8090"'
 ---
+
 Saves bytes to a UDP socket.
 
 ```tql

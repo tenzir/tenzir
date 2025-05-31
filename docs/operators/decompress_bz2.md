@@ -3,6 +3,7 @@ title: decompress_bz2
 category: Encode & Decode
 example: 'decompress_bz2'
 ---
+
 Decompresses a stream of bytes in the Bzip2 format.
 
 ```tql

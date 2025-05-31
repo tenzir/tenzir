@@ -3,6 +3,7 @@ title: decompress_zstd
 category: Encode & Decode
 example: 'decompress_zstd'
 ---
+
 Decompresses a stream of bytes in the Zstd format.
 
 ```tql

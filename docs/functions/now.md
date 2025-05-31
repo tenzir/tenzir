@@ -3,6 +3,7 @@ title: now
 category: Time & Date
 example: 'now()'
 ---
+
 Gets the current wallclock time.
 
 ```tql

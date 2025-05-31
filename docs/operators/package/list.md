@@ -3,6 +3,7 @@ title: list
 category: Packages
 example: 'package::list'
 ---
+
 Shows installed packages.
 
 ```tql

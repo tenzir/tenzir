@@ -3,6 +3,7 @@ title: save_file
 category: Outputs/Bytes
 example: 'save_file "/tmp/out.json"'
 ---
+
 Writes a byte stream to a file.
 
 ```tql

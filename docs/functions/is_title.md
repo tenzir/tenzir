@@ -3,6 +3,7 @@ title: is_title
 category: String/Inspection
 example: '"Hello World".is_title()'
 ---
+
 Checks if a string follows title case.
 
 ```tql

@@ -3,6 +3,7 @@ title: ip
 category: Type System/Conversion
 example: 'ip("1.2.3.4")'
 ---
+
 Casts an expression to an IP address.
 
 ```tql

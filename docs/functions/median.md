@@ -3,6 +3,7 @@ title: median
 category: Aggregation
 example: 'median([1,2,3,4])'
 ---
+
 Computes the approximate median of all grouped values using a t-digest algorithm.
 
 ```tql

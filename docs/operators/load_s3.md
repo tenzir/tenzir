@@ -3,6 +3,7 @@ title: load_s3
 category: Inputs/Bytes
 example: 'load_s3 "s3://my-bucket/obj.csv"'
 ---
+
 Loads from an Amazon S3 object.
 
 ```tql

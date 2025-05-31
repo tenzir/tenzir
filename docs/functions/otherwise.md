@@ -3,6 +3,7 @@ title: otherwise
 category: Aggregation
 example: 'x.otherwise(0)'
 ---
+
 Returns a `fallback` value if `primary` is `null`.
 
 ```tql

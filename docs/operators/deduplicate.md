@@ -3,6 +3,7 @@ title: deduplicate
 category: Filter
 example: 'deduplicate src_ip'
 ---
+
 Removes duplicate events based on a common key.
 
 ```tql

@@ -3,6 +3,7 @@ title: subscribe
 category: Connecting Pipelines
 example: 'subscribe "topic"'
 ---
+
 Subscribes to events from a channel with a topic.
 
 ```tql

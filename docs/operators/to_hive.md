@@ -3,6 +3,7 @@ title: to_hive
 category: Outputs/Events
 example: 'to_hive "s3://…", partition_by=[x]'
 ---
+
 Writes events to a URI using hive partitioning.
 
 ```tql

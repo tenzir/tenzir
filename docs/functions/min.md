@@ -3,6 +3,7 @@ title: min
 category: Aggregation
 example: 'min([1,2,3])'
 ---
+
 Computes the minimum of all grouped values.
 
 ```tql

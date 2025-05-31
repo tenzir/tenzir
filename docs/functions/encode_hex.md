@@ -3,6 +3,7 @@ title: encode_hex
 category: Encoding
 example: 'encode_hex("Tenzir")'
 ---
+
 Encodes bytes into their hexadecimal representation.
 
 ```tql

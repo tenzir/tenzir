@@ -3,6 +3,7 @@ title: compress
 category: Encode & Decode
 example: 'compress "zstd"'
 ---
+
 Compresses a stream of bytes.
 
 ```tql

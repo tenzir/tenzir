@@ -3,6 +3,7 @@ title: publish
 category: Connecting Pipelines
 example: 'publish "topic"'
 ---
+
 Publishes events to a channel with a topic.
 
 ```tql

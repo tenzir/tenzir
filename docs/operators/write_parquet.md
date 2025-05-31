@@ -3,6 +3,7 @@ title: write_parquet
 category: Printing
 example: 'write_parquet'
 ---
+
 Transforms event stream to a Parquet byte stream.
 
 ```tql

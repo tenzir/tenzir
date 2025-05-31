@@ -3,6 +3,7 @@ title: decode_base64
 category: Decoding
 example: 'decode_base64("VGVuemly")'
 ---
+
 Decodes bytes as Base64.
 
 ```tql

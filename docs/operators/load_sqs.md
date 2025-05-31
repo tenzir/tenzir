@@ -3,6 +3,7 @@ title: load_sqs
 category: Inputs/Bytes
 example: 'load_sqs "sqs://tenzir"'
 ---
+
 Loads bytes from [Amazon SQS][sqs] queues.
 
 [sqs]: https://docs.aws.amazon.com/sqs/

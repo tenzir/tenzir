@@ -3,6 +3,7 @@ title: floor
 category: Math
 example: 'floor(4.8)'
 ---
+
 Computes the floor of a number or a time/duration with a specified unit.
 
 ```tql

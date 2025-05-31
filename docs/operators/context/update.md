@@ -3,6 +3,7 @@ title: update
 category: Contexts
 example: 'context::update "ctx", key=x, value=y'
 ---
+
 Updates a context with new data.
 
 ```tql

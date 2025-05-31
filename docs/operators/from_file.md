@@ -3,6 +3,7 @@ title: from_file
 category: Inputs/Events
 example: 'from_file "s3://data/**.json"'
 ---
+
 :::warning[Under Active Development]
 This operator is still under active development.
 :::

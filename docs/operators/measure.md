@@ -3,6 +3,7 @@ title: measure
 category: Internals
 example: 'measure'
 ---
+
 Replaces the input with metrics describing the input.
 
 ```tql

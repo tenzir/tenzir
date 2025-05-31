@@ -3,6 +3,7 @@ title: pass
 category: Flow Control
 example: 'pass'
 ---
+
 Does nothing with the input.
 
 ```tql
