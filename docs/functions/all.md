@@ -1,7 +1,8 @@
 ---
 title: all
+category: Aggregation
+example: 'all([true,true,false])'
 ---
-
 Computes the conjunction (AND) of all grouped boolean values.
 
 ```tql

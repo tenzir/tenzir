@@ -1,8 +1,10 @@
 ---
 title: parse_syslog
+category: Parsing
+example: 'string.parse_syslog()'
 ---
 
-Parses a string as a [Syslog](https://en.wikipedia.org/wiki/Syslog) message.
+Parses a string as a Syslog message.
 
 ```tql
 parse_syslog [raw=bool, schema=string, selector=string, schema_only=bool,
@@ -19,7 +21,7 @@ Tenzir supports reading syslog messages in both the standardized "Syslog Protoco
 
 ## `input: string`
 
-import ParsingOptions from '../../.../../../../partials/functions/ParsingOptions.mdx';
+import ParsingOptions from "../../.../../../../partials/functions/ParsingOptions.mdx";
 
 <ParsingOptions />
 

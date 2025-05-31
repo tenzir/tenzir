@@ -1,7 +1,8 @@
 ---
 title: yara
+category: Detection
+example: 'yara "/path/to/rules", blockwise=true'
 ---
-
 Executes YARA rules on byte streams.
 
 ```tql

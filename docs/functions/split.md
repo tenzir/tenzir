@@ -1,7 +1,8 @@
 ---
 title: split
+category: String/Transformation
+example: 'split("a,b,c", ",")'
 ---
-
 Splits a string into substrings.
 
 ```tql

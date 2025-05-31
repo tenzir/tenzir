@@ -1,7 +1,8 @@
 ---
 title: compress_bz2
+category: Encode & Decode
+example: 'compress_bz2, level=9'
 ---
-
 Compresses a stream of bytes using bz2 compression.
 
 ```tql

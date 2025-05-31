@@ -1,7 +1,8 @@
 ---
 title: load
+category: Contexts
+example: 'context::load "ctx"'
 ---
-
 Loads context state.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: is_v4
+category: IP
+example: 'is_v4(1.2.3.4)'
 ---
-
 Checks whether an IP address has version number 4.
 
 ```tql

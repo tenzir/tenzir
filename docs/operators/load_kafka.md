@@ -1,7 +1,8 @@
 ---
 title: load_kafka
+category: Inputs/Bytes
+example: 'load_kafka topic="example"'
 ---
-
 Loads a byte stream from a Apache Kafka topic.
 
 ```tql

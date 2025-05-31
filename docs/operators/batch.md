@@ -1,7 +1,8 @@
 ---
 title: batch
+category: Internals
+example: 'batch timeout=1s'
 ---
-
 The `batch` operator controls the batch size of events.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: files
+category: Host Inspection
+example: 'files "/var/log/", recurse=true'
 ---
-
 Shows file information for a given directory.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: sort
+category: Analyze
+example: 'sort name, -abs(transaction)'
 ---
-
 Sorts events by the given expressions.
 
 ```tql

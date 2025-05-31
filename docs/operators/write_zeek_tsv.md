@@ -1,7 +1,8 @@
 ---
 title: write_zeek_tsv
+category: Printing
+example: 'write_zeek_tsv'
 ---
-
 Transforms event stream into Zeek Tab-Separated Value byte stream.
 
 ```tql

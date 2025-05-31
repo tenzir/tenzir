@@ -1,7 +1,8 @@
 ---
 title: ceil
+category: Math
+example: 'ceil(4.2)'
 ---
-
 Computes the ceiling of a number or a time/duration with a specified unit.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: nics
+category: Host Inspection
+example: 'nics'
 ---
-
 Shows a snapshot of available network interfaces.
 
 ```tql

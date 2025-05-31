@@ -1,7 +1,8 @@
 ---
 title: load_google_cloud_pubsub
+category: Inputs/Bytes
+example: 'load_google_cloud_pubsub project_id="my-project"'
 ---
-
 Subscribes to a Google Cloud Pub/Sub subscription and obtains bytes.
 
 ```tql

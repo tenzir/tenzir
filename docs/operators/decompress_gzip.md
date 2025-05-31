@@ -1,7 +1,8 @@
 ---
 title: decompress_gzip
+category: Encode & Decode
+example: 'decompress_gzip'
 ---
-
 Decompresses a stream of bytes in the Gzip format.
 
 ```tql

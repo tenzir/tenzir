@@ -1,7 +1,8 @@
 ---
 title: from_http
+category: Inputs/Events
+example: 'from_http "0.0.0.0:8080'
 ---
-
 Receives HTTP/1.1 requests.
 
 ```tql

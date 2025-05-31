@@ -1,7 +1,8 @@
 ---
 title: match_regex
+category: String/Inspection
+example: '"Hi".match_regex("[Hh]i")'
 ---
-
 Checks if a string partially matches a regular expression.
 
 ```tql

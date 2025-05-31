@@ -1,7 +1,8 @@
 ---
 title: mode
+category: Aggregation
+example: 'mode([1,1,2,3])'
 ---
-
 Takes the most common non-null grouped value.
 
 ```tql

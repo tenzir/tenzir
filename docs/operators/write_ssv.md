@@ -1,7 +1,8 @@
 ---
 title: write_ssv
+category: Printing
+example: 'write_ssv'
 ---
-
 Transforms event stream to SSV (Space-Separated Values) byte stream.
 
 ```tql

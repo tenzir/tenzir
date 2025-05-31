@@ -1,7 +1,8 @@
 ---
 title: tail
+category: Filter
+example: 'tail 20'
 ---
-
 Limits the input to the last `n` events.
 
 ```tql

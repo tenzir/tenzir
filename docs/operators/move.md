@@ -1,6 +1,10 @@
 ---
 title: move
+category: Modify
+example: 'move id=parsed_id, ctx.message=incoming.status'
 ---
+
+Moves values from one field to another, removing the original field.
 
 ```tql
 move to=from, …

@@ -1,7 +1,8 @@
 ---
 title: is_printable
+category: String/Inspection
+example: '"hello".is_printable()'
 ---
-
 Checks if a string contains only printable characters.
 
 ```tql

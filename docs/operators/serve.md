@@ -1,7 +1,8 @@
 ---
 title: serve
+category: Internals
+example: 'serve "abcde12345"'
 ---
-
 Make events available under the `/serve` REST API endpoint
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: trim_start
+category: String/Transformation
+example: '" hello".trim_start()'
 ---
-
 Trims whitespace from the start of a string.
 
 ```tql

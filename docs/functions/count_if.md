@@ -1,7 +1,8 @@
 ---
 title: count_if
+category: Aggregation
+example: 'count_if([1,2,null], x => x > 1)'
 ---
-
 Counts the events or non-null grouped values matching a given predicate.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: chart_bar
+category: Charts
+example: 'chart_bar …'
 ---
-
 Plots events on an bar chart.
 
 ```tql

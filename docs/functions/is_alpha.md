@@ -1,7 +1,8 @@
 ---
 title: is_alpha
+category: String/Inspection
+example: '"hello".is_alpha()'
 ---
-
 Checks if a string contains only alphabetic characters.
 
 ```tql

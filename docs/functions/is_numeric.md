@@ -1,7 +1,8 @@
 ---
 title: is_numeric
+category: String/Inspection
+example: '"1234".is_numeric()'
 ---
-
 Checks if a string contains only numeric characters.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: env
+category: Runtime
+example: 'env("PATH")'
 ---
-
 Reads an environment variable.
 
 ```tql

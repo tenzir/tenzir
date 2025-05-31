@@ -1,7 +1,8 @@
 ---
 title: print_yaml
+category: Printing
+example: 'record.print_yaml()'
 ---
-
 Prints a value as a YAML document.
 
 ```tql

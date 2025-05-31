@@ -1,7 +1,8 @@
 ---
 title: distinct
+category: Aggregation
+example: 'distinct([1,2,2,3])'
 ---
-
 Creates a sorted list without duplicates of non-null grouped values.
 
 ```tql

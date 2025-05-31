@@ -1,7 +1,8 @@
 ---
 title: read_lines
+category: Parsing
+example: 'read_lines'
 ---
-
 Parses an incoming bytes stream into events.
 
 ```tql

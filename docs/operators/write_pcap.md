@@ -1,7 +1,8 @@
 ---
 title: write_pcap
+category: Printing
+example: 'write_pcap'
 ---
-
 Transforms event stream to PCAP byte stream.
 
 ```tql

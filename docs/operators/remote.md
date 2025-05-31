@@ -1,7 +1,8 @@
 ---
 title: remote
+category: Internals
+example: 'remote { version }'
 ---
-
 Forces a pipeline to run remotely at a node.
 
 ```tql

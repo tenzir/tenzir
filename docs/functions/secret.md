@@ -1,7 +1,8 @@
 ---
 title: secret
+category: Runtime
+example: 'secret("KEY")'
 ---
-
 Reads a secret from a store.
 
 ```tql

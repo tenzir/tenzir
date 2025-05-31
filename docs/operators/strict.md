@@ -1,7 +1,8 @@
 ---
 title: strict
+category: Internals
+example: 'strict { assert false }'
 ---
-
 Treats all warnings as errors.
 
 ```tql

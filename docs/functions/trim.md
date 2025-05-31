@@ -1,7 +1,8 @@
 ---
 title: trim
+category: String/Transformation
+example: '" hello ".trim()'
 ---
-
 Trims whitespace from both ends of a string.
 
 ```tql

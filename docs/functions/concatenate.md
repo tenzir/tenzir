@@ -1,7 +1,8 @@
 ---
 title: concatenate
+category: List
+example: 'concatenate(xs, ys)'
 ---
-
 Merges two lists.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: load_gcs
+category: Inputs/Bytes
+example: 'load_gcs "gs://bucket/object.json"'
 ---
-
 Loads bytes from a Google Cloud Storage object.
 
 ```tql

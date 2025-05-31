@@ -1,7 +1,8 @@
 ---
 title: since_epoch
+category: Time & Date
+example: 'since_epoch(2021-02-24)'
 ---
-
 Interprets a time value as duration since the Unix epoch.
 
 ```tql

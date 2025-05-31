@@ -1,7 +1,8 @@
 ---
 title: shift_left
+category: Bit Operations
+example: 'shift_left(lhs, rhs)'
 ---
-
 Performs a bit-wise left shift.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: replace_regex
+category: String/Transformation
+example: '"hello".replace("l+o", "y")'
 ---
-
 Replaces characters within a string based on a regular expression.
 
 ```tql

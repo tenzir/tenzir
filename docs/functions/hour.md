@@ -1,7 +1,8 @@
 ---
 title: hour
+category: Time & Date
+example: 'ts.hour()'
 ---
-
 Extracts the hour component from a timestamp.
 
 ```tql

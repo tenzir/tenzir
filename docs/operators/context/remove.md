@@ -1,7 +1,8 @@
 ---
 title: remove
+category: Contexts
+example: 'context::remove "ctx"'
 ---
-
 Deletes a context.
 
 ```tql

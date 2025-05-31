@@ -1,7 +1,8 @@
 ---
 title: inspect
+category: Contexts
+example: 'context::inspect "ctx"'
 ---
-
 Resets a context.
 
 ```tql

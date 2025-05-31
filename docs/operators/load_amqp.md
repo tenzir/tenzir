@@ -1,7 +1,8 @@
 ---
 title: load_amqp
+category: Inputs/Bytes
+example: 'load_amqp'
 ---
-
 Loads a byte stream via AMQP messages.
 
 ```tql

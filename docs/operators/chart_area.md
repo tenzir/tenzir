@@ -1,7 +1,8 @@
 ---
 title: chart_area
+category: Charts
+example: 'chart_area …'
 ---
-
 Plots events on an area chart.
 
 ```tql

@@ -1,7 +1,8 @@
 ---
 title: join
+category: String/Transformation
+example: 'join(["a", "b", "c"], ",")'
 ---
-
 Joins a list of strings into a single string using a separator.
 
 ```tql
