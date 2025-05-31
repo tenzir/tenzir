@@ -41,7 +41,7 @@ struct formatter<tenzir::endpoint> {
     auto out = ctx.out();
     out = fmt::format_to(out, "{}", value.host);
     if (value.port) {
-      out = fmt::format_to(out, ":{}", value.port);
+      out = fmt::format_to(out, ":{}", value.port.value());
     }
     return out;
   }
