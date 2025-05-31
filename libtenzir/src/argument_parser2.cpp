@@ -481,7 +481,7 @@ auto argument_parser2::docs() const -> std::string {
     TENZIR_UNREACHABLE();
   });
   boost::replace_all(name, "::", "/");
-  return fmt::format("https://docs.tenzir.com/tql2/{}/{}", category, name);
+  return fmt::format("https://docs.tenzir.com/reference/{}/{}", category, name);
 }
 
 template <class T>

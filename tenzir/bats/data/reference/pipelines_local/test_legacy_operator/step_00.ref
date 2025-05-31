@@ -5,4 +5,4 @@ error: expected additional positional argument `definition`
   | ^^^^^^ 
   |
   = usage: legacy definition:string
-  = docs: https://docs.tenzir.com/tql2/operators/legacy
+  = docs: https://docs.tenzir.com/reference/operators/legacy

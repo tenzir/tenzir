@@ -5,7 +5,7 @@ error: expected additional positional argument `prefix`
   |            ^^^^^^^^^^^ 
   |
   = usage: starts_with(x:string, prefix:string)
-  = docs: https://docs.tenzir.com/tql2/functions/starts_with
+  = docs: https://docs.tenzir.com/reference/functions/starts_with
 
 error: expected additional positional argument `prefix`
  --> exec/expr/ufcs_error.tql:5:6
@@ -14,4 +14,4 @@ error: expected additional positional argument `prefix`
   |      ^^^^^^^^^^^ 
   |
   = usage: starts_with(x:string, prefix:string)
-  = docs: https://docs.tenzir.com/tql2/functions/starts_with
+  = docs: https://docs.tenzir.com/reference/functions/starts_with

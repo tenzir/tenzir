@@ -87,7 +87,6 @@ public:
               diagnostic::warning("expected `number`, got `{}`",
                                   value.type.kind())
                 .primary(expr)
-                .docs("https://docs.tenzir.com/functions/sqrt")
                 .emit(ctx);
               check(b.AppendNulls(value.length()));
             },
