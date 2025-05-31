@@ -1,7 +1,7 @@
 ---
-title: detach
+title: pipeline::detach
 category: Pipelines
-example: 'pipeline::detach { … }'
+example: "pipeline::detach { … }"
 ---
 
 Starts a pipeline in the node.

@@ -1,5 +1,5 @@
 ---
-title: create_lookup_table
+title: context::create_lookup_table
 category: Contexts
 example: 'context::create_lookup_table "ctx"'
 ---

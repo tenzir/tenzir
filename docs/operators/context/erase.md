@@ -1,5 +1,5 @@
 ---
-title: erase
+title: context::erase
 category: Contexts
 example: 'context::erase "ctx", key=x'
 ---

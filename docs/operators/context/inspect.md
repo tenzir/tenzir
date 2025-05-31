@@ -1,5 +1,5 @@
 ---
-title: inspect
+title: context::inspect
 category: Contexts
 example: 'context::inspect "ctx"'
 ---

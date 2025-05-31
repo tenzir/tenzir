@@ -1,5 +1,5 @@
 ---
-title: enrich
+title: context::enrich
 category: Contexts
 example: 'context::enrich "ctx", key=x'
 ---

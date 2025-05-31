@@ -1,5 +1,5 @@
 ---
-title: save
+title: context::save
 category: Contexts
 example: 'context::save "ctx"'
 ---
