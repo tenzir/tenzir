@@ -1,7 +1,7 @@
 ---
-title: run
+title: pipeline::run
 category: Pipelines
-example: 'pipeline::run { … }'
+example: "pipeline::run { … }"
 ---
 
 Starts a pipeline in the node and waits for it to complete.

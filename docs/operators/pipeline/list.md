@@ -1,7 +1,7 @@
 ---
-title: list
+title: pipeline::list
 category: Pipelines, Packages
-example: 'pipeline::list'
+example: "pipeline::list"
 ---
 
 Shows managed pipelines.

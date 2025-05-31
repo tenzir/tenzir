@@ -1,5 +1,5 @@
 ---
-title: remove
+title: package::remove
 category: Contexts
 example: 'package::remove "suricata-ocsf"'
 ---

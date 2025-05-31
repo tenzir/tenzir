@@ -1,5 +1,5 @@
 ---
-title: update
+title: context::update
 category: Contexts
 example: 'context::update "ctx", key=x, value=y'
 ---

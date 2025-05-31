@@ -1,5 +1,5 @@
 ---
-title: create_bloom_filter
+title: context::create_bloom_filter
 category: Contexts
 example: 'context::create_bloom_filter "ctx", capacity=1Mi, fp_probability=0.01'
 ---

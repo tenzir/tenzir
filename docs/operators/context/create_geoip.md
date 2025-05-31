@@ -1,5 +1,5 @@
 ---
-title: create_geoip
+title: context::create_geoip
 category: Contexts
 example: 'context::create_geoip "ctx", db_path="GeoLite2-City.mmdb"'
 ---

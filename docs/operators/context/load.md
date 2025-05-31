@@ -1,5 +1,5 @@
 ---
-title: load
+title: context::load
 category: Contexts
 example: 'context::load "ctx"'
 ---

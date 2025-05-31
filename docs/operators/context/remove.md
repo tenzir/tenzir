@@ -1,5 +1,5 @@
 ---
-title: remove
+title: context::remove
 category: Contexts
 example: 'context::remove "ctx"'
 ---

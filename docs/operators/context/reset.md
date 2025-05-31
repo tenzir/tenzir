@@ -1,5 +1,5 @@
 ---
-title: reset
+title: context::reset
 category: Contexts
 example: 'context::reset "ctx"'
 ---

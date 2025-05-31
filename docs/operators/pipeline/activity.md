@@ -1,7 +1,7 @@
 ---
-title: activity
+title: pipeline::activity
 category: Pipelines
-example: 'pipeline::activity range=1d, interval=1h'
+example: "pipeline::activity range=1d, interval=1h"
 ---
 
 Summarizes the activity of pipelines.

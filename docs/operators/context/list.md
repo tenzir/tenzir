@@ -1,7 +1,7 @@
 ---
-title: list
+title: context::list
 category: Contexts, Packages
-example: 'context::list'
+example: "context::list"
 ---
 
 Lists all contexts

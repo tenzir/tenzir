@@ -1,5 +1,5 @@
 ---
-title: add
+title: package::add
 category: Packages
 example: 'package::add "suricata-ocsf"'
 ---
