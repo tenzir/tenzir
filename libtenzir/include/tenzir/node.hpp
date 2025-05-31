@@ -10,6 +10,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/component_registry.hpp"
+#include "tenzir/endpoint.hpp"
 #include "tenzir/series_builder.hpp"
 
 #if __has_include("boost/process.hpp")
@@ -81,8 +82,8 @@ struct node_state {
   /// Flag to signal if the node received an exit message.
   bool tearing_down = false;
 
-  /// Listening port.
-  uint16_t listening_port{};
+  /// Listening endpoint.
+  endpoint endpoint;
 
   /// Weak handles to remotely spawned and monitored exec ndoes for cleanup on
   /// node shutdown.

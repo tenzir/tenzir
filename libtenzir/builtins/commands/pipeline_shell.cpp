@@ -6,8 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/plugin.hpp>
+#include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/connect_to_node.hpp>
+#include <tenzir/endpoint.hpp>
+#include <tenzir/execution_node.hpp>
+#include <tenzir/plugin.hpp>
 
 #include <caf/actor_from_state.hpp>
 #include <caf/scoped_actor.hpp>
@@ -18,7 +22,8 @@ namespace {
 
 class pipeline_shell {
 public:
-  pipeline_shell(pipeline_shell_actor::pointer self) : self_{self} {
+  pipeline_shell(pipeline_shell_actor::pointer self, node_actor node)
+    : self_{self}, node_{std::move(node)} {
   }
 
   auto make_behavior() -> pipeline_shell_actor::behavior_type {
@@ -27,11 +32,55 @@ public:
              std::string definition,
              const receiver_actor<diagnostic>& diagnostic_handler,
              const metrics_receiver_actor& metrics_receiver, int32_t index,
-             bool is_hidden, uuid run_id) -> caf::result<exec_node_actor> {},
+             bool is_hidden, uuid run_id) -> caf::result<exec_node_actor> {
+        return spawn_exec_node(std::move(box), input_type,
+                               std::move(definition), diagnostic_handler,
+                               metrics_receiver, index, is_hidden, run_id);
+      },
     };
   }
 
+  auto spawn_exec_node(operator_box box, operator_type input_type,
+                       std::string definition,
+                       const receiver_actor<diagnostic>& diagnostic_handler,
+                       const metrics_receiver_actor& metrics_receiver,
+                       int32_t index, bool is_hidden, uuid run_id)
+    -> caf::result<exec_node_actor> {
+      auto op = std::move(box).unwrap();
+      //if (op->location() == operator_location::local) {
+      //  return caf::make_error(ec::logic_error,
+      //                         fmt::format("{} cannot spawn local operator "
+      //                                     "'{}' in remote node",
+      //                                     *self, op->name()));
+      //}
+      auto description = fmt::format("{:?}", op);
+      auto spawn_result = tenzir::spawn_exec_node(
+        self_, std::move(op), input_type, std::move(definition), node_,
+        diagnostic_handler, metrics_receiver, index, false, is_hidden, run_id);
+      if (not spawn_result) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} failed to spawn execution node "
+                                           "for operator '{}': {}",
+                                           *self_, description,
+                                           spawn_result.error()));
+      }
+      self_->monitor(
+        spawn_result->first,
+        [this, source = spawn_result->first->address()](const caf::error&) {
+          const auto num_erased = monitored_exec_nodes.erase(source);
+          TENZIR_ASSERT(num_erased == 1);
+        });
+      monitored_exec_nodes.insert(spawn_result->first->address());
+      // TODO: Check output type.
+      return spawn_result->first;
+  }
+
+  /// Weak handles to remotely spawned and monitored exec ndoes for cleanup on
+  /// node shutdown.
+  std::unordered_set<caf::actor_addr> monitored_exec_nodes;
+
   pipeline_shell_actor::pointer self_;
+  node_actor node_;
 };
 
 auto pipeline_shell_command(const invocation& inv, caf::actor_system& sys)
@@ -39,17 +88,17 @@ auto pipeline_shell_command(const invocation& inv, caf::actor_system& sys)
   if (inv.arguments.size() != 2) {
     return caf::make_message(ec::silent);
   }
-  TENZIR_INFO("Hi from the pipeline shell");
   caf::scoped_actor self{sys};
-  auto port = inv.arguments[0];
+  auto endpoint = to<tenzir::endpoint>(inv.arguments[0]);
+  TENZIR_ASSERT(endpoint);
   auto identifier = inv.arguments[1];
-  auto node_opt = connect_to_node(self);
+  auto node_opt = connect_to_node(self, *endpoint, caf::infinite);
   if (not node_opt) {
     return caf::make_message(std::move(node_opt.error()));
   }
   auto result = caf::expected<caf::actor>{caf::error{}};
   const auto node = std::move(*node_opt);
-  auto shell = self->spawn(caf::actor_from_state<pipeline_shell>);
+  auto shell = self->spawn(caf::actor_from_state<pipeline_shell>, node);
   self->mail(atom::connect_v, atom::shell_v, identifier, shell).send(node);
   self->wait_for(shell);
   return caf::make_message(ec::no_error);

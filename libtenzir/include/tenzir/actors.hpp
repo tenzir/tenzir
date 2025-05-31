@@ -353,8 +353,8 @@ struct node_actor_traits {
       ->caf::result<std::vector<caf::actor>>,
     // Retrieve the version of the process running the NODE.
     auto(atom::get, atom::version)->caf::result<record>,
-    // Set the listening port of the tenzir-node.
-    auto(atom::set, uint16_t)->caf::result<void>,
+    // Set the listening endpoint of the tenzir-node.
+    auto(atom::set, endpoint)->caf::result<void>,
     // Spawn an pipeline_shell subprocess.
     auto(atom::spawn, atom::shell)->caf::result<pipeline_shell_actor>,
     // Callback from subprocess when shell actor is ready.

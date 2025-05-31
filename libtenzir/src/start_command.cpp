@@ -132,8 +132,9 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
             .to_error();
       return caf::make_message(std::move(err));
     }
+    node_endpoint->port.emplace(*bound_port, port_type::tcp);
+    self->mail(atom::set_v, *node_endpoint).send(node);
     // TODO: Consider error checking
-    self->mail(atom::set_v, *bound_port).send(node);
     listen_endpoint = fmt::format("{}:{}", node_endpoint->host, *bound_port);
     TENZIR_INFO("node listens for node-to-node connections on tcp://{}",
                 *listen_endpoint);

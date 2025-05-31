@@ -637,13 +637,12 @@ auto node(node_actor::stateful_pointer<node_state> self,
             core_shutdown_sequence();
           });
     },
-    [self](atom::set, uint16_t port) {
-      TENZIR_ASSERT(self->state().listening_port == 0);
-      TENZIR_ASSERT(port != 0);
-      self->state().listening_port = port;
+    [self](atom::set, endpoint endpoint) {
+      TENZIR_ASSERT(endpoint.port != 0);
+      self->state().endpoint = endpoint;
     },
     [self](atom::spawn, atom::shell) -> caf::result<pipeline_shell_actor> {
-      TENZIR_ASSERT(self->state().listening_port != 0);
+      TENZIR_ASSERT(self->state().endpoint.port->number() != 0);
       namespace bp = boost::process;
       auto addr = self->current_sender()->address();
       self->monitor(self->current_sender(), [self, addr](const caf::error&) {
@@ -665,8 +664,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
         tenzir_ctl.generic_string(),
         {
           "pipeline_shell",
-          fmt::to_string(self->state().listening_port),
-          // TODO: idk
+          fmt::to_string(self->state().endpoint),
           identifier,
         },
         std::move(env),
@@ -680,7 +678,6 @@ auto node(node_actor::stateful_pointer<node_state> self,
     },
     [self](atom::connect, atom::shell, const std::string& identifier,
            pipeline_shell_actor handle) -> caf::result<void> {
-      TENZIR_INFO("got response");
       auto& ps = self->state().shell_response_promises;
       const auto it = ps.find(identifier);
       if (it == ps.end()) {
