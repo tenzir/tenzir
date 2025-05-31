@@ -388,7 +388,7 @@ jobs:
             --pull=always --rm \
             "ghcr.io/tenzir/tenzir:${{ needs.configure.outputs.tenzir-container-ref }}" \
             'openapi | to "docs/openapi.node.yaml"'
-          git add --intent-to-add web/openapi/openapi.yaml
+          git add --intent-to-add docs/openapi.node.yaml
           git diff --quiet --exit-code || {
             echo "The OpenAPI Spec is not aligned with the current sources. Please run *tenzir 'openapi | to "docs/openapi.node.yaml"'* or apply the following diff directly:"
             git diff --exit-code
