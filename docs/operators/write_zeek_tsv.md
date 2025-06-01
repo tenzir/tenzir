@@ -61,5 +61,4 @@ save_file "filtered_conn.log"
 ## See Also
 
 [`read_zeek_json`](/reference/operators/read_zeek_json),
-[`read_zeek_tsv`](/reference/operators/read_zeek_tsv),
-[`write_zeek_json`](/reference/operators/write_zeek_json)
+[`read_zeek_tsv`](/reference/operators/read_zeek_tsv)

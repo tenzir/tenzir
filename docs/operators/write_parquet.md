@@ -38,7 +38,7 @@ compression, `gzip` for [gzip][gzip-docs] compression, and `snappy` for
 
 :::tip[Why would I use this over the `compress` operator?]
 The Parquet format offers more efficient compression compared to the
-[`compress`](compress) operator. This is because it compresses
+[`compress`](/reference/operators/compress) operator. This is because it compresses
 the data column-by-column, leaving metadata that needs to be accessed frequently
 uncompressed.
 :::

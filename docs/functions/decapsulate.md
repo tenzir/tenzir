@@ -14,7 +14,7 @@ decapsulate(packet:record) -> record
 
 The `decapsulate` function decodes binary PCAP packet data by extracting link,
 network, and transport layer information. The function takes a `packet` record
-as argument as produced by the [PCAP parser](/reference/formats/pcap), which may
+as argument as produced by the [`read_pcap`](/reference/operators/read_pcap) operator, which may
 look like this:
 
 ```tql

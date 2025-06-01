@@ -87,5 +87,4 @@ write_syslog
 ## See Also
 
 [`parse_syslog`](/reference/functions/parse_syslog),
-[`print_syslog`](/reference/functions/print_syslog),
-[`read_syslog`](/reference/operators/./read_syslog)
+[`read_syslog`](/reference/operators/read_syslog)
