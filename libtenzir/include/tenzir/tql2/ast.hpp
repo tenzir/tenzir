@@ -182,9 +182,6 @@ struct root_field {
   }
 };
 
-template <concepts::one_of<std::string, blob> Type>
-struct format_expr;
-
 using expression_kinds = detail::type_list<
   record, list, meta, this_, root_field, pipeline_expr, constant, field_access,
   index_expr, binary_expr, unary_expr, function_call, lambda_expr, underscore,
@@ -783,16 +780,17 @@ struct format_expr {
     }
   };
   using segment = variant<Type, replacement>;
+
   std::vector<segment> segments;
-  location loc;
+  struct location location;
 
   friend auto inspect(auto& f, format_expr& x) -> bool {
     return f.object(x).fields(f.field("segments", x.segments),
-                              f.field("loc", x.loc));
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
-    return loc;
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 

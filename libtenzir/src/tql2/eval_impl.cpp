@@ -532,7 +532,7 @@ template <>
 auto evaluator::eval(const ast::format_expr<blob>& x) -> multi_series {
   if (x.segments.size() > 1) {
     diagnostic::warning("format strings for `blob` are not implemented")
-      .primary(x.loc)
+      .primary(x.location)
       .emit(ctx_);
     return series::null(blob_type{}, length_);
   }
@@ -545,7 +545,7 @@ auto evaluator::eval(const ast::format_expr<blob>& x) -> multi_series {
       check(b.Append(std::string_view{data, data + s->size()}));
     } else {
       diagnostic::warning("format strings for `blob` are not implemented")
-        .primary(x.loc)
+        .primary(x.location)
         .emit(ctx_);
       check(b.AppendNull());
     }

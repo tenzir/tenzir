@@ -10,6 +10,8 @@
 #include <tenzir/multi_series.hpp>
 
 namespace tenzir {
+
 auto to_string(multi_series ms, location loc, diagnostic_handler& dh)
   -> basic_series<string_type>;
-}
+
+} // namespace tenzir

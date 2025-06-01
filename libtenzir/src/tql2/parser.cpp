@@ -510,7 +510,6 @@ public:
 
   template <concepts::one_of<std::string, blob> Type>
   auto parse_format_expr() -> ast::format_expr<Type> {
-    auto r = ast::format_expr<Type>{};
     constexpr static auto is_string = std::same_as<Type, std::string>;
     constexpr static auto begin_token
       = is_string ? tk::string_begin : tk::blob_begin;
@@ -525,19 +524,21 @@ public:
       }
       throw_token();
     }();
-    r.loc = begin.first.location;
+    auto location = begin.first.location;
+    auto segments = std::vector<typename ast::format_expr<Type>::segment>{};
     while (true) {
       if (auto end = accept(tk::closing_quote)) {
-        r.loc.end = end.location.end;
-        return r;
-      } else if (auto chars = accept(tk::char_seq)) {
+        location.end = end.location.end;
+        return ast::format_expr<Type>{std::move(segments), location};
+      }
+      if (auto chars = accept(tk::char_seq)) {
         switch (begin.second) {
           case begin_token: {
             if constexpr (is_string) {
-              r.segments.emplace_back(
+              segments.emplace_back(
                 unescape_string(located{chars.text, chars.location}));
             } else {
-              r.segments.emplace_back(
+              segments.emplace_back(
                 unescape_blob(located{chars.text, chars.location}));
             }
             break;
@@ -553,13 +554,13 @@ public:
                   // .hint("consider using a blob instead: b{}", token.text)
                   .throw_();
               }
-              r.segments.emplace_back(std::in_place_type<std::string>,
-                                      chars.text);
+              segments.emplace_back(std::in_place_type<std::string>,
+                                    chars.text);
             } else {
               const auto data
                 = reinterpret_cast<const std::byte*>(chars.text.data());
-              r.segments.emplace_back(std::in_place_type<blob>, data,
-                                      data + chars.text.size());
+              segments.emplace_back(std::in_place_type<blob>, data,
+                                    data + chars.text.size());
             }
             break;
           }
@@ -567,15 +568,15 @@ public:
             TENZIR_UNREACHABLE();
         }
       } else if (auto fmt = accept(tk::fmt_begin)) {
-        r.segments.emplace_back(
+        segments.emplace_back(
           std::in_place_type<typename ast::format_expr<Type>::replacement>,
           parse_expression());
         expect(tk::fmt_end);
       } else {
         TENZIR_ASSERT(eoi());
         diagnostic::error("non-terminated {} literal",
-                          type_kind{tag_v < data_to_type_t<Type>})
-          .secondary(r.loc)
+                          type_kind::of<data_to_type_t<Type>>)
+          .secondary(location)
           .primary(next_location())
           .throw_();
       }
@@ -932,7 +933,7 @@ public:
           throw r.error();
         }
         if (auto* s = try_as<std::string>(*r)) {
-          return ast::identifier{std::move(*s), v.loc};
+          return ast::identifier{std::move(*s), v.location};
         }
         diagnostic::error("expected `string`").primary(v).throw_();
       }

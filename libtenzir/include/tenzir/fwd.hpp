@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/concepts.hpp"
 #include "tenzir/config.hpp"  // IWYU pragma: export
 #include "tenzir/tql/fwd.hpp" // IWYU pragma: export
 
@@ -420,6 +421,8 @@ struct dollar_var;
 struct entity;
 struct expression;
 struct field_access;
+template <concepts::one_of<std::string, blob> Type>
+struct format_expr;
 struct function_call;
 struct identifier;
 struct if_stmt;
