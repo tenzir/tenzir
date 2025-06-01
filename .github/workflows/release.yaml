@@ -130,7 +130,7 @@ jobs:
           # Create release notes with changelog link
           RELEASE_NOTES="${{ github.event.inputs.description }}
 
-          For a detailed list of all changes, view [the changelog](${CHANGELOG_URL})"
+          For a detailed list of all changes, view [the changelog](${CHANGELOG_URL})."
 
           gh release create "${{ github.event.inputs.version }}" \
             --title "${{ github.event.inputs.title }}" \
