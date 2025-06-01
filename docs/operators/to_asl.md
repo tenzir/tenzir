@@ -4,9 +4,7 @@ category: Outputs/Events
 example: 'to_asl "s3://…"'
 ---
 
-Sends events to [Amazon Security Lake (ASL)][asl].
-
-[asl]: https://aws.amazon.com/security-lake/
+Sends events to Amazon Security Lake (ASL).
 
 ```tql
 to_asl s3_uri:string, region=string, account_id=string, [timeout=duration]
@@ -23,6 +21,8 @@ OCSF event classes supported by ASL can be found [here](https://docs.aws.amazon.
 The operator takes care of ASL's partitioning and file size requirements.
 The file names will be randomly generated UUIDs (v4) with a `.parquet` file
 extension.
+
+[asl]: https://aws.amazon.com/security-lake/
 
 ### `s3_uri: string`
 
