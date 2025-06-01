@@ -87,10 +87,9 @@ write_ndjson strip_null_fields=true
 
 ## See Also
 
-[`parse_ndjson`](/reference/functions/parse_ndjson),
 [`parse_json`](/reference/functions/parse_json),
 [`print_ndjson`](/reference/functions/print_ndjson),
 [`print_json`](/reference/functions/print_json),
-[`read_json`](/reference/operators/./read_json),
-[`read_ndjson`](/reference/operators/./read_ndjson),
-[`write_json`](/reference/operators/./write_json)
+[`read_json`](/reference/operators/read_json),
+[`read_ndjson`](/reference/operators/read_ndjson),
+[`write_json`](/reference/operators/write_json)

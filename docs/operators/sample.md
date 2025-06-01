@@ -70,7 +70,7 @@ sample 30s, min_events=50, max_rate=500
 
 Sample some `metrics` every hour, limiting the max samples per period to 5,000
 samples (`max_samples`) and limiting the overall sample count to 100,000 samples
-([`head`](head)).
+([`head`](/reference/operators/head)).
 
 ```tql
 subscribe "metrics"
