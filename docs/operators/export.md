@@ -4,7 +4,7 @@ category: Node/Storage Engine
 example: 'export'
 ---
 
-Retrieves events from a Tenzir node. The dual to [`import`](/reference/operators/import).
+Retrieves events from a Tenzir node.
 
 ```tql
 export [live=bool, retro=bool, internal=bool, parallel=int]
@@ -13,6 +13,8 @@ export [live=bool, retro=bool, internal=bool, parallel=int]
 ## Description
 
 The `export` operator retrieves events from a Tenzir node.
+
+This operator is the dual to [`import`](/reference/operators/import).
 
 ### `live = bool (optional)`
 

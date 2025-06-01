@@ -4,9 +4,7 @@ category: Detection
 example: 'sigma "/tmp/rules/"'
 ---
 
-Filter the input with [Sigma rules][sigma] and output matching events.
-
-[sigma]: https://github.com/SigmaHQ/sigma
+Filter the input with Sigma rules and output matching events.
 
 ```tql
 sigma path:string, [refresh_interval=duration]

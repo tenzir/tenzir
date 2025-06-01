@@ -4,7 +4,7 @@ category: Analyze
 example: 'top user'
 ---
 
-Shows the most common values. The dual to [`rare`](/reference/operators/rare).
+Shows the most common values.
 
 ```tql
 top x:field
@@ -19,6 +19,8 @@ containing its count will be produced. In general, `top x` is equivalent to:
 summarize x, count=count()
 sort -count
 ```
+
+This operator is the dual to [`rare`](/reference/operators/rare).
 
 :::note[Potentially High Memory Usage]
 Use caution when applying this operator to large inputs. It currently buffers

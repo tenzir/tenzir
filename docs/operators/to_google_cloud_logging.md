@@ -4,7 +4,7 @@ category: Outputs/Events
 example: 'to_google_cloud_logging …'
 ---
 
-Sends events to [Google Cloud Logging](https://cloud.google.com/logging).
+Sends events to Google Cloud Logging.
 
 ```tql
 to_google_cloud_logging log_id=string, [project=string, organization=string,

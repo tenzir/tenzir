@@ -4,7 +4,7 @@ category: Node/Storage Engine
 example: 'import'
 ---
 
-Imports events into a Tenzir node. The dual to [`export`](/reference/operators/export).
+Imports events into a Tenzir node.
 
 ```tql
 import
@@ -13,6 +13,8 @@ import
 ## Description
 
 The `import` operator persists events in a Tenzir node.
+
+This operator is the dual to [`export`](/reference/operators/export).
 
 ## Examples
 

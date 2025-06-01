@@ -4,9 +4,7 @@ category: Outputs/Events
 example: 'to_azure_log_analytics tenant_id="...", workspace_id="..."'
 ---
 
-Sends events to the [Microsoft Azure Logs Ingestion API][api].
-
-[api]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview
+Sends events to the Microsoft Azure Logs Ingestion API.
 
 ```tql
 to_azure_log_analytics tenant_id=string, client_id=string, client_secret=string,
@@ -15,9 +13,12 @@ to_azure_log_analytics tenant_id=string, client_id=string, client_secret=string,
 
 ## Description
 
+Sends events to the Microsoft [Azure Logs Ingestion API][api].
+
 The `to_azure_log_analytics` operator makes it possible to upload events to
 [supported tables][supported] or to [custom tables][custom] in Microsoft Azure.
 
+[api]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview
 [supported]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview#supported-tables
 [custom]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table?tabs=azure-portal-1%2Cazure-portal-2%2Cazure-portal-3#create-a-custom-table
 
