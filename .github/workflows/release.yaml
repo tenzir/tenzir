@@ -81,6 +81,17 @@ jobs:
             --title "${{ github.event.inputs.title }}" \
             --description "${{ github.event.inputs.description }}"
 
+      - name: Update version.json
+        run: |
+          # Extract version without 'v' prefix
+          VERSION_NUMBER=$(echo "${{ github.event.inputs.version }}" | sed 's/^v//')
+
+          # Update tenzir-version in version.json using jq
+          jq --arg version "${VERSION_NUMBER}" '.["tenzir-version"] = $version' version.json > version.json.tmp
+          mv version.json.tmp version.json
+
+          echo "Updated version.json with tenzir-version: ${VERSION_NUMBER}"
+
       - name: Verify release file was created
         run: |
           if [ ! -f "changelog/releases/${{ github.event.inputs.version }}.yaml" ]; then
@@ -89,6 +100,9 @@ jobs:
           fi
           echo "Release file created successfully:"
           cat "changelog/releases/${{ github.event.inputs.version }}.yaml"
+
+          echo "Updated version.json:"
+          cat "version.json"
 
       - name: Commit release file
         env:
@@ -101,7 +115,7 @@ jobs:
           git remote set-url origin https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${{ github.repository }}.git
 
           # Commit changes
-          git add changelog/releases/"${{ github.event.inputs.version }}.yaml"
+          git add changelog/releases/"${{ github.event.inputs.version }}.yaml" version.json
           git commit -s -m "Release Tenzir Node ${{ github.event.inputs.version }}"
 
       - name: Create signed annotated tag
