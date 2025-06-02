@@ -29,7 +29,7 @@ time = from_epoch(time * 1s)
 ```
 
 ```tql
-{x: 2025-01-10T16:10:29+00:00}
+{time: 2025-01-10T16:10:29+00:00}
 ```
 
 ### Interpret a duration as Unix time

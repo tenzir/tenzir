@@ -42,7 +42,7 @@ from (
   {x: 1, y: 2},
   {x: 3},
 }
-select x = x.get("x", -1), y = y.get("y", -1)
+select x = this.get("x", -1), y = this.get("y", -1)
 ```
 
 ```tql

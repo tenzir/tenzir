@@ -12,7 +12,7 @@ assert_throughput min_events:int, within=duration, [retries=int]
 
 ## Description
 
-The `assert_throghput` operator checks a pipeline's throughput, emitting a
+The `assert_throughput` operator checks a pipeline's throughput, emitting a
 warning if the minimum specified throughput is unmet, and optionally an error if
 the number of retries is exceeded.
 

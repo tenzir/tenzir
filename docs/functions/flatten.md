@@ -12,7 +12,7 @@ flatten(x:record, separtor=string) -> record
 
 ## Description
 
-The `flatten` function takes a record and performs actions of contained
+The `flatten` function takes a record and performs actions on contained
 container types:
 
 1. **Records**: Join nested records with a separator (`.` by default). For

@@ -4,7 +4,7 @@ category: Filter
 example: 'assert name.starts_with("John")'
 ---
 
-Drops event and emits a warning if the invariant is violated.
+Drops events and emits a warning if the invariant is violated.
 
 ```tql
 assert invariant:bool

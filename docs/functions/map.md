@@ -7,7 +7,7 @@ example: 'xs.map(x => x + 3)'
 Maps each list element to an expression.
 
 ```tql
-map(xs:list, capture:field, any => any) -> list
+map(xs:list, function:any => any) -> list
 ```
 
 ## Description
