@@ -102,7 +102,7 @@ endif ()
 
 # -- boost --------------------------------------------------------------------
 
-find_package(Boost REQUIRED COMPONENTS headers filesystem url)
+find_package(Boost REQUIRED COMPONENTS headers filesystem process url)
 
 # -- re2 ----------------------------------------------------------------------
 
@@ -371,10 +371,10 @@ target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
-target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem
+target_link_libraries(libtenzir PUBLIC Boost::headers Boost::filesystem Boost::process
                                        Boost::url)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url)")
+       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem url process)")
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
