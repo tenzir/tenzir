@@ -7,7 +7,7 @@ example: 'count_if([1,2,null], x => x > 1)'
 Counts the events or non-null grouped values matching a given predicate.
 
 ```tql
-count_if(xs:list, predicate:any => bool) -> int
+count_if(xs:list, predicate:any -> bool) -> int
 ```
 
 ## Description
@@ -19,7 +19,7 @@ satisfy the given `predicate`.
 
 The values to count.
 
-### `predicate: any => bool`
+### `predicate: any -> bool`
 
 The predicate to apply to each value to check whether it should be counted.
 

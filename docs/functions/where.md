@@ -7,7 +7,7 @@ example: 'xs.where(x, x > 5)'
 Filters list elements based on a predicate.
 
 ```tql
-where(xs:list, prediacte:any => bool) -> list
+where(xs:list, prediacte:any->bool) -> list
 ```
 
 ## Description
@@ -19,7 +19,7 @@ evaluates to `true`.
 
 A list of values.
 
-### `predicate: any => bool`
+### `predicate: any -> bool`
 
 The predicate evaluated for each list element.
 
