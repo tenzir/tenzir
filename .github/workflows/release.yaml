@@ -4,15 +4,25 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version identifier for the release (e.g., v5.3.0)"
+        description: |
+          Version identifier for the release (e.g., v5.3.0)
         required: true
         type: string
       title:
-        description: 'Title of the release (e.g., "Tenzir Node v5.3.0")'
+        description: |
+          Title of the release (e.g., "Tenzir Node v5.3.0")
+
+          The title of the release should be at most three words long, must be
+          title-cased.
         required: true
         type: string
       description:
-        description: "Description of the release"
+        description: |
+          Description of the release
+
+          The description of the release should be 1-2 sentences long, must be
+          written in active voice, and should clearly communicate the theme of
+          the release to the user. Use full sentences and avoid abbreviations.
         required: true
         type: string
 
@@ -67,6 +77,18 @@ jobs:
           if [[ ! "${{ github.event.inputs.version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-.*)?$ ]]; then
             echo "Error: Version must follow semver format (e.g., v1.2.3 or v1.2.3-beta1)"
             exit 1
+          fi
+
+      - name: Determine release type based on branch
+        id: release_type
+        run: |
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          if [[ "$CURRENT_BRANCH" == "main" ]]; then
+            echo "is_latest=true" >> $GITHUB_OUTPUT
+            echo "Running on main branch - this will be a latest release"
+          else
+            echo "is_latest=false" >> $GITHUB_OUTPUT
+            echo "Running on $CURRENT_BRANCH branch - this will be a non-latest release"
           fi
 
       - name: Check if release already exists
@@ -136,15 +158,57 @@ jobs:
 
       - name: Push changes and tag
         run: |
-          git push origin main
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          git push origin "$CURRENT_BRANCH"
           git push origin "${{ github.event.inputs.version }}"
 
+      - name: Copy release file to main branch (non-latest release)
+        if: steps.release_type.outputs.is_latest == 'false'
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          # Store the release file content
+          cp "changelog/releases/${{ github.event.inputs.version }}.yaml" "/tmp/release.yaml"
+
+          # Extract changelog entry IDs from the release file
+          CHANGE_IDS=$(yq eval '.changes[]' "changelog/releases/${{ github.event.inputs.version }}.yaml")
+
+          # Copy referenced changelog entries to temp directory
+          mkdir -p "/tmp/changes"
+          for CHANGE_ID in $CHANGE_IDS; do
+            if [ -f "changelog/changes/${CHANGE_ID}.md" ]; then
+              cp "changelog/changes/${CHANGE_ID}.md" "/tmp/changes/"
+            fi
+          done
+
+          # Switch to main branch
+          git fetch origin main
+          git checkout main
+
+          # Copy the release file
+          cp "/tmp/release.yaml" "changelog/releases/${{ github.event.inputs.version }}.yaml"
+
+          # Copy the referenced changelog entries
+          for CHANGE_ID in $CHANGE_IDS; do
+            if [ -f "/tmp/changes/${CHANGE_ID}.md" ]; then
+              cp "/tmp/changes/${CHANGE_ID}.md" "changelog/changes/"
+            fi
+          done
+
+          # Commit to main
+          git add "changelog/releases/${{ github.event.inputs.version }}.yaml" changelog/changes/
+          git commit -s -m "Add backport release Tenzir Node ${{ github.event.inputs.version }}"
+          git push origin main
+
       - name: Update latest branch
+        if: steps.release_type.outputs.is_latest == 'true'
         run: |
           git checkout -B latest
           git push origin latest --force
 
       - name: Create GitHub Release
+        if: steps.release_type.outputs.is_latest == 'true'
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
@@ -159,12 +223,21 @@ jobs:
 
           gh release create "${{ github.event.inputs.version }}" \
             --title "${{ github.event.inputs.title }}" \
-            --notes "$RELEASE_NOTES"
+            --notes "$RELEASE_NOTES" \
+            --latest "${{ steps.release_type.outputs.is_latest }}"
 
-      - name: Output success message
+      - name: Output success message (latest release)
+        if: steps.release_type.outputs.is_latest == 'true'
         run: |
           echo "🎉 Release ${{ github.event.inputs.version }} created successfully!"
           echo "📁 Release file: changelog/releases/${{ github.event.inputs.version }}.yaml"
           echo "🏷️ Tag: ${{ github.event.inputs.version }}"
           echo "🌿 Latest branch updated"
           echo "📋 GitHub release: https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.version }}"
+
+      - name: Output success message (non-latest release)
+        if: steps.release_type.outputs.is_latest == 'false'
+        run: |
+          echo "🎉 Release ${{ github.event.inputs.version }} created successfully!"
+          echo "📁 Release file: changelog/releases/${{ github.event.inputs.version }}.yaml"
+          echo "📋 Release file copied to main branch"
