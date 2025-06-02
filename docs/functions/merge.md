@@ -69,7 +69,7 @@ select result = merge(x, y)
 
 ```tql
 {
-  result {
+  result: {
     a: 1
   }
 }

@@ -44,7 +44,7 @@ from {
 }
 output = this.print_xsv(
   field_separator=",",
-  list_selarator=";",
+  list_separator=";",
   null_value="null")
 ```
 

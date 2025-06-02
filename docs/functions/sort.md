@@ -43,5 +43,5 @@ this = this.sort()
 {a: 1, b: {y: true, x: false}, c: 3}
 ```
 
-Observe that the nested record is *not* sorted. Use `b = b.sort()` to sort it
+Note that nested records are not automatically sorted. Use `b = b.sort()` to sort it
 manually.
