@@ -638,12 +638,12 @@ auto node(node_actor::stateful_pointer<node_state> self,
             core_shutdown_sequence();
           });
     },
-    [self](atom::set, endpoint endpoint) {
-      TENZIR_ASSERT(endpoint.port != 0);
-      self->state().endpoint = endpoint;
+    [self](atom::set, endpoint endpoint_) {
+      TENZIR_ASSERT(endpoint_.port != 0);
+      self->state().endpoint_ = std::move(endpoint_);
     },
     [self](atom::spawn, atom::shell) -> caf::result<pipeline_shell_actor> {
-      TENZIR_ASSERT(self->state().endpoint.port->number() != 0);
+      TENZIR_ASSERT(self->state().endpoint_.port->number() != 0);
       namespace bp = boost::process;
       auto addr = self->current_sender()->address();
       self->monitor(self->current_sender(), [self, addr](const caf::error&) {
@@ -665,7 +665,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
         tenzir_ctl.generic_string(),
         {
           "pipeline_shell",
-          fmt::to_string(self->state().endpoint),
+          fmt::to_string(self->state().endpoint_),
           identifier,
         },
         std::move(env),

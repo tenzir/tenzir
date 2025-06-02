@@ -14,7 +14,6 @@
 #include "tenzir/series_builder.hpp"
 
 #include <boost/process/v2/process.hpp>
-
 #include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -79,7 +78,7 @@ struct node_state {
   bool tearing_down = false;
 
   /// Listening endpoint.
-  endpoint endpoint;
+  endpoint endpoint_;
 
   /// Weak handles to remotely spawned and monitored exec ndoes for cleanup on
   /// node shutdown.
