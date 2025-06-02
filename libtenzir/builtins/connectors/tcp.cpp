@@ -65,18 +65,17 @@ struct saver_args : ssl_options {
   std::string hostname;
   std::string service;
   bool listen = false;
-  located<duration> max_retry_delay
-    = located{std::chrono::seconds{10}, location::unknown};
-  located<duration> retry_timeout
-    = located{std::chrono::minutes{30}, location::unknown};
+  located<int64_t> max_retry_count = located{int64_t{10}, location::unknown};
+  located<duration> retry_delay
+    = located{std::chrono::seconds{30}, location::unknown};
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x).fields(
       f.field("ssl_options", static_cast<ssl_options&>(x)),
       f.field("hostname", x.hostname), f.field("service", x.service),
       f.field("listen", x.listen),
-      f.field("max_retry_delay", x.max_retry_delay),
-      f.field("retry_timeout", x.retry_timeout));
+      f.field("max_retry_delay", x.max_retry_count),
+      f.field("retry_timeout", x.retry_delay));
   }
 };
 
@@ -115,9 +114,6 @@ public:
   tcp_bridge(tcp_bridge_actor::pointer self, metric_handler metric_handler,
              shared_diagnostic_handler diagnostic_handler, saver_args args)
     : self_{self},
-      initial_retry_delay_{std::chrono::seconds{1}},
-      current_retry_delay_{initial_retry_delay_},
-      retry_backoff_multiplier_{2.0},
       metrics_{.metric_handler = metric_handler},
       diagnostic_handler_{std::move(diagnostic_handler)},
       args_{std::move(args)} {
@@ -327,41 +323,27 @@ private:
   }
 
   void handle_connection_failure(const caf::error& error) {
-    if (current_retry_delay_sum_ >= args_.retry_timeout.inner) {
+    if (current_retry_attempt_ > args_.max_retry_count.inner) {
       if (pending_write_) {
         auto& [promise, chunk] = *pending_write_;
         promise.deliver(caf::make_error(
-          ec::system_error, "connection failed after retrying for {}",
-          to_string(args_.retry_timeout.inner)));
+          ec::system_error, "connection failed after retrying {} times",
+          to_string(args_.max_retry_count.inner)));
       }
       pending_write_.reset();
       connection_rp_.deliver(error);
       retry_timer_.reset();
       return;
     }
-    // Calculate delay with exponential backoff
-    auto delay
-      = (current_retry_attempt_ == 0)
-          ? initial_retry_delay_
-          : std::min(std::chrono::duration_cast<duration>(
-                       current_retry_delay_ * retry_backoff_multiplier_),
-                     args_.max_retry_delay.inner);
     current_retry_attempt_++;
-    // Make the last attempt line up with the timeout value.
-    if (current_retry_delay_sum_ + delay > args_.retry_timeout.inner
-        and current_retry_delay_sum_ < args_.retry_timeout.inner) {
-      delay = args_.retry_timeout.inner - current_retry_delay_sum_;
-    }
-    current_retry_delay_ = delay;
-    current_retry_delay_sum_ += delay;
     diagnostic::warning("tcp connector connection attempt {} failed, retrying "
                         "in {}: {}",
-                        current_retry_attempt_, to_string(current_retry_delay_),
-                        error)
+                        current_retry_attempt_,
+                        to_string(args_.retry_delay.inner), error)
       .emit(diagnostic_handler_);
     // Schedule retry after delay
     retry_timer_.emplace(*io_ctx_);
-    retry_timer_->expires_after(delay);
+    retry_timer_->expires_after(args_.retry_delay.inner);
     retry_timer_->async_wait(
       [this, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self_)](
         const boost::system::error_code& ec) {
@@ -384,8 +366,6 @@ private:
     }
     is_connected_ = false;
     current_retry_attempt_ = 0;
-    current_retry_delay_ = initial_retry_delay_;
-    current_retry_delay_sum_ = duration::zero();
     // Close existing sockets
     if (tls_socket_) {
       boost::system::error_code ec;
@@ -580,11 +560,8 @@ public:
   // Member variables
   tcp_bridge_actor::pointer self_ = {};
   // Retry logic members
-  duration initial_retry_delay_ = {};
   duration current_retry_delay_ = {};
-  double retry_backoff_multiplier_ = {};
   uint32_t current_retry_attempt_ = {};
-  duration current_retry_delay_sum_ = {};
   std::optional<connection_params> connect_params_;
   std::optional<boost::asio::steady_timer> retry_timer_;
   bool is_connected_ = {};
@@ -738,8 +715,8 @@ class save_tcp final : public virtual operator_plugin2<save_tcp_operator> {
     auto parser = argument_parser2::operator_(name());
     auto uri = located<std::string>{};
     parser.positional("endpoint", uri, "string");
-    parser.named_optional("max_retry_delay", args.max_retry_delay);
-    parser.named_optional("retry_timeout", args.retry_timeout);
+    parser.named_optional("max_retry_count", args.max_retry_count);
+    parser.named_optional("retry_delay", args.retry_delay);
     args.add_tls_options(parser);
     TRY(parser.parse(inv, ctx));
     if (uri.inner.starts_with("tcp://")) {
