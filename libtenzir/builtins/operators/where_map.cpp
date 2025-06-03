@@ -281,6 +281,7 @@ struct arguments {
         diagnostic::error("expected identifier").primary(expr).emit(ctx);
         return failure::promise();
       }
+      args.lambda.left = std::move(field->id);
       return args;
     }
     for (auto& diag : diags) {
