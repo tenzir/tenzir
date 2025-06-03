@@ -67,7 +67,9 @@ public:
       slice = resolve_enumerations(slice);
       (void)client->insert(slice);
     }
-  } catch (::clickhouse::Error& e) {
+  } catch (const panic_exception& e) {
+    throw;
+  } catch (const std::exception& e) {
     diagnostic::error("unexpected error: {}", e.what())
       .primary(args_.operator_location)
       .emit(ctrl.diagnostics());
