@@ -36,6 +36,11 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Setup Poetry
+        uses: abatilo/actions-poetry@v4.0.0
+        with:
+          poetry-version: latest
+
       - name: Generate an app token
         id: generate_token
         uses: actions/create-github-app-token@v1
