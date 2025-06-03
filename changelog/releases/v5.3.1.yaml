@@ -1,4 +1,0 @@
-title: Fixed Python Operator
-description: This release fixes a regression in the Python operator, which was not working correctly in v5.3.0.
-changes:
-  - H36NPOAkm9tjMGVFAL74rLtuMb
