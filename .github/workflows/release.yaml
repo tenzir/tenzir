@@ -81,7 +81,7 @@ jobs:
             --title "${{ github.event.inputs.title }}" \
             --description "${{ github.event.inputs.description }}"
 
-      - name: Update version.json
+      - name: Update version.json and poetry version
         run: |
           # Extract version without 'v' prefix
           VERSION_NUMBER=$(echo "${{ github.event.inputs.version }}" | sed 's/^v//')
@@ -90,7 +90,13 @@ jobs:
           jq --arg version "${VERSION_NUMBER}" '.["tenzir-version"] = $version' version.json > version.json.tmp
           mv version.json.tmp version.json
 
+          # Update poetry version
+          pushd python
+          poetry version "${VERSION_NUMBER}"
+          popd
+
           echo "Updated version.json with tenzir-version: ${VERSION_NUMBER}"
+          echo "Updated poetry version to: ${VERSION_NUMBER}"
 
       - name: Verify release file was created
         run: |
