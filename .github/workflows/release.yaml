@@ -126,7 +126,7 @@ jobs:
           git remote set-url origin https://x-access-token:${GITHUB_APP_TOKEN}@github.com/${{ github.repository }}.git
 
           # Commit changes
-          git add changelog/releases/"${{ github.event.inputs.version }}.yaml" version.json
+          git add --all
           git commit -s -m "Release Tenzir Node ${{ github.event.inputs.version }}"
 
       - name: Create signed annotated tag
