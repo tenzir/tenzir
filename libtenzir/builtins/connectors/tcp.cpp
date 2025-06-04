@@ -631,9 +631,10 @@ public:
         {"bytes_written", uint64_type{}},
       },
     });
-    auto tcp_bridge = ctrl.self().spawn(caf::actor_from_state<class tcp_bridge>,
-                                        std::move(tcp_metrics),
-                                        ctrl.shared_diagnostics(), args_);
+    auto tcp_bridge
+      = ctrl.self().spawn<caf::linked>(caf::actor_from_state<class tcp_bridge>,
+                                       std::move(tcp_metrics),
+                                       ctrl.shared_diagnostics(), args_);
     if (not args_.listen) {
       ctrl.self()
         .mail(atom::connect_v)
