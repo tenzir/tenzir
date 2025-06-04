@@ -1,0 +1,8 @@
+error: unsupported scheme `scheme`
+ --> exec/operators/from/invalid_scheme.tql:3:7
+  |
+3 | from "scheme://foo.json"
+  |       ^^^^^^ 
+  |
+  = note: supported schemes for deduction: `abfs`, `abfss`, `amqp`, `amqps`, `elasticsearch`, `file`, `fluent-bit`, `ftp`, `ftps`, `gcps`, `gs`, `http`, `https`, `inproc`, `kafka`, `opensearch`, `s3`, `sqs`, `tcp`, `udp`, `zmq`
+  = docs: https://docs.tenzir.com/reference/operators/from
