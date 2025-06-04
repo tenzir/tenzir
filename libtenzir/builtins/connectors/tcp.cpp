@@ -111,11 +111,11 @@ class tcp_bridge {
 public:
   [[maybe_unused]] static constexpr auto name = "tcp-bridge";
 
-  tcp_bridge(tcp_bridge_actor::pointer self, metric_handler metric_handler,
-             shared_diagnostic_handler diagnostic_handler, saver_args args)
+  tcp_bridge(tcp_bridge_actor::pointer self, metric_handler mh,
+             shared_diagnostic_handler dh, saver_args args)
     : self_{self},
-      metrics_{.metric_handler = metric_handler},
-      diagnostic_handler_{std::move(diagnostic_handler)},
+      metrics_{.metric_handler = mh},
+      diagnostic_handler_{std::move(dh)},
       args_{std::move(args)} {
     io_ctx_ = std::make_shared<boost::asio::io_context>();
     socket_.emplace(*io_ctx_);
@@ -271,10 +271,9 @@ private:
 #if TENZIR_MACOS
         auto fcntl_error = std::optional<caf::error>{};
         if (ec == boost::system::errc::success
-            and ::fcntl(socket_->native_handle(), F_SETFD, FD_CLOEXEC) != 0) {
-          auto error = detail::describe_errno();
+            and ::fcntl(socket_->native_handle(), F_SETFD, FD_CLOEXEC) == -1) {
           fcntl_error = diagnostic::error("failed to configure TLS socket")
-                          .hint("{}", error)
+                          .hint("{}", detail::describe_errno())
                           .to_error();
         }
 #endif
@@ -423,10 +422,9 @@ public:
       auto reuse_address = boost::asio::socket_base::reuse_address(true);
       acceptor_->set_option(reuse_address);
       acceptor_->bind(endpoint);
-      if (::fcntl(acceptor_->native_handle(), F_SETFD, FD_CLOEXEC) != 0) {
-        auto error = detail::describe_errno();
+      if (::fcntl(acceptor_->native_handle(), F_SETFD, FD_CLOEXEC) == -1) {
         return diagnostic::error("failed to configure TLS socket")
-          .hint("{}", error)
+          .hint("{}", detail::describe_errno())
           .to_error();
       }
       const auto max_connections =
@@ -451,10 +449,9 @@ public:
                                        boost::asio::ip::tcp::socket peer) {
       TENZIR_DEBUG("tcp connector accepted incoming request");
       auto fcntl_error = std::optional<caf::error>{};
-      if (::fcntl(peer.native_handle(), F_SETFD, FD_CLOEXEC) != 0) {
-        auto error = detail::describe_errno();
+      if (::fcntl(peer.native_handle(), F_SETFD, FD_CLOEXEC) == -1) {
         fcntl_error = diagnostic::error("failed to configure TLS socket")
-                        .hint("{}", error)
+                        .hint("{}", detail::describe_errno())
                         .to_error();
       }
       if (auto hdl = weak_hdl.lock()) {
@@ -557,7 +554,6 @@ public:
     return write_rp_;
   }
 
-  // Member variables
   tcp_bridge_actor::pointer self_ = {};
   // Retry logic members
   duration current_retry_delay_ = {};
@@ -600,18 +596,16 @@ public:
       TENZIR_ASSERT(args_.certfile);
       auto* keyfile = std::fopen(args_.keyfile->inner.c_str(), "er");
       if (not keyfile) {
-        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS keyfile")
-          .hint("{}", error)
+          .hint("{}", detail::describe_errno())
           .emit(ctrl.diagnostics());
         co_return;
       }
       std::fclose(keyfile);
       auto* certfile = std::fopen(args_.certfile->inner.c_str(), "er");
       if (not certfile) {
-        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS certfile")
-          .hint("{}", error)
+          .hint("{}", detail::describe_errno())
           .emit(ctrl.diagnostics());
         co_return;
       }
@@ -727,7 +721,7 @@ class save_tcp final : public virtual operator_plugin2<save_tcp_operator> {
     if (split.size() != 2) {
       diagnostic::error("malformed endpoint")
         .primary(uri.source)
-        .hint("format must be 'tcp://address:service'")
+        .hint("format must be 'tcp://hostname:port'")
         .emit(ctx);
       return failure::promise();
     }
