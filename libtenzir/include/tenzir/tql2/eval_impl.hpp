@@ -69,8 +69,7 @@ public:
 
   auto eval(const ast::index_expr& x) -> multi_series;
 
-  template <concepts::one_of<std::string, blob> Type>
-  auto eval(const ast::format_expr<Type>& x) -> multi_series;
+  auto eval(const ast::format_expr& x) -> multi_series;
 
   template <class T>
     requires(detail::tl_contains<ast::expression_kinds, T>::value)

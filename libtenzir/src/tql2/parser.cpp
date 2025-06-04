@@ -559,46 +559,24 @@ public:
     return located{std::move(result), begin.location.combine(end)};
   }
 
-  template <concepts::one_of<std::string, blob> Type>
-  auto parse_format_expr() -> ast::format_expr<Type> {
-    // TODO: Clean this up.
-    constexpr auto is_string = std::same_as<Type, std::string>;
-    // constexpr static auto begin_token
-    //   = is_string ? tk::string_begin : tk::blob_begin;
-    // constexpr static auto raw_begin_token
-    //   = is_string ? tk::raw_string_begin : tk::raw_blob_begin;
-    auto [begin, begin_token] = std::invoke([&]() {
-      return std::pair{expect(tk::format_string_begin), tk::string_begin};
-      // if (peek(begin_token)) {
-      //   return std::pair{accept(begin_token), begin_token};
-      // }
-      // if (peek(raw_begin_token)) {
-      //   return std::pair{accept(raw_begin_token), raw_begin_token};
-      // }
-      // throw_token();
-    });
+  auto parse_format_expr() -> ast::format_expr {
+    auto begin = expect(tk::format_string_begin);
     auto location = begin.location;
-    auto segments = std::vector<typename ast::format_expr<Type>::segment>{};
+    auto segments = std::vector<ast::format_expr::segment>{};
     while (true) {
       if (auto end = accept(tk::closing_quote)) {
-        location.end = end.location.end;
-        return ast::format_expr<Type>{std::move(segments), location};
+        auto location = begin.location.combine(end);
+        return ast::format_expr{std::move(segments), location};
       }
       if (auto chars = accept(tk::char_seq)) {
-        if constexpr (is_string) {
-          // TODO: Same thing here. Point at entire format string?
-          segments.emplace_back(unescape_string(chars, chars.location, true));
-        } else {
-          segments.emplace_back(unescape_blob(chars, true));
-        }
+        segments.emplace_back(unescape_string(chars, chars.location, true));
       } else if (auto fmt = accept(tk::fmt_begin)) {
         segments.emplace_back(
-          typename ast::format_expr<Type>::replacement{parse_expression()});
+          ast::format_expr::replacement{parse_expression()});
         expect(tk::fmt_end);
       } else {
         TENZIR_ASSERT(eoi());
-        diagnostic::error("non-terminated {} literal",
-                          type_kind::of<data_to_type_t<Type>>)
+        diagnostic::error("non-terminated format string")
           .secondary(location)
           .primary(next_location())
           .throw_();
@@ -622,7 +600,7 @@ public:
       return ast::constant{std::move(blob.inner), blob.source};
     }
     if (peek(tk::format_string_begin)) {
-      return parse_format_expr<std::string>();
+      return parse_format_expr();
     }
     if (auto constant = accept_constant()) {
       return std::move(*constant);
@@ -964,7 +942,7 @@ public:
         return result.as_identifier();
       }
       if (peek(tk::format_string_begin)) {
-        auto v = parse_format_expr<std::string>();
+        auto v = parse_format_expr();
         // TODO: This should be const_eval'ed later.
         auto r = const_eval(v, diag_);
         if (not r) {
