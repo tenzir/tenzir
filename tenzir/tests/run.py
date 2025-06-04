@@ -305,14 +305,13 @@ def run_simple_test(
         report_failure(test, f'└─▶ \033[31munexpected exception: {e}\033[0m')
         return False
     if test_config["error"] == good:
-        with stdout_lock :
-            print(f"{test_config}, {good}")
+        with stdout_lock:
             report_failure(
                 test, f"┌─▶ \033[31mgot unexpected exit code {completed.returncode}\033[0m"
             )
             for last, line in last_and(output.split(b"\n")):
-                    prefix = "│ " if not last else "└─"
-                    sys.stdout.buffer.write(prefix.encode() + line + b"\n")
+                prefix = "│ " if not last else "└─"
+                sys.stdout.buffer.write(prefix.encode() + line + b"\n")
         return False
     if not good:
         ext = "txt"

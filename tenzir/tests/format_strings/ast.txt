@@ -12,12 +12,7 @@
         items: [
           field {
             name: `x` @ 19..20,
-            expr: format_expr {
-              segments: [
-                string "\""
-              ],
-              loc: 22..26
-            }
+            expr: constant string "{}" @ 22..26
           }
         ],
         end: 26..27
@@ -29,171 +24,171 @@
             name: `x` @ 32..33,
             expr: format_expr {
               segments: [
-                string "{}"
+                string "\""
               ],
-              loc: 35..39
+              location: 35..40
             }
           }
         ],
-        end: 39..40
+        end: 40..41
       },
       record {
-        begin: 44..45,
+        begin: 45..46,
         items: [
           field {
-            name: `x` @ 45..46,
+            name: `x` @ 46..47,
             expr: format_expr {
               segments: [
                 format_expr root_field {
-                  id: `ident` @ 51..56,
+                  id: `ident` @ 52..57,
                   has_question_mark: false
                 }
               ],
-              loc: 48..58
+              location: 49..59
             }
           }
         ],
-        end: 58..59
+        end: 59..60
       },
       record {
-        begin: 63..64,
+        begin: 64..65,
         items: [
           field {
-            name: `x` @ 64..65,
+            name: `x` @ 65..66,
             expr: format_expr {
               segments: [
                 format_expr binary_expr {
                   left: root_field {
-                    id: `a` @ 70..71,
+                    id: `a` @ 71..72,
                     has_question_mark: false
                   },
-                  op: "add" @ 71..72,
+                  op: "add" @ 72..73,
                   right: root_field {
-                    id: `b` @ 72..73,
+                    id: `b` @ 73..74,
                     has_question_mark: false
                   }
                 }
               ],
-              loc: 67..75
+              location: 68..76
             }
           }
         ],
-        end: 75..76
+        end: 76..77
       },
       record {
-        begin: 80..81,
+        begin: 81..82,
         items: [
           field {
-            name: `x` @ 81..82,
+            name: `x` @ 82..83,
             expr: format_expr {
               segments: [
                 string "pre ",
-                format_expr format_expr {
-                  segments: [
-                    string "string"
-                  ],
-                  loc: 91..99
-                }
+                format_expr constant string "string" @ 92..100
               ],
-              loc: 84..101
+              location: 85..102
             }
           }
         ],
-        end: 101..102
+        end: 102..103
       },
       record {
-        begin: 106..107,
+        begin: 107..108,
         items: [
           field {
-            name: `x` @ 107..108,
+            name: `x` @ 108..109,
+            expr: format_expr {
+              segments: [
+                string "{}"
+              ],
+              location: 111..118
+            }
+          }
+        ],
+        end: 118..119
+      },
+      record {
+        begin: 123..124,
+        items: [
+          field {
+            name: `x` @ 124..125,
             expr: format_expr {
               segments: [
                 format_expr record {
-                  begin: 113..114,
+                  begin: 131..132,
                   items: [
                     
                   ],
-                  end: 114..115
+                  end: 132..133
                 }
               ],
-              loc: 110..117
+              location: 127..136
             }
           }
         ],
-        end: 117..118
+        end: 136..137
       },
       record {
-        begin: 122..123,
+        begin: 141..142,
         items: [
           field {
-            name: `x` @ 123..124,
+            name: `x` @ 142..143,
             expr: format_expr {
               segments: [
                 format_expr record {
-                  begin: 129..130,
+                  begin: 149..150,
                   items: [
                     field {
-                      name: `key` @ 130..133,
-                      expr: format_expr {
-                        segments: [
-                          string "value"
-                        ],
-                        loc: 135..142
-                      }
+                      name: `key` @ 150..153,
+                      expr: constant string "value" @ 155..162
                     }
                   ],
-                  end: 142..143
+                  end: 162..163
                 }
               ],
-              loc: 126..145
+              location: 145..166
             }
           }
         ],
-        end: 145..146
+        end: 166..167
       },
       record {
-        begin: 150..151,
+        begin: 171..172,
         items: [
           field {
-            name: `x` @ 151..152,
+            name: `x` @ 172..173,
             expr: format_expr {
               segments: [
                 format_expr record {
-                  begin: 157..158,
+                  begin: 179..180,
                   items: [
                     field {
-                      name: `key` @ 158..161,
+                      name: `key` @ 180..183,
                       expr: format_expr {
                         segments: [
                           string "pre2",
                           format_expr record {
-                            begin: 170..171,
+                            begin: 193..194,
                             items: [
                               field {
-                                name: `key2` @ 171..175,
-                                expr: format_expr {
-                                  segments: [
-                                    string "string"
-                                  ],
-                                  loc: 177..185
-                                }
+                                name: `key2` @ 194..198,
+                                expr: constant string "string" @ 200..208
                               }
                             ],
-                            end: 185..186
+                            end: 208..209
                           }
                         ],
-                        loc: 163..188
+                        location: 185..212
                       }
                     }
                   ],
-                  end: 188..189
+                  end: 212..213
                 }
               ],
-              loc: 154..191
+              location: 175..216
             }
           }
         ],
-        end: 192..193
+        end: 217..218
       }
     ]
   }

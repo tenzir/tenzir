@@ -96,8 +96,19 @@ public:
   }
 
   struct accept_result {
+    accept_result() = default;
+
+    accept_result(std::string_view text, tenzir::location location)
+      : text{text}, location{location} {
+    }
+
     std::string_view text;
     tenzir::location location;
+
+    explicit(false) operator located<std::string_view>() {
+      TENZIR_ASSERT(*this);
+      return {text, location};
+    }
 
     explicit operator bool() const {
       // TODO: Is this okay?
@@ -105,14 +116,12 @@ public:
     }
 
     auto as_identifier() const -> ast::identifier {
+      TENZIR_ASSERT(*this);
       return ast::identifier{text, location};
     }
 
-    auto as_string() const -> located<std::string> {
-      return {text, location};
-    }
-
     auto get_location() const -> tenzir::location {
+      TENZIR_ASSERT(*this);
       return location;
     }
   };
@@ -508,23 +517,67 @@ public:
     return expr;
   }
 
+  auto parse_string() -> located<std::string> {
+    auto raw = false;
+    auto begin = accept(tk::string_begin);
+    if (not begin) {
+      raw = true;
+      begin = expect(tk::raw_string_begin);
+    }
+    auto content = accept(tk::char_seq);
+    auto end = expect(tk::closing_quote);
+    auto location = begin.location.combine(end.location);
+    auto result = std::invoke([&] {
+      if (not content) {
+        return std::string{};
+      }
+      if (raw) {
+        validate_string(content.text, location);
+        return std::string{content.text};
+      }
+      return unescape_string(content, location, false);
+    });
+    return located{std::move(result), location};
+  }
+
+  auto parse_blob() -> located<blob> {
+    auto raw = false;
+    auto begin = accept(tk::blob_begin);
+    if (not begin) {
+      raw = true;
+      begin = expect(tk::raw_blob_begin);
+    }
+    auto result = blob{};
+    if (auto content = accept(tk::char_seq)) {
+      if (raw) {
+        result = blob{as_bytes(content.text)};
+      } else {
+        result = unescape_blob(content, false);
+      }
+    }
+    auto end = expect(tk::closing_quote);
+    return located{std::move(result), begin.location.combine(end)};
+  }
+
   template <concepts::one_of<std::string, blob> Type>
   auto parse_format_expr() -> ast::format_expr<Type> {
-    constexpr static auto is_string = std::same_as<Type, std::string>;
-    constexpr static auto begin_token
-      = is_string ? tk::string_begin : tk::blob_begin;
-    constexpr static auto raw_begin_token
-      = is_string ? tk::raw_string_begin : tk::raw_blob_begin;
-    const auto begin = [&]() {
-      if (peek(begin_token)) {
-        return std::pair{accept(begin_token), begin_token};
-      }
-      if (peek(raw_begin_token)) {
-        return std::pair{accept(raw_begin_token), raw_begin_token};
-      }
-      throw_token();
-    }();
-    auto location = begin.first.location;
+    // TODO: Clean this up.
+    constexpr auto is_string = std::same_as<Type, std::string>;
+    // constexpr static auto begin_token
+    //   = is_string ? tk::string_begin : tk::blob_begin;
+    // constexpr static auto raw_begin_token
+    //   = is_string ? tk::raw_string_begin : tk::raw_blob_begin;
+    auto [begin, begin_token] = std::invoke([&]() {
+      return std::pair{expect(tk::format_string_begin), tk::string_begin};
+      // if (peek(begin_token)) {
+      //   return std::pair{accept(begin_token), begin_token};
+      // }
+      // if (peek(raw_begin_token)) {
+      //   return std::pair{accept(raw_begin_token), raw_begin_token};
+      // }
+      // throw_token();
+    });
+    auto location = begin.location;
     auto segments = std::vector<typename ast::format_expr<Type>::segment>{};
     while (true) {
       if (auto end = accept(tk::closing_quote)) {
@@ -532,45 +585,15 @@ public:
         return ast::format_expr<Type>{std::move(segments), location};
       }
       if (auto chars = accept(tk::char_seq)) {
-        switch (begin.second) {
-          case begin_token: {
-            if constexpr (is_string) {
-              segments.emplace_back(
-                unescape_string(located{chars.text, chars.location}));
-            } else {
-              segments.emplace_back(
-                unescape_blob(located{chars.text, chars.location}));
-            }
-            break;
-          }
-          case raw_begin_token: {
-            if constexpr (is_string) {
-              if (not arrow::util::ValidateUTF8(chars.text)) {
-                // TODO: Would be nice to report the actual error location.
-                diagnostic::error("string contains invalid utf-8")
-                  // TODO: Maybe this should include the quotes... sometimes
-                  .primary(chars.location)
-                  // TODO: This hint would be helpful, but we cannot support it
-                  // .hint("consider using a blob instead: b{}", token.text)
-                  .throw_();
-              }
-              segments.emplace_back(std::in_place_type<std::string>,
-                                    chars.text);
-            } else {
-              const auto data
-                = reinterpret_cast<const std::byte*>(chars.text.data());
-              segments.emplace_back(std::in_place_type<blob>, data,
-                                    data + chars.text.size());
-            }
-            break;
-          }
-          default:
-            TENZIR_UNREACHABLE();
+        if constexpr (is_string) {
+          // TODO: Same thing here. Point at entire format string?
+          segments.emplace_back(unescape_string(chars, chars.location, true));
+        } else {
+          segments.emplace_back(unescape_blob(chars, true));
         }
       } else if (auto fmt = accept(tk::fmt_begin)) {
         segments.emplace_back(
-          std::in_place_type<typename ast::format_expr<Type>::replacement>,
-          parse_expression());
+          typename ast::format_expr<Type>::replacement{parse_expression()});
         expect(tk::fmt_end);
       } else {
         TENZIR_ASSERT(eoi());
@@ -591,10 +614,15 @@ public:
       return result;
     }
     if (peek(tk::string_begin) or peek(tk::raw_string_begin)) {
-      return parse_format_expr<std::string>();
+      auto string = parse_string();
+      return ast::constant{std::move(string.inner), string.source};
     }
     if (peek(tk::blob_begin) or peek(tk::raw_blob_begin)) {
-      return parse_format_expr<blob>();
+      auto blob = parse_blob();
+      return ast::constant{std::move(blob.inner), blob.source};
+    }
+    if (peek(tk::format_string_begin)) {
+      return parse_format_expr<std::string>();
     }
     if (auto constant = accept_constant()) {
       return std::move(*constant);
@@ -677,9 +705,9 @@ public:
     // TODO: Try to implement this better.
     auto is_record
       = silent_peek(tk::rbrace) || silent_peek(tk::dot_dot_dot)
-        || ((silent_peek(tk::string_begin) || silent_peek(tk::raw_string_begin)
-             || silent_peek(tk::identifier))
-            && silent_peek_n(tk::colon, 1));
+        || silent_peek(tk::string_begin) || silent_peek(tk::raw_string_begin)
+        || silent_peek(tk::format_string_begin)
+        || (silent_peek(tk::identifier) && silent_peek_n(tk::colon, 1));
     if (is_record) {
       return parse_record(begin.location);
     }
@@ -692,8 +720,8 @@ public:
     };
   }
 
-  static auto unescape_unchecked(located<std::string_view> input)
-    -> std::string {
+  static auto unescape_unchecked(located<std::string_view> input,
+                                 bool format_string) -> std::string {
     auto result = std::string{};
     auto f = input.inner.begin();
     auto e = input.inner.end();
@@ -701,8 +729,18 @@ public:
       auto x = *it;
       if (x != '\\') {
         result.push_back(x);
+        if (format_string) {
+          if (x == '{') {
+            ++it;
+            TENZIR_ASSERT(*it == '{');
+          } else if (x == '}') {
+            ++it;
+            TENZIR_ASSERT(*it == '}');
+          }
+        }
         continue;
       }
+      auto backslash = it;
       ++it;
       if (it == e) {
         // TODO: invalid, but cannot happen
@@ -789,27 +827,23 @@ public:
             result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
           } else {
             diagnostic::error("unicode codepoint out of range")
-              .primary(input.source.subloc(
-                brace_open - f, (it - brace_open) + (it != e ? 1 : 0) + 1))
+              .primary(input.source.subloc(backslash - f, it + 1 - backslash))
               .throw_();
           }
           // it is at '}', loop will ++it
         } else {
           // Handle \uXXXX or \UXXXXXXXX
           auto digits = (x == 'u') ? 4uz : 8uz;
-          if (std::distance(it, e) < static_cast<ptrdiff_t>(digits)) {
+          if (std::distance(it, e) < static_cast<ptrdiff_t>(digits) + 1) {
             diagnostic::error("incomplete unicode escape sequence")
-              .primary(input.source.subloc(it - f, std::distance(it, e) + 1))
+              .primary(input.source.subloc(backslash - f))
               .throw_();
           }
           auto codepoint = uint32_t{0};
           auto valid = true;
           for (size_t i = 0; i < digits; ++i) {
             ++it;
-            if (it == e) {
-              valid = false;
-              break;
-            }
+            TENZIR_ASSERT(it != e);
             auto c = *it;
             codepoint <<= 4;
             if (c >= '0' and c <= '9') {
@@ -825,7 +859,7 @@ public:
           }
           if (not valid) {
             diagnostic::error("invalid unicode escape sequence")
-              .primary(input.source.subloc(it - f - digits, digits + 1))
+              .primary(input.source.subloc(backslash - f, digits + 2))
               .throw_();
           }
           // Encode codepoint as UTF-8
@@ -851,15 +885,16 @@ public:
             result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
           } else {
             diagnostic::error("unicode codepoint out of range")
-              .primary(input.source.subloc(it - f - digits, digits + 2))
+              .primary(input.source.subloc(backslash - f, digits + 2))
               .throw_();
           }
         }
       } else if (x == 'x') {
         // Hexadecimal byte escape: \xHH
-        if (std::distance(it, e) < 2) {
+        // We are at `x` now, so the distance to `e` must be at least 3.
+        if (std::distance(it, e) < 3) {
           diagnostic::error("incomplete hex escape sequence")
-            .primary(input.source.subloc(it - f, 4))
+            .primary(input.source.subloc(backslash - f, e - backslash))
             .throw_();
         }
         ++it;
@@ -882,50 +917,53 @@ public:
         auto lo = hex_to_int(c2);
         if (hi == -1 or lo == -1) {
           diagnostic::error("invalid hex escape sequence")
-            .primary(input.source.subloc(it - f - 2, 4))
+            .primary(input.source.subloc(backslash - f, 4))
             .throw_();
         }
         result.push_back(static_cast<char>((hi << 4) | lo));
       } else {
         diagnostic::error("found unknown escape sequence `{}`",
-                          input.inner.substr(it - f, 2))
-          .primary(input.source.subloc(it - f, 2))
+                          input.inner.substr(backslash - f, 2))
+          .primary(input.source.subloc(backslash - f, 2))
           .throw_();
       }
     }
     return result;
   }
 
-  auto unescape_blob(located<std::string_view> input) -> blob {
-    auto u = unescape_unchecked(input);
-    auto* data = reinterpret_cast<std::byte*>(u.data());
-    return {data, data + u.size()};
+  auto unescape_blob(located<std::string_view> input, bool format_string)
+    -> blob {
+    return blob{as_bytes(unescape_unchecked(input, format_string))};
   }
 
-  auto unescape_string(located<std::string_view> input) -> std::string {
-    auto u = unescape_unchecked(input);
-    if (not arrow::util::ValidateUTF8(u)) {
+  void validate_string(std::string_view content, location location) {
+    if (not arrow::util::ValidateUTF8(content)) {
       // TODO: Would be nice to report the actual error location.
       diagnostic::error("string contains invalid utf-8")
-        // TODO: Maybe this should include the quotes... sometimes
-        .primary(input)
-        // TODO: This hint would be helpful, but we cannot support it
-        // .hint("consider using a blob instead: b{}", token.text)
+        .primary(location)
+        .hint("consider using a blob instead: b\"…\"")
         .throw_();
     }
-    return u;
+  }
+
+  auto unescape_string(located<std::string_view> content, location location,
+                       bool format_string) -> std::string {
+    auto unescaped = unescape_unchecked(content, format_string);
+    validate_string(unescaped, location);
+    return unescaped;
   }
 
   auto parse_record_item() -> ast::record::item {
     if (auto dots = accept(tk::dot_dot_dot)) {
       return ast::spread{dots.location, parse_expression()};
     }
-    // TODO: Decide how to represent string fields in the AST.
+    // TODO: Use a different representation for field names that are strings or
+    // format strings in the AST.
     auto ident = [this]() {
       if (auto result = accept(tk::identifier)) {
         return result.as_identifier();
       }
-      if (peek(tk::string_begin) or peek(tk::raw_string_begin)) {
+      if (peek(tk::format_string_begin)) {
         auto v = parse_format_expr<std::string>();
         // TODO: This should be const_eval'ed later.
         auto r = const_eval(v, diag_);
@@ -937,7 +975,8 @@ public:
         }
         diagnostic::error("expected `string`").primary(v).throw_();
       }
-      throw_token();
+      auto string = parse_string();
+      return ast::identifier{string.inner, string.source};
     }();
     expect(tk::colon);
     auto expr = parse_expression();

@@ -27,7 +27,8 @@ TENZIR_ENUM(
   // literals
   scalar, true_, false_, null, ip, subnet, datetime,
   // strings
-  string_begin, raw_string_begin, blob_begin, raw_blob_begin, closing_quote,
+  string_begin, raw_string_begin, blob_begin, raw_blob_begin,
+  format_string_begin, closing_quote,
   // format
   fmt_begin, fmt_end, char_seq,
   // punctuation
