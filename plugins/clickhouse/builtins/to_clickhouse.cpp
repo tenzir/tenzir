@@ -46,6 +46,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> try {
+    auto& dh = ctrl.diagnostics();
     auto args = easy_client::arguments{
       .host = "",
       .port = args_.port,
@@ -57,27 +58,12 @@ public:
       .primary = args_.primary,
       .operator_location = args_.operator_location,
     };
-    auto host = resolved_secret_value{};
-    auto user = resolved_secret_value{};
-    auto password = resolved_secret_value{};
-    ctrl.resolve_secrets_must_yield({
-      {args_.host, host},
-      {args_.user, user},
-      {args_.password, password},
+    (void)ctrl.resolve_secrets_must_yield({
+      make_secret_request("host", args_.host, args.host, dh),
+      make_secret_request("user", args_.user, args.user, dh),
+      make_secret_request("password", args_.password, args.password, dh),
     });
     co_yield {};
-#define X(NAME)                                                                \
-  if (auto u = NAME.utf8_view()) {                                             \
-    args.NAME = std::string{*u};                                               \
-  } else {                                                                     \
-    diagnostic::error("expected UTF-8 value")                                  \
-      .primary(args_.NAME.source)                                              \
-      .emit(ctrl.diagnostics());                                               \
-  }
-    X(host);
-    X(user);
-    X(password);
-#undef X
     args.ssl.update_cacert(ctrl);
     auto client = easy_client::make(args, ctrl.diagnostics());
     if (not client) {

@@ -228,8 +228,8 @@ struct exec_node_control_plane final : public operator_control_plane {
   }
 
   struct located_resolved_secret {
-    ecc::cleansing_blob value;
     location loc;
+    ecc::cleansing_blob value;
 
     located_resolved_secret(location loc) : loc{loc} {
     }
@@ -240,8 +240,10 @@ struct exec_node_control_plane final : public operator_control_plane {
 
   struct secret_finisher {
     class secret secret;
-    resolved_secret_value& out;
+    secret_request_callback callback;
     location loc;
+
+    auto finish(auto) const;
 
     void finish(const request_map_t& requested) const {
       auto res = ecc::cleansing_blob{};
@@ -301,14 +303,18 @@ struct exec_node_control_plane final : public operator_control_plane {
         // We append the resolved & transformed element to the final result.
         res.insert(res.end(), temp_blob.begin(), temp_blob.end());
       }
-      // Finally, we make the result available to the original requests
-      // out-parameter.
-      out = resolved_secret_value{std::move(res)};
+      // Finally, we invoke the callback
+      callback(resolved_secret_value{std::move(res)});
     }
   };
 
-  virtual auto resolve_secrets_must_yield(std::vector<secret_request> requests)
-    -> void override {
+  /// @param requests the requests to resolve
+  /// @param final_callback the callback to invoke after all secrets are
+  ///        resolved and their callback have been invoked
+  virtual auto
+  resolve_secrets_must_yield(std::vector<secret_request> requests,
+                             std::function<void(void)> final_callback)
+    -> bool override {
     auto requested_secrets = std::make_shared<request_map_t>();
     auto finishers = std::vector<secret_finisher>{};
     for (auto& req : requests) {
@@ -316,34 +322,37 @@ struct exec_node_control_plane final : public operator_control_plane {
         const auto name = element->name()->string_view();
         const auto is_literal = element->is_literal();
         if (not is_literal) {
-          requested_secrets->try_emplace(std::string{name}, req.loc);
+          requested_secrets->try_emplace(std::string{name}, req.location);
         }
       }
-      finishers.emplace_back(std::move(req.secret), req.out, req.loc);
+      finishers.emplace_back(std::move(req.secret), std::move(req.callback),
+                             req.location);
     }
     if (requested_secrets->empty()) {
       for (const auto& f : finishers) {
         f.finish(*requested_secrets);
       }
-      return;
+      final_callback();
+      return false;
     }
-    auto callback = [this, finishers = std::move(finishers),
-                     requested_secrets = std::move(requested_secrets)](
-                      caf::expected<node_actor> maybe_actor) {
+    auto node_callback = [this, finishers = std::move(finishers),
+                          final_callback = std::move(final_callback),
+                          requested_secrets = std::move(requested_secrets)](
+                           caf::expected<node_actor> maybe_actor) {
       if (not maybe_actor) {
         diagnostic::error("no Tenzir Node to resolve secrets")
           .primary(finishers.front().loc)
           .emit(diagnostics());
         return;
       }
-      // FIXME: Is this actually threadsafe the way we use it? The counter
-      // itself certainly is not.
       auto fan = detail::make_fanout_counter_with_error<diagnostic>(
         requested_secrets->size(),
-        [this, requested_secrets, finishers = std::move(finishers)]() {
+        [this, requested_secrets, finishers = std::move(finishers),
+         final_callback = std::move(final_callback)]() {
           for (const auto& f : finishers) {
             f.finish(*requested_secrets);
           }
+          final_callback();
           set_waiting(false);
         },
         [this](std::span<diagnostic> diags) {
@@ -395,10 +404,11 @@ struct exec_node_control_plane final : public operator_control_plane {
     set_waiting(true);
     auto node = this->node();
     if (node) {
-      callback(node);
-      return;
+      node_callback(node);
+      return true;
     }
-    connect_to_node(state.self, std::move(callback));
+    connect_to_node(state.self, std::move(node_callback));
+    return true;
   }
 
   exec_node_state<Input, Output>& state;

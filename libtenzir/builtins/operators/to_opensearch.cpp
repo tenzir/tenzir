@@ -332,7 +332,7 @@ public:
       if (args_.passwd) {
         requests.emplace_back(*args_.passwd, password);
       }
-      ctrl.resolve_secrets_must_yield(std::move(requests));
+      (void)ctrl.resolve_secrets_must_yield(std::move(requests));
       co_yield {};
     }
     auto final_url = std::string{};
