@@ -343,19 +343,29 @@ private:
     // Schedule retry after delay
     retry_timer_.emplace(*io_ctx_);
     retry_timer_->expires_after(args_.retry_delay.inner);
-    retry_timer_->async_wait(
-      [this, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self_)](
-        const boost::system::error_code& ec) {
-        if (ec) {
-          return; // Timer was cancelled
-        }
+    retry_timer_->async_wait([this,
+                              weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(
+                                self_)](const boost::system::error_code& ec) {
+      if (ec) {
         if (auto hdl = weak_hdl.lock()) {
-          caf::anon_mail(caf::make_action([this]() {
-            attempt_connect();
+          caf::anon_mail(caf::make_action([this, ec]() {
+            if (pending_write_) {
+              auto& [promise, chunk] = *pending_write_;
+              promise.deliver(caf::make_error(ec::system_error,
+                                              "retry_error: {}", ec.message()));
+            }
           }))
             .send(caf::actor_cast<caf::actor>(hdl));
+          return; // Timer was cancelled
         }
-      });
+      }
+      if (auto hdl = weak_hdl.lock()) {
+        caf::anon_mail(caf::make_action([this]() {
+          attempt_connect();
+        }))
+          .send(caf::actor_cast<caf::actor>(hdl));
+      }
+    });
   }
 
   // Handle disconnection by triggering reconnection
