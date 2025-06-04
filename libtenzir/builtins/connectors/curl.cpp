@@ -13,6 +13,7 @@
 #include <tenzir/http.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/transfer.hpp>
 
@@ -33,34 +34,83 @@ struct http_options {
   bool chunked;
   bool multipart;
   std::string method;
-  std::vector<http::request_item> items;
+  located<record> body;
+  located<record> headers;
+  located<record> params;
 
   friend auto inspect(auto& f, http_options& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.http_options")
       .fields(f.field("json", x.json), f.field("form", x.form),
               f.field("chunked", x.chunked), f.field("multipart", x.multipart),
-              f.field("method", x.method), f.field("items", x.items));
+              f.field("method", x.method), f.field("body", x.body),
+              f.field("headers", x.headers), f.field("params", x.params));
   }
 };
 
 struct connector_args {
-  std::string url;
+  bool is_ftp = false;
+  located<secret> url;
   transfer_options transfer_opts;
   http_options http_opts;
 
   friend auto inspect(auto& f, connector_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.connector_args")
-      .fields(f.field("url", x.url), f.field("transfer_opts", x.transfer_opts),
+      .fields(f.field("is_ftp", x.is_ftp), f.field("url", x.url),
+              f.field("transfer_opts", x.transfer_opts),
               f.field("http_opts", x.http_opts));
   }
 };
 
-auto make_request(const connector_args& args) -> caf::expected<http::request> {
+auto make_items_wo_secrets(const connector_args& args, diagnostic_handler& dh)
+  -> std::vector<http::request_item> {
+  auto items = std::vector<http::request_item>{};
+  for (auto& [key, value] : args.http_opts.body.inner) {
+    auto str = to_json(value);
+    TENZIR_ASSERT(str);
+    items.emplace_back(tenzir::http::request_item::data_json, std::move(key),
+                       std::move(*str));
+  }
+  for (auto& [key, value] : args.http_opts.params.inner) {
+    if (auto* str = try_as<std::string>(value)) {
+      items.emplace_back(tenzir::http::request_item::url_param, std::move(key),
+                         std::move(*str));
+      continue;
+    }
+    if (is<secret>(value)) {
+      // secrets are resolved later
+      continue;
+    }
+    diagnostic::error("header `{}` must be a `string`", key)
+      .primary(args.http_opts.params)
+      .emit(dh);
+    break;
+  }
+  for (auto& [key, value] : args.http_opts.headers.inner) {
+    if (auto* str = try_as<std::string>(value)) {
+      items.emplace_back(tenzir::http::request_item::header, std::move(key),
+                         std::move(*str));
+      continue;
+    }
+    if (is<secret>(value)) {
+      // secrets are resolved later
+      continue;
+    }
+    diagnostic::error("header `{}` must be a `string`", key)
+      .primary(args.http_opts.params)
+      .emit(dh);
+    break;
+  }
+  return items;
+}
+
+auto make_request(const connector_args& args, std::string_view url,
+                  std::vector<http::request_item> items)
+  -> caf::expected<http::request> {
   auto result = http::request{};
   // Set URL.
-  result.uri = args.url;
+  result.uri = url;
   // Set method.
   result.method = args.http_opts.method;
   if (args.http_opts.json) {
@@ -79,10 +129,30 @@ auto make_request(const connector_args& args) -> caf::expected<http::request> {
   if (args.http_opts.chunked) {
     result.headers.emplace_back("Transfer-Encoding", "chunked");
   }
-  if (auto err = apply(args.http_opts.items, result)) {
+  if (auto err = apply(items, result)) {
     return err;
   }
   return result;
+}
+
+auto make_record_param_request(std::string name,
+                               http::request_item::item_type type,
+                               const located<record>& r,
+                               std::vector<http::request_item>& items,
+                               diagnostic_handler& dh) {
+  return make_secret_request(
+    r.inner, r.source,
+    [loc = r.source, name, type, &items, &dh](std::string_view key,
+                                              resolved_secret_value value) {
+      if (auto sv = value.utf8_view()) {
+        items.emplace_back(type, std::string{key}, std::string{*sv});
+        return;
+      }
+      diagnostic::error("expected {} entry `{}` to be a valid UTF-8 string",
+                        name, key)
+        .primary(loc)
+        .emit(dh);
+    });
 }
 
 class load_http_operator final : public crtp_operator<load_http_operator> {
@@ -97,12 +167,30 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    // TODO: Clean this up.
+    auto url = std::string{};
+    auto& dh = ctrl.diagnostics();
+    auto items = make_items_wo_secrets(args_, dh);
+    (void)resolve_secrets_must_yield(
+      ctrl,
+      {
+        make_secret_request("url", args_.url, url, dh),
+        make_record_param_request("parameter", http::request_item::url_param,
+                                  args_.http_opts.params, items, dh),
+        make_record_param_request("header", http::request_item::header,
+                                  args_.http_opts.headers, items, dh),
+      });
     co_yield {};
+    if (args_.is_ftp and not url.starts_with("ftp://")
+        and not url.starts_with("ftps://")) {
+      url.insert(0, "ftp://");
+    }
     auto args = args_;
+    if (not args.transfer_opts.ssl.validate(url, args_.url.source, dh)) {
+      co_return;
+    }
     args.transfer_opts.ssl.update_cacert(ctrl);
     auto tx = transfer{args.transfer_opts};
-    auto req = make_request(args);
+    auto req = make_request(args_, url, items);
     if (not req) {
       diagnostic::error("failed to construct HTTP request")
         .note("{}", req.error())
@@ -142,7 +230,8 @@ public:
     }
     for (auto&& chunk : tx.download_chunks()) {
       if (not chunk) {
-        diagnostic::error("failed to download {}", args.url)
+        diagnostic::error("failed to download")
+          .primary(args_.url.source)
           .hint(fmt::format("{}", chunk.error()))
           .emit(ctrl.diagnostics());
         co_return;
@@ -187,11 +276,30 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    auto url = std::string{};
+    auto& dh = ctrl.diagnostics();
+    auto items = make_items_wo_secrets(args_, dh);
+    (void)resolve_secrets_must_yield(
+      ctrl,
+      {
+        make_secret_request("url", args_.url, url, dh),
+        make_record_param_request("parameter", http::request_item::url_param,
+                                  args_.http_opts.params, items, dh),
+        make_record_param_request("header", http::request_item::header,
+                                  args_.http_opts.headers, items, dh),
+      });
     co_yield {};
-    // TODO: Clean this up.
+    if (args_.is_ftp and not url.starts_with("ftp://")
+        and not url.starts_with("ftps://")) {
+      url.insert(0, "ftp://");
+    }
     auto args = args_;
+    if (not args.transfer_opts.ssl.validate(url, args_.url.source, dh)) {
+      co_return;
+    }
     args.transfer_opts.ssl.update_cacert(ctrl);
-    auto req = make_request(args_);
+    auto tx = transfer{args.transfer_opts};
+    auto req = make_request(args_, url, items);
     if (not req) {
       diagnostic::error("failed to construct HTTP request")
         .note("{}", req.error())
@@ -209,7 +317,6 @@ public:
         .hint("remove arguments that create a request body")
         .emit(ctrl.diagnostics());
     }
-    auto tx = transfer(args_.transfer_opts);
     if (auto err = tx.prepare(std::move(*req))) {
       diagnostic::error("failed to prepare HTTP request")
         .note("{}", err)
@@ -227,7 +334,8 @@ public:
           .emit(ctrl.diagnostics());
       }
       if (auto err = tx.perform()) {
-        diagnostic::error("failed to upload chunk to {}", args.url)
+        diagnostic::error("failed to upload chunk")
+          .primary(args_.url.source)
           .note("{}", err)
           .emit(ctrl.diagnostics());
       }
@@ -259,21 +367,17 @@ private:
 auto parse_http_args(const std::string& name,
                      const operator_factory_plugin::invocation& inv,
                      session ctx) -> failure_or<connector_args> {
-  auto url = located<std::string>{};
-  auto body_data = std::optional<located<record>>{};
-  auto params = std::optional<located<record>>{};
-  auto headers = std::optional<located<record>>{};
   auto form = std::optional<location>{};
   auto method = std::optional<std::string>{};
   auto args = connector_args{};
   args.transfer_opts.default_protocol = "https";
   auto parser = argument_parser2::operator_(name);
-  parser.positional("url", url);
-  parser.named("params", params);
-  parser.named("headers", headers);
+  parser.positional("url", args.url);
+  parser.named_optional("params", args.http_opts.params);
+  parser.named_optional("headers", args.http_opts.headers);
   parser.named("method", method);
   if (name == "load_http") {
-    parser.named("data", body_data);
+    parser.named_optional("data", args.http_opts.body);
     parser.named("form", form);
     parser.named("chunked", args.http_opts.chunked);
     parser.named("multipart", args.http_opts.multipart);
@@ -281,46 +385,9 @@ auto parse_http_args(const std::string& name,
   args.transfer_opts.ssl.add_tls_options(parser);
   parser.named("_verbose", args.transfer_opts.verbose);
   TRY(parser.parse(inv, ctx));
-  TRY(args.transfer_opts.ssl.validate(url, ctx));
-  args.url = std::move(url.inner);
+  TRY(args.transfer_opts.ssl.validate(ctx));
   if (form) {
     args.http_opts.form = true;
-  }
-  if (body_data) {
-    for (auto& [key, value] : body_data->inner) {
-      auto str = to_json(value);
-      TENZIR_ASSERT(str);
-      args.http_opts.items.emplace_back(tenzir::http::request_item::data_json,
-                                        std::move(key), std::move(*str));
-    }
-  }
-  if (params) {
-    for (auto& [name, value] : params->inner) {
-      // TODO: What about other types?
-      auto* str = try_as<std::string>(&value);
-      if (not str) {
-        diagnostic::error("expected `string` for parameter `{}`", name)
-          .primary(*params)
-          .emit(ctx);
-        continue;
-      }
-      args.http_opts.items.emplace_back(tenzir::http::request_item::url_param,
-                                        std::move(name), std::move(*str));
-    }
-  }
-  if (headers) {
-    for (auto& [name, value] : headers->inner) {
-      // TODO: What about other types?
-      auto* str = try_as<std::string>(&value);
-      if (not str) {
-        diagnostic::error("expected `string` for header `{}`", name)
-          .primary(*headers)
-          .emit(ctx);
-        continue;
-      }
-      args.http_opts.items.emplace_back(tenzir::http::request_item::header,
-                                        std::move(name), std::move(*str));
-    }
   }
   if (method) {
     args.http_opts.method = std::move(*method);
@@ -367,12 +434,9 @@ auto parse_ftp_args(std::string name,
   auto parser = argument_parser2::operator_(std::move(name));
   parser.positional("url", args.url);
   args.transfer_opts.ssl.add_tls_options(parser);
+  args.is_ftp = true;
   TRY(parser.parse(inv, ctx));
-  if (not args.url.starts_with("ftp://")
-      and not args.url.starts_with("ftps://")) {
-    args.url.insert(0, "ftp://");
-  }
-  TRY(args.transfer_opts.ssl.validate(args.url, location::unknown, ctx));
+  TRY(args.transfer_opts.ssl.validate(ctx));
   return args;
 }
 

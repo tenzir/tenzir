@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/as_bytes.hpp"
+#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/function.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/narrow.hpp"
@@ -312,6 +313,12 @@ private:
   template <class Inspector>
   friend bool save_impl(Inspector& f, chunk_ptr& x) {
     using tenzir::detail::narrow;
+    if (auto* dbg = as_debug_writer(f)) {
+      if (x == nullptr) {
+        return dbg->fmt_value("<chunk:null>");
+      }
+      return dbg->fmt_value("<chunk:size:{}>", x->size());
+    }
     if (x == nullptr)
       return f.apply(chunk::invalid_size);
     if (!f.apply(narrow<int64_t>(x->size())))
