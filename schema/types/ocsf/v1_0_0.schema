@@ -8,6 +8,22 @@ type _ocsf.v1_0_0.object.authorization = record{
   policy: _ocsf.v1_0_0.object.policy #optional,
 }
 
+// The Geo Location object describes a geographical location, usually associated
+// with an IP address. Defined by D3FEND <a target='_blank' href='https://d3fend
+// .mitre.org/dao/artifact/d3f:PhysicalLocation/'>d3f:PhysicalLocation</a>.
+type _ocsf.v1_0_0.object.location = record{
+  city: string #recommended,
+  continent: string #recommended,
+  coordinates: list<double> #required,
+  country: string #recommended,
+  desc: string #optional,
+  is_on_premises: bool #optional,
+  isp: string #optional,
+  postal_code: string #optional,
+  provider: string #optional,
+  region: string #optional,
+}
+
 // The Network Endpoint object describes characteristics of a network endpoint.
 // These can be a source or destination of a network connection.
 type _ocsf.v1_0_0.object.network_endpoint = record{
@@ -29,6 +45,18 @@ type _ocsf.v1_0_0.object.network_endpoint = record{
   vpc_uid: string #optional,
 }
 
+// The Product object describes characteristics of a software product.
+type _ocsf.v1_0_0.object.product = record{
+  feature: _ocsf.v1_0_0.object.feature #optional,
+  lang: string #recommended,
+  name: string #recommended,
+  path: string #optional,
+  uid: string #recommended,
+  url_string: string #optional,
+  vendor_name: string #required,
+  version: string #recommended,
+}
+
 // The Service object describes characteristics of a service, <code> e.g. AWS
 // EC2. </code>
 type _ocsf.v1_0_0.object.service = record{
@@ -38,23 +66,28 @@ type _ocsf.v1_0_0.object.service = record{
   version: string #recommended,
 }
 
-// The Kernel Extension object describes a kernel driver that has been loaded or
-// unloaded into the operating system (OS) kernel. Defined by D3FEND <a
-// target='_blank' href='https://d3fend.mitre.org/dao/artifact/d3f:KernelModule/
-// '>d3f:KernelModule</a>.
-type _ocsf.v1_0_0.object.kernel_driver = record{
-  file: _ocsf.v1_0_0.object.file #required,
+// The Enrichment object provides inline enrichment data for specific attributes
+// of interest within an event. It serves as a mechanism to enhance or
+// supplement the information associated with the event by adding additional
+// relevant details or context.
+type _ocsf.v1_0_0.object.enrichment = record{
+  data: string #print_json #required,
+  name: string #required,
+  provider: string #recommended,
+  type: string #recommended,
+  value: string #required,
 }
 
-// The Fingerprint object provides detailed information about a digital
-// fingerprint, which is a compact representation of data used to identify a
-// longer piece of information, such as a public key or file content. It
-// contains the algorithm and value of the fingerprint, enabling efficient and
-// reliable identification of the associated data.
-type _ocsf.v1_0_0.object.fingerprint = record{
-  algorithm: string #optional,
-  algorithm_id: int64 #required,
-  value: string #required,
+// The Web Resource object describes characteristics of a web resource that was
+// affected by the activity/event.
+type _ocsf.v1_0_0.object.web_resource = record{
+  data: string #print_json #optional,
+  desc: string #optional,
+  labels: list<string> #optional,
+  name: string #optional,
+  type: string #optional,
+  uid: string #optional,
+  url_string: string #recommended,
 }
 
 // The Image object provides a description of a specific Virtual Machine (VM) or
@@ -114,28 +147,6 @@ type _ocsf.v1_0_0.object.idp = record{
   uid: string #recommended,
 }
 
-// The Endpoint object describes a physical or virtual device that connects to
-// and exchanges information with a computer network. Some examples of endpoints
-// are mobile devices, desktop computers, virtual machines, embedded devices,
-// and servers. Internet-of-Things devices—like cameras, lighting,
-// refrigerators, security systems, smart speakers, and thermostats—are also
-// endpoints.
-type _ocsf.v1_0_0.object.endpoint = record{
-  domain: string #optional,
-  hostname: string #recommended,
-  instance_uid: string #recommended,
-  interface_name: string #recommended,
-  interface_uid: string #recommended,
-  ip: ip #recommended,
-  location: _ocsf.v1_0_0.object.location #optional,
-  mac: string #optional,
-  name: string #recommended,
-  subnet_uid: string #optional,
-  uid: string #recommended,
-  vlan_uid: string #optional,
-  vpc_uid: string #optional,
-}
-
 // The Device object represents an addressable computer system or host, which is
 // typically connected to a computer network and participates in the
 // transmission or processing of data within the computer network. Defined by
@@ -144,9 +155,11 @@ type _ocsf.v1_0_0.object.endpoint = record{
 type _ocsf.v1_0_0.object.device = record{
   autoscale_uid: string #optional,
   created_time: time #optional,
+  created_time_dt: time #optional #profile=datetime,
   desc: string #optional,
   domain: string #optional,
   first_seen_time: time #optional,
+  first_seen_time_dt: time #optional #profile=datetime,
   groups: list<_ocsf.v1_0_0.object.group> #optional,
   hostname: string #recommended,
   hw_info: _ocsf.v1_0_0.object.device_hw_info #optional,
@@ -162,9 +175,11 @@ type _ocsf.v1_0_0.object.device = record{
   is_personal: bool #optional,
   is_trusted: bool #optional,
   last_seen_time: time #optional,
+  last_seen_time_dt: time #optional #profile=datetime,
   location: _ocsf.v1_0_0.object.location #optional,
   mac: string #optional,
   modified_time: time #optional,
+  modified_time_dt: time #optional #profile=datetime,
   name: string #recommended,
   network_interfaces: list<_ocsf.v1_0_0.object.network_interface> #optional,
   org: _ocsf.v1_0_0.object.organization #optional,
@@ -187,18 +202,26 @@ type _ocsf.v1_0_0.object.device = record{
 // Defined by D3FEND <a target='_blank'
 // href='https://d3fend.mitre.org/dao/artifact/d3f:Process/'>d3f:Process</a>.
 type _ocsf.v1_0_0.object.process = record{
+  auid: int64 #optional #profile=linux/linux_users #extension=linux,
   cmd_line: string #recommended,
+  container: _ocsf.v1_0_0.object.container #recommended #profile=container,
   created_time: time #recommended,
+  created_time_dt: time #optional #profile=datetime,
+  egid: int64 #optional #profile=linux/linux_users #extension=linux,
+  euid: int64 #optional #profile=linux/linux_users #extension=linux,
   file: _ocsf.v1_0_0.object.file #recommended,
+  group: _ocsf.v1_0_0.object.group #recommended #profile=linux/linux_users,
   integrity: string #optional,
   integrity_id: int64 #optional,
   lineage: list<string> #optional,
   loaded_modules: list<string> #optional,
   name: string #recommended,
+  namespace_pid: int64 #recommended #profile=container,
   pid: int64 #recommended,
   sandbox: string #optional,
   session: _ocsf.v1_0_0.object.session #optional,
   terminated_time: time #optional,
+  terminated_time_dt: time #optional #profile=datetime,
   tid: int64 #optional,
   uid: string #recommended,
   user: _ocsf.v1_0_0.object.user #recommended,
@@ -223,86 +246,6 @@ type _ocsf.v1_0_0.object.url = record{
   url_string: string #recommended,
 }
 
-// The Product object describes characteristics of a software product.
-type _ocsf.v1_0_0.object.product = record{
-  feature: _ocsf.v1_0_0.object.feature #optional,
-  lang: string #recommended,
-  name: string #recommended,
-  path: string #optional,
-  uid: string #recommended,
-  url_string: string #optional,
-  vendor_name: string #required,
-  version: string #recommended,
-}
-
-// The OCSF Schema Extension object provides detailed information about the
-// schema extension used to construct the event. The schema extensions are
-// registered in the <a target='_blank' href='https://github.com/ocsf/ocsf-
-// schema/blob/main/extensions.md'>extensions.md</a> file.
-type _ocsf.v1_0_0.object.extension = record{
-  name: string #required,
-  uid: string #required,
-  version: string #required,
-}
-
-// The Network Interface object describes the type and associated attributes of
-// a network interface.
-type _ocsf.v1_0_0.object.network_interface = record{
-  hostname: string #recommended,
-  ip: ip #recommended,
-  mac: string #recommended,
-  name: string #recommended,
-  namespace: string #optional,
-  subnet_prefix: int64 #optional,
-  type: string #optional,
-  type_id: int64 #required,
-  uid: string #optional,
-}
-
-// The Attack object describes the technique and associated tactics related to
-// an attack. See <a target='_blank' href='https://attack.mitre.org'>MITRE
-// ATT&CK®</a>.
-type _ocsf.v1_0_0.object.attack = record{
-  tactics: list<_ocsf.v1_0_0.object.tactic> #required,
-  technique: _ocsf.v1_0_0.object.technique #required,
-  version: string #required,
-}
-
-// The File object represents the metadata associated with a file stored in a
-// computer system. It encompasses information about the file itself, including
-// its attributes, properties, and organizational details. Defined by D3FEND <a
-// target='_blank'
-// href='https://next.d3fend.mitre.org/dao/artifact/d3f:File/'>d3f:File</a>.
-type _ocsf.v1_0_0.object.file = record{
-  accessed_time: time #optional,
-  accessor: _ocsf.v1_0_0.object.user #optional,
-  attributes: int64 #optional,
-  company_name: string #optional,
-  confidentiality: string #optional,
-  confidentiality_id: int64 #optional,
-  created_time: time #optional,
-  creator: _ocsf.v1_0_0.object.user #optional,
-  desc: string #optional,
-  hashes: list<_ocsf.v1_0_0.object.fingerprint> #recommended,
-  is_system: bool #optional,
-  mime_type: string #optional,
-  modified_time: time #optional,
-  modifier: _ocsf.v1_0_0.object.user #optional,
-  name: string #required,
-  owner: _ocsf.v1_0_0.object.user #optional,
-  parent_folder: string #optional,
-  path: string #recommended,
-  product: _ocsf.v1_0_0.object.product #optional,
-  security_descriptor: string #optional,
-  signature: _ocsf.v1_0_0.object.digital_signature #optional,
-  size: int64 #optional,
-  type: string #optional,
-  type_id: int64 #required,
-  uid: string #optional,
-  version: string #optional,
-  xattributes: string #print_json #optional,
-}
-
 // The Network Connection Information object describes characteristics of a
 // network connection. Defined by D3FEND <a target='_blank' href='https://d3fend
 // .mitre.org/dao/artifact/d3f:NetworkSession/'>d3f:NetworkSession</a>.
@@ -319,6 +262,79 @@ type _ocsf.v1_0_0.object.network_connection_info = record{
   uid: string #optional,
 }
 
+// The File object represents the metadata associated with a file stored in a
+// computer system. It encompasses information about the file itself, including
+// its attributes, properties, and organizational details. Defined by D3FEND <a
+// target='_blank'
+// href='https://next.d3fend.mitre.org/dao/artifact/d3f:File/'>d3f:File</a>.
+type _ocsf.v1_0_0.object.file = record{
+  accessed_time: time #optional,
+  accessed_time_dt: time #optional #profile=datetime,
+  accessor: _ocsf.v1_0_0.object.user #optional,
+  attributes: int64 #optional,
+  company_name: string #optional,
+  confidentiality: string #optional,
+  confidentiality_id: int64 #optional,
+  created_time: time #optional,
+  created_time_dt: time #optional #profile=datetime,
+  creator: _ocsf.v1_0_0.object.user #optional,
+  desc: string #optional,
+  hashes: list<_ocsf.v1_0_0.object.fingerprint> #recommended,
+  is_system: bool #optional,
+  mime_type: string #optional,
+  modified_time: time #optional,
+  modified_time_dt: time #optional #profile=datetime,
+  modifier: _ocsf.v1_0_0.object.user #optional,
+  name: string #required,
+  owner: _ocsf.v1_0_0.object.user #optional,
+  parent_folder: string #optional,
+  path: string #recommended,
+  product: _ocsf.v1_0_0.object.product #optional,
+  security_descriptor: string #optional,
+  signature: _ocsf.v1_0_0.object.digital_signature #optional,
+  size: int64 #optional,
+  type: string #optional,
+  type_id: int64 #required,
+  uid: string #optional,
+  version: string #optional,
+  xattributes: string #print_json #optional,
+}
+
+// The Digital Certificate, also known as a Public Key Certificate, object
+// contains information about the ownership and usage of a public key. It serves
+// as a means to establish trust in the authenticity and integrity of the public
+// key and the associated entity. Defined by D3FEND <a target='_blank' href='htt
+// ps://d3fend.mitre.org/dao/artifact/d3f:Certificate/'>d3f:Certificate</a>.
+type _ocsf.v1_0_0.object.certificate = record{
+  created_time: time #recommended,
+  created_time_dt: time #optional #profile=datetime,
+  expiration_time: time #recommended,
+  expiration_time_dt: time #optional #profile=datetime,
+  fingerprints: list<_ocsf.v1_0_0.object.fingerprint> #required,
+  issuer: string #required,
+  serial_number: string #required,
+  subject: string #recommended,
+  version: string #recommended,
+}
+
+// The Organization object describes characteristics of an organization or
+// company and its division if any.
+type _ocsf.v1_0_0.object.organization = record{
+  name: string #recommended,
+  ou_name: string #recommended,
+  ou_uid: string #optional,
+  uid: string #recommended,
+}
+
+// The Technique object describes the technique related to an attack, as defined
+// by <a target='_blank'
+// href='https://attack.mitre.org/wiki/ATT&CK_Matrix'>ATT&CK
+// Matrix<sup>TM</sup></a>.
+type _ocsf.v1_0_0.object.technique = record{
+  name: string #recommended,
+  uid: string #recommended,
+}
+
 // The Module object describes the load attributes of a module.
 type _ocsf.v1_0_0.object.module = record{
   base_address: string #recommended,
@@ -330,13 +346,16 @@ type _ocsf.v1_0_0.object.module = record{
   type: string #recommended,
 }
 
-// The Related Event object describes an event related to a finding or detection
-// as identified by the security product.
-type _ocsf.v1_0_0.object.related_event = record{
-  product_uid: string #optional,
-  type: string #optional,
-  type_uid: int64 #recommended,
-  uid: string #required,
+// The Software Package object describes details about a software package.
+// Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
+// act/d3f:SoftwarePackage/'>d3f:SoftwarePackage</a>.
+type _ocsf.v1_0_0.object.package = record{
+  architecture: string #recommended,
+  epoch: int64 #optional,
+  license: string #optional,
+  name: string #required,
+  release: string #optional,
+  version: string #required,
 }
 
 // The HTTP Request object represents the attributes of a request made to a web
@@ -383,34 +402,26 @@ type _ocsf.v1_0_0.object.rule = record{
   version: string #optional,
 }
 
-// The Device Hardware Information object contains details and specifications of
-// the physical components that make up a device. This information provides an
-// overview of the hardware capabilities, configuration, and characteristics of
-// the device.
-type _ocsf.v1_0_0.object.device_hw_info = record{
-  bios_date: string #optional,
-  bios_manufacturer: string #optional,
-  bios_ver: string #optional,
-  chassis: string #optional,
-  cpu_bits: int64 #optional,
-  cpu_cores: int64 #optional,
-  cpu_count: int64 #optional,
-  cpu_speed: int64 #optional,
-  cpu_type: string #optional,
-  desktop_display: _ocsf.v1_0_0.object.display #optional,
-  keyboard_info: _ocsf.v1_0_0.object.keyboard_info #optional,
-  ram_size: int64 #optional,
-  serial_number: string #optional,
-}
-
-// The observable object is a pivot element that contains related information
-// found in many places in the event.
-type _ocsf.v1_0_0.object.observable = record{
-  name: string #required,
-  reputation: _ocsf.v1_0_0.object.reputation #optional,
-  type: string #optional,
-  type_id: int64 #required,
-  value: string #optional,
+// The Network Proxy Endpoint describes characteristics of a network proxy.
+// Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
+// act/d3f:ProxyServer/'>d3f:ProxyServer</a>.
+type _ocsf.v1_0_0.object.network_proxy = record{
+  domain: string #optional,
+  hostname: string #recommended,
+  instance_uid: string #recommended,
+  interface_name: string #recommended,
+  interface_uid: string #recommended,
+  intermediate_ips: list<ip> #optional,
+  ip: ip #recommended,
+  location: _ocsf.v1_0_0.object.location #optional,
+  mac: string #optional,
+  name: string #recommended,
+  port: int64 #recommended,
+  subnet_uid: string #optional,
+  svc_name: string #recommended,
+  uid: string #recommended,
+  vlan_uid: string #optional,
+  vpc_uid: string #optional,
 }
 
 // The Policy object describes the policies that are applicable. <p>Policy
@@ -437,6 +448,21 @@ type _ocsf.v1_0_0.object.group = record{
   uid: string #recommended,
 }
 
+// The DNS query object represents a specific request made to the Domain Name
+// System (DNS) to retrieve information about a domain or perform a DNS
+// operation. This object encapsulates the necessary attributes and methods to
+// construct and send DNS queries, specify the query type (e.g., A, AAAA, MX).
+// Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
+// act/d3f:DNSLookup/'>d3f:DNSLookup</a>.
+type _ocsf.v1_0_0.object.dns_query = record{
+  class: string #required,
+  hostname: string #required,
+  opcode: string #optional,
+  opcode_id: int64 #recommended,
+  packet_uid: int64 #recommended,
+  type: string #required,
+}
+
 // The Cloud object contains information about a cloud account such as AWS
 // Account ID, regions, etc.
 type _ocsf.v1_0_0.object.cloud = record{
@@ -460,9 +486,12 @@ type _ocsf.v1_0_0.object.metadata = record{
   log_provider: string #recommended,
   log_version: string #optional,
   logged_time: time #optional,
+  logged_time_dt: time #optional #profile=datetime,
   modified_time: time #optional,
+  modified_time_dt: time #optional #profile=datetime,
   original_time: string #recommended,
   processed_time: time #optional,
+  processed_time_dt: time #optional #profile=datetime,
   product: _ocsf.v1_0_0.object.product #required,
   profiles: list<string> #optional,
   sequence: int64 #optional,
@@ -499,16 +528,25 @@ type _ocsf.v1_0_0.object.cis_control = record{
   version: string #recommended,
 }
 
-// The Software Package object describes details about a software package.
-// Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
-// act/d3f:SoftwarePackage/'>d3f:SoftwarePackage</a>.
-type _ocsf.v1_0_0.object.package = record{
-  architecture: string #recommended,
-  epoch: int64 #optional,
-  license: string #optional,
+// The Subject Alternative name (SAN) object describes a SAN secured by a
+// digital certificate
+type _ocsf.v1_0_0.object.san = record{
   name: string #required,
-  release: string #optional,
-  version: string #required,
+  type: string #required,
+}
+
+// The Network Interface object describes the type and associated attributes of
+// a network interface.
+type _ocsf.v1_0_0.object.network_interface = record{
+  hostname: string #recommended,
+  ip: ip #recommended,
+  mac: string #recommended,
+  name: string #recommended,
+  namespace: string #optional,
+  subnet_prefix: int64 #optional,
+  type: string #optional,
+  type_id: int64 #required,
+  uid: string #optional,
 }
 
 // The Container object describes an instance of a specific container. A
@@ -525,6 +563,16 @@ type _ocsf.v1_0_0.object.container = record{
   size: int64 #recommended,
   tag: string #optional,
   uid: string #required,
+}
+
+// The API, or Application Programming Interface, object represents  information
+// pertaining to an API request and response.
+type _ocsf.v1_0_0.object.api = record{
+  operation: string #required,
+  request: _ocsf.v1_0_0.object.request #recommended,
+  response: _ocsf.v1_0_0.object.response #recommended,
+  service: _ocsf.v1_0_0.object.service #optional,
+  version: string #optional,
 }
 
 // The User object describes the characteristics of a user/person or a security
@@ -548,9 +596,10 @@ type _ocsf.v1_0_0.object.user = record{
 // The registry key object describes a Windows registry key. Defined by D3FEND
 // <a target='_blank' href='https://d3fend.mitre.org/dao/artifact/d3f:WindowsReg
 // istryKey/'>d3f:WindowsRegistryKey</a>.
-type _ocsf.v1_0_0.object.registry_key = record{
+type _ocsf.v1_0_0.object.win__registry_key = record{
   is_system: bool #optional,
   modified_time: time #optional,
+  modified_time_dt: time #optional #profile=datetime,
   path: string #required,
   security_descriptor: string #optional,
 }
@@ -600,50 +649,51 @@ type _ocsf.v1_0_0.object.http_header = record{
 // href='https://d3fend.mitre.org/dao/artifact/d3f:Session/'>d3f:Session</a>.
 type _ocsf.v1_0_0.object.session = record{
   created_time: time #recommended,
+  created_time_dt: time #optional #profile=datetime,
   credential_uid: string #optional,
   expiration_time: time #optional,
+  expiration_time_dt: time #optional #profile=datetime,
   is_remote: bool #recommended,
   issuer: string #recommended,
   uid: string #recommended,
   uuid: string #optional,
 }
 
-// The Web Resource object describes characteristics of a web resource that was
-// affected by the activity/event.
-type _ocsf.v1_0_0.object.web_resource = record{
-  data: string #print_json #optional,
-  desc: string #optional,
-  labels: list<string> #optional,
-  name: string #optional,
-  type: string #optional,
-  uid: string #optional,
-  url_string: string #recommended,
+// The Response Elements object describes characteristics of an API response.
+type _ocsf.v1_0_0.object.response = record{
+  code: int64 #recommended,
+  error: string #recommended,
+  error_message: string #recommended,
+  flags: list<string> #optional,
+  message: string #recommended,
 }
 
-// The API, or Application Programming Interface, object represents  information
-// pertaining to an API request and response.
-type _ocsf.v1_0_0.object.api = record{
-  operation: string #required,
-  request: _ocsf.v1_0_0.object.request #recommended,
-  response: _ocsf.v1_0_0.object.response #recommended,
-  service: _ocsf.v1_0_0.object.service #optional,
-  version: string #optional,
+// The Email object describes the email metadata such as sender, recipients, and
+// direction. Defined by D3FEND <a target='_blank'
+// href='https://d3fend.mitre.org/dao/artifact/d3f:Email/'>d3f:Email</a>.
+type _ocsf.v1_0_0.object.email = record{
+  cc: list<string> #optional,
+  delivered_to: string #optional,
+  from: string #required,
+  message_uid: string #recommended,
+  raw_header: string #optional,
+  reply_to: string #recommended,
+  size: int64 #recommended,
+  smtp_from: string #recommended,
+  smtp_to: list<string> #recommended,
+  subject: string #optional,
+  to: list<string> #required,
+  uid: string #recommended,
+  x_originating_ip: list<ip> #optional,
 }
 
-// The Geo Location object describes a geographical location, usually associated
-// with an IP address. Defined by D3FEND <a target='_blank' href='https://d3fend
-// .mitre.org/dao/artifact/d3f:PhysicalLocation/'>d3f:PhysicalLocation</a>.
-type _ocsf.v1_0_0.object.location = record{
-  city: string #recommended,
-  continent: string #recommended,
-  coordinates: list<double> #required,
-  country: string #recommended,
-  desc: string #optional,
-  is_on_premises: bool #optional,
-  isp: string #optional,
-  postal_code: string #optional,
-  provider: string #optional,
-  region: string #optional,
+// The Tactic object describes the tactic IDs and/or name that are associated
+// with the attack technique, as defined by <a target='_blank'
+// href='https://attack.mitre.org/wiki/ATT&CK_Matrix'>ATT&CK
+// Matrix<sup>TM</sup></a>.
+type _ocsf.v1_0_0.object.tactic = record{
+  name: string #recommended,
+  uid: string #recommended,
 }
 
 // The DNS Answer object represents a specific response provided by the Domain
@@ -658,23 +708,6 @@ type _ocsf.v1_0_0.object.dns_answer = record{
   rdata: string #required,
   ttl: int64 #recommended,
   type: string #required,
-}
-
-// The HTTP Cookie object, also known as a web cookie or browser cookie,
-// contains details and values pertaining to a small piece of data that a server
-// sends to a user's web browser. This data is then stored by the browser and
-// sent back to the server with subsequent requests, allowing the server to
-// remember and track certain information about the user's browsing session or
-// preferences.
-type _ocsf.v1_0_0.object.http_cookie = record{
-  domain: string #optional,
-  expiration_time: time #optional,
-  http_only: bool #optional,
-  name: string #required,
-  path: string #optional,
-  samesite: string #optional,
-  secure: bool #optional,
-  value: string #required,
 }
 
 // The Email Authentication object describes the Sender Policy Framework (SPF),
@@ -696,10 +729,14 @@ type _ocsf.v1_0_0.object.email_auth = record{
 // activities identified during security assessments or monitoring processes.
 type _ocsf.v1_0_0.object.finding = record{
   created_time: time #optional,
+  created_time_dt: time #optional #profile=datetime,
   desc: string #optional,
   first_seen_time: time #optional,
+  first_seen_time_dt: time #optional #profile=datetime,
   last_seen_time: time #optional,
+  last_seen_time_dt: time #optional #profile=datetime,
   modified_time: time #optional,
+  modified_time_dt: time #optional #profile=datetime,
   product_uid: string #optional,
   related_events: list<_ocsf.v1_0_0.object.related_event> #optional,
   remediation: _ocsf.v1_0_0.object.remediation #optional,
@@ -724,13 +761,22 @@ type _ocsf.v1_0_0.object.cvss = record{
   version: string #required,
 }
 
-// The Tactic object describes the tactic IDs and/or name that are associated
-// with the attack technique, as defined by <a target='_blank'
-// href='https://attack.mitre.org/wiki/ATT&CK_Matrix'>ATT&CK
-// Matrix<sup>TM</sup></a>.
-type _ocsf.v1_0_0.object.tactic = record{
-  name: string #recommended,
-  uid: string #recommended,
+// The HTTP Cookie object, also known as a web cookie or browser cookie,
+// contains details and values pertaining to a small piece of data that a server
+// sends to a user's web browser. This data is then stored by the browser and
+// sent back to the server with subsequent requests, allowing the server to
+// remember and track certain information about the user's browsing session or
+// preferences.
+type _ocsf.v1_0_0.object.http_cookie = record{
+  domain: string #optional,
+  expiration_time: time #optional,
+  expiration_time_dt: time #optional #profile=datetime,
+  http_only: bool #optional,
+  name: string #required,
+  path: string #optional,
+  samesite: string #optional,
+  secure: bool #optional,
+  value: string #required,
 }
 
 // The Managed Entity object describes the type and version of an entity, such
@@ -755,37 +801,21 @@ type _ocsf.v1_0_0.object.cis_benchmark_result = record{
   rule: _ocsf.v1_0_0.object.rule #optional,
 }
 
-// The Technique object describes the technique related to an attack, as defined
-// by <a target='_blank'
-// href='https://attack.mitre.org/wiki/ATT&CK_Matrix'>ATT&CK
-// Matrix<sup>TM</sup></a>.
-type _ocsf.v1_0_0.object.technique = record{
-  name: string #recommended,
-  uid: string #recommended,
+// The Metric object defines a simple name/value pair entity for a metric.
+type _ocsf.v1_0_0.object.metric = record{
+  name: string #required,
+  value: string #required,
 }
 
-// The HASSH (Honeypot Attention-Grabbing SSH) object contains SSH network
-// fingerprinting values for specific client/server implementations. It provides
-// a standardized way of identifying and categorizing SSH connections based on
-// their unique characteristics and behavior.
-type _ocsf.v1_0_0.object.hassh = record{
-  algorithm: string #recommended,
-  fingerprint: _ocsf.v1_0_0.object.fingerprint #required,
-}
-
-// The Digital Certificate, also known as a Public Key Certificate, object
-// contains information about the ownership and usage of a public key. It serves
-// as a means to establish trust in the authenticity and integrity of the public
-// key and the associated entity. Defined by D3FEND <a target='_blank' href='htt
-// ps://d3fend.mitre.org/dao/artifact/d3f:Certificate/'>d3f:Certificate</a>.
-type _ocsf.v1_0_0.object.certificate = record{
-  created_time: time #recommended,
-  expiration_time: time #recommended,
-  fingerprints: list<_ocsf.v1_0_0.object.fingerprint> #required,
-  issuer: string #required,
-  serial_number: string #required,
-  subject: string #recommended,
-  version: string #recommended,
+// The Fingerprint object provides detailed information about a digital
+// fingerprint, which is a compact representation of data used to identify a
+// longer piece of information, such as a public key or file content. It
+// contains the algorithm and value of the fingerprint, enabling efficient and
+// reliable identification of the associated data.
+type _ocsf.v1_0_0.object.fingerprint = record{
+  algorithm: string #optional,
+  algorithm_id: int64 #required,
+  value: string #required,
 }
 
 // The Keyboard Information object contains details and attributes related to a
@@ -815,15 +845,26 @@ type _ocsf.v1_0_0.object.vulnerability = record{
 }
 
 // The registry value object describes a Windows registry value.
-type _ocsf.v1_0_0.object.registry_value = record{
+type _ocsf.v1_0_0.object.win__registry_value = record{
   data: string #print_json #optional,
   is_default: bool #optional,
   is_system: bool #optional,
   modified_time: time #optional,
+  modified_time_dt: time #optional #profile=datetime,
   name: string #required,
   path: string #required,
   type: string #optional,
   type_id: int64 #recommended,
+}
+
+// The Feature object provides information about the software product feature
+// that generated a specific event. It encompasses details related to the
+// capabilities, components, user interface (UI) design, and performance
+// upgrades associated with the feature.
+type _ocsf.v1_0_0.object.feature = record{
+  name: string #recommended,
+  uid: string #recommended,
+  version: string #recommended,
 }
 
 // The Request Elements object describes characteristics of an API request.
@@ -860,34 +901,17 @@ type _ocsf.v1_0_0.object.rpc_interface = record{
   version: string #required,
 }
 
-// The Network Proxy Endpoint describes characteristics of a network proxy.
-// Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
-// act/d3f:ProxyServer/'>d3f:ProxyServer</a>.
-type _ocsf.v1_0_0.object.network_proxy = record{
-  domain: string #optional,
-  hostname: string #recommended,
-  instance_uid: string #recommended,
-  interface_name: string #recommended,
-  interface_uid: string #recommended,
-  intermediate_ips: list<ip> #optional,
-  ip: ip #recommended,
-  location: _ocsf.v1_0_0.object.location #optional,
-  mac: string #optional,
-  name: string #recommended,
-  port: int64 #recommended,
-  subnet_uid: string #optional,
-  svc_name: string #recommended,
-  uid: string #recommended,
-  vlan_uid: string #optional,
-  vpc_uid: string #optional,
-}
-
-// The TLS Extension object describes additional attributes that extend the base
-// Transport Layer Security (TLS) object.
-type _ocsf.v1_0_0.object.tls_extension = record{
-  data: string #print_json #recommended,
-  type: string #optional,
-  type_id: int64 #required,
+// The Digital Signature object contains information about the cryptographic
+// mechanism used to verify the authenticity, integrity, and origin of the file
+// or application.
+type _ocsf.v1_0_0.object.digital_signature = record{
+  algorithm: string #optional,
+  algorithm_id: int64 #required,
+  certificate: _ocsf.v1_0_0.object.certificate #recommended,
+  created_time: time #optional,
+  created_time_dt: time #optional #profile=datetime,
+  developer_uid: string #optional,
+  digest: _ocsf.v1_0_0.object.fingerprint #optional,
 }
 
 // The Job object provides information about a scheduled job or task, including
@@ -896,14 +920,27 @@ type _ocsf.v1_0_0.object.tls_extension = record{
 type _ocsf.v1_0_0.object.job = record{
   cmd_line: string #recommended,
   created_time: time #recommended,
+  created_time_dt: time #optional #profile=datetime,
   desc: string #recommended,
   file: _ocsf.v1_0_0.object.file #required,
   last_run_time: time #recommended,
+  last_run_time_dt: time #optional #profile=datetime,
   name: string #required,
   next_run_time: time #optional,
+  next_run_time_dt: time #optional #profile=datetime,
   run_state: string #optional,
   run_state_id: int64 #recommended,
   user: _ocsf.v1_0_0.object.user #optional,
+}
+
+// The observable object is a pivot element that contains related information
+// found in many places in the event.
+type _ocsf.v1_0_0.object.observable = record{
+  name: string #required,
+  reputation: _ocsf.v1_0_0.object.reputation #optional,
+  type: string #optional,
+  type_id: int64 #required,
+  value: string #optional,
 }
 
 // The Malware object describes the classification of known malicious software,
@@ -929,15 +966,6 @@ type _ocsf.v1_0_0.object.display = record{
   scale_factor: int64 #optional,
 }
 
-// The Response Elements object describes characteristics of an API response.
-type _ocsf.v1_0_0.object.response = record{
-  code: int64 #recommended,
-  error: string #recommended,
-  error_message: string #recommended,
-  flags: list<string> #optional,
-  message: string #recommended,
-}
-
 // The Kernel Resource object provides information about a specific kernel
 // resource, including its name and type. It describes essential attributes
 // associated with a resource managed by the kernel of an operating system.
@@ -952,27 +980,40 @@ type _ocsf.v1_0_0.object.kernel = record{
   type_id: int64 #required,
 }
 
-// The Digital Signature object contains information about the cryptographic
-// mechanism used to verify the authenticity, integrity, and origin of the file
-// or application.
-type _ocsf.v1_0_0.object.digital_signature = record{
-  algorithm: string #optional,
-  algorithm_id: int64 #required,
-  certificate: _ocsf.v1_0_0.object.certificate #recommended,
-  created_time: time #optional,
-  developer_uid: string #optional,
-  digest: _ocsf.v1_0_0.object.fingerprint #optional,
+// The OCSF Schema Extension object provides detailed information about the
+// schema extension used to construct the event. The schema extensions are
+// registered in the <a target='_blank' href='https://github.com/ocsf/ocsf-
+// schema/blob/main/extensions.md'>extensions.md</a> file.
+type _ocsf.v1_0_0.object.extension = record{
+  name: string #required,
+  uid: string #required,
+  version: string #required,
+}
+
+// The Network Traffic object describes characteristics of network traffic.
+// Network traffic refers to data moving across a network at a given point of
+// time. Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao
+// /artifact/d3f:NetworkTraffic/'>d3f:NetworkTraffic</a>.
+type _ocsf.v1_0_0.object.network_traffic = record{
+  bytes: int64 #recommended,
+  bytes_in: int64 #optional,
+  bytes_out: int64 #optional,
+  packets: int64 #recommended,
+  packets_in: int64 #optional,
+  packets_out: int64 #optional,
 }
 
 // The Resource Details object describes details about resources that were
 // affected by the activity/event.
 type _ocsf.v1_0_0.object.resource_details = record{
+  cloud_partition: string #optional #profile=cloud,
   criticality: string #optional,
   data: string #print_json #optional,
   group: _ocsf.v1_0_0.object.group #optional,
   labels: list<string> #optional,
   name: string #optional,
   owner: _ocsf.v1_0_0.object.user #recommended,
+  region: string #optional #profile=cloud,
   type: string #optional,
   uid: string #optional,
   version: string #optional,
@@ -991,9 +1032,31 @@ type _ocsf.v1_0_0.object.analytic = record{
   version: string #optional,
 }
 
+// The Endpoint object describes a physical or virtual device that connects to
+// and exchanges information with a computer network. Some examples of endpoints
+// are mobile devices, desktop computers, virtual machines, embedded devices,
+// and servers. Internet-of-Things devices—like cameras, lighting,
+// refrigerators, security systems, smart speakers, and thermostats—are also
+// endpoints.
+type _ocsf.v1_0_0.object.endpoint = record{
+  domain: string #optional,
+  hostname: string #recommended,
+  instance_uid: string #recommended,
+  interface_name: string #recommended,
+  interface_uid: string #recommended,
+  ip: ip #recommended,
+  location: _ocsf.v1_0_0.object.location #optional,
+  mac: string #optional,
+  name: string #recommended,
+  subnet_uid: string #optional,
+  uid: string #recommended,
+  vlan_uid: string #optional,
+  vpc_uid: string #optional,
+}
+
 // The Windows resource object describes a resource object managed by Windows,
 // such as mutant or timer.
-type _ocsf.v1_0_0.object.win_resource = record{
+type _ocsf.v1_0_0.object.win__win_resource = record{
   data: string #print_json #optional,
   details: string #optional,
   labels: list<string> #optional,
@@ -1004,76 +1067,41 @@ type _ocsf.v1_0_0.object.win_resource = record{
   uid: string #optional,
 }
 
-// The Feature object provides information about the software product feature
-// that generated a specific event. It encompasses details related to the
-// capabilities, components, user interface (UI) design, and performance
-// upgrades associated with the feature.
-type _ocsf.v1_0_0.object.feature = record{
-  name: string #recommended,
-  uid: string #recommended,
-  version: string #recommended,
+// The Device Hardware Information object contains details and specifications of
+// the physical components that make up a device. This information provides an
+// overview of the hardware capabilities, configuration, and characteristics of
+// the device.
+type _ocsf.v1_0_0.object.device_hw_info = record{
+  bios_date: string #optional,
+  bios_manufacturer: string #optional,
+  bios_ver: string #optional,
+  chassis: string #optional,
+  cpu_bits: int64 #optional,
+  cpu_cores: int64 #optional,
+  cpu_count: int64 #optional,
+  cpu_speed: int64 #optional,
+  cpu_type: string #optional,
+  desktop_display: _ocsf.v1_0_0.object.display #optional,
+  keyboard_info: _ocsf.v1_0_0.object.keyboard_info #optional,
+  ram_size: int64 #optional,
+  serial_number: string #optional,
 }
 
-// The Organization object describes characteristics of an organization or
-// company and its division if any.
-type _ocsf.v1_0_0.object.organization = record{
-  name: string #recommended,
-  ou_name: string #recommended,
-  ou_uid: string #optional,
-  uid: string #recommended,
+// The Related Event object describes an event related to a finding or detection
+// as identified by the security product.
+type _ocsf.v1_0_0.object.related_event = record{
+  product_uid: string #optional,
+  type: string #optional,
+  type_uid: int64 #recommended,
+  uid: string #required,
 }
 
-// The Email object describes the email metadata such as sender, recipients, and
-// direction. Defined by D3FEND <a target='_blank'
-// href='https://d3fend.mitre.org/dao/artifact/d3f:Email/'>d3f:Email</a>.
-type _ocsf.v1_0_0.object.email = record{
-  cc: list<string> #optional,
-  delivered_to: string #optional,
-  from: string #required,
-  message_uid: string #recommended,
-  raw_header: string #optional,
-  reply_to: string #recommended,
-  size: int64 #recommended,
-  smtp_from: string #recommended,
-  smtp_to: list<string> #recommended,
-  subject: string #optional,
-  to: list<string> #required,
-  uid: string #recommended,
-  x_originating_ip: list<ip> #optional,
-}
-
-// The DNS query object represents a specific request made to the Domain Name
-// System (DNS) to retrieve information about a domain or perform a DNS
-// operation. This object encapsulates the necessary attributes and methods to
-// construct and send DNS queries, specify the query type (e.g., A, AAAA, MX).
-// Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
-// act/d3f:DNSLookup/'>d3f:DNSLookup</a>.
-type _ocsf.v1_0_0.object.dns_query = record{
-  class: string #required,
-  hostname: string #required,
-  opcode: string #optional,
-  opcode_id: int64 #recommended,
-  packet_uid: int64 #recommended,
-  type: string #required,
-}
-
-// The Metric object defines a simple name/value pair entity for a metric.
-type _ocsf.v1_0_0.object.metric = record{
-  name: string #required,
-  value: string #required,
-}
-
-// The Network Traffic object describes characteristics of network traffic.
-// Network traffic refers to data moving across a network at a given point of
-// time. Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao
-// /artifact/d3f:NetworkTraffic/'>d3f:NetworkTraffic</a>.
-type _ocsf.v1_0_0.object.network_traffic = record{
-  bytes: int64 #recommended,
-  bytes_in: int64 #optional,
-  bytes_out: int64 #optional,
-  packets: int64 #recommended,
-  packets_in: int64 #optional,
-  packets_out: int64 #optional,
+// The Kernel Extension object describes a kernel driver that has been loaded or
+// unloaded into the operating system (OS) kernel. Defined by D3FEND <a
+// target='_blank' href='https://d3fend.mitre.org/dao/artifact/d3f:KernelModule/
+// '>d3f:KernelModule</a>.
+type _ocsf.v1_0_0.object.kernel_driver = record{
+  file: _ocsf.v1_0_0.object.file #required,
 }
 
 // The Common Vulnerabilities and Exposures (CVE) object represents publicly
@@ -1082,66 +1110,122 @@ type _ocsf.v1_0_0.object.network_traffic = record{
 // Record for each vulnerability in the catalog.
 type _ocsf.v1_0_0.object.cve = record{
   created_time: time #recommended,
+  created_time_dt: time #optional #profile=datetime,
   cvss: _ocsf.v1_0_0.object.cvss #recommended,
   cwe_uid: string #optional,
   cwe_url: string #optional,
   modified_time: time #optional,
+  modified_time_dt: time #optional #profile=datetime,
   product: _ocsf.v1_0_0.object.product #optional,
   type: string #recommended,
   uid: string #required,
 }
 
-// The Enrichment object provides inline enrichment data for specific attributes
-// of interest within an event. It serves as a mechanism to enhance or
-// supplement the information associated with the event by adding additional
-// relevant details or context.
-type _ocsf.v1_0_0.object.enrichment = record{
-  data: string #print_json #required,
-  name: string #required,
-  provider: string #recommended,
-  type: string #recommended,
-  value: string #required,
+// The HASSH (Honeypot Attention-Grabbing SSH) object contains SSH network
+// fingerprinting values for specific client/server implementations. It provides
+// a standardized way of identifying and categorizing SSH connections based on
+// their unique characteristics and behavior.
+type _ocsf.v1_0_0.object.hassh = record{
+  algorithm: string #recommended,
+  fingerprint: _ocsf.v1_0_0.object.fingerprint #required,
 }
 
-// The Subject Alternative name (SAN) object describes a SAN secured by a
-// digital certificate
-type _ocsf.v1_0_0.object.san = record{
-  name: string #required,
-  type: string #required,
+// The TLS Extension object describes additional attributes that extend the base
+// Transport Layer Security (TLS) object.
+type _ocsf.v1_0_0.object.tls_extension = record{
+  data: string #print_json #recommended,
+  type: string #optional,
+  type_id: int64 #required,
+}
+
+// The Attack object describes the technique and associated tactics related to
+// an attack. See <a target='_blank' href='https://attack.mitre.org'>MITRE
+// ATT&CK®</a>.
+type _ocsf.v1_0_0.object.attack = record{
+  tactics: list<_ocsf.v1_0_0.object.tactic> #required,
+  technique: _ocsf.v1_0_0.object.technique #required,
+  version: string #required,
 }
 
 // Registry Key Activity events report when a process performs an action on a
 // Windows registry key.
-type _ocsf.v1_0_0.registry_key_activity = record{
+type _ocsf.v1_0_0.win__registry_key_activity = record{
   access_mask: int64 #optional,
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   create_mask: string #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
   open_mask: int64 #optional,
-  prev_reg_key: _ocsf.v1_0_0.object.registry_key #optional,
+  prev_reg_key: _ocsf.v1_0_0.object.win__registry_key #optional #extension=win,
   raw_data: string #optional,
-  reg_key: _ocsf.v1_0_0.object.registry_key #required,
+  reg_key: _ocsf.v1_0_0.object.win__registry_key #required #extension=win,
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
+  timezone_offset: int64 #recommended,
+  type_name: string #optional,
+  type_uid: int64 #required,
+  unmapped: string #print_json #optional,
+}
+
+// The base event is a generic and concrete event. It also defines a set of
+// attributes available in most event classes. As a generic event that does not
+// belong to any event category, it could be used to log events that are not
+// otherwise defined by the schema.
+type _ocsf.v1_0_0.base_event = record{
+  activity_id: int64 #required,
+  activity_name: string #optional,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  category_name: string #optional,
+  category_uid: int64 #required,
+  class_name: string #optional,
+  class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
+  count: int64 #optional,
+  duration: int64 #optional,
+  end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
+  enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  message: string #recommended,
+  metadata: _ocsf.v1_0_0.object.metadata #required,
+  observables: list<_ocsf.v1_0_0.object.observable> #optional,
+  raw_data: string #optional,
+  severity: string #optional,
+  severity_id: int64 #required,
+  start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
+  status: string #optional,
+  status_code: string #optional,
+  status_detail: string #optional,
+  status_id: int64 #recommended,
+  time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1159,10 +1243,12 @@ type _ocsf.v1_0_0.api_activity = record{
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #optional,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   http_request: _ocsf.v1_0_0.object.http_request #optional,
   message: string #recommended,
@@ -1174,11 +1260,13 @@ type _ocsf.v1_0_0.api_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1189,15 +1277,24 @@ type _ocsf.v1_0_0.api_activity = record{
 type _ocsf.v1_0_0.email_url_activity = record{
   activity_id: int64 #optional,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   email_uid: string #required,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -1205,11 +1302,13 @@ type _ocsf.v1_0_0.email_url_activity = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1223,15 +1322,22 @@ type _ocsf.v1_0_0.module_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   module: _ocsf.v1_0_0.object.module #required,
@@ -1240,11 +1346,13 @@ type _ocsf.v1_0_0.module_activity = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1255,20 +1363,29 @@ type _ocsf.v1_0_0.module_activity = record{
 type _ocsf.v1_0_0.http_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   app_name: string #optional,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   connection_info: _ocsf.v1_0_0.object.network_connection_info #recommended,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   http_request: _ocsf.v1_0_0.object.http_request #required,
   http_response: _ocsf.v1_0_0.object.http_response #required,
   http_status: int64 #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -1278,11 +1395,13 @@ type _ocsf.v1_0_0.http_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   tls: _ocsf.v1_0_0.object.tls #optional,
   traffic: _ocsf.v1_0_0.object.network_traffic #optional,
@@ -1296,20 +1415,29 @@ type _ocsf.v1_0_0.http_activity = record{
 type _ocsf.v1_0_0.ftp_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   app_name: string #optional,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   codes: list<int64> #recommended,
   command: string #recommended,
   command_responses: list<string> #recommended,
   connection_info: _ocsf.v1_0_0.object.network_connection_info #recommended,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   name: string #recommended,
@@ -1321,11 +1449,13 @@ type _ocsf.v1_0_0.ftp_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   tls: _ocsf.v1_0_0.object.tls #optional,
   traffic: _ocsf.v1_0_0.object.network_traffic #optional,
@@ -1339,16 +1469,25 @@ type _ocsf.v1_0_0.ftp_activity = record{
 type _ocsf.v1_0_0.email_file_activity = record{
   activity_id: int64 #optional,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   email_uid: string #required,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   file: _ocsf.v1_0_0.object.file #required,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -1356,11 +1495,13 @@ type _ocsf.v1_0_0.email_file_activity = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1371,17 +1512,26 @@ type _ocsf.v1_0_0.email_file_activity = record{
 type _ocsf.v1_0_0.network_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   app_name: string #optional,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   connection_info: _ocsf.v1_0_0.object.network_connection_info #recommended,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -1391,47 +1541,16 @@ type _ocsf.v1_0_0.network_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   tls: _ocsf.v1_0_0.object.tls #optional,
   traffic: _ocsf.v1_0_0.object.network_traffic #optional,
-  type_name: string #optional,
-  type_uid: int64 #required,
-  unmapped: string #print_json #optional,
-}
-
-// The base event is a generic and concrete event. It also defines a set of
-// attributes available in most event classes. As a generic event that does not
-// belong to any event category, it could be used to log events that are not
-// otherwise defined by the schema.
-type _ocsf.v1_0_0.base_event = record{
-  activity_id: int64 #required,
-  activity_name: string #optional,
-  category_name: string #optional,
-  category_uid: int64 #required,
-  class_name: string #optional,
-  class_uid: int64 #required,
-  count: int64 #optional,
-  duration: int64 #optional,
-  end_time: time #optional,
-  enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
-  message: string #recommended,
-  metadata: _ocsf.v1_0_0.object.metadata #required,
-  observables: list<_ocsf.v1_0_0.object.observable> #optional,
-  raw_data: string #optional,
-  severity: string #optional,
-  severity_id: int64 #required,
-  start_time: time #optional,
-  status: string #optional,
-  status_code: string #optional,
-  status_detail: string #optional,
-  status_id: int64 #recommended,
-  time: time #required,
-  timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional,
@@ -1442,14 +1561,19 @@ type _ocsf.v1_0_0.base_event = record{
 type _ocsf.v1_0_0.authorize_session = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #optional,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   group: _ocsf.v1_0_0.object.group #recommended,
   message: string #recommended,
@@ -1461,11 +1585,13 @@ type _ocsf.v1_0_0.authorize_session = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1478,13 +1604,18 @@ type _ocsf.v1_0_0.authorize_session = record{
 type _ocsf.v1_0_0.web_resource_access_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   http_request: _ocsf.v1_0_0.object.http_request #required,
   http_response: _ocsf.v1_0_0.object.http_response #optional,
@@ -1497,11 +1628,13 @@ type _ocsf.v1_0_0.web_resource_access_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #recommended,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   tls: _ocsf.v1_0_0.object.tls #optional,
   type_name: string #optional,
@@ -1517,18 +1650,25 @@ type _ocsf.v1_0_0.process_activity = record{
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
   actual_permissions: int64 #optional,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   exit_code: int64 #optional,
   injection_type: string #optional,
   injection_type_id: int64 #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   module: _ocsf.v1_0_0.object.module #optional,
@@ -1539,11 +1679,13 @@ type _ocsf.v1_0_0.process_activity = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1556,6 +1698,7 @@ type _ocsf.v1_0_0.authentication = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #optional,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   auth_protocol: string #optional,
   auth_protocol_id: int64 #recommended,
   category_name: string #optional,
@@ -1563,10 +1706,13 @@ type _ocsf.v1_0_0.authentication = record{
   certificate: _ocsf.v1_0_0.object.certificate #optional,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #recommended,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   http_request: _ocsf.v1_0_0.object.http_request #optional,
   is_cleartext: bool #optional,
@@ -1586,11 +1732,13 @@ type _ocsf.v1_0_0.authentication = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #optional,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1606,16 +1754,23 @@ type _ocsf.v1_0_0.memory_activity = record{
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
   actual_permissions: int64 #optional,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   base_address: string #recommended,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -1626,11 +1781,13 @@ type _ocsf.v1_0_0.memory_activity = record{
   severity_id: int64 #required,
   size: int64 #optional,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1641,21 +1798,30 @@ type _ocsf.v1_0_0.memory_activity = record{
 type _ocsf.v1_0_0.email_activity = record{
   activity_id: int64 #optional,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   attempt: int64 #optional,
   banner: string #optional,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   direction: string #optional,
   direction_id: int64 #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #optional,
   duration: int64 #optional,
   email: _ocsf.v1_0_0.object.email #required,
   email_auth: _ocsf.v1_0_0.object.email_auth #recommended,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -1665,11 +1831,13 @@ type _ocsf.v1_0_0.email_activity = record{
   smtp_hello: string #recommended,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #optional,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1681,20 +1849,29 @@ type _ocsf.v1_0_0.email_activity = record{
 type _ocsf.v1_0_0.rdp_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   app_name: string #optional,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   capabilities: list<string> #optional,
   category_name: string #optional,
   category_uid: int64 #required,
   certificate_chain: list<string> #optional,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   connection_info: _ocsf.v1_0_0.object.network_connection_info #recommended,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #optional #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   identifier_cookie: string #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -1708,11 +1885,13 @@ type _ocsf.v1_0_0.rdp_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   tls: _ocsf.v1_0_0.object.tls #optional,
   traffic: _ocsf.v1_0_0.object.network_traffic #optional,
@@ -1726,14 +1905,17 @@ type _ocsf.v1_0_0.device_inventory_info = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #optional,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
@@ -1742,11 +1924,13 @@ type _ocsf.v1_0_0.device_inventory_info = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1759,14 +1943,19 @@ type _ocsf.v1_0_0.device_inventory_info = record{
 type _ocsf.v1_0_0.entity_management = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   comment: string #optional,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   entity: _ocsf.v1_0_0.object.managed_entity #required,
   entity_result: _ocsf.v1_0_0.object.managed_entity #optional,
@@ -1777,11 +1966,13 @@ type _ocsf.v1_0_0.entity_management = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1793,13 +1984,18 @@ type _ocsf.v1_0_0.entity_management = record{
 type _ocsf.v1_0_0.group_management = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   group: _ocsf.v1_0_0.object.group #required,
   message: string #recommended,
@@ -1811,11 +2007,13 @@ type _ocsf.v1_0_0.group_management = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1825,19 +2023,26 @@ type _ocsf.v1_0_0.group_management = record{
 
 // Windows Resource Activity events report when a process accesses a Windows
 // managed resource object, successful or otherwise.
-type _ocsf.v1_0_0.windows_resource_activity = record{
+type _ocsf.v1_0_0.win__windows_resource_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -1845,47 +2050,58 @@ type _ocsf.v1_0_0.windows_resource_activity = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
   unmapped: string #print_json #optional,
-  win_resource: _ocsf.v1_0_0.object.win_resource #required,
+  win_resource: _ocsf.v1_0_0.object.win__win_resource #required #extension=win,
 }
 
 // Registry Value Activity events reports when a process performs an action on a
 // Windows registry value.
-type _ocsf.v1_0_0.registry_value_activity = record{
+type _ocsf.v1_0_0.win__registry_value_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
-  prev_reg_value: _ocsf.v1_0_0.object.registry_value #optional,
+  prev_reg_value: _ocsf.v1_0_0.object.win__registry_value #optional #extension=win,
   raw_data: string #optional,
-  reg_value: _ocsf.v1_0_0.object.registry_value #required,
+  reg_value: _ocsf.v1_0_0.object.win__registry_value #required #extension=win,
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1898,16 +2114,23 @@ type _ocsf.v1_0_0.scheduled_job_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #optional,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   job: _ocsf.v1_0_0.object.job #required,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -1915,11 +2138,13 @@ type _ocsf.v1_0_0.scheduled_job_activity = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1931,14 +2156,19 @@ type _ocsf.v1_0_0.scheduled_job_activity = record{
 type _ocsf.v1_0_0.web_resources_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #recommended,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
@@ -1948,11 +2178,13 @@ type _ocsf.v1_0_0.web_resources_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #recommended,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -1966,15 +2198,18 @@ type _ocsf.v1_0_0.device_config_state = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #optional,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   cis_benchmark_result: _ocsf.v1_0_0.object.cis_benchmark_result #optional,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
@@ -1983,11 +2218,13 @@ type _ocsf.v1_0_0.device_config_state = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -2000,16 +2237,23 @@ type _ocsf.v1_0_0.kernel_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   kernel: _ocsf.v1_0_0.object.kernel #required,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -2017,11 +2261,13 @@ type _ocsf.v1_0_0.kernel_activity = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -2033,22 +2279,31 @@ type _ocsf.v1_0_0.kernel_activity = record{
 type _ocsf.v1_0_0.smb_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   app_name: string #optional,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
   client_dialects: list<string> #recommended,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   command: string #recommended,
   connection_info: _ocsf.v1_0_0.object.network_connection_info #recommended,
   count: int64 #optional,
   dce_rpc: _ocsf.v1_0_0.object.dce_rpc #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   dialect: string #recommended,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   file: _ocsf.v1_0_0.object.file #recommended,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -2063,11 +2318,13 @@ type _ocsf.v1_0_0.smb_activity = record{
   share_type_id: int64 #recommended,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   tls: _ocsf.v1_0_0.object.tls #optional,
   traffic: _ocsf.v1_0_0.object.network_traffic #optional,
@@ -2083,15 +2340,19 @@ type _ocsf.v1_0_0.network_file_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   expiration_time: time #optional,
+  expiration_time_dt: time #optional #profile=datetime,
   file: _ocsf.v1_0_0.object.file #required,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
@@ -2101,11 +2362,13 @@ type _ocsf.v1_0_0.network_file_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -2119,21 +2382,28 @@ type _ocsf.v1_0_0.file_system_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   component: string #optional,
   connection_uid: string #optional,
   count: int64 #optional,
   create_mask: string #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   file: _ocsf.v1_0_0.object.file #required,
   file_diff: string #optional,
   file_result: _ocsf.v1_0_0.object.file #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -2141,11 +2411,13 @@ type _ocsf.v1_0_0.file_system_activity = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -2156,37 +2428,50 @@ type _ocsf.v1_0_0.file_system_activity = record{
 type _ocsf.v1_0_0.dns_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
   answers: list<_ocsf.v1_0_0.object.dns_answer> #recommended,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   app_name: string #optional,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   connection_info: _ocsf.v1_0_0.object.network_connection_info #optional,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
   proxy: _ocsf.v1_0_0.object.network_proxy #optional,
   query: _ocsf.v1_0_0.object.dns_query #recommended,
   query_time: time #recommended,
+  query_time_dt: time #optional #profile=datetime,
   raw_data: string #optional,
   rcode: string #optional,
   rcode_id: int64 #optional,
   response_time: time #recommended,
+  response_time_dt: time #optional #profile=datetime,
   severity: string #optional,
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   tls: _ocsf.v1_0_0.object.tls #optional,
   traffic: _ocsf.v1_0_0.object.network_traffic #optional,
@@ -2200,14 +2485,19 @@ type _ocsf.v1_0_0.dns_activity = record{
 type _ocsf.v1_0_0.dhcp_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #recommended,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   is_renewal: bool #optional,
   lease_dur: int64 #optional,
@@ -2220,11 +2510,13 @@ type _ocsf.v1_0_0.dhcp_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #recommended,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   transaction_uid: string #optional,
   type_name: string #optional,
@@ -2237,14 +2529,19 @@ type _ocsf.v1_0_0.dhcp_activity = record{
 type _ocsf.v1_0_0.application_lifecycle = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   app: _ocsf.v1_0_0.object.product #required,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
@@ -2253,11 +2550,13 @@ type _ocsf.v1_0_0.application_lifecycle = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -2270,16 +2569,23 @@ type _ocsf.v1_0_0.kernel_extension_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #required,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
   device: _ocsf.v1_0_0.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   driver: _ocsf.v1_0_0.object.kernel_driver #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -2287,11 +2593,13 @@ type _ocsf.v1_0_0.kernel_extension_activity = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -2305,13 +2613,17 @@ type _ocsf.v1_0_0.account_change = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   actor: _ocsf.v1_0_0.object.actor #recommended,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   http_request: _ocsf.v1_0_0.object.http_request #optional,
   message: string #recommended,
@@ -2322,11 +2634,13 @@ type _ocsf.v1_0_0.account_change = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #recommended,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -2341,12 +2655,14 @@ type _ocsf.v1_0_0.security_finding = record{
   activity_id: int64 #required,
   activity_name: string #optional,
   analytic: _ocsf.v1_0_0.object.analytic #recommended,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_0_0.object.attack> #optional,
   category_name: string #optional,
   category_uid: int64 #required,
   cis_csc: list<_ocsf.v1_0_0.object.cis_control> #optional,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   compliance: _ocsf.v1_0_0.object.compliance #optional,
   confidence: string #optional,
   confidence_id: int64 #recommended,
@@ -2355,6 +2671,7 @@ type _ocsf.v1_0_0.security_finding = record{
   data_sources: list<string> #optional,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   evidence: string #print_json #optional,
   finding: _ocsf.v1_0_0.object.finding #required,
@@ -2376,6 +2693,7 @@ type _ocsf.v1_0_0.security_finding = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   state: string #optional,
   state_id: int64 #required,
   status: string #optional,
@@ -2383,6 +2701,7 @@ type _ocsf.v1_0_0.security_finding = record{
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,
@@ -2395,18 +2714,27 @@ type _ocsf.v1_0_0.security_finding = record{
 type _ocsf.v1_0_0.ssh_activity = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   app_name: string #optional,
+  attacks: list<_ocsf.v1_0_0.object.attack> #recommended #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
   client_hassh: _ocsf.v1_0_0.object.hassh #recommended,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   connection_info: _ocsf.v1_0_0.object.network_connection_info #recommended,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #required #profile=security_control,
   dst_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
+  malware: list<_ocsf.v1_0_0.object.malware> #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
   observables: list<_ocsf.v1_0_0.object.observable> #optional,
@@ -2418,11 +2746,13 @@ type _ocsf.v1_0_0.ssh_activity = record{
   severity_id: int64 #required,
   src_endpoint: _ocsf.v1_0_0.object.network_endpoint #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   tls: _ocsf.v1_0_0.object.tls #optional,
   traffic: _ocsf.v1_0_0.object.network_traffic #optional,
@@ -2436,13 +2766,18 @@ type _ocsf.v1_0_0.ssh_activity = record{
 type _ocsf.v1_0_0.user_access_management = record{
   activity_id: int64 #required,
   activity_name: string #optional,
+  actor: _ocsf.v1_0_0.object.actor #optional #profile=host,
+  api: _ocsf.v1_0_0.object.api #optional #profile=cloud,
   category_name: string #optional,
   category_uid: int64 #required,
   class_name: string #optional,
   class_uid: int64 #required,
+  cloud: _ocsf.v1_0_0.object.cloud #required #profile=cloud,
   count: int64 #optional,
+  device: _ocsf.v1_0_0.object.device #recommended #profile=host,
   duration: int64 #optional,
   end_time: time #optional,
+  end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_0_0.object.enrichment> #optional,
   message: string #recommended,
   metadata: _ocsf.v1_0_0.object.metadata #required,
@@ -2453,11 +2788,13 @@ type _ocsf.v1_0_0.user_access_management = record{
   severity: string #optional,
   severity_id: int64 #required,
   start_time: time #optional,
+  start_time_dt: time #optional #profile=datetime,
   status: string #optional,
   status_code: string #optional,
   status_detail: string #optional,
   status_id: int64 #recommended,
   time: time #required,
+  time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required,

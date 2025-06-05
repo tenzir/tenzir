@@ -19,8 +19,9 @@ DOCUMENT_FIELDS = False
 OCSF_PREFIX = "_ocsf"
 OBJECT_INFIX = "object"
 COLUMN_LIMIT = 80
-PROFILES = []  # List of strings or ALL.
+PROFILES = ALL  # List of strings or ALL.
 EXCLUDE_VERSIONS = ["1.0.0-rc.2", "1.0.0-rc.3"]
+ROOT_DIR = Path(__file__).parent.parent
 
 # TODO: Discuss dropping optional fields.
 # =================================================== #
@@ -146,6 +147,8 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
             entity_name = entity["name"]
         else:
             entity_name = entity["caption"].lower().replace(" ", "_")
+        if extension := entity.get("extension"):
+            entity_name = extension + "__" + entity_name
         full_name = f"{prefix}.{entity_name}"
         if full_name == "ocsf.object.object":
             # Not needed because this is special-case to print JSON.
@@ -165,11 +168,13 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
                 if type_name == "object":
                     resolved = "string #print_json"
                 else:
+                    type_name = type_name.replace("/", "__")
                     # Some object names have a prefix, which is separated by a
                     # slash. It looks like this prefix can just be discarded.
-                    slash = type_name.rfind("/")
-                    if slash != -1:
-                        type_name = type_name[slash + 1 :]
+                    # slash = type_name.rfind("/")
+                    # if slash != -1:
+                    #     log(f"{full_name} -> {type_name}")
+                    #     type_name = type_name[slash + 1 :]
                     resolved = f"{object_prefix(schema)}.{type_name}"
             else:
                 resolved = types[attr_def["type"]]
@@ -183,6 +188,9 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
             attributes = f" #{requirement}"
             if profile is not None:
                 attributes += f" #profile={profile}"
+            extension = attr_def.get("extension")
+            if extension is not None:
+                attributes += f" #extension={extension}"
             writer.print(f"{attr_name}: {resolved}{attributes},")
         writer.end("}")
 
@@ -198,8 +206,7 @@ def emit_objects(writer: Writer, schema: Schema) -> None:
 def open_schema_file(version: str):
     version = re.sub("[^0-9a-zA-Z_-]", "", version.replace(".", "_"))
     name = "v" + version + ".schema"
-    scripts = Path(__file__).parent
-    types = (scripts / "../schema/types").resolve()
+    types = ROOT_DIR / "schema/types"
     if not types.is_dir():
         raise NotADirectoryError(f"expected {types} to be a directory")
     ocsf_dir = types / "ocsf"
@@ -209,15 +216,48 @@ def open_schema_file(version: str):
     return path.open("w")
 
 
-def main():
-    # Use a hacky regex to get the available versions.
+def collect_enum(schema: Schema, attribute: str) -> dict[int, str]:
+    result = {}
+    for entity in schema["classes"].values():
+        enum = entity["attributes"][attribute]["enum"]
+        for key, value in enum.items():
+            num = int(key)
+            name = value["caption"]
+            if num in result:
+                if result[num] != name:
+                    raise ValueError("got mismatch")
+            result[num] = name
+    return dict(sorted(result.items()))
+
+
+def write_enum(schema: Schema, attribute: str, filename: str) -> None:
+    categories = collect_enum(schema, attribute)
+    categories_inc = ROOT_DIR / "libtenzir/include/tenzir" / filename
+    with categories_inc.open("w") as f:
+        f.write("// This file was generated, do not edit.\n\n")
+        for num, name in sorted(categories.items()):
+            f.write(f'X({num}, "{name}")\n')
+
+
+def write_enums(schema: Schema):
+    write_enum(schema, "category_uid", "ocsf_categories.inc")
+    write_enum(schema, "class_uid", "ocsf_classes.inc")
+    write_enum(schema, "type_uid", "ocsf_types.inc")
+
+
+def fetch_versions() -> list[str]:
+    # return ["1.5.0"]
     log(f"Fetching available versions from {SERVER}")
     body = requests.get(SERVER).content.decode()
-    versions = [
+    return [
         version
         for version in re.findall("<option value=[^>]*>v([^<]*)</option>", body)
         if version not in EXCLUDE_VERSIONS
     ]
+
+
+def main():
+    versions = fetch_versions()
     for version in versions:
         with log_section(f"Processing version {version}"):
             schema = load_schema(version)
@@ -236,6 +276,7 @@ def main():
                 emit_objects(writer, schema)
                 writer.print()
                 emit_classes(writer, schema)
+            write_enums(schema)
     log("Done")
 
 
