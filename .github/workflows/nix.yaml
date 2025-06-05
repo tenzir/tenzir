@@ -199,3 +199,18 @@ jobs:
           docker exec -e TENZIR_LEGACY=true installer-test-rocky \
             /opt/tenzir/bin/tenzir "api /pipeline/create '${args}'"
           docker exec installer-test-rocky halt
+      - name: Publish Release on Github Pages APT repository
+        #if: fromJSON(inputs.config).git-tag != null
+        # peternewman/apt-repo-action@globs
+        uses: peternewman/apt-repo-action@ff037894ae6f9a6a40c56f0993d083adc23b7986
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          repo_supported_arch: |
+            amd64
+          repo_supported_version: stable
+          file: packages/debian/tenzir*.deb
+          file_target_version: stable
+          public_key: ${{ secrets.APT_SIGNING_PUBLIC }}
+          private_key: ${{ secrets.APT_SIGNING_PRIVATE }}
+          key_passphrase: ${{ secrets.APT_SIGNING_PASSPHRASE }}
+          debug: true
