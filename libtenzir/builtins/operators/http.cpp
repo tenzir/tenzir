@@ -903,7 +903,8 @@ public:
       .make_observable()
       .from_resource(std::move(*pull))
       .for_each([&](const http::request& r) mutable {
-        TENZIR_DEBUG("[http] handling request");
+        TENZIR_DEBUG("[http] handling request with size: {}B",
+                     r.body().size_bytes());
         if (args_.responses) {
           const auto it = args_.responses->inner.find(r.header().path());
           if (it != args_.responses->inner.end()) {
@@ -1013,7 +1014,8 @@ public:
     auto slices = std::vector<table_slice>{};
     auto paginate_queue = std::vector<http::client_factory>{};
     const auto handle_response = [&](const http::response& r) {
-      TENZIR_DEBUG("[http] handling response");
+      TENZIR_DEBUG("[http] handling response with size: {}B",
+                   r.body().size_bytes());
       if (const auto code = std::to_underlying(r.code());
           code < 200 or 399 < code) {
         diagnostic::error("received erroneous http status code: `{}`", code)
@@ -1413,7 +1415,8 @@ public:
     auto warned = false;
     const auto handle_response = [&](view<record> og) {
       return [&, og = materialize(std::move(og))](const http::response& r) {
-        TENZIR_DEBUG("[http] handling response");
+        TENZIR_DEBUG("[http] handling response with size: {}B",
+                     r.body().size_bytes());
         if (const auto code = std::to_underlying(r.code());
             code < 200 or 399 < code) {
           --awaiting;
