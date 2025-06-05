@@ -1,0 +1,3 @@
+   line_comment "// test: lexer"
+        newline "\n"
+   string_begin "\""

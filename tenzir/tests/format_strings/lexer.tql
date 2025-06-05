@@ -1,0 +1,28 @@
+// test: lexer
+
+"{}"
+
+f""
+
+f"{}"
+
+f"\""
+
+f"{ident}"
+
+f"{a+b}"
+
+f"pre {}"
+
+f"pre {} post"
+
+f"pre {"string"} post"
+
+f"{{}}"
+
+// TODO: Write more tests for this.
+f"{ {} }"
+
+f"{ {key: "value"} }"
+
+f"{ {key: f"pre2{ {key2: "string"} }"} }"

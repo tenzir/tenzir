@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/concepts.hpp"
 #include "tenzir/config.hpp"  // IWYU pragma: export
 #include "tenzir/tql/fwd.hpp" // IWYU pragma: export
 
@@ -133,6 +134,7 @@ class active_store;
 class aggregation_function;
 class bitmap;
 class blob_type;
+class blob;
 class bool_type;
 class chunk;
 class command;
@@ -332,21 +334,6 @@ using time = caf::timestamp;
 /// Enumeration type.
 using enumeration = uint8_t;
 
-/// Blob type.
-struct blob : std::vector<std::byte> {
-  using super = std::vector<std::byte>;
-  using super::super;
-
-  friend constexpr auto operator+(blob l, const blob& r) -> blob {
-    return l += r;
-  }
-
-  constexpr auto operator+=(const blob& r) -> blob& {
-    insert(end(), r.begin(), r.end());
-    return *this;
-  }
-};
-
 class secret;
 
 namespace fbs {
@@ -420,6 +407,7 @@ struct dollar_var;
 struct entity;
 struct expression;
 struct field_access;
+struct format_expr;
 struct function_call;
 struct identifier;
 struct if_stmt;

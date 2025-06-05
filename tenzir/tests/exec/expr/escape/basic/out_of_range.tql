@@ -1,5 +1,5 @@
 // error: true
 
 from {
-  x: "\u{120301230123}",
+  x: "\u{FFFFFF}",
 }
