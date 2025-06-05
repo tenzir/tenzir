@@ -39,7 +39,7 @@
             name: `x` @ 46..47,
             expr: format_expr {
               segments: [
-                format_expr root_field {
+                replacement root_field {
                   id: `ident` @ 52..57,
                   has_question_mark: false
                 }
@@ -57,7 +57,7 @@
             name: `x` @ 65..66,
             expr: format_expr {
               segments: [
-                format_expr binary_expr {
+                replacement binary_expr {
                   left: root_field {
                     id: `a` @ 71..72,
                     has_question_mark: false
@@ -83,7 +83,7 @@
             expr: format_expr {
               segments: [
                 string "pre ",
-                format_expr constant string "string" @ 92..100
+                replacement constant string "string" @ 92..100
               ],
               location: 85..102
             }
@@ -113,7 +113,7 @@
             name: `x` @ 124..125,
             expr: format_expr {
               segments: [
-                format_expr record {
+                replacement record {
                   begin: 131..132,
                   items: [
                     
@@ -134,7 +134,7 @@
             name: `x` @ 142..143,
             expr: format_expr {
               segments: [
-                format_expr record {
+                replacement record {
                   begin: 149..150,
                   items: [
                     field {
@@ -158,7 +158,7 @@
             name: `x` @ 172..173,
             expr: format_expr {
               segments: [
-                format_expr record {
+                replacement record {
                   begin: 179..180,
                   items: [
                     field {
@@ -166,7 +166,7 @@
                       expr: format_expr {
                         segments: [
                           string "pre2",
-                          format_expr record {
+                          replacement record {
                             begin: 193..194,
                             items: [
                               field {
