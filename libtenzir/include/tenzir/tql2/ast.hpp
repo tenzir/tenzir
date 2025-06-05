@@ -398,10 +398,7 @@ struct lambda_expr {
   }
 
   auto left_as_field_path() const -> field_path {
-    return check(field_path::try_from(root_field{
-      .id = left,
-      .has_question_mark = false,
-    }));
+    return check(field_path::try_from(root_field{left, false}));
   }
 
   auto get_location() const -> location {
