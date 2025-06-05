@@ -26,10 +26,10 @@ using argument_parser_data_types
   = detail::tl_map_t<detail::tl_filter_not_type_t<data::types, pattern>,
                      as_located>;
 
-using argument_parser_full_types
-  = detail::tl_concat_t<argument_parser_data_types,
-                        detail::type_list<located<pipeline>, ast::expression,
-                                          ast::field_path, located<data>>>;
+using argument_parser_full_types = detail::tl_concat_t<
+  argument_parser_data_types,
+  detail::type_list<located<pipeline>, ast::expression, ast::field_path,
+                    ast::lambda_expr, located<data>>>;
 
 using argument_parser_bare_types
   = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,

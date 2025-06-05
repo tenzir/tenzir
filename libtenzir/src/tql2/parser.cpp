@@ -218,7 +218,7 @@ public:
   auto parse_match_stmt_arm() -> match_stmt::arm {
     auto filter = std::vector<ast::expression>{};
     while (true) {
-      filter.push_back(parse_expression());
+      filter.push_back(parse_expression(1));
       if (accept(tk::fat_arrow)) {
         break;
       }
@@ -373,6 +373,16 @@ public:
             equal.location,
             std::move(right),
           };
+          continue;
+        }
+        if (auto arrow = accept(tk::fat_arrow)) {
+          auto* left = try_as<ast::root_field>(expr);
+          if (not left or left->has_question_mark) {
+            diagnostic::error("expected identifier").primary(expr).throw_();
+          }
+          auto right = parse_expression();
+          expr = lambda_expr{std::move(left->id), arrow.location,
+                             std::move(right)};
           continue;
         }
       }

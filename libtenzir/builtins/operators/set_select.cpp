@@ -18,7 +18,7 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto usage = "set <path>=<expr>...";
-    auto docs = "https://docs.tenzir.com/operators/set";
+    auto docs = "https://docs.tenzir.com/reference/operators/set";
     auto assignments = std::vector<ast::assignment>{};
     for (auto& arg : inv.args) {
       arg.match(

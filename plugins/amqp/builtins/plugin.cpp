@@ -71,6 +71,7 @@ class plugin : public virtual operator_plugin2<Operator> {
   auto make(operator_factory_plugin::invocation inv,
             session ctx) const -> failure_or<operator_ptr> override {
     auto args = Args{};
+    args.op = inv.self.get_location();
     auto channel = std::optional<located<uint64_t>>{};
     auto options = std::optional<located<record>>{};
     auto parser = argument_parser2::operator_(this->name());

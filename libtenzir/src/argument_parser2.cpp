@@ -12,6 +12,7 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/similarity.hpp"
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
 
@@ -152,6 +153,14 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         set(std::move(*sel));
       },
+      [&](setter<ast::lambda_expr>& set) {
+        const auto* lambda = try_as<ast::lambda_expr>(expr);
+        if (not lambda) {
+          emit(diagnostic::error("expected a lambda").primary(expr));
+          return;
+        }
+        set(*lambda);
+      },
       [&](setter<located<pipeline>>& set) {
         auto pipe_expr = try_as<ast::pipeline_expr>(expr);
         if (not pipe_expr) {
@@ -277,6 +286,14 @@ auto argument_parser2::parse(const ast::entity& self,
             }
             set(std::move(*sel));
           },
+          [&](setter<ast::lambda_expr>& set) {
+            auto* lambda = try_as<ast::lambda_expr>(expr);
+            if (not lambda) {
+              emit(diagnostic::error("expected a lambda").primary(expr));
+              return;
+            }
+            set(std::move(*lambda));
+          },
           [&](setter<located<pipeline>>& set) {
             auto pipe_expr = try_as<ast::pipeline_expr>(expr);
             if (not pipe_expr) {
@@ -353,6 +370,9 @@ auto argument_parser2::usage() const -> std::string {
       [](const setter<ast::field_path>&) -> std::string {
         // TODO: `field` is not 100% accurate, but we use it in the docs.
         return "field";
+      },
+      [](const setter<ast::lambda_expr>&) -> std::string {
+        return "lambda";
       },
       [](const setter<located<pipeline>>&) -> std::string {
         return "{ … }";
@@ -461,7 +481,7 @@ auto argument_parser2::docs() const -> std::string {
     TENZIR_UNREACHABLE();
   });
   boost::replace_all(name, "::", "/");
-  return fmt::format("https://docs.tenzir.com/tql2/{}/{}", category, name);
+  return fmt::format("https://docs.tenzir.com/reference/{}/{}", category, name);
 }
 
 template <class T>

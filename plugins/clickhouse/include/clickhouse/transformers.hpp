@@ -27,6 +27,10 @@ using dropmask_type = std::vector<char>;
 using dropmask_ref = std::span<char>;
 using dropmask_cref = std::span<const char>;
 
+inline auto pop_count(dropmask_cref mask) -> int64_t {
+  return std::ranges::count(mask, true);
+}
+
 /// A `transformer` performs the type erased conversion from our arrays to
 /// clickhouse-cpp's API types
 struct transformer {
@@ -78,7 +82,8 @@ struct transformer {
   [[nodiscard]] virtual auto
   create_column(path_type& path, const tenzir::type& type,
                 const arrow::Array& array, dropmask_cref dropmask,
-                tenzir::diagnostic_handler& dh) -> ::clickhouse::ColumnRef
+                int64_t dropcount, tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef
     = 0;
 
   virtual ~transformer() = default;
@@ -104,7 +109,7 @@ struct transformer_record : transformer {
 
   virtual auto create_column(path_type& path, const tenzir::type& type,
                              const arrow::Array& array, dropmask_cref dropmask,
-                             tenzir::diagnostic_handler& dh)
+                             int64_t dropcount, tenzir::diagnostic_handler& dh)
     -> ::clickhouse::ColumnRef override;
 
   struct find_result {

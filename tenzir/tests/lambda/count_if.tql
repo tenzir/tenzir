@@ -1,0 +1,11 @@
+from (
+  {xs: [1, 2, 3]},
+  {xs: [4, null]},
+  {xs: [null.int()]},
+  {xs: []},
+  {xs: ["foo", "bar", "baz"]},
+  {xs: null},
+  {xs: "qux"},
+)
+num_strings = xs.count_if(x => type_of(x).kind == "string")
+num_ints = xs.count_if(x => type_of(x).kind == "int64")
