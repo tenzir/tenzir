@@ -1,5 +1,5 @@
 ---
-title: packag::list
+title: package::list
 category: Packages
 example: "package::list"
 ---

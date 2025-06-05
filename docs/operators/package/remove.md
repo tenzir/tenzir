@@ -1,6 +1,6 @@
 ---
 title: package::remove
-category: Contexts
+category: Packages
 example: 'package::remove "suricata-ocsf"'
 ---
 
@@ -28,5 +28,4 @@ package::remove "suricata-ocsf"
 
 ## See Also
 
-[`list`](/reference/operators/package/list),
 [`package::add`](/reference/operators/package/add)
