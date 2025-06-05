@@ -321,6 +321,7 @@ using ids = bitmap; // temporary; until we have a real type for 'ids'
 using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
+using symbol_map = std::unordered_map<std::string, legacy_type>;
 
 /// A duration in time with nanosecond resolution.
 using duration = caf::timespan;

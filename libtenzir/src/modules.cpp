@@ -8,20 +8,27 @@
 
 #include "tenzir/modules.hpp"
 
-#include "tenzir/module.hpp"
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
+#include "tenzir/legacy_type.hpp"
 #include "tenzir/taxonomies.hpp"
 
+#include <boost/unordered/unordered_flat_map.hpp>
+
+#include <mutex>
 #include <utility>
-#include <vector>
 
 namespace tenzir::modules {
 
 namespace {
 
 struct global_module_registry {
-  module mod;
+  std::mutex mutex;
+  boost::unordered_flat_map<std::string, variant<type, legacy_type>,
+                            detail::heterogeneous_string_hash,
+                            detail::heterogeneous_string_equal>
+    types;
+
   concepts_map concepts;
-  std::vector<type> schemas;
 };
 
 bool initialized = false;
@@ -33,37 +40,45 @@ auto get_impl() -> global_module_registry& {
 
 } // namespace
 
-/// Initialize the global module, concept and schema registries.
-auto init(module mod, concepts_map concepts) -> bool {
-  if (initialized) [[likely]]
-    return false;
-  get_impl().mod = std::move(mod);
+void init(symbol_map symbols, concepts_map concepts) {
+  TENZIR_ASSERT(not initialized);
+  auto& impl = get_impl();
+  auto lock = std::unique_lock{impl.mutex};
+  for (auto& [name, ty] : symbols) {
+    TENZIR_ASSERT(name == ty.name());
+    if (is<legacy_record_type>(ty)) {
+      impl.types.emplace(name, std::move(ty));
+    }
+  }
   get_impl().concepts = std::move(concepts);
-  std::copy_if(get_impl().mod.begin(), get_impl().mod.end(),
-               std::back_inserter(get_impl().schemas), [](const auto& type) {
-                 return not type.name().empty() && is<record_type>(type);
-               });
   initialized = true;
-  return true;
 }
 
-// Get the list of schemas.
-// Returns an empty list if init(...) was not called.
-auto schemas() -> const std::vector<type>& {
-  return get_impl().schemas;
+auto get_schema(std::string_view name) -> std::optional<type> {
+  auto& global = get_impl();
+  // The critical section here is very small once the type has been converted.
+  // This function should this be fine to call outside of tight loops.
+  auto lock = std::unique_lock{global.mutex};
+  auto it = global.types.find(name);
+  if (it == global.types.end()) {
+    return std::nullopt;
+  }
+  return match(
+    it->second,
+    [](const type& ty) {
+      return ty;
+    },
+    [&](const legacy_type& legacy) {
+      auto converted = type::from_legacy_type(legacy);
+      it->second = converted;
+      return converted;
+    });
 }
+
 // Get the concepts map.
 // Returns an empty map if init(...) was not called.
 auto concepts() -> const concepts_map& {
   return get_impl().concepts;
-}
-
-// Get the list of modules.
-[[deprecated("call modules::schemas() instead")]] auto global_module()
-  -> const module* {
-  if (not initialized)
-    return nullptr;
-  return &get_impl().mod;
 }
 
 } // namespace tenzir::modules

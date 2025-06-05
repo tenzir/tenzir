@@ -132,7 +132,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   auto msb = multi_series_builder{
     std::move(options),
     dh,
-    modules::schemas(),
+    modules::get_schema,
     detail::data_builder::non_number_parser,
   };
   auto document = std::string{};
@@ -400,7 +400,7 @@ public:
               auto builder = multi_series_builder{
                 msb_opts,
                 ctx,
-                modules::schemas(),
+                modules::get_schema,
                 detail::data_builder::non_number_parser,
               };
               for (int64_t i = 0; i < arg.length(); ++i) {

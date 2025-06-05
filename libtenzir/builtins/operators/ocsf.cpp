@@ -282,10 +282,8 @@ public:
               += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
           }
         }
-        auto it = std::ranges::find_if(modules::schemas(), [&](const type& ty) {
-          return ty.name() == schema;
-        });
-        if (it == modules::schemas().end()) {
+        auto ty = modules::get_schema(schema);
+        if (not ty) {
           diagnostic::warning("dropping events with unknown version `{}` for "
                               "class `{}`",
                               *version, *class_name)
@@ -295,7 +293,7 @@ public:
         }
         // TODO: Drop metadata after casting and rename!
         return caster{self_, ctrl.diagnostics()}.cast(
-          subslice(slice, begin, end), *it);
+          subslice(slice, begin, end), *ty);
       };
       for (; end < class_array->length(); ++end) {
         auto next_version = view_at(*version_array, end);
