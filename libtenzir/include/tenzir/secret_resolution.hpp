@@ -72,6 +72,7 @@ private:
 struct secret_censor {
 public:
   auto censor(std::string text) const -> std::string;
+  auto censor(const arrow::Status& status) const -> std::string;
   template <typename T>
   auto censor(const arrow::Result<T>& r) const -> std::string {
     return censor(r.status().ToString());
