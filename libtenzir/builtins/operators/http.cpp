@@ -45,6 +45,8 @@
 #include <unordered_map>
 #include <utility>
 
+constexpr auto max_response_size = std::numeric_limits<int32_t>::max();
+
 namespace tenzir::plugins::http {
 namespace {
 
@@ -185,12 +187,12 @@ struct internal_sink final : public crtp_operator<internal_sink> {
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    auto slice = table_slice{};
     for (auto slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
+      TENZIR_DEBUG("[internal-http-sink] pushing slice");
       ctrl.set_waiting(true);
       ctrl.self()
         .mail(atom::internal_v, atom::push_v, std::move(slice))
@@ -903,7 +905,8 @@ public:
       .make_observable()
       .from_resource(std::move(*pull))
       .for_each([&](const http::request& r) mutable {
-        TENZIR_DEBUG("[http] handling request");
+        TENZIR_DEBUG("[http] handling request with size: {}B",
+                     r.body().size_bytes());
         if (args_.responses) {
           const auto it = args_.responses->inner.find(r.header().path());
           if (it != args_.responses->inner.end()) {
@@ -926,10 +929,12 @@ public:
           }
           return chunk::copy(r.body());
         };
-        const auto actor
-          = spawn_pipeline(ctrl,
-                           make_pipeline(args_.parse, r, args_.op, dh).unwrap(),
-                           args_.filter, make_chunk(), true);
+        auto pipe = make_pipeline(args_.parse, r, args_.op, dh);
+        if (not pipe) {
+          return;
+        }
+        const auto actor = spawn_pipeline(ctrl, std::move(pipe).unwrap(),
+                                          args_.filter, make_chunk(), true);
         if (not actor) {
           return;
         }
@@ -1013,7 +1018,9 @@ public:
     auto slices = std::vector<table_slice>{};
     auto paginate_queue = std::vector<http::client_factory>{};
     const auto handle_response = [&](const http::response& r) {
-      TENZIR_DEBUG("[http] handling response");
+      ctrl.set_waiting(false);
+      TENZIR_DEBUG("[http] handling response with size: {}B",
+                   r.body().size_bytes());
       if (const auto code = std::to_underlying(r.code());
           code < 200 or 399 < code) {
         diagnostic::error("received erroneous http status code: `{}`", code)
@@ -1023,7 +1030,6 @@ public:
       }
       if (r.body().empty()) {
         --awaiting;
-        ctrl.set_waiting(false);
         return;
       }
       const auto& headers = r.header_fields();
@@ -1037,9 +1043,12 @@ public:
         }
         return chunk::copy(r.body());
       };
-      const auto actor = spawn_pipeline(
-        ctrl, make_pipeline(args_.parse, r, args_.op, dh, false).unwrap(),
-        args_.filter, make_chunk(), false);
+      auto pipe = make_pipeline(args_.parse, r, args_.op, dh, false);
+      if (not pipe) {
+        return;
+      }
+      const auto actor = spawn_pipeline(ctrl, std::move(pipe).unwrap(),
+                                        args_.filter, make_chunk(), false);
       std::invoke([&, &args_ = args_, r, actor](this const auto& pull) -> void {
         TENZIR_DEBUG("[http] requesting slice");
         ctrl.self()
@@ -1048,10 +1057,10 @@ public:
           .then(
             [&, r, pull, actor](table_slice slice) {
               TENZIR_DEBUG("[http] pulled slice");
+              ctrl.set_waiting(false);
               if (slice.rows() == 0) {
                 TENZIR_DEBUG("[http] finishing subpipeline");
                 --awaiting;
-                ctrl.set_waiting(false);
                 return;
               }
               pull();
@@ -1074,6 +1083,7 @@ public:
                   http::with(ctrl.self().system())
                     .context(args_.make_ssl_context())
                     .connect(caf::make_uri(*url))
+                    .max_response_size(max_response_size)
                     .connection_timeout(args_.connection_timeout->inner)
                     .max_retry_count(args_.max_retry_count->inner)
                     .retry_delay(args_.retry_delay->inner)
@@ -1094,6 +1104,7 @@ public:
     http::with(ctrl.self().system())
       .context(args_.make_ssl_context())
       .connect(caf::make_uri(args_.url.inner))
+      .max_response_size(max_response_size)
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
       .retry_delay(args_.retry_delay->inner)
@@ -1413,13 +1424,12 @@ public:
     auto warned = false;
     const auto handle_response = [&](view<record> og) {
       return [&, og = materialize(std::move(og))](const http::response& r) {
-        TENZIR_DEBUG("[http] handling response");
+        TENZIR_DEBUG("[http] handling response with size: {}B",
+                     r.body().size_bytes());
+        ctrl.set_waiting(false);
         if (const auto code = std::to_underlying(r.code());
             code < 200 or 399 < code) {
           --awaiting;
-          if (awaiting < args_.parallel.inner) {
-            ctrl.set_waiting(false);
-          }
           diagnostic::warning("received erroneous http status code: `{}`", code)
             .primary(args_.op)
             .note("skipping response handling")
@@ -1428,17 +1438,11 @@ public:
         }
         if (r.body().empty()) {
           --awaiting;
-          if (awaiting < args_.parallel.inner) {
-            ctrl.set_waiting(false);
-          }
           return;
         }
         auto p = make_pipeline(args_.parse, r, args_.op, dh, true);
         if (not p) {
           --awaiting;
-          if (awaiting < args_.parallel.inner) {
-            ctrl.set_waiting(false);
-          }
           return;
         }
         const auto& headers = r.header_fields();
@@ -1463,12 +1467,10 @@ public:
             .then(
               [&, r, pull, og, actor](table_slice slice) {
                 TENZIR_DEBUG("[http] pulled slice");
+                ctrl.set_waiting(false);
                 if (slice.rows() == 0) {
                   TENZIR_DEBUG("[http] finishing subpipeline");
                   --awaiting;
-                  if (awaiting < args_.parallel.inner) {
-                    ctrl.set_waiting(false);
-                  }
                   return;
                 }
                 pull();
@@ -1499,6 +1501,7 @@ public:
                     http::with(ctrl.self().system())
                       .context(args_.make_ssl_context())
                       .connect(caf::make_uri(*url))
+                      .max_response_size(max_response_size)
                       .connection_timeout(args_.connection_timeout.inner)
                       .max_retry_count(args_.max_retry_count)
                       .retry_delay(args_.retry_delay.inner)
@@ -1511,9 +1514,7 @@ public:
               },
               [&](const caf::error&) {
                 --awaiting;
-                if (awaiting < args_.parallel.inner) {
-                  ctrl.set_waiting(false);
-                }
+                ctrl.set_waiting(false);
                 diagnostic::warning("failed to parse response")
                   .primary(args_.op)
                   .emit(ctrl.diagnostics());
@@ -1558,6 +1559,7 @@ public:
         http::with(ctrl.self().system())
           .context(args_.make_ssl_context())
           .connect(caf::make_uri(url))
+          .max_response_size(max_response_size)
           .connection_timeout(args_.connection_timeout.inner)
           .max_retry_count(args_.max_retry_count)
           .retry_delay(args_.retry_delay.inner)
@@ -1576,25 +1578,23 @@ public:
             fut.bind_to(ctrl.self())
               .then(handle_response(row), [&](const caf::error& e) {
                 --awaiting;
-                if (awaiting < args_.parallel.inner) {
-                  ctrl.set_waiting(false);
-                }
+                ctrl.set_waiting(false);
                 diagnostic::warning("request failed: `{}`", e)
                   .primary(args_.op)
                   .emit(dh);
               });
           });
-        if (awaiting >= args_.parallel.inner) {
+        while (awaiting >= args_.parallel.inner) {
+          // NOTE: Must be an index-based loop. The thread can go back to the
+          // observe loop after yielding here, causing the vector's iterator to
+          // be invalidated.
+          for (auto i = size_t{}; i < slices.size(); ++i) {
+            co_yield slices[i];
+          }
+          slices.clear();
           ctrl.set_waiting(true);
           co_yield {};
         }
-        // NOTE: Must be an index-based loop. The thread can go back to the
-        // observe loop after yielding here, causing the vector's iterator to
-        // be invalidated.
-        for (auto i = size_t{}; i < slices.size(); ++i) {
-          co_yield slices[i];
-        }
-        slices.clear();
         // NOTE: Must be an index-based loop. The thread can go back to the
         // observe loop after yielding here, causing the vector's iterator to
         // be invalidated.
@@ -1617,26 +1617,24 @@ public:
                   fut.bind_to(ctrl.self())
                     .then(handle_response(row), [&](const caf::error& e) {
                       --awaiting;
-                      if (awaiting < args_.parallel.inner) {
-                        ctrl.set_waiting(false);
-                      }
+                      ctrl.set_waiting(false);
                       diagnostic::warning("request failed: `{}`", e)
                         .primary(args_.op)
                         .emit(dh);
                     });
                 });
             });
-          if (awaiting >= args_.parallel.inner) {
+          while (awaiting >= args_.parallel.inner) {
+            // NOTE: Must be an index-based loop. The thread can go back to the
+            // observe loop after yielding here, causing the vector's iterator
+            // to be invalidated.
+            for (auto i = size_t{}; i < slices.size(); ++i) {
+              co_yield slices[i];
+            }
+            slices.clear();
             ctrl.set_waiting(true);
             co_yield {};
           }
-          // NOTE: Must be an index-based loop. The thread can go back to the
-          // observe loop after yielding here, causing the vector's iterator to
-          // be invalidated.
-          for (auto i = size_t{}; i < slices.size(); ++i) {
-            co_yield slices[i];
-          }
-          slices.clear();
         }
         paginate_queue.clear();
       }
