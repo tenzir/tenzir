@@ -63,12 +63,54 @@ inline auto offset_parser() {
   return beginning | end | stored | value;
 }
 
+inline void
+set_or_fail(const std::string& key, const std::string& value, location loc,
+            kafka::configuration& cfg, diagnostic_handler& dh) {
+  if (auto e = cfg.set(key, value)) {
+    diagnostic::error("failed to set librdkafka option {}={}: {}", key, value,
+                      e)
+      .primary(loc)
+      .emit(dh);
+  }
+};
+
+[[nodiscard]] inline auto
+configure_or_request(const located<record>& options, kafka::configuration& cfg,
+                     diagnostic_handler& dh) -> std::vector<secret_request> {
+  auto requests = std::vector<secret_request>{};
+
+  for (const auto& [key, value] : options.inner) {
+    match(
+      value,
+      [&](const concepts::arithmetic auto& v) {
+        set_or_fail(key, fmt::to_string(v), options.source, cfg, dh);
+      },
+      [&](const std::string& s) {
+        set_or_fail(key, s, options.source, cfg, dh);
+      },
+      [&](const secret& s) {
+        requests.emplace_back(
+          s, options.source,
+          [&cfg, &dh, loc = options.source, key](resolved_secret_value v) {
+            set_or_fail(key,
+                        std::string{v.utf8_view("options." + key, loc, dh)},
+                        loc, cfg, dh);
+          });
+      },
+      [](const auto&) {
+        /// This case should be covered by the early validation in `plugin::make`
+        TENZIR_UNREACHABLE();
+      });
+  }
+  return requests;
+}
+
 struct loader_args {
   std::string topic;
   std::optional<located<uint64_t>> count;
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
-  located<std::vector<std::pair<std::string, std::string>>> options;
+  located<record> options;
   configuration::aws_iam_options aws;
 
   template <class Inspector>
@@ -122,15 +164,11 @@ public:
         diagnostic::error("failed to set rebalance callback: {}", err).done());
     }
     // Override configuration with arguments.
-    if (not args_.options.inner.empty()) {
-      for (const auto& [key, value] : args_.options.inner) {
-        TENZIR_INFO("providing librdkafka option {}={}", key, value);
-        if (auto err = cfg->set(key, value)) {
-          diagnostic::error("failed to set librdkafka option {}={}: {}", key,
-                            value, err)
-            .primary(args_.options.source)
-            .emit(ctrl.diagnostics());
-        }
+    {
+      auto secrets
+        = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
+      if (ctrl.resolve_secrets_must_yield(std::move(secrets))) {
+        co_yield {};
       }
     }
     // Create the consumer.
@@ -200,7 +238,7 @@ struct saver_args {
   std::string topic;
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
-  located<std::vector<std::pair<std::string, std::string>>> options;
+  located<record> options;
   configuration::aws_iam_options aws;
 
   template <class Inspector>
@@ -229,15 +267,11 @@ public:
       diagnostic::error(cfg.error()).emit(ctrl.diagnostics());
     };
     // Override configuration with arguments.
-    if (not args_.options.inner.empty()) {
-      for (const auto& [key, value] : args_.options.inner) {
-        TENZIR_INFO("providing librdkafka option {}={}", key, value);
-        if (auto err = cfg->set(key, value)) {
-          diagnostic::error("failed to set librdkafka option {}={}: {}", key,
-                            value, err)
-            .primary(args_.options.source)
-            .throw_();
-        }
+    {
+      auto secrets
+        = configure_or_request(args_.options, *cfg, ctrl.diagnostics());
+      if (ctrl.resolve_secrets_must_yield(std::move(secrets))) {
+        co_yield {};
       }
     }
     if (auto value = cfg->get("bootstrap.servers")) {
