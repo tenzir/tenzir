@@ -25,6 +25,35 @@ auto make_secret_request(const located<record>& r,
                                  std::move(callback)};
 }
 
+auto arrow_uri_callback(std::string prefix, arrow::util::Uri& uri,
+                        diagnostic_handler& dh, location loc)
+  -> secret_request_callback {
+  return [&uri, &dh, loc, prefix = std::move(prefix)](resolved_secret_value v) {
+    auto str = std::string{v.utf8_view("uri", loc, dh)};
+    if (not str.starts_with(prefix)) {
+      str.insert(0, prefix);
+    }
+    const auto parse_result = uri.Parse(str);
+    if (not parse_result.ok()) {
+      diagnostic::error("failed to parse uri").primary(loc).emit(dh);
+    };
+  };
+}
+
+auto make_uri_request(secret s, location loc, std::string prefix,
+                      arrow::util::Uri& uri, diagnostic_handler& dh)
+  -> secret_request {
+  return secret_request{s, loc,
+                        arrow_uri_callback(std::move(prefix), uri, dh, loc)};
+}
+
+auto make_uri_request(const located<secret>& s, std::string prefix,
+                      arrow::util::Uri& uri, diagnostic_handler& dh)
+  -> secret_request {
+  return secret_request{s, arrow_uri_callback(std::move(prefix), uri, dh,
+                                              s.source)};
+}
+
 auto resolve_secrets_must_yield(operator_control_plane& ctrl,
                                 std::vector<secret_request_combined> requests)
   -> bool {
