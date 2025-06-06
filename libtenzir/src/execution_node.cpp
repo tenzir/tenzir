@@ -249,10 +249,12 @@ struct exec_node_control_plane final : public operator_control_plane {
       auto res = ecc::cleansing_blob{};
       auto temp_blob = ecc::cleansing_blob{};
       // For every element in the original secret
+      bool all_literal = true;
       for (const auto& e : *secret.buffer->elements()) {
         const auto name = e->name()->string_view();
         const auto ops = e->operations()->string_view();
         const auto is_literal = e->is_literal();
+        all_literal |= is_literal;
         if (is_literal) {
           // If it is a literal secret, we copy its name into a temporary blob.
           temp_blob.assign(
@@ -304,7 +306,7 @@ struct exec_node_control_plane final : public operator_control_plane {
         res.insert(res.end(), temp_blob.begin(), temp_blob.end());
       }
       // Finally, we invoke the callback
-      callback(resolved_secret_value{std::move(res)});
+      callback(resolved_secret_value{std::move(res), all_literal});
     }
   };
 
