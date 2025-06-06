@@ -375,18 +375,20 @@ public:
     }
   };
 
-  multi_series_builder(options opts, diagnostic_handler& dh,
-                       std::vector<type> schemas = modules::schemas(),
-                       data_builder::data_parsing_function parser
-                       = detail::data_builder::basic_parser)
+  multi_series_builder(
+    options opts, diagnostic_handler& dh,
+    std::function<auto(std::string_view)->std::optional<type>> schema_fn
+    = modules::get_schema,
+    data_builder::data_parsing_function parser
+    = detail::data_builder::basic_parser)
     : multi_series_builder{std::move(opts.policy), std::move(opts.settings), dh,
-                           std::move(schemas), std::move(parser)} {
+                           std::move(schema_fn), std::move(parser)} {
   }
 
   multi_series_builder(
     policy_type policy, settings_type settings, diagnostic_handler& dh,
-    std::vector<type> schemas
-    = modules::schemas(), // FIXME remove the explicit call at use sites
+    std::function<auto(std::string_view)->std::optional<type>> schema_fn
+    = modules::get_schema,
     data_builder::data_parsing_function parser
     = detail::data_builder::basic_parser);
 
@@ -465,6 +467,8 @@ private:
   diagnostic_handler& dh_;
   // used for quick name -> schema mapping
   detail::flat_map<std::string, tenzir::type> schemas_;
+  // used to populate the map above
+  std::function<auto(std::string_view)->std::optional<type>> schema_fn_;
   // builder used in merging mode
   series_builder merging_builder_;
   // builder_raw_ must be constructed after `dh_` as it depends on it

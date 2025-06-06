@@ -124,13 +124,7 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
       return false;
     }
     if (not p->seed_schema.empty()) {
-      const auto schemas = modules::schemas();
-
-      auto it
-        = std::find_if(schemas.begin(), schemas.end(), [p](const auto& t) {
-            return t.name() == p->seed_schema;
-          });
-      if (it == schemas.end()) {
+      if (not modules::get_schema(p->seed_schema)) {
         if (settings_.schema_only) {
           diagnostic::error("schema `{}` does not exist, but `--schema-only` "
                             "was specified",

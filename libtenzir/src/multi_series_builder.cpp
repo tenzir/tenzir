@@ -428,16 +428,13 @@ auto series_to_table_slice(std::vector<series> data,
 
 multi_series_builder::multi_series_builder(
   policy_type policy, settings_type settings, diagnostic_handler& dh,
-  std::vector<type> schemas, data_builder::data_parsing_function parser)
+  std::function<auto(std::string_view)->std::optional<type>> schema_fn,
+  data_builder::data_parsing_function parser)
   : policy_{std::move(policy)},
     settings_{std::move(settings)},
     dh_{dh},
+    schema_fn_{std::move(schema_fn)},
     builder_raw_{std::move(parser), &dh, settings_.schema_only, settings_.raw} {
-  schemas_.reserve(schemas.size());
-  for (auto t : schemas) {
-    const auto [it, success] = schemas_.try_emplace(t.name(), std::move(t));
-    TENZIR_ASSERT(success, "Repeated schema name");
-  }
   if (get_policy<policy_default>()) {
     // if we merge all events, they are necessarily ordered
     settings_.ordered |= settings_.merge;
@@ -737,12 +734,15 @@ std::optional<size_t> multi_series_builder::next_free_index() const {
 
 auto multi_series_builder::type_for_schema(std::string_view name)
   -> const tenzir::type* {
-  const auto it = schemas_.find(name);
+  auto it = schemas_.find(name);
   if (it == std::ranges::end(schemas_)) {
-    return nullptr;
-  } else {
-    return std::addressof(it->second);
+    auto schema = schema_fn_(name);
+    if (not schema) {
+      return nullptr;
+    }
+    it = schemas_.emplace(name, std::move(*schema)).first;
   }
+  return &it->second;
 }
 
 void multi_series_builder::make_events_available_where(
