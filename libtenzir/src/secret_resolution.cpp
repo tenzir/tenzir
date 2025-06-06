@@ -91,6 +91,10 @@ auto secret_censor::censor(std::string text) const -> std::string {
   return text;
 }
 
+auto secret_censor::censor(const arrow::Status& status) const -> std::string {
+  return censor(status.ToString());
+}
+
 auto make_secret_request(std::string name, secret s, tenzir::location loc,
                          std::string& out, diagnostic_handler& dh,
                          secret_censor* censor) -> secret_request {
