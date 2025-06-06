@@ -14,6 +14,11 @@
 
 #include <string_view>
 
+namespace arrow {
+template <typename T>
+class Result;
+}
+
 namespace tenzir {
 
 /// @relates `operator_control_plane::resolve_secrets_must_yield`
@@ -21,16 +26,10 @@ class resolved_secret_value {
 public:
   resolved_secret_value() = default;
 
-  explicit resolved_secret_value(ecc::cleansing_blob value)
-    : value_{std::move(value)} {
+  explicit resolved_secret_value(ecc::cleansing_blob value, bool all_literal
+                                                            = false)
+    : value_{std::move(value)}, all_literal_{all_literal} {
   }
-
-  ~resolved_secret_value() = default;
-  resolved_secret_value(const resolved_secret_value&) = delete;
-  auto operator=(const resolved_secret_value&)
-    -> resolved_secret_value& = delete;
-  resolved_secret_value(resolved_secret_value&&) = default;
-  auto operator=(resolved_secret_value&&) -> resolved_secret_value& = default;
 
   /// Returns a string view over the secret's UTF-8 value, if it is valid UTF-8.
   auto utf8_view() const -> std::optional<std::string_view>;
@@ -39,6 +38,12 @@ public:
   /// Otherwise, emits a diagnostic::error
   auto utf8_view(std::string_view name, location loc,
                  diagnostic_handler& dh) const -> std::string_view;
+
+  /// Whether the secret only consists of literals, i.e. is all plain text
+  /// This is mostly useful for a decision to censor secrets
+  auto all_literal() const -> bool {
+    return all_literal_;
+  }
 
   /// Returns a view over the secret's raw bytes.
   auto blob() const -> std::span<const std::byte> {
@@ -59,6 +64,21 @@ public:
 
 private:
   ecc::cleansing_blob value_;
+  bool all_literal_ = false;
+};
+
+/// A utility that censors any occurrence of (part of) a secret in a string.
+/// @relates make_secret_request
+struct secret_censor {
+public:
+  auto censor(std::string text) const -> std::string;
+  template <typename T>
+  auto censor(const arrow::Result<T>& r) const -> std::string {
+    return censor(r.status().ToString());
+  }
+
+  size_t max_size = 3;
+  std::vector<resolved_secret_value> secrets;
 };
 
 using secret_request_callback = std::function<void(resolved_secret_value)>;
@@ -81,16 +101,6 @@ struct secret_request {
   }
 
   /// A secret request that will invoke `callback` on successful resolution
-  secret_request(tenzir::secret secret, resolved_secret_value& out,
-                 tenzir::location loc)
-    : secret{std::move(secret)},
-      location{loc},
-      callback{[&out](resolved_secret_value v) {
-        out = std::move(v);
-      }} {
-  }
-
-  /// A secret request that will invoke `callback` on successful resolution
   secret_request(const located<tenzir::secret>& secret,
                  secret_request_callback callback)
     : secret{secret.inner},
@@ -99,14 +109,12 @@ struct secret_request {
   }
 
   /// A secret request that will directly set `out` on successful resolution
+  secret_request(tenzir::secret secret, tenzir::location loc,
+                 resolved_secret_value& out, secret_censor* censor = nullptr);
+
+  /// A secret request that will directly set `out` on successful resolution
   secret_request(const located<tenzir::secret>& secret,
-                 resolved_secret_value& out)
-    : secret{secret.inner},
-      location{secret.source},
-      callback{[&out](resolved_secret_value v) {
-        out = std::move(v);
-      }} {
-  }
+                 resolved_secret_value& out, secret_censor* censor = nullptr);
 };
 
 namespace detail {
@@ -114,16 +122,19 @@ namespace detail {
 /// UTF-8 string and raises an error otherwise.
 /// @relates operator_control_plane::resolve_secrets_must_yield
 /// @relates resolved_secret_value::utf8_view
-auto secret_setter_callback(std::string name, tenzir::location loc,
-                            std::string& out, diagnostic_handler& dh)
+auto secret_string_setter_callback(std::string name, tenzir::location loc,
+                                   std::string& out, diagnostic_handler& dh,
+                                   secret_censor* censor = nullptr)
   -> secret_request_callback;
 
 /// Creates a secret_request_callback that sets `out`, if the secret is a valid
 /// UTF-8 string and raises an error otherwise.
 /// @relates operator_control_plane::resolve_secrets_must_yield
 /// @relates resolved_secret_value::utf8_view
-auto secret_setter_callback(std::string name, tenzir::location loc,
-                            located<std::string>& out, diagnostic_handler& dh)
+auto secret_string_setter_callback(std::string name, tenzir::location loc,
+                                   located<std::string>& out,
+                                   diagnostic_handler& dh,
+                                   secret_censor* censor = nullptr)
   -> secret_request_callback;
 } // namespace detail
 
@@ -132,8 +143,8 @@ auto secret_setter_callback(std::string name, tenzir::location loc,
 /// @relates operator_control_plane::resolve_secrets_must_yield
 /// @relates resolved_secret_value::utf8_view
 auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         std::string& out, diagnostic_handler& dh)
-  -> secret_request;
+                         std::string& out, diagnostic_handler& dh,
+                         secret_censor* censor = nullptr) -> secret_request;
 
 /// Creates a secret request that will set `out`, if the secret is a valid
 /// UTF-8 string and raises an error otherwise.
@@ -141,22 +152,22 @@ auto make_secret_request(std::string name, secret s, tenzir::location loc,
 /// @relates resolved_secret_value::utf8_view
 
 auto make_secret_request(std::string name, secret s, tenzir::location loc,
-                         located<std::string>& out, diagnostic_handler& dh)
-  -> secret_request;
+                         located<std::string>& out, diagnostic_handler& dh,
+                         secret_censor* censor = nullptr) -> secret_request;
 
 /// Creates a secret request that will set `out`, if the secret is a valid
 /// UTF-8 string and raises an error otherwise.
 /// @relates operator_control_plane::resolve_secrets_must_yield
 /// @relates resolved_secret_value::utf8_view
 auto make_secret_request(std::string name, const located<secret>& s,
-                         located<std::string>& out, diagnostic_handler& dh)
-  -> secret_request;
+                         located<std::string>& out, diagnostic_handler& dh,
+                         secret_censor* censor = nullptr) -> secret_request;
 
 /// Creates a secret request that will set `out`, if the secret is a valid
 /// UTF-8 string and raises an error otherwise.
 /// @relates operator_control_plane::resolve_secrets_must_yield
 /// @relates resolved_secret_value::utf8_view
 auto make_secret_request(std::string name, const located<secret>& s,
-                         std::string& out, diagnostic_handler& dh)
-  -> secret_request;
+                         std::string& out, diagnostic_handler& dh,
+                         secret_censor* censor = nullptr) -> secret_request;
 } // namespace tenzir
