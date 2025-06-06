@@ -26,7 +26,7 @@ public:
     auto array = check(to_record_batch(slice)->ToStructArray());
     TENZIR_ASSERT(array);
     auto result
-      = std::dynamic_pointer_cast<arrow::StructArray>(cast(*array, ty));
+      = std::dynamic_pointer_cast<arrow::StructArray>(cast(*array, ty, ""));
     TENZIR_ASSERT(result);
     auto columns = check(result->Flatten());
     // TODO: Don't we need matching metadata here?
@@ -39,12 +39,14 @@ public:
 
 private:
   template <basic_type Type>
-  auto cast(const type_to_arrow_array_t<Type>& array, const Type&)
+  auto cast(const type_to_arrow_array_t<Type>& array, const Type&,
+            std::string_view path)
     -> std::shared_ptr<type_to_arrow_array_t<Type>> {
+    (void)path;
     return std::make_shared<type_to_arrow_array_t<Type>>(array.data());
   }
 
-  auto cast(const arrow::Array& array, const type& ty)
+  auto cast(const arrow::Array& array, const type& ty, std::string_view path)
     -> std::shared_ptr<arrow::Array> {
     if (is<string_type>(ty) and ty.attribute("print_json")) {
       return print_json(array);
@@ -53,15 +55,14 @@ private:
       std::tie(array, ty),
       [&]<class Type>(const type_to_arrow_array_t<Type>& array,
                       const Type& ty) -> std::shared_ptr<arrow::Array> {
-        return cast(array, ty);
+        return cast(array, ty, path);
       },
       [&]<class Array, class Type>(const Array& array, const Type& ty)
         requires(not std::same_as<Array, type_to_arrow_array_t<Type>>)
       {
         if constexpr (not std::same_as<Array, arrow::NullArray>) {
-          // TODO: Give field path here!
-          diagnostic::warning("expected type `{}` for field, but got `{}`",
-                              type_kind::of<Type>,
+          diagnostic::warning("expected type `{}` for `{}`, but got `{}`",
+                              type_kind::of<Type>, path,
                               type_kind::of<type_from_arrow_t<Array>>)
             .primary(self_)
             .emit(dh_);
@@ -76,27 +77,28 @@ private:
     return result;
   }
 
-  auto cast(const enumeration_type::array_type&, const enumeration_type&)
-    -> std::shared_ptr<enumeration_type::array_type> {
+  auto cast(const enumeration_type::array_type&, const enumeration_type&,
+            std::string_view) -> std::shared_ptr<enumeration_type::array_type> {
     TENZIR_UNREACHABLE();
   }
 
-  auto cast(const arrow::MapArray&, const map_type&)
+  auto cast(const arrow::MapArray&, const map_type&, std::string_view)
     -> std::shared_ptr<arrow::MapArray> {
     TENZIR_UNREACHABLE();
   }
 
-  auto cast(const arrow::ListArray& array, const list_type& ty)
-    -> std::shared_ptr<arrow::ListArray> {
-    auto values = cast(*array.values(), ty.value_type());
+  auto cast(const arrow::ListArray& array, const list_type& ty,
+            std::string_view path) -> std::shared_ptr<arrow::ListArray> {
+    auto values
+      = cast(*array.values(), ty.value_type(), std::string{path} + "[]");
     // TODO: What about `array.offset()`?
     return check(arrow::ListArray::FromArrays(
       *array.offsets(), *values, arrow::default_memory_pool(),
       array.null_bitmap(), array.data()->null_count));
   }
 
-  auto cast(const arrow::StructArray& array, const record_type& ty)
-    -> std::shared_ptr<arrow::StructArray> {
+  auto cast(const arrow::StructArray& array, const record_type& ty,
+            std::string_view path) -> std::shared_ptr<arrow::StructArray> {
     auto fields = arrow::FieldVector{};
     auto field_arrays = arrow::ArrayVector{};
     for (auto&& field : ty.fields()) {
@@ -109,15 +111,26 @@ private:
           arrow::MakeArrayOfNull(field.type.to_arrow_type(), array.length())));
         continue;
       }
-      field_arrays.push_back(cast(*field_array, field.type));
+      auto field_path = std::string{path};
+      if (not field_path.empty()) {
+        field_path += '.';
+      }
+      field_path += field.name;
+      field_arrays.push_back(cast(*field_array, field.type, field_path));
     }
     for (auto& field : array.struct_type()->fields()) {
       // Warn for fields that do not exist in the target type.
+      auto field_path = std::string{path};
+      if (not field_path.empty()) {
+        field_path += '.';
+      }
+      field_path += field->name();
       if (not ty.has_field(field->name())) {
-        // TODO: Should give full path to field.
-        // TODO: Field name should probably not be included in message.
-        diagnostic::warning(
-          "dropping field `{}` which does not exist in schema", field->name())
+        // We only include the field path here in the note so that we do not get
+        // flooded with diagnostics in case there are many invalid fields.
+        diagnostic::warning("dropping field which does not exist in schema",
+                            field_path)
+          .note("found {}", field_path)
           .primary(self_)
           .emit(dh_);
       }
@@ -183,24 +196,6 @@ public:
         continue;
       }
       auto ty = as<record_type>(slice.schema());
-      auto class_index = ty.resolve_field("class_uid");
-      if (not class_index) {
-        diagnostic::warning("dropping events where `class_uid` does not exist")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
-      auto class_array = std::dynamic_pointer_cast<arrow::Int64Array>(
-        to_record_batch(slice)->column(detail::narrow<int>(*class_index)));
-      if (not class_array) {
-        diagnostic::warning(
-          "dropping events where `class_uid` is not an integer")
-          .primary(self_)
-          .emit(ctrl.diagnostics());
-        co_yield {};
-        continue;
-      }
       auto metadata_index = ty.resolve_field("metadata");
       if (not metadata_index) {
         diagnostic::warning("dropping events where `metadata` does not exist")
@@ -233,6 +228,24 @@ public:
       if (not version_array) {
         diagnostic::warning(
           "dropping events where `metadata.version` is not a string")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      auto class_index = ty.resolve_field("class_uid");
+      if (not class_index) {
+        diagnostic::warning("dropping events where `class_uid` does not exist")
+          .primary(self_)
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+      auto class_array = std::dynamic_pointer_cast<arrow::Int64Array>(
+        to_record_batch(slice)->column(detail::narrow<int>(*class_index)));
+      if (not class_array) {
+        diagnostic::warning(
+          "dropping events where `class_uid` is not an integer")
           .primary(self_)
           .emit(ctrl.diagnostics());
         co_yield {};
@@ -284,10 +297,10 @@ public:
         }
         auto ty = modules::get_schema(schema);
         if (not ty) {
-          diagnostic::warning("dropping events with unknown version `{}` for "
-                              "class `{}`",
-                              *version, *class_name)
+          diagnostic::warning("could not find schema for the given event")
             .primary(self_)
+            .note("tried to find version {:?} for class {:?}", *version,
+                  *class_name)
             .emit(ctrl.diagnostics());
           return {};
         }
