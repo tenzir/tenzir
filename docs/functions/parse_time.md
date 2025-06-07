@@ -23,50 +23,45 @@ The input string from which the timestamp should be extracted.
 The string that specifies the format of `input`, for example `"%m-%d-%Y"`. The
 allowed format specifiers are the same as for `strptime(3)`:
 
-| Specifier | Description |
-|:---------:|:-------------|
-| `%%`      | The `%` character.
-| `%a/%A`   | Day name in abbreviated or full form.
-| `%b/%B/%h`| Month name in abbreviated or full form.
-| `%c`      | Date and time representation for the locale.
-| `%C`      | Century number (0–99).
-| `%d/%e`   | Day of the month (1–31).
-| `%D`      | Equivalent to `%m/%d/%y` (American style).
-| `%H`      | Hour (0–23).
-| `%I`      | Hour on a 12-hour clock (1–12).
-| `%j`      | Day number in the year (1–366).
-| `%m`      | Month number (1–12).
-| `%M`      | Minute (0–59).
-| `%n`      | Arbitrary whitespace.
-| `%p`      | Locale's equivalent of AM or PM.
-| `%r`      | 12-hour clock time, e.g., `%I:%M:%S %p`.
-| `%R`      | Equivalent to `%H:%M`.
-| `%S`      | Second (0–60, leap seconds included).
-| `%t`      | Arbitrary whitespace.
-| `%T`      | Equivalent to `%H:%M:%S`.
-| `%U`      | Week number (Sunday as the first day, 0–53).
-| `%w`      | Ordinal day of the week (0–6, Sunday=0).
-| `%W`      | Week number (Monday as the first day, 0–53).
-| `%x`      | Date in the locale's format.
-| `%X`      | Time in the locale's format.
-| `%y`      | Year within the century (0–99).
-| `%Y`      | Full year (e.g., 1991).
-| `%Ec`     | Locale's alternative date and time.
-| `%EC`     | Base year name in alternative representation.
-| `%Ex`     | Locale's alternative date.
-| `%EX`     | Locale's alternative time.
-| `%Ey`     | Year offset from `%EC`.
-| `%EY`     | Full alternative year.
-| `%Od/%Oe` | Day of month with alternative numeric symbols.
-| `%OH`     | Hour (24-hour clock) in alternative numeric symbols.
-| `%OI`     | Hour (12-hour clock) in alternative numeric symbols.
-| `%Om`     | Month with alternative numeric symbols.
-| `%OM`     | Minutes with alternative numeric symbols.
-| `%OS`     | Seconds with alternative numeric symbols.
-| `%OU`     | Week number (Sunday as first day) in alternative numeric symbols.
-| `%Ow`     | Ordinal day of the week in alternative numeric symbols.
-| `%OW`     | Week number (Monday as first day) in alternative numeric symbols.
-| `%Oy`     | Year offset in alternative numeric symbols.
+| Specifier | Description                            | Example                   |
+| :-------: | :------------------------------------- | :------------------------ |
+|   `%%`    | A literal `%` character                | `%`                       |
+|   `%a`    | Abbreviated weekday name               | `Mon`                     |
+|   `%A`    | Full weekday name                      | `Monday`                  |
+|   `%b`    | Abbreviated month name                 | `Jan`                     |
+|   `%B`    | Full month name                        | `January`                 |
+|   `%c`    | Date and time representation           | `Mon Jan 1 12:00:00 2024` |
+|   `%C`    | Century (year divided by 100)          | `20`                      |
+|   `%d`    | Day of month with zero padding         | `01`, `31`                |
+|   `%D`    | Equivalent to `%m/%d/%y`               | `01/31/24`                |
+|   `%e`    | Day of month with space padding        | ` 1`, `31`                |
+|   `%F`    | Equivalent to `%Y-%m-%d`               | `2024-01-31`              |
+|   `%g`    | Last two digits of ISO week-based year | `24`                      |
+|   `%G`    | ISO week-based year                    | `2024`                    |
+|   `%h`    | Equivalent to `%b`                     | `Jan`                     |
+|   `%H`    | Hour in 24-hour format                 | `00`, `23`                |
+|   `%I`    | Hour in 12-hour format                 | `01`, `12`                |
+|   `%j`    | Day of year                            | `001`, `365`              |
+|   `%m`    | Month number                           | `01`, `12`                |
+|   `%M`    | Minute                                 | `00`, `59`                |
+|   `%n`    | Newline character                      | `\n`                      |
+|   `%p`    | AM/PM designation                      | `AM`, `PM`                |
+|   `%r`    | 12-hour clock time                     | `12:00:00 PM`             |
+|   `%R`    | Equivalent to `%H:%M`                  | `23:59`                   |
+|   `%S`    | Seconds                                | `00`, `59`                |
+|   `%t`    | Tab character                          | `\t`                      |
+|   `%T`    | Equivalent to `%H:%M:%S`               | `23:59:59`                |
+|   `%u`    | ISO weekday (Monday=1)                 | `1`, `7`                  |
+|   `%U`    | Week number (Sunday as first day)      | `00`, `52`                |
+|   `%V`    | ISO week number                        | `01`, `53`                |
+|   `%w`    | Weekday (Sunday=0)                     | `0`, `6`                  |
+|   `%W`    | Week number (Monday as first day)      | `00`, `52`                |
+|   `%x`    | Date representation                    | `01/31/24`                |
+|   `%X`    | Time representation                    | `23:59:59`                |
+|   `%y`    | Year without century                   | `24`                      |
+|   `%Y`    | Year with century                      | `2024`                    |
+|   `%z`    | UTC offset                             | `+0000`, `-0430`          |
+|   `%Z`    | Time zone abbreviation                 | `UTC`, `EST`              |
 
 ## Examples
 
@@ -78,6 +73,7 @@ from {
 }
 x = x.parse_time("%Y-%m-%d+%H:%M:%S")
 ```
+
 ```tql
 {x: 2024-12-31T12:59:42.000000}
 ```
