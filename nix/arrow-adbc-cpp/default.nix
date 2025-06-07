@@ -34,8 +34,7 @@ stdenv.mkDerivation (finalAttrs: {
     (lib.cmakeBool "ADBC_BUILD_STATIC" stdenv.hostPlatform.isStatic)
     (lib.cmakeBool "ADBC_DRIVER_MANAGER" true)
     (lib.cmakeBool "ADBC_DRIVER_SNOWFLAKE" true)
-    (lib.cmakeFeature "adbc_driver_snowflake_prebuilt"
-    "${arrow-adbc-go}/lib/snowflake${stdenv.hostPlatform.extensions.library}")
+    (lib.cmakeFeature "adbc_driver_snowflake_prebuilt" "${arrow-adbc-go}/lib/snowflake${stdenv.hostPlatform.extensions.library}")
   ];
 
   meta = with lib; {

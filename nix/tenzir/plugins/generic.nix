@@ -9,13 +9,16 @@
 stdenv.mkDerivation {
   inherit name src;
 
-  outputs = ["out" "dev"];
+  outputs = [
+    "out"
+    "dev"
+  ];
 
-  nativeBuildInputs = [cmake];
-  buildInputs = [tenzir];
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ tenzir ];
 
   meta = with lib; {
     platforms = platforms.linux;
-    maintainers = with maintainers; [tobim];
+    maintainers = with maintainers; [ tobim ];
   };
 }

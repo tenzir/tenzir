@@ -8,7 +8,7 @@
   curl,
   libxml2,
   mbedtls_2,
-  openssl
+  openssl,
 }:
 let
   azure-macro-utils-c = stdenv.mkDerivation {
@@ -45,14 +45,20 @@ let
       hash = "sha256-RezVUPsG8TP2UxUa65jRl4on8RfrPRWoZdqsSVDGZ1Q=";
     };
 
-    nativeBuildInputs = [ cmake ninja pkg-config ];
-    buildInputs = [
-      azure-macro-utils-c
-      mbedtls_2
-      umock-c
-    ] ++ lib.optionals stdenv.hostPlatform.isStatic [
-      openssl
+    nativeBuildInputs = [
+      cmake
+      ninja
+      pkg-config
     ];
+    buildInputs =
+      [
+        azure-macro-utils-c
+        mbedtls_2
+        umock-c
+      ]
+      ++ lib.optionals stdenv.hostPlatform.isStatic [
+        openssl
+      ];
     propagatedBuildInputs = [
       curl
     ];
@@ -66,11 +72,12 @@ let
 
     env = {
       # From `pkg-config --libs libcurl`.
-      NIX_LDFLAGS = ""
-      + lib.optionalString stdenv.hostPlatform.isStatic
-        "-lnghttp2 -lidn2 -lunistring -lssh2 -lpsl -lssl -lcrypto -lssl -lcrypto -lzstd -lzstd -lz -lidn2 -lunistring"
-      + lib.optionalString (stdenv.hostPlatform.isStatic && stdenv.hostPlatform.isDarwin)
-        " -liconv -framework SystemConfiguration";
+      NIX_LDFLAGS =
+        ""
+        + lib.optionalString stdenv.hostPlatform.isStatic "-lnghttp2 -lidn2 -lunistring -lssh2 -lpsl -lssl -lcrypto -lssl -lcrypto -lzstd -lzstd -lz -lidn2 -lunistring"
+        + lib.optionalString (
+          stdenv.hostPlatform.isStatic && stdenv.hostPlatform.isDarwin
+        ) " -liconv -framework SystemConfiguration";
     };
 
     postInstall = ''
@@ -90,7 +97,10 @@ let
       hash = "sha256-oeqsy63G98c4HWT6NtsYzC6/YxgdROvUe9RAdmElbCM=";
     };
 
-    nativeBuildInputs = [ cmake ninja ];
+    nativeBuildInputs = [
+      cmake
+      ninja
+    ];
     buildInputs = [
       azure-macro-utils-c
     ];
@@ -113,7 +123,10 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-+drodBren44VLC84gYTjKaAJ2YU1CoUPr0FTVxdVIa4=";
   };
 
-  nativeBuildInputs = [ cmake ninja ];
+  nativeBuildInputs = [
+    cmake
+    ninja
+  ];
 
   buildInputs = [
     azure-c-shared-utility

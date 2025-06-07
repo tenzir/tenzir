@@ -4,27 +4,31 @@
   config,
   tenzir,
   ...
-}: let
+}:
+let
   name = "tenzir";
   inherit (lib) mkIf mkOption mkEnableOption;
   cfg = config.services.tenzir;
-  format = pkgs.formats.yaml {};
+  format = pkgs.formats.yaml { };
   # The settings and extraConfigFile of yaml will be merged in the final
   # configFile.
-  configFile = let
-    # Needs to convert yaml to json so we can use `importJson`.
-    toJsonFile = pkgs.runCommand "extraConfigFile.json" {preferLocalBuild = true;} ''
-      ${pkgs.remarshal}/bin/yaml2json  -i ${cfg.extraConfigFile} -o $out
-    '';
-  in
+  configFile =
+    let
+      # Needs to convert yaml to json so we can use `importJson`.
+      toJsonFile = pkgs.runCommand "extraConfigFile.json" { preferLocalBuild = true; } ''
+        ${pkgs.remarshal}/bin/yaml2json  -i ${cfg.extraConfigFile} -o $out
+      '';
+    in
     format.generate "tenzir.yaml" (
-      if cfg.extraConfigFile == null
-      then cfg.settings
-      else (lib.recursiveUpdate cfg.settings (lib.importJSON toJsonFile))
+      if cfg.extraConfigFile == null then
+        cfg.settings
+      else
+        (lib.recursiveUpdate cfg.settings (lib.importJSON toJsonFile))
     );
 
   port = lib.toInt (lib.last (lib.splitString ":" cfg.settings.tenzir.endpoint));
-in {
+in
+{
   options.services.tenzir = {
     enable = mkEnableOption "enable Tenzir";
 
@@ -56,13 +60,13 @@ in {
         freeformType = format.type;
         options = {
           tenzir = mkOption {
-            default = {};
+            default = { };
             type = lib.types.submodule {
               freeformType = format.type;
               options = {
                 plugins = mkOption {
                   type = lib.types.listOf lib.types.str;
-                  default = ["all"];
+                  default = [ "all" ];
                   description = "The names of plugins to enable";
                 };
                 state-directory = mkOption {
@@ -82,7 +86,7 @@ in {
           };
         };
       };
-      default = {};
+      default = { };
       example = lib.literalExpression ''
         {
           tenzir = {
@@ -99,10 +103,10 @@ in {
   };
 
   config = mkIf cfg.enable {
-    environment.systemPackages = [cfg.package];
+    environment.systemPackages = [ cfg.package ];
 
     systemd.services.tenzir = {
-      wantedBy = ["multi-user.target"];
+      wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         Type = "notify";
         ExecStart = "${cfg.package}/bin/tenzir-node --config=${configFile}";
@@ -122,7 +126,7 @@ in {
     };
 
     networking.firewall = mkIf cfg.openFirewall {
-      allowedTCPPorts = [port];
+      allowedTCPPorts = [ port ];
     };
   };
 }

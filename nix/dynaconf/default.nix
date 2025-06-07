@@ -29,14 +29,22 @@ buildPythonPackage rec {
   };
 
   propagatedBuildInputs =
-    [setuptools]
+    [ setuptools ]
     ++ lib.optional iniSupport configobj
     ++ lib.optional redisSupport redis
     ++ lib.optional vaultSupport hvac;
 
-  nativeCheckInputs = [pytestCheckHook configobj flask django];
+  nativeCheckInputs = [
+    pytestCheckHook
+    configobj
+    flask
+    django
+  ];
 
-  disabledTestPaths = ["tests/test_redis.py" "tests/test_vault.py"];
+  disabledTestPaths = [
+    "tests/test_redis.py"
+    "tests/test_vault.py"
+  ];
 
   pythonImportsCheck = [
     "dynaconf"
@@ -46,6 +54,6 @@ buildPythonPackage rec {
     description = "The dynamic configurator for your Python Project";
     homepage = "https://github.com/dynaconf/dynaconf";
     license = licenses.mit;
-    maintainers = [];
+    maintainers = [ ];
   };
 }

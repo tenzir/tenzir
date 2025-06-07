@@ -8,26 +8,29 @@
     tenzir.url = "github:tenzir/tenzir/stable";
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    nixops-plugged,
-    flake-utils,
-    tenzir,
-    ...
-  }: let
-    pkgsFor = system:
-      import nixpkgs {
-        inherit system;
-      };
-  in
+  outputs =
+    {
+      self,
+      nixpkgs,
+      nixops-plugged,
+      flake-utils,
+      tenzir,
+      ...
+    }:
+    let
+      pkgsFor =
+        system:
+        import nixpkgs {
+          inherit system;
+        };
+    in
     {
       nixopsConfigurations.default = {
         inherit nixpkgs;
         network.description = "tenzir";
 
         tenzir = {
-          imports = [tenzir.nixosModules.tenzir];
+          imports = [ tenzir.nixosModules.tenzir ];
           nixpkgs.pkgs = pkgsFor "x86_64-linux";
           services.tenzir = {
             enable = true;
@@ -57,13 +60,17 @@
         };
       };
     }
-    // flake-utils.lib.eachDefaultSystem (system: let
-      pkgs = pkgsFor system;
-    in {
-      devShell = pkgs.mkShell {
-        nativeBuildInputs = [
-          nixops-plugged.defaultPackage.${system}
-        ];
-      };
-    });
+    // flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = pkgsFor system;
+      in
+      {
+        devShell = pkgs.mkShell {
+          nativeBuildInputs = [
+            nixops-plugged.defaultPackage.${system}
+          ];
+        };
+      }
+    );
 }

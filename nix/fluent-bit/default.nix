@@ -136,18 +136,22 @@ stdenv.mkDerivation rec {
     "dev"
   ];
 
-  postInstall = let
-    archive-blacklist = [
-      "libmaxminddb.a"
-      "libxxhash.a"
-    ];
-  in lib.optionalString stdenv.hostPlatform.isStatic ''
-    set -x
-    mkdir -p $out/lib
-    find . -type f \( -name "*.a" ${lib.concatMapStrings (x: " ! -name \"${x}\"") archive-blacklist} \) \
-           -exec cp "{}" $out/lib/ \;
-    set +x
-  '';
+  postInstall =
+    let
+      archive-blacklist = [
+        "libmaxminddb.a"
+        "libxxhash.a"
+      ];
+    in
+    lib.optionalString stdenv.hostPlatform.isStatic ''
+      set -x
+      mkdir -p $out/lib
+      find . -type f \( -name "*.a" ${
+        lib.concatMapStrings (x: " ! -name \"${x}\"") archive-blacklist
+      } \) \
+             -exec cp "{}" $out/lib/ \;
+      set +x
+    '';
 
   doInstallCheck = true;
 
