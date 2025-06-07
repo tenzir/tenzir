@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/secret_resolution_utilities.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
@@ -39,7 +41,7 @@ struct s3_config {
 
 struct s3_args {
   bool anonymous = {};
-  located<std::string> uri = {};
+  located<secret> uri = {};
   std::optional<s3_config> config = {};
 
   template <class Inspector>
@@ -50,8 +52,9 @@ struct s3_args {
   }
 };
 
-auto get_options(const s3_args& args) -> caf::expected<arrow::fs::S3Options> {
-  auto opts = arrow::fs::S3Options::FromUri(args.uri.inner);
+auto get_options(const s3_args& args, const arrow::util::Uri& uri)
+  -> caf::expected<arrow::fs::S3Options> {
+  auto opts = arrow::fs::S3Options::FromUri(uri);
   if (not opts.ok()) {
     return diagnostic::error("failed to parse S3 options: {}",
                              opts.status().ToString())
@@ -78,17 +81,11 @@ public:
   s3_loader(s3_args args) : args_{std::move(args)} {
   }
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    co_yield {};
     auto uri = arrow::util::Uri{};
-    const auto parse_result = uri.Parse(args_.uri.inner);
-    if (not parse_result.ok()) {
-      diagnostic::error("failed to parse URI `{}`: {}", args_.uri.inner,
-                        parse_result.ToString())
-        .primary(args_.uri.source)
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    auto opts = get_options(args_);
+    (void)ctrl.resolve_secrets_must_yield(
+      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
+    co_yield {};
+    auto opts = get_options(args_, uri);
     if (not opts) {
       diagnostic::error(opts.error()).emit(ctrl.diagnostics());
       co_return;
@@ -167,15 +164,11 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    co_yield {};
     auto uri = arrow::util::Uri{};
-    const auto parse_result = uri.Parse(args_.uri.inner);
-    if (not parse_result.ok()) {
-      diagnostic::error("failed to parse URI `{}`: {}", args_.uri.inner,
-                        parse_result.ToString())
-        .emit(ctrl.diagnostics());
-    }
-    auto opts = get_options(args_);
+    (void)ctrl.resolve_secrets_must_yield(
+      {make_uri_request(args_.uri, "s3://", uri, ctrl.diagnostics())});
+    co_yield {};
+    auto opts = get_options(args_, uri);
     if (not opts) {
       diagnostic::error(opts.error()).emit(ctrl.diagnostics());
     }

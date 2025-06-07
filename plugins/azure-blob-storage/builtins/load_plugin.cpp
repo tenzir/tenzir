@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/secret_resolution_utilities.hpp"
+
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/filesystem/azurefs.h>
@@ -26,13 +28,16 @@ class load_abs_operator final : public crtp_operator<load_abs_operator> {
 public:
   load_abs_operator() = default;
 
-  explicit load_abs_operator(located<std::string> uri) : uri_{std::move(uri)} {
+  explicit load_abs_operator(located<secret> uri) : uri_{std::move(uri)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto uri = arrow::util::Uri{};
+    (void)ctrl.resolve_secrets_must_yield(
+      {make_uri_request(uri_, "", uri, ctrl.diagnostics())});
     co_yield {};
     auto path = std::string{};
-    auto opts = arrow::fs::AzureOptions::FromUri(uri_.inner, &path);
+    auto opts = arrow::fs::AzureOptions::FromUri(uri, &path);
     if (not opts.ok()) {
       diagnostic::error("failed to create Arrow Azure Blob Storage "
                         "filesystem: {}",
@@ -103,14 +108,14 @@ public:
   }
 
 private:
-  located<std::string> uri_;
+  located<secret> uri_;
 };
 
 class load_abs_plugin final : public operator_plugin2<load_abs_operator> {
 public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    auto uri = located<std::string>{};
+    auto uri = located<secret>{};
     TRY(argument_parser2::operator_("load_azure_blob_storage")
           .named("uri", uri)
           .parse(inv, ctx));
