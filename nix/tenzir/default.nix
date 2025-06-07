@@ -215,9 +215,7 @@ let
               rabbitmq-c
               rdkafka
               cppzmq
-              (restinio.override {
-                with_boost_asio = true;
-              })
+              restinio
               llhttp
             ]
             ++ lib.optionals isStatic [
