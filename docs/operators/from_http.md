@@ -31,6 +31,7 @@ Must have the form `<host>:<port>` when `server=true`.
 ### `method = string (optional)`
 
 One of the following HTTP method to use when using the client:
+
 - `get`
 - `head`
 - `post`
@@ -109,8 +110,8 @@ Specify custom responses for endpoints on the server. For example,
 
 ```tql
 responses = {
-    "/resource/create": { code: 200, content_type: "text/html", body: "Created!" },
-    "/resource/delete": { code: 401, content_type: "text/html", body: "Unauthorized!" }
+  "/resource/create": { code: 200, content_type: "text/html", body: "Created!" },
+  "/resource/delete": { code: 401, content_type: "text/html", body: "Unauthorized!" }
 }
 ```
 
@@ -148,14 +149,17 @@ A pipeline that receives the response body as bytes, allowing parsing per
 request. This is especially useful in scenarios where the response body can be
 parsed into multiple events.
 
-If this is not provided, the operator will attempt to infer the parsing operator
-from the `Content-Type` header. Should this inference fail (e.g., unsupported or
-missing `Content-Type`), a diagnostic is raised. The request is skipped and the
-pipeline continues in server mode, else errors.
+If not provided, the operator will attempt to infer the parsing operator from
+the `Content-Type` header. Should this inference fail (e.g., unsupported or
+missing `Content-Type`), the operator raises a warngin and skips the request.
+In server mode, the pipeline fails.
+
+## Examples
 
 ### Make a GET request
 
-Here we make a request to [urlscan.io](https://urlscan.io/docs/api#search) to search for scans for `tenzir.com` and get the first result.
+Make a request to [urlscan.io](https://urlscan.io/docs/api#search) to search for
+scans for `tenzir.com` and get the first result.
 
 ```tql
 from_http "https://urlscan.io/api/v1/search?q=tenzir.com"
@@ -184,7 +188,7 @@ head 1
 
 ### Paginated API Requests
 
-Use the `paginate` parameter to handle paginated APIs. For example:
+Use the `paginate` parameter to handle paginated APIs:
 
 ```tql
 from_http "https://api.example.com/data", paginate=(x => x.next_url?)
@@ -201,7 +205,7 @@ Configure retries for failed requests:
 from_http "https://api.example.com/data", max_retry_count=3, retry_delay=2s
 ```
 
-This retries failed requests up to 3 times, waiting 2 seconds between retries.
+This tries up to 3 times, waiting 2 seconds between each retry.
 
 ### Listen on port 8080
 
@@ -211,13 +215,13 @@ Spin up a server with:
 from_http "0.0.0.0:8080", server=true, metadata_field=metadata
 ```
 
-and send a curl request at it via:
+Send a request to the HTTP endpoint via `curl`:
 
 ```sh
 echo '{"key": "value"}' | gzip | curl localhost:8080 --data-binary @- -H 'Content-Encoding: gzip' -H 'Content-Type: application/json'
 ```
 
-and see it on the Tenzir side, parsed and decompressed(!):
+Observe the request in the Tenzir pipeline, parsed and decompressed:
 
 ```tql
 {
