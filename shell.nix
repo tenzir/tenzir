@@ -1,4 +1,7 @@
-{ pkgs }:
+{
+  pkgs,
+  package,
+}:
 let
   inherit (pkgs) lib;
   inherit (pkgs.stdenv.hostPlatform) isStatic;
@@ -8,8 +11,8 @@ pkgs.mkShell (
     name = "tenzir-dev";
     hardeningDisable = [ "fortify" ] ++ lib.optional isStatic "pic";
     inputsFrom = [
-      pkgs.tenzir-de
-      pkgs.tenzir-de.unchecked
+      package.tenzir-de
+      package.tenzir-de.unchecked
     ];
     nativeBuildInputs =
       [
@@ -34,7 +37,7 @@ pkgs.mkShell (
           ]
         ))
       ]
-      ++ pkgs.tenzir-integration-test-deps
+      ++ package.tenzir-integration-test-deps
       ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
         # Make clang available as alternative compiler when it isn't the default.
         pkgs.clang

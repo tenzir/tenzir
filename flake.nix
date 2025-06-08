@@ -39,18 +39,24 @@
     // flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ] (
       system:
       let
-        overlay = import ./nix/overlay.nix { inherit inputs; };
+        overlay = import ./nix/overlay.nix;
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
+        package = pkgs.callPackages ./nix/package.nix {
+          inherit inputs;
+        };
+        static = pkgs.pkgsStatic.callPackages ./nix/package.nix {
+          inherit inputs;
+        };
       in
       {
         packages =
           flake-utils.lib.flattenTree {
-            tenzir-de = pkgs.tenzir-de;
-            tenzir-de-static = pkgs.pkgsStatic.tenzir-de;
-            tenzir = pkgs.tenzir;
-            tenzir-static = pkgs.pkgsStatic.tenzir;
+            tenzir-de = package.tenzir-de;
+            tenzir-de-static = static.tenzir-de;
+            tenzir = package.tenzir;
+            tenzir-static = static.tenzir;
             integration-test-shell = pkgs.mkShell {
-              packages = pkgs.tenzir-integration-test-runner;
+              packages = package.tenzir-integration-test-runner;
             };
           }
           // {
@@ -108,7 +114,7 @@
             '';
           };
         # Legacy aliases for backwards compatibility.
-        devShell = import ./shell.nix { inherit pkgs; };
+        devShell = import ./shell.nix { inherit pkgs package; };
         formatter = pkgs.nixfmt-rfc-style;
         hydraJobs =
           {
