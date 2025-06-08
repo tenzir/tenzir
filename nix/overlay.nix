@@ -156,6 +156,7 @@ in
       # to the PATH in the checkPhase directly as a workaround.
       #toybox
       yara
+      uv
       (python3.withPackages (
         ps: with ps; [
           trustme
