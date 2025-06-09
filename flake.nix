@@ -42,7 +42,8 @@
         overlay = import ./nix/overlay.nix;
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
         package = pkgs.callPackages ./nix/package.nix {
-          inherit inputs;
+          nix2container = inputs.nix2container.packages.${system};
+          isReleaseBuild = inputs.isReleaseBuild.value;
         };
       in
       {

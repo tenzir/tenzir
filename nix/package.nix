@@ -1,5 +1,6 @@
 {
-  inputs,
+  isReleaseBuild,
+  nix2container,
   lib,
   pkgs,
 }:
@@ -65,10 +66,11 @@ rec {
     ))
   ] ++ tenzir-integration-test-runner;
 
+  toImageFn = import ./tenzir/image.nix nix2container;
+
   unchecked = linkPkgs: rec {
     tenzir-de = linkPkgs.callPackage ./tenzir {
-      inherit tenzir-source;
-      isReleaseBuild = inputs.isReleaseBuild.value;
+      inherit tenzir-source toImageFn isReleaseBuild;
     };
     # Policy: The suffix-less `tenzir' packages come with a few closed source
     # plugins.

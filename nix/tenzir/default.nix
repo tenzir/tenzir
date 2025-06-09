@@ -1,4 +1,4 @@
-{ callPackage, ... }@args:
+{ callPackage, toImageFn, ... }@args:
 let
   pkgFun =
     {
@@ -57,6 +57,7 @@ let
       pkgsBuildHost,
       makeBinaryWrapper,
       isReleaseBuild ? false,
+      ...
     }:
     let
       inherit (stdenv.hostPlatform) isMusl isStatic;
@@ -165,7 +166,7 @@ let
         in
         thisLayer;
 
-      toImage = pkgsBuildHost.callPackage ./image.nix {
+      toImage = pkgsBuildHost.callPackage toImageFn {
         inherit isStatic;
       };
 
