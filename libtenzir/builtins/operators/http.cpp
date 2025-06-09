@@ -598,7 +598,6 @@ struct from_http_args {
   }
 
   auto validate(diagnostic_handler& dh) -> failure_or<void> {
-    TENZIR_ASSERT(op);
     if (parse) {
       auto ty = parse->inner.infer_type(tag_v<chunk_ptr>);
       if (not ty) {
