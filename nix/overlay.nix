@@ -25,9 +25,13 @@ in
 
   # Customized from upstream nixpkgs.
   arrow-cpp = callFunction ./overrides/arrow-cpp.nix { inherit (prevPkgs) arrow-cpp; };
-  aws-sdk-cpp-tenzir = callFunction ./overrides/aws-sdk-cpp-tenzir.nix { inherit (prevPkgs) aws-sdk-cpp; };
+  aws-sdk-cpp-tenzir = callFunction ./overrides/aws-sdk-cpp-tenzir.nix {
+    inherit (prevPkgs) aws-sdk-cpp;
+  };
   caf = callFunction ./caf { inherit (prevPkgs) caf; };
-  google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix { inherit (prevPkgs) google-cloud-cpp; };
+  google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
+    inherit (prevPkgs) google-cloud-cpp;
+  };
   libmaxminddb = callFunction ./overrides/libmaxminddb.nix { inherit (prevPkgs) libmaxminddb; };
   llhttp = callFunction ./overrides/llhttp.nix { inherit (prevPkgs) llhttp; };
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };

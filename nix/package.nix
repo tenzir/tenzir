@@ -1,9 +1,7 @@
 {
   inputs,
   lib,
-  stdenv,
-  callPackage,
-  pkgsBuildBuild,
+  pkgs,
 }:
 rec {
   bundledPlugins = builtins.attrNames (
@@ -39,40 +37,37 @@ rec {
     fileset = tenzir-tree;
   };
 
-  tenzir-integration-test-runner = with pkgsBuildBuild; [
-    (bats.withLibraries (
-      p: [
-        p.bats-support
-        p.bats-assert
-        bats-tenzir
-      ]
-    ))
-    parallel
+  tenzir-integration-test-runner = [
+    (pkgs.bats.withLibraries (p: [
+      p.bats-support
+      p.bats-assert
+      pkgs.bats-tenzir
+    ]))
+    pkgs.parallel
   ];
-  tenzir-integration-test-deps = with pkgsBuildBuild; [
-    curl
-    jq
-    lsof
-    perl
-    procps
-    socat
+  tenzir-integration-test-deps = [
+    pkgs.curl
+    pkgs.jq
+    pkgs.lsof
+    pkgs.perl
+    pkgs.procps
+    pkgs.socat
     # toybox provides a portable `rev`, but it also comes with a `cp` that does
     # not provide all the flags that are used in stdenv phases. We just add it
     # to the PATH in the checkPhase directly as a workaround.
     #toybox
-    yara
-    uv
-    (python3.withPackages (ps:
-      with ps; [
-        trustme
-      ])
-    )
+    pkgs.yara
+    pkgs.uv
+    (pkgs.python3.withPackages (
+      ps: [
+        ps.trustme
+      ]
+    ))
   ] ++ tenzir-integration-test-runner;
 
-  unchecked = {
-    tenzir-de = callPackage ./tenzir {
+  unchecked = linkPkgs: rec {
+    tenzir-de = linkPkgs.callPackage ./tenzir {
       inherit tenzir-source;
-      inherit stdenv;
       isReleaseBuild = inputs.isReleaseBuild.value;
     };
     # Policy: The suffix-less `tenzir' packages come with a few closed source
@@ -83,8 +78,8 @@ rec {
           if builtins.pathExists ./../contrib/tenzir-plugins/README.md then
             ./../contrib/tenzir-plugins
           else
-            callPackage ./tenzir/plugins/source.nix { };
-        pkg = unchecked.tenzir-de.override {
+            pkgs.callPackage ./tenzir/plugins/source.nix { };
+        pkg = tenzir-de.override {
           inherit tenzir-plugins-source;
         };
       in
@@ -103,7 +98,7 @@ rec {
           ps.to_google_cloud_logging
           ps.vast
         ]
-        ++ lib.optionals (!stdenv.hostPlatform.isStatic) [
+        ++ lib.optionals (!linkPkgs.stdenv.hostPlatform.isStatic) [
           ps.snowflake
         ]
       );
@@ -112,8 +107,8 @@ rec {
     x:
     # Run checks only on Linux for now. Alternative platforms are expensive in
     # CI and also not as important.
-    if stdenv.hostPlatform.isLinux then
-      callPackage ./tenzir/check.nix {
+    if pkgs.stdenv.hostPlatform.isLinux then
+      pkgs.callPackage ./tenzir/check.nix {
         inherit tenzir-integration-test-deps;
         src = lib.fileset.toSource {
           root = ../.;
@@ -125,6 +120,8 @@ rec {
       } x
     else
       x // { unchecked = x; };
-  tenzir-de = toChecked unchecked.tenzir-de;
-  tenzir = toChecked unchecked.tenzir;
+  tenzir-de = toChecked (unchecked pkgs).tenzir-de;
+  tenzir = toChecked (unchecked pkgs).tenzir;
+  tenzir-de-static = toChecked (unchecked pkgs.pkgsStatic).tenzir-de;
+  tenzir-static = toChecked (unchecked pkgs.pkgsStatic).tenzir;
 }

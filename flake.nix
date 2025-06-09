@@ -44,17 +44,14 @@
         package = pkgs.callPackages ./nix/package.nix {
           inherit inputs;
         };
-        static = pkgs.pkgsStatic.callPackages ./nix/package.nix {
-          inherit inputs;
-        };
       in
       {
         packages =
           flake-utils.lib.flattenTree {
             tenzir-de = package.tenzir-de;
-            tenzir-de-static = static.tenzir-de;
+            tenzir-de-static = package.tenzir-de-static;
             tenzir = package.tenzir;
-            tenzir-static = static.tenzir;
+            tenzir-static = package.tenzir-static;
             integration-test-shell = pkgs.mkShell {
               packages = package.tenzir-integration-test-runner;
             };

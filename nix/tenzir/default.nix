@@ -102,18 +102,17 @@ let
           ]
         );
 
-      allPlugins = callPackage ./plugins {
-        tenzir = self;
-        inherit tenzir-plugins-source;
-      };
+      allPluginSrcs = builtins.mapAttrs (
+        name: type: if type == "directory" then "${tenzir-plugins-source}/${name}" else null
+      ) (lib.filterAttrs (_: type: type == "directory") (builtins.readDir tenzir-plugins-source));
 
       withTenzirPluginsStatic =
         selection:
         let
-          layerPlugins = selection allPlugins;
+          layerPlugins = selection allPluginSrcs;
           final =
             (self.override {
-              extraPlugins = extraPlugins ++ map (x: x.src) layerPlugins;
+              extraPlugins = extraPlugins ++ layerPlugins;
             }).overrideAttrs
               (prevAttrs: {
                 passthru = prevAttrs.passthru // {
@@ -130,6 +129,10 @@ let
         { prevLayer }:
         selection:
         let
+          allPlugins = callPackage ./plugins {
+            tenzir = self;
+            tenzir-plugins-srcs = allPluginSrcs;
+          };
           layerPlugins = selection allPlugins;
           thisLayer = symlinkJoin {
             inherit (self)
@@ -216,6 +219,9 @@ let
               rdkafka
               cppzmq
               restinio
+              (restinio.override {
+                with_boost_asio = true;
+              })
               llhttp
             ]
             ++ lib.optionals isStatic [
