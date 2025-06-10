@@ -20,8 +20,13 @@ f"pre {"string"} post"
 
 f"{{}}"
 
-// TODO: Write more tests for this.
 f"{ {} }"
+
+f"{{{}}}"
+
+f"{{{{}}}}"
+
+f"{{{ {x: 42}}}}"
 
 f"{ {key: "value"} }"
 
