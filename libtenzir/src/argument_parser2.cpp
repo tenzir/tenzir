@@ -287,15 +287,15 @@ auto argument_parser2::parse(const ast::entity& self,
             set(std::move(*sel));
           },
           [&](setter<ast::lambda_expr>& set) {
-            auto* lambda = try_as<ast::lambda_expr>(expr);
+            const auto* lambda = try_as<ast::lambda_expr>(expr);
             if (not lambda) {
               emit(diagnostic::error("expected a lambda").primary(expr));
               return;
             }
-            set(std::move(*lambda));
+            set(*lambda);
           },
           [&](setter<located<pipeline>>& set) {
-            auto pipe_expr = try_as<ast::pipeline_expr>(expr);
+            const auto* pipe_expr = try_as<ast::pipeline_expr>(expr);
             if (not pipe_expr) {
               emit(diagnostic::error("expected a pipeline expression")
                      .primary(expr));
@@ -481,7 +481,7 @@ auto argument_parser2::docs() const -> std::string {
     TENZIR_UNREACHABLE();
   });
   boost::replace_all(name, "::", "/");
-  return fmt::format("https://docs.tenzir.com/tql2/{}/{}", category, name);
+  return fmt::format("https://docs.tenzir.com/reference/{}/{}", category, name);
 }
 
 template <class T>

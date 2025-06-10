@@ -545,7 +545,8 @@ auto create_pipeline_from_uri(std::string path,
 
 class from_plugin2 final : public virtual operator_factory_plugin {
 public:
-  constexpr static auto docs = "https://docs.tenzir.com/tql2/operators/from";
+  constexpr static auto docs
+    = "https://docs.tenzir.com/reference/operators/from";
   auto name() const -> std::string override {
     return "tql2.from";
   }
@@ -612,7 +613,7 @@ public:
 
 class to_plugin2 final : public virtual operator_factory_plugin {
 public:
-  constexpr static auto docs = "https://docs.tenzir.com/tql2/operators/to";
+  constexpr static auto docs = "https://docs.tenzir.com/reference/operators/to";
   auto name() const -> std::string override {
     return "tql2.to";
   }
@@ -1101,7 +1102,7 @@ private:
     TRY(auto compression_and_format,
         get_compression_and_format<true>(
           located<std::string_view>{path, args_.url.source}, nullptr,
-          "https://docs.tenzir.com/tql2/operators/from_file", parse_dh));
+          "https://docs.tenzir.com/reference/operators/from_file", parse_dh));
     auto& format = compression_and_format.format.get();
     auto compression = compression_and_format.compression;
     auto provider = session_provider::make(parse_dh);

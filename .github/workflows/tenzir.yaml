@@ -69,8 +69,6 @@ jobs:
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
       tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
       tenzir-version-build-metadata: ${{ steps.configure.outputs.tenzir-version-build-metadata }}
-      run-changelog: ${{ steps.configure.outputs.run-changelog }}
-      run-docs: ${{ steps.configure.outputs.run-docs }}
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
@@ -162,21 +160,17 @@ jobs:
           # * Set version variables (above)
           # * Enable Jobs (below)
           echo "::notice Disable all others so we can selectivly enable again"
-          echo "run-changelog=false" >> $GITHUB_OUTPUT
           echo "run-regression-tests=false" >> $GITHUB_OUTPUT
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
-          echo "run-docs=false" >> $GITHUB_OUTPUT
           echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
           echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
           echo "run-tenzir=false" >> $GITHUB_OUTPUT
           # A little helper to enable all checks.
           shopt -s expand_aliases
           alias run_all_checks=' \
-            echo "run-changelog=true" >> $GITHUB_OUTPUT; \
             echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
-            echo "run-docs=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
             echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
             echo "run-tenzir=true" >> $GITHUB_OUTPUT;'
@@ -216,8 +210,6 @@ jobs:
             exit 0
           fi
           run_if_changed python "python/"
-          run_if_changed docs "web/" "python/"
-          run_if_changed changelog "changelog/" "web/" "python/"
           TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
           run_if_changed tenzir "${TENZIR_SOURCES[@]}"
           run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
@@ -360,80 +352,6 @@ jobs:
             [ $pr_number ] # Assert the pr number was non-empty
           fi
 
-  changelog:
-    name: Changelog
-    needs:
-      - configure
-    if: ${{ needs.configure.outputs.run-changelog == 'true' }}
-    runs-on: ubuntu-latest
-    container: debian:trixie-slim
-    steps:
-      - name: Install git
-        run: |
-          apt-get update
-          apt-get -y install git
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Dependencies
-        run: ./scripts/debian/install-dev-dependencies.sh
-      - name: Configure Build
-        env:
-          CC: gcc-14
-          CXX: g++-14
-        run: |
-          cmake -B build -DTENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
-      - name: Generate CHANGELOG.md
-        run: |
-          cmake --build build --target changelog
-      - name: Upload CHANGELOG.md
-        uses: actions/upload-artifact@v4
-        with:
-          name: CHANGELOG.md
-          path: build/CHANGELOG.md
-          if-no-files-found: error
-
-  docs:
-    needs:
-      - configure
-      - changelog
-    if: ${{ needs.configure.outputs.run-docs == 'true' }}
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Checkout dotgithub submodule
-        run: |
-          git submodule update --init web/.github
-      - name: Download CHANGELOG.md
-        uses: actions/download-artifact@v4
-        with:
-          name: CHANGELOG.md
-      - name: Override Stub Changelog
-        run: |
-          cp -f CHANGELOG.md web/src/pages/changelog.md
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache-dependency-path: web/yarn.lock
-          cache: yarn
-      - name: Install dependencies
-        working-directory: web
-        run: yarn install --frozen-lockfile
-      - name: Build website
-        working-directory: web
-        run: |
-          yarn build
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: web/build
-          cname: docs.tenzir.com
-          user_name: tenzir-bot
-          user_email: engineering@tenzir.com
-
   docker-tenzir:
     name: Docker
     needs:
@@ -469,10 +387,10 @@ jobs:
           docker run \
             --pull=always --rm \
             "ghcr.io/tenzir/tenzir:${{ needs.configure.outputs.tenzir-container-ref }}" \
-            'openapi | to "web/openapi/openapi.yaml"'
-          git add --intent-to-add web/openapi/openapi.yaml
+            'openapi | to "docs/openapi.node.yaml"'
+          git add --intent-to-add docs/openapi.node.yaml
           git diff --quiet --exit-code || {
-            echo "The OpenAPI Spec is not aligned with the current sources. Please run *tenzir 'openapi | to "web/openapi/openapi.yaml"'* or apply the following diff directly:"
+            echo "The OpenAPI Spec is not aligned with the current sources. Please run *tenzir 'openapi | to "docs/openapi.node.yaml"'* or apply the following diff directly:"
             git diff --exit-code
           }
 
@@ -808,10 +726,8 @@ jobs:
 
   pass-branch-protections:
     needs:
-      - changelog
       - configure
       - docker-tenzir
-      - docs
       - openapi-spec
       - policy-enforcement
       - python

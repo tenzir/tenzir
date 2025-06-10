@@ -50,7 +50,6 @@ public:
             .note("internal server error")
             .note("endpoint: {}", endpoint_)
             .note("request body: {}", request_body_)
-            .docs("https://docs.tenzir.com/operators/api")
             .emit(ctrl.diagnostics());
         });
     ctrl.set_waiting(true);
@@ -64,7 +63,6 @@ public:
       diagnostic::error(std::move(detail))
         .note("request failed with code {}", response->code())
         .note("body: {}", response->body())
-        .docs("https://docs.tenzir.com/operators/api")
         .emit(ctrl.diagnostics());
       co_return;
     }
