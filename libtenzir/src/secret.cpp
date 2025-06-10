@@ -95,6 +95,16 @@ auto create_joined_buffer(const fbs::data::Secret* left,
 namespace detail::secrets {
 
 template <typename FlatbufferType>
+auto secret_common<FlatbufferType>::is_all_literal() const -> bool {
+  for (auto* e : *buffer->elements()) {
+    if (not e->is_literal()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template <typename FlatbufferType>
 auto secret_common<FlatbufferType>::with_prepended(
   std::string_view literal) const -> secret {
   return {create_buffer_with_prepend(literal, &*buffer)};
