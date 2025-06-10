@@ -1,7 +1,7 @@
 ---
 title: "Format strings"
 type: feature
-authors: jachris, IyeOnline
+authors: [jachris, IyeOnline]
 pr: 5254
 ---
 
@@ -21,13 +21,13 @@ Using the new format strings, this simply becomes
 
 ```tql
 percent = round(found / total * 100)
-message = f"Found {found}/{total} => {percent}%" 
+message = f"Found {found}/{total} => {percent}%"
 ```
 
 You can also use arbitrary expressions inside `{` to simplify this even further:
 
 ```tql
-message = f"Found {found}/{total} => {round(found / total * 100)}%" 
+message = f"Found {found}/{total} => {round(found / total * 100)}%"
 ```
 
 If you ever need an actual `{` in your format string, you can use `{{`. The same
