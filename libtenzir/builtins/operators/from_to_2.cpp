@@ -654,8 +654,9 @@ using chunk_source_actor = caf::typed_actor<chunk_source_traits>;
 
 class arrow_chunk_source {
 public:
-  explicit arrow_chunk_source(std::shared_ptr<arrow::io::InputStream> stream)
-    : stream_{std::move(stream)} {
+  explicit arrow_chunk_source(std::shared_ptr<arrow::io::InputStream> stream,
+                              std::shared_ptr<secret_censor> censor)
+    : stream_{std::move(stream)}, censor_{std::move(censor)} {
   }
 
   auto make_behavior() -> chunk_source_actor::behavior_type {
@@ -663,9 +664,7 @@ public:
       [this](atom::get) -> caf::result<chunk_ptr> {
         auto buffer = stream_->Read(1 << 20);
         if (not buffer.ok()) {
-          return diagnostic::error(
-                   "{}", buffer.status().ToStringWithoutContextLines())
-            .to_error();
+          return diagnostic::error("{}", censor_->censor(buffer)).to_error();
         }
         return chunk::make(buffer.MoveValueUnsafe());
       },
@@ -674,6 +673,7 @@ public:
 
 private:
   std::shared_ptr<arrow::io::InputStream> stream_;
+  std::shared_ptr<secret_censor> censor_;
 };
 
 class from_file_source final : public crtp_operator<from_file_source> {
@@ -845,7 +845,7 @@ struct file_hasher {
 using file_set = boost::unordered_set<arrow::fs::FileInfo, file_hasher>;
 
 struct from_file_args {
-  located<std::string> url;
+  located<secret> url;
   bool watch{false};
   located<bool> remove{false, location::unknown};
   std::optional<ast::lambda_expr> rename;
@@ -864,13 +864,16 @@ struct from_file_args {
 class from_file_impl {
 public:
   from_file_impl(from_file_actor::pointer self, from_file_args args,
-                 event_order order, std::unique_ptr<diagnostic_handler> dh,
-                 std::string definition, node_actor node, bool is_hidden,
+                 std::string plaintext_url,
+                 std::shared_ptr<secret_censor> censor, event_order order,
+                 std::unique_ptr<diagnostic_handler> dh, std::string definition,
+                 node_actor node, bool is_hidden,
                  metrics_receiver_actor metrics_receiver,
                  uint64_t operator_index)
     : self_{self},
       dh_{std::move(dh)},
       args_{std::move(args)},
+      censor_{std::move(censor)},
       order_{order},
       definition_{std::move(definition)},
       node_{std::move(node)},
@@ -878,7 +881,7 @@ public:
       operator_index_{operator_index},
       metrics_receiver_{std::move(metrics_receiver)} {
     TENZIR_ASSERT(dh_);
-    auto expanded = expand_home(args_.url.inner);
+    auto expanded = expand_home(plaintext_url);
     if (not expanded.contains("://")) {
       // Arrow doesn't allow relative paths, so we make it absolute.
       expanded = std::filesystem::weakly_canonical(expanded);
@@ -889,9 +892,7 @@ public:
     auto path = std::string{};
     auto fs = arrow::fs::FileSystemFromUriOrPath(expanded, &path);
     if (not fs.ok()) {
-      diagnostic::error("{}", fs.status().ToStringWithoutContextLines())
-        .primary(args_.url)
-        .emit(*dh_);
+      diagnostic::error("{}", censor_->censor(fs)).primary(args_.url).emit(*dh_);
       self->quit(ec::silent);
       return;
     }
@@ -975,7 +976,7 @@ private:
       self_, fs_->GetFileInfoAsync(std::vector{root_path_}),
       [this](arrow::Result<std::vector<arrow::fs::FileInfo>> infos) {
         if (not infos.ok()) {
-          diagnostic::error("{}", infos.status().ToStringWithoutContextLines())
+          diagnostic::error("{}", censor_->censor(infos))
             .primary(args_.url)
             .emit(*dh_);
           return;
@@ -988,13 +989,13 @@ private:
             if (args_.watch) {
               got_all_files();
             } else {
-              diagnostic::error("`{}` does not exist", root_path_)
+              diagnostic::error("`{}` does not exist", root_path())
                 .primary(args_.url)
                 .emit(*dh_);
             }
             return;
           case arrow::fs::FileType::Unknown:
-            diagnostic::error("`{}` is unknown", root_path_)
+            diagnostic::error("`{}` is unknown", root_path())
               .primary(args_.url)
               .emit(*dh_);
             return;
@@ -1003,7 +1004,7 @@ private:
               add_job(std::move(root_info));
               got_all_files();
             } else if (not args_.watch) {
-              diagnostic::error("`{}` is a file, not a directory", root_path_)
+              diagnostic::error("`{}` is a file, not a directory", root_path())
                 .primary(args_.url)
                 .emit(*dh_);
             }
@@ -1017,8 +1018,7 @@ private:
               self_, std::move(gen),
               [this](arrow::Result<arrow::fs::FileInfoVector> files) {
                 if (not files.ok()) {
-                  diagnostic::error(
-                    "{}", files.status().ToStringWithoutContextLines())
+                  diagnostic::error("{}", censor_->censor(files))
                     .primary(args_.url)
                     .emit(*dh_);
                   return;
@@ -1143,15 +1143,15 @@ private:
   start_stream(arrow::Result<std::shared_ptr<arrow::io::InputStream>> stream,
                pipeline pipe, std::string path) {
     if (not stream.ok()) {
-      pipeline_failed("failed to open `{}`", path)
+      pipeline_failed("failed to open `{}`", censor_->censor(path))
         .primary(args_.url)
-        .note(stream.status().ToStringWithoutContextLines())
+        .note(censor_->censor(stream))
         .emit(*dh_);
       active_jobs_ -= 1;
       return;
     }
     auto source = self_->spawn(caf::actor_from_state<arrow_chunk_source>,
-                               std::move(*stream));
+                               std::move(*stream), censor_);
     auto weak = caf::weak_actor_ptr{source->ctrl()};
     pipe.prepend(std::make_unique<from_file_source>(std::move(source)));
     pipe.append(std::make_unique<from_file_sink>(
@@ -1181,7 +1181,7 @@ private:
       active_jobs_ -= 1;
       if (error) {
         pipeline_failed(std::move(error))
-          .note("coming from `{}`", path)
+          .note("coming from `{}`", censor_->censor(path))
           .emit(*dh_);
         return;
       }
@@ -1213,9 +1213,9 @@ private:
         // There is no async call available.
         auto status = fs_->DeleteFile(path);
         if (not status.ok()) {
-          diagnostic::warning("failed to remove `{}`", path)
+          diagnostic::warning("failed to remove `{}`", censor_->censor(path))
             .primary(args_.url)
-            .note(status.ToStringWithoutContextLines())
+            .note(censor_->censor(status))
             .emit(*dh_);
         }
       }
@@ -1226,7 +1226,7 @@ private:
       .then([] {},
             [this, path = std::move(path)](caf::error error) {
               pipeline_failed(std::move(error))
-                .note("coming from `{}`", path)
+                .note("coming from `{}`", censor_->censor(path))
                 .emit(*dh_);
             });
   }
@@ -1265,12 +1265,18 @@ private:
     return glob_.size() != 1 or not is<std::string>(glob_[0]);
   }
 
+  auto root_path() const -> std::string_view {
+    return args_.url.inner.is_all_literal() ? root_path_
+                                            : std::string_view{"uri"};
+  }
+
   from_file_actor::pointer self_;
   std::unique_ptr<diagnostic_handler> dh_;
   std::shared_ptr<arrow::fs::FileSystem> fs_;
 
   // The configuration and things derived from it.
   from_file_args args_;
+  std::shared_ptr<secret_censor> censor_;
   event_order order_;
   glob glob_;
   std::string root_path_;
@@ -1315,10 +1321,16 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    auto censor = std::make_shared<secret_censor>();
+    auto plaintext_url = std::string{};
+    (void)ctrl.resolve_secrets_must_yield({make_secret_request(
+      "uri", args_.url, plaintext_url, ctrl.diagnostics(), censor.get())});
+    co_yield {};
     // Spawning the actor detached because some parts of the Arrow filesystem
     // API are blocking.
     auto impl = scope_linked{ctrl.self().spawn<caf::linked + caf::detached>(
-      caf::actor_from_state<from_file_impl>, args_, order_,
+      caf::actor_from_state<from_file_impl>, args_, std::move(plaintext_url),
+      std::move(censor), order_,
       std::make_unique<shared_diagnostic_handler>(ctrl.shared_diagnostics()),
       std::string{ctrl.definition()}, ctrl.node(), ctrl.is_hidden(),
       ctrl.metrics_receiver(), ctrl.operator_index())};

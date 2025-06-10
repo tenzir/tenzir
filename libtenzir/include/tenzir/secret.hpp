@@ -39,6 +39,11 @@ public:
   secret_common(FlatbufferType buffer) : buffer{std::move(buffer)} {
   }
 
+  /// Whether the secret is made up of only literals, i.e. no managed secret
+  /// needs to be looked up for this. This makes it permissible to print the
+  /// plain value.
+  auto is_all_literal() const -> bool;
+
   template <typename T1, typename T2>
   friend auto
   operator<=>(const secret_common<T1>& lhs, const secret_common<T2>& rhs)
