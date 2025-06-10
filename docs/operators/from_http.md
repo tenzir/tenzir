@@ -151,8 +151,7 @@ parsed into multiple events.
 
 If not provided, the operator will attempt to infer the parsing operator from
 the `Content-Type` header. Should this inference fail (e.g., unsupported or
-missing `Content-Type`), the operator raises a warngin and skips the request.
-In server mode, the pipeline fails.
+missing `Content-Type`), the operator raises an error.
 
 ## Examples
 
