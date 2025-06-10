@@ -31,5 +31,5 @@ message = f"Found {found}/{total} => {round(found / total * 100)}%"
 ```
 
 If you ever need an actual `{` in your format string, you can use `{{`. The same
-goes for the closing brace `}`, which needs to be written as `}}` withing format
+goes for the closing brace `}`, which needs to be written as `}}` within format
 strings.
