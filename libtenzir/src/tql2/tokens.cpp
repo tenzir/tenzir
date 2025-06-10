@@ -286,7 +286,7 @@ auto describe(token_kind k) -> std::string_view {
     X(at, "@");
     X(bang_equal, "`!=`");
     X(blob_begin, "`b\"`");
-    X(char_seq, "char seq");
+    X(char_seq, "character sequence");
     X(closing_quote, "`\"`");
     X(colon_colon, "`::`");
     X(colon, "`:`");
