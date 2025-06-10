@@ -75,10 +75,11 @@ public:
   auto censor(const arrow::Status& status) const -> std::string;
   template <typename T>
   auto censor(const arrow::Result<T>& r) const -> std::string {
-    return censor(r.status().ToString());
+    return censor(r.status());
   }
 
   size_t max_size = 3;
+  bool censor_literals = false;
   std::vector<resolved_secret_value> secrets;
 };
 

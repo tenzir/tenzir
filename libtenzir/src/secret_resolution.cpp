@@ -69,6 +69,9 @@ secret_request::secret_request(const located<tenzir::secret>& secret,
 auto secret_censor::censor(std::string text) const -> std::string {
   TENZIR_ASSERT(max_size > 0);
   for (const auto& s : secrets) {
+    if (s.all_literal() and not censor_literals) {
+      continue;
+    }
     /// This is a naive implementation with pretty bad complexity. The
     /// assumption is that this is rarely used and usually only in error cases
     /// (e.g. when censoring an arrow::Status::ToString).
@@ -92,7 +95,7 @@ auto secret_censor::censor(std::string text) const -> std::string {
 }
 
 auto secret_censor::censor(const arrow::Status& status) const -> std::string {
-  return censor(status.ToString());
+  return censor(status.ToStringWithoutContextLines());
 }
 
 auto make_secret_request(std::string name, secret s, tenzir::location loc,
