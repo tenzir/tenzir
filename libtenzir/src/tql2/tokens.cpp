@@ -232,6 +232,8 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
         } else if (kind == tk::closing_quote) {
           TENZIR_ASSERT(not stack.empty());
           stack.pop();
+        } else if (kind == tk::fmt_end) {
+          // We ignore this here but catch it within the parser.
         } else {
           TENZIR_ASSERT(kind == tk::char_seq);
         }

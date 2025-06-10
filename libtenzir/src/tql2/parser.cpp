@@ -570,10 +570,14 @@ public:
       }
       if (auto chars = accept(tk::char_seq)) {
         segments.emplace_back(unescape_string(chars, chars.location, true));
-      } else if (auto fmt = accept(tk::fmt_begin)) {
+      } else if (accept(tk::fmt_begin)) {
         segments.emplace_back(
           ast::format_expr::replacement{parse_expression()});
         expect(tk::fmt_end);
+      } else if (auto fmt_end = accept(tk::fmt_end)) {
+        diagnostic::error("found `}}` without prior `{{`")
+          .primary(fmt_end)
+          .throw_();
       } else {
         TENZIR_ASSERT(eoi());
         diagnostic::error("non-terminated format string")
