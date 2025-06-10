@@ -14,6 +14,7 @@
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 
 #include <caf/expected.hpp>
 
@@ -126,8 +127,8 @@ inline auto to_error(const amqp_rpc_reply_t& reply) -> caf::error {
   return {};
 }
 
-inline auto parse_url(const record& config_,
-                      std::string_view str) -> std::optional<record> {
+inline auto parse_url(const record& config_, std::string_view str)
+  -> std::optional<record> {
   auto info = amqp_connection_info{};
   auto copy = std::string{str};
   if (amqp_parse_url(copy.data(), &info) != AMQP_STATUS_OK) {
@@ -397,8 +398,8 @@ public:
 
   /// Consumes a message.
   /// @returns The message from the server.
-  auto consume(std::optional<std::chrono::microseconds> timeout
-               = {}) -> caf::expected<chunk_ptr> {
+  auto consume(std::optional<std::chrono::microseconds> timeout = {})
+    -> caf::expected<chunk_ptr> {
     TENZIR_TRACE("consuming message");
     auto envelope = amqp_envelope_t{};
     amqp_maybe_release_buffers(conn_);
@@ -525,8 +526,8 @@ struct connector_args {
   std::optional<located<uint16_t>> channel;
   std::optional<located<std::string>> routing_key;
   std::optional<located<std::string>> exchange;
-  std::optional<located<std::string>> options;
-  std::optional<located<std::string>> url;
+  std::optional<located<record>> options;
+  std::optional<located<secret>> url;
   location op;
 
   friend auto inspect(auto& f, connector_args& x) -> bool {
@@ -573,6 +574,23 @@ struct saver_args : connector_args {
   }
 };
 
+auto set_or_fail(record& config, std::string_view key, std::string value,
+                 location loc, diagnostic_handler& dh) -> void {
+  const auto strings = std::set<std::string_view>{
+    "hostname", "vhost", "sasl_method", "username", "password"};
+  if (strings.contains(key)) {
+    config[key] = std::move(value);
+    return;
+  }
+  if (auto x = from_yaml(value)) {
+    config[key] = std::move(*x);
+    return;
+  }
+  diagnostic::error("failed to parse value for key `{}` in key-value pair", key)
+    .primary(loc)
+    .emit(dh);
+}
+
 class rabbitmq_loader final : public crtp_operator<rabbitmq_loader> {
 public:
   rabbitmq_loader() = default;
@@ -583,7 +601,59 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     co_yield {};
-    auto engine = amqp_engine::make(config_);
+    auto& dh = ctrl.diagnostics();
+    auto config = config_;
+    auto secret_reqs = std::vector<secret_request>{};
+    if (args_.options) {
+      const auto& loc = args_.options->source;
+      for (const auto& [k, v] : args_.options->inner) {
+        match(
+          v,
+          [&](const concepts::arithmetic auto& x) {
+            set_or_fail(config, k, fmt::to_string(x), loc, dh);
+          },
+          [&](const std::string& x) {
+            set_or_fail(config, k, x, loc, dh);
+          },
+          [&](const secret& x) {
+            auto req = secret_request{
+              x,
+              loc,
+              [=, &config, &dh](const resolved_secret_value& x) {
+                const auto v = x.utf8_view(k, loc, dh);
+                set_or_fail(config, k, std::string{v}, loc, dh);
+              },
+            };
+            secret_reqs.push_back(std::move(req));
+          },
+          [](const auto&) {
+            // validated in `plugin::make`
+            TENZIR_UNREACHABLE();
+          });
+      }
+    }
+    if (args_.url) {
+      auto req = secret_request{
+        args_.url.value(),
+        [&, loc = args_.url->source](const resolved_secret_value& val) {
+          auto view = val.utf8_view("url", loc, dh);
+          if (auto cfg = parse_url(config, view)) {
+            config = std::move(*cfg);
+            return;
+          }
+          diagnostic::error("failed to parse AMQP URL")
+            .primary(loc)
+            .hint("URL must adhere to the following format")
+            .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
+            .emit(dh);
+        },
+      };
+      secret_reqs.push_back(std::move(req));
+    }
+    if (ctrl.resolve_secrets_must_yield(std::move(secret_reqs))) {
+      co_yield {};
+    }
+    auto engine = amqp_engine::make(std::move(config));
     if (not engine) {
       diagnostic::error("failed to construct AMQP engine")
         .primary(args_.op)
@@ -681,8 +751,60 @@ public:
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     co_yield {};
+    auto& dh = ctrl.diagnostics();
+    auto config = config_;
+    auto secret_reqs = std::vector<secret_request>{};
+    if (args_.options) {
+      const auto& loc = args_.options->source;
+      for (const auto& [k, v] : args_.options->inner) {
+        match(
+          v,
+          [&](const concepts::arithmetic auto& x) {
+            set_or_fail(config, k, fmt::to_string(x), loc, dh);
+          },
+          [&](const std::string& x) {
+            set_or_fail(config, k, x, loc, dh);
+          },
+          [&](const secret& x) {
+            auto req = secret_request{
+              x,
+              loc,
+              [=, &config, &dh](const resolved_secret_value& x) {
+                const auto v = x.utf8_view(k, loc, dh);
+                set_or_fail(config, k, std::string{v}, loc, dh);
+              },
+            };
+            secret_reqs.push_back(std::move(req));
+          },
+          [](const auto&) {
+            // validated in `plugin::make`
+            TENZIR_UNREACHABLE();
+          });
+      }
+    }
+    if (args_.url) {
+      auto req = secret_request{
+        args_.url.value(),
+        [&, loc = args_.url->source](const resolved_secret_value& val) {
+          auto view = val.utf8_view("url", loc, dh);
+          if (auto cfg = parse_url(config, view)) {
+            config = std::move(*cfg);
+            return;
+          }
+          diagnostic::error("failed to parse AMQP URL")
+            .primary(loc)
+            .hint("URL must adhere to the following format")
+            .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
+            .emit(dh);
+        },
+      };
+      secret_reqs.push_back(std::move(req));
+    }
+    if (ctrl.resolve_secrets_must_yield(std::move(secret_reqs))) {
+      co_yield {};
+    }
     auto engine = std::shared_ptr<amqp_engine>{};
-    if (auto eng = amqp_engine::make(config_)) {
+    if (auto eng = amqp_engine::make(config)) {
       engine = std::make_shared<amqp_engine>(std::move(*eng));
     } else {
       diagnostic::error(eng.error()).emit(ctrl.diagnostics());
@@ -702,12 +824,13 @@ public:
       .mandatory = args_.mandatory,
       .immediate = args_.immediate,
     };
-    auto heartbeat = try_get<uint64_t>(config_, "heartbeat");
+    auto heartbeat = try_get<uint64_t>(config, "heartbeat");
     if (heartbeat and *heartbeat and **heartbeat > 0) {
-      // If we are requesting heartbeats, we are also responsible to handle the
-      // heartbeats we get. If we have long gaps in interaction with the broker,
-      // we need to proactively check explicitly if there is something for us.
-      // We check 3 times per heartbeat interval, at most once per second.
+      // If we are requesting heartbeats, we are also responsible to handle
+      // the heartbeats we get. If we have long gaps in interaction with the
+      // broker, we need to proactively check explicitly if there is something
+      // for us. We check 3 times per heartbeat interval, at most once per
+      // second.
       auto interval = std::max(uint64_t{1}, **heartbeat / 3);
       TENZIR_DEBUG("using heartbeat interval of {} seconds", interval);
       detail::weak_run_delayed_loop(
