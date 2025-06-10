@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/to_string.hpp"
+
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/concept/printable/tenzir/json_printer_options.hpp"
-
-#include <tenzir/to_string.hpp>
 
 #include <arrow/util/utf8.h>
 

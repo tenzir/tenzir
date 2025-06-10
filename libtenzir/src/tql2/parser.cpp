@@ -577,7 +577,7 @@ public:
       } else {
         TENZIR_ASSERT(eoi());
         diagnostic::error("non-terminated format string")
-          .secondary(location)
+          .secondary(location, "starts here")
           .primary(next_location())
           .throw_();
       }
@@ -684,7 +684,6 @@ public:
     auto is_record
       = silent_peek(tk::rbrace) || silent_peek(tk::dot_dot_dot)
         || silent_peek(tk::string_begin) || silent_peek(tk::raw_string_begin)
-        || silent_peek(tk::format_string_begin)
         || (silent_peek(tk::identifier) && silent_peek_n(tk::colon, 1));
     if (is_record) {
       return parse_record(begin.location);
@@ -698,8 +697,9 @@ public:
     };
   }
 
-  static auto unescape_unchecked(located<std::string_view> input,
-                                 bool format_string) -> std::string {
+  /// Unescapes a string or blob without checking for UTF-8 validity.
+  auto unescape_unchecked(located<std::string_view> input, bool format_string)
+    -> std::string {
     auto result = std::string{};
     auto f = input.inner.begin();
     auto e = input.inner.end();
@@ -937,25 +937,13 @@ public:
     }
     // TODO: Use a different representation for field names that are strings or
     // format strings in the AST.
-    auto ident = [this]() {
+    auto ident = std::invoke([this]() {
       if (auto result = accept(tk::identifier)) {
         return result.as_identifier();
       }
-      if (peek(tk::format_string_begin)) {
-        auto v = parse_format_expr();
-        // TODO: This should be const_eval'ed later.
-        auto r = const_eval(v, diag_);
-        if (not r) {
-          throw r.error();
-        }
-        if (auto* s = try_as<std::string>(*r)) {
-          return ast::identifier{std::move(*s), v.location};
-        }
-        diagnostic::error("expected `string`").primary(v).throw_();
-      }
       auto string = parse_string();
       return ast::identifier{string.inner, string.source};
-    }();
+    });
     expect(tk::colon);
     auto expr = parse_expression();
     return ast::record::field{

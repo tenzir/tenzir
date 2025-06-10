@@ -6,18 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/view3.hpp"
+#include "tenzir/tql2/eval_impl.hpp"
 
-#include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/arrow_utils.hpp>
-#include <tenzir/checked_math.hpp>
-#include <tenzir/collect.hpp>
-#include <tenzir/detail/enumerate.hpp>
-#include <tenzir/detail/zip_iterator.hpp>
-#include <tenzir/multi_series_builder.hpp>
-#include <tenzir/series_builder.hpp>
-#include <tenzir/to_string.hpp>
-#include <tenzir/tql2/eval_impl.hpp>
+#include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
+#include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/zip_iterator.hpp"
+#include "tenzir/series_builder.hpp"
+#include "tenzir/to_string.hpp"
+#include "tenzir/view3.hpp"
 
 #include <ranges>
 
