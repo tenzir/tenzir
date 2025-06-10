@@ -1,4 +1,4 @@
-//test: lexer
+// test: lexer
 
 foo42_bar
 42

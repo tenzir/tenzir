@@ -714,9 +714,11 @@ public:
         if (format_string) {
           if (x == '{') {
             ++it;
+            TENZIR_ASSERT(it != e);
             TENZIR_ASSERT(*it == '{');
           } else if (x == '}') {
             ++it;
+            TENZIR_ASSERT(it != e);
             TENZIR_ASSERT(*it == '}');
           }
         }
@@ -725,8 +727,11 @@ public:
       auto backslash = it;
       ++it;
       if (it == e) {
-        // TODO: invalid, but cannot happen
-        TENZIR_UNREACHABLE();
+        // This can happen if the file ends with a backslash of a non-terminated
+        // format string. Or if we have something like `f"\{x}"`.
+        diagnostic::error("backslash is not followed by escape sequence")
+          .primary(input.source.subloc(backslash - f, 1))
+          .throw_();
       }
       x = *it;
       if (x == '\\') {
