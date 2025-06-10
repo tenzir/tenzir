@@ -3,3 +3,4 @@
    line_comment "// error: true"
         newline "\n"
           error "\x00"
+        newline "\n"
