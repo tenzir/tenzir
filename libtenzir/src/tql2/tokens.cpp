@@ -143,7 +143,6 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("in", in)
     | X("let", let)
     | X("match", match)
-    | X("meta", meta)
     | X("not", not_)
     | X("null", null)
     | X("or", or_)
@@ -322,7 +321,6 @@ auto describe(token_kind k) -> std::string_view {
     X(line_comment, "`// ...`");
     X(lpar, "`(`");
     X(match, "`match`");
-    X(meta, "`meta`");
     X(minus, "`-`");
     X(move, "`move`");
     X(newline, "newline");

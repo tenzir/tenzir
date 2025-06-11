@@ -621,17 +621,8 @@ public:
     if (peek(tk::lbracket)) {
       return parse_list();
     }
-    // TODO: Drop one of the syntax possibilities.
-    if (peek(tk::meta) || peek(tk::at)) {
-      auto begin = location{};
-      auto is_at = false;
-      if (auto meta = accept(tk::meta)) {
-        begin = meta.location;
-        expect(tk::dot);
-      } else {
-        begin = expect(tk::at).location;
-        is_at = true;
-      }
+    if (auto at = accept(tk::at)) {
+      auto begin = at.location;
       auto ident = expect(tk::identifier).as_identifier();
       auto kind = ast::meta_kind{};
       if (ident.name == "name") {
@@ -641,7 +632,7 @@ public:
       } else if (ident.name == "internal") {
         kind = ast::meta::internal;
       } else if (ident.name == "schema") {
-        diagnostic::error("use `{}name` instead", is_at ? "@" : "meta.")
+        diagnostic::error("use `@name` instead")
           .primary(begin.combine(ident))
           .throw_();
       } else if (ident.name == "schema_id") {
