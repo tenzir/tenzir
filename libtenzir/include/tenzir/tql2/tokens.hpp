@@ -22,7 +22,7 @@ TENZIR_ENUM(
   // identifiers
   identifier, dollar_ident,
   // keywords
-  this_, if_, else_, match, not_, and_, or_, move, underscore, let, in, meta,
+  this_, if_, else_, match, not_, and_, or_, move, underscore, let, in,
   reserved_keyword,
   // literals
   scalar, true_, false_, null, ip, subnet, datetime,
