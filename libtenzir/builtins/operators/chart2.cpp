@@ -674,6 +674,9 @@ public:
       prev = curr;
       return std::nullopt;
     }
+    if (is<caf::none_t>(*prev) or is<caf::none_t>(curr)) {
+      return std::nullopt;
+    }
     auto result = match(
       std::tie(curr, *prev),
       [&](const duration& c, const duration& p) -> std::optional<data> {

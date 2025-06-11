@@ -8,6 +8,8 @@
 
 #include "tenzir/detail/base58.hpp"
 
+#include "tenzir/detail/enumerate.hpp"
+
 #include <algorithm>
 #include <vector>
 
@@ -16,13 +18,13 @@ namespace tenzir::detail::base58 {
 namespace {
 constexpr std::string_view ALPHABET
   = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-}
+} // namespace
 
 auto encode(const std::string_view input) -> std::string {
   if (input.empty()) {
     return "";
   }
-  std::vector<unsigned char> result((input.size() * 138) / 100
+  std::vector<unsigned char> result(((input.size() * 138) / 100)
                                     + 1); // log(256)/log(58), rounded up
   size_t result_len = 0;
   for (unsigned char byte : input) {
@@ -57,12 +59,12 @@ auto decode(const std::string_view input) -> caf::expected<std::string> {
   static const std::array<int8_t, 256> ALPHABET_MAP = [] {
     std::array<int8_t, 256> map = {};
     std::fill(std::begin(map), std::end(map), -1);
-    for (int8_t i = 0; ALPHABET[i] != '\0'; ++i) {
-      map.at(static_cast<unsigned char>(ALPHABET[i])) = i;
+    for (const auto [i, c] : detail::enumerate<int8_t>(ALPHABET)) {
+      map.at(static_cast<unsigned char>(c)) = i;
     }
     return map;
   }();
-  std::vector<unsigned char> result((input.size() * 733) / 1000
+  std::vector<unsigned char> result(((input.size() * 733) / 1000)
                                     + 1); // log(58)/log(256), rounded up
   size_t result_len = 0;
   for (char c : input) {
