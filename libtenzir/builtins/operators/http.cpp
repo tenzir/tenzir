@@ -700,7 +700,7 @@ struct from_http_args {
   }
 
   auto validate_server_opts(diagnostic_handler& dh) -> failure_or<void> {
-    if (max_request_size and max_request_size->inner == 0) {
+    if (max_request_size.inner == 0) {
       diagnostic::error("request size must not be zero")
         .primary(max_request_size->source)
         .emit(dh);
@@ -773,12 +773,12 @@ struct from_http_args {
 
   auto make_headers() const
     -> std::pair<std::unordered_map<std::string, std::string>,
-                 detail::stable_map<std::string, secret>> {
+                 std::vector<std::pair<std::string, secret>>> {
     if (not headers) {
       return {};
     }
     auto hdrs = std::unordered_map<std::string, std::string>{};
-    auto secrets = detail::stable_map<std::string, secret>{};
+    auto secrets = std::vector<std::pair<std::string, secret>>{};
     for (const auto& [k, v] : headers->inner) {
       match(
         v,
@@ -786,7 +786,7 @@ struct from_http_args {
           hdrs.emplace(k, x);
         },
         [&](const secret& x) {
-          secrets.emplace(k, x);
+          secrets.emplace_back(k, x);
         },
         [](const auto&) {
           TENZIR_UNREACHABLE();
@@ -847,7 +847,8 @@ public:
     auto url = std::string{};
     auto port = uint16_t{};
     auto req = make_secret_request("url", args_.url, url, dh);
-    co_yield ctrl.resolve_secrets_must_yield({std::move(req)});
+    std::ignore = ctrl.resolve_secrets_must_yield({std::move(req)});
+    co_yield {};
     if (url.empty()) {
       diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
       co_return;
@@ -1022,16 +1023,16 @@ public:
         auto req = secret_request{
           std::move(secret),
           loc,
-          [&, name](const resolved_secret_value& x) -> failure_or<void> {
-            TRY(auto str, x.utf8_view(name, loc, dh));
-            headers.emplace(name, std::string{str});
-            return {};
+          [&, name](const resolved_secret_value& x) {
+            auto view = x.utf8_view(name, loc, dh);
+            headers.emplace(name, std::string{view});
           },
         };
         reqs.emplace_back(std::move(req));
       }
     }
-    co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
+    std::ignore = ctrl.resolve_secrets_must_yield(std::move(reqs));
+    co_yield {};
     if (url.empty()) {
       diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
       co_return;
@@ -1131,15 +1132,9 @@ public:
       });
       TENZIR_DEBUG("[http] handled response");
     };
-    auto uri = caf::make_uri(url);
-    if (! uri) {
-      diagnostic::error("failed to parse uri: {}", uri.error())
-        .primary(args_.op)
-        .emit(ctrl.diagnostics());
-    }
     http::with(ctrl.self().system())
-      .context(args_.make_ssl_context(*uri))
-      .connect(std::move(uri))
+      .context(args_.make_ssl_context())
+      .connect(caf::make_uri(url))
       .max_response_size(max_response_size)
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
