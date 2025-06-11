@@ -301,15 +301,17 @@ def run_simple_test(
     except subprocess.CalledProcessError as e:
         report_failure(test, f'└─▶ \033[31msubprocess error: {e}\033[0m')
         return False
-    except Exception as e :
+    except Exception as e:
         report_failure(test, f'└─▶ \033[31munexpected exception: {e}\033[0m')
+        return False
     if test_config["error"] == good:
-        report_failure(
-            test, f"┌─▶ \033[31mgot unexpected exit code {completed.returncode}\033[0m"
-        )
-        for last, line in last_and(output.split(b"\n")):
-            prefix = "│ " if not last else "└─"
-            sys.stdout.buffer.write(prefix.encode() + line + b"\n")
+        with stdout_lock:
+            report_failure(
+                test, f"┌─▶ \033[31mgot unexpected exit code {completed.returncode}\033[0m"
+            )
+            for last, line in last_and(output.split(b"\n")):
+                prefix = "│ " if not last else "└─"
+                sys.stdout.buffer.write(prefix.encode() + line + b"\n")
         return False
     if not good:
         ext = "txt"
@@ -388,6 +390,17 @@ class ExtRunner(Runner):
 class TqlRunner(ExtRunner):
     def __init__(self, *, prefix: str):
         super().__init__(prefix=prefix, ext="tql")
+
+
+class LexerRunner(TqlRunner):
+    def __init__(self):
+        super().__init__(prefix="lexer")
+
+    def run(self, test: Path, update: bool, coverage: bool = False) -> bool:
+        test_config = parse_test_config(test, coverage=coverage)
+        if test_config.get("node", False):
+            return run_with_node(test, update=update, args=("--dump-tokens",), ext="txt", coverage=coverage)
+        return run_simple_test(test, update=update, args=("--dump-tokens",), ext="txt", coverage=coverage)
 
 
 class AstRunner(TqlRunner):
@@ -758,13 +771,14 @@ class CustomFixture(ExtRunner):
 
 RUNNERS = [
     AstRunner(),
-    ExecRunner(),
     CustomFixture(),
-    OldIrRunner(),
-    IrRunner(),
-    InstantiationRunner(),
-    OptRunner(),
+    ExecRunner(),
     FinalizeRunner(),
+    InstantiationRunner(),
+    IrRunner(),
+    LexerRunner(),
+    OldIrRunner(),
+    OptRunner(),
 ]
 
 runners = {}
@@ -830,7 +844,7 @@ def main() -> None:
     parser.add_argument("-u", "--update", action="store_true")
     parser.add_argument("--purge", action="store_true")
     parser.add_argument("--coverage", action="store_true", help="Enable code coverage collection (increases timeouts by 5x)")
-    parser.add_argument("--coverage-source-dir", type=str, 
+    parser.add_argument("--coverage-source-dir", type=str,
                        help="Source directory for code coverage path mapping (defaults to current directory)")
     default_jobs = 4 * (os.cpu_count() or 16)
     parser.add_argument("-j", "--jobs", type=int, default=default_jobs, metavar="N")

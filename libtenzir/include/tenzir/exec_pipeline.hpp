@@ -14,14 +14,14 @@ namespace tenzir {
 
 constexpr inline auto make_default_implicit_events_sink(bool color)
   -> std::string {
-  return color ? R"(write_tql color=true | save_file "-")"
-               : R"(write_tql | save_file "-")";
+  return color ? R"(write_tql color=true | save_stdout)"
+               : R"(write_tql | save_stdout)";
 }
 
 struct exec_config {
-  std::string implicit_bytes_source = R"(load_file "-")";
-  std::string implicit_events_source = R"(load_file "-" | read_json)";
-  std::string implicit_bytes_sink = R"(save_file "-")";
+  std::string implicit_bytes_source = R"(load_stdin)";
+  std::string implicit_events_source = R"(load_stdin | read_json)";
+  std::string implicit_bytes_sink = R"(save_stdout)";
   std::string implicit_events_sink = make_default_implicit_events_sink(false);
   bool dump_tokens = false;
   bool dump_ast = false;
