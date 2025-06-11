@@ -529,11 +529,10 @@ auto make_metadata(const http::request& r) -> series {
 
 struct from_http_args {
   tenzir::location op;
-  uint16_t port{};
   std::optional<expression> filter;
-  located<std::string> url;
+  located<secret> url;
   std::optional<located<std::string>> method;
-  std::optional<located<std::string>> payload;
+  std::optional<located<secret>> payload;
   std::optional<located<record>> headers;
   std::optional<ast::field_path> metadata_field;
   std::optional<ast::lambda_expr> paginate;
@@ -584,10 +583,6 @@ struct from_http_args {
           .emit(dh);
         return failure::promise();
       }
-    }
-    if (url.inner.empty()) {
-      diagnostic::error("`url` must not be empty").primary(url).emit(dh);
-      return failure::promise();
     }
     const auto tls_logic
       = [&](const std::optional<located<std::string>>& opt,
@@ -653,7 +648,7 @@ struct from_http_args {
   auto validate_client_opts(diagnostic_handler& dh) -> failure_or<void> {
     if (headers) {
       for (const auto& [_, v] : headers->inner) {
-        if (not is<std::string>(v)) {
+        if (not is<std::string>(v) and not is<secret>(v)) {
           diagnostic::error("header values must be of type `string`")
             .primary(*headers)
             .emit(dh);
@@ -701,38 +696,10 @@ struct from_http_args {
     if (not max_retry_count) {
       max_retry_count = {0, location::unknown};
     }
-    if (not url.inner.starts_with("http://")
-        and not url.inner.starts_with("https://")) {
-      url.inner.insert(0, tls.inner ? "https://" : "http://");
-    }
-    if (tls.inner and url.inner.starts_with("http://")) {
-      url.inner.insert(4, "s");
-    }
     return {};
   }
 
   auto validate_server_opts(diagnostic_handler& dh) -> failure_or<void> {
-    const auto col = url.inner.rfind(':');
-    if (col == 0 or col == std::string::npos) {
-      diagnostic::error("`url` must have the form `<host>:<port>`")
-        .primary(url)
-        .emit(dh);
-      return failure::promise();
-    }
-    const auto* end = url.inner.data() + url.inner.size();
-    const auto [ptr, err]
-      = std::from_chars(url.inner.data() + col + 1, end, port);
-    if (err != std::errc{}) {
-      diagnostic::error("failed to parse port").primary(url).emit(dh);
-      return failure::promise();
-    }
-    if (ptr != end) {
-      diagnostic::error("`url` must have the form `<host>:<port>`")
-        .primary(url)
-        .emit(dh);
-      return failure::promise();
-    }
-    url.inner.resize(col);
     if (max_request_size and max_request_size->inner == 0) {
       diagnostic::error("request size must not be zero")
         .primary(max_request_size->source)
@@ -804,15 +771,28 @@ struct from_http_args {
     return std::nullopt;
   }
 
-  auto make_headers() const -> std::unordered_map<std::string, std::string> {
+  auto make_headers() const
+    -> std::pair<std::unordered_map<std::string, std::string>,
+                 std::vector<std::pair<std::string, secret>>> {
     if (not headers) {
       return {};
     }
-    auto hs = std::unordered_map<std::string, std::string>{};
+    auto hdrs = std::unordered_map<std::string, std::string>{};
+    auto secrets = std::vector<std::pair<std::string, secret>>{};
     for (const auto& [k, v] : headers->inner) {
-      hs.emplace(k, as<std::string>(v));
+      match(
+        v,
+        [&](const std::string& x) {
+          hdrs.emplace(k, x);
+        },
+        [&](const secret& x) {
+          secrets.emplace_back(k, x);
+        },
+        [](const auto&) {
+          TENZIR_UNREACHABLE();
+        });
     }
-    return hs;
+    return std::pair{hdrs, secrets};
   }
 
   auto make_ssl_context() const -> caf::expected<ssl::context> {
@@ -836,9 +816,9 @@ struct from_http_args {
 
   friend auto inspect(auto& f, from_http_args& x) -> bool {
     return f.object(x).fields(
-      f.field("op", x.op), f.field("port", x.port), f.field("filter", x.filter),
-      f.field("url", x.url), f.field("method", x.method),
-      f.field("payload", x.payload), f.field("headers", x.headers),
+      f.field("op", x.op), f.field("filter", x.filter), f.field("url", x.url),
+      f.field("method", x.method), f.field("payload", x.payload),
+      f.field("headers", x.headers),
       f.field("metadata_field", x.metadata_field),
       f.field("paginate", x.paginate),
       f.field("paginate_delay", x.paginate_delay),
@@ -862,13 +842,41 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    co_yield {};
     auto& dh = ctrl.diagnostics();
     auto pull = std::optional<caf::async::consumer_resource<http::request>>{};
+    auto url = std::string{};
+    auto port = uint16_t{};
+    auto req = make_secret_request("url", args_.url, url, dh);
+    std::ignore = ctrl.resolve_secrets_must_yield({std::move(req)});
+    co_yield {};
+    if (url.empty()) {
+      diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
+      co_return;
+    }
+    const auto col = url.rfind(':');
+    if (col == 0 or col == std::string::npos) {
+      diagnostic::error("`url` must have the form `<host>:<port>`")
+        .primary(args_.url)
+        .emit(dh);
+      co_return;
+    }
+    const auto* end = url.data() + url.size();
+    const auto [ptr, err] = std::from_chars(url.data() + col + 1, end, port);
+    if (err != std::errc{}) {
+      diagnostic::error("failed to parse port").primary(args_.url).emit(dh);
+      co_return;
+    }
+    if (ptr != end) {
+      diagnostic::error("`url` must have the form `<host>:<port>`")
+        .primary(args_.url)
+        .emit(dh);
+      co_return;
+    }
+    url.resize(col);
     auto server
       = http::with(ctrl.self().system())
           .context(args_.make_ssl_context())
-          .accept(args_.port, args_.url.inner)
+          .accept(port, url)
           .monitor(static_cast<exec_node_actor>(&ctrl.self()))
           .max_request_size(
             inner(args_.max_request_size).value_or(10 * 1024 * 1024))
@@ -1000,7 +1008,41 @@ public:
     auto awaiting = uint64_t{};
     auto slices = std::vector<table_slice>{};
     auto paginate_queue = std::vector<http::client_factory>{};
-    const auto handle_response = [&](const http::response& r) {
+    auto reqs = std::vector<secret_request>{};
+    auto url = std::string{};
+    auto payload = std::string{};
+    auto [headers, secrets] = args_.make_headers();
+    reqs.emplace_back(make_secret_request("url", args_.url, url, dh));
+    if (args_.payload) {
+      reqs.emplace_back(
+        make_secret_request("payload", *args_.payload, payload, dh));
+    }
+    if (not secrets.empty()) {
+      const auto& loc = args_.headers->source;
+      for (auto& [name, secret] : secrets) {
+        auto req = secret_request{
+          std::move(secret),
+          loc,
+          [&, name](const resolved_secret_value& x) {
+            auto view = x.utf8_view(name, loc, dh);
+            headers.emplace(name, std::string{view});
+          },
+        };
+        reqs.emplace_back(std::move(req));
+      }
+    }
+    std::ignore = ctrl.resolve_secrets_must_yield(std::move(reqs));
+    co_yield {};
+    if (url.empty()) {
+      diagnostic::error("`url` must not be empty").primary(args_.url).emit(dh);
+      co_return;
+    }
+    if (not url.starts_with("http://") and not url.starts_with("https://")) {
+      url.insert(0, args_.tls.inner ? "https://" : "http://");
+    } else if (args_.tls.inner and url.starts_with("http://")) {
+      url.insert(4, "s");
+    }
+    const auto handle_response = [&, hdrs = headers](const http::response& r) {
       ctrl.set_waiting(false);
       TENZIR_DEBUG("[http] handling response with size: {}B",
                    r.body().size_bytes());
@@ -1032,13 +1074,14 @@ public:
       }
       const auto actor = spawn_pipeline(ctrl, std::move(pipe).unwrap(),
                                         args_.filter, make_chunk(), false);
-      std::invoke([&, &args_ = args_, r, actor](this const auto& pull) -> void {
+      std::invoke([&, &args_ = args_, r, actor,
+                   hdrs](this const auto& pull) -> void {
         TENZIR_DEBUG("[http] requesting slice");
         ctrl.self()
           .mail(atom::pull_v)
           .request(actor, caf::infinite)
           .then(
-            [&, r, pull, actor](table_slice slice) {
+            [&, r, pull, actor, hdrs](table_slice slice) {
               TENZIR_DEBUG("[http] pulled slice");
               ctrl.set_waiting(false);
               if (slice.rows() == 0) {
@@ -1075,7 +1118,7 @@ public:
                     .connection_timeout(args_.connection_timeout->inner)
                     .max_retry_count(args_.max_retry_count->inner)
                     .retry_delay(args_.retry_delay->inner)
-                    .add_header_fields(args_.make_headers())));
+                    .add_header_fields(hdrs)));
               } else {
                 TENZIR_DEBUG("[http] done paginating");
               }
@@ -1089,21 +1132,15 @@ public:
       });
       TENZIR_DEBUG("[http] handled response");
     };
-    auto uri = caf::make_uri(args_.url.inner);
-    if (! uri) {
-      diagnostic::error("failed to parse uri: {}", uri.error())
-        .primary(args_.op)
-        .emit(ctrl.diagnostics());
-    }
     http::with(ctrl.self().system())
-      .context(args_.make_ssl_context(*uri))
-      .connect(*uri)
+      .context(args_.make_ssl_context())
+      .connect(caf::make_uri(url))
       .max_response_size(max_response_size)
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
       .retry_delay(args_.retry_delay->inner)
-      .add_header_fields(args_.make_headers())
-      .request(args_.make_method().value(), inner(args_.payload).value_or(""))
+      .add_header_fields(std::move(headers))
+      .request(args_.make_method().value(), payload)
       .or_else([&](const caf::error& e) {
         diagnostic::error("failed to make http request: {}", e)
           .primary(args_.op)
