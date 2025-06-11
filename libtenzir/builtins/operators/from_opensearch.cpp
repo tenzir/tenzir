@@ -38,7 +38,7 @@ namespace ssl = caf::net::ssl;
 
 auto split_at_newline(const chunk_ptr& chunk)
   -> std::vector<std::vector<std::byte>> {
-  if (!chunk || chunk->size() == 0) {
+  if (not chunk || chunk->size() == 0) {
     return {};
   }
   auto svs = std::vector<std::vector<std::byte>>{};
@@ -82,7 +82,6 @@ struct opensearch_args {
 
   auto validate(std::optional<located<std::string>> url_op,
                 diagnostic_handler& dh) -> failure_or<void> {
-    TENZIR_ASSERT(op);
     if (url_op) {
       url = std::move(*url_op);
     }
@@ -151,7 +150,7 @@ struct opensearch_args {
 
 auto decompress_payload(const http::request& r, diagnostic_handler& dh)
   -> std::optional<chunk_ptr> {
-  if (!r.header().has_field("Content-Encoding")) {
+  if (not r.header().has_field("Content-Encoding")) {
     // TODO: Can we take ownership?
     return chunk::copy(r.payload());
   }
