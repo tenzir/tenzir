@@ -152,7 +152,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
 #undef X
     | ignore((
         lit{"self"} | "is" | "as" | "use" /*| "type"*/ | "return" | "def" | "function"
-        | "fn" | "meta" | "super" | "for" | "while" | "mod" | "module"
+        | "fn" | "super" | "for" | "while" | "mod" | "module"
       ) >> !continue_ident) ->* [] { return tk::reserved_keyword; }
     | ignore('$' >> identifier)
       ->* [] { return tk::dollar_ident; }
