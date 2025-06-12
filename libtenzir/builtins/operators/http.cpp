@@ -773,12 +773,12 @@ struct from_http_args {
 
   auto make_headers() const
     -> std::pair<std::unordered_map<std::string, std::string>,
-                 std::vector<std::pair<std::string, secret>>> {
+                 detail::stable_map<std::string, secret>> {
     if (not headers) {
       return {};
     }
     auto hdrs = std::unordered_map<std::string, std::string>{};
-    auto secrets = std::vector<std::pair<std::string, secret>>{};
+    auto secrets = detail::stable_map<std::string, secret>{};
     for (const auto& [k, v] : headers->inner) {
       match(
         v,
@@ -786,7 +786,7 @@ struct from_http_args {
           hdrs.emplace(k, x);
         },
         [&](const secret& x) {
-          secrets.emplace_back(k, x);
+          secrets.emplace(k, x);
         },
         [](const auto&) {
           TENZIR_UNREACHABLE();
@@ -1132,9 +1132,15 @@ public:
       });
       TENZIR_DEBUG("[http] handled response");
     };
+    auto uri = caf::make_uri(url);
+    if (! uri) {
+      diagnostic::error("failed to parse uri: {}", uri.error())
+        .primary(args_.op)
+        .emit(ctrl.diagnostics());
+    }
     http::with(ctrl.self().system())
-      .context(args_.make_ssl_context())
-      .connect(caf::make_uri(url))
+      .context(args_.make_ssl_context(*uri))
+      .connect(std::move(uri))
       .max_response_size(max_response_size)
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
@@ -1481,7 +1487,8 @@ public:
                                    sb.finish_assert_one_slice(), dh);
                   }
                   if (args_.metadata_field) {
-                    auto sb = make_metadata(r, slice.rows());
+                    auto sb = make_metadata(r, ctrl.diagnostics(), slice.rows(),
+                                            false);
                     slice = assign(*args_.metadata_field,
                                    sb.finish_assert_one_array(), slice,
                                    ctrl.diagnostics());
@@ -1618,8 +1625,9 @@ public:
           }
         }
       }
-      if (not reqs.empty()) {
-        co_yield ctrl.resolve_secrets_must_yield(std::move(reqs));
+      if (not reqs.empty()
+          and ctrl.resolve_secrets_must_yield(std::move(reqs))) {
+        co_yield {};
       }
       auto url_it = urls.begin();
       auto hdr_it = hdrs.begin();
