@@ -4,7 +4,5 @@ error: json parser: SCALAR_DOCUMENT_AS_VALUE: A JSON document made of a scalar (
 4 | pipeline::run {
   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
   |
-  = note: found invalid JSON 'x
-          1
-          '
+  = note: found invalid JSON
   = note: failed to wait for pipeline

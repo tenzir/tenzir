@@ -17,8 +17,6 @@
 
 namespace tenzir::json {
 
-namespace {
-
 using namespace tenzir::si_literals;
 
 /// This is the initial simdjson buffer size when *NOT* using NDJSON.
@@ -29,10 +27,6 @@ constexpr auto max_simdjson_batch_size = 2_G;
 static_assert(initial_simdjson_batch_size <= max_simdjson_batch_size);
 static_assert(max_simdjson_batch_size <= 4_G,
               "simdjson specifies 4G as an upper bound for the batch_size");
-
-} // namespace
-
-auto truncate(std::string_view text, const size_t N = 50) -> std::string;
 
 /// Parses simdjson objects into the given `series_builder` handles.
 class doc_parser {
@@ -174,8 +168,7 @@ private:
         // * store a double (i.e. as an approx value)
         // * store the value as a string
         report_parse_err(val, "a big integer",
-                         fmt::format("value `{}` does not fit into 64bits",
-                                     truncate(val.raw_json_token())));
+                         "value does not fit into 64 bits");
         /// We need this potential unpacking here, as `parse_json` may give us
         /// an entire `document` which has a slightly different iterface
         auto raw = val.raw_json_token();
@@ -226,47 +219,26 @@ private:
     return true;
   }
 
-  void emit_unparsed_json_diagnostics(
-    std::string description,
-    simdjson::simdjson_result<const char*> document_location,
-    std::string note = {}) {
-    auto document_to_truncate = parsed_document_;
-    auto note_prefix = "somewhere in";
-    if (not document_location.error()) {
-      document_to_truncate = std::string_view{document_location.value_unsafe(),
-                                              parsed_document_.end()};
-      note_prefix = "at";
-    }
-    auto b = diagnostic::warning("failed to parse {} in the JSON document",
-                                 std::move(description))
-               .note("{} `{}`", note_prefix, truncate(document_to_truncate));
-    if (not note.empty()) {
-      b = std::move(b).note("{}", note);
-    }
-    std::move(b).emit(diag_);
-  }
-
   void report_parse_err(auto& v, std::string expected, std::string note = {}) {
     if (parsed_lines_) {
       report_parse_err_with_parsed_lines(v, std::move(expected),
                                          std::move(note));
       return;
     }
-    emit_unparsed_json_diagnostics(std::move(expected), v.current_location(),
-                                   std::move(note));
+    diagnostic::warning("failed to parse {} in the JSON document",
+                        std::move(expected))
+      .note(note)
+      .emit(diag_);
   }
 
   void report_parse_err_with_parsed_lines(auto& v, std::string description,
                                           std::string note) {
     if (v.current_location().error()) {
-      auto b = diagnostic::warning("failed to parse {} in the JSON document",
-                                   std::move(description))
-                 .note("line {}", *parsed_lines_);
-      if (not note.empty()) {
-        b = std::move(b).note("{}", note);
-      }
-
-      std::move(b).emit(diag_);
+      diagnostic::warning("failed to parse {} in the JSON document",
+                          std::move(description))
+        .note("line {}", *parsed_lines_)
+        .note(note)
+        .emit(diag_);
       return;
     }
     auto column = v.current_location().value_unsafe() - parsed_document_.data();
