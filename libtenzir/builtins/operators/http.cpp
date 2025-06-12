@@ -773,12 +773,12 @@ struct from_http_args {
 
   auto make_headers() const
     -> std::pair<std::unordered_map<std::string, std::string>,
-                 std::vector<std::pair<std::string, secret>>> {
+                 detail::stable_map<std::string, secret>> {
     if (not headers) {
       return {};
     }
     auto hdrs = std::unordered_map<std::string, std::string>{};
-    auto secrets = std::vector<std::pair<std::string, secret>>{};
+    auto secrets = detail::stable_map<std::string, secret>{};
     for (const auto& [k, v] : headers->inner) {
       match(
         v,
@@ -786,7 +786,7 @@ struct from_http_args {
           hdrs.emplace(k, x);
         },
         [&](const secret& x) {
-          secrets.emplace_back(k, x);
+          secrets.emplace(k, x);
         },
         [](const auto&) {
           TENZIR_UNREACHABLE();
@@ -1132,9 +1132,15 @@ public:
       });
       TENZIR_DEBUG("[http] handled response");
     };
+    auto uri = caf::make_uri(url);
+    if (! uri) {
+      diagnostic::error("failed to parse uri: {}", uri.error())
+        .primary(args_.op)
+        .emit(ctrl.diagnostics());
+    }
     http::with(ctrl.self().system())
-      .context(args_.make_ssl_context())
-      .connect(caf::make_uri(url))
+      .context(args_.make_ssl_context(*uri))
+      .connect(std::move(uri))
       .max_response_size(max_response_size)
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
@@ -1356,45 +1362,6 @@ struct http_args {
     return {};
   }
 
-  auto make_headers(const table_slice& slice, diagnostic_handler& dh,
-                    bool& warned) const
-    -> std::unordered_map<std::string, std::string> {
-    if (not headers) {
-      return {};
-    }
-    auto hs = std::unordered_map<std::string, std::string>{};
-    auto ms = eval(*headers, slice, dh);
-    for (const auto& s : ms.parts()) {
-      if (s.type.kind().is_not<record_type>()) {
-        diagnostic::warning("expected `record`, got `{}`", s.type.kind())
-          .primary(*headers)
-          .note("skipping headers")
-          .emit(dh);
-        continue;
-      }
-      for (const auto& val : s.values<record_type>()) {
-        if (not val) {
-          diagnostic::warning("expected `record`, got `null`")
-            .primary(*headers)
-            .note("skipping headers")
-            .emit(dh);
-          continue;
-        }
-        for (const auto& [k, v] : *val) {
-          if (const auto* str = try_as<std::string_view>(v)) {
-            hs.emplace(k, *str);
-          } else if (not warned) {
-            warned = true;
-            diagnostic::warning("`headers` must be `{{ string: string }}`")
-              .primary(*headers)
-              .emit(dh);
-          }
-        }
-      }
-    }
-    return hs;
-  }
-
   auto make_method(const std::string_view method) const
     -> std::optional<http::method> {
     if (method.empty()) {
@@ -1451,52 +1418,58 @@ public:
     // NOTE: lambda because context has a deleted copy constructor
     auto awaiting = uint64_t{};
     auto slices = std::vector<table_slice>{};
-    auto paginate_queue = std::vector<http::client_factory>{};
-    auto warned = false;
-    const auto handle_response = [&](view<record> og) {
-      return [&, og = materialize(std::move(og))](const http::response& r) {
-        TENZIR_DEBUG("[http] handling response with size: {}B",
-                     r.body().size_bytes());
-        ctrl.set_waiting(false);
-        if (const auto code = std::to_underlying(r.code());
-            code < 200 or 399 < code) {
-          --awaiting;
-          diagnostic::warning("received erroneous http status code: `{}`", code)
-            .primary(args_.op)
-            .note("skipping response handling")
-            .emit(dh);
-          return;
-        }
-        if (r.body().empty()) {
-          --awaiting;
-          return;
-        }
-        auto p = make_pipeline(args_.parse, r, args_.op, dh, true);
-        if (not p) {
-          --awaiting;
-          return;
-        }
-        const auto& headers = r.header_fields();
-        const auto* it = std::ranges::find_if(headers, [](const auto& x) {
-          return caf::icase_equal(x.first, "content-encoding");
-        });
-        const auto encoding = it != std::ranges::end(headers) ? it->first : "";
-        const auto make_chunk = [&] {
-          if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
-            return chunk::make(std::move(*body));
+    auto paginate_queue
+      = std::vector<std::pair<http::client_factory,
+                              std::unordered_map<std::string, std::string>>>{};
+    auto hdr_warned = false;
+    const auto handle_response =
+      [&](view<record> og, std::unordered_map<std::string, std::string> hdrs) {
+        return [&, hdrs = std::move(hdrs),
+                og = materialize(std::move(og))](const http::response& r) {
+          TENZIR_DEBUG("[http] handling response with size: {}B",
+                       r.body().size_bytes());
+          ctrl.set_waiting(false);
+          if (const auto code = std::to_underlying(r.code());
+              code < 200 or 399 < code) {
+            --awaiting;
+            diagnostic::warning("received erroneous http status code: `{}`",
+                                code)
+              .primary(args_.op)
+              .note("skipping response handling")
+              .emit(dh);
+            return;
           }
-          return chunk::copy(r.body());
-        };
-        const auto actor
-          = spawn_pipeline(ctrl, *p, args_.filter, make_chunk(), true);
-        std::invoke(
-          [&, &args_ = args_, r, og, actor](this const auto& pull) -> void {
+          if (r.body().empty()) {
+            --awaiting;
+            return;
+          }
+          auto p = make_pipeline(args_.parse, r, args_.op, dh, true);
+          if (not p) {
+            --awaiting;
+            return;
+          }
+          const auto& headers = r.header_fields();
+          const auto* it = std::ranges::find_if(headers, [](const auto& x) {
+            return caf::icase_equal(x.first, "content-encoding");
+          });
+          const auto encoding
+            = it != std::ranges::end(headers) ? it->first : "";
+          const auto make_chunk = [&] {
+            if (auto body = try_decompress_payload(encoding, r.body(), dh)) {
+              return chunk::make(std::move(*body));
+            }
+            return chunk::copy(r.body());
+          };
+          const auto actor
+            = spawn_pipeline(ctrl, *p, args_.filter, make_chunk(), true);
+          std::invoke([&, &args_ = args_, r, og, hdrs,
+                       actor](this const auto& pull) -> void {
             TENZIR_DEBUG("[http] requesting slice");
             ctrl.self()
               .mail(atom::pull_v)
               .request(actor, caf::infinite)
               .then(
-                [&, r, pull, og, actor](table_slice slice) {
+                [&, r, hdrs, pull, og, actor](table_slice slice) {
                   TENZIR_DEBUG("[http] pulled slice");
                   ctrl.set_waiting(false);
                   if (slice.rows() == 0) {
@@ -1527,16 +1500,17 @@ public:
                     if (args_.tls and url->starts_with("http://")) {
                       url->insert(4, "s");
                     }
-                    paginate_queue.push_back(std::move(
-                      http::with(ctrl.self().system())
-                        .context(args_.make_ssl_context())
-                        .connect(caf::make_uri(*url))
-                        .max_response_size(max_response_size)
-                        .connection_timeout(args_.connection_timeout.inner)
-                        .max_retry_count(args_.max_retry_count)
-                        .retry_delay(args_.retry_delay.inner)
-                        .add_header_fields(
-                          args_.make_headers(slice, dh, warned))));
+                    paginate_queue.emplace_back(
+                      std::move(
+                        http::with(ctrl.self().system())
+                          .context(args_.make_ssl_context())
+                          .connect(caf::make_uri(*url))
+                          .max_response_size(max_response_size)
+                          .connection_timeout(args_.connection_timeout.inner)
+                          .max_retry_count(args_.max_retry_count)
+                          .retry_delay(args_.retry_delay.inner)
+                          .add_header_fields(hdrs)),
+                      hdrs);
                   } else {
                     TENZIR_DEBUG("[http] done paginating");
                   }
@@ -1550,19 +1524,117 @@ public:
                     .emit(ctrl.diagnostics());
                 });
           });
-        TENZIR_DEBUG("[http] handled response");
+          TENZIR_DEBUG("[http] handled response");
+        };
       };
-    };
     for (const auto& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      auto urls = eval_string(args_.url, slice, dh);
+      auto urls = std::vector<std::string>{};
+      urls.reserve(slice.rows());
+      auto reqs = std::vector<secret_request>{};
+      auto url_warn = false;
+      const auto url_ms = eval(args_.url, slice, dh);
+      for (const auto& s : url_ms.parts()) {
+        if (s.type.kind().is<string_type>()) {
+          for (auto val : s.values<string_type>()) {
+            if (val) {
+              urls.emplace_back(*val);
+            } else {
+              url_warn = true;
+              urls.emplace_back();
+            }
+          }
+          continue;
+        }
+        if (s.type.kind().is<secret_type>()) {
+          for (const auto& val : s.values<secret_type>()) {
+            if (val) {
+              auto req = make_secret_request("url", materialize(*val),
+                                             args_.url.get_location(),
+                                             urls.emplace_back(), dh);
+              reqs.emplace_back(std::move(req));
+            } else {
+              url_warn = true;
+              urls.emplace_back();
+            }
+          }
+          continue;
+        }
+        diagnostic::warning("expected `string`, got `{}`", s.type.kind())
+          .primary(args_.url)
+          .emit(dh);
+        urls.insert(urls.end(), s.length(), {});
+      }
+      if (url_warn) {
+        diagnostic::warning("`url` must not be null")
+          .primary(args_.url)
+          .note("skipping request")
+          .emit(dh);
+      }
+      auto hdrs = std::vector<std::unordered_map<std::string, std::string>>{};
+      hdrs.reserve(slice.rows());
+      if (args_.headers) {
+        auto hdr_ms = eval(*args_.headers, slice, dh);
+        for (const auto& s : hdr_ms.parts()) {
+          if (s.type.kind().is_not<record_type>()) {
+            hdrs.insert(hdrs.end(), s.length(), {});
+            diagnostic::warning("expected `record`, got `{}`", s.type.kind())
+              .primary(*args_.headers)
+              .note("skipping headers")
+              .emit(dh);
+            continue;
+          }
+          for (const auto& val : s.values<record_type>()) {
+            if (not val) {
+              hdrs.emplace_back();
+              diagnostic::warning("expected `record`, got `null`")
+                .primary(*args_.headers)
+                .note("skipping headers")
+                .emit(dh);
+              continue;
+            }
+            auto& h = hdrs.emplace_back();
+            for (const auto& [k, v] : *val) {
+              match(
+                v,
+                [&](const std::string_view& x) {
+                  h.emplace(k, x);
+                },
+                [&](const secret_view& x) {
+                  auto key = std::string{k};
+                  auto req = make_secret_request(key, materialize(x),
+                                                 args_.headers->get_location(),
+                                                 h[key], dh);
+                  reqs.emplace_back(std::move(req));
+                },
+                [&](const auto&) {
+                  if (not hdr_warned) {
+                    hdr_warned = true;
+                    diagnostic::warning(
+                      "`headers` must be `{{ string: string }}`")
+                      .primary(*args_.headers)
+                      .note("skipping headers")
+                      .emit(dh);
+                  }
+                });
+            }
+          }
+        }
+      }
+      if (not reqs.empty()
+          and ctrl.resolve_secrets_must_yield(std::move(reqs))) {
+        co_yield {};
+      }
+      auto url_it = urls.begin();
+      auto hdr_it = hdrs.begin();
       auto methods = eval_optional_string(args_.method, slice, dh);
       auto payloads = eval_optional_string(args_.payload, slice, dh);
       for (auto row : slice.values()) {
-        auto url = std::string{urls.next().value()};
+        auto& url = *url_it;
+        auto& headers = *hdr_it;
         const auto method = methods.next().value();
         const auto payload = payloads.next().value();
         if (url.empty()) {
@@ -1593,7 +1665,7 @@ public:
           .connection_timeout(args_.connection_timeout.inner)
           .max_retry_count(args_.max_retry_count)
           .retry_delay(args_.retry_delay.inner)
-          .add_header_fields(args_.make_headers(slice, dh, warned))
+          .add_header_fields(std::move(headers))
           .request(*m, payload)
           .or_else([&](const caf::error& e) {
             diagnostic::error("failed to make http request: {}", e)
@@ -1606,13 +1678,14 @@ public:
           .transform([&](const caf::async::future<http::response>& fut) {
             ++awaiting;
             fut.bind_to(ctrl.self())
-              .then(handle_response(row), [&](const caf::error& e) {
-                --awaiting;
-                ctrl.set_waiting(false);
-                diagnostic::warning("request failed: `{}`", e)
-                  .primary(args_.op)
-                  .emit(dh);
-              });
+              .then(handle_response(row, std::move(headers)),
+                    [&](const caf::error& e) {
+                      --awaiting;
+                      ctrl.set_waiting(false);
+                      diagnostic::warning("request failed: `{}`", e)
+                        .primary(args_.op)
+                        .emit(dh);
+                    });
           });
         while (awaiting >= args_.parallel.inner) {
           // NOTE: Must be an index-based loop. The thread can go back to the
@@ -1632,7 +1705,8 @@ public:
           ++awaiting;
           ctrl.self().run_delayed(
             args_.paginate_delay.inner,
-            [&, req = std::move(paginate_queue[i])] mutable {
+            [&, req = std::move(paginate_queue[i].first),
+             hdrs = std::move(paginate_queue[i].second)] mutable {
               std::move(req)
                 .get()
                 .or_else([&](const caf::error& e) {
@@ -1645,13 +1719,14 @@ public:
                 })
                 .transform([&](const caf::async::future<http::response>& fut) {
                   fut.bind_to(ctrl.self())
-                    .then(handle_response(row), [&](const caf::error& e) {
-                      --awaiting;
-                      ctrl.set_waiting(false);
-                      diagnostic::warning("request failed: `{}`", e)
-                        .primary(args_.op)
-                        .emit(dh);
-                    });
+                    .then(handle_response(row, std::move(hdrs)),
+                          [&](const caf::error& e) {
+                            --awaiting;
+                            ctrl.set_waiting(false);
+                            diagnostic::warning("request failed: `{}`", e)
+                              .primary(args_.op)
+                              .emit(dh);
+                          });
                 });
             });
           while (awaiting >= args_.parallel.inner) {
@@ -1683,10 +1758,17 @@ public:
     TENZIR_ASSERT(paginate_queue.empty());
   }
 
-  static auto eval_string(const ast::expression& expr, const table_slice& slice,
-                          diagnostic_handler& dh)
+  static auto
+  eval_optional_string(const std::optional<ast::expression>& expr,
+                       const table_slice& slice, diagnostic_handler& dh)
     -> generator<std::string_view> {
-    const auto ms = eval(expr, slice, dh);
+    if (not expr) {
+      for (auto i = size_t{}; i < slice.rows(); ++i) {
+        co_yield {};
+      }
+      co_return;
+    }
+    const auto ms = eval(*expr, slice, dh);
     for (const auto& s : ms.parts()) {
       if (s.type.kind().is<null_type>()) {
         for (auto i = int64_t{}; i < s.length(); ++i) {
@@ -1701,26 +1783,11 @@ public:
         continue;
       }
       diagnostic::warning("expected `string`, got `{}`", s.type.kind())
-        .primary(expr)
+        .primary(*expr)
         .emit(dh);
       for (auto i = int64_t{}; i < s.length(); ++i) {
         co_yield {};
       }
-    }
-  }
-
-  static auto
-  eval_optional_string(const std::optional<ast::expression>& expr,
-                       const table_slice& slice, diagnostic_handler& dh)
-    -> generator<std::string_view> {
-    if (not expr) {
-      for (auto i = size_t{}; i < slice.rows(); ++i) {
-        co_yield {};
-      }
-      co_return;
-    }
-    for (auto val : eval_string(expr.value(), slice, dh)) {
-      co_yield val;
     }
   }
 
