@@ -97,10 +97,15 @@ struct json_printer : printer_base<json_printer> {
         default:
           return (*this)(caf::none);
       }
-      if (double i; std::modf(x, &i) == 0.0) { // NOLINT
-        out_ = fmt::format_to(out_, options_.style.number, "{}.0", i);
-      } else {
-        out_ = fmt::format_to(out_, options_.style.number, "{}", x);
+      // There doesn't seem to be an option that prints `1.0` as `1.0`. It is
+      // normally printed as `1`, or `1.` in alternate mode. Because we want to
+      // have a trailing zero, we detect that case and append one. Detection
+      // based purely on the fractional part doesn't work, because we might get
+      // scientific notation and thereby produce incorrect JSON.
+      auto result = fmt::format(options_.style.number, "{:#}", x);
+      out_ = std::copy(result.begin(), result.end(), out_);
+      if (result.back() == '.') {
+        *out_++ = '0';
       }
       return true;
     }
