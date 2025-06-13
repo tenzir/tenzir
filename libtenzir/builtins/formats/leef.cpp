@@ -6,7 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/view3.hpp"
+
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -23,6 +26,7 @@
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/table_slice.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/view.hpp>
@@ -386,9 +390,6 @@ public:
                                expr = std::move(expr)](auto eval, session ctx) {
       return map_series(eval(expr), [&](series arg) {
         auto f = detail::overload{
-          [&](const arrow::NullArray&) -> multi_series {
-            return arg;
-          },
           [&](const arrow::StringArray& arg) -> multi_series {
             auto builder = multi_series_builder{
               msb_ops,
@@ -414,11 +415,245 @@ public:
                                 arg.type.kind())
               .primary(call)
               .emit(ctx);
+            /// TODO: We actually know the type it would produce here, sans the
+            /// attributes
             return series::null(null_type{}, arg.length());
           },
         };
         return match(*arg.array, f);
       });
+    });
+  }
+};
+
+/// @returns expression `field? else "fallback_text"`
+auto make_root_field(std::string field, std::string fallback_text)
+  -> ast::binary_expr {
+  return ast::binary_expr{
+    ast::root_field{
+      .id = ast::identifier{std::move(field), location::unknown},
+      .has_question_mark = true,
+    },
+    located{ast::binary_op::else_, location::unknown},
+    ast::constant{fallback_text, location::unknown},
+  };
+}
+
+/// @returns expression `field`
+auto make_root_field(std::string field) -> ast::root_field {
+  return ast::root_field{
+    .id = ast::identifier{std::move(field), location::unknown},
+    .has_question_mark = true,
+  };
+}
+
+struct printer_args final {
+  ast::expression attributes{make_root_field("attributes")};
+  located<std::string> delimiter = located{"\t", location::unknown};
+  ast::expression vendor{make_root_field("vendor", "Tenzir")};
+  ast::expression product_name{make_root_field("product_name", "Tenzir Node")};
+  ast::expression product_version{
+    make_root_field("product_version", tenzir::version::version)};
+  ast::expression event_class_id{
+    make_root_field("event_class_id", "unspecified")};
+  located<std::string> null_value = located{std::string{}, location::unknown};
+  located<std::string> flatten_separator
+    = located{std::string{"."}, location::unknown};
+  location op;
+
+  auto add_to(argument_parser2& p) -> void {
+    p.positional("attributes", attributes, "record");
+    p.named_optional("delimiter", delimiter, "string");
+    p.named_optional("vendor", vendor, "string");
+    p.named_optional("product_name", product_name, "string");
+    p.named_optional("product_version", product_version, "string");
+    p.named_optional("event_class_id", event_class_id, "string");
+    p.named_optional("null_value", null_value);
+    p.named_optional("flatten_separator", flatten_separator);
+  }
+
+  auto loc(into_location loc) const -> location {
+    return loc ? loc : op;
+  }
+
+  friend auto inspect(auto& f, printer_args& x) -> bool {
+    return f.object(x).fields(
+      f.field("attributes", x.attributes), f.field("delimiter", x.delimiter),
+      f.field("vendor", x.vendor), f.field("product_name", x.product_name),
+      f.field("product_version", x.product_version),
+      f.field("event_class_id", x.event_class_id),
+      f.field("null_value", x.null_value),
+      f.field("flatten_separator", x.flatten_separator), f.field("op", x.op));
+  }
+};
+
+void append_attributes(std::string& out, record_view3 attributes,
+                       std::string_view delim, location loc,
+                       diagnostic_handler& dh) {
+  const auto f = detail::overload{
+    [&](const caf::none_t&) {
+      // noop
+    },
+    [&](auto v) {
+      fmt::format_to(std::back_inserter(out), "{}", v);
+    },
+
+    [&](view3<list>) {
+      diagnostic::warning("`list` is not supported in a LEEF attribute value")
+        .primary(loc)
+        .emit(dh);
+    },
+    [&](view3<tenzir::pattern>) {
+      TENZIR_UNREACHABLE();
+    },
+    [&](view3<tenzir::record>) {
+      TENZIR_UNREACHABLE();
+    },
+  };
+  for (const auto& [k, v] : attributes) {
+    out += k;
+    out += '=';
+    match(v, f);
+    out.append(delim);
+  }
+  // Remove the final delimiter again
+  out.erase(out.size() - 1);
+}
+
+class print_leef final : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "print_leef";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto parser = argument_parser2::function(name());
+    auto args = printer_args{};
+    args.op = inv.call.get_location();
+    args.add_to(parser);
+    TRY(parser.parse(inv, ctx));
+    if (args.delimiter.inner.size() != 1) {
+      diagnostic::error("custom LEEF `delimiter` must be a single character")
+        .primary(args.delimiter, "got `{}`", args.delimiter.inner)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (args.delimiter.inner == "|") {
+      diagnostic::error("custom LEEF `delimiter` must not be `|`")
+        .primary(args.delimiter)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (args.null_value.inner.contains("|")) {
+      diagnostic::error("`null_value` must not contain `|`")
+        .primary(args.null_value)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make([args = std::move(args)](
+                                auto eval, session ctx) -> multi_series {
+      const auto arr = std::array{
+        eval(args.vendor),          eval(args.product_name),
+        eval(args.product_version), eval(args.event_class_id),
+        eval(args.attributes),
+      };
+      return map_series(
+        arr, [&args, &ctx](const std::span<series> x) -> multi_series {
+          TENZIR_ASSERT(x.size() == 5);
+          const auto& vendor_series = x[0];
+          const auto& product_name_series = x[1];
+          const auto& product_version_series = x[2];
+          const auto& event_class_id_series = x[3];
+          const auto attributes_series_f
+            = flatten(x[4], args.flatten_separator.inner);
+          const auto& attributes_series = attributes_series_f.series;
+          TENZIR_ASSERT(vendor_series.length() == product_name_series.length());
+          TENZIR_ASSERT(vendor_series.length()
+                        == product_version_series.length());
+          TENZIR_ASSERT(vendor_series.length()
+                        == event_class_id_series.length());
+          TENZIR_ASSERT(vendor_series.length() == attributes_series.length());
+          bool ok = true;
+#define TYPE_CHECK(NAME, TYPE)                                                 \
+  if (not(NAME##_series.type.kind().template is<TYPE>()                        \
+          or NAME##_series.type.kind().template is<null_type>())) {            \
+    ok = false;                                                                \
+    diagnostic::warning(#NAME " must be `{}`", type_kind{tag_v<TYPE>})         \
+      .primary(args.loc(args.NAME), "got `{}`", NAME##_series.type.kind())     \
+      .emit(ctx);                                                              \
+  }
+          TYPE_CHECK(vendor, string_type)
+          TYPE_CHECK(product_name, string_type)
+          TYPE_CHECK(product_version, string_type)
+          TYPE_CHECK(event_class_id, string_type)
+          TYPE_CHECK(attributes, record_type)
+#undef TYPE_CHECK
+          if (not ok) {
+            return series::null(string_type{}, vendor_series.length());
+          }
+          auto builder = type_to_arrow_builder_t<string_type>{};
+          check(builder.Reserve(vendor_series.length()));
+          auto str = std::string{};
+          auto vendor_gen = values3(*vendor_series.array);
+          auto product_name_gen = values3(*product_name_series.array);
+          auto product_version_gen = values3(*product_version_series.array);
+          auto event_class_id_gen = values3(*event_class_id_series.array);
+          auto attributes_gen = values3(*attributes_series.array);
+          while (true) {
+            const auto vendor = vendor_gen.next();
+            const auto product_name = product_name_gen.next();
+            const auto product_version = product_version_gen.next();
+            const auto event_class_id = event_class_id_gen.next();
+            const auto attributes = attributes_gen.next();
+            if (not vendor) {
+              TENZIR_ASSERT(not product_name);
+              TENZIR_ASSERT(not product_version);
+              TENZIR_ASSERT(not event_class_id);
+              TENZIR_ASSERT(not attributes);
+              break;
+            }
+            str = "LEEF:";
+            if (args.delimiter.inner == "\t") {
+              str.append("1.0");
+            } else {
+              str.append("2.0");
+            }
+            str += '|';
+            const auto append_field = [&str, &args](const auto& field) {
+              if (is<view3<caf::none_t>>(*field)) {
+                str.append(args.null_value.inner);
+              } else {
+                str.append(as<view3<std::string>>(*field));
+              }
+              str += '|';
+            };
+            append_field(vendor);
+            append_field(product_name);
+            append_field(product_version);
+            append_field(event_class_id);
+            if (args.delimiter.inner != "\t") {
+              str.append(args.delimiter.inner);
+              str += '|';
+            }
+            if (auto* r = try_as<view3<record>>(*attributes)) {
+              append_attributes(str, *r, args.delimiter.inner,
+                                args.attributes.get_location(), ctx);
+            } else {
+              TENZIR_ASSERT(is<view3<caf::none_t>>(*attributes));
+              diagnostic::warning("`attributes` was `null`")
+                .primary(args.attributes)
+                .emit(ctx);
+            }
+            check(builder.Append(str));
+          }
+          return series{string_type{}, check(builder.Finish())};
+        });
     });
   }
 };
@@ -429,3 +664,4 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::leef_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::read_leef)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::parse_leef)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::print_leef)

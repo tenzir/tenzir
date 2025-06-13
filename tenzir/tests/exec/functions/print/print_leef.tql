@@ -1,0 +1,10 @@
+from { a: 42, b: "Hello"}
+r1 = {a: a, b: b}.print_leef(product_version="VERSION")
+event_class_id = "critical"
+product_version = "VERSION2"
+r2 = {}.print_leef(event_class_id="good")
+r3 = null.print_leef()
+r4 = {}.print_leef(vendor=null)
+r5 = {}.print_leef(vendor=string(null))
+r6 = { a: {b: "nested"}, b: "top" }.print_leef()
+drop a, b, event_class_id, product_version
