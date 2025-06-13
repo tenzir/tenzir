@@ -1,9 +1,0 @@
-from(
-  {},
-  {class_uid: ""},
-  {class_uid: 42},
-  {class_uid: 1002, count: "wrong-type", this_field_does_not_exist: 42},
-  {class_uid: 4002, count: 42, unmapped: {foo: 192.168.0.1}},
-)
-metadata.version = "1.5.0"
-ocsf::apply
