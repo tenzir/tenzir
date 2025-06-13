@@ -16,5 +16,7 @@ auto ocsf_class_name(int64_t id) -> std::optional<std::string_view>;
 auto ocsf_class_uid(std::string_view name) -> std::optional<int64_t>;
 auto ocsf_category_name(int64_t id) -> std::optional<std::string_view>;
 auto ocsf_category_uid(std::string_view name) -> std::optional<int64_t>;
+auto ocsf_type_name(int64_t id) -> std::optional<std::string_view>;
+auto ocsf_type_uid(std::string_view name) -> std::optional<int64_t>;
 
 } // namespace tenzir

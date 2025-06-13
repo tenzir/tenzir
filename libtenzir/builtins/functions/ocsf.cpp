@@ -17,7 +17,7 @@ namespace tenzir::plugins::ocsf {
 
 namespace {
 
-/// Generic mapping plugin that supports `string <-> integer` conversion.
+/// Generic mapping plugin that supports `In -> Out` conversion.
 template <class In, class Out>
 class generic_mapping_plugin final : public function_plugin {
 public:
@@ -131,3 +131,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
   "ocsf::class_uid", "string", tenzir::ocsf_class_uid, "OCSF class name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
   "ocsf::class_name", "int", tenzir::ocsf_class_name, "OCSF class ID"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
+  "ocsf::type_uid", "string", tenzir::ocsf_type_uid, "OCSF type name"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
+  "ocsf::type_name", "int", tenzir::ocsf_type_name, "OCSF type ID"})
