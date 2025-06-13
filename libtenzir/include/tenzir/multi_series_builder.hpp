@@ -392,10 +392,11 @@ public:
     data_builder::data_parsing_function parser
     = detail::data_builder::basic_parser);
 
-  multi_series_builder(multi_series_builder&& other) noexcept;
-  multi_series_builder& operator=(const multi_series_builder&) = delete;
-  // unimplemented
-  multi_series_builder& operator=(multi_series_builder&&) = delete;
+  ~multi_series_builder() = default;
+  multi_series_builder(const multi_series_builder&) = delete;
+  auto operator=(const multi_series_builder&) -> multi_series_builder& = delete;
+  multi_series_builder(multi_series_builder&& other) = default;
+  auto operator=(multi_series_builder&&) -> multi_series_builder& = default;
 
 private:
   /// @brief Gets a pointer to the active policy, if its the given one.
@@ -422,7 +423,7 @@ private:
   std::optional<size_t> next_free_index() const;
 
   /// @brief Look up a schema by name.
-  auto type_for_schema(std::string_view str) -> const type*;
+  auto type_for_schema(std::string_view name) -> const type*;
 
   struct entry_data {
     entry_data(const tenzir::type* schema = nullptr)
@@ -464,7 +465,7 @@ private:
   // the builders settings
   settings_type settings_;
   // the diagnostic handler to be used
-  diagnostic_handler& dh_;
+  std::reference_wrapper<diagnostic_handler> dh_;
   // used for quick name -> schema mapping
   detail::flat_map<std::string, tenzir::type> schemas_;
   // used to populate the map above
@@ -476,7 +477,7 @@ private:
   // used to determine whether we need a signature compute
   bool needs_signature_ = true;
   // used to name builders
-  tenzir::type naming_sentinel_;
+  std::unique_ptr<tenzir::type> naming_sentinel_;
   // the schema to construct the series builder with
   const tenzir::type* builder_schema_ = nullptr;
   // the schema to use when during parsing/signature computation

@@ -435,6 +435,7 @@ multi_series_builder::multi_series_builder(
     dh_{dh},
     schema_fn_{std::move(schema_fn)},
     builder_raw_{std::move(parser), &dh, settings_.schema_only, settings_.raw} {
+  TENZIR_ASSERT(schema_fn_);
   if (get_policy<policy_default>()) {
     // if we merge all events, they are necessarily ordered
     settings_.ordered |= settings_.merge;
@@ -456,43 +457,20 @@ multi_series_builder::multi_series_builder(
       }
     } else {
       if (seed) {
-        naming_sentinel_ = *seed;
+        naming_sentinel_ = std::make_unique<type>(*seed);
         needs_signature_ = not settings_.schema_only;
-        builder_schema_ = &naming_sentinel_;
-        parsing_signature_schema_ = &naming_sentinel_;
+        builder_schema_ = naming_sentinel_.get();
+        parsing_signature_schema_ = naming_sentinel_.get();
       } else {
-        naming_sentinel_ = tenzir::type{p->seed_schema, null_type{}};
-        builder_schema_ = &naming_sentinel_;
+        naming_sentinel_
+          = std::make_unique<tenzir::type>(p->seed_schema, null_type{});
+        builder_schema_ = naming_sentinel_.get();
         parsing_signature_schema_ = nullptr;
       }
     }
   }
   // The selector mode has not special ctor setup, as it all depends on runtime
   // inputs
-}
-
-multi_series_builder::multi_series_builder(multi_series_builder&& other) noexcept
-  : policy_{std::move(other.policy_)},
-    settings_{std::move(other.settings_)},
-    dh_{other.dh_},
-    schemas_{std::move(other.schemas_)},
-    merging_builder_{std::move(other.merging_builder_)},
-    builder_raw_{std::move(other.builder_raw_)},
-    needs_signature_{other.needs_signature_},
-    naming_sentinel_{std::move(other.naming_sentinel_)},
-    builder_schema_{other.builder_schema_ == &other.naming_sentinel_
-                      ? &naming_sentinel_
-                      : nullptr},
-    parsing_signature_schema_{other.parsing_signature_schema_
-                                  == &other.naming_sentinel_
-                                ? &naming_sentinel_
-                                : nullptr},
-    signature_raw_{std::move(other.signature_raw_)},
-    signature_map_{std::move(other.signature_map_)},
-    entries_{std::move(other.entries_)},
-    ready_events_{std::move(other.ready_events_)},
-    last_yield_time_{std::move(other.last_yield_time_)},
-    active_index_{other.active_index_} {
 }
 
 auto multi_series_builder::yield_ready() -> std::vector<series> {
@@ -538,7 +516,7 @@ auto multi_series_builder::data_unparsed(std::string text) -> void {
     auto res = builder_raw_.parser_(text, nullptr);
     auto& [value, diag] = res;
     if (diag) {
-      dh_.emit(std::move(*diag));
+      dh_.get().emit(std::move(*diag));
     }
     if (value) {
       merging_builder_.data(std::move(*value));
@@ -680,8 +658,9 @@ void multi_series_builder::complete_last_event() {
             .note("`{}` does not refer to a known schema", schema_name)
             .emit(dh_);
         }
-        naming_sentinel_ = tenzir::type{schema_name, null_type{}};
-        builder_schema_ = &naming_sentinel_;
+        naming_sentinel_
+          = std::make_unique<tenzir::type>(schema_name, null_type{});
+        builder_schema_ = naming_sentinel_.get();
       }
       append_name_to_signature(schema_name, signature_raw_);
     }
