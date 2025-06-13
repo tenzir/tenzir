@@ -102,9 +102,13 @@ struct json_printer : printer_base<json_printer> {
       // have a trailing zero, we detect that case and append one. Detection
       // based purely on the fractional part doesn't work, because we might get
       // scientific notation and thereby produce incorrect JSON.
-      auto result = fmt::format(options_.style.number, "{:#}", x);
+      auto result = fmt::to_string(x);
+      auto is_integer = std::ranges::all_of(result, [](char ch) {
+        return ('0' <= ch and ch <= '9') or ch == '-';
+      });
       out_ = std::copy(result.begin(), result.end(), out_);
-      if (result.back() == '.') {
+      if (is_integer) {
+        *out_++ = '.';
         *out_++ = '0';
       }
       return true;
