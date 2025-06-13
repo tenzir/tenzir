@@ -69,12 +69,7 @@ auto try_decompress_payload(const std::string_view encoding,
   }
   const auto compression_type
     = arrow::util::Codec::GetCompressionType(std::string{encoding});
-  // Arrow straight up crashes if we use a codec created from the
-  // string "uncompressed", so we just don't do that.
-  // Last checked with Arrow 12.0.
-  // TODO: Recheck if this is still the case.
-  if (not compression_type.ok()
-      or *compression_type == arrow::Compression::UNCOMPRESSED) {
+  if (not compression_type.ok()) {
     diagnostic::warning("invalid compression type: {}", encoding)
       .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
       .note("skipping decompression")
@@ -86,6 +81,9 @@ auto try_decompress_payload(const std::string_view encoding,
   const auto codec = arrow::util::Codec::Create(
     compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
   TENZIR_ASSERT(codec.ok());
+  if (not codec.ValueUnsafe()) {
+    return std::nullopt;
+  }
   const auto decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
   auto written = size_t{};
   auto read = size_t{};

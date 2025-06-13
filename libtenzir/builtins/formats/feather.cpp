@@ -51,8 +51,8 @@ auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
 /// alongside Tenzir-related meta data (currently limited to the import time).
 /// Message envelope is unwrapped and the metadata, attached to the to-level
 /// schema the input record batch is copied to the newly created record batch.
-std::shared_ptr<arrow::RecordBatch>
-unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb) {
+auto unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb)
+  -> std::shared_ptr<arrow::RecordBatch> {
   auto event_col = rb->GetColumnByName("event");
   auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
   auto event_rb = check(arrow::RecordBatch::FromStructArray(event_col));
@@ -133,7 +133,7 @@ auto decode_ipc_stream(chunk_ptr chunk)
 }
 
 class passive_feather_store final : public passive_store {
-  [[nodiscard]] caf::error load(chunk_ptr chunk) override {
+  [[nodiscard]] auto load(chunk_ptr chunk) -> caf::error override {
     auto decode_result = decode_ipc_stream(std::move(chunk));
     if (not decode_result) {
       return caf::make_error(ec::format_error,
@@ -145,7 +145,7 @@ class passive_feather_store final : public passive_store {
     return {};
   }
 
-  [[nodiscard]] generator<table_slice> slices() const override {
+  [[nodiscard]] auto slices() const -> generator<table_slice> override {
     auto offset = id{};
     auto i = size_t{};
     while (true) {
@@ -173,14 +173,14 @@ class passive_feather_store final : public passive_store {
     }
   }
 
-  [[nodiscard]] uint64_t num_events() const override {
+  [[nodiscard]] auto num_events() const -> uint64_t override {
     if (cached_num_events_ == 0) {
       cached_num_events_ = rows(collect(slices()));
     }
     return cached_num_events_;
   }
 
-  [[nodiscard]] type schema() const override {
+  [[nodiscard]] auto schema() const -> type override {
     for (const auto& slice : slices()) {
       return slice.schema();
     }
@@ -188,13 +188,11 @@ class passive_feather_store final : public passive_store {
   }
 
 private:
-  generator<std::shared_ptr<arrow::RecordBatch>> remaining_slices_generator_
-    = {};
+  generator<std::shared_ptr<arrow::RecordBatch>> remaining_slices_generator_;
   mutable generator<std::shared_ptr<arrow::RecordBatch>>::iterator
-    remaining_slices_iterator_
-    = {};
+    remaining_slices_iterator_;
   mutable uint64_t cached_num_events_ = {};
-  mutable std::vector<table_slice> cached_slices_ = {};
+  mutable std::vector<table_slice> cached_slices_;
 };
 
 class active_feather_store final : public active_store {
@@ -203,7 +201,8 @@ public:
     : compression_level_{compression_level} {
   }
 
-  [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
+  [[nodiscard]] auto add(std::vector<table_slice> new_slices)
+    -> caf::error override {
     new_slices_.reserve(new_slices.size() + new_slices_.size());
     for (auto& slice : new_slices) {
       // The index already sets the correct offset for this slice, but in some
@@ -229,7 +228,7 @@ public:
     return {};
   }
 
-  [[nodiscard]] caf::expected<chunk_ptr> finish() override {
+  [[nodiscard]] auto finish() -> caf::expected<chunk_ptr> override {
     if (num_new_events_ > 0) {
       rebatched_slices_.push_back(concatenate(std::exchange(new_slices_, {})));
     }
@@ -259,7 +258,7 @@ public:
     return chunk::make(buffer.MoveValueUnsafe());
   }
 
-  [[nodiscard]] generator<table_slice> slices() const override {
+  [[nodiscard]] auto slices() const -> generator<table_slice> override {
     // We need to make a copy of the slices here because the slices_ vector
     // may get invalidated while we iterate over it.
     auto rebatched_slices = rebatched_slices_;
@@ -272,14 +271,14 @@ public:
     }
   }
 
-  [[nodiscard]] uint64_t num_events() const override {
+  [[nodiscard]] auto num_events() const -> uint64_t override {
     return num_events_;
   }
 
 private:
   int64_t compression_level_;
-  std::vector<table_slice> rebatched_slices_ = {};
-  std::vector<table_slice> new_slices_ = {};
+  std::vector<table_slice> rebatched_slices_;
+  std::vector<table_slice> new_slices_;
   size_t num_new_events_ = {};
   size_t num_events_ = {};
 };
@@ -290,8 +289,8 @@ class callback_listener : public arrow::ipc::Listener {
 public:
   callback_listener() = default;
 
-  arrow::Status OnRecordBatchDecoded(
-    std::shared_ptr<arrow::RecordBatch> record_batch) override {
+  auto OnRecordBatchDecoded(std::shared_ptr<arrow::RecordBatch> record_batch)
+    -> arrow::Status override {
     record_batch_buffer.push(std::move(record_batch));
     return arrow::Status::OK();
   }
@@ -403,9 +402,9 @@ auto print_feather(
 
 class feather_options {
 public:
-  std::optional<located<int64_t>> compression_level{};
-  std::optional<located<std::string>> compression_type{};
-  std::optional<located<double>> min_space_savings{};
+  std::optional<located<int64_t>> compression_level;
+  std::optional<located<std::string>> compression_type;
+  std::optional<located<double>> min_space_savings;
 
   friend auto inspect(auto& f, feather_options& x) -> bool {
     return f.object(x).fields(f.field("compression_level", x.compression_level),
@@ -496,7 +495,9 @@ public:
           .to_error();
       }
       ipc_write_options.codec = codec_result.MoveValueUnsafe();
-      ipc_write_options.min_space_savings = options_.min_space_savings->inner;
+      if (options_.min_space_savings) {
+        ipc_write_options.min_space_savings = options_.min_space_savings->inner;
+      }
     }
     const auto schema = input_schema.to_arrow_schema();
     auto stream_writer_result = arrow::ipc::MakeStreamWriter(
@@ -568,13 +569,13 @@ class plugin final : public virtual parser_plugin<feather_parser>,
     return std::make_unique<feather_printer>(std::move(options));
   }
 
-  [[nodiscard]] caf::expected<std::unique_ptr<passive_store>>
-  make_passive_store() const override {
+  [[nodiscard]] auto make_passive_store() const
+    -> caf::expected<std::unique_ptr<passive_store>> override {
     return std::make_unique<store::passive_feather_store>();
   }
 
-  [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
-  make_active_store() const override {
+  [[nodiscard]] auto make_active_store() const
+    -> caf::expected<std::unique_ptr<active_store>> override {
     return std::make_unique<store::active_feather_store>(compression_level_);
   }
 
