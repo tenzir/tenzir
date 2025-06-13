@@ -367,45 +367,43 @@ public:
           };
         };
       };
-      auto profiles_at = std::invoke(
-        [&]() {
-          auto profiles_index
-            = metadata_array->struct_type()->GetFieldIndex("profiles");
-          if (profiles_index == -1) {
-            return make_profiles_at(nullptr);
-          }
-          auto profiles_array
-            = check(metadata_array->GetFlattenedField(profiles_index));
-          if (dynamic_cast<arrow::NullArray*>(&*profiles_array)) {
-            return make_profiles_at(nullptr);
-          };
-          auto profiles_lists = std::dynamic_pointer_cast<arrow::ListArray>(
-            std::move(profiles_array));
-          if (not profiles_lists) {
-            diagnostic::warning("ignoring profiles for events where "
-                                "`metadata.profiles` is not a list")
-              .primary(self_)
-              .emit(ctrl.diagnostics());
-            return make_profiles_at(nullptr);
-          }
-          if (dynamic_cast<arrow::NullArray*>(&*profiles_lists->values())) {
-            return make_profiles_at(nullptr);
-          }
-          if (not dynamic_cast<arrow::StringArray*>(
-                &*profiles_lists->values())) {
-            diagnostic::warning("ignoring profiles for events where "
-                                "`metadata.profiles` is not a list of strings")
-              .primary(self_)
-              .emit(ctrl.diagnostics());
-            return make_profiles_at(nullptr);
-          }
-          // Optimize the case where we know that all lists are trivially empty.
-          if (profiles_lists->value_offset(0)
-              == profiles_lists->value_offset(profiles_lists->length())) {
-            return make_profiles_at(nullptr);
-          }
-          return make_profiles_at(profiles_lists);
-        });
+      auto profiles_at = std::invoke([&]() {
+        auto profiles_index
+          = metadata_array->struct_type()->GetFieldIndex("profiles");
+        if (profiles_index == -1) {
+          return make_profiles_at(nullptr);
+        }
+        auto profiles_array
+          = check(metadata_array->GetFlattenedField(profiles_index));
+        if (dynamic_cast<arrow::NullArray*>(&*profiles_array)) {
+          return make_profiles_at(nullptr);
+        };
+        auto profiles_lists = std::dynamic_pointer_cast<arrow::ListArray>(
+          std::move(profiles_array));
+        if (not profiles_lists) {
+          diagnostic::warning("ignoring profiles for events where "
+                              "`metadata.profiles` is not a list")
+            .primary(self_)
+            .emit(ctrl.diagnostics());
+          return make_profiles_at(nullptr);
+        }
+        if (dynamic_cast<arrow::NullArray*>(&*profiles_lists->values())) {
+          return make_profiles_at(nullptr);
+        }
+        if (not dynamic_cast<arrow::StringArray*>(&*profiles_lists->values())) {
+          diagnostic::warning("ignoring profiles for events where "
+                              "`metadata.profiles` is not a list of strings")
+            .primary(self_)
+            .emit(ctrl.diagnostics());
+          return make_profiles_at(nullptr);
+        }
+        // Optimize the case where we know that all lists are trivially empty.
+        if (profiles_lists->value_offset(0)
+            == profiles_lists->value_offset(profiles_lists->length())) {
+          return make_profiles_at(nullptr);
+        }
+        return make_profiles_at(profiles_lists);
+      });
       if (not class_array) {
         diagnostic::warning(
           "dropping events where `class_uid` is not an integer")
