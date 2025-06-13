@@ -320,7 +320,7 @@ rest_response::rest_response(const tenzir::record& data)
 }
 
 auto rest_response::from_json_string(std::string json) -> rest_response {
-  TENZIR_ASSERT_EXPENSIVE(validate_json(json));
+  TENZIR_ASSERT(validate_json(json));
   auto result = rest_response{};
   result.code_ = 200;
   result.body_ = std::move(json);
