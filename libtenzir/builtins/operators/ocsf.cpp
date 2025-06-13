@@ -67,10 +67,11 @@ public:
     TENZIR_ASSERT(array);
     auto result = cast(*array, as<record_type>(ty), "");
     auto schema = type{name, result.type};
+    auto arrow_schema = schema.to_arrow_schema();
     return table_slice{
-      arrow::RecordBatch::Make(schema.to_arrow_schema(), result.length(),
+      arrow::RecordBatch::Make(std::move(arrow_schema), result.length(),
                                result.array->fields()),
-      ty,
+      std::move(schema),
     };
   }
 
