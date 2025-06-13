@@ -169,12 +169,6 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
                     resolved = "string #print_json"
                 else:
                     type_name = type_name.replace("/", "__")
-                    # Some object names have a prefix, which is separated by a
-                    # slash. It looks like this prefix can just be discarded.
-                    # slash = type_name.rfind("/")
-                    # if slash != -1:
-                    #     log(f"{full_name} -> {type_name}")
-                    #     type_name = type_name[slash + 1 :]
                     resolved = f"{object_prefix(schema)}.{type_name}"
             else:
                 resolved = types[attr_def["type"]]
@@ -191,6 +185,8 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
             extension = attr_def.get("extension")
             if extension is not None:
                 attributes += f" #extension={extension}"
+            if not objects and attr_name == "unmapped":
+                attributes += " #nullify_empty_records"
             writer.print(f"{attr_name}: {resolved}{attributes},")
         writer.end("}")
 

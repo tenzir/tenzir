@@ -122,7 +122,9 @@ private:
   auto cast(const arrow::Array& array, const type& ty, std::string_view path)
     -> series {
     if (is<string_type>(ty) and ty.attribute("print_json")) {
-      return series{string_type{}, print_json(array)};
+      return series{
+        string_type{},
+        print_json(array, ty.attribute("nullify_empty_records").has_value())};
     }
     auto result = match(
       std::tie(array, ty),
@@ -239,26 +241,23 @@ private:
                               field_arrays)};
   }
 
-  auto print_json(const arrow::Array& array)
+  auto print_json(const arrow::Array& array, bool nullify_empty_records)
     -> std::shared_ptr<arrow::StringArray> {
     if (is<arrow::StringArray>(array)) {
       // Keep strings as they are (assuming they are already JSON).
       return std::make_shared<arrow::StringArray>(array.data());
     }
-    // Convert everything else into JSON.
     auto builder = arrow::StringBuilder{};
+    if (nullify_empty_records) {
+      if (auto struct_array = dynamic_cast<const arrow::StructArray*>(&array)) {
+        if (struct_array->num_fields() == 0) {
+          check(builder.AppendNulls(array.length()));
+          return finish(builder);
+        }
+      }
+    }
     auto printer = json_printer{{.style = no_style(), .oneline = true}};
     auto buffer = std::string{};
-    // TODO: At least for `unmapped`, we should think about encoding empty
-    // records as `null` as well. However, for other fields, maybe not.
-    // auto empty_records = match(
-    //   ty,
-    //   [](const record_type& ty) {
-    //     return ty.num_fields() == 0;
-    //   },
-    //   [](const auto&) {
-    //     return false;
-    //   });
     match(array, [&](const auto& array) {
       for (auto value : values3(array)) {
         if (not value) {
