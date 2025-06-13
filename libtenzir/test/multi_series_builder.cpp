@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <ranges>
 
 namespace tenzir {
 namespace {
@@ -127,6 +128,17 @@ struct failing_diagnostic_handler : public diagnostic_handler {
 
 failing_diagnostic_handler dh;
 
+auto schema_fn(std::vector<type> schemas)
+  -> std::function<auto(std::string_view)->std::optional<type>> {
+  return [schemas
+          = std::move(schemas)](std::string_view name) -> std::optional<type> {
+    auto it = std::ranges::find(schemas, name, [](const type& ty) {
+      return ty.name();
+    });
+    return it == schemas.end() ? std::nullopt : std::optional{*it};
+  };
+}
+
 TEST(empty builder) {
   multi_series_builder b{
     multi_series_builder::policy_default{},
@@ -206,7 +218,7 @@ TEST(merging records with seed) {
       .merge = true,
     },
     dh,
-    {seed_schema},
+    schema_fn({seed_schema}),
   };
   b.record().exact_field("0").data(int64_t{0});
   b.record().exact_field("2").data(uint64_t{0});
@@ -277,7 +289,7 @@ TEST(merging records with seed and raw) {
       .raw = true,
     },
     cdh,
-    {seed_schema},
+    schema_fn({seed_schema}),
   };
 
   {
@@ -480,7 +492,7 @@ TEST(precise unordered with seed) {
     multi_series_builder::policy_schema{.seed_schema = "seed"},
     multi_series_builder::settings_type{.ordered = false},
     dh,
-    {seed_schema},
+    schema_fn({seed_schema}),
   };
   // seed schema only
   b.record().exact_field("0").data(int64_t{0});
@@ -571,7 +583,7 @@ TEST(selector) {
                                           .naming_prefix = "prefix"},
     multi_series_builder::settings_type{},
     dh,
-    {seed_schema_1, seed_schema_2},
+    schema_fn({seed_schema_1, seed_schema_2}),
   };
   {
     auto r = b.record();
@@ -639,7 +651,7 @@ TEST(selector unordered) {
                                           .naming_prefix = "prefix"},
     multi_series_builder::settings_type{.ordered = false},
     dh,
-    {seed_schema_1, seed_schema_2},
+    schema_fn({seed_schema_1, seed_schema_2}),
   };
   {
     auto r = b.record();
@@ -724,7 +736,7 @@ TEST(selector unordered schema_only) {
       .schema_only = true,
     },
     dh,
-    {seed_schema_1, seed_schema_2},
+    schema_fn({seed_schema_1, seed_schema_2}),
   };
   {
     auto r = b.record();

@@ -26,8 +26,6 @@
 
 namespace tenzir {
 
-class data;
-
 /// A sequence of types.
 class module : detail::equality_comparable<module> {
 public:
@@ -83,23 +81,12 @@ private:
   std::vector<value_type> types_;
 };
 
-/// Loads the complete module for an invocation by combining the configured
-/// modules with the ones passed directly as command line options.
-/// @param options The set of command line options.
-/// @returns The parsed module.
-caf::expected<module> get_module(const caf::settings& options);
-
 /// Gathers the list of paths to traverse for loading module or taxonomies data.
 /// @param cfg The application config.
 /// module directories.
 /// @returns The list of module directories.
 detail::stable_set<std::filesystem::path>
 get_module_dirs(const caf::actor_system_config& cfg);
-
-/// Loads a single module file.
-/// @param module_file The file path.
-/// @returns The parsed module.
-caf::expected<module> load_module(const std::filesystem::path& module_file);
 
 /// Loads module files from the given directories.
 /// @param module_dirs The directories to load modules from.
@@ -109,13 +96,13 @@ caf::expected<module> load_module(const std::filesystem::path& module_file);
 /// combined. It is designed so types that exist in later paths can override the
 /// earlier ones, but the same mechanism makes no sense inside of a single
 /// directory unless we specify a specific order of traversal.
-caf::expected<tenzir::module>
-load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
-            size_t max_recursion = defaults::max_recursion);
+caf::expected<symbol_map>
+load_symbols(const detail::stable_set<std::filesystem::path>& module_dirs,
+             size_t max_recursion = defaults::max_recursion);
 
 /// Loads modules according to the configuration. This is a convenience wrapper
 /// around *get_module_dirs* and *load_module*.
-caf::expected<tenzir::module> load_module(const caf::actor_system_config& cfg);
+caf::expected<symbol_map> load_symbols(const caf::actor_system_config& cfg);
 
 /// Loads taxonomies according to the configuration.
 /// Mainly used for loading concepts into the global concept registry.

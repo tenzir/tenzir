@@ -216,12 +216,11 @@ inline auto record_view3::iterator::operator*() const
   };
 }
 
-template <std::same_as<arrow::Array> T>
-auto values3(const T& array) -> generator<data_view3> {
+inline auto values3(const arrow::Array& array) -> generator<data_view3> {
   return match(
     array,
     [&](const auto& x) -> generator<data_view3> {
-      for (auto i = int64_t{0}; i < array.length(); ++i) {
+      for (auto i = int64_t{0}; i < x.length(); ++i) {
         if (auto v = view_at(x, i)) {
           co_yield *v;
         }

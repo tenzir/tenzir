@@ -1269,7 +1269,7 @@ public:
               auto builder = multi_series_builder{
                 msb_opts,
                 ctx,
-                modules::schemas(),
+                modules::get_schema,
                 detail::data_builder::non_number_parser,
               };
               for (auto i = int64_t{0}; i < arg.length(); ++i) {

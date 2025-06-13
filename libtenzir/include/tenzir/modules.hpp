@@ -13,19 +13,18 @@
 namespace tenzir::modules {
 
 /// Initialize the global module and concepts registries.
-/// @returns `true` after first initialization, `false` otherwise.
-auto init(module mod, concepts_map concepts) -> bool;
+///
+/// Must be called at most once.
+void init(symbol_map mod, concepts_map concepts);
 
-/// Get the list of schemas.
-/// @returns An empty list if init(...) was not called.
-auto schemas() -> const std::vector<type>&;
+/// Returns the schema with the given name, if it exists.
+///
+/// This function lazily convert the schema definitions we have to `type`,
+/// because it turned out that this currently is a bottleneck during startup.
+auto get_schema(std::string_view name) -> std::optional<type>;
 
 /// Get the concepts map.
 /// @returns An empty map if init(...) was not called.
 auto concepts() -> const concepts_map&;
-
-/// Get the list of modules.
-[[deprecated("call modules::schemas() instead")]] auto global_module()
-  -> const module*;
 
 } // namespace tenzir::modules

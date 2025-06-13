@@ -1,0 +1,6 @@
+warning: dropping events where `metadata.version` is not a string
+ --> ocsf/wrong_type_version.tql:2:1
+  |
+2 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |
