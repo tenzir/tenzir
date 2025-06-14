@@ -25,4 +25,17 @@ auto resolved_secret_value::utf8_view() const
   };
 }
 
+auto resolved_secret_value::utf8_view(std::string_view name, location loc,
+                                      diagnostic_handler& dh) const
+  -> std::string_view {
+  auto r = utf8_view();
+  if (not r) {
+    diagnostic::error("expected secret `{}` to be a UTF-8 string", name)
+      .primary(loc)
+      .emit(dh);
+    TENZIR_UNREACHABLE();
+  }
+  return *r;
+}
+
 } // namespace tenzir

@@ -7,7 +7,13 @@
     gzip_format: "gzip" @ 0..0
   },
   tql2.save_http {
-    url: "https://example.org/example.yaml.bz2",
+    is_ftp: false,
+    url: {
+      buffer: {
+        chunk: <chunk:size:108>,
+        table-offset: 12
+      }
+    } @ 3..41,
     transfer_opts: {
       verbose: false,
       default_protocol: "https",
@@ -22,9 +28,15 @@
       chunked: false,
       multipart: false,
       method: "",
-      items: [
+      body: [
         
-      ]
+      ] @ 0..0,
+      headers: [
+        
+      ] @ 0..0,
+      params: [
+        
+      ] @ 0..0
     }
   }
 ]
