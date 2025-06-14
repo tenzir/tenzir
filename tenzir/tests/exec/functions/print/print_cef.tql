@@ -1,0 +1,39 @@
+from {
+  extension: {
+    a: 42,
+    b: "Hello"
+  },
+  signature_id: "MyCustomSignature",
+  severity: "8"
+}
+r1 = extension.print_cef(
+    cef_version="0",
+    device_vendor="VENDOR", device_product="PRODUCT", device_version="VERSION",
+    signature_id=signature_id, severity=severity, name="NAME"
+)
+r2 = {}.print_cef(
+    cef_version="0",
+    device_vendor="VENDOR", device_product="PRODUCT", device_version="VERSION",
+    signature_id=signature_id, severity=severity, name="NAME"
+)
+r3 = null.print_cef(
+    cef_version="0",
+    device_vendor="VENDOR", device_product="PRODUCT", device_version="VERSION",
+    signature_id=signature_id, severity=severity, name="NAME"
+)
+r4 = {}.print_cef(
+    cef_version="0",
+    device_vendor="VENDOR", device_product="PRODUCT", device_version="VERSION",
+    signature_id=signature_id, severity=severity, name=null
+)
+r5 = {}.print_cef(
+    cef_version="0",
+    device_vendor="VENDOR", device_product="PRODUCT", device_version="VERSION",
+    signature_id=signature_id, severity=severity, name=string(null)
+)
+r6 = { a: {b: "nested"}, b: "top", c: null }.print_cef(
+    cef_version="0",
+    device_vendor="VENDOR", device_product="PRODUCT", device_version="VERSION",
+    signature_id=signature_id, severity=severity, name="NAME"
+)
+drop extension, signature_id, severity
