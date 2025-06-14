@@ -59,13 +59,94 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
       });
 }
 
+auto pipeline_executor_state::is_ad_hoc() const -> bool {
+  return not node or node->home_system().node() != self->home_system().node();
+}
+
+
 void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
   TENZIR_TRACE("{} spawns execution nodes", *self);
   auto input_type = operator_type::make<void>();
-  auto previous = exec_node_actor{};
   bool spawn_remote = false;
   // Spawn pipeline piece by piece.
   auto op_index = 0;
+
+  auto spawn_local = [&](operator_ptr op, operator_type input_type,
+                         int32_t op_index) -> caf::expected<operator_type> {
+    auto description = fmt::format("{:?}", op);
+    TENZIR_TRACE("{} spawns {} locally", *self, description);
+    auto spawn_result
+      = spawn_exec_node(self, std::move(op), input_type, definition, node,
+                        diagnostics, metrics, op_index, has_terminal, is_hidden,
+                        run_id);
+    if (not spawn_result) {
+      abort_start(diagnostic::error(spawn_result.error())
+                    .note("failed to spawn {} locally", description)
+                    .to_error());
+      return ec::logic_error;
+    }
+    TENZIR_TRACE("{} spawned {} locally", *self, description);
+    auto [exec_node, output_type] = std::move(*spawn_result);
+    self->monitor(exec_node, [this, source
+                                    = exec_node->address()](const caf::error&) {
+      const auto exec_node
+        = std::ranges::find(exec_nodes, source, &exec_node_actor::address);
+      TENZIR_ASSERT(exec_node != exec_nodes.end());
+      exec_nodes.erase(exec_node);
+    });
+    exec_nodes.push_back(exec_node);
+    return output_type;
+  };
+
+  auto spawn_in_shell = [&](const pipeline_shell_actor& shell, operator_ptr op,
+                            operator_type input_type,
+                            int32_t op_index) -> caf::expected<operator_type> {
+    auto description = fmt::format("{:?}", op);
+    TENZIR_TRACE("{} spawns {} remotely", *self, description);
+    if (not node) {
+      abort_start(caf::make_error(ec::invalid_argument,
+                                  "encountered remote operator, but remote node "
+                                  "is nullptr"));
+      return ec::logic_error;
+    }
+    // The node will instantiate the operator for us, but we already need
+    // its output type to spawn the following operator.
+    auto output_type = op->infer_type(input_type);
+    if (not output_type) {
+      abort_start(caf::make_error(ec::invalid_argument,
+                                  "could not spawn '{}' for {}", description,
+                                  input_type));
+      return ec::logic_error;
+    }
+    // Allocate an empty handle in the list of exec nodes. When the node
+    // actor returns the handle, we set the handle. This is also used to
+    // detect when all exec nodes are spawned.
+    auto index = exec_nodes.size();
+    exec_nodes.emplace_back();
+    self
+      ->mail(atom::spawn_v, operator_box{std::move(op)}, input_type, definition,
+             diagnostics, metrics, op_index, is_hidden, run_id)
+      .request(shell, caf::infinite)
+      .then(
+        [this, description, index](exec_node_actor& exec_node) {
+          TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
+          self->monitor(exec_node, [this, source = exec_node->address()](
+                                     const caf::error&) {
+            const auto exec_node
+              = std::ranges::find(exec_nodes, source, &exec_node_actor::address);
+            TENZIR_ASSERT(exec_node != exec_nodes.end());
+            exec_nodes.erase(exec_node);
+          });
+          exec_nodes[index] = std::move(exec_node);
+          start_nodes_if_all_spawned();
+        },
+        [this, description](const caf::error& err) {
+          abort_start(diagnostic::error(err)
+                        .note("failed to spawn {} remotely", description)
+                        .to_error());
+        });
+    return *output_type;
+  };
   for (auto&& op : std::move(pipe).unwrap()) {
     // Only switch locations if necessary.
     if (spawn_remote and op->location() == operator_location::local) {
@@ -74,74 +155,26 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
                and op->location() == operator_location::remote) {
       spawn_remote = true;
     }
-    auto description = fmt::format("{:?}", op);
-    if (spawn_remote) {
-      TENZIR_TRACE("{} spawns {} remotely", *self, description);
-      if (not node) {
-        abort_start(caf::make_error(
-          ec::invalid_argument, "encountered remote operator, but remote node "
-                                "is nullptr"));
+    if (is_ad_hoc() == spawn_remote) {
+      auto op_shell = spawn_remote ? actor_cast<pipeline_shell_actor>(node) : shell;
+      if (not op_shell) {
+        abort_start(
+          caf::make_error(ec::invalid_argument, "encountered remote operator, "
+                                                "but remote shell is nullptr"));
         return;
       }
-      // The node will instantiate the operator for us, but we already need its
-      // output type to spawn the following operator.
-      auto output_type = op->infer_type(input_type);
-      if (not output_type) {
-        abort_start(caf::make_error(ec::invalid_argument,
-                                    "could not spawn '{}' for {}", description,
-                                    input_type));
+      if (auto output_type = spawn_in_shell(op_shell, operator_box{std::move(op)}, input_type, op_index)) {
+        input_type = *output_type;
+      }
+      else {
         return;
       }
-      // Allocate an empty handle in the list of exec nodes. When the node actor
-      // returns the handle, we set the handle. This is also used to detect when
-      // all exec nodes are spawned.
-      auto index = exec_nodes.size();
-      exec_nodes.emplace_back();
-      self
-        ->mail(atom::spawn_v, operator_box{std::move(op)}, input_type,
-               definition, diagnostics, metrics, op_index, is_hidden, run_id)
-        .request(node, caf::infinite)
-        .then(
-          [this, description, index](exec_node_actor& exec_node) {
-            TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
-            self->monitor(exec_node, [this, source = exec_node->address()](
-                                       const caf::error&) {
-              const auto exec_node = std::ranges::find(
-                exec_nodes, source, &exec_node_actor::address);
-              TENZIR_ASSERT(exec_node != exec_nodes.end());
-              exec_nodes.erase(exec_node);
-            });
-            exec_nodes[index] = std::move(exec_node);
-            start_nodes_if_all_spawned();
-          },
-          [this, description](const caf::error& err) {
-            abort_start(diagnostic::error(err)
-                          .note("failed to spawn {} remotely", description)
-                          .to_error());
-          });
-      input_type = *output_type;
-    } else {
-      TENZIR_TRACE("{} spawns {} locally", *self, description);
-      auto spawn_result
-        = spawn_exec_node(self, std::move(op), input_type, definition, node,
-                          diagnostics, metrics, op_index, has_terminal,
-                          is_hidden, run_id);
-      if (not spawn_result) {
-        abort_start(diagnostic::error(spawn_result.error())
-                      .note("failed to spawn {} locally", description)
-                      .to_error());
+    } else  {
+      if (auto output_type = spawn_local(std::move(op), input_type, op_index)) {
+        input_type = *output_type;
+      } else {
         return;
       }
-      TENZIR_TRACE("{} spawned {} locally", *self, description);
-      std::tie(previous, input_type) = std::move(*spawn_result);
-      self->monitor(previous, [this, source
-                                     = previous->address()](const caf::error&) {
-        const auto exec_node
-          = std::ranges::find(exec_nodes, source, &exec_node_actor::address);
-        TENZIR_ASSERT(exec_node != exec_nodes.end());
-        exec_nodes.erase(exec_node);
-      });
-      exec_nodes.push_back(previous);
     }
     ++op_index;
   }
@@ -205,6 +238,25 @@ auto pipeline_executor_state::start() -> caf::result<void> {
       diagnostic::error("expected pipeline to end with a sink{}", suffix)
         .docs("https://docs.tenzir.com/reference/operators")
         .done());
+    return start_rp;
+  }
+  const auto needs_shell
+    = not is_ad_hoc()
+      and std::ranges::any_of(pipe.operators(), [](const auto& op) {
+            return op->location() != operator_location::remote;
+          });
+  if (needs_shell) {
+    self->mail(atom::spawn_v, atom::shell_v)
+      .request(node, caf::infinite)
+      .then(
+        [this, pipe = std::move(pipe)](pipeline_shell_actor handle) mutable {
+          shell = std::move(handle);
+          TENZIR_INFO("got shell");
+          spawn_execution_nodes(std::move(pipe));
+        },
+        [this](const caf::error& e) {
+          abort_start(e);
+        });
     return start_rp;
   }
   if (not node) {
