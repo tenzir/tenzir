@@ -14,6 +14,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/legacy_type.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
@@ -212,9 +213,9 @@ auto main(int argc, char** argv) -> int try {
     }
   }
   // Set up the modules singleton.
-  auto module = load_module(cfg);
-  if (not module) {
-    TENZIR_ERROR("failed to read schema dirs: {}", module.error());
+  auto symbols = load_symbols(cfg);
+  if (not symbols) {
+    TENZIR_ERROR("failed to read schema dirs: {}", symbols.error());
     return EXIT_FAILURE;
   }
   auto taxonomies = load_taxonomies(cfg);
@@ -222,7 +223,7 @@ auto main(int argc, char** argv) -> int try {
     TENZIR_ERROR("failed to load concepts: {}", taxonomies.error());
     return EXIT_FAILURE;
   }
-  modules::init(*module, std::move(taxonomies->concepts));
+  modules::init(std::move(*symbols), std::move(taxonomies->concepts));
   // Set up pipeline aliases.
   using namespace std::literals;
   auto aliases = std::unordered_map<std::string, std::string>{};
