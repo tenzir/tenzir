@@ -1,0 +1,10 @@
+from { a: 42, b: "Hello"}
+r1 = {a: a, b: b}.print_cef(device_version="VERSION")
+signature_id = "ID"
+device_version = "VERSION2"
+r2 = {}.print_cef(signature_id="good")
+r3 = null.print_cef()
+r4 = {}.print_cef(device_vendor=null)
+r5 = {}.print_cef(device_vendor=string(null))
+r6 = { a: {b: "nested"}, b: "top" }.print_cef()
+drop a, b, signature_id, device_version

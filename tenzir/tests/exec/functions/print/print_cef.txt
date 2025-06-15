@@ -1,0 +1,14 @@
+{
+  r1: "CEF:0|Tenzir|Tenzir Node|VERSION|unspecified||Unknown|a=42 b=Hello",
+  r2: "CEF:0|Tenzir|Tenzir Node|VERSION2|good||Unknown",
+  r3: "CEF:0|Tenzir|Tenzir Node|VERSION2|ID||Unknown|",
+  r4: "CEF:0||Tenzir Node|VERSION2|ID||Unknown",
+  r5: "CEF:0||Tenzir Node|VERSION2|ID||Unknown",
+  r6: "CEF:0|Tenzir|Tenzir Node|VERSION2|ID||Unknown|a.b=nested b=top",
+}
+warning: `extension` is `null`
+ --> exec/functions/print/print_cef.tql:6:6
+  |
+6 | r3 = null.print_cef()
+  |      ~~~~ 
+  |
