@@ -81,10 +81,6 @@ public:
           .positional("uri", args.uri)
           .named("anonymous", args.anonymous)
           .parse(inv, ctx));
-    // TODO: URI parser.
-    if (not args.uri.inner.starts_with("s3://")) {
-      args.uri.inner = fmt::format("s3://{}", args.uri.inner);
-    }
     args.config = config_;
     return std::make_unique<Operator>(std::move(args));
   }

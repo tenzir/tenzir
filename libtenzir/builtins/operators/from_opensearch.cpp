@@ -36,6 +36,10 @@ namespace {
 namespace http = caf::net::http;
 namespace ssl = caf::net::ssl;
 
+constexpr auto inner(const located<std::string>& x) -> std::string {
+  return x.inner;
+}
+
 auto split_at_newline(const chunk_ptr& chunk)
   -> std::vector<std::vector<std::byte>> {
   if (not chunk || chunk->size() == 0) {
@@ -78,6 +82,7 @@ struct opensearch_args {
     p.named("tls", tls);
     p.named("certfile", certfile);
     p.named("keyfile", keyfile);
+    p.named("password", password);
   }
 
   auto validate(std::optional<located<std::string>> url_op,
@@ -282,13 +287,12 @@ public:
     auto [ptr, launch] = ctrl.self().system().spawn_inactive();
     auto context
       = ssl::context::enable(args_.tls.has_value())
-          .and_then(ssl::emplace_server(ssl::tls::v1_2))
-          .and_then(ssl::use_private_key_file_if(
-            args_.keyfile ? args_.keyfile->inner : "", ssl::format::pem))
+          .and_then(ssl::emplace_server(ssl::tls::any))
+          .and_then(ssl::use_private_key_file_if(args_.keyfile.transform(inner),
+                                                 ssl::format::pem))
           .and_then(ssl::use_certificate_file_if(
-            args_.certfile ? args_.certfile->inner : "", ssl::format::pem))
-          .and_then(
-            ssl::use_password_if(args_.password ? args_.password->inner : ""))
+            args_.certfile.transform(inner), ssl::format::pem))
+          .and_then(ssl::use_password_if(args_.password.transform(inner)))
           .and_then(ssl::enable_default_verify_paths());
     auto server
       = http::with(ctrl.self().system())
