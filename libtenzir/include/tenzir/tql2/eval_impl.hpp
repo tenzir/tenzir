@@ -69,6 +69,8 @@ public:
 
   auto eval(const ast::index_expr& x) -> multi_series;
 
+  auto eval(const ast::format_expr& x) -> multi_series;
+
   template <class T>
     requires(detail::tl_contains<ast::expression_kinds, T>::value)
   auto eval(const T& x) -> multi_series {

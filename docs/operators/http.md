@@ -25,6 +25,7 @@ URL to connect to.
 ### `method = string (optional)`
 
 One of the following HTTP method to use when using the client:
+
 - `get`
 - `head`
 - `post`
@@ -120,9 +121,9 @@ A pipeline that receives the response body as bytes, allowing parsing per
 request. This is especially useful in scenarios where the response body can be
 parsed into multiple events.
 
-If this is not provided, the operator will attempt to infer the parsing operator
-from the `Content-Type` header. Should this inference fail (e.g., unsupported or
-missing `Content-Type`), a warning is raised.
+If not provided, the operator will attempt to infer the parsing operator from
+the `Content-Type` header. Should this inference fail (e.g., unsupported or
+missing `Content-Type`), the operator raises a warning and skips the request.
 
 ## Examples
 

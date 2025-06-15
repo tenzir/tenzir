@@ -85,6 +85,28 @@ private:
   U max_;
 };
 
+template <class Parser, class Func>
+class function_repeat_parser
+  : public parser_base<function_repeat_parser<Parser, Func>> {
+public:
+  using container = detail::container_t<typename Parser::attribute>;
+  using attribute = typename container::attribute;
+
+  function_repeat_parser(Parser p, Func f)
+    : parser_{std::move(p)}, f_{std::move(f)} {
+  }
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    auto count = f_();
+    return detail::parse_repeat(parser_, f, l, a, count, count);
+  }
+
+private:
+  Parser parser_;
+  Func f_;
+};
+
 template <int Min, int Max = Min, class Parser>
 auto repeat(const Parser& p) {
   return static_repeat_parser<Parser, Min, Max>{p};

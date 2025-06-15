@@ -4,4 +4,4 @@ error: string contains invalid utf-8
 4 |   s1: "\xFF", // Invalid UTF-8 byte
   |       ^^^^^^ 
   |
-  = hint: consider using a blob instead: b"\xFF"
+  = hint: consider using a blob instead: b"…"

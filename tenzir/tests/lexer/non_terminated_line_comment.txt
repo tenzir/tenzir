@@ -1,0 +1,4 @@
+   line_comment "// test: lexer"
+        newline "\n"
+        newline "\n"
+   line_comment "// This line does not have a trailing new-line on purpose!"

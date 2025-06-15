@@ -6,15 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/arrow_utils.hpp>
-#include <tenzir/checked_math.hpp>
-#include <tenzir/collect.hpp>
-#include <tenzir/detail/enumerate.hpp>
-#include <tenzir/detail/zip_iterator.hpp>
-#include <tenzir/multi_series_builder.hpp>
-#include <tenzir/series_builder.hpp>
-#include <tenzir/tql2/eval_impl.hpp>
+#include "tenzir/tql2/eval_impl.hpp"
+
+#include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
+#include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/zip_iterator.hpp"
+#include "tenzir/series_builder.hpp"
+#include "tenzir/to_string.hpp"
+#include "tenzir/view3.hpp"
 
 #include <ranges>
 
@@ -523,6 +523,43 @@ auto evaluator::eval(const ast::assignment& x) -> multi_series {
 
 auto evaluator::eval(const ast::constant& x) -> multi_series {
   return to_series(x.as_data());
+}
+
+auto evaluator::eval(const ast::format_expr& x) -> multi_series {
+  auto cols = std::vector<variant<std::string, basic_series<string_type>>>{};
+  cols.reserve(x.segments.size());
+  for (auto& s : x.segments) {
+    match(
+      s,
+      [&](const std::string& s) {
+        cols.emplace_back(s);
+      },
+      [&](const ast::format_expr::replacement& r) {
+        auto arr = cols.emplace_back(
+          to_string(eval(r.expr), r.expr.get_location(), ctx_));
+      });
+  }
+  auto b = type_to_arrow_builder_t<string_type>{};
+  check(b.Reserve(length_));
+  auto row_text = std::string{};
+  for (auto i = int64_t{0}; i < length_; ++i) {
+    for (auto& c : cols) {
+      if (auto* s = try_as<std::string>(c)) {
+        row_text.append(*s);
+      } else {
+        auto& string_series = as<basic_series<string_type>>(c);
+        auto v = view_at(*string_series.array, i);
+        if (v) {
+          row_text.append(*v);
+        } else {
+          row_text.append("null");
+        }
+      }
+    }
+    check(b.Append(row_text));
+    row_text.clear();
+  }
+  return series{string_type{}, finish(b)};
 }
 
 auto evaluator::eval(const ast::expression& x) -> multi_series {

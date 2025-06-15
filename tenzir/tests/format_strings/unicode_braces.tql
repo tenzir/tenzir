@@ -1,0 +1,4 @@
+// test: ast
+// error: true
+
+from {x: f"\u{0}"}

@@ -625,6 +625,9 @@ struct exec_node_state {
   /// A handle to the previous execution node.
   exec_node_actor previous = {};
 
+  /// Whether the previous execution node exited.
+  caf::actor_addr prev_addr = nullptr;
+
   /// The inbound buffer.
   std::deque<Input> inbound_buffer = {};
   uint64_t inbound_buffer_size = {};
@@ -721,6 +724,7 @@ struct exec_node_state {
       }
       previous
         = caf::actor_cast<exec_node_actor>(std::move(all_previous.back()));
+      prev_addr = previous->address();
       all_previous.pop_back();
       self->link_to(previous);
     }
@@ -1129,10 +1133,15 @@ struct exec_node_state {
       on_error(msg.reason);
       return;
     } else {
-      if (not previous) {
+      if (not previous and msg.source == prev_addr) {
+        // Ignore duplicate exit message from the previous node.
+        // For some reason, we can get multiple exit messages from the previous
+        // exec node. This can cause the current operator to ungracefully quit.
+        //
+        // We ignore this because we should only get exit messages from the exec
+        // nodes from the `linked` state.
         return;
       }
-      const auto prev_addr = previous->address();
       // We got an exit message, which can mean one of four things:
       // 1. The pipeline manager quit.
       // 2. The next operator quit.
@@ -1140,7 +1149,7 @@ struct exec_node_state {
       // 4. The previous operator quit ungracefully.
       // In cases (1-3) we need to shut down this operator unconditionally.
       // For (4) we we need to treat the previous operator as offline.
-      if (msg.source != prev_addr) {
+      if (not previous or msg.source != prev_addr) {
         TENZIR_DEBUG("{} {} got exit message from the next execution node or "
                      "its executor with address {}: {}",
                      *self, op->name(), msg.source, msg.reason);
@@ -1171,8 +1180,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
-  TENZIR_ASSERT(node != nullptr
-                or not(op->location() == operator_location::remote));
+  TENZIR_ASSERT(node != nullptr or op->location() != operator_location::remote);
   TENZIR_ASSERT(diagnostics_handler != nullptr);
   TENZIR_ASSERT(metrics_receiver != nullptr);
   auto output_type = op->infer_type(input_type);

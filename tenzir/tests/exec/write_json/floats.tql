@@ -1,0 +1,8 @@
+from {
+  a: 0.0, // trailing zero
+  b: 5483819555176798000.float(), // scientific notation without extra zero
+  c: "inf".float(), // printed as `null`
+  d: "nan".float(), // printed as `null`
+  e: 0.000000001, // scientific notation
+}
+write_json
