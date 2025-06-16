@@ -7,7 +7,7 @@ example: 'ocsf::category_uid("Findings")'
 Returns the `category_uid` for a given `category_name`.
 
 ```tql
-ocsf::category_uid(name:string)
+ocsf::category_uid(name:string) -> int
 ```
 
 ## Description

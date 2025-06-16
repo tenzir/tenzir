@@ -7,7 +7,7 @@ example: 'ocsf::type_uid("SSH Activity: Fail")'
 Returns the `type_uid` for a given `type_name`.
 
 ```tql
-ocsf::type_uid(name:string)
+ocsf::type_uid(name:string) -> int
 ```
 
 ## Description

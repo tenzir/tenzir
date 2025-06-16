@@ -7,7 +7,7 @@ example: 'ocsf::class_name(4003)'
 Returns the `class_name` for a given `class_uid`.
 
 ```tql
-ocsf::class_uid(id:int)
+ocsf::class_uid(id:int) -> string
 ```
 
 ## Description

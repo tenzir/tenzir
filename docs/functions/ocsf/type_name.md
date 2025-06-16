@@ -7,7 +7,7 @@ example: 'ocsf::type_name(400704)'
 Returns the `type_name` for a given `type_uid`.
 
 ```tql
-ocsf::type_name(id:int)
+ocsf::type_name(id:int) -> string
 ```
 
 ## Description

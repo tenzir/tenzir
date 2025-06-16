@@ -7,7 +7,7 @@ example: 'ocsf::class_uid("DNS Activity")'
 Returns the `class_uid` for a given `class_name`.
 
 ```tql
-ocsf::class_uid(name:string)
+ocsf::class_uid(name:string) -> int
 ```
 
 ## Description
