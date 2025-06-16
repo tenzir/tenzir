@@ -19,11 +19,8 @@ DOCUMENT_FIELDS = False
 OCSF_PREFIX = "_ocsf"
 OBJECT_INFIX = "object"
 COLUMN_LIMIT = 80
-PROFILES = ALL  # List of strings or ALL.
 EXCLUDE_VERSIONS = ["1.0.0-rc.2", "1.0.0-rc.3"]
 ROOT_DIR = Path(__file__).parent.parent
-
-# TODO: Discuss dropping optional fields.
 # =================================================== #
 
 OMIT_MARKER = object()
@@ -159,9 +156,6 @@ def _emit(writer: Writer, schema: Schema, *, objects: bool) -> None:
             if attr_name in omit:
                 continue
             profile = attr_def.get("profile")
-            if profile is not None and PROFILES != ALL:
-                if profile not in PROFILES:
-                    continue
             if "object_type" in attr_def:
                 type_name = attr_def["object_type"]
                 # Special-case the "Object" type to use a JSON string instead.
@@ -242,7 +236,6 @@ def write_enums(schema: Schema):
 
 
 def fetch_versions() -> list[str]:
-    # return ["1.5.0"]
     log(f"Fetching available versions from {SERVER}")
     body = requests.get(SERVER).content.decode()
     return [
@@ -262,12 +255,6 @@ def main():
                 writer = Writer(f)
                 writer.comment("This file is generated, do not edit manually.")
                 writer.comment(f"OCSF version: {version}")
-                # profiles = (
-                #     "all"
-                #     if PROFILES == ALL
-                #     else "none" if PROFILES == [] else ", ".join(PROFILES)
-                # )
-                # writer.comment(f"OCSF Profiles: {profiles}")
                 writer.print()
                 emit_objects(writer, schema)
                 writer.print()

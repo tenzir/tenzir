@@ -56,6 +56,7 @@ from {
   },
   // … some more fields
 }
+ocsf::apply
 ```
 ```tql
 {

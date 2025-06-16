@@ -57,7 +57,7 @@ void init(symbol_map symbols, concepts_map concepts) {
 auto get_schema(std::string_view name) -> std::optional<type> {
   auto& global = get_impl();
   // The critical section here is very small once the type has been converted.
-  // This function should this be fine to call outside of tight loops.
+  // This function should thus be fine to call outside of tight loops.
   auto lock = std::unique_lock{global.mutex};
   auto it = global.types.find(name);
   if (it == global.types.end()) {
