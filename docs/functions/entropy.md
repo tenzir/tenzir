@@ -7,7 +7,7 @@ example: "entropy([1,1,2,3])"
 Computes the Shannon entropy of all grouped values.
 
 ```tql
-entropy(xs:list, normalize=bool) -> float
+entropy(xs:list, [normalize=bool]) -> float
 ```
 
 ## Description
@@ -24,7 +24,7 @@ The entropy is calculated as: `H(x) = -sum(p(x[i]) * log(p(x[i])))`, where
 
 The values to evaluate.
 
-### `normalize: bool`
+### `normalize: bool (optional)`
 
 Optional parameter to normalize the entropy between 0 and 1. When `true`, the
 entropy is divided by `log(number of unique values)`. Defaults to `false`.
