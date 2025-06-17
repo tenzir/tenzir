@@ -62,6 +62,12 @@ dedicated virtual environment.
 The string is passed verbatim to `pip install`. To add multiple dependencies,
 separate them with a space: `requirements="foo bar"`.
 
+## Secrets
+
+By default, the `python` operator does not accept secrets. If you want to allow
+usage of secrets in the `code` argument, you can enable the configuration option
+`tenzir.allow-secrets-in-escape-hatches`.
+
 ## Examples
 
 ### Insert or modify a field
