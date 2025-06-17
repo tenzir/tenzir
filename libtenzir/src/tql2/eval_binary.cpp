@@ -731,36 +731,39 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
     } else {
       static_assert(detail::always_false_v<decltype(Op)>, "unsupported op");
     }
-    const auto eval_right = [&](int64_t start, int64_t end) -> multi_series {
-      return map_series(
-        self.slice(left_begin + start, left_begin + end).eval(x.right),
-        [&](series right) -> multi_series {
-          if (is<bool_type>(right.type)) {
-            return right;
-          }
-          if (not is<null_type>(right.type)) {
-            diagnostic::warning("expected `bool`, but got `{}`",
-                                right.type.kind())
-              .primary(x.right)
-              .emit(self.ctx());
-          }
-          return series::null(bool_type{}, right.length());
-        });
-    };
     TENZIR_ASSERT(typed_left);
     const auto get_left = [&](int64_t i) -> bool {
       return typed_left->array->IsValid(i) and typed_left->array->GetView(i);
     };
-    auto result = multi_series{};
+    auto builder = arrow::BooleanBuilder{};
+    check(builder.Reserve(self.length()));
+    const auto append_eval_right = [&](int64_t start, int64_t end) -> void {
+      for (const auto& right :
+           self.slice(left_begin + start, left_begin + end).eval(x.right)) {
+        if (is<bool_type>(right.type)) {
+          check(
+            builder.AppendArraySlice(*right.array->data(), 0, right.length()));
+          continue;
+        }
+        if (not is<null_type>(right.type)) {
+          diagnostic::warning("expected `bool`, but got `{}`",
+                              right.type.kind())
+            .primary(x.right)
+            .emit(self.ctx());
+        }
+        check(builder.AppendNulls(right.length()));
+      }
+    };
     auto range_offset = int64_t{0};
     auto range_current = get_left(0);
     const auto append_until = [&](int64_t end) {
-      if constexpr (Op == ast::binary_op::and_) {
-        result.append(range_current ? eval_right(range_offset, end)
-                                    : left.slice(range_offset, end));
-      } else if constexpr (Op == ast::binary_op::or_) {
-        result.append(range_current ? left.slice(range_offset, end)
-                                    : eval_right(range_offset, end));
+      if constexpr (Op == ast::binary_op::and_ or Op == ast::binary_op::or_) {
+        if (range_current == (Op == ast::binary_op::and_)) {
+          append_eval_right(range_offset, end);
+        } else {
+          check(builder.AppendArraySlice(*left.array->data(), range_offset,
+                                         end - range_offset));
+        }
       } else {
         static_assert(detail::always_false_v<decltype(Op)>, "unsupported op");
       }
@@ -774,8 +777,11 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
       range_current = not range_current;
     }
     append_until(length);
-    TENZIR_ASSERT(result.length() == length);
-    return result;
+    TENZIR_ASSERT(builder.length() == length);
+    return series{
+      bool_type{},
+      finish(builder),
+    };
   });
 }
 
