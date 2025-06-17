@@ -25,6 +25,12 @@ by `/bin/sh -c`.
 Try using raw string literals: `r#"echo "i can use quotes""#`.
 :::
 
+## Secrets
+
+By default, the `shell` operator does not accept secrets. If you want to allow
+usage of secrets in the `cmd` argument, you can enable the configuration option
+`tenzir.allow-secrets-in-escape-hatches`.
+
 ## Examples
 
 ### Show a live log from the `tenzir-node` service

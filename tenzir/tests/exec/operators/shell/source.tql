@@ -1,0 +1,3 @@
+shell "{ echo 'value'; seq 1 2 10; }"
+read_csv
+write_ndjson
