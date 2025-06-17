@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/ast.hpp"
-
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/glob.hpp>
@@ -1373,7 +1371,7 @@ public:
     parser.positional("url", args.url)
       .named_optional("watch", args.watch)
       .named_optional("remove", args.remove)
-      .named("rename", args.rename, "old => new")
+      .named("rename", args.rename, "string => string")
       .named("path_field", args.path_field)
       .positional("{ … }", args.pipe);
     TRY(parser.parse(inv, ctx));
