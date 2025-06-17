@@ -1,21 +1,21 @@
 {
-  mixed_numeric: 1.3862943611198906,
+  mixed_numeric: 1.39,
 }
 {
-  boolean_values: 0.6365141682948129,
+  boolean_values: 0.64,
 }
 {
-  duration_values: 0.6365141682948129,
+  duration_values: 0.64,
 }
 {
-  time_values: 0.6365141682948129,
+  time_values: 0.64,
 }
 {
-  ip_values: 0.6365141682948129,
+  ip_values: 0.64,
 }
 {
-  subnet_values: 0.6365141682948129,
+  subnet_values: 0.64,
 }
 {
-  blob_values: 0.6365141682948129,
+  blob_values: 0.64,
 }

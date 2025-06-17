@@ -1,2 +1,3 @@
 from {x: 1}, {x: 1}, {x: 2}, {x: 3}
 summarize normalized_entropy=entropy(x, normalize=true)
+normalized_entropy = round(normalized_entropy * 100) / 100
