@@ -39,6 +39,9 @@ auto try_const_eval(const ast::expression& expr, session ctx)
 auto eval(const ast::lambda_expr& lambda, const multi_series& input,
           diagnostic_handler& dh) -> multi_series;
 
+auto eval(const ast::lambda_expr& lambda, const data& input,
+          diagnostic_handler& dh) -> data;
+
 struct resolve_error {
   struct field_not_found {};
   struct field_not_found_no_error {};

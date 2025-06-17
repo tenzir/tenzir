@@ -11,7 +11,7 @@ This operator is still under active development.
 Reads one or multiple files from a filesystem.
 
 ```tql
-from_file url:string, [watch=bool, remove=bool, path_field=field] { … }
+from_file url:string, [watch=bool, remove=bool, rename=old=>new, path_field=field] { … }
 ```
 
 ## Description
@@ -47,6 +47,10 @@ Defaults to `false`.
 Deletes files after they have been read completely.
 
 Defaults to `false`.
+
+### `rename = old => new (optional)`
+
+Renames files after they have been read completely.
 
 ### `path_field = field (optional)`
 
