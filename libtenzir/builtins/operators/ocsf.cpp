@@ -143,14 +143,10 @@ private:
             .primary(self_)
             .emit(dh_);
         }
-        // TODO: If we check `#required`, we need to check this as well.
         auto cast_ty = cast_type(ty);
         return series{cast_ty, check(arrow::MakeArrayOfNull(
                                  cast_ty.to_arrow_type(), array.length()))};
       });
-    if (ty.attribute("required") and result.array->null_count() > 0) {
-      // TODO: Warn because required attribute is not set.
-    }
     return result;
   }
 
@@ -168,7 +164,6 @@ private:
             std::string_view path) -> basic_series<list_type> {
     auto values
       = cast(*array.values(), ty.value_type(), std::string{path} + "[]");
-    // TODO: What about `array.offset()`?
     return {list_type{values.type},
             check(arrow::ListArray::FromArrays(
               *array.offsets(), *values.array, arrow::default_memory_pool(),
@@ -187,7 +182,6 @@ private:
       auto field_array = array.GetFieldByName(std::string{field.name});
       if (not field_array) {
         // No warning if the a target field does not exist.
-        // TODO: Maybe if it is required?
         auto cast_ty = cast_type(field.type);
         fields.emplace_back(field.name, cast_ty);
         field_arrays.push_back(check(
@@ -412,14 +406,13 @@ public:
         co_yield {};
         continue;
       }
-      // TODO: Could do the same for extensions here.
       // Figure out longest slices that share:
       // - metadata.version
-      // - class_uid,
-      // - set(metadata.profiles)
-      // - set(metadata.extensions[].name)
-      // We just use the name for the extensions because we only support that
-      // extensions that are served by the OCSF schema server anyway, and those
+      // - metadata.profiles
+      // - class_uid
+      // TODO: Could do the same for extensions here. We should then simply use
+      // `metadata.extensions[].name` the name for them because we would only
+      // support extensions that are served by the OCSF schema server, and those
       // have a non-conflicting name and are versioned together with OCSF, so
       // there is no need to take their ID and version into account.
       auto begin = int64_t{0};
@@ -478,11 +471,8 @@ public:
           return {};
         }
         auto type_name = "ocsf." + snake_case_class_name;
-        // TODO: Extensions.
         auto result = caster{self_, ctrl.diagnostics(), profiles}.cast(
           subslice(slice, begin, end), *ty, type_name);
-        // TODO: Remove.
-        check(to_record_batch(result)->ValidateFull());
         return result;
       };
       for (; end < class_array->length(); ++end) {
