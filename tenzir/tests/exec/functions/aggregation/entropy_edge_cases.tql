@@ -1,0 +1,60 @@
+// Test edge cases for entropy function
+from {x: 1}
+summarize single_value=entropy(x)
+single_value = round(single_value * 100) / 100
+write_tql
+save_stdout
+
+from {x: 1}, {x: 1}, {x: 1}
+summarize identical_values=entropy(x)
+identical_values = round(identical_values * 100) / 100
+write_tql
+save_stdout
+
+from {x: 1}, {x: 2}
+summarize two_values=entropy(x)
+two_values = round(two_values * 100) / 100
+write_tql
+save_stdout
+
+from {x: 1}, {x: 2}
+summarize two_values_normalized=entropy(x, normalize=true)
+two_values_normalized = round(two_values_normalized * 100) / 100
+write_tql
+save_stdout
+
+from {x: null}, {x: 1}, {x: 2}
+summarize with_null=entropy(x)
+with_null = round(with_null * 100) / 100
+write_tql
+save_stdout
+
+from {x: null}, {x: null}
+summarize only_nulls=entropy(x)
+only_nulls = round(only_nulls * 100) / 100
+write_tql
+save_stdout
+
+from {x: "a"}, {x: "b"}, {x: "a"}
+summarize string_values=entropy(x)
+string_values = round(string_values * 100) / 100
+write_tql
+save_stdout
+
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+summarize uniform_distribution=entropy(x)
+uniform_distribution = round(uniform_distribution * 100) / 100
+write_tql
+save_stdout
+
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+summarize uniform_normalized=entropy(x, normalize=true)
+uniform_normalized = round(uniform_normalized * 100) / 100
+write_tql
+save_stdout
+
+from {x: 1}, {x: 1}, {x: 1}, {x: 1}, {x: 2}
+summarize skewed_distribution=entropy(x)
+skewed_distribution = round(skewed_distribution * 100) / 100
+write_tql
+save_stdout

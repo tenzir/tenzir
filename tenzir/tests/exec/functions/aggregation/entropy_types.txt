@@ -1,0 +1,21 @@
+{
+  mixed_numeric: 1.39,
+}
+{
+  boolean_values: 0.64,
+}
+{
+  duration_values: 0.64,
+}
+{
+  time_values: 0.64,
+}
+{
+  ip_values: 0.64,
+}
+{
+  subnet_values: 0.64,
+}
+{
+  blob_values: 0.64,
+}

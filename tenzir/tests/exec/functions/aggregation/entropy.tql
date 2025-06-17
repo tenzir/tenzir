@@ -1,0 +1,3 @@
+from {x: 1}, {x: 1}, {x: 2}, {x: 3}
+summarize entropy_value=entropy(x)
+entropy_value = round(entropy_value * 100) / 100

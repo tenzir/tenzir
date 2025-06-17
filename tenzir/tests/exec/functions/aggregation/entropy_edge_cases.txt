@@ -1,0 +1,30 @@
+{
+  single_value: 0.0,
+}
+{
+  identical_values: 0.0,
+}
+{
+  two_values: 0.69,
+}
+{
+  two_values_normalized: 1.0,
+}
+{
+  with_null: 0.69,
+}
+{
+  only_nulls: 0.0,
+}
+{
+  string_values: 0.64,
+}
+{
+  uniform_distribution: 1.61,
+}
+{
+  uniform_normalized: 1.0,
+}
+{
+  skewed_distribution: 0.5,
+}
