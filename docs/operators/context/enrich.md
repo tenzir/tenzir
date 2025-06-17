@@ -4,7 +4,7 @@ category: Contexts
 example: 'context::enrich "ctx", key=x'
 ---
 
-Resets data with a context.
+Enriches events with data from a context.
 
 ```tql
 context::enrich name:string, key=any,
@@ -13,11 +13,11 @@ context::enrich name:string, key=any,
 
 ## Description
 
-The `context::inspect` operator shows details about a specified context.
+The `context::enrich` operator enriches events with data from a context.
 
 ### `name: string`
 
-The name of the context to inspect.
+The name of the context to enrich with.
 
 ### `key = any`
 
