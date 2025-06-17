@@ -525,8 +525,40 @@ auto evaluator::eval(const ast::constant& x) -> multi_series {
   return to_series(x.as_data());
 }
 
+namespace {
+auto merge_as_secret(multi_series ms, location loc, diagnostic_handler& dh)
+  -> basic_series<secret_type> {
+  auto b = type_to_arrow_builder_t<secret_type>{};
+  for (auto& part : ms) {
+    if (part.type.kind().is<secret_type>()) {
+      for (auto v :
+           values3(as<type_to_arrow_array_t<secret_type>>(*part.array))) {
+        if (v) {
+          check(append_builder(secret_type{}, b, *v));
+        } else {
+          check(b.AppendNull());
+        }
+      }
+      continue;
+    }
+    auto str_part = to_string(part, loc, dh);
+    for (auto v : values3(*str_part.array)) {
+      if (v) {
+        check(append_builder(secret_type{}, b, secret::make_literal(*v)));
+      } else {
+        check(b.AppendNull());
+      }
+    }
+  }
+  TENZIR_ASSERT(b.length() == ms.length());
+  return {secret_type{}, finish(b)};
+}
+} // namespace
+
 auto evaluator::eval(const ast::format_expr& x) -> multi_series {
-  auto cols = std::vector<variant<std::string, basic_series<string_type>>>{};
+  auto cols = std::vector<variant<std::string, basic_series<string_type>,
+                                  basic_series<secret_type>>>{};
+  auto has_secrets = false;
   cols.reserve(x.segments.size());
   for (auto& s : x.segments) {
     match(
@@ -535,31 +567,94 @@ auto evaluator::eval(const ast::format_expr& x) -> multi_series {
         cols.emplace_back(s);
       },
       [&](const ast::format_expr::replacement& r) {
-        auto arr = cols.emplace_back(
-          to_string(eval(r.expr), r.expr.get_location(), ctx_));
+        auto ms = eval(r.expr);
+        bool segment_has_secret = false;
+        for (auto& part : ms) {
+          if (part.type.kind().is<secret_type>()) {
+            segment_has_secret = true;
+            break;
+          }
+        }
+        if (not segment_has_secret) {
+          cols.emplace_back(
+            to_string(std::move(ms), r.expr.get_location(), ctx_));
+          return;
+        }
+        has_secrets = true;
+        cols.emplace_back(
+          merge_as_secret(std::move(ms), r.expr.get_location(), ctx_));
       });
   }
-  auto b = type_to_arrow_builder_t<string_type>{};
-  check(b.Reserve(length_));
-  auto row_text = std::string{};
-  for (auto i = int64_t{0}; i < length_; ++i) {
-    for (auto& c : cols) {
-      if (auto* s = try_as<std::string>(c)) {
-        row_text.append(*s);
-      } else {
-        auto& string_series = as<basic_series<string_type>>(c);
-        auto v = view_at(*string_series.array, i);
-        if (v) {
-          row_text.append(*v);
+  if (not has_secrets) {
+    auto b = type_to_arrow_builder_t<string_type>{};
+    check(b.Reserve(length_));
+    auto row_text = std::string{};
+    for (auto i = int64_t{0}; i < length_; ++i) {
+      for (auto& c : cols) {
+        if (auto* s = try_as<std::string>(c)) {
+          row_text.append(*s);
         } else {
-          row_text.append("null");
+          auto& string_series = as<basic_series<string_type>>(c);
+          auto v = view_at(*string_series.array, i);
+          if (v) {
+            row_text.append(*v);
+          } else {
+            row_text.append("null");
+          }
         }
       }
+      check(b.Append(row_text));
+      row_text.clear();
     }
-    check(b.Append(row_text));
-    row_text.clear();
+    return series{string_type{}, finish(b)};
+  } else {
+    auto b = type_to_arrow_builder_t<secret_type>{};
+    for (auto i = int64_t{0}; i < length_; ++i) {
+      auto row_secret = std::optional<secret>{};
+      bool valid = false;
+      for (auto& c : cols) {
+        auto f = detail::overload{
+          [&row_secret](const std::string& s) {
+            if (not row_secret) {
+              row_secret.emplace(secret::make_literal(s));
+              return true;
+            }
+            row_secret = row_secret->with_appended(s);
+            return true;
+          },
+          [&row_secret, i]<concepts::one_of<string_type, secret_type> T>(
+            const basic_series<T>& s) {
+            auto v = view_at(*s.array, i);
+            if (v) {
+              if (not row_secret) {
+                if constexpr (std::same_as<string_type, T>) {
+                  row_secret.emplace(secret::make_literal(*v));
+                  return true;
+                } else {
+                  row_secret.emplace(materialize(*v));
+                  return true;
+                }
+              }
+              row_secret = row_secret->with_appended(*v);
+              return true;
+            } else {
+              return false;
+            }
+          },
+        };
+        valid = match(c, f);
+        if (not valid) {
+          break;
+        }
+      }
+      if (valid) {
+        check(append_builder(secret_type{}, b, *row_secret));
+      } else {
+        check(b.AppendNull());
+      }
+    }
+    return series{secret_type{}, finish(b)};
   }
-  return series{string_type{}, finish(b)};
 }
 
 auto evaluator::eval(const ast::expression& x) -> multi_series {
