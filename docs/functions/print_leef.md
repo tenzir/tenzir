@@ -100,7 +100,7 @@ write_syslog
 
 ## See Also
 
-[`read_leef`](/reference/functions/read_leef),
-[`parse_leef`](/reference/operators/parse_leef),
+[`parse_leef`](/reference/functions/parse_leef),
+[`read_leef`](/reference/operators/read_leef),
 [`read_syslog`](/reference/operators/read_syslog),
 [`write_syslog`](/reference/operators/write_syslog)
