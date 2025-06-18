@@ -1,0 +1,36 @@
+from {
+  attributes: {
+    a: 42, b: "Hello"
+  }, event_class_id: "id"
+}
+r1 = attributes.print_leef(
+    vendor="Tenzir",
+    product_name="Tenzir Node",
+    product_version="5.5.0",
+    event_class_id=event_class_id)
+r2 = attributes.print_leef(
+    vendor="Tenzir",
+    product_name="Tenzir Node",
+    product_version="5.5.0",
+    event_class_id="other-id")
+r3 = {}.print_leef(
+    vendor="Tenzir",
+    product_name="Tenzir Node",
+    product_version="5.5.0",
+    event_class_id=null)
+r4 = null.print_leef(
+    vendor="Tenzir",
+    product_name="Tenzir Node",
+    product_version="5.5.0",
+    event_class_id=event_class_id)
+r5 = {}.print_leef(
+    vendor="Tenzir",
+    product_name="Tenzir Node",
+    product_version="5.5.0",
+    event_class_id=string(null))
+r6 = { a: {b: "nested"}, b: "top", c:null}.print_leef(
+    vendor="Tenzir",
+    product_name="Tenzir Node",
+    product_version="5.5.0",
+    event_class_id=event_class_id,delimiter="^")
+drop attributes,event_class_id

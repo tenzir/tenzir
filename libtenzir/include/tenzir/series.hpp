@@ -162,4 +162,16 @@ struct basic_series {
 /// type, e.g., a column in a table slice.
 using series = basic_series<type>;
 
+/// @related flatten
+struct flatten_series_result {
+  basic_series<type> series;
+  std::vector<std::string> renamed_fields = {};
+};
+
+/// Flattens a `series` if it is a record, returning it as-is otherwise
+/// @param s a series to flatten
+/// @param flatten_separator the separator to use in between nested keys
+auto flatten(series s, std::string_view flatten_separator = ".")
+  -> flatten_series_result;
+
 } // namespace tenzir
