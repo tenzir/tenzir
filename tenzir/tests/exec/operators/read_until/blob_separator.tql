@@ -1,0 +1,5 @@
+from {
+  line: "foo\x00\x01bar\x00\x01baz"
+}
+write_lines
+read_until b"\x00\x01"

@@ -1,0 +1,5 @@
+from {
+  line: "foo.*bar.*baz"
+}
+write_lines
+read_until ".*"

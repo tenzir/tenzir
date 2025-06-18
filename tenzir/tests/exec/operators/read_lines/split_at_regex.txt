@@ -7,3 +7,9 @@
 {
   line: "<999>x=z\n",
 }
+warning: the `split_at_regex` option is deprecated, use `read_until_regex` instead
+ --> exec/operators/read_lines/split_at_regex.tql:5:27
+  |
+5 | read_lines split_at_regex=" (?=<)"
+  |                           ~~~~~~~~ 
+  |
