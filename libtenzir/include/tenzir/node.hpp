@@ -10,11 +10,14 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/component_registry.hpp"
+#include "tenzir/endpoint.hpp"
 #include "tenzir/series_builder.hpp"
 
+#include <boost/process/v2/process.hpp>
 #include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <caf/typed_response_promise.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -74,9 +77,24 @@ struct node_state {
   /// Flag to signal if the node received an exit message.
   bool tearing_down = false;
 
+  /// Listening endpoint.
+  endpoint endpoint_;
+
   /// Weak handles to remotely spawned and monitored exec ndoes for cleanup on
   /// node shutdown.
   std::unordered_set<caf::actor_addr> monitored_exec_nodes;
+
+  /// Response promises for pending subprocess operations, indexed by caller
+  /// address.
+  std::unordered_map<std::string,
+                     caf::typed_response_promise<pipeline_shell_actor>>
+    shell_response_promises;
+
+  /// Response promises for pending subprocess operations, indexed by caller
+  /// address.
+  std::unordered_map<caf::actor_addr, boost::process::process> shell_children;
+
+  boost::asio::io_context ctx_{};
 };
 
 /// Spawns a node.

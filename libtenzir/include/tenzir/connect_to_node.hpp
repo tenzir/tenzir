@@ -39,6 +39,11 @@ check_version(const record& remote_version, const record& cfg) -> bool;
 } // namespace detail
 
 /// Connects to a remote Tenzir server.
+auto connect_to_node(caf::scoped_actor& self, endpoint endpoint,
+                     caf::timespan timeout,
+                     std::optional<caf::timespan> retry_delay = std::nullopt)
+  -> caf::expected<node_actor>;
+
 auto connect_to_node(caf::scoped_actor& self) -> caf::expected<node_actor>;
 
 template <class... Sigs>
