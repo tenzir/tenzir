@@ -89,7 +89,7 @@ public:
     if (args_.authzid) {
       transfer_opts.authzid.emplace();
       requests.emplace_back(make_secret_request("authzid", *args_.authzid,
-                                                *transfer_opts.username, dh));
+                                                *transfer_opts.authzid, dh));
     }
     (void)ctrl.resolve_secrets_must_yield(std::move(requests));
     co_yield {};

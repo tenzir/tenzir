@@ -144,14 +144,8 @@ auto make_record_param_request(std::string name,
     r.inner, r.source,
     [loc = r.source, name, type, &items, &dh](std::string_view key,
                                               resolved_secret_value value) {
-      if (auto sv = value.utf8_view()) {
-        items.emplace_back(type, std::string{key}, std::string{*sv});
-        return;
-      }
-      diagnostic::error("expected {} entry `{}` to be a valid UTF-8 string",
-                        name, key)
-        .primary(loc)
-        .emit(dh);
+      auto sv = value.utf8_view(name, loc, dh).unwrap();
+      items.emplace_back(type, std::string{key}, std::string{sv});
     });
 }
 

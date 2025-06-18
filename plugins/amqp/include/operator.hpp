@@ -620,8 +620,9 @@ public:
               x,
               loc,
               [=, &config, &dh](const resolved_secret_value& x) {
-                const auto v = x.utf8_view(k, loc, dh);
-                set_or_fail(config, k, std::string{v}, loc, dh);
+                set_or_fail(config, k,
+                            std::string{x.utf8_view(k, loc, dh).unwrap()}, loc,
+                            dh);
               },
             };
             secret_reqs.push_back(std::move(req));
@@ -636,7 +637,7 @@ public:
       auto req = secret_request{
         args_.url.value(),
         [&, loc = args_.url->source](const resolved_secret_value& val) {
-          auto view = val.utf8_view("url", loc, dh);
+          auto view = val.utf8_view("url", loc, dh).unwrap();
           if (auto cfg = parse_url(config, view)) {
             config = std::move(*cfg);
             return;
@@ -770,8 +771,9 @@ public:
               x,
               loc,
               [=, &config, &dh](const resolved_secret_value& x) {
-                const auto v = x.utf8_view(k, loc, dh);
-                set_or_fail(config, k, std::string{v}, loc, dh);
+                set_or_fail(config, k,
+                            std::string{x.utf8_view(k, loc, dh).unwrap()}, loc,
+                            dh);
               },
             };
             secret_reqs.push_back(std::move(req));
@@ -786,7 +788,7 @@ public:
       auto req = secret_request{
         args_.url.value(),
         [&, loc = args_.url->source](const resolved_secret_value& val) {
-          auto view = val.utf8_view("url", loc, dh);
+          auto view = val.utf8_view("url", loc, dh).unwrap();
           if (auto cfg = parse_url(config, view)) {
             config = std::move(*cfg);
             return;

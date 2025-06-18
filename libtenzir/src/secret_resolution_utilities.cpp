@@ -32,7 +32,7 @@ auto arrow_uri_callback(std::string prefix, arrow::util::Uri& uri,
                         secret_censor* censor) -> secret_request_callback {
   return [&uri, &dh, loc, prefix = std::move(prefix),
           censor](resolved_secret_value v) {
-    auto str = std::string{v.utf8_view("uri", loc, dh)};
+    auto str = std::string{v.utf8_view("uri", loc, dh).unwrap()};
     if (not str.starts_with(prefix)) {
       str.insert(0, prefix);
     }
