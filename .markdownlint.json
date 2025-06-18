@@ -1,0 +1,14 @@
+{
+  "default": false,
+  "html": false,
+  "indentation": false,
+  "links": false,
+  "spelling": true,
+  "whitespace": true,
+  "MD010": {
+    "code_blocks": false
+  },
+  "MD033": false,
+  "MD038": false,
+  "MD040": false
+}

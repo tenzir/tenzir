@@ -11,20 +11,8 @@ updates:
       interval: daily
     labels:
       - dependencies
-  - package-ecosystem: npm
-    directory: /docs
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
   - package-ecosystem: pip
     directory: /python
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-  - package-ecosystem: pip
-    directory: /web
     schedule:
       interval: weekly
     labels:

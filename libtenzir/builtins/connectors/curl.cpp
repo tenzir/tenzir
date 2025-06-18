@@ -19,6 +19,7 @@
 #include <caf/actor_system_config.hpp>
 
 #include <string_view>
+#include <utility>
 
 using namespace std::chrono_literals;
 
@@ -214,8 +215,8 @@ public:
         .note("{}", err)
         .emit(ctrl.diagnostics());
     }
-    for (auto chunk : input) {
-      if (! chunk || chunk->size() == 0) {
+    for (const auto& chunk : input) {
+      if (not chunk || chunk->size() == 0) {
         co_yield {};
         continue;
       }
@@ -241,8 +242,8 @@ public:
     return true;
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -255,7 +256,7 @@ private:
   connector_args args_;
 };
 
-auto parse_http_args(std::string name,
+auto parse_http_args(const std::string& name,
                      const operator_factory_plugin::invocation& inv,
                      session ctx) -> failure_or<connector_args> {
   auto url = located<std::string>{};
@@ -296,7 +297,7 @@ auto parse_http_args(std::string name,
   if (params) {
     for (auto& [name, value] : params->inner) {
       // TODO: What about other types?
-      auto str = try_as<std::string>(&value);
+      auto* str = try_as<std::string>(&value);
       if (not str) {
         diagnostic::error("expected `string` for parameter `{}`", name)
           .primary(*params)
@@ -310,7 +311,7 @@ auto parse_http_args(std::string name,
   if (headers) {
     for (auto& [name, value] : headers->inner) {
       // TODO: What about other types?
-      auto str = try_as<std::string>(&value);
+      auto* str = try_as<std::string>(&value);
       if (not str) {
         diagnostic::error("expected `string` for header `{}`", name)
           .primary(*headers)
@@ -330,25 +331,23 @@ auto parse_http_args(std::string name,
 class load_http_plugin final
   : public virtual operator_plugin2<load_http_operator> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    diagnostic::warning(
+      "`load_http` is deprecated and will be removed in a future release")
+      .hint("use `from` or `from_http` instead")
+      .primary(inv.self.get_location())
+      .emit(ctx);
     TRY(auto args, parse_http_args("load_http", inv, ctx));
     return std::make_unique<load_http_operator>(std::move(args));
-  }
-
-  auto load_properties() const -> load_properties_t override {
-    return {
-      .schemes = {"http", "https"},
-      .default_format = plugins::find<operator_factory_plugin>("read_json"),
-    };
   }
 };
 
 class save_http_plugin final
   : public virtual operator_plugin2<save_http_operator> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(auto args, parse_http_args("save_http", inv, ctx));
     return std::make_unique<save_http_operator>(std::move(args));
   }
@@ -362,14 +361,15 @@ public:
 };
 
 auto parse_ftp_args(std::string name,
-                    const operator_factory_plugin::invocation& inv,
-                    session ctx) -> failure_or<connector_args> {
+                    const operator_factory_plugin::invocation& inv, session ctx)
+  -> failure_or<connector_args> {
   auto args = connector_args{};
-  auto parser = argument_parser2::operator_(name);
+  auto parser = argument_parser2::operator_(std::move(name));
   parser.positional("url", args.url);
   args.transfer_opts.ssl.add_tls_options(parser);
   TRY(parser.parse(inv, ctx));
-  if (not(args.url.starts_with("ftp://") or args.url.starts_with("ftps://"))) {
+  if (not args.url.starts_with("ftp://")
+      and not args.url.starts_with("ftps://")) {
     args.url.insert(0, "ftp://");
   }
   TRY(args.transfer_opts.ssl.validate(args.url, location::unknown, ctx));
@@ -383,8 +383,8 @@ public:
     return "load_ftp";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(auto args, parse_ftp_args(name(), inv, ctx));
     return std::make_unique<load_http_operator>(std::move(args));
   }
@@ -403,8 +403,8 @@ public:
     return "save_ftp";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     TRY(auto args, parse_ftp_args(name(), inv, ctx));
     return std::make_unique<save_http_operator>(std::move(args));
   }

@@ -545,7 +545,8 @@ auto create_pipeline_from_uri(std::string path,
 
 class from_plugin2 final : public virtual operator_factory_plugin {
 public:
-  constexpr static auto docs = "https://docs.tenzir.com/tql2/operators/from";
+  constexpr static auto docs
+    = "https://docs.tenzir.com/reference/operators/from";
   auto name() const -> std::string override {
     return "tql2.from";
   }
@@ -612,7 +613,7 @@ public:
 
 class to_plugin2 final : public virtual operator_factory_plugin {
 public:
-  constexpr static auto docs = "https://docs.tenzir.com/tql2/operators/to";
+  constexpr static auto docs = "https://docs.tenzir.com/reference/operators/to";
   auto name() const -> std::string override {
     return "tql2.to";
   }
@@ -846,13 +847,15 @@ using file_set = boost::unordered_set<arrow::fs::FileInfo, file_hasher>;
 struct from_file_args {
   located<std::string> url;
   bool watch{false};
-  bool remove{false};
+  located<bool> remove{false, location::unknown};
+  std::optional<ast::lambda_expr> rename;
   std::optional<ast::field_path> path_field;
   std::optional<located<pipeline>> pipe;
 
   friend auto inspect(auto& f, from_file_args& x) -> bool {
     return f.object(x).fields(f.field("url", x.url), f.field("watch", x.watch),
                               f.field("remove", x.remove),
+                              f.field("move", x.rename),
                               f.field("path_field", x.path_field),
                               f.field("pipe", x.pipe));
   }
@@ -1101,7 +1104,7 @@ private:
     TRY(auto compression_and_format,
         get_compression_and_format<true>(
           located<std::string_view>{path, args_.url.source}, nullptr,
-          "https://docs.tenzir.com/tql2/operators/from_file", parse_dh));
+          "https://docs.tenzir.com/reference/operators/from_file", parse_dh));
     auto& format = compression_and_format.format.get();
     auto compression = compression_and_format.compression;
     auto provider = session_provider::make(parse_dh);
@@ -1182,7 +1185,31 @@ private:
           .emit(*dh_);
         return;
       }
-      if (args_.remove) {
+      if (args_.rename) {
+        match(
+          eval(*args_.rename, path, *dh_),
+          [&](const std::string& new_path) {
+            // TODO:
+            // - If new_path has a trailing slash, append the original file name.
+            // - Create any intermediate directories required for writing to
+            // new_path.
+            auto status = fs_->Move(path, new_path);
+            if (not status.ok()) {
+              diagnostic::warning("failed to rename `{}` to `{}`", path,
+                                  new_path)
+                .primary(*args_.rename)
+                .note(status.ToStringWithoutContextLines())
+                .emit(*dh_);
+            }
+          },
+          [&](const auto& x) {
+            diagnostic::warning("expected `string`, but got `{}`",
+                                type::infer(x).value_or(type{}).kind())
+              .primary(*args_.rename)
+              .emit(*dh_);
+          });
+      }
+      if (args_.remove.inner) {
         // There is no async call available.
         auto status = fs_->DeleteFile(path);
         if (not status.ok()) {
@@ -1344,6 +1371,7 @@ public:
     parser.positional("url", args.url)
       .named_optional("watch", args.watch)
       .named_optional("remove", args.remove)
+      .named("rename", args.rename, "string => string")
       .named("path_field", args.path_field)
       .positional("{ … }", args.pipe);
     TRY(parser.parse(inv, ctx));
@@ -1363,6 +1391,14 @@ public:
           .emit(ctx);
         return failure::promise();
       }
+    }
+    if (args.remove.inner and args.rename) {
+      diagnostic::error("cannot use both `remove` and `rename`")
+        .primary(args.remove.source)
+        .primary(*args.rename)
+        .docs(parser.docs())
+        .emit(ctx);
+      return failure::promise();
     }
     return std::make_unique<from_file>(std::move(args));
   }

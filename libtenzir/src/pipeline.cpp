@@ -225,12 +225,14 @@ auto pipeline::optimize(expression const& filter, event_order order) const
     auto const& op = **it;
     auto opt = op.optimize(current_filter, current_order);
     // TODO: This is a small hack to not propagate a TQLv2 `where` unless the
-    // pipeline starts in `export`. By doing this, we make sure that we keep
-    // TQLv2 semantics (including warnings), unless performance demands it. This
-    // hack will be fixed by upgrading the catalog to the new expressions.
-    if (op.name() == "tql2.where") {
+    // pipeline starts with an allow-listed operator. By doing this, we make
+    // sure that we keep TQLv2 semantics (including warnings), unless
+    // performance demands it. This hack will be fixed by upgrading the catalog
+    // to the new expressions.
+    if (op.name() == "where_assert_operator") {
       auto qualifies = std::ranges::all_of(it, operators_.rend(), [](auto& op) {
-        return op->name() == "tql2.where" || op->name() == "export";
+        return op->name() == "where_assert_operator" || op->name() == "export"
+               || op->name() == "subscribe";
       });
       if (not qualifies) {
         opt = optimize_result::order_invariant(op, current_order);

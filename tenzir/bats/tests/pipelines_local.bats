@@ -947,26 +947,6 @@ EOF
   check ! tenzir --strict 'from {x: 1}, {x: 2}, {x: 3} | assert x != 2'
 }
 
-@test "summarize an empty input" {
-  check tenzir 'from {} | head 0 | summarize count(), sum(foo)'
-  check tenzir 'from {} | head 0| summarize count(), sum(foo), bar'
-}
-
-@test "map and where an empty list" {
-  check tenzir 'from {foo: []} | foo = foo.map(x, x + 1)'
-  check tenzir 'from {foo: []} | foo = foo.where(x, x > 3)'
-}
-
-@test "map and where a list of numbers" {
-  check tenzir 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.map(x, x + 1)'
-  check tenzir 'from {foo: [1, 2, 3, 4, 5]} | foo = foo.where(x, x > 3)'
-}
-
-@test "map and where with records" {
-  check tenzir 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.map(x, x.en)'
-  check tenzir 'from {foo: [{en: "one", de: "eins"}, {en: "two", de: "zwei"}]} | foo = foo.where(x, x.de == "eins")'
-}
-
 @test "zip" {
   check tenzir 'from {foo: [1, 2, 3], bar: [4, 5, 6]} | baz = zip(foo, bar)'
   check tenzir 'from {foo: [1, 2, 3], bar: [4, 5]} | baz = zip(foo, bar)'

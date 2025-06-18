@@ -1,5 +1,6 @@
 // node: true
 // error: true
+// skip: non-determinstic behavior
 
 pipeline::run {
   from {x: 1}

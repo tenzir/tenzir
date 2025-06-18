@@ -116,29 +116,6 @@ else ()
 endif ()
 unset(_TENZIR_PARENT_DIRECTORY)
 
-# -- changelog -----------------------------------------------------------------
-
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirChangelog.cmake.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/TenzirChangelog.cmake" @ONLY)
-
-file(GLOB_RECURSE changelog_dependencies CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/changelog/**.md")
-
-add_custom_target(
-  changelog ALL
-  BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
-  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/TenzirChangelog.cmake"
-          ${changelog_dependencies}
-  COMMAND ${CMAKE_COMMAND} -P
-          "${CMAKE_CURRENT_BINARY_DIR}/TenzirChangelog.cmake")
-
-option(TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE
-       "Skip build configuration after update-changelog target" OFF)
-mark_as_advanced(TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
-if (TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
-  return()
-endif ()
-
 # -- testing -------------------------------------------------------------------
 
 cmake_dependent_option(
@@ -1021,8 +998,7 @@ endif ()
 # Install CHANGELOG, LICENSE, README, and VERSIONING. This can intentionally not
 # be disabled.
 install(
-  FILES "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
-        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
         "${CMAKE_CURRENT_SOURCE_DIR}/tenzir.spdx.json"
         "${CMAKE_CURRENT_SOURCE_DIR}/VERSIONING.md"
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"

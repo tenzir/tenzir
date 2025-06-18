@@ -1,22 +1,24 @@
-from { events: [
-  { x: [ "0", "1" ]},
-  { x: [] },
-  { x: null },
-  { x: [ "10", "11", "12" ]},
-  { x: null },
-  { x: [ "20", "31", "42" ]},
-  { x: null },
-  { x: [] },
-  { x: [ r#""string""# ]},
-  { x: null },
-  { x: [] },
-  { x: null },
-  { x: [] },
-  { x: ["100"] },
-  { x: ["{}", r#"{ "x": 0 }"#, "[]"] },
-  { x: null },
-]}
+from {
+  events: [
+    {x: [ "0", "1" ]},
+    {x: []},
+    {x: null},
+    {x: [ "10", "11", "12" ]},
+    {x: null},
+    {x: [ "20", "31", "42" ]},
+    {x: null},
+    {x: []},
+    {x: [ r#""string""# ]},
+    {x: null},
+    {x: []},
+    {x: null},
+    {x: []},
+    {x: ["100"]},
+    {x: ["{}", r#"{ "x": 0 }"#, "[]"]},
+    {x: null},
+  ],
+}
 unroll events
 this = events
-x = x.map( str, str.parse_json() )
+x = x.map(str => str.parse_json())
 write_tql compact=true

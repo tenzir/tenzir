@@ -1,0 +1,6 @@
+error: backslash is not followed by escape sequence
+ --> format_strings/backslash_fmt.tql:4:12
+  |
+4 | from {x: f"\{42}"}
+  |            ^ 
+  |

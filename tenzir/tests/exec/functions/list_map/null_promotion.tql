@@ -1,4 +1,6 @@
 let $pattern = "%{WORD:w} %{NUMBER:n}"
 
-from { l: ["hello","world 42"] }
-l = l.map( str, str.parse_grok($pattern) )
+from {
+  l: ["hello", "world 42"],
+}
+l = l.map(str => str.parse_grok($pattern))

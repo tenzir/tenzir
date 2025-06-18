@@ -169,8 +169,14 @@ struct this_ {
 };
 
 struct root_field {
+  root_field() = default;
+
+  root_field(identifier id, bool has_question_mark = false)
+    : id{std::move(id)}, has_question_mark{has_question_mark} {
+  }
+
   identifier id;
-  bool has_question_mark = false;
+  bool has_question_mark{};
 
   auto get_location() const -> location {
     return id.location;
@@ -185,8 +191,8 @@ struct root_field {
 using expression_kinds
   = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
                       constant, field_access, index_expr, binary_expr,
-                      unary_expr, function_call, underscore, unpack, assignment,
-                      dollar_var>;
+                      unary_expr, function_call, lambda_expr, underscore,
+                      unpack, assignment, dollar_var, format_expr>;
 
 using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
@@ -371,6 +377,32 @@ struct unary_expr {
 
   auto get_location() const -> location {
     return op.source.combine(expr);
+  }
+};
+
+struct lambda_expr {
+  lambda_expr() = default;
+
+  lambda_expr(identifier left, location arrow, expression right)
+    : left{std::move(left)}, arrow{arrow}, right{std::move(right)} {
+  }
+
+  identifier left;
+  location arrow;
+  expression right;
+
+  friend auto inspect(auto& f, lambda_expr& x) -> bool {
+    return f.object(x).fields(f.field("left", x.left),
+                              f.field("arrow", x.arrow),
+                              f.field("right", x.right));
+  }
+
+  auto left_as_field_path() const -> field_path {
+    return check(field_path::try_from(root_field{left, false}));
+  }
+
+  auto get_location() const -> location {
+    return left.get_location().combine(right);
   }
 };
 
@@ -742,6 +774,35 @@ struct pipeline_expr {
   }
 };
 
+struct format_expr {
+  struct replacement {
+    ast::expression expr;
+
+    friend auto inspect(auto& f, replacement& x) -> bool {
+      return f.apply(x.expr);
+    }
+  };
+  using segment = variant<std::string, replacement>;
+
+  format_expr() = default;
+
+  format_expr(std::vector<segment> segments, location location)
+    : segments{std::move(segments)}, location{location} {
+  }
+
+  std::vector<segment> segments;
+  struct location location;
+
+  friend auto inspect(auto& f, format_expr& x) -> bool {
+    return f.object(x).fields(f.field("segments", x.segments),
+                              f.field("location", x.location));
+  }
+
+  auto get_location() const -> struct location {
+    return location;
+  }
+};
+
 inline expression::~expression() = default;
 inline expression::expression(expression&&) noexcept = default;
 inline auto expression::operator=(expression&&) noexcept
@@ -846,6 +907,11 @@ protected:
     go(x.args);
   }
 
+  void enter(lambda_expr& x) {
+    go(x.left);
+    go(x.right);
+  }
+
   void enter(pipeline_expr& x) {
     go(x.inner);
   }
@@ -934,6 +1000,19 @@ protected:
 
   void enter(ast::underscore& x) {
     TENZIR_UNUSED(x);
+  }
+
+  void enter(ast::format_expr& x) {
+    for (auto& s : x.segments) {
+      tenzir::match(
+        s,
+        [&](const std::string&) {
+          // noop
+        },
+        [&](ast::format_expr::replacement& r) {
+          go(r.expr);
+        });
+    }
   }
 
 private:

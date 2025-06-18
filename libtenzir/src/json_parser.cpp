@@ -12,11 +12,6 @@
 
 namespace tenzir::json {
 
-auto truncate(std::string_view text, const size_t N) -> std::string {
-  return std::string{text.substr(0, N)}
-         + (text.size() > N ? " ... (truncated)" : "");
-}
-
 auto ndjson_parser::parse(simdjson::padded_string_view json_line) -> void {
   ++lines_processed_;
   simdjson::ondemand::document_stream stream;
@@ -42,14 +37,11 @@ auto ndjson_parser::parse(simdjson::padded_string_view json_line) -> void {
     }
     auto doc = *doc_it;
     TENZIR_ASSERT(not doc.current_location().error());
-    const auto source = std::string_view{
-      doc.current_location().value_unsafe(),
-      json_line.data() + json_line.size(),
-    };
     if (auto err = doc.error()) {
       diagnostic::warning("{}", error_message(err))
-        .note("line {}", lines_processed_)
-        .note("skipped invalid JSON `{}`", truncate(source))
+        .note("line {} column {}", lines_processed_,
+              doc.current_location().value_unsafe() - json_line.data())
+        .note("skipped invalid JSON")
         .emit(*dh);
       ++diags_emitted;
       break;
@@ -57,8 +49,9 @@ auto ndjson_parser::parse(simdjson::padded_string_view json_line) -> void {
     auto val = doc.get_value();
     if (auto err = val.error()) {
       diagnostic::warning("{}", error_message(err))
-        .note("line {}", lines_processed_)
-        .note("skipped invalid JSON `{}`", truncate(source))
+        .note("line {} column {}", lines_processed_,
+              doc.current_location().value_unsafe() - json_line.data())
+        .note("skipped invalid JSON")
         .emit(*dh);
       ++diags_emitted;
       break;
@@ -74,7 +67,7 @@ auto ndjson_parser::parse(simdjson::padded_string_view json_line) -> void {
   if (objects_parsed == 0 and diags_emitted == 0) {
     diagnostic::warning("line did not contain a single valid JSON object")
       .note("line {}", lines_processed_)
-      .note("skipped invalid JSON `{}`", truncate(json_line))
+      .note("skipped invalid JSON")
       .emit(*dh);
   } else if (objects_parsed > 1) {
     diagnostic::warning("more than one JSON object in line")
@@ -84,12 +77,10 @@ auto ndjson_parser::parse(simdjson::padded_string_view json_line) -> void {
   }
   auto truncated_count = stream.truncated_bytes();
   if (truncated_count > 0 and objects_parsed) {
-    auto truncated_text = std::string_view{
-      json_line.data() + json_line.size() - truncated_count, truncated_count};
     diagnostic::warning("skipped remaining invalid JSON bytes")
       .note("line {}", lines_processed_)
       .note("{} bytes remained", truncated_count)
-      .note("skipped invalid JSON `{}`", truncate(truncated_text))
+      .note("skipped invalid JSON")
       .emit(*dh);
   }
 }
@@ -123,7 +114,7 @@ auto default_parser::parse(const chunk& json_chunk) -> void {
       return;
     }
     auto current_document = size_t{};
-    for (auto doc_it = stream_.begin(); doc_it != stream_.end(); ++doc_it) {
+    for (auto doc_ : stream_) {
       // Skip documents that passed the simdjson batch_size limits previously
       if (current_document < completed_documents) {
         continue;
@@ -131,7 +122,7 @@ auto default_parser::parse(const chunk& json_chunk) -> void {
       ++current_document;
       // doc.error() will inherit all errors from *doc_it and get_value.
       // No need to check after each operation.
-      auto doc = (*doc_it).get_value();
+      auto doc = doc_.get_value();
       if (auto err = doc.error()) {
         if (err == simdjson::CAPACITY) {
           current_batch_size *= 2;
@@ -142,29 +133,23 @@ auto default_parser::parse(const chunk& json_chunk) -> void {
         }
         abort_requested = true;
         diagnostic::error("{}", error_message(err))
-          .note("found invalid JSON '{}'", truncate(view))
+          .note("found invalid JSON")
           .emit(*dh);
         return;
       }
       TENZIR_ASSERT(not doc.current_location().error());
-      auto const doc_source = std::string_view{
-        doc.current_location().value_unsafe(),
-        view.data() + view.size(),
-      };
       ++completed_documents;
       if (arrays_of_objects_) {
         auto arr = doc.value_unsafe().get_array();
         if (arr.error()) {
           abort_requested = true;
-          diagnostic::error("expected an array of objects")
-            .note("got: {}", truncate(doc_source))
-            .emit(*dh);
+          diagnostic::error("expected an array of objects").emit(*dh);
           return;
         }
         for (auto&& elem : arr.value_unsafe()) {
           if (auto err = elem.error()) {
             diagnostic::error("{}", error_message(err))
-              .note("found invalid JSON array '{}'", truncate(doc_source))
+              .note("found invalid JSON array")
               .emit(*dh);
             return;
           }
@@ -192,10 +177,10 @@ auto default_parser::parse(const chunk& json_chunk) -> void {
         };
         const auto type = check(doc.type());
         if (type != simdjson::ondemand::json_type::object) {
-          auto diag = diagnostic::error("expected an object")
-                        .note("got: {}", truncate(view));
+          auto diag = diagnostic::error("expected an object");
           if (type == simdjson::ondemand::json_type::array) {
-            diag = std::move(diag).hint("use the `--arrays-of-objects` option");
+            diag
+              = std::move(diag).hint("use the `arrays_of_objects=true` option");
           }
           std::move(diag).emit(*dh);
           return;
@@ -230,9 +215,7 @@ auto default_parser::handle_truncated_bytes() -> void {
   // investigation in the future.
   if (truncated_bytes > buffer_.view().size()) {
     abort_requested = true;
-    diagnostic::error("detected malformed JSON")
-      .note("in input '{}'", truncate(buffer_.view()))
-      .emit(*dh);
+    diagnostic::error("detected malformed JSON").emit(*dh);
     return;
   }
   buffer_.truncate(truncated_bytes);

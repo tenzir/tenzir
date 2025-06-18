@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/concepts.hpp"
 #include "tenzir/config.hpp"  // IWYU pragma: export
 #include "tenzir/tql/fwd.hpp" // IWYU pragma: export
 
@@ -133,6 +134,7 @@ class active_store;
 class aggregation_function;
 class bitmap;
 class blob_type;
+class blob;
 class bool_type;
 class chunk;
 class command;
@@ -321,6 +323,7 @@ using ids = bitmap; // temporary; until we have a real type for 'ids'
 using operator_ptr = std::unique_ptr<operator_base>;
 using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
+using symbol_map = std::unordered_map<std::string, legacy_type>;
 
 /// A duration in time with nanosecond resolution.
 using duration = caf::timespan;
@@ -331,21 +334,6 @@ using time = caf::timestamp;
 
 /// Enumeration type.
 using enumeration = uint8_t;
-
-/// Blob type.
-struct blob : std::vector<std::byte> {
-  using super = std::vector<std::byte>;
-  using super::super;
-
-  friend constexpr auto operator+(blob l, const blob& r) -> blob {
-    return l += r;
-  }
-
-  constexpr auto operator+=(const blob& r) -> blob& {
-    insert(end(), r.begin(), r.end());
-    return *this;
-  }
-};
 
 class secret;
 
@@ -420,11 +408,13 @@ struct dollar_var;
 struct entity;
 struct expression;
 struct field_access;
+struct format_expr;
 struct function_call;
 struct identifier;
 struct if_stmt;
 struct index_expr;
 struct invocation;
+struct lambda_expr;
 struct let_stmt;
 struct list;
 struct match_stmt;

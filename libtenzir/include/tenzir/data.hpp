@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/aliases.hpp"
+#include "tenzir/blob.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/printable/print.hpp"
 #include "tenzir/concept/printable/tenzir/json_printer_options.hpp"

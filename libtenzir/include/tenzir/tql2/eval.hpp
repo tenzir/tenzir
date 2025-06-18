@@ -27,13 +27,20 @@ auto eval(const ast::field_path& expr, const table_slice& input,
 auto eval(const ast::constant& expr, const table_slice& input,
           diagnostic_handler& dh) -> series;
 
+/// Constant evaluates an expression, even if it is non-deterministic.
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   -> failure_or<data>;
 
-/// Tries to evaluate an expression to a constant value. Emits diagnostics only
-/// if the evaluation succeeded.
+/// Tries to evaluate a determistic expression to a constant value. Emits
+/// diagnostics only if the evaluation succeeded.
 auto try_const_eval(const ast::expression& expr, session ctx)
   -> std::optional<data>;
+
+auto eval(const ast::lambda_expr& lambda, const multi_series& input,
+          diagnostic_handler& dh) -> multi_series;
+
+auto eval(const ast::lambda_expr& lambda, const data& input,
+          diagnostic_handler& dh) -> data;
 
 struct resolve_error {
   struct field_not_found {};

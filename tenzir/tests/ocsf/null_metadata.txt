@@ -1,0 +1,6 @@
+warning: dropping events where `metadata` is not a record
+ --> ocsf/null_metadata.tql:2:1
+  |
+2 | ocsf::apply
+  | ~~~~~~~~~~~ 
+  |

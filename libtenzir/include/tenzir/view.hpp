@@ -106,6 +106,10 @@ struct blob_view : std::span<const std::byte>,
   explicit(false) blob_view(super span) : super{span} {
   }
 
+  explicit operator blob() const {
+    return blob{begin(), end()};
+  }
+
   friend constexpr auto operator<=>(const blob_view& l, const blob_view& r) {
     return std::lexicographical_compare_three_way(l.begin(), l.end(), r.begin(),
                                                   r.end());
@@ -545,6 +549,9 @@ template <class T>
 std::string materialize(T&& x) {
   return materialize(std::string_view{std::forward<T>(x)});
 }
+
+template <class T>
+using materialize_t = decltype(materialize(std::declval<T>()));
 
 // -- utilities ----------------------------------------------------------------
 

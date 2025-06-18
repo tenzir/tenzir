@@ -99,7 +99,7 @@ public:
           diagnostic::error("{} `{}` not found", type, ident.name)
             .primary(ident)
             .hint("did you mean `{}`?", best)
-            .docs("https://docs.tenzir.com/tql2/{}",
+            .docs("https://docs.tenzir.com/reference/{}",
                   target_ns == entity_ns::op ? "operators" : "functions")
             .emit(diag_);
           return;
@@ -107,7 +107,7 @@ public:
       }
       diagnostic::error("{} `{}` not found", type, ident.name)
         .primary(ident)
-        .docs("https://docs.tenzir.com/tql2/{}",
+        .docs("https://docs.tenzir.com/reference/{}",
               target_ns == entity_ns::op ? "operators" : "functions")
         .emit(diag_);
     };
