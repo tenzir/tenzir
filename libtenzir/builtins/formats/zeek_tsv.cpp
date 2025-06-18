@@ -712,12 +712,9 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       document.builder = series_builder{std::move(schema)};
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
-      auto target_schema
-        = std::ranges::find_if(modules::schemas(), [&](const auto& schema) {
-            return schema.name() == schema_name;
-          });
+      auto target_schema = modules::get_schema(schema_name);
       document.target_schema
-        = target_schema == modules::schemas().end() ? type{} : *target_schema;
+        = target_schema ? std::move(*target_schema) : type{};
       // We intentionally fall through here; we create the builder lazily
       // when we encounter the first event, but that we still need to parse
       // now.

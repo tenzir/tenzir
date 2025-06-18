@@ -107,32 +107,6 @@ bool operator==(const module& x, const module& y) {
   return x.types_ == y.types_;
 }
 
-caf::expected<module> get_module(const caf::settings& options) {
-  // Get the default module from the registry.
-  TENZIR_DIAGNOSTIC_PUSH
-  TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED
-  const auto* module_reg_ptr = modules::global_module();
-  TENZIR_DIAGNOSTIC_POP
-  auto module = module_reg_ptr ? *module_reg_ptr : tenzir::module{};
-  // Update with an alternate module, if requested.
-  auto sc = caf::get_if<std::string>(&options, "tenzir.import.schema");
-  auto mf = caf::get_if<std::string>(&options, "tenzir.import.schema-file");
-  if (sc && mf)
-    return caf::make_error(ec::invalid_configuration,
-                           "had both schema and schema-file "
-                           "provided");
-  if (!sc && !mf)
-    return module;
-  caf::expected<tenzir::module> update = caf::error{};
-  if (sc)
-    update = to<tenzir::module>(*sc);
-  else
-    update = load_module(*mf);
-  if (!update)
-    return update.error();
-  return module::combine(module, *update);
-}
-
 detail::stable_set<std::filesystem::path>
 get_module_dirs(const caf::actor_system_config& cfg) {
   const auto bare_mode = caf::get_or(cfg, "tenzir.bare-mode", false);
@@ -165,15 +139,6 @@ get_module_dirs(const caf::actor_system_config& cfg) {
   return result;
 }
 
-caf::expected<module> load_module(const std::filesystem::path& module_file) {
-  if (module_file.empty())
-    return caf::make_error(ec::filesystem_error, "empty path");
-  auto str = detail::load_contents(module_file);
-  if (!str)
-    return str.error();
-  return to<module>(*str);
-}
-
 caf::error
 load_symbols(const std::filesystem::path& module_file, symbol_map& local) {
   if (module_file.empty())
@@ -188,12 +153,11 @@ load_symbols(const std::filesystem::path& module_file, symbol_map& local) {
   return caf::none;
 }
 
-caf::expected<module>
-load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
-            size_t max_recursion) {
+caf::expected<symbol_map>
+load_symbols(const detail::stable_set<std::filesystem::path>& module_dirs,
+             size_t max_recursion) {
   if (max_recursion == 0)
     return ec::recursion_limit_reached;
-  tenzir::module types;
   symbol_map global_symbols;
   for (const auto& dir : module_dirs) {
     TENZIR_VERBOSE("loading schemas from {}", dir);
@@ -218,20 +182,21 @@ load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
       if (auto err = load_symbols(f, local_symbols))
         return err;
     }
-    auto r = symbol_resolver{global_symbols, local_symbols};
+    auto r = symbol_resolver{global_symbols, local_symbols, true};
     auto directory_module = r.resolve();
     if (!directory_module)
       return caf::make_error(ec::format_error, "failed to resolve types in",
                              dir.string(), directory_module.error().context());
     local_symbols.merge(std::move(global_symbols));
     global_symbols = std::move(local_symbols);
-    types = module::combine(types, *directory_module);
+    // We are doing a lazy conversion here.
+    TENZIR_ASSERT(directory_module->empty());
   }
-  return types;
+  return global_symbols;
 }
 
-caf::expected<tenzir::module> load_module(const caf::actor_system_config& cfg) {
-  return load_module(get_module_dirs(cfg));
+caf::expected<symbol_map> load_symbols(const caf::actor_system_config& cfg) {
+  return load_symbols(get_module_dirs(cfg));
 }
 
 auto load_taxonomies(const caf::actor_system_config& cfg)

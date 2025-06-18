@@ -265,7 +265,7 @@ public:
           d.message = fmt::format("{} parser: {}", name, d.message);
           return d;
         })},
-      builder{std::move(options), *dh, modules::schemas(),
+      builder{std::move(options), *dh, modules::get_schema,
               detail::data_builder::non_number_parser} {
   }
   // this has to be pointer stable because `builder` holds a reference to it
