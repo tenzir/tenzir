@@ -673,9 +673,11 @@ auto eval_op(evaluator& self, const ast::binary_expr& x) -> multi_series {
 }
 
 template <ast::binary_op Op>
-auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
+auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> series {
+  auto builder = arrow::BooleanBuilder{};
+  check(builder.Reserve(self.length()));
   auto left_offset = int64_t{0};
-  return map_series(self.eval(x.left), [&](series left) -> multi_series {
+  for (const auto& left : self.eval(x.left)) {
     const auto length = left.length();
     const auto left_begin = left_offset;
     const auto left_end = left_begin + length;
@@ -688,45 +690,44 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
           .emit(self.ctx());
       }
     }
-    const auto short_circuit_eval_right = [&]<bool Value>() -> multi_series {
-      return map_series( //
-        self.slice(left_begin, left_end).eval(x.right),
-        [&](series right) -> multi_series {
-          if (const auto typed_right = right.as<bool_type>()) {
-            auto builder = arrow::BooleanBuilder{};
-            check(builder.Reserve(right.length()));
-            for (const auto& value : *typed_right->array) {
-              if (value and *value == Value) {
-                check(builder.Append(Value));
-                continue;
-              }
-              check(builder.AppendNull());
+    const auto short_circuit_eval_right = [&]<bool Value>() {
+      for (const auto& right : self.slice(left_begin, left_end).eval(x.right)) {
+        if (const auto typed_right = right.as<bool_type>()) {
+          for (const auto& value : *typed_right->array) {
+            if (value and *value == Value) {
+              check(builder.Append(Value));
+              continue;
             }
-            right.array = check(builder.Finish());
-            return right;
+            check(builder.AppendNull());
           }
-          if (not is<null_type>(right.type)) {
-            diagnostic::warning("expected `bool`, but got `{}`",
-                                right.type.kind())
-              .primary(x.right)
-              .emit(self.ctx());
-          }
-          return series::null(bool_type{}, right.length());
-        });
+          continue;
+        }
+        if (not is<null_type>(right.type)) {
+          diagnostic::warning("expected `bool`, but got `{}`",
+                              right.type.kind())
+            .primary(x.right)
+            .emit(self.ctx());
+        }
+        check(builder.AppendNulls(right.length()));
+      }
     };
     if constexpr (Op == ast::binary_op::and_) {
       if (not typed_left) {
-        return short_circuit_eval_right.template operator()<false>();
+        short_circuit_eval_right.template operator()<false>();
+        continue;
       }
       if (typed_left->array->false_count() == length) {
-        return left;
+        check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
+        continue;
       }
     } else if constexpr (Op == ast::binary_op::or_) {
       if (not typed_left) {
-        return short_circuit_eval_right.template operator()<true>();
+        short_circuit_eval_right.template operator()<true>();
+        continue;
       }
       if (typed_left->array->true_count() == length) {
-        return left;
+        check(builder.AppendArraySlice(*typed_left->array->data(), 0, length));
+        continue;
       }
     } else {
       static_assert(detail::always_false_v<decltype(Op)>, "unsupported op");
@@ -735,9 +736,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
     const auto get_left = [&](int64_t i) -> bool {
       return typed_left->array->IsValid(i) and typed_left->array->GetView(i);
     };
-    auto builder = arrow::BooleanBuilder{};
-    check(builder.Reserve(self.length()));
-    const auto append_eval_right = [&](int64_t start, int64_t end) -> void {
+    const auto eval_right = [&](int64_t start, int64_t end) -> void {
       for (const auto& right :
            self.slice(left_begin + start, left_begin + end).eval(x.right)) {
         if (is<bool_type>(right.type)) {
@@ -759,7 +758,7 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
     const auto append_until = [&](int64_t end) {
       if constexpr (Op == ast::binary_op::and_ or Op == ast::binary_op::or_) {
         if (range_current == (Op == ast::binary_op::and_)) {
-          append_eval_right(range_offset, end);
+          eval_right(range_offset, end);
         } else {
           check(builder.AppendArraySlice(*left.array->data(), range_offset,
                                          end - range_offset));
@@ -777,12 +776,11 @@ auto eval_and_or(evaluator& self, const ast::binary_expr& x) -> multi_series {
       range_current = not range_current;
     }
     append_until(length);
-    TENZIR_ASSERT(builder.length() == length);
-    return series{
-      bool_type{},
-      finish(builder),
-    };
-  });
+  }
+  return series{
+    bool_type{},
+    finish(builder),
+  };
 }
 
 auto eval_if(evaluator& self, const ast::binary_expr& x,
