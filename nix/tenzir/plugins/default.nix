@@ -1,16 +1,15 @@
 {
-  lib,
   callPackage,
   tenzir,
-  tenzir-plugins-source ? callPackage ./source.nix {},
+  tenzir-plugins-srcs,
   ...
-}: let
-  versions = import ./names.nix;
-  f = name:
+}:
+let
+  f =
+    name: src:
     callPackage ./generic.nix {
       name = "tenzir-plugin-${name}";
-      src = "${tenzir-plugins-source}/${name}";
-      inherit tenzir;
+      inherit src tenzir;
     };
 in
-  lib.genAttrs versions f
+builtins.mapAttrs f tenzir-plugins-srcs

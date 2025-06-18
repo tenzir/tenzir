@@ -1,6 +1,6 @@
+nix2container:
 {
   lib,
-  nix2container,
   runCommand,
   bashInteractive,
   coreutils,

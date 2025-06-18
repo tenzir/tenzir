@@ -8,7 +8,10 @@ stdenv.mkDerivation (finalAttrs: {
   pname = "cityhash";
   version = "1.0.1";
 
-  outputs = ["out" "dev"];
+  outputs = [
+    "out"
+    "dev"
+  ];
 
   src = fetchFromGitHub {
     owner = "google";

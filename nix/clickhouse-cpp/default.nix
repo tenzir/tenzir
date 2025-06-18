@@ -11,7 +11,7 @@
 }:
 
 let
-  cityhash = callPackage ./cityhash {};
+  cityhash = callPackage ./cityhash { };
 in
 stdenv.mkDerivation {
   pname = "clickhouse-cpp";

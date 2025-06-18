@@ -46,7 +46,7 @@ stdenvNoCC.mkDerivation {
       mkdir -p cache
       export XDG_CACHE_HOME=$PWD/cache
       ${template "tenzir"}
-      ${lib.concatMapStrings template unchecked.plugins}
+      ${lib.concatMapStrings template (builtins.map (x: x.src) (builtins.concatLists unchecked.plugins))}
     '';
 
   # We just symlink all outputs of the unchecked derivation.
