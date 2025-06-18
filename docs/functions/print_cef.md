@@ -107,7 +107,7 @@ write_syslog
 
 ## See Also
 
-[`read_cef`](/reference/functions/read_cef),
-[`parse_cef`](/reference/operators/parse_cef),
+[`parse_cef`](/reference/functions/parse_cef),
+[`read_cef`](/reference/operators/read_cef),
 [`read_syslog`](/reference/operators/read_syslog),
 [`write_syslog`](/reference/operators/write_syslog)
