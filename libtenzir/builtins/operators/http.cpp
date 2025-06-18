@@ -849,6 +849,16 @@ struct from_http_args {
       .and_then(ssl::use_password_if(inner(password)));
   }
 
+  auto make_ssl_context(caf::uri uri) const -> caf::expected<ssl::context> {
+    return ssl::context::enable(tls.inner)
+      .and_then(ssl::emplace_context(ssl::tls::any))
+      .and_then(ssl::enable_default_verify_paths())
+      .and_then(ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
+      .and_then(ssl::use_certificate_file_if(inner(certfile), ssl::format::pem))
+      .and_then(ssl::use_password_if(inner(password)))
+      .and_then(ssl::use_sni_hostname(std::move(uri)));
+  }
+
   friend auto inspect(auto& f, from_http_args& x) -> bool {
     return f.object(x).fields(
       f.field("op", x.op), f.field("port", x.port), f.field("filter", x.filter),
@@ -1076,10 +1086,16 @@ public:
                 if (args_.tls.inner and url->starts_with("http://")) {
                   url->insert(4, "s");
                 }
+                auto uri = caf::make_uri(*url);
+                if (! uri) {
+                  diagnostic::error("failed to parse uri: {}", uri.error())
+                    .primary(args_.op)
+                    .emit(ctrl.diagnostics());
+                }
                 paginate_queue.push_back(std::move(
                   http::with(ctrl.self().system())
-                    .context(args_.make_ssl_context())
-                    .connect(caf::make_uri(*url))
+                    .context(args_.make_ssl_context(*uri))
+                    .connect(*uri)
                     .max_response_size(max_response_size)
                     .connection_timeout(args_.connection_timeout->inner)
                     .max_retry_count(args_.max_retry_count->inner)
@@ -1098,9 +1114,15 @@ public:
       });
       TENZIR_DEBUG("[http] handled response");
     };
+    auto uri = caf::make_uri(args_.url.inner);
+    if (! uri) {
+      diagnostic::error("failed to parse uri: {}", uri.error())
+        .primary(args_.op)
+        .emit(ctrl.diagnostics());
+    }
     http::with(ctrl.self().system())
-      .context(args_.make_ssl_context())
-      .connect(caf::make_uri(args_.url.inner))
+      .context(args_.make_ssl_context(*uri))
+      .connect(*uri)
       .max_response_size(max_response_size)
       .connection_timeout(args_.connection_timeout->inner)
       .max_retry_count(args_.max_retry_count->inner)
