@@ -5,6 +5,7 @@
 //
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
+
 #pragma once
 
 #include "tenzir/diagnostics.hpp"
@@ -12,12 +13,9 @@
 #include "tenzir/location.hpp"
 #include "tenzir/secret.hpp"
 
-#include <string_view>
+#include <arrow/type_fwd.h>
 
-namespace arrow {
-template <typename T>
-class Result;
-}
+#include <string_view>
 
 namespace tenzir {
 
@@ -26,8 +24,7 @@ class resolved_secret_value {
 public:
   resolved_secret_value() = default;
 
-  explicit resolved_secret_value(ecc::cleansing_blob value, bool all_literal
-                                                            = false)
+  explicit resolved_secret_value(ecc::cleansing_blob value, bool all_literal)
     : value_{std::move(value)}, all_literal_{all_literal} {
   }
 
@@ -37,7 +34,7 @@ public:
   /// Returns a string view over the secret's UTF-8 value, if it is valid UTF-8.
   /// Otherwise, emits a diagnostic::error
   auto utf8_view(std::string_view name, location loc,
-                 diagnostic_handler& dh) const -> std::string_view;
+                 diagnostic_handler& dh) const -> failure_or<std::string_view>;
 
   /// Whether the secret only consists of literals, i.e. is all plain text
   /// This is mostly useful for a decision to censor secrets

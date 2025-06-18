@@ -12,8 +12,8 @@ secret(name:string) -> secret
 
 ## Description
 
-An operator accepting a secret will first try and lookup the value locally in
-the environment or configuration of the Tenzir Node.
+An operator accepting a secret will first try and lookup the value in the
+environment or configuration of the Tenzir Node.
 A `tenzir` client process can use secrets only if it has a Tenzir Node to connect
 to.
 

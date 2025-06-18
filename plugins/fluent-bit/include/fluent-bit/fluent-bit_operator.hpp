@@ -237,8 +237,8 @@ inline void to_property_map_or_request(const located<tenzir::record>& rec,
       requests.emplace_back(
         *s, rec.source,
         [key, loc = rec.source, &dh, &map](resolved_secret_value v) {
-          auto str = v.utf8_view(key, loc, dh);
-          const auto [it, inserted] = map.try_emplace(key, std::string{str});
+          const auto [it, inserted] = map.try_emplace(
+            key, std::string{v.utf8_view(key, loc, dh).unwrap()});
           TENZIR_ASSERT(inserted);
         });
       continue;

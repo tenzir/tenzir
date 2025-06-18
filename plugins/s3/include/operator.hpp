@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include "tenzir/secret_resolution_utilities.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/s3fs.h>

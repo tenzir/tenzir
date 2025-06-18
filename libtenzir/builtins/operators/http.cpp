@@ -1024,8 +1024,8 @@ public:
           std::move(secret),
           loc,
           [&, name](const resolved_secret_value& x) {
-            auto view = x.utf8_view(name, loc, dh);
-            headers.emplace(name, std::string{view});
+            headers.emplace(name,
+                            std::string{x.utf8_view(name, loc, dh).unwrap()});
           },
         };
         reqs.emplace_back(std::move(req));

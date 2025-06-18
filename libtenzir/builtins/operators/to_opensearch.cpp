@@ -38,7 +38,7 @@ struct opensearch_args {
   std::optional<located<duration>> buffer_timeout
     = located{std::chrono::seconds{5}, location::unknown};
   std::optional<location> compress = location::unknown;
-  bool _debug_curl = false;
+  std::optional<location> _debug_curl;
   location operator_location = location::unknown;
 
   auto add_to(argument_parser2& parser) -> void {
@@ -69,6 +69,28 @@ struct opensearch_args {
         .primary(*buffer_timeout)
         .emit(dh);
       return failure::promise();
+    }
+
+    if (_debug_curl) {
+      if (not url.inner.is_all_literal()) {
+        diagnostic::error(
+          "cannot use `_debug_curl` when an argument is a secret")
+          .primary(*_debug_curl)
+          .primary(url.source)
+          .emit(dh);
+        return failure::promise();
+      }
+#define X(NAME)                                                                \
+  if (NAME and not NAME->inner.is_all_literal()) {                             \
+    diagnostic::error("cannot use `_debug_curl` when an argument is a secret") \
+      .primary(*_debug_curl)                                                   \
+      .primary(NAME->source)                                                   \
+      .emit(dh);                                                               \
+    return failure::promise();                                                 \
+  }
+      X(user)
+      X(passwd)
+#undef X
     }
     return {};
   }
@@ -337,12 +359,12 @@ public:
     }
     auto final_url = std::string{};
     {
-      const auto url_utf8 = url.utf8_view();
-      if (not url_utf8) {
-        diagnostic::error("url must be valid UTF-8").primary(args_.url).emit(dh);
+      const auto url_utf8_result = url.utf8_view("url", args_.url.source, dh);
+      if (! url_utf8_result) {
         co_return;
       }
-      const auto parsed_url = boost::urls::parse_uri_reference(*url_utf8);
+      const auto parsed_url
+        = boost::urls::parse_uri_reference(*url_utf8_result);
       if (not parsed_url) {
         diagnostic::error("failed to parse url").primary(args_.url).emit(dh);
         co_return;
@@ -359,9 +381,15 @@ public:
     }
     auto req = curl::easy{};
     if (args_.user or args_.passwd) {
+      const auto user_utf8
+        = args_.user ? user.utf8_view("user", args_.user->source, dh).unwrap()
+                     : std::string_view{};
+      const auto password_utf8
+        = args_.passwd
+            ? password.utf8_view("password", args_.passwd->source, dh).unwrap()
+            : std::string_view{};
       const auto token = detail::base64::encode(
-        fmt::format("{}:{}", args_.user ? user.utf8_view() : std::string_view{},
-                    args_.passwd ? password.utf8_view() : std::string_view{}));
+        fmt::format("{}:{}", user_utf8, password_utf8));
       req.set_http_header("Authorization", fmt::format("Basic {}", token));
       user.clear();
       password.clear();

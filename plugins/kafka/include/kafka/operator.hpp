@@ -92,9 +92,9 @@ configure_or_request(const located<record>& options, kafka::configuration& cfg,
         requests.emplace_back(
           s, options.source,
           [&cfg, &dh, loc = options.source, key](resolved_secret_value v) {
-            set_or_fail(key,
-                        std::string{v.utf8_view("options." + key, loc, dh)},
-                        loc, cfg, dh);
+            set_or_fail(
+              key, std::string{v.utf8_view("options." + key, loc, dh).unwrap()},
+              loc, cfg, dh);
           });
       },
       [](const auto&) {
@@ -129,7 +129,7 @@ public:
 
   kafka_loader(loader_args args, record config)
     : args_{std::move(args)}, config_{std::move(config)} {
-    if (!config_.contains("group.id")) {
+    if (! config_.contains("group.id")) {
       config_["group.id"] = "tenzir";
     }
   }
@@ -137,7 +137,7 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     co_yield {};
     auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
-    if (!cfg) {
+    if (! cfg) {
       ctrl.diagnostics().emit(
         diagnostic::error("failed to create configuration: {}", cfg.error())
           .done());
@@ -263,7 +263,7 @@ public:
     -> generator<std::monostate> {
     co_yield {};
     auto cfg = configuration::make(config_, args_.aws, ctrl.diagnostics());
-    if (!cfg) {
+    if (! cfg) {
       diagnostic::error(cfg.error()).emit(ctrl.diagnostics());
     };
     // Override configuration with arguments.
@@ -278,7 +278,7 @@ public:
       TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
     auto client = producer::make(*cfg);
-    if (!client) {
+    if (! client) {
       TENZIR_ERROR(client.error());
       diagnostic::error(client.error()).emit(ctrl.diagnostics());
     };
@@ -303,7 +303,7 @@ public:
       TENZIR_ASSERT(result); // validated earlier
     }
     for (auto chunk : input) {
-      if (!chunk || chunk->size() == 0) {
+      if (! chunk || chunk->size() == 0) {
         co_yield {};
         continue;
       }

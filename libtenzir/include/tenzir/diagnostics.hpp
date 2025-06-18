@@ -485,6 +485,7 @@ public:
               failure>;
 
   using reference_type = std::add_lvalue_reference_t<T>;
+  using const_reference_type = std::add_lvalue_reference_t<std::add_const_t<T>>;
 
   using super::super;
 
@@ -517,6 +518,13 @@ public:
   }
 
   auto operator*() -> reference_type {
+    TENZIR_ASSERT(is_success());
+    if constexpr (not std::same_as<T, void>) {
+      return std::get<0>(*this);
+    }
+  }
+
+  auto operator*() const -> const_reference_type {
     TENZIR_ASSERT(is_success());
     if constexpr (not std::same_as<T, void>) {
       return std::get<0>(*this);

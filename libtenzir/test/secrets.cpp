@@ -17,14 +17,20 @@ TEST(censor) {
   constexpr static auto needle_sv = "needle"sv;
   constexpr static auto noddle_sv = "noodle"sv;
 
-  auto needle = resolved_secret_value{ecc::cleansing_blob{
-    reinterpret_cast<const std::byte*>(needle_sv.data()),
-    reinterpret_cast<const std::byte*>(needle_sv.data()) + needle_sv.size(),
-  }};
-  auto noodle = resolved_secret_value{ecc::cleansing_blob{
-    reinterpret_cast<const std::byte*>(noddle_sv.data()),
-    reinterpret_cast<const std::byte*>(noddle_sv.data()) + noddle_sv.size(),
-  }};
+  auto needle = resolved_secret_value{
+    ecc::cleansing_blob{
+      reinterpret_cast<const std::byte*>(needle_sv.data()),
+      reinterpret_cast<const std::byte*>(needle_sv.data()) + needle_sv.size(),
+    },
+    false,
+  };
+  auto noodle = resolved_secret_value{
+    ecc::cleansing_blob{
+      reinterpret_cast<const std::byte*>(noddle_sv.data()),
+      reinterpret_cast<const std::byte*>(noddle_sv.data()) + noddle_sv.size(),
+    },
+    false,
+  };
   const auto censor = secret_censor{
     .max_size = max_size, .secrets = {std::move(needle), std::move(noodle)}};
 

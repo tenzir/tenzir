@@ -8,7 +8,35 @@
 
 #include "tenzir/secret_resolution.hpp"
 
+#include <arrow/util/utf8.h>
+
 namespace tenzir {
+
+auto resolved_secret_value::utf8_view() const
+  -> std::optional<std::string_view> {
+  const auto valid_utf8 = arrow::util::ValidateUTF8(
+    reinterpret_cast<const uint8_t*>(value_.data()), value_.size());
+  if (not valid_utf8) {
+    return std::nullopt;
+  }
+  return std::string_view{
+    reinterpret_cast<const char*>(value_.data()),
+    value_.size(),
+  };
+}
+
+auto resolved_secret_value::utf8_view(std::string_view name, location loc,
+                                      diagnostic_handler& dh) const
+  -> failure_or<std::string_view> {
+  auto r = utf8_view();
+  if (not r) {
+    diagnostic::error("expected secret `{}` to be a UTF-8 string", name)
+      .primary(loc)
+      .emit(dh);
+    return failure::promise();
+  }
+  return *r;
+}
 
 namespace detail {
 
@@ -27,7 +55,7 @@ auto secret_string_setter_callback(std::string name, tenzir::location loc,
                                    secret_censor* censor)
   -> secret_request_callback {
   return [name, loc, &out, &dh, censor](resolved_secret_value v) {
-    out = std::string{v.utf8_view(name, loc, dh)};
+    out = std::string{v.utf8_view(name, loc, dh).unwrap()};
     if (censor) {
       censor->secrets.push_back(std::move(v));
     }
@@ -40,7 +68,7 @@ auto secret_string_setter_callback(std::string name, tenzir::location loc,
                                    secret_censor* censor)
   -> secret_request_callback {
   return [name, loc, &out, &dh, censor](resolved_secret_value v) {
-    out = located{std::string{v.utf8_view(name, loc, dh)}, loc};
+    out = located{std::string{v.utf8_view(name, loc, dh).unwrap()}, loc};
     if (censor) {
       censor->secrets.push_back(std::move(v));
     }

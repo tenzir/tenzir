@@ -989,13 +989,14 @@ private:
             if (args_.watch) {
               got_all_files();
             } else {
-              diagnostic::error("`{}` does not exist", root_path())
+              diagnostic::error("`{}` does not exist",
+                                censor_->censor(root_path_))
                 .primary(args_.url)
                 .emit(*dh_);
             }
             return;
           case arrow::fs::FileType::Unknown:
-            diagnostic::error("`{}` is unknown", root_path())
+            diagnostic::error("`{}` is unknown", censor_->censor(root_path_))
               .primary(args_.url)
               .emit(*dh_);
             return;
@@ -1004,7 +1005,8 @@ private:
               add_job(std::move(root_info));
               got_all_files();
             } else if (not args_.watch) {
-              diagnostic::error("`{}` is a file, not a directory", root_path())
+              diagnostic::error("`{}` is a file, not a directory",
+                                censor_->censor(root_path_))
                 .primary(args_.url)
                 .emit(*dh_);
             }
@@ -1263,11 +1265,6 @@ private:
 
   auto is_globbing() const -> bool {
     return glob_.size() != 1 or not is<std::string>(glob_[0]);
-  }
-
-  auto root_path() const -> std::string_view {
-    return args_.url.inner.is_all_literal() ? root_path_
-                                            : std::string_view{"uri"};
   }
 
   from_file_actor::pointer self_;
