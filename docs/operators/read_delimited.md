@@ -1,18 +1,18 @@
 ---
-title: read_until
+title: read_delimited
 category: Parsing
-example: 'read_until "|"'
+example: 'read_delimited "|"'
 ---
 
 Parses an incoming bytes stream into events using a string as delimiter.
 
 ```tql
-read_until separator:string|blob, [binary=bool, include_separator=bool]
+read_delimited separator:string|blob, [binary=bool, include_separator=bool]
 ```
 
 ## Description
 
-The `read_until` operator takes its input bytes and splits it using the
+The `read_delimited` operator takes its input bytes and splits it using the
 provided string as a delimiter. This is useful for parsing data that uses
 simple string delimiters instead of regular expressions or standard newlines.
 
@@ -40,47 +40,47 @@ default, the separator is excluded from the results.
 
 ```tql
 load_file "data.txt"
-read_until "||"
+read_delimited "||"
 ```
 
 ### Parse CSV-like data with custom delimiter
 
 ```tql
 load_file "custom.csv"
-read_until ";;;"
+read_delimited ";;;"
 ```
 
 ### Include the separator in the output
 
 ```tql
 load_file "data.txt"
-read_until "||", include_separator=true
+read_delimited "||", include_separator=true
 ```
 
 ### Parse binary data with blob delimiters
 
 ```tql
 load_file "binary.dat"
-read_until b"\x00\x01"
+read_delimited b"\x00\x01"
 ```
 
 ### Use blob separator with include_separator
 
 ```tql
 load_file "data.txt"
-read_until b"||", include_separator=true
+read_delimited b"||", include_separator=true
 ```
 
 ### Parse binary data with string delimiters
 
 ```tql
 load_file "binary.dat"
-read_until "\x00\x01", binary=true
+read_delimited "\x00\x01", binary=true
 ```
 
 ## See Also
 
-[`read_until_regex`](/reference/operators/read_until_regex),
+[`read_delimited_regex`](/reference/operators/read_delimited_regex),
 [`read_lines`](/reference/operators/read_lines),
 [`read_ssv`](/reference/operators/read_ssv),
 [`read_tsv`](/reference/operators/read_tsv),

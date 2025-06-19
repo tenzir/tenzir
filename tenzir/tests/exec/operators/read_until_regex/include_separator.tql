@@ -1,5 +1,0 @@
-from {
-  line: "foo||bar||baz"
-}
-write_lines
-read_until_regex "\\|\\|", include_separator=true

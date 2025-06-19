@@ -1,27 +1,27 @@
 ---
-title: "`read_until` and `read_until_regex`"
+title: "`read_delimited` and `read_delimited_regex`"
 type: feature
 authors: dominiklohmann
 pr: 5291
 ---
 
 TQL now supports two new operators for parsing data streams with custom
-delimiters: `read_until` and `read_until_regex`. These operators provide a more
+delimiters: `read_delimited` and `read_delimited_regex`. These operators provide a more
 intuitive and discoverable way to split data on custom separators compared to
 the deprecated `split_at_regex` option in `read_lines`.
 
-The `read_until` operator splits input on exact string or blob matches:
+The `read_delimited` operator splits input on exact string or blob matches:
 
 ```tql
 load_file "data.txt"
-read_until "||"
+read_delimited "||"
 ```
 
-The `read_until_regex` operator splits input using regular expression patterns:
+The `read_delimited_regex` operator splits input using regular expression patterns:
 
 ```tql
 load_tcp "0.0.0.0:514" {
-  read_until_regex "(?=<[0-9]+>)"
+  read_delimited_regex "(?=<[0-9]+>)"
 }
 ```
 

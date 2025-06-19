@@ -33,7 +33,7 @@ Use null byte (`\0`) as the delimiter instead of newline characters.
 
 :::warning Deprecated
 This option is deprecated. Use
-[`read_until_regex`](/reference/operators/read_until_regex) instead.
+[`read_delimited_regex`](/reference/operators/read_delimited_regex) instead.
 :::
 
 Use the specified regex as the delimiter instead of newline characters.
@@ -52,11 +52,11 @@ is_error = line.starts_with("error:")
 ### Split Syslog-like events without newline terminators from a TCP input
 
 :::info
-Consider using [`read_until_regex`](/reference/operators/read_until_regex) for regex-based splitting:
+Consider using [`read_delimited_regex`](/reference/operators/read_delimited_regex) for regex-based splitting:
 
 ```tql
 load_tcp "0.0.0.0:514"
-read_until_regex "(?=<[0-9]+>)"
+read_delimited_regex "(?=<[0-9]+>)"
 this = line.parse_syslog()
 ```
 
@@ -72,6 +72,6 @@ this = line.parse_syslog()
 
 [`read_ssv`](/reference/operators/read_ssv),
 [`read_tsv`](/reference/operators/read_tsv),
-[`read_until_regex`](/reference/operators/read_until_regex),
+[`read_delimited_regex`](/reference/operators/read_delimited_regex),
 [`read_xsv`](/reference/operators/read_xsv),
 [`write_lines`](/reference/operators/write_lines)

@@ -2,4 +2,4 @@ from {
   line: "foo||bar||baz"
 }
 write_lines
-read_until "||", include_separator=true
+read_delimited "||"

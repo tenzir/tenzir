@@ -2,4 +2,4 @@ from {
   line: "START<123>dataEND<456>moreEND<789>final"
 }
 write_lines
-read_until_regex "END(?=<[0-9]+>)", include_separator=true
+read_delimited_regex "END(?=<[0-9]+>)", include_separator=true

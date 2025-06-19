@@ -2,4 +2,4 @@ from {
   line: "a|b|c|d"
 }
 write_lines
-read_until "|"
+read_delimited "|"

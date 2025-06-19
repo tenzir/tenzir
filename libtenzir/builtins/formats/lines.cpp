@@ -326,7 +326,7 @@ class read_lines final
     }
     if (args.split_at_regex) {
       diagnostic::warning("the `split_at_regex` option is deprecated, use "
-                          "`read_until_regex` instead")
+                          "`read_delimited_regex` instead")
         .primary(*args.split_at_regex)
         .emit(ctx);
     }
@@ -344,10 +344,10 @@ class write_lines final
   }
 };
 
-class read_until_regex final
+class read_delimited_regex final
   : public virtual operator_plugin2<parser_adapter<lines_parser>> {
   auto name() const -> std::string override {
-    return "read_until_regex";
+    return "read_delimited_regex";
   }
 
   auto make(invocation inv, session ctx) const
@@ -391,10 +391,10 @@ class read_until_regex final
   }
 };
 
-class read_until final
+class read_delimited final
   : public virtual operator_plugin2<parser_adapter<lines_parser>> {
   auto name() const -> std::string override {
-    return "read_until";
+    return "read_delimited";
   }
 
   auto make(invocation inv, session ctx) const
@@ -447,5 +447,5 @@ class read_until final
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_lines)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::write_lines)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_until_regex)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_until)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_delimited_regex)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_delimited)
