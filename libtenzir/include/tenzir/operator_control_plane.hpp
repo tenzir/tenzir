@@ -61,25 +61,24 @@ struct operator_control_plane {
   /// background.
   virtual auto is_hidden() const noexcept -> bool = 0;
 
+  /// Suspend or resume the operator's runloop. A suspended operator will not
+  /// get resumed after it yielded to the executor.
+  virtual auto set_waiting(bool value) noexcept -> void = 0;
+
+  static void noop_callback() {
+  }
+
   /// Resolves multiple secrets. The implementation in the
   /// `exec_node_control_plane` will first check the config and then try and
   /// dispatch to the platform plugin. The platform query is async, so this
   /// function will perform `set_waiting(true)`, and only re-schedule the actor
   /// after the request has been fulfilled.
-  /// Users MUST `co_yield` after a call to `resolve_secret_must_yield`, but
-  /// are guaranteed that resolution is completed once the operator resumes.
-  virtual auto resolve_secrets_must_yield(std::vector<secret_request> requests)
-    -> void
+  /// If the function returns `false`, the caller is not required to `co_yield`
+  [[nodiscard]] virtual auto
+  resolve_secrets_must_yield(std::vector<secret_request> requests,
+                             std::function<void(void)> final_callback
+                             = noop_callback) -> bool
     = 0;
-
-  auto resolve_secret_must_yield(const located<secret>& secret,
-                                 resolved_secret_value& out) -> void {
-    return resolve_secrets_must_yield({{secret, out}});
-  }
-
-  /// Suspend or resume the operator's runloop. A suspended operator will not
-  /// get resumed after it yielded to the executor.
-  virtual auto set_waiting(bool value) noexcept -> void = 0;
 
   /// Return a version of the diagnostic handler that may be passed to other
   /// threads. NOTE: Unlike for the regular diagnostic handler, emitting an
